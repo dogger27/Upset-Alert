@@ -1,0 +1,219 @@
+/* ── Outer container ── */
+.bracket-scroll {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: calc(100vh - 130px);
+  padding: 0 0.75rem 1rem;
+  background: var(--bg);
+}
+
+/* ── Round labels row ── */
+.bracket-labels {
+  display: flex;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg);
+  padding-bottom: 4px;
+}
+
+.round-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: white;
+  background: var(--green);
+  text-align: center;
+  padding: 0.35rem 0.5rem;
+  border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Bracket body ── */
+.bracket-body {
+  display: flex;
+  align-items: flex-start;
+  position: relative;
+}
+
+.bracket-col {
+  position: relative;
+  flex-shrink: 0;
+}
+
+/* ── Connector SVG ── */
+.connector-svg {
+  display: block;
+  overflow: visible;
+}
+
+/* ── Match box ── */
+.match-box {
+  border: 1px solid #d0d0d0;
+  border-radius: 5px;
+  overflow: hidden;
+  background: white;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.match-box.bye {
+  opacity: 0.5;
+}
+
+.match-box.needs-pick {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2), 0 1px 3px rgba(0,0,0,0.08);
+}
+
+/* ── Player row ── */
+.player-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px 3px 4px;
+  min-height: 28px;
+  border-bottom: 1px solid #f0f0f0;
+  transition: background 0.1s;
+  user-select: none;
+  cursor: default;
+  font-size: 0.75rem;
+  line-height: 1.2;
+  overflow: hidden;
+}
+
+.player-row:last-child { border-bottom: none; }
+
+.player-row.bye-slot {
+  justify-content: center;
+  font-size: 0.68rem;
+}
+
+.player-row.empty .pname { color: var(--text-muted); font-style: italic; }
+
+.player-row.clickable { cursor: pointer; }
+.player-row.clickable:hover { background: #f3faf5; }
+
+.player-row.picked {
+  background: #e6f4ea;
+  font-weight: 600;
+}
+
+.player-row.winner {
+  background: #c8e6c9;
+  font-weight: 700;
+}
+
+.player-row.eliminated {
+  opacity: 0.55;
+  color: #666;
+}
+
+.player-row.projected {
+  border-left: 2px solid var(--green-light);
+  background: #fafff9;
+  font-style: italic;
+  color: #555;
+}
+
+.player-row.projected.picked {
+  background: #e6f4ea;
+  font-style: normal;
+  border-left-color: var(--green);
+}
+
+/* ── Badge alignment slots (fixed-width ensures name left-edges align) ── */
+.badge-left-slot {
+  width: 28px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.badge-type-slot {
+  width: 26px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+/* ── Position badges ── */
+.pos-badge {
+  display: inline-block;
+  font-size: 0.62rem;
+  font-weight: 700;
+  min-width: 16px;
+  text-align: center;
+  padding: 1px 3px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  line-height: 1.3;
+}
+
+.pos-badge.seeded  { background: #fff3cd; color: #7d5a00; }
+.pos-badge.unseeded { background: #e9ecef; color: #888; font-weight: 500; }
+.pos-badge.nr       { background: #f8f9fa; color: #adb5bd; font-style: italic; cursor: default; }
+.pos-badge.ghost   { background: #f0f0f0; color: #aaa; font-style: italic; }
+
+.pos-badge.entry { }
+.pos-badge.entry-wc { background: #cfe2ff; color: #084298; }
+.pos-badge.entry-q  { background: #d1e7dd; color: #0a3622; }
+.pos-badge.entry-ll { background: #f8d7da; color: #58151c; }
+.pos-badge.entry-pr { background: #e2d9f3; color: #432874; }
+
+/* ── Player name ── */
+.pname {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Scores ── */
+.score-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  flex-shrink: 0;
+  margin-left: 2px;
+}
+
+.score-cell {
+  display: inline-block;
+  min-width: 14px;
+  text-align: center;
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  color: #555;
+  line-height: 1;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+
+.score-cell sup {
+  font-size: 0.48rem;
+  vertical-align: super;
+  line-height: 0;
+  color: #888;
+}
+
+.score-cell.empty { color: #ccc; }
+
+.ret-badge {
+  font-size: 0.6rem;
+  font-style: italic;
+  color: #b45309;
+  background: #fef3c7;
+  border-radius: 3px;
+  padding: 0 3px;
+  flex-shrink: 0;
+  line-height: 1.4;
+}
+
+/* Winner's scores slightly bolder */
+.player-row.winner .score-cell { font-weight: 700; color: #1b4332; }
+.player-row.eliminated .score-cell { opacity: 0.7; }

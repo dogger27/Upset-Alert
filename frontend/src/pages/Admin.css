@@ -1,0 +1,44 @@
+.admin-page { max-width: 1600px; margin: 0 auto; padding: 2rem 1.5rem; }
+.admin-page h1 { font-size: 1.5rem; margin-bottom: 1.5rem; }
+
+.admin-section { margin-bottom: 2rem; }
+.admin-section h2 { font-size: 1.1rem; margin-bottom: 1rem; }
+
+.preset-row {
+  display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center;
+  margin-bottom: 1.25rem; padding-bottom: 1.25rem; border-bottom: 1px solid var(--border);
+}
+.preset-btn { font-size: 0.75rem; padding: 0.3rem 0.6rem; }
+
+.admin-form { display: flex; flex-direction: column; gap: 0.75rem; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.75rem; }
+.form-row { display: flex; flex-direction: column; gap: 0.25rem; }
+.form-row label { font-size: 0.8rem; font-weight: 600; color: var(--text-muted); }
+.admin-form button[type="submit"] { align-self: flex-start; margin-top: 0.5rem; }
+
+.admin-table-wrap { display: inline-block; min-width: 100%; }
+.admin-table { width: auto; border-collapse: collapse; font-size: 0.88rem; margin-top: 0.5rem; }
+.admin-table th {
+  text-align: center; padding: 0.5rem 0.4rem;
+  border-bottom: 2px solid var(--border); color: var(--text-muted);
+  font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em;
+}
+.admin-table td { padding: 0.6rem 0.4rem; border-bottom: 1px solid var(--border); vertical-align: middle; text-align: center; }
+.admin-table td.td-left { text-align: left; }
+.admin-table tr:last-child td { border-bottom: none; }
+.admin-table tr.clickable-row:hover td {
+  border-top: 1px solid #aaa;
+  border-bottom: 1px solid #aaa;
+}
+.admin-table tr.clickable-row:hover td:first-child { border-left: 1px solid #aaa; }
+.admin-table tr.clickable-row:hover td:last-child  { border-right: 1px solid #aaa; }
+/* Override the bottom border of the row immediately above the hovered row so it
+   matches — otherwise border-collapse lets the neighbour's border win on top. */
+.admin-table tr:has(+ tr.clickable-row:hover) td   { border-bottom: 1px solid #aaa; }
+.admin-table tr.status-group-header td {
+  padding: 0.5rem 0.4rem 0.25rem;
+  font-size: 0.9rem; font-weight: 800; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-muted); font-weight: 800;
+  border-bottom: 1px solid var(--border); background: transparent;
+  text-align: left;
+}

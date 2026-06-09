@@ -1,0 +1,99 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --green: #2d6a4f;
+  --green-light: #52b788;
+  --green-dark: #1b4332;
+  --clay: #c9783a;
+  --clay-light: #e8a87c;
+  --bg: #f8f9fa;
+  --surface: #ffffff;
+  --border: #dee2e6;
+  --text: #212529;
+  --text-muted: #6c757d;
+  --radius: 8px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+a { color: var(--green); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+button, a.btn-primary, a.btn-secondary, a.btn-clay {
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.875rem;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-primary {
+  background: var(--green);
+  color: white;
+  border-color: var(--green-dark);
+}
+.btn-primary:hover:not(:disabled) { background: var(--green-dark); }
+
+.btn-secondary {
+  background: white;
+  color: var(--text);
+  border-color: var(--border);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+.btn-secondary:hover:not(:disabled) { background: var(--bg); text-decoration: none; }
+
+.btn-clay {
+  background: var(--clay);
+  color: white;
+  border-color: #a0522d;
+}
+.btn-clay:hover:not(:disabled) { background: #a0522d; }
+
+input[type="checkbox"], input[type="radio"] { width: auto; cursor: pointer; }
+
+input, select, textarea {
+  font-family: inherit;
+  font-size: 0.875rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  width: 100%;
+  background: white;
+  transition: border-color 0.15s;
+}
+input:focus, select:focus { outline: none; border-color: var(--green-light); }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1.5rem;
+}
+
+.error { color: #dc3545; font-size: 0.85rem; }
+.muted { color: var(--text-muted); font-size: 0.85rem; }
+
+.badge {
+  display: inline-block;
+  padding: 0.2em 0.55em;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.badge-seed { background: #fff3cd; color: #856404; }
+.badge-wc   { background: #cfe2ff; color: #084298; }
+.badge-q    { background: #d1e7dd; color: #0a3622; }
+.badge-ll   { background: #f8d7da; color: #58151c; }

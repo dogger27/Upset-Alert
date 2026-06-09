@@ -1,0 +1,371 @@
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.core.auth import get_current_user
+from app.database import get_db
+from app.models.tournament import Match, Player, Tournament
+from app.models.user import User
+from app.schemas.tournament import DrawOut, MatchOut, PlayerOut, TournamentCreate, TournamentOut
+from app.services.rankings import fetch_rankings, match_player_ranking
+from app.services.scraper import scrape_tournament
+
+router = APIRouter(prefix="/tournaments", tags=["tournaments"])
+
+
+@router.get("", response_model=list[TournamentOut])
+async def list_tournaments(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Tournament).order_by(Tournament.year.desc(), Tournament.name))
+    tournaments = result.scalars().all()
+
+    # Update status to computed status based on dates
+    for t in tournaments:
+        t.status = t.computed_status
+
+    return tournaments
+
+
+@router.post("", response_model=TournamentOut, status_code=201)
+async def create_tournament(
+    body: TournamentCreate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    t = Tournament(
+        name=" ".join(body.name.split()),  # collapse any accidental extra spaces
+        year=body.year,
+        gender=body.gender,
+        surface=body.surface,
+        wiki_page_title=body.wiki_page_title,
+        start_date=body.start_date,
+        end_date=body.end_date,
+        venue_timezone=body.venue_timezone,
+        day1_start_hour=body.day1_start_hour,
+        day1_start_minute=body.day1_start_minute,
+        closing_time=body.closing_time,
+        draw_size=0,
+        num_rounds=0,
+    )
+    db.add(t)
+    await db.flush()  # get ID before scraping
+    await _do_scrape(t, db)
+    await db.commit()
+    await db.refresh(t)
+    return t
+
+
+@router.post("/refresh-completed", response_model=dict)
+async def refresh_all_completed(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Re-scrape every tournament that is completed or whose end_date has passed."""
+    import logging
+    from datetime import date
+    from sqlalchemy import or_, and_
+    logger = logging.getLogger(__name__)
+    today = date.today()
+    result = await db.execute(
+        select(Tournament).where(
+            or_(
+                Tournament.status == "completed",
+                and_(Tournament.end_date != None, Tournament.end_date < today),
+            )
+        )
+    )
+    tournaments = result.scalars().all()
+    ok, failed = 0, []
+    for t in tournaments:
+        try:
+            await _do_scrape(t, db)
+            await db.commit()
+            await db.refresh(t)
+            ok += 1
+        except Exception as exc:
+            logger.error("Failed to re-scrape %s: %s", t.wiki_page_title, exc)
+            await db.rollback()
+            failed.append(t.name)
+    return {"refreshed": ok, "failed": failed}
+
+
+@router.post("/apply-schedules", response_model=dict)
+async def apply_all_schedules(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """
+    Back-fill venue_timezone, day1_start_hour, day1_start_minute, and closing_time
+    for all tournaments that are missing them.  Safe to re-run; won't overwrite
+    manually-set values.
+    """
+    import logging
+    from app.services.tournament_schedule import apply_schedule, apply_closing_time
+    logger = logging.getLogger(__name__)
+
+    result = await db.execute(select(Tournament))
+    tournaments = result.scalars().all()
+
+    schedule_set = closing_set = 0
+    for t in tournaments:
+        if apply_schedule(t):
+            schedule_set += 1
+        if apply_closing_time(t):
+            closing_set += 1
+            logger.info("Set closing_time for %s %s: %s", t.year, t.name, t.closing_time)
+
+    await db.commit()
+    return {"schedule_fields_set": schedule_set, "closing_times_set": closing_set}
+
+
+@router.get("/{tournament_id}", response_model=TournamentOut)
+async def get_tournament(tournament_id: int, db: AsyncSession = Depends(get_db)):
+    t = await db.get(Tournament, tournament_id)
+    if not t:
+        raise HTTPException(404, "Tournament not found")
+    return t
+
+
+@router.get("/{tournament_id}/draw", response_model=DrawOut)
+async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
+    t = await db.get(Tournament, tournament_id)
+    if not t:
+        raise HTTPException(404, "Tournament not found")
+
+    players_result = await db.execute(
+        select(Player).where(Player.tournament_id == tournament_id).order_by(Player.bracket_position)
+    )
+    players = players_result.scalars().all()
+
+    matches_result = await db.execute(
+        select(Match)
+        .where(Match.tournament_id == tournament_id)
+        .options(
+            selectinload(Match.player1),
+            selectinload(Match.player2),
+            selectinload(Match.winner),
+        )
+        .order_by(Match.round_number, Match.match_number)
+    )
+    matches = matches_result.scalars().all()
+
+    match_outs = []
+    for m in matches:
+        match_outs.append(MatchOut(
+            id=m.id,
+            round_number=m.round_number,
+            match_number=m.match_number,
+            player1=PlayerOut.model_validate(m.player1) if m.player1 else None,
+            player2=PlayerOut.model_validate(m.player2) if m.player2 else None,
+            winner=PlayerOut.model_validate(m.winner) if m.winner else None,
+            is_bye=m.is_bye,
+            status=m.status,
+            round_name=t.round_name(m.round_number),
+            scores=m.scores_json,
+        ))
+
+    return DrawOut(
+        tournament=TournamentOut.model_validate(t),
+        players=[PlayerOut.model_validate(p) for p in players],
+        matches=match_outs,
+    )
+
+
+@router.post("/{tournament_id}/refresh", response_model=TournamentOut)
+async def refresh_draw(
+    tournament_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    t = await db.get(Tournament, tournament_id)
+    if not t:
+        raise HTTPException(404, "Tournament not found")
+    await _do_scrape(t, db)
+    await db.commit()
+    await db.refresh(t)
+    return t
+
+
+# ---------------------------------------------------------------------------
+# Internal scrape helper
+# ---------------------------------------------------------------------------
+
+async def _do_scrape(tournament: Tournament, db: AsyncSession, force_refresh: bool = False) -> None:
+    from datetime import date, timedelta
+    import logging
+    logger = logging.getLogger(__name__)
+
+    parsed = await scrape_tournament(
+        tournament.wiki_page_title,
+        year=tournament.year,
+        gender=tournament.gender,
+        page_id=tournament.wiki_page_id,
+        force_refresh=force_refresh,
+    )
+    if parsed.wiki_page_id and tournament.wiki_page_id is None:
+        tournament.wiki_page_id = parsed.wiki_page_id
+
+    tournament.draw_size = parsed.draw_size
+    tournament.num_rounds = parsed.num_rounds
+    tournament.last_scraped_at = datetime.now(timezone.utc)
+
+    # Update location from infobox if not already set
+    if parsed.city and not tournament.city:
+        tournament.city = parsed.city
+    if parsed.country and not tournament.country:
+        tournament.country = parsed.country
+
+    # Auto-populate schedule fields and closing_time from lookup table
+    from app.services.tournament_schedule import apply_schedule, apply_closing_time
+    apply_schedule(tournament)
+    if apply_closing_time(tournament):
+        logger.info(
+            "Auto-set closing_time for %s %s: %s (tz=%s %02d:%02d local)",
+            tournament.year, tournament.name, tournament.closing_time,
+            tournament.venue_timezone, tournament.day1_start_hour or 0,
+            tournament.day1_start_minute or 0,
+        )
+
+    # Authoritative dates from the tournament's own infobox
+    if parsed.start_date:
+        tournament.start_date = parsed.start_date
+    if parsed.end_date:
+        tournament.end_date = parsed.end_date
+
+    # Record actual draw release dates when detected
+    if parsed.has_direct_draw and not tournament.draw_released_direct_at:
+        tournament.draw_released_direct_at = date.today()
+        logger.info("Tournament %s: Direct acceptance draw released on %s",
+                   tournament.wiki_page_title, date.today())
+
+    if parsed.has_qualifiers and not tournament.draw_released_qualifiers_at:
+        tournament.draw_released_qualifiers_at = date.today()
+        logger.info("Tournament %s: Qualifiers added on %s",
+                   tournament.wiki_page_title, date.today())
+
+    # If final match has a winner, tournament is completed regardless of current date
+    if parsed.has_final_winner:
+        tournament.status = "completed"
+        logger.info("Tournament %s marked as completed (final match has winner)", tournament.wiki_page_title)
+
+    # Determine ranking reference date
+    ref_date = parsed.ranking_ref_date
+    if ref_date is None:
+        # Default: 5 weeks before tournament start, or today if no start date
+        if tournament.start_date:
+            ref_date = tournament.start_date - timedelta(weeks=5)
+        else:
+            ref_date = date.today()
+
+    # Fetch rankings for this date
+    try:
+        rankings = await fetch_rankings(tournament.gender, ref_date)
+        logger.info("Fetched %d %s rankings for %s", len(rankings),
+                    "ATP" if tournament.gender == "M" else "WTA", ref_date)
+    except Exception as exc:
+        logger.warning("Could not fetch rankings: %s", exc)
+        rankings = {}
+
+    # Load existing players and matches indexed for upsert
+    existing_players_res = await db.execute(
+        select(Player).where(Player.tournament_id == tournament.id)
+    )
+    existing_players: dict[int, Player] = {
+        p.bracket_position: p for p in existing_players_res.scalars()
+    }
+    existing_matches_res = await db.execute(
+        select(Match).where(Match.tournament_id == tournament.id)
+    )
+    existing_matches: dict[tuple, Match] = {
+        (m.round_number, m.match_number): m for m in existing_matches_res.scalars()
+    }
+
+    # Upsert players — update in place to preserve any FK references
+    pos_to_player_id: dict[int, int] = {}
+    seen_positions: set[int] = set()
+    for pe in parsed.players:
+        ranking = match_player_ranking(pe.name, rankings) if rankings else None
+        seen_positions.add(pe.bracket_position)
+        if pe.bracket_position in existing_players:
+            player = existing_players[pe.bracket_position]
+            player.name = pe.name
+            player.nationality = pe.nationality
+            player.seed = pe.seed
+            player.entry_type = pe.entry_type
+            player.ranking = ranking
+        else:
+            player = Player(
+                tournament_id=tournament.id,
+                name=pe.name,
+                nationality=pe.nationality,
+                seed=pe.seed,
+                entry_type=pe.entry_type,
+                bracket_position=pe.bracket_position,
+                ranking=ranking,
+            )
+            db.add(player)
+            await db.flush()
+        pos_to_player_id[pe.bracket_position] = player.id
+
+    # Delete players no longer in draw
+    for pos, old_player in existing_players.items():
+        if pos not in seen_positions:
+            await db.delete(old_player)
+    await db.flush()
+
+    # Upsert matches — update in place to preserve prediction foreign keys
+    seen_match_keys: set[tuple] = set()
+    for mr in parsed.matches:
+        p1_id = pos_to_player_id.get(mr.player1_position)
+        p2_id = pos_to_player_id.get(mr.player2_position) if mr.player2_position else None
+        w_id = pos_to_player_id.get(mr.winner_position) if mr.winner_position else None
+        key = (mr.round_number, mr.match_number)
+        seen_match_keys.add(key)
+        if key in existing_matches:
+            match = existing_matches[key]
+            match.player1_id = p1_id
+            match.player2_id = p2_id
+            match.winner_id = w_id
+            match.is_bye = mr.is_bye
+            match.scores_json = mr.scores
+            match.status = "completed" if w_id else "pending"
+            match.completed_at = datetime.now(timezone.utc) if w_id else None
+        else:
+            match = Match(
+                tournament_id=tournament.id,
+                round_number=mr.round_number,
+                match_number=mr.match_number,
+                player1_id=p1_id,
+                player2_id=p2_id,
+                winner_id=w_id,
+                is_bye=mr.is_bye,
+                scores_json=mr.scores,
+                status="completed" if w_id else "pending",
+                completed_at=datetime.now(timezone.utc) if w_id else None,
+            )
+            db.add(match)
+
+    # Delete matches no longer in draw (and their orphaned predictions)
+    from app.models.prediction import UserPrediction
+    for key, old_match in existing_matches.items():
+        if key not in seen_match_keys:
+            orphaned = await db.execute(
+                select(UserPrediction).where(UserPrediction.match_id == old_match.id)
+            )
+            for pred in orphaned.scalars():
+                await db.delete(pred)
+            await db.delete(old_match)
+
+    # Auto-set tournament status
+    from datetime import date as _date
+    total_matches = len(parsed.matches)
+    completed = sum(1 for m in parsed.matches if m.winner_position is not None)
+    started = tournament.start_date is None or tournament.start_date <= _date.today()
+    if completed == total_matches and completed > 0:
+        tournament.status = "completed"
+    elif completed > 0 and started:
+        tournament.status = "active"
+    else:
+        tournament.status = "upcoming"
