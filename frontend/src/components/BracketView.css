@@ -67,6 +67,16 @@
   box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2), 0 1px 3px rgba(0,0,0,0.08);
 }
 
+.match-box.correct-pick {
+  background: #dcfce7;
+  border-color: #16a34a;
+}
+
+.match-box.wrong-pick {
+  background: #fee2e2;
+  border-color: #dc2626;
+}
+
 /* ── Player row ── */
 .player-row {
   display: flex;
@@ -93,15 +103,13 @@
 .player-row.empty .pname { color: var(--text-muted); font-style: italic; }
 
 .player-row.clickable { cursor: pointer; }
-.player-row.clickable:hover { background: #f3faf5; }
+.player-row.clickable:hover { background: #f5f5f5; }
 
 .player-row.picked {
-  background: #e6f4ea;
   font-weight: 600;
 }
 
 .player-row.winner {
-  background: #c8e6c9;
   font-weight: 700;
 }
 
@@ -110,17 +118,27 @@
   color: #666;
 }
 
+.player-row.wrong-pick {
+  opacity: 0.75;
+}
+
+.pick-result {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  margin-left: 0.3rem;
+  line-height: 1;
+}
+.pick-result.correct { color: #15803d; }
+.pick-result.wrong   { color: #dc2626; }
+
 .player-row.projected {
-  border-left: 2px solid var(--green-light);
-  background: #fafff9;
   font-style: italic;
   color: #555;
 }
 
 .player-row.projected.picked {
-  background: #e6f4ea;
   font-style: normal;
-  border-left-color: var(--green);
 }
 
 /* ── Badge alignment slots (fixed-width ensures name left-edges align) ── */

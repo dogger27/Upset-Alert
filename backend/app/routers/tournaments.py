@@ -62,33 +62,86 @@ async def refresh_all_completed(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    """Re-scrape every tournament that is completed or whose end_date has passed."""
+    """Re-scrape every in-progress tournament (skips fully completed ones).
+
+    Covers:
+    - Tournaments that have already started (start_date <= today)
+    - Upcoming tournaments whose expected draw date has passed but draw is not yet confirmed
+    """
     import logging
-    from datetime import date
+    from datetime import date, timedelta
     from sqlalchemy import or_, and_
     logger = logging.getLogger(__name__)
     today = date.today()
     result = await db.execute(
         select(Tournament).where(
-            or_(
-                Tournament.status == "completed",
-                and_(Tournament.end_date != None, Tournament.end_date < today),
+            and_(
+                Tournament.status != "completed",
+                or_(
+                    # Already started
+                    and_(Tournament.start_date != None, Tournament.start_date <= today),
+                    # DA draw date has passed but not yet confirmed
+                    and_(
+                        Tournament.draw_release_direct != None,
+                        Tournament.draw_release_direct <= today,
+                        Tournament.draw_released_direct_at == None,
+                    ),
+                    # Qualifier date has passed but not yet confirmed
+                    and_(
+                        Tournament.draw_release_qualifiers != None,
+                        Tournament.draw_release_qualifiers <= today,
+                        Tournament.draw_released_qualifiers_at == None,
+                    ),
+                )
             )
         )
     )
-    tournaments = result.scalars().all()
+    # Capture id/name/title before any rollback can expire ORM objects
+    tournament_info = [
+        (t.id, t.name, t.wiki_page_title)
+        for t in result.scalars().all()
+    ]
     ok, failed = 0, []
-    for t in tournaments:
+    for t_id, t_name, t_title in tournament_info:
         try:
-            await _do_scrape(t, db)
+            # Re-fetch fresh each time so a previous rollback doesn't leave a stale object
+            t = await db.get(Tournament, t_id)
+            if t is None or t.status == "completed":
+                continue
+            await _do_scrape(t, db, force_refresh=True)
             await db.commit()
-            await db.refresh(t)
             ok += 1
         except Exception as exc:
-            logger.error("Failed to re-scrape %s: %s", t.wiki_page_title, exc)
+            logger.error("Failed to re-scrape %s: %s", t_title, exc)
             await db.rollback()
-            failed.append(t.name)
+            failed.append(t_name)
     return {"refreshed": ok, "failed": failed}
+
+
+@router.post("/sync-tournaments", response_model=dict)
+async def sync_tournaments(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """
+    Run a full discovery + title-correction + scrape cycle for the current year.
+    Fixes wrong wiki page titles (e.g. '– Men's singles' stored when Wikipedia
+    uses '– Singles') then immediately scrapes any tournament still missing a
+    confirmed page ID.
+    """
+    import logging
+    from datetime import datetime, timezone
+    logger = logging.getLogger(__name__)
+    current_year = datetime.now(timezone.utc).year
+    try:
+        from app.services.tournament_sync import sync_season
+        summary = await sync_season(db, current_year, scrape_new=True)
+        return {"status": "ok", **summary}
+    except Exception as exc:
+        logger.error("sync_tournaments failed: %s", exc)
+        await db.rollback()
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.post("/apply-schedules", response_model=dict)
@@ -182,7 +235,7 @@ async def refresh_draw(
     t = await db.get(Tournament, tournament_id)
     if not t:
         raise HTTPException(404, "Tournament not found")
-    await _do_scrape(t, db)
+    await _do_scrape(t, db, force_refresh=True)
     await db.commit()
     await db.refresh(t)
     return t

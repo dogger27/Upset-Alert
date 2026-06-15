@@ -135,11 +135,14 @@ def _apply_update(existing: Tournament, discovered: DiscoveredTournament) -> boo
             setattr(existing, attr, val)
             changed = True
 
-    # Fill in draw release dates if missing (e.g. records inserted before this logic existed)
-    if existing.draw_release_direct is None and discovered.start_date and discovered.category:
+    # Always recalculate estimated draw release dates — these are formula-derived
+    # estimates and should stay in sync with the current formula
+    if discovered.start_date and discovered.category:
         direct, qual = calculate_draw_release_dates(discovered.start_date, discovered.category)
-        if direct:
+        if direct and existing.draw_release_direct != direct:
             existing.draw_release_direct = direct
+            changed = True
+        if qual != existing.draw_release_qualifiers:
             existing.draw_release_qualifiers = qual
             changed = True
 
@@ -179,6 +182,19 @@ async def sync_season(
                 updated += 1
             else:
                 skipped += 1
+
+            # If we've never successfully fetched this singles page (page_id is
+            # still null), try now — covers cases where the page didn't exist
+            # when the tournament was first inserted, or where a title rename
+            # just corrected a bad stored title.
+            if scrape_new and existing.wiki_page_id is None:
+                try:
+                    from app.routers.tournaments import _do_scrape
+                    await _do_scrape(existing, db)
+                    logger.info("Confirmed wiki_page_id for %s", existing.wiki_page_title)
+                except Exception as exc:
+                    logger.debug("Still no page for %s: %s", existing.wiki_page_title, exc)
+
             continue
 
         # New tournament

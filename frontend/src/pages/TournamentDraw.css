@@ -1,23 +1,121 @@
 .draw-page { max-width: 100%; }
 
+.draw-last-modified {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin: 0.1rem 0 0;
+}
+
+/* ── View mode toggle ── */
+.draw-mode-toggle {
+  display: flex;
+  justify-content: center;
+  padding: 1.25rem 1.5rem 0.5rem;
+  gap: 0;
+}
+
+.draw-mode-btn {
+  padding: 0.65rem 2.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  font-family: inherit;
+  border: 2px solid var(--green-dark, #2d5a3d);
+  background: white;
+  color: var(--green-dark, #2d5a3d);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  letter-spacing: 0.01em;
+}
+
+.draw-mode-btn:first-child {
+  border-radius: 8px 0 0 8px;
+  border-right-width: 1px;
+}
+
+.draw-mode-btn:last-child {
+  border-radius: 0 8px 8px 0;
+  border-left-width: 1px;
+}
+
+.draw-mode-btn.active {
+  background: var(--green-dark, #2d5a3d);
+  color: white;
+}
+
+.draw-mode-btn:not(.active):hover {
+  background: #f0f7f2;
+}
+
 .draw-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   flex-wrap: wrap;
   gap: 1rem;
-  padding: 1.5rem;
+  padding: 1.25rem 1.5rem;
   background: white;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 2px solid var(--border);
 }
 
-.draw-header h1 { font-size: 1.5rem; margin-bottom: 0.2rem; }
+.draw-header-top { flex: 1; min-width: 0; }
+
+.draw-title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.3rem;
+}
+
+.draw-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.draw-title-dates {
+  font-size: 0.9rem;
+  font-weight: 400;
+  color: var(--text-muted);
+  margin-left: 0.6rem;
+}
+
+.draw-level {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.draw-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 0.25rem;
+}
+
+.draw-meta-left { display: flex; align-items: center; gap: 0.4rem; }
+.draw-meta-sep { opacity: 0.4; }
+.draw-meta-right { display: flex; align-items: center; gap: 0.75rem; }
+
+.draw-confirmed { color: #15803d; font-weight: 600; }
+.draw-pending-label { color: var(--text-muted); }
 
 .draw-header-actions {
   display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.4rem;
+}
+
+.draw-status-level {
+  display: flex;
   align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
+  gap: 0.75rem;
 }
 
 .lock-badge {

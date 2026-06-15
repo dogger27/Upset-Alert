@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import get_current_user
@@ -10,6 +10,38 @@ from app.models.user import User
 from app.schemas.prediction import PredictionOut, PredictionSet
 
 router = APIRouter(prefix="/predictions", tags=["predictions"])
+
+
+@router.get("/entry-status", response_model=dict[int, str])
+async def get_entry_status(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Returns {tournament_id: 'complete' | 'partial'} for tournaments with at least one pick."""
+    totals_result = await db.execute(
+        select(Match.tournament_id, func.count().label("total"))
+        .where(Match.is_bye == False)
+        .group_by(Match.tournament_id)
+    )
+    total_by_t = {r.tournament_id: r.total for r in totals_result}
+
+    picks_result = await db.execute(
+        select(UserPrediction.tournament_id, func.count().label("pick_count"))
+        .where(
+            UserPrediction.user_id == current_user.id,
+            UserPrediction.predicted_winner_id.isnot(None),
+        )
+        .group_by(UserPrediction.tournament_id)
+    )
+    picks_by_t = {r.tournament_id: r.pick_count for r in picks_result}
+
+    result = {}
+    for t_id, total in total_by_t.items():
+        count = picks_by_t.get(t_id, 0)
+        if count == 0:
+            continue
+        result[t_id] = "complete" if count >= total else "partial"
+    return result
 
 
 @router.get("/{tournament_id}", response_model=list[PredictionOut])

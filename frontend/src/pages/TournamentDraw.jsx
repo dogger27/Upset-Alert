@@ -5,6 +5,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import clsx from 'clsx'
 import { getDraw } from '../api/tournaments'
 import { getPredictions, savePredictions } from '../api/predictions'
 import { useAuth } from '../store/auth'
@@ -29,8 +30,7 @@ export default function TournamentDraw() {
 
   // Local picks state: {match_id: player_id}
   const [picks, setPicks] = useState({})
-  // Matches whose composition changed since the pick was made — need user review
-  const [stalePicks, setStalePicks] = useState(new Set())
+  const [viewMode, setViewMode] = useState('picks')
   // Celebration state
   const [celebrating, setCelebrating] = useState(false)
   const celebrateTimerRef = useRef(null)
@@ -55,9 +55,9 @@ export default function TournamentDraw() {
 
   const handlePick = (matchId, playerId) => {
     const newPicks = { ...picks }
-    const newStale = new Set(stalePicks)
     const oldPlayerId = newPicks[matchId]
 
+    // Cascade-clear: if switching picks, clear downstream picks for the old player
     if (oldPlayerId != null && oldPlayerId !== playerId && data) {
       const byKey = {}
       for (const m of data.matches) byKey[`${m.round_number}:${m.match_number}`] = m
@@ -66,23 +66,14 @@ export default function TournamentDraw() {
         const next = byKey[`${cur.round_number + 1}:${Math.ceil(cur.match_number / 2)}`]
         if (!next) break
         if (newPicks[next.id] === oldPlayerId) {
-          // Cascade-clear: old player can no longer reach this match
           newPicks[next.id] = null
-          newStale.delete(next.id)
-        } else if (newPicks[next.id] != null) {
-          // Different player picked here — matchup has changed, flag for review
-          newStale.add(next.id)
         }
         cur = next
       }
     }
 
-    // Making a pick for a match resolves its stale status
-    newStale.delete(matchId)
-
     newPicks[matchId] = playerId
     setPicks(newPicks)
-    setStalePicks(newStale)
     if (user && !locked) {
       saveMutation.mutate(newPicks)
     }
@@ -108,22 +99,50 @@ export default function TournamentDraw() {
   const pickedCount = Object.values(picks).filter(v => v != null).length
   const totalPredictable = matches.filter(m => !m.is_bye).length
 
+  // Header helpers
+  const catShort = tournament.category ? tournament.category.replace(/^(ATP|WTA)\s+/, '') : ''
+  const tourLabel = `${tournament.gender === 'M' ? 'ATP' : 'WTA'}${catShort ? ' ' + catShort : ''}`
+  const surface = tournament.surface ? tournament.surface.replace(/\s*\(.*?\)/g, '') : ''
+
+  const fmtDateRange = (start, end) => {
+    if (!start) return ''
+    const s = new Date(start + 'T00:00:00')
+    const mo = d => d.toLocaleDateString('en-US', { month: 'short' })
+    if (!end) return `${mo(s)} ${s.getDate()}`
+    const e = new Date(end + 'T00:00:00')
+    return s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear()
+      ? `${mo(s)} ${s.getDate()} – ${e.getDate()}`
+      : `${mo(s)} ${s.getDate()} – ${mo(e)} ${e.getDate()}`
+  }
+
+  const fmtModified = raw => {
+    const d = new Date(raw.endsWith('Z') || raw.includes('+') ? raw : raw + 'Z')
+    const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+      .replace(' AM', 'am').replace(' PM', 'pm')
+    return `${date}, ${time}`
+  }
+
   return (
     <div className="draw-page">
       <div className="draw-header">
-        <div>
-          <h1>{tournament.year} {tournament.name}</h1>
-          <p className="muted">
-            {tournament.start_date && (
-              <>
-                {new Date(tournament.start_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                {' · '}
-              </>
-            )}
-            {tournament.gender === 'M' ? "Men's" : "Women's"} Singles ·{' '}
-            {tournament.draw_size}-player draw · {tournament.num_rounds} rounds
-            {tournament.surface && ` · ${tournament.surface}`}
-          </p>
+        <div className="draw-header-top">
+          <div className="draw-title-row">
+            <h1 className="draw-title">
+              {tournament.name}
+              {tournament.start_date && (
+                <span className="draw-title-dates">{fmtDateRange(tournament.start_date, tournament.end_date)}</span>
+              )}
+            </h1>
+          </div>
+          <div className="draw-meta-row">
+            <span className="draw-meta-left">
+              {[tournament.city, surface].filter(Boolean).join(' · ')}
+            </span>
+          </div>
+          {tournament.last_scraped_at && (
+            <p className="draw-last-modified">Last modified: {fmtModified(tournament.last_scraped_at)}</p>
+          )}
         </div>
         <div className="draw-header-actions">
           {locked ? (
@@ -140,7 +159,7 @@ export default function TournamentDraw() {
               }
               return (
                 <span className="muted" title={venueLocal ?? undefined}>
-                  Closes {userLocal}
+                  Pick selection closes {userLocal}
                 </span>
               )
             })()
@@ -153,6 +172,21 @@ export default function TournamentDraw() {
           {!user && (
             <Link to="/login" className="btn-primary">Log in to make picks</Link>
           )}
+          <div className="draw-status-level">
+            <span className="draw-meta-right">
+              {tournament.draw_released_direct_at
+                ? <span className="draw-confirmed">✓ DA</span>
+                : tournament.draw_release_direct
+                  ? <span className="draw-pending-label">DA: {new Date(tournament.draw_release_direct + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                  : null}
+              {tournament.draw_released_qualifiers_at
+                ? <span className="draw-confirmed">✓ Qual</span>
+                : tournament.draw_release_qualifiers
+                  ? <span className="draw-pending-label">Qual: {new Date(tournament.draw_release_qualifiers + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                  : null}
+            </span>
+            <span className="draw-level">{tourLabel}</span>
+          </div>
         </div>
       </div>
 
@@ -164,14 +198,29 @@ export default function TournamentDraw() {
 
       {celebrating && <CelebrationOverlay />}
 
+      <div className="draw-mode-toggle">
+        <button
+          className={clsx('draw-mode-btn', { active: viewMode === 'picks' })}
+          onClick={() => setViewMode('picks')}
+        >
+          My Picks
+        </button>
+        <button
+          className={clsx('draw-mode-btn', { active: viewMode === 'live' })}
+          onClick={() => setViewMode('live')}
+        >
+          Live Draw
+        </button>
+      </div>
+
       <BracketView
         tournament={tournament}
         matches={matches}
         players={players}
         picks={user ? picks : {}}
-        stalePicks={stalePicks}
         onPick={handlePick}
         locked={!user || locked}
+        mode={viewMode}
       />
     </div>
   )

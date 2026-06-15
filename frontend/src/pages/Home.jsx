@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { listTournaments } from '../api/tournaments'
 import { listLeagues } from '../api/leagues'
+import { getEntryStatus } from '../api/predictions'
 import { useAuth } from '../store/auth'
 import './Home.css'
 
@@ -9,6 +10,36 @@ function fmtDate(s) {
   if (!s) return null
   const [y, m, d] = s.split('-').map(Number)
   return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+function fmtQueryTime(ts) {
+  if (!ts) return null
+  const d = new Date(ts)
+  const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+    .replace(' AM', 'am').replace(' PM', 'pm')
+  return `${date}, ${time}`
+}
+
+function fmtDateRange(start, end) {
+  if (!start) return ''
+  const s = new Date(start + 'T00:00:00')
+  const mo = (d) => d.toLocaleDateString('en-US', { month: 'short' })
+  if (!end) return `${mo(s)} ${s.getDate()}`
+  const e = new Date(end + 'T00:00:00')
+  const sameMonth = s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear()
+  return sameMonth
+    ? `${mo(s)} ${s.getDate()} - ${e.getDate()}`
+    : `${mo(s)} ${s.getDate()} - ${mo(e)} ${e.getDate()}`
+}
+
+function fmtModified(iso) {
+  if (!iso) return null
+  const d = new Date(iso.endsWith('Z') || iso.includes('+') ? iso : iso + 'Z')
+  const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+    .replace(' AM', 'am').replace(' PM', 'pm')
+  return `${date}, ${time}`
 }
 
 function DrawDates({ t, section }) {
@@ -44,83 +75,145 @@ function DrawDates({ t, section }) {
   return null
 }
 
-function TournamentCard({ t, section }) {
-  const genderLabel = t.gender === 'M' ? "Men's" : "Women's"
+function TournamentCard({ t, section, pickStatus: ps }) {
+  const pickState = ps?.[t.id] ?? null  // 'complete' | 'partial' | null
   const catShort = t.category ? t.category.replace(/^(ATP|WTA)\s+/, '') : ''
   const surface = t.surface ? t.surface.replace(/\s*\(.*?\)/g, '') : ''
   const city = t.city ? t.city : ''
+  const hasDrawData = t.status === 'completed' || !!t.draw_released_direct_at
 
+  const cardClass = `home-card home-card-${t.gender === 'M' ? 'men' : 'women'}${!hasDrawData ? ' home-card-upcoming' : ''}`
+  const inner = (
+    <>
+      <div className="home-card-title-row">
+        <span className="home-card-title">
+          {t.name}
+          {t.start_date && (
+            <span className="home-card-dates">{fmtDateRange(t.start_date, t.end_date)}</span>
+          )}
+        </span>
+        {catShort && <span className="home-card-level">{catShort}</span>}
+      </div>
+      <div className="home-card-sub-row">
+        <span className="home-card-sub">{city}{city && surface ? ' · ' : ''}{surface}</span>
+        <DrawDates t={t} section={section} />
+      </div>
+      {(section === 'active' || section === 'open') && (
+        <div className="home-card-bottom-row">
+          <span className="home-card-modified">
+            {t.last_scraped_at ? `Last modified: ${fmtModified(t.last_scraped_at)}` : ''}
+          </span>
+          {section === 'active' && pickState === 'complete'
+            ? <span className="home-card-entered competing">★ Competing</span>
+            : pickState === 'complete'
+              ? <span className="home-card-entered complete">✓ Picks entered</span>
+              : pickState === 'partial'
+                ? <span className="home-card-entered partial">⚠ Picks incomplete</span>
+                : <span className="home-card-entered none">✕ Picks not started</span>
+          }
+        </div>
+      )}
+    </>
+  )
+
+  if (!hasDrawData) {
+    return <div className={cardClass}>{inner}</div>
+  }
+  return <Link to={`/tournaments/${t.id}`} className={cardClass}>{inner}</Link>
+}
+
+function GenderCol({ label, tournaments, section, pickStatus }) {
   return (
-    <Link to={`/tournaments/${t.id}`} className={`home-card home-card-${t.gender === 'M' ? 'men' : 'women'}`}>
-      <div className="home-card-meta">{catShort} · {genderLabel}</div>
-      <div className="home-card-title">{t.name}</div>
-      <div className="home-card-sub">{city}{city && surface ? ' · ' : ''}{surface}</div>
-      <DrawDates t={t} section={section} />
-    </Link>
+    <div className="home-gender-col">
+      <div className="home-gender-header">{label}</div>
+      {tournaments.length > 0 ? tournaments.map(t => (
+        <TournamentCard key={t.id} t={t} section={section} pickStatus={pickStatus} />
+      )) : (
+        <p className="home-gender-empty">—</p>
+      )}
+    </div>
   )
 }
 
-function Section({ title, description, tournaments, section, emptyMsg }) {
-  if (!tournaments.length) return null
+function Section({ title, description, tournaments, section, pickStatus, emptyMessage }) {
+  if (!tournaments.length && !emptyMessage) return null
+
+  const mens = tournaments.filter(t => t.gender === 'M')
+  const womens = tournaments.filter(t => t.gender === 'F')
+
   return (
     <section className="home-section">
       <div className="home-section-header">
         <h2>{title}</h2>
         <p className="home-section-desc">{description}</p>
       </div>
-      <div className="home-grid">
-        {tournaments.map(t => <TournamentCard key={t.id} t={t} section={section} />)}
-      </div>
+      {tournaments.length > 0 ? (
+        <div className="home-gender-columns">
+          <GenderCol label="ATP" tournaments={mens} section={section} pickStatus={pickStatus} />
+          <GenderCol label="WTA" tournaments={womens} section={section} pickStatus={pickStatus} />
+        </div>
+      ) : (
+        <p className="home-empty-section">{emptyMessage}</p>
+      )}
     </section>
   )
 }
 
 function getSection(t) {
-  const now = new Date()
-  const in3Days = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000)
-
   if (t.status === 'active') return 'active'
+  if (t.status === 'open') return 'open'
   if (t.status === 'completed') return null
-
-  // pending — show if DA draw is out (Open) or releasing within 3 days (Upcoming)
-  if (t.draw_released_direct_at) return 'open'
-  if (t.draw_release_direct && new Date(t.draw_release_direct) <= in3Days) return 'upcoming'
-
+  if (t.status === 'upcoming' && t.start_date) {
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    const in7Days = new Date(today); in7Days.setDate(today.getDate() + 8)
+    const start = new Date(t.start_date + 'T00:00:00')
+    if (start > today && start <= in7Days) return 'upcoming'
+  }
   return null
 }
 
 export default function Home() {
   const { user } = useAuth()
-  const { data: tournaments } = useQuery({ queryKey: ['tournaments'], queryFn: listTournaments })
+  const { data: tournaments, dataUpdatedAt } = useQuery({ queryKey: ['tournaments'], queryFn: listTournaments })
   const { data: leagues } = useQuery({ queryKey: ['leagues'], queryFn: listLeagues, enabled: !!user })
+  const { data: enteredList } = useQuery({
+    queryKey: ['entry-status'],
+    queryFn: getEntryStatus,
+    enabled: !!user,
+  })
+  const pickStatus = enteredList || null  // {tournament_id: 'complete' | 'partial'}
 
+  const dataLoaded = tournaments !== undefined
   const active = tournaments?.filter(t => getSection(t) === 'active') || []
   const open = tournaments?.filter(t => getSection(t) === 'open') || []
   const upcoming = tournaments?.filter(t => getSection(t) === 'upcoming') || []
 
-  const hasAny = active.length + open.length + upcoming.length > 0
-
   return (
     <div className="home">
-      <div className="hero">
-        <h1>🚨 Upset Alert</h1>
-        <p>Pick the bracket. Track every match. Beat your group.</p>
-        {!user && (
+      {!user && (
+        <div className="hero">
           <div className="hero-cta">
             <Link to="/register" className="btn-clay">Get started</Link>
             <Link to="/login" className="btn-secondary">Log in</Link>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       <div className="home-sections">
-        {hasAny && <h2 className="home-main-title">Tournaments</h2>}
+        {dataLoaded && (
+          <div className="home-main-title-row">
+            <h2 className="home-main-title">Tournaments</h2>
+            <span className="last-queried">Last queried: {fmtQueryTime(dataUpdatedAt)}</span>
+          </div>
+        )}
 
         <Section
           title="Active"
           description="Matches are underway. Selection is closed."
           tournaments={active}
           section="active"
+          pickStatus={pickStatus}
+          emptyMessage={dataLoaded ? 'No active tournaments at this time.' : null}
         />
 
         <Section
@@ -128,20 +221,17 @@ export default function Home() {
           description="Direct Acceptance draw is set — no matches yet. Selection is OPEN."
           tournaments={open}
           section="open"
+          pickStatus={pickStatus}
+          emptyMessage={dataLoaded ? 'No open tournaments at this time.' : null}
         />
 
         <Section
           title="Upcoming"
-          description="DA players expected in the draw within 3 days."
+          description="Starting within 8 days — draw not yet released."
           tournaments={upcoming}
           section="upcoming"
+          pickStatus={pickStatus}
         />
-
-        {!hasAny && (
-          <div className="card" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
-            No tournaments in the next 3 days. Check back soon!
-          </div>
-        )}
 
         {user && leagues && leagues.length > 0 && (
           <section className="home-section">

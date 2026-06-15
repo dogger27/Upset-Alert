@@ -23,13 +23,13 @@ def calculate_draw_release_dates(
 
     if "Grand Slam" in category:
         direct_days_before = 8
-        qualifiers_days_before = 6
+        qualifiers_days_before = 3  # qualifying wraps ~3 days before R1
     elif "1000" in category:
         direct_days_before = 5
         qualifiers_days_before = 3
     elif "500" in category:
         direct_days_before = 4
-        qualifiers_days_before = 2
+        qualifiers_days_before = 1  # qualifying finishes day before R1
     elif "250" in category:
         direct_days_before = 2
         qualifiers_days_before = 1

@@ -13,12 +13,13 @@
 }
 
 .navbar-brand {
-  font-size: 1.2rem;
+  font-size: 1.1rem;
   font-weight: 700;
   color: white;
-  text-decoration: none;
-  letter-spacing: -0.3px;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
 }
+.navbar-brand:hover { text-decoration: none; color: white; opacity: 0.9; }
 
 .navbar-links {
   display: flex;
@@ -32,9 +33,142 @@
 }
 .navbar-links a:hover { color: white; text-decoration: none; }
 
+.navbar-profile {
+  position: relative;
+}
+
 .navbar-user {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
   font-size: 0.85rem;
   color: var(--green-light);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.3rem 0.4rem;
+  border-radius: 5px;
+  font-family: inherit;
+  transition: background 0.15s;
+}
+.navbar-user:hover {
+  background: rgba(255,255,255,0.08);
+}
+
+.navbar-caret {
+  font-size: 0.65rem;
+  opacity: 0.7;
+}
+
+/* Dropdown */
+.profile-dropdown {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  min-width: 200px;
+  background: #fff;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  z-index: 200;
+  overflow: hidden;
+}
+
+.profile-dropdown-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.85rem 1rem;
+}
+
+.profile-dropdown-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text, #111);
+}
+
+.profile-dropdown-email {
+  font-size: 0.78rem;
+  color: var(--text-muted, #6b7280);
+}
+
+.profile-dropdown-divider {
+  height: 1px;
+  background: var(--border, #e5e7eb);
+}
+
+.profile-dropdown-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.65rem 1rem;
+  font-size: 0.88rem;
+  color: var(--text, #111);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.12s;
+}
+.profile-dropdown-item:hover {
+  background: var(--bg-subtle, #f3f4f6);
+}
+.profile-dropdown-item--danger {
+  color: #dc2626;
+}
+
+/* Inline edit form */
+.profile-edit-form {
+  padding: 0.85rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.profile-edit-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text, #111);
+  margin-bottom: 0.25rem;
+}
+
+.profile-edit-label {
+  font-size: 0.75rem;
+  color: var(--text-muted, #6b7280);
+  margin-top: 0.25rem;
+}
+
+.profile-edit-input {
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.85rem;
+  border: 1px solid var(--border, #d1d5db);
+  border-radius: 5px;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+.profile-edit-input:focus {
+  outline: none;
+  border-color: var(--green-mid, #4a7c59);
+  box-shadow: 0 0 0 2px rgba(74,124,89,0.15);
+}
+
+.profile-edit-error {
+  font-size: 0.78rem;
+  color: #dc2626;
+  margin: 0.1rem 0;
+}
+
+.profile-edit-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+
+.profile-edit-btn {
+  flex: 1;
+  padding: 0.4rem 0;
+  font-size: 0.82rem;
 }
 
 .navbar-links .btn-secondary {

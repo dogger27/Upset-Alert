@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { listTournaments } from '../api/tournaments'
@@ -47,24 +47,42 @@ export default function Tournaments() {
   const [filterCategory, setFilterCategory] = useState(new Set(['250', '500', '1000', 'Grand Slam']))
   const [filterYear, setFilterYear] = useState(new Date().getFullYear())
 
-  const { data: tournaments = [], isLoading } = useQuery({
+  const { data: tournaments = [], isLoading, dataUpdatedAt } = useQuery({
     queryKey: ['tournaments'],
     queryFn: listTournaments,
     refetchInterval: 60 * 1000,
   })
 
+  function fmtQueryTime(ts) {
+    if (!ts) return null
+    const d = new Date(ts)
+    const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+      .replace(' AM', 'am').replace(' PM', 'pm')
+    return `${date}, ${time}`
+  }
+
   const localTzAbbr = Intl.DateTimeFormat('en-US', { timeZoneName: 'short' })
     .formatToParts(new Date())
     .find(p => p.type === 'timeZoneName')?.value ?? ''
 
-  const availableYears = [...new Set(tournaments.map(t => t.year))].sort((a, b) => b - a)
-
-  const filtered = tournaments.filter(t => {
-    if (filterYear !== 'all' && t.year !== filterYear) return false
+  // Pre-year filtered set — used to derive which years actually have matching rows
+  const preYearFiltered = tournaments.filter(t => {
     if (!filterStatus.has(t.status)) return false
     if (!filterGender.has(t.gender)) return false
     return Array.from(filterCategory).some(sel => CATEGORY_GROUPS[sel]?.includes(t.category))
-  }).sort((a, b) => {
+  })
+  const availableYears = [...new Set(preYearFiltered.map(t => t.year))].sort((a, b) => b - a)
+
+  // If the selected year is no longer in the available set (e.g. after changing
+  // other filters), auto-select the most recent available year.
+  useEffect(() => {
+    if (availableYears.length > 0 && !availableYears.includes(filterYear)) {
+      setFilterYear(availableYears[0])
+    }
+  }, [availableYears.join(',')])
+
+  const filtered = preYearFiltered.filter(t => t.year === filterYear).sort((a, b) => {
     const sg = STATUS_GROUP_ORDER.indexOf(a.status) - STATUS_GROUP_ORDER.indexOf(b.status)
     if (sg !== 0) return sg
     const dateA = a.start_date ? new Date(a.start_date) : new Date(9999, 0, 0)
@@ -79,25 +97,16 @@ export default function Tournaments() {
 
   return (
     <div className="tournaments-page">
-      <div className="tournaments-title-row">
-        <h1>Tournaments</h1>
-        <select
-          className="year-select"
-          value={filterYear}
-          onChange={e => setFilterYear(e.target.value === 'all' ? 'all' : Number(e.target.value))}
-        >
-          <option value="all">All years</option>
-          {availableYears.map(y => (
-            <option key={y} value={y}>{y}</option>
-          ))}
-        </select>
-      </div>
+      <h1>Tournaments</h1>
 
       {/* Filters */}
       <div className="card tournaments-section" style={{ width: 'fit-content', margin: '0 auto 1.25rem' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
           <h2 style={{ margin: 0 }}>Filters</h2>
-          <span className="muted" style={{ fontSize: '0.82rem' }}>{filtered.length} tournament{filtered.length !== 1 ? 's' : ''}</span>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.15rem' }}>
+            <span className="muted" style={{ fontSize: '0.82rem' }}>{filtered.length} tournament{filtered.length !== 1 ? 's' : ''}</span>
+            {dataUpdatedAt ? <span className="last-queried">Last queried: {fmtQueryTime(dataUpdatedAt)}</span> : null}
+          </div>
         </div>
         <div style={{ display: 'flex', gap: '2.5rem', alignItems: 'flex-start' }}>
 
@@ -146,6 +155,21 @@ export default function Tournaments() {
             ))}
           </div>
 
+          <div>
+            <h3 className="filter-label">Year</h3>
+            {availableYears.map(y => (
+              <label key={y} className="filter-row">
+                <input
+                  type="radio"
+                  name="filter-year"
+                  checked={filterYear === y}
+                  onChange={() => setFilterYear(y)}
+                />
+                {y}
+              </label>
+            ))}
+          </div>
+
           <div style={{ marginLeft: 'auto', paddingLeft: '2rem', borderLeft: '1px solid var(--border)', alignSelf: 'stretch', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '0.5rem' }}>
             <h3 className="filter-label">Legend</h3>
             {[{ label: "Men's", color: GENDER_COLORS.M, border: '#93b8ff' }, { label: "Women's", color: GENDER_COLORS.F, border: '#ffb3c6' }].map(({ label, color, border }) => (
@@ -158,8 +182,8 @@ export default function Tournaments() {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="card tournaments-section" style={{ width: 'fit-content', margin: '0 auto' }}>
+      <div style={{ width: 'fit-content', margin: '0 auto' }}>
+      <div className="card tournaments-section">
         {isLoading && <p className="muted">Loading tournaments…</p>}
 
         {!isLoading && (
@@ -232,13 +256,15 @@ export default function Tournaments() {
                             <td>{t.draw_size > 0 ? t.draw_size : '—'}</td>
                             <td>{surface}</td>
                             <td onClick={e => e.stopPropagation()} style={{ padding: '0 0.5rem' }}>
-                              <a
-                                href={`https://en.wikipedia.org/wiki/${t.wiki_page_title.replace(/ /g, '_')}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                title="View on Wikipedia"
-                                style={{ color: 'var(--text-muted)', lineHeight: 1, display: 'inline-flex' }}
-                              >🌐</a>
+                              {t.wiki_page_id && (
+                                <a
+                                  href={`https://en.wikipedia.org/wiki/${t.wiki_page_title.replace(/ /g, '_')}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title="View on Wikipedia"
+                                  style={{ color: 'var(--text-muted)', lineHeight: 1, display: 'inline-flex' }}
+                                >🌐</a>
+                              )}
                             </td>
                           </tr>
                         )
@@ -251,6 +277,7 @@ export default function Tournaments() {
             </table>
           </div>
         )}
+      </div>
       </div>
     </div>
   )
