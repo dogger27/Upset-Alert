@@ -10,6 +10,9 @@ export default function Navbar() {
   const [editing, setEditing] = useState(false)
   const [username, setUsername] = useState('')
   const [fullName, setFullName] = useState('')
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const menuRef = useRef(null)
@@ -30,6 +33,9 @@ export default function Navbar() {
   const openEdit = () => {
     setUsername(user?.username ?? user?.display_name ?? '')
     setFullName(user?.full_name ?? '')
+    setCurrentPassword('')
+    setNewPassword('')
+    setConfirmPassword('')
     setError('')
     setEditing(true)
   }
@@ -40,10 +46,20 @@ export default function Navbar() {
   }
 
   const saveEdit = async () => {
+    const changingPassword = currentPassword || newPassword || confirmPassword
+    if (changingPassword) {
+      if (!currentPassword) { setError('Enter your current password'); return }
+      if (newPassword.length < 8) { setError('New password must be at least 8 characters'); return }
+      if (newPassword !== confirmPassword) { setError('Passwords do not match'); return }
+    }
     setSaving(true)
     setError('')
     try {
       await updateProfile({ username: username.trim() || undefined, full_name: fullName.trim() || undefined })
+      if (changingPassword) {
+        const { default: client } = await import('../api/client')
+        await client.patch('/auth/me/password', { current_password: currentPassword, new_password: newPassword })
+      }
       setEditing(false)
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to save')
@@ -60,21 +76,24 @@ export default function Navbar() {
 
   return (
     <nav className="navbar">
-      <Link to="/" className="navbar-brand">🚨 Upset Alert</Link>
+      <div className="navbar-left" />
+      <Link to="/" className="navbar-brand">Upset Alert</Link>
       <div className="navbar-links">
+        <Link to="/">Dashboard</Link>
         <Link to="/tournaments">Tournaments</Link>
-        <Link to="/leagues">Leagues</Link>
         {user ? (
           <>
-            <Link to="/admin">Admin</Link>
+            {user.is_admin && <Link to="/admin" className="navbar-admin-btn">Admin</Link>}
             <div className="navbar-profile" ref={menuRef}>
               <button
                 className="navbar-user"
                 onClick={() => { setMenuOpen(s => !s); setEditing(false); setError('') }}
                 aria-expanded={menuOpen}
               >
-                {user.display_name}
-                <span className="navbar-caret" aria-hidden>▾</span>
+                <svg className="navbar-user-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <circle cx="12" cy="8" r="4" />
+                  <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+                </svg>
               </button>
               {menuOpen && (
                 <div className="profile-dropdown">
@@ -111,6 +130,35 @@ export default function Navbar() {
                         onChange={e => setFullName(e.target.value)}
                         placeholder="Full name"
                       />
+                      <div className="profile-dropdown-divider" style={{ margin: '0.75rem 0 0.5rem' }} />
+                      <p className="profile-edit-label" style={{ fontWeight: 700, marginBottom: '0.5rem' }}>Change Password</p>
+                      <label className="profile-edit-label">Current Password</label>
+                      <input
+                        className="profile-edit-input"
+                        type="password"
+                        value={currentPassword}
+                        onChange={e => setCurrentPassword(e.target.value)}
+                        placeholder="Current password"
+                        autoComplete="current-password"
+                      />
+                      <label className="profile-edit-label">New Password</label>
+                      <input
+                        className="profile-edit-input"
+                        type="password"
+                        value={newPassword}
+                        onChange={e => setNewPassword(e.target.value)}
+                        placeholder="New password (min 8 chars)"
+                        autoComplete="new-password"
+                      />
+                      <label className="profile-edit-label">Confirm New Password</label>
+                      <input
+                        className="profile-edit-input"
+                        type="password"
+                        value={confirmPassword}
+                        onChange={e => setConfirmPassword(e.target.value)}
+                        placeholder="Confirm new password"
+                        autoComplete="new-password"
+                      />
                       {error && <p className="profile-edit-error">{error}</p>}
                       <div className="profile-edit-actions">
                         <button className="btn-secondary profile-edit-btn" onClick={cancelEdit} disabled={saving}>
@@ -126,14 +174,7 @@ export default function Navbar() {
               )}
             </div>
           </>
-        ) : (
-          <>
-            <Link to="/login">Log in</Link>
-            <Link to="/register" className="btn-primary" style={{ padding: '0.4rem 0.9rem', borderRadius: 6 }}>
-              Sign up
-            </Link>
-          </>
-        )}
+        ) : null}
       </div>
     </nav>
   )

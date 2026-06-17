@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { getMe, login as apiLogin, register as apiRegister } from '../api/auth'
+import { getMe, login as apiLogin, register as apiRegister, updateMe as apiUpdateMe } from '../api/auth'
+import { queryClient } from '../main'
 
 export const useAuth = create((set) => ({
   user: null,
@@ -21,15 +22,22 @@ export const useAuth = create((set) => ({
     const { access_token } = await apiLogin(email, password)
     localStorage.setItem('token', access_token)
     const user = await getMe()
+    queryClient.clear()
     set({ user })
   },
 
-  register: async (email, displayName, password) => {
-    await apiRegister({ email, display_name: displayName, password })
+  register: async (email, username, fullName, password) => {
+    await apiRegister({ email, username, full_name: fullName, display_name: fullName, password })
+  },
+
+  updateProfile: async (data) => {
+    const user = await apiUpdateMe(data)
+    set({ user })
   },
 
   logout: () => {
     localStorage.removeItem('token')
+    queryClient.clear()
     set({ user: null })
   },
 }))

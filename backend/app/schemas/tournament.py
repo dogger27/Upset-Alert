@@ -42,7 +42,9 @@ class TournamentOut(BaseModel):
     day1_start_minute: Optional[int]
     closing_time: Optional[datetime]
     status: str
+    selections_unlocked: bool = False
     last_scraped_at: Optional[datetime]
+    latest_result_at: Optional[datetime] = None
     is_locked: bool
 
     @property

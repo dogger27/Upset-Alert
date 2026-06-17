@@ -1,7 +1,7 @@
 from datetime import date, datetime, timezone
 from typing import Optional
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, JSON, String, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, JSON, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -41,6 +41,7 @@ class Tournament(Base):
     closing_time: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     # upcoming / open / active / completed
     status: Mapped[str] = mapped_column(String, default="upcoming")
+    selections_unlocked: Mapped[bool] = mapped_column(Boolean, default=False)
     last_scraped_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
@@ -55,6 +56,8 @@ class Tournament(Base):
 
     @property
     def is_locked(self) -> bool:
+        if self.selections_unlocked:
+            return False
         close = self.closing_time
         if close is None:
             return False
@@ -92,6 +95,8 @@ class Tournament(Base):
         # DA draw published → open, unless the start date has arrived and the
         # scraper already detected match results (closing_time not yet set)
         if self.draw_released_direct_at:
+            if self.start_date and (self.start_date - today).days > 30:
+                return "upcoming"
             if self.status == "active" and self.start_date and today >= self.start_date:
                 return "active"
             return "open"
@@ -106,7 +111,11 @@ class Tournament(Base):
         if rounds_from_end in names:
             return names[rounds_from_end]
         players_in_round = self.draw_size // (2 ** (round_number - 1))
-        return f"Round of {players_in_round}"
+        # Round up to the nearest power of 2 (e.g. 28 → 32)
+        p = 1
+        while p < players_in_round:
+            p <<= 1
+        return f"Round of {p}"
 
 
 class Player(Base):
@@ -125,6 +134,8 @@ class Player(Base):
     bracket_position: Mapped[int] = mapped_column(Integer, nullable=False)
     # Official ATP/WTA ranking at time of draw
     ranking: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Foreign key into te_players — set once on first resolution, never changes
+    te_player_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     tournament: Mapped["Tournament"] = relationship("Tournament", back_populates="players")
 

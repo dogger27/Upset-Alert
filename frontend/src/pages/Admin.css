@@ -42,3 +42,39 @@
   border-bottom: 1px solid var(--border); background: transparent;
   text-align: left;
 }
+
+/* Scraping explainer */
+.scraping-explainer p { font-size: 0.88rem; color: var(--text-muted); margin: 0.4rem 0 0; line-height: 1.55; }
+
+.scraping-step { padding: 1rem 0; border-bottom: 1px solid var(--border); }
+.scraping-step:last-child { border-bottom: none; padding-bottom: 0; }
+.scraping-step:first-child { padding-top: 0; }
+
+.scraping-step-header {
+  display: flex; align-items: center; gap: 0.6rem;
+  margin-bottom: 0.5rem;
+}
+.scraping-step-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.4rem; height: 1.4rem; border-radius: 50%;
+  background: var(--clay); color: #fff;
+  font-size: 0.75rem; font-weight: 700; flex-shrink: 0;
+}
+.scraping-step-header strong { font-size: 0.95rem; }
+.scraping-schedule {
+  margin-left: auto; font-size: 0.75rem; color: var(--text-muted);
+  background: var(--bg-alt, #f3f4f6); padding: 0.15rem 0.5rem;
+  border-radius: 999px; white-space: nowrap;
+}
+
+.scraping-links { display: flex; gap: 0.75rem; margin: 0.5rem 0; flex-wrap: wrap; }
+.scraping-links a {
+  font-size: 0.85rem; font-weight: 600;
+  color: var(--clay); text-decoration: none;
+}
+.scraping-links a:hover { text-decoration: underline; }
+
+.scraping-list {
+  margin: 0.4rem 0 0.4rem 1.25rem; padding: 0;
+  font-size: 0.88rem; color: var(--text-muted); line-height: 1.7;
+}

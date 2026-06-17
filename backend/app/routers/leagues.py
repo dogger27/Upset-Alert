@@ -15,6 +15,7 @@ from app.schemas.league import (
     LeaderboardEntry,
     LeaderboardOut,
     LeagueCreate,
+    LeagueMemberOut,
     LeagueTournamentOut,
     LeagueOut,
     LeagueUpdate,
@@ -26,8 +27,19 @@ router = APIRouter(prefix="/leagues", tags=["leagues"])
 
 
 def _with_users(members) -> list:
-    """Return member User objects for those where the user relationship is loaded."""
-    return [m.user for m in members if hasattr(m, "user") and m.user is not None]
+    """Return LeagueMemberOut objects including is_admin flag."""
+    out = []
+    for m in members:
+        if not (hasattr(m, "user") and m.user is not None):
+            continue
+        out.append(LeagueMemberOut(
+            id=m.user.id,
+            username=m.user.username,
+            display_name=m.user.display_name,
+            email=m.user.email,
+            is_admin=bool(m.is_admin),
+        ))
+    return out
 
 
 def _league_out(league: League, member_count: int = 0) -> LeagueOut:
@@ -37,6 +49,8 @@ def _league_out(league: League, member_count: int = 0) -> LeagueOut:
         scoring_mode=league.scoring_mode,
         custom_points=league.custom_points,
         is_public=league.is_public,
+        show_real_name=league.show_real_name,
+        allow_member_invites=league.allow_member_invites,
         invite_code=league.invite_code,
         created_at=league.created_at,
         owner=league.owner,
@@ -93,12 +107,14 @@ async def create_league(
         scoring_mode=body.scoring_mode,
         custom_points=body.custom_points,
         is_public=body.is_public,
+        show_real_name=body.show_real_name,
+        allow_member_invites=body.allow_member_invites,
     )
     db.add(league)
     await db.flush()
 
-    # Owner is automatically a member
-    db.add(LeagueMember(league_id=league.id, user_id=current_user.id))
+    # Owner is automatically a member and admin
+    db.add(LeagueMember(league_id=league.id, user_id=current_user.id, is_admin=True))
     await db.commit()
 
     await db.refresh(league)
@@ -129,6 +145,21 @@ async def get_league(
     return _league_out(league, len(league.members))
 
 
+@router.delete("/{league_id}", status_code=204)
+async def delete_league(
+    league_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    league = await db.get(League, league_id)
+    if not league:
+        raise HTTPException(404, "League not found")
+    if league.owner_id != current_user.id:
+        raise HTTPException(403, "Only the league owner can delete this league")
+    await db.delete(league)
+    await db.commit()
+
+
 @router.put("/{league_id}", response_model=LeagueOut)
 async def update_league(
     league_id: int,
@@ -155,10 +186,38 @@ async def update_league(
         league.custom_points = body.custom_points
     if body.is_public is not None:
         league.is_public = body.is_public
+    if body.show_real_name is not None:
+        league.show_real_name = body.show_real_name
+    if body.allow_member_invites is not None:
+        league.allow_member_invites = body.allow_member_invites
 
     await db.commit()
     await db.refresh(league)
     return _league_out(league, len(league.members))
+
+
+@router.post("/join", status_code=204)
+async def join_league_by_code(
+    invite_code: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(select(League).where(League.invite_code == invite_code))
+    league = result.scalar_one_or_none()
+    if not league:
+        raise HTTPException(404, "Invalid invite code")
+
+    existing = await db.execute(
+        select(LeagueMember).where(
+            LeagueMember.league_id == league.id,
+            LeagueMember.user_id == current_user.id,
+        )
+    )
+    if existing.scalar_one_or_none():
+        return  # already a member
+
+    db.add(LeagueMember(league_id=league.id, user_id=current_user.id))
+    await db.commit()
 
 
 @router.post("/{league_id}/join", status_code=204)
@@ -184,6 +243,69 @@ async def join_league(
         return  # already a member
 
     db.add(LeagueMember(league_id=league_id, user_id=current_user.id))
+    await db.commit()
+
+
+@router.put("/{league_id}/members/{user_id}/admin", status_code=204)
+async def set_member_admin(
+    league_id: int,
+    user_id: int,
+    is_admin: bool,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(League)
+        .options(selectinload(League.members))
+        .where(League.id == league_id)
+    )
+    league = result.scalar_one_or_none()
+    if not league:
+        raise HTTPException(404, "League not found")
+
+    caller = next((m for m in league.members if m.user_id == current_user.id), None)
+    if not caller or not caller.is_admin:
+        raise HTTPException(403, "Only admins can change admin status")
+
+    if user_id == league.owner_id:
+        raise HTTPException(400, "Cannot change the league owner's admin status")
+
+    target = next((m for m in league.members if m.user_id == user_id), None)
+    if not target:
+        raise HTTPException(404, "Member not found")
+
+    target.is_admin = is_admin
+    await db.commit()
+
+
+@router.delete("/{league_id}/members/{user_id}", status_code=204)
+async def remove_member(
+    league_id: int,
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(League)
+        .options(selectinload(League.members))
+        .where(League.id == league_id)
+    )
+    league = result.scalar_one_or_none()
+    if not league:
+        raise HTTPException(404, "League not found")
+
+    caller = next((m for m in league.members if m.user_id == current_user.id), None)
+    if not caller or not caller.is_admin:
+        raise HTTPException(403, "Only admins can remove members")
+
+    if user_id == league.owner_id:
+        raise HTTPException(400, "Cannot remove the league owner")
+
+    target = next((m for m in league.members if m.user_id == user_id), None)
+    if not target:
+        raise HTTPException(404, "Member not found")
+
+    await db.delete(target)
     await db.commit()
 
 
@@ -272,7 +394,7 @@ async def leaderboard(
 ):
     result = await db.execute(
         select(League)
-        .options(selectinload(League.owner), selectinload(League.members).selectinload(LeagueMember.user).selectinload(LeagueMember.user))
+        .options(selectinload(League.owner), selectinload(League.members).selectinload(LeagueMember.user))
         .where(League.id == league_id)
     )
     league = result.scalar_one_or_none()

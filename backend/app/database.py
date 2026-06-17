@@ -17,6 +17,10 @@ async def get_db():
 
 
 async def init_db():
+    # Ensure all model modules are imported so their tables are registered with
+    # Base.metadata before create_all runs.
+    import app.models.rankings  # noqa: F401
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         # Add any missing columns that were introduced after initial creation
@@ -35,6 +39,24 @@ async def _migrate(conn):
         "ALTER TABLE tournaments ADD COLUMN draw_released_qualifiers_at DATE",
         "ALTER TABLE tournaments ADD COLUMN city VARCHAR",
         "ALTER TABLE tournaments ADD COLUMN country VARCHAR",
+        "ALTER TABLE users ADD COLUMN username VARCHAR",
+        "ALTER TABLE users ADD COLUMN full_name VARCHAR",
+        "ALTER TABLE leagues ADD COLUMN show_real_name BOOLEAN DEFAULT 0",
+        # Rankings cache tables
+        (
+            "CREATE TABLE IF NOT EXISTS te_players "
+            "(id INTEGER PRIMARY KEY, gender VARCHAR(1) NOT NULL, "
+            "name_raw VARCHAR NOT NULL UNIQUE, name_norm VARCHAR NOT NULL)"
+        ),
+        (
+            "CREATE TABLE IF NOT EXISTS te_rankings_snapshots "
+            "(player_id INTEGER NOT NULL REFERENCES te_players(id), "
+            "week_date DATE NOT NULL, rank INTEGER NOT NULL, "
+            "PRIMARY KEY (player_id, week_date))"
+        ),
+        "CREATE INDEX IF NOT EXISTS idx_te_snap_week ON te_rankings_snapshots(week_date)",
+        "ALTER TABLE players ADD COLUMN te_player_id INTEGER",
+        "ALTER TABLE tournaments ADD COLUMN selections_unlocked BOOLEAN DEFAULT 0",
     ]
     for sql in migrations:
         try:

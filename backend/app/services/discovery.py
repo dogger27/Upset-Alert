@@ -314,9 +314,14 @@ def parse_season_schedule(wikitext: str, year: int, gender: str) -> list[Discove
         return t
 
     # Pass 1 — explicit singles links
+    # Use the exact title from the wikilink — don't inject gender suffix.
+    # Wikipedia sometimes uses "– Singles" (not "– Men's singles") even for
+    # single-gender events (e.g. "2026 Halle Open – Singles"). Normalising
+    # to "– Men's singles" produces a non-existent page title, causing every
+    # subsequent fetch to fail and leaving wiki_page_id permanently null.
     for m in _SINGLES_LINK_RE.finditer(wikitext):
         ctx = _cell_context(wikitext, m.start())
-        add(_norm_title(m.group(1)), m.start(), ctx)
+        add(m.group(1).strip(), m.start(), ctx)
 
     # Pass 2 — unlinked "Singles –" entries (future tournaments)
     for m in _UNLINKED_SINGLES_RE.finditer(wikitext):
@@ -367,8 +372,8 @@ def parse_season_schedule(wikitext: str, year: int, gender: str) -> list[Discove
 # ---------------------------------------------------------------------------
 
 async def discover_tournaments(year: int) -> list[DiscoveredTournament]:
-    atp_wt = await fetch_wikitext(f"{year} ATP Tour")
-    wta_wt = await fetch_wikitext(f"{year} WTA Tour")
+    atp_wt, _ = await fetch_wikitext(f"{year} ATP Tour")
+    wta_wt, _ = await fetch_wikitext(f"{year} WTA Tour")
     atp = parse_season_schedule(atp_wt, year, "M")
     wta = parse_season_schedule(wta_wt, year, "F")
     return sorted(atp + wta, key=lambda t: t.sort_key)

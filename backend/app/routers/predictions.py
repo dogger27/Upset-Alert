@@ -1,8 +1,10 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth import get_current_user
+from app.core.auth import get_current_user, get_optional_user
 from app.database import get_db
 from app.models.prediction import UserPrediction
 from app.models.tournament import Match, Tournament
@@ -47,12 +49,16 @@ async def get_entry_status(
 @router.get("/{tournament_id}", response_model=list[PredictionOut])
 async def get_predictions(
     tournament_id: int,
+    user_id: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_optional_user),
 ):
+    uid = user_id if user_id is not None else (current_user.id if current_user else None)
+    if uid is None:
+        raise HTTPException(401, "Not authenticated")
     result = await db.execute(
         select(UserPrediction).where(
-            UserPrediction.user_id == current_user.id,
+            UserPrediction.user_id == uid,
             UserPrediction.tournament_id == tournament_id,
         )
     )

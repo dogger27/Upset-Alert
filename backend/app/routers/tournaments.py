@@ -1,30 +1,43 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.auth import get_current_user
 from app.database import get_db
+from app.models.prediction import UserPrediction
 from app.models.tournament import Match, Player, Tournament
 from app.models.user import User
+from app.schemas.league import LeaderboardEntry
 from app.schemas.tournament import DrawOut, MatchOut, PlayerOut, TournamentCreate, TournamentOut
-from app.services.rankings import fetch_rankings, match_player_ranking
+from app.schemas.user import UserPublicOut
+from app.services.rankings import assign_rankings
 from app.services.scraper import scrape_tournament
+from app.services.scoring import UserScore, rank_users
 
 router = APIRouter(prefix="/tournaments", tags=["tournaments"])
 
 
 @router.get("", response_model=list[TournamentOut])
 async def list_tournaments(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Tournament).order_by(Tournament.year.desc(), Tournament.name))
-    tournaments = result.scalars().all()
-
-    # Update status to computed status based on dates
-    for t in tournaments:
+    lat_subq = (
+        select(Match.tournament_id, func.max(Match.completed_at).label("lat"))
+        .group_by(Match.tournament_id)
+        .subquery()
+    )
+    result = await db.execute(
+        select(Tournament, lat_subq.c.lat)
+        .outerjoin(lat_subq, Tournament.id == lat_subq.c.tournament_id)
+        .order_by(Tournament.year.desc(), Tournament.name)
+    )
+    rows = result.all()
+    tournaments = []
+    for t, lat in rows:
         t.status = t.computed_status
-
+        t.latest_result_at = lat
+        tournaments.append(t)
     return tournaments
 
 
@@ -118,6 +131,44 @@ async def refresh_all_completed(
     return {"refreshed": ok, "failed": failed}
 
 
+@router.post("/backfill-rankings", response_model=dict)
+async def backfill_rankings(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Re-resolve te_player_id and refresh rankings for every tournament."""
+    import logging
+    from datetime import date
+    logger = logging.getLogger(__name__)
+
+    tournaments_res = await db.execute(select(Tournament))
+    tournaments = tournaments_res.scalars().all()
+
+    updated_total = 0
+    failed = []
+
+    for t in tournaments:
+        try:
+            ref_date = t.start_date or date.today()
+            players_res = await db.execute(select(Player).where(Player.tournament_id == t.id))
+            players = players_res.scalars().all()
+
+            before = [p.ranking for p in players]
+            await assign_rankings(players, t.gender, ref_date, db)
+            after = [p.ranking for p in players]
+
+            updated = sum(1 for b, a in zip(before, after) if b != a)
+            await db.commit()
+            updated_total += updated
+            logger.info("%s: updated %d/%d player rankings", t.name, updated, len(players))
+        except Exception as exc:
+            logger.error("Failed rankings backfill for %s: %s", t.name, exc)
+            await db.rollback()
+            failed.append(t.name)
+
+    return {"updated_players": updated_total, "failed": failed}
+
+
 @router.post("/sync-tournaments", response_model=dict)
 async def sync_tournaments(
     db: AsyncSession = Depends(get_db),
@@ -178,7 +229,110 @@ async def get_tournament(tournament_id: int, db: AsyncSession = Depends(get_db))
     t = await db.get(Tournament, tournament_id)
     if not t:
         raise HTTPException(404, "Tournament not found")
+    lat = await db.execute(
+        select(func.max(Match.completed_at)).where(Match.tournament_id == tournament_id)
+    )
+    t.latest_result_at = lat.scalar_one_or_none()
     return t
+
+
+@router.get("/{tournament_id}/competitors", response_model=list[UserPublicOut])
+async def tournament_competitors(tournament_id: int, db: AsyncSession = Depends(get_db)):
+    """Return all users who have submitted complete picks for this tournament."""
+    total_result = await db.execute(
+        select(func.count())
+        .where(Match.tournament_id == tournament_id, Match.is_bye == False)
+    )
+    total = total_result.scalar_one()
+    if total == 0:
+        return []
+
+    sub = (
+        select(UserPrediction.user_id)
+        .where(
+            UserPrediction.tournament_id == tournament_id,
+            UserPrediction.predicted_winner_id.isnot(None),
+        )
+        .group_by(UserPrediction.user_id)
+        .having(func.count() >= total)
+    )
+    result = await db.execute(
+        select(User).where(User.id.in_(sub)).order_by(User.display_name)
+    )
+    return result.scalars().all()
+
+
+@router.get("/{tournament_id}/standings", response_model=list[LeaderboardEntry])
+async def global_standings(tournament_id: int, db: AsyncSession = Depends(get_db)):
+    """Global standings for a tournament using classic scoring (no league)."""
+    tournament = await db.get(Tournament, tournament_id)
+    if not tournament:
+        raise HTTPException(404, "Tournament not found")
+
+    total_result = await db.execute(
+        select(func.count()).where(Match.tournament_id == tournament_id, Match.is_bye == False)
+    )
+    total_matches = total_result.scalar_one()
+    if total_matches == 0:
+        return []
+
+    completed_result = await db.execute(
+        select(Match)
+        .options(selectinload(Match.player1), selectinload(Match.player2), selectinload(Match.winner))
+        .where(Match.tournament_id == tournament_id, Match.status == "completed")
+    )
+    completed_matches = completed_result.scalars().all()
+
+    # Classic points: round_number → 2^(r-1)
+    pts_table = {r: 2 ** (r - 1) for r in range(1, tournament.num_rounds + 1)}
+    final_round = tournament.num_rounds
+
+    sub = (
+        select(UserPrediction.user_id)
+        .where(UserPrediction.tournament_id == tournament_id, UserPrediction.predicted_winner_id.isnot(None))
+        .group_by(UserPrediction.user_id)
+        .having(func.count() >= total_matches)
+    )
+    users_result = await db.execute(select(User).where(User.id.in_(sub)))
+    users = users_result.scalars().all()
+
+    scores: list[UserScore] = []
+    for user in users:
+        preds_result = await db.execute(
+            select(UserPrediction).where(
+                UserPrediction.user_id == user.id,
+                UserPrediction.tournament_id == tournament_id,
+                UserPrediction.predicted_winner_id.isnot(None),
+            )
+        )
+        preds = preds_result.scalars().all()
+        pred_by_match = {p.match_id: p.predicted_winner_id for p in preds}
+
+        total_pts = 0.0
+        correct = 0
+        champ = False
+        finalist = False
+        for m in completed_matches:
+            if m.winner_id is None:
+                continue
+            if pred_by_match.get(m.id) == m.winner_id:
+                total_pts += pts_table.get(m.round_number, 0)
+                correct += 1
+                if m.round_number == final_round:
+                    champ = True
+                elif m.round_number == final_round - 1:
+                    finalist = True
+        scores.append(UserScore(user_id=user.id, total_points=total_pts, correct_count=correct,
+                                champion_correct=champ, finalist_correct=finalist))
+
+    ranked = rank_users(scores)
+    user_map = {u.id: u for u in users}
+    return [
+        LeaderboardEntry(rank=i + 1, user=user_map[s.user_id], total_points=s.total_points,
+                         correct_count=s.correct_count, champion_correct=s.champion_correct,
+                         finalist_correct=s.finalist_correct)
+        for i, s in enumerate(ranked)
+    ]
 
 
 @router.get("/{tournament_id}/draw", response_model=DrawOut)
@@ -219,6 +373,7 @@ async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
             scores=m.scores_json,
         ))
 
+    t.latest_result_at = max((m.completed_at for m in matches if m.completed_at), default=None)
     return DrawOut(
         tournament=TournamentOut.model_validate(t),
         players=[PlayerOut.model_validate(p) for p in players],
@@ -241,12 +396,29 @@ async def refresh_draw(
     return t
 
 
+@router.post("/{tournament_id}/toggle-unlock", response_model=TournamentOut)
+async def toggle_unlock_selections(
+    tournament_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not current_user.is_admin:
+        raise HTTPException(403, "Admin only")
+    t = await db.get(Tournament, tournament_id)
+    if not t:
+        raise HTTPException(404, "Tournament not found")
+    t.selections_unlocked = not t.selections_unlocked
+    await db.commit()
+    await db.refresh(t)
+    return t
+
+
 # ---------------------------------------------------------------------------
 # Internal scrape helper
 # ---------------------------------------------------------------------------
 
 async def _do_scrape(tournament: Tournament, db: AsyncSession, force_refresh: bool = False) -> None:
-    from datetime import date, timedelta
+    from datetime import date
     import logging
     logger = logging.getLogger(__name__)
 
@@ -303,24 +475,6 @@ async def _do_scrape(tournament: Tournament, db: AsyncSession, force_refresh: bo
         tournament.status = "completed"
         logger.info("Tournament %s marked as completed (final match has winner)", tournament.wiki_page_title)
 
-    # Determine ranking reference date
-    ref_date = parsed.ranking_ref_date
-    if ref_date is None:
-        # Default: 5 weeks before tournament start, or today if no start date
-        if tournament.start_date:
-            ref_date = tournament.start_date - timedelta(weeks=5)
-        else:
-            ref_date = date.today()
-
-    # Fetch rankings for this date
-    try:
-        rankings = await fetch_rankings(tournament.gender, ref_date)
-        logger.info("Fetched %d %s rankings for %s", len(rankings),
-                    "ATP" if tournament.gender == "M" else "WTA", ref_date)
-    except Exception as exc:
-        logger.warning("Could not fetch rankings: %s", exc)
-        rankings = {}
-
     # Load existing players and matches indexed for upsert
     existing_players_res = await db.execute(
         select(Player).where(Player.tournament_id == tournament.id)
@@ -335,11 +489,23 @@ async def _do_scrape(tournament: Tournament, db: AsyncSession, force_refresh: bo
         (m.round_number, m.match_number): m for m in existing_matches_res.scalars()
     }
 
+    # Detect whether the player roster changed (additions, removals, or replacements).
+    # Rankings are only re-fetched when the roster changes — not on every match-result sync.
+    incoming_positions = {pe.bracket_position for pe in parsed.players}
+    roster_changed = (
+        incoming_positions != set(existing_players.keys())
+        or any(
+            pe.name != existing_players[pe.bracket_position].name
+            for pe in parsed.players
+            if pe.bracket_position in existing_players
+        )
+    )
+
     # Upsert players — update in place to preserve any FK references
     pos_to_player_id: dict[int, int] = {}
     seen_positions: set[int] = set()
+    upserted_players: list[Player] = []
     for pe in parsed.players:
-        ranking = match_player_ranking(pe.name, rankings) if rankings else None
         seen_positions.add(pe.bracket_position)
         if pe.bracket_position in existing_players:
             player = existing_players[pe.bracket_position]
@@ -347,7 +513,6 @@ async def _do_scrape(tournament: Tournament, db: AsyncSession, force_refresh: bo
             player.nationality = pe.nationality
             player.seed = pe.seed
             player.entry_type = pe.entry_type
-            player.ranking = ranking
         else:
             player = Player(
                 tournament_id=tournament.id,
@@ -356,11 +521,19 @@ async def _do_scrape(tournament: Tournament, db: AsyncSession, force_refresh: bo
                 seed=pe.seed,
                 entry_type=pe.entry_type,
                 bracket_position=pe.bracket_position,
-                ranking=ranking,
             )
             db.add(player)
             await db.flush()
         pos_to_player_id[pe.bracket_position] = player.id
+        upserted_players.append(player)
+
+    if roster_changed:
+        try:
+            ref_date = tournament.start_date or date.today()
+            await assign_rankings(upserted_players, tournament.gender, ref_date, db)
+            logger.info("Roster change in %s — rankings assigned", tournament.name)
+        except Exception as exc:
+            logger.warning("Could not assign rankings for %s: %s", tournament.name, exc)
 
     # Delete players no longer in draw
     for pos, old_player in existing_players.items():
@@ -378,13 +551,16 @@ async def _do_scrape(tournament: Tournament, db: AsyncSession, force_refresh: bo
         seen_match_keys.add(key)
         if key in existing_matches:
             match = existing_matches[key]
+            if w_id and match.winner_id != w_id:
+                match.completed_at = datetime.now(timezone.utc)
+            elif not w_id:
+                match.completed_at = None
             match.player1_id = p1_id
             match.player2_id = p2_id
             match.winner_id = w_id
             match.is_bye = mr.is_bye
             match.scores_json = mr.scores
             match.status = "completed" if w_id else "pending"
-            match.completed_at = datetime.now(timezone.utc) if w_id else None
         else:
             match = Match(
                 tournament_id=tournament.id,

@@ -99,7 +99,7 @@ function CreateLeagueForm({ onDone }) {
   const qc = useQueryClient()
   const [name, setName] = useState('')
   const [mode, setMode] = useState('classic')
-  const [isPublic, setIsPublic] = useState(false)
+  const [showRealName, setShowRealName] = useState(false)
   const [customPoints, setCustomPoints] = useState('')
   const [error, setError] = useState('')
 
@@ -111,7 +111,7 @@ function CreateLeagueForm({ onDone }) {
 
   const submit = (e) => {
     e.preventDefault()
-    const payload = { name, scoring_mode: mode, is_public: isPublic }
+    const payload = { name, scoring_mode: mode, is_public: false, show_real_name: showRealName }
     if (mode === 'custom') {
       try { payload.custom_points = JSON.parse(customPoints) }
       catch { setError('custom_points must be valid JSON, e.g. {"1":1,"2":2,"3":4}'); return }
@@ -145,8 +145,8 @@ function CreateLeagueForm({ onDone }) {
         )}
         <div className="form-row form-check">
           <label>
-            <input type="checkbox" checked={isPublic} onChange={e => setIsPublic(e.target.checked)} />
-            Public league (anyone can join)
+            <input type="checkbox" checked={showRealName} onChange={e => setShowRealName(e.target.checked)} />
+            Enable &ldquo;Show Real Name&rdquo; on hover
           </label>
         </div>
         {error && <p className="error">{error}</p>}

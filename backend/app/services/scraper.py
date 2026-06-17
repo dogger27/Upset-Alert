@@ -238,7 +238,7 @@ def extract_ranking_ref_date(wikitext: str) -> Optional[date]:
 
 
 _WIKI_CACHE_DIR = "/tmp/wiki_cache"
-_WIKI_CACHE_TTL = 6 * 3600  # 6 hours in seconds
+_WIKI_CACHE_TTL = 25 * 60  # 25 min — expires before the 30-min scheduler job refires
 
 
 def _cache_path(page_id: Optional[int], page_title: str) -> str:
@@ -284,6 +284,7 @@ async def fetch_wikitext(
     else:
         params["action"] = "query"
         params["titles"] = page_title
+        params["redirects"] = 1  # follow redirects so "– Men's singles" → "– Singles" works
 
     headers = {"User-Agent": "TennisFantasyLeague/1.0 (https://github.com/local/tennis-fantasy; contact@example.com)"}
     async with httpx.AsyncClient(timeout=30, headers=headers) as client:

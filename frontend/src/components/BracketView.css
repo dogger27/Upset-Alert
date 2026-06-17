@@ -7,6 +7,7 @@
   background: var(--bg);
 }
 
+
 /* ── Round labels row ── */
 .bracket-labels {
   display: flex;
@@ -132,6 +133,11 @@
 .pick-result.correct { color: #15803d; }
 .pick-result.wrong   { color: #dc2626; }
 
+.player-row.dead-pick .pname {
+  text-decoration: line-through;
+  opacity: 0.45;
+}
+
 .player-row.projected {
   font-style: italic;
   color: #555;
@@ -232,6 +238,5 @@
   line-height: 1.4;
 }
 
-/* Winner's scores slightly bolder */
-.player-row.winner .score-cell { font-weight: 700; color: #1b4332; }
+.player-row.winner .score-cell { font-weight: 700; }
 .player-row.eliminated .score-cell { opacity: 0.7; }

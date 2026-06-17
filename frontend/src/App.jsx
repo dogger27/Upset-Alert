@@ -7,7 +7,6 @@ import Login from './pages/Login'
 import Register from './pages/Register'
 import Tournaments from './pages/Tournaments'
 import TournamentDraw from './pages/TournamentDraw'
-import Leagues from './pages/Leagues'
 import LeagueDetail from './pages/LeagueDetail'
 import Admin from './pages/Admin'
 
@@ -15,6 +14,13 @@ function RequireAuth({ children }) {
   const { user, loading } = useAuth()
   if (loading) return null
   if (!user) return <Navigate to="/login" replace />
+  return children
+}
+
+function RequireAdmin({ children }) {
+  const { user, loading } = useAuth()
+  if (loading) return null
+  if (!user || !user.is_admin) return <Navigate to="/" replace />
   return children
 }
 
@@ -31,9 +37,8 @@ export default function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/tournaments" element={<Tournaments />} />
         <Route path="/tournaments/:id" element={<TournamentDraw />} />
-        <Route path="/leagues" element={<Leagues />} />
         <Route path="/leagues/:id" element={<LeagueDetail />} />
-        <Route path="/admin" element={<RequireAuth><Admin /></RequireAuth>} />
+        <Route path="/admin" element={<RequireAdmin><Admin /></RequireAdmin>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </>

@@ -16,7 +16,7 @@ function computeDrawRanks(players) {
   const seeded = players.filter(p => p.seed != null)
   for (const p of seeded) ranks[p.id] = p.seed
 
-  // Rank unseeded players by world ranking; unranked (WC/Q with no ranking) sort last
+  // Sort unseeded by world ranking, then assign sequential relative ranks after the seeds
   const unseeded = players
     .filter(p => p.seed == null)
     .sort((a, b) => {
@@ -25,7 +25,6 @@ function computeDrawRanks(players) {
       if (b.ranking != null) return 1
       return a.bracket_position - b.bracket_position
     })
-
   const offset = seeded.length
   unseeded.forEach((p, i) => { ranks[p.id] = offset + i + 1 })
   return ranks
@@ -100,9 +99,9 @@ function hasRetirement(scores) {
 
 function PlayerRow({
   playerId, playerById, drawRanks,
-  isPicked, isWinner, isEliminated, isProjected,
+  isPicked, isWinner, isEliminated, isProjected, isDeadPick,
   scores, retired, onClick, locked,
-  showTypeSlot, showScores,
+  showTypeSlot, showScores, markWinner, showRowBg,
 }) {
   const player = playerId != null ? playerById[playerId] : null
 
@@ -138,14 +137,16 @@ function PlayerRow({
 
   const correctPick = isPicked && isWinner
   const wrongPick = isPicked && isEliminated
+  const showTick = correctPick || (markWinner && isWinner)
 
   return (
     <div
       className={clsx('player-row', {
-        picked: isPicked && !isWinner,
+        picked: !markWinner && isPicked && !isWinner,
         winner: isWinner,
-        eliminated: isEliminated,
+        eliminated: isEliminated && showRowBg,
         'wrong-pick': wrongPick,
+        'dead-pick': isDeadPick,
         projected: isProjected && !isWinner,
         clickable: !locked && onClick,
       })}
@@ -156,7 +157,7 @@ function PlayerRow({
       {showTypeSlot && <span className="badge-type-slot">{typeBadge}</span>}
       <span className="pname">{player.name}</span>
       {retired && <span className="ret-badge">ret.</span>}
-      {correctPick && <span className="pick-result correct" title="Correct pick">✓</span>}
+      {showTick && <span className="pick-result correct" title={correctPick ? 'Correct pick' : 'Winner'}>✓</span>}
       {wrongPick && <span className="pick-result wrong" title="Wrong pick">✗</span>}
       {showScores && scores && scores.length > 0 && (
         <span className="score-row">
@@ -171,7 +172,7 @@ function playerNeedsTypeSlot(p) {
   return !!p?.entry_type
 }
 
-function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick, locked, style, mode }) {
+function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick, locked, style, mode, lossRound }) {
   const { p1: p1id, p2: p2id } = resolvedPlayers || { p1: match.player1?.id, p2: match.player2?.id }
   const pickedId = picks[match.id]
   const actualWinnerId = match.winner?.id
@@ -179,6 +180,10 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
   // "Projected" italic only applies in live mode (slot filled by cascade, not yet official)
   const p1IsProjected = mode === 'live' && !match.player1 && p1id != null
   const p2IsProjected = mode === 'live' && !match.player2 && p2id != null
+
+  // Dead pick: player appears here (via picks cascade) but already lost in an earlier round
+  const p1DeadPick = mode === 'picks' && p1id != null && lossRound[p1id] != null && lossRound[p1id] < match.round_number
+  const p2DeadPick = mode === 'picks' && p2id != null && lossRound[p2id] != null && lossRound[p2id] < match.round_number
 
   const scores = match.scores
   const p1Scores = scores?.[0] ?? null
@@ -203,8 +208,9 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
   // Orange: picks mode only, when a player slot is still TBD
   const needsPick = mode === 'picks' && (p1id == null || p2id == null)
 
-  const correctPick = actualWinnerId != null && pickedId != null && pickedId === actualWinnerId
-  const wrongPick   = actualWinnerId != null && pickedId != null && pickedId !== actualWinnerId
+  const correctPick = mode === 'picks' && actualWinnerId != null && pickedId != null && pickedId === actualWinnerId
+  const wrongPick   = mode === 'picks' && ((actualWinnerId != null && pickedId != null && pickedId !== actualWinnerId)
+                    || (p1DeadPick && p2DeadPick))
 
   return (
     <div
@@ -220,6 +226,7 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
         isPicked={pickedId === p1id}
         isWinner={actualWinnerId === p1id}
         isEliminated={actualWinnerId != null && actualWinnerId !== p1id && p1id != null}
+        isDeadPick={p1DeadPick}
         isProjected={p1IsProjected}
         scores={p1Scores}
         retired={ret.p1}
@@ -227,12 +234,14 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
         locked={locked}
         showTypeSlot={showTypeSlot}
         showScores={showScores}
+        markWinner={mode === 'live'}
       />
       <PlayerRow
         playerId={p2id} playerById={playerById} drawRanks={drawRanks}
         isPicked={pickedId === p2id}
         isWinner={actualWinnerId === p2id}
         isEliminated={actualWinnerId != null && actualWinnerId !== p2id && p2id != null}
+        isDeadPick={p2DeadPick}
         isProjected={p2IsProjected}
         scores={p2Scores}
         retired={ret.p2}
@@ -240,6 +249,7 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
         locked={locked}
         showTypeSlot={showTypeSlot}
         showScores={showScores}
+        markWinner={mode === 'live'}
       />
     </div>
   )
@@ -276,10 +286,22 @@ function ConnectorLines({ leftMatches, rightMatches, totalH }) {
 // Main component
 // ---------------------------------------------------------------------------
 
-export default function BracketView({ tournament, matches, players, picks, onPick, locked, mode = 'picks' }) {
+export default function BracketView({ tournament, matches, players, picks, onPick, locked, mode = 'picks', picksOwner = null }) {
   const playerById = Object.fromEntries(players.map(p => [p.id, p]))
   const drawRanks = computeDrawRanks(players)
   const resolved = resolveMatchPlayers(matches, picks, mode)
+
+  // Build lossRound: playerId → round number they actually lost (for picks-mode strikethrough)
+  const lossRound = {}
+  if (mode === 'picks') {
+    for (const m of matches) {
+      if (m.winner?.id && !m.is_bye) {
+        const wid = m.winner.id
+        const loserId = wid === m.player1?.id ? m.player2?.id : m.player1?.id
+        if (loserId) lossRound[loserId] = m.round_number
+      }
+    }
+  }
 
   const rounds = {}
   for (const m of matches) {
@@ -325,6 +347,7 @@ export default function BracketView({ tournament, matches, players, picks, onPic
                       onPick={onPick}
                       locked={locked}
                       mode={mode}
+                      lossRound={lossRound}
                       style={{ position: 'absolute', top, left: 6, right: 6 }}
                     />
                   )

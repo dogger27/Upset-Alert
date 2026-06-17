@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { listTournaments } from '../api/tournaments'
+import { getEntryStatus } from '../api/predictions'
+import { useAuth } from '../store/auth'
 import './Tournaments.css'
 
 const CATEGORY_ORDER = { 'Grand Slam': 0, 'ATP 1000': 1, 'WTA 1000': 1, 'ATP 500': 2, 'WTA 500': 2, 'ATP 250': 3, 'WTA 250': 3 }
@@ -42,15 +44,23 @@ function fmtVenueTime(closingTimeUtc, venueTimezone) {
 
 export default function Tournaments() {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [filterStatus, setFilterStatus] = useState(new Set(['upcoming', 'open', 'active']))
   const [filterGender, setFilterGender] = useState(new Set(['M', 'F']))
   const [filterCategory, setFilterCategory] = useState(new Set(['250', '500', '1000', 'Grand Slam']))
   const [filterYear, setFilterYear] = useState(new Date().getFullYear())
+  const [filterMyEvents, setFilterMyEvents] = useState(new Set(['competing', 'not-competing']))
 
   const { data: tournaments = [], isLoading, dataUpdatedAt } = useQuery({
     queryKey: ['tournaments'],
     queryFn: listTournaments,
     refetchInterval: 60 * 1000,
+  })
+
+  const { data: entryStatus = {} } = useQuery({
+    queryKey: ['entry-status'],
+    queryFn: getEntryStatus,
+    enabled: !!user,
   })
 
   function fmtQueryTime(ts) {
@@ -70,7 +80,13 @@ export default function Tournaments() {
   const preYearFiltered = tournaments.filter(t => {
     if (!filterStatus.has(t.status)) return false
     if (!filterGender.has(t.gender)) return false
-    return Array.from(filterCategory).some(sel => CATEGORY_GROUPS[sel]?.includes(t.category))
+    if (!Array.from(filterCategory).some(sel => CATEGORY_GROUPS[sel]?.includes(t.category))) return false
+    if (user) {
+      const isCompeting = entryStatus[t.id] === 'complete'
+      if (isCompeting && !filterMyEvents.has('competing')) return false
+      if (!isCompeting && !filterMyEvents.has('not-competing')) return false
+    }
+    return true
   })
   const availableYears = [...new Set(preYearFiltered.map(t => t.year))].sort((a, b) => b - a)
 
@@ -155,6 +171,23 @@ export default function Tournaments() {
             ))}
           </div>
 
+          {user && (
+            <div>
+              <h3 className="filter-label">My Events</h3>
+              {[{ value: 'competing', label: 'Competing' }, { value: 'not-competing', label: 'Not Competing' }].map(({ value, label }) => (
+                <label key={value} className="filter-row">
+                  <input type="checkbox" checked={filterMyEvents.has(value)}
+                    onChange={e => {
+                      const s = new Set(filterMyEvents)
+                      e.target.checked ? s.add(value) : s.delete(value)
+                      setFilterMyEvents(s)
+                    }} />
+                  {label}
+                </label>
+              ))}
+            </div>
+          )}
+
           <div>
             <h3 className="filter-label">Year</h3>
             {availableYears.map(y => (
@@ -191,6 +224,7 @@ export default function Tournaments() {
             <table className="t-table">
               <thead>
                 <tr>
+                  <th rowSpan={2} style={{ width: 20, padding: 0 }}></th>
                   <th rowSpan={2}>Start Date</th>
                   <th rowSpan={2}>Category</th>
                   <th colSpan={2} style={{ borderBottom: '1px solid var(--border)' }}>Expected Draw Dates</th>
@@ -213,13 +247,13 @@ export default function Tournaments() {
                     const inGroup = filtered.filter(t => t.status === status)
                     rows.push(
                       <tr key={`group-${status}`} className="status-group-header">
-                        <td colSpan={10}>{STATUS_LABELS[status] ?? status}</td>
+                        <td colSpan={11}>{STATUS_LABELS[status] ?? status}</td>
                       </tr>
                     )
                     if (inGroup.length === 0) {
                       rows.push(
                         <tr key={`empty-${status}`} className="status-group-empty-row">
-                          <td colSpan={10}>No {STATUS_LABELS[status].toLowerCase()} tournaments at this time</td>
+                          <td colSpan={11}>No {STATUS_LABELS[status].toLowerCase()} tournaments at this time</td>
                         </tr>
                       )
                     } else {
@@ -227,6 +261,7 @@ export default function Tournaments() {
                         const isCompleted = t.status === 'completed'
                         const hasDrawData = !!(isCompleted || t.draw_released_direct_at)
                         const surface = t.surface ? t.surface.replace(/\s*\(.*?\)/g, '') : '—'
+                        const isCompeting = t.status !== 'upcoming' && entryStatus[t.id] === 'complete'
                         rows.push(
                           <tr
                             key={t.id}
@@ -234,6 +269,7 @@ export default function Tournaments() {
                             style={{ background: GENDER_COLORS[t.gender] || '#fff', cursor: hasDrawData ? 'pointer' : 'default' }}
                             onClick={hasDrawData ? () => navigate(`/tournaments/${t.id}`) : undefined}
                           >
+                            <td className="td-star">{isCompeting && <span className="competing-star">★</span>}</td>
                             <td className="muted td-left">{fmtDate(t.start_date)}</td>
                             <td>{t.category ? t.category.replace(/^(ATP|WTA)\s+/, '') : '—'}</td>
                             <td className="td-left">
@@ -246,7 +282,7 @@ export default function Tournaments() {
                                 ? <><span className="muted">{fmtDate(t.draw_release_qualifiers)}</span>{(isCompleted || t.draw_released_qualifiers_at) && <span style={{ marginLeft: '0.4rem', color: '#4CAF50' }}>✓</span>}</>
                                 : isCompleted ? <span style={{ color: '#4CAF50' }}>✓</span> : '—'}
                             </td>
-                            <td className="td-left" style={{ fontWeight: 700 }}>{t.name}</td>
+                            <td className="td-left td-name" style={{ fontWeight: 700 }}>{t.name}</td>
                             <td className="muted">{t.city && t.country ? `${t.city}, ${t.country}` : t.city || t.country || '—'}</td>
                             <td className="muted" title={fmtVenueTime(t.closing_time, t.venue_timezone) ?? undefined}>
                               {t.closing_time

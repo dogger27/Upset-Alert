@@ -124,30 +124,34 @@ def start_scheduler() -> None:
         hour=0,
         minute=0,
         id="auto_discover",
+        misfire_grace_time=3600,
     )
+    # Scrape active tournaments every 30 minutes so live scores update promptly.
     scheduler.add_job(
         _refresh_active_tournaments,
-        "cron",
-        hour=12,
-        minute=0,
+        "interval",
+        minutes=30,
         id="refresh_active",
+        misfire_grace_time=300,
     )
     scheduler.add_job(
         _sync_subscriptions,
         "interval",
         minutes=5,
         id="sync_subscriptions",
+        misfire_grace_time=120,
     )
     scheduler.start()
     logger.info("Tournament discovery scheduled (daily at midnight UTC)")
-    logger.info("Active tournament refresh scheduled (daily at noon UTC)")
+    logger.info("Active tournament refresh scheduled (every 30 min)")
     logger.info("EventStreams listener started for real-time draw updates")
     logger.info("Subscription sync scheduled (every 5 min)")
     asyncio.create_task(eventstream.start())
-    # Run an immediate catch-up refresh on startup so any draws or results
-    # that arrived while the server was down are not missed until the next
-    # scheduled noon job. Force-refresh bypasses the cache so we always get
-    # the latest Wikipedia content, not a stale cached copy.
+    # Subscribe immediately on startup so EventStreams catches edits from the
+    # first second — don't wait up to 5 min for the interval job to fire.
+    asyncio.create_task(_sync_subscriptions())
+    # Force-refresh on startup to catch any results that arrived while the
+    # server was down.
     asyncio.create_task(_refresh_active_tournaments(force_refresh=True))
 
 

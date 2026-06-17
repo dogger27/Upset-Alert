@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getLeague, getLeagueTournaments, getLeaderboard, updateLeague } from '../api/leagues'
+import { getLeague, getLeagueTournaments, getLeaderboard, updateLeague, setMemberAdmin, removeMember, deleteLeague } from '../api/leagues'
 import { useAuth } from '../store/auth'
+import UserName from '../components/UserName'
 import './LeagueDetail.css'
 
 const SCORING_LABELS = {
@@ -21,6 +22,7 @@ export default function LeagueDetail() {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const [editing, setEditing] = useState(false)
+  const [showInvite, setShowInvite] = useState(false)
   const [selectedTournamentId, setSelectedTournamentId] = useState(null)
 
   const { data: league, isLoading } = useQuery({
@@ -45,6 +47,7 @@ export default function LeagueDetail() {
   if (!league) return null
 
   const isOwner = user?.id === league.owner.id
+  const canInvite = isOwner || league.allow_member_invites
   const entries = leaderboard?.entries ?? []
   const selectedTournament = leagueTournaments.find(lt => lt.tournament.id === selectedTournamentId)?.tournament
 
@@ -55,13 +58,15 @@ export default function LeagueDetail() {
           <h1>{league.name}</h1>
           <p className="muted">
             {SCORING_LABELS[league.scoring_mode]} ·{' '}
-            {league.member_count} member{league.member_count !== 1 ? 's' : ''} ·{' '}
-            <span className={`status-badge status-${league.is_public ? 'public' : 'private'}`}>
-              {league.is_public ? 'Public' : 'Private'}
-            </span>
+            {league.member_count} member{league.member_count !== 1 ? 's' : ''}
           </p>
         </div>
         <div className="league-header-actions">
+          {canInvite && (
+            <button className="btn-secondary" onClick={() => setShowInvite(true)}>
+              Invite
+            </button>
+          )}
           {isOwner && (
             <button className="btn-secondary" onClick={() => setEditing(s => !s)}>
               {editing ? 'Cancel' : 'Settings'}
@@ -70,11 +75,8 @@ export default function LeagueDetail() {
         </div>
       </div>
 
-      {!league.is_public && (
-        <div className="invite-banner">
-          Invite friends — share this code: <strong>{league.invite_code}</strong>{' '}
-          (League ID: <strong>{league.id}</strong>)
-        </div>
+      {showInvite && (
+        <InviteModal league={league} onClose={() => setShowInvite(false)} />
       )}
 
       {editing && isOwner && (
@@ -87,7 +89,7 @@ export default function LeagueDetail() {
         <div className="league-members-list">
           {league.members.map(m => (
             <span key={m.id} className="league-member-chip">
-              {m.display_name}
+              <UserName user={m} showRealName={league.show_real_name} />
             </span>
           ))}
         </div>
@@ -118,7 +120,7 @@ export default function LeagueDetail() {
                 {t.city && <div className="ltc-city muted">{t.city}</div>}
                 <div className="ltc-count">
                   <span className="ltc-count-num">{picker_count}</span>
-                  <span className="ltc-count-label"> member{picker_count !== 1 ? 's' : ''} participating</span>
+                  <span className="ltc-count-label"> member{picker_count !== 1 ? 's' : ''} competing</span>
                 </div>
               </button>
             ))}
@@ -156,7 +158,7 @@ export default function LeagueDetail() {
                 {entries.map(e => (
                   <tr key={e.user.id} className={e.user.id === user?.id ? 'my-row' : ''}>
                     <td>{e.rank}</td>
-                    <td>{e.user.display_name}</td>
+                    <td><UserName user={e.user} showRealName={league.show_real_name} /></td>
                     <td className="pts">{e.total_points}</td>
                     <td>{e.correct_count}</td>
                     <td>{e.champion_correct ? '✓' : '–'}</td>
@@ -172,17 +174,67 @@ export default function LeagueDetail() {
   )
 }
 
-function LeagueSettings({ league, onDone }) {
+function InviteModal({ league, onClose }) {
+  const [copied, setCopied] = useState(false)
+
+  const copy = () => {
+    navigator.clipboard.writeText(league.invite_code)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <div className="invite-modal-overlay" onClick={onClose}>
+      <div className="invite-modal" onClick={e => e.stopPropagation()}>
+        <div className="invite-modal-header">
+          <h3>Invite Friends</h3>
+          <button className="invite-modal-close" onClick={onClose}>✕</button>
+        </div>
+        <p className="invite-modal-msg">
+          Send this invite code to your friends! Tell them to click <strong>Join</strong> from the dashboard and enter this code.
+        </p>
+        <div className="invite-code-block">
+          <div className="invite-code-label">Invite Code</div>
+          <div className="invite-code-value">{league.invite_code}</div>
+        </div>
+        <button className="btn-primary invite-copy-btn" onClick={copy}>
+          {copied ? '✓ Copied!' : 'Copy Invite Code'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function LeagueSettings({ league, onDone, currentUserId }) {
   const qc = useQueryClient()
+  const navigate = useNavigate()
   const [name, setName] = useState(league.name)
-  const [isPublic, setIsPublic] = useState(league.is_public)
   const [mode, setMode] = useState(league.scoring_mode)
+  const [showRealName, setShowRealName] = useState(league.show_real_name)
+  const [allowMemberInvites, setAllowMemberInvites] = useState(league.allow_member_invites)
   const [error, setError] = useState('')
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState('')
 
   const mutation = useMutation({
     mutationFn: (data) => updateLeague(league.id, data),
     onSuccess: () => { qc.invalidateQueries(['league', String(league.id)]); onDone() },
     onError: (e) => setError(e.response?.data?.detail || 'Failed'),
+  })
+
+  const adminMutation = useMutation({
+    mutationFn: ({ userId, isAdmin }) => setMemberAdmin(league.id, userId, isAdmin),
+    onSuccess: () => qc.invalidateQueries(['league', String(league.id)]),
+  })
+
+  const removeMutation = useMutation({
+    mutationFn: (userId) => removeMember(league.id, userId),
+    onSuccess: () => qc.invalidateQueries(['league', String(league.id)]),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteLeague(league.id),
+    onSuccess: () => { qc.invalidateQueries(['leagues']); navigate('/') },
   })
 
   return (
@@ -203,18 +255,97 @@ function LeagueSettings({ league, onDone }) {
       </div>
       <div className="form-row form-check">
         <label>
-          <input type="checkbox" checked={isPublic} onChange={e => setIsPublic(e.target.checked)} />
-          &nbsp;Public league
+          <input type="checkbox" checked={showRealName} onChange={e => setShowRealName(e.target.checked)} />
+          &nbsp;Enable &ldquo;Show Real Name&rdquo; on hover
+        </label>
+      </div>
+      <div className="form-row form-check">
+        <label>
+          <input type="checkbox" checked={allowMemberInvites} onChange={e => setAllowMemberInvites(e.target.checked)} />
+          &nbsp;Allow all members to invite others
         </label>
       </div>
       {error && <p className="error">{error}</p>}
       <button
         className="btn-primary"
-        onClick={() => mutation.mutate({ name, is_public: isPublic, scoring_mode: mode })}
+        onClick={() => mutation.mutate({ name, scoring_mode: mode, show_real_name: showRealName, allow_member_invites: allowMemberInvites })}
         disabled={mutation.isPending}
       >
         Save
       </button>
+
+      <div className="settings-members">
+        <h4 className="settings-members-title">Members</h4>
+        {league.members.map(m => {
+          const isOwner = m.id === league.owner.id
+          return (
+            <div key={m.id} className="settings-member-row">
+              <span className="settings-member-name">
+                @{m.username}
+                {isOwner && <span className="settings-member-badge owner">Owner</span>}
+                {!isOwner && m.is_admin && <span className="settings-member-badge admin">Admin</span>}
+              </span>
+              <div className="settings-member-actions">
+                {!isOwner && (
+                  <button
+                    className={`settings-admin-btn${m.is_admin ? ' active' : ''}`}
+                    onClick={() => adminMutation.mutate({ userId: m.id, isAdmin: !m.is_admin })}
+                    disabled={adminMutation.isPending}
+                    title={m.is_admin ? 'Remove admin' : 'Make admin'}
+                  >
+                    {m.is_admin ? 'Remove Admin' : 'Make Admin'}
+                  </button>
+                )}
+                {!isOwner && (
+                  <button
+                    className="settings-remove-btn"
+                    onClick={() => { if (window.confirm(`Remove @${m.username}?`)) removeMutation.mutate(m.id) }}
+                    disabled={removeMutation.isPending}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="settings-danger-zone">
+        {!showDeleteConfirm ? (
+          <button className="btn-danger" onClick={() => setShowDeleteConfirm(true)}>
+            Delete League
+          </button>
+        ) : (
+          <div className="settings-delete-confirm">
+            <p className="settings-delete-warning">
+              ⚠️ <strong>This cannot be undone.</strong> Deleting this league will permanently remove all members, history, and leaderboard data.
+            </p>
+            <p className="settings-delete-prompt">
+              Type <strong>{league.name}</strong> to confirm:
+            </p>
+            <input
+              className="settings-delete-input"
+              value={deleteConfirmText}
+              onChange={e => setDeleteConfirmText(e.target.value)}
+              placeholder={league.name}
+              autoFocus
+            />
+            <div className="settings-delete-actions">
+              <button className="btn-secondary" onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText('') }}>
+                Cancel
+              </button>
+              <button
+                className="btn-danger"
+                disabled={deleteConfirmText !== league.name || deleteMutation.isPending}
+                onClick={() => deleteMutation.mutate()}
+              >
+                {deleteMutation.isPending ? 'Deleting…' : 'Permanently Delete'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

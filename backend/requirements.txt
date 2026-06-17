@@ -13,3 +13,5 @@ apscheduler>=3.10.0
 aiosqlite>=0.20.0
 greenlet>=3.0.0
 email-validator>=2.2.0
+playwright>=1.40.0
+pdfplumber>=0.11.0

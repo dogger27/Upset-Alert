@@ -5,7 +5,8 @@ import './AuthForm.css'
 
 export default function Register() {
   const [email, setEmail] = useState('')
-  const [name, setName] = useState('')
+  const [username, setUsername] = useState('')
+  const [fullName, setFullName] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -16,7 +17,7 @@ export default function Register() {
     e.preventDefault()
     setError(''); setLoading(true)
     try {
-      await register(email, name, password)
+      await register(email, username, fullName, password)
       await login(email, password)
       navigate('/')
     } catch (err) {
@@ -31,8 +32,10 @@ export default function Register() {
       <div className="auth-card card">
         <h2>Create account</h2>
         <form onSubmit={submit}>
-          <label>Display name</label>
-          <input value={name} onChange={e => setName(e.target.value)} required placeholder="How others see you" />
+          <label>User Name</label>
+          <input value={username} onChange={e => setUsername(e.target.value)} required placeholder="Your unique handle" />
+          <label>Full Name</label>
+          <input value={fullName} onChange={e => setFullName(e.target.value)} required placeholder="Your full name" />
           <label>Email</label>
           <input type="email" value={email} onChange={e => setEmail(e.target.value)} required />
           <label>Password</label>

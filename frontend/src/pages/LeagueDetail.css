@@ -7,10 +7,31 @@
 .league-detail-header h1 { font-size: 1.5rem; margin-bottom: 0.2rem; }
 .league-header-actions { display: flex; gap: 0.75rem; }
 
-.invite-banner {
-  background: #eff6ff; border: 1px solid #bfdbfe; border-radius: var(--radius);
-  padding: 0.75rem 1rem; margin-bottom: 1.5rem; font-size: 0.88rem;
+.invite-modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+  display: flex; align-items: center; justify-content: center; z-index: 1000;
 }
+.invite-modal {
+  background: white; border-radius: 12px; padding: 1.5rem;
+  width: 100%; max-width: 380px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+}
+.invite-modal-header {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;
+}
+.invite-modal-header h3 { margin: 0; font-size: 1.1rem; }
+.invite-modal-close {
+  background: none; border: none; font-size: 1rem; cursor: pointer;
+  color: var(--text-muted); padding: 0.2rem 0.4rem; border-radius: 4px;
+}
+.invite-modal-close:hover { background: #f0f0f0; }
+.invite-modal-msg { font-size: 0.86rem; color: var(--text-muted); margin: 0 0 1.25rem; line-height: 1.5; }
+.invite-code-block {
+  background: #f4f6f9; border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1rem;
+}
+.invite-code-label { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+.invite-code-value { font-size: 1.6rem; font-weight: 700; letter-spacing: 0.12em; color: var(--text); font-family: monospace; }
+.invite-copy-btn { width: 100%; }
 
 .settings-panel { margin-bottom: 1.5rem; }
 .settings-panel h3 { margin-bottom: 1rem; }
@@ -24,6 +45,51 @@
   background: var(--bg-subtle, #f3f4f6); border: 1px solid var(--border);
   border-radius: 999px; font-size: 0.85rem;
 }
+
+/* Member management in settings */
+.settings-members { margin-top: 1.5rem; border-top: 1px solid var(--border); padding-top: 1rem; }
+.settings-members-title { font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin: 0 0 0.75rem; }
+.settings-member-row { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.4rem 0; border-bottom: 1px solid var(--border); }
+.settings-member-row:last-child { border-bottom: none; }
+.settings-member-name { font-size: 0.88rem; display: flex; align-items: center; gap: 0.4rem; }
+.settings-member-badge { font-size: 0.68rem; font-weight: 700; padding: 1px 6px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.04em; }
+.settings-member-badge.owner { background: #fef3c7; color: #92400e; }
+.settings-member-badge.admin { background: #dbeafe; color: #1e40af; }
+.settings-member-actions { display: flex; gap: 0.4rem; flex-shrink: 0; }
+.settings-admin-btn { font-size: 0.75rem; padding: 0.2rem 0.55rem; border-radius: 5px; border: 1px solid #93c5fd; color: #1d4ed8; background: #eff6ff; cursor: pointer; font-family: inherit; }
+.settings-admin-btn.active { background: #dbeafe; border-color: #60a5fa; }
+.settings-admin-btn:hover { background: #dbeafe; }
+.settings-remove-btn { font-size: 0.75rem; padding: 0.2rem 0.55rem; border-radius: 5px; border: 1px solid #fca5a5; color: #dc2626; background: #fff; cursor: pointer; font-family: inherit; }
+.settings-remove-btn:hover { background: #fee2e2; }
+
+/* Danger zone */
+.settings-danger-zone {
+  margin-top: 1.5rem; border-top: 1px solid #fca5a5;
+  padding-top: 1rem;
+}
+.settings-danger-title {
+  font-size: 0.8rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.04em; color: #dc2626; margin: 0 0 0.75rem;
+}
+.btn-danger {
+  background: #dc2626; color: white; border: none; border-radius: 6px;
+  padding: 0.45rem 1rem; font-size: 0.88rem; font-weight: 600;
+  cursor: pointer; font-family: inherit; transition: background 0.15s;
+}
+.btn-danger:hover:not(:disabled) { background: #b91c1c; }
+.btn-danger:disabled { opacity: 0.45; cursor: not-allowed; }
+.settings-delete-confirm { display: flex; flex-direction: column; gap: 0.6rem; }
+.settings-delete-warning {
+  background: #fff1f1; border: 1px solid #fca5a5; border-radius: 6px;
+  padding: 0.65rem 0.85rem; font-size: 0.85rem; color: #7f1d1d; margin: 0; line-height: 1.5;
+}
+.settings-delete-prompt { font-size: 0.85rem; margin: 0; }
+.settings-delete-input {
+  padding: 0.4rem 0.65rem; border: 1.5px solid #fca5a5; border-radius: 6px;
+  font-size: 0.9rem; font-family: inherit; width: 100%; box-sizing: border-box;
+}
+.settings-delete-input:focus { outline: 2px solid #dc2626; border-color: transparent; }
+.settings-delete-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
 
 /* Tournament cards */
 .league-tournaments-section { margin-bottom: 1.5rem; }

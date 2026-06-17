@@ -6,10 +6,11 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
-import { getDraw } from '../api/tournaments'
+import { getDraw, refreshDraw, toggleUnlockSelections } from '../api/tournaments'
 import { getPredictions, savePredictions } from '../api/predictions'
 import { useAuth } from '../store/auth'
 import BracketView from '../components/BracketView'
+import DrawSidebar from '../components/DrawSidebar'
 import './TournamentDraw.css'
 
 export default function TournamentDraw() {
@@ -17,9 +18,24 @@ export default function TournamentDraw() {
   const { user } = useAuth()
   const qc = useQueryClient()
 
+  // All state declared first
+  const [picks, setPicks] = useState({})
+  const [viewMode, setViewMode] = useState('live')
+  const [viewedUserId, setViewedUserId] = useState(null)
+  const [viewedUserName, setViewedUserName] = useState(null)
+  const initialModeSet = useRef(false)
+  const [celebrating, setCelebrating] = useState(false)
+  const [showUnlockConfirm, setShowUnlockConfirm] = useState(false)
+  const celebrateTimerRef = useRef(null)
+
   const { data, isLoading, error } = useQuery({
     queryKey: ['draw', id],
     queryFn: () => getDraw(Number(id)),
+    // Poll every 2 min for active tournaments so live scores stay fresh
+    refetchInterval: (query) => {
+      const status = query.state.data?.tournament?.status
+      return status === 'active' ? 2 * 60 * 1000 : false
+    },
   })
 
   const { data: savedPreds } = useQuery({
@@ -28,12 +44,12 @@ export default function TournamentDraw() {
     enabled: !!user,
   })
 
-  // Local picks state: {match_id: player_id}
-  const [picks, setPicks] = useState({})
-  const [viewMode, setViewMode] = useState('picks')
-  // Celebration state
-  const [celebrating, setCelebrating] = useState(false)
-  const celebrateTimerRef = useRef(null)
+  const viewingOther = viewedUserId != null && viewedUserId !== user?.id
+  const { data: viewedPreds } = useQuery({
+    queryKey: ['predictions', id, viewedUserId],
+    queryFn: () => getPredictions(Number(id), viewedUserId),
+    enabled: viewingOther,
+  })
 
   // Initialise picks from saved predictions, filtering out any stale match IDs
   useEffect(() => {
@@ -48,9 +64,26 @@ export default function TournamentDraw() {
     }
   }, [savedPreds, data])
 
+  // Set initial view mode once: 'picks' if user has picks, otherwise 'live'
+  useEffect(() => {
+    if (initialModeSet.current || savedPreds === undefined) return
+    initialModeSet.current = true
+    if (savedPreds.some(p => p.predicted_winner_id != null)) setViewMode('picks')
+  }, [savedPreds])
+
   const saveMutation = useMutation({
     mutationFn: (latestPicks) => savePredictions(Number(id), latestPicks),
     onSuccess: () => qc.invalidateQueries(['predictions', id]),
+  })
+
+  const refreshMutation = useMutation({
+    mutationFn: () => refreshDraw(Number(id)),
+    onSuccess: () => qc.invalidateQueries(['draw', id]),
+  })
+
+  const unlockMutation = useMutation({
+    mutationFn: () => toggleUnlockSelections(Number(id)),
+    onSuccess: () => { qc.invalidateQueries(['draw', id]); setShowUnlockConfirm(false) },
   })
 
   const handlePick = (matchId, playerId) => {
@@ -95,7 +128,14 @@ export default function TournamentDraw() {
 
   const { tournament, matches, players } = data
   const locked = tournament.is_locked
+  const picksOwner = viewMode === 'picks' ? (viewingOther ? viewedUserName : user?.username) ?? null : null
 
+  // When viewing another user's picks, build their picks map from fetched predictions
+  const viewedPicksMap = viewingOther && viewedPreds
+    ? Object.fromEntries(viewedPreds.filter(p => p.predicted_winner_id != null).map(p => [p.match_id, p.predicted_winner_id]))
+    : null
+
+  const activePicks = viewingOther ? (viewedPicksMap ?? {}) : picks
   const pickedCount = Object.values(picks).filter(v => v != null).length
   const totalPredictable = matches.filter(m => !m.is_bye).length
 
@@ -130,8 +170,17 @@ export default function TournamentDraw() {
           <div className="draw-title-row">
             <h1 className="draw-title">
               {tournament.name}
-              {tournament.start_date && (
-                <span className="draw-title-dates">{fmtDateRange(tournament.start_date, tournament.end_date)}</span>
+              {catShort && <span className="draw-title-level">{tourLabel}</span>}
+              {tournament.wiki_page_id && (
+                <a
+                  href={`https://en.wikipedia.org/?curid=${tournament.wiki_page_id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="draw-wiki-link"
+                  title={tournament.wiki_page_title}
+                >
+                  🌐
+                </a>
               )}
             </h1>
           </div>
@@ -140,13 +189,57 @@ export default function TournamentDraw() {
               {[tournament.city, surface].filter(Boolean).join(' · ')}
             </span>
           </div>
-          {tournament.last_scraped_at && (
-            <p className="draw-last-modified">Last modified: {fmtModified(tournament.last_scraped_at)}</p>
+          {tournament.latest_result_at && (
+            <p className="draw-last-modified">Latest result: {fmtModified(tournament.latest_result_at)}</p>
           )}
         </div>
+        <div className="draw-header-center">
+          {tournament.start_date && (
+            <span className="draw-title-dates">{fmtDateRange(tournament.start_date, tournament.end_date)}</span>
+          )}
+          <div className="draw-mode-buttons">
+            <button
+              className={clsx('draw-mode-btn', { active: viewMode === 'picks' })}
+              onClick={() => setViewMode('picks')}
+            >
+              Picks
+            </button>
+            <button
+              className={clsx('draw-mode-btn', { active: viewMode === 'live' })}
+              onClick={() => setViewMode('live')}
+            >
+              Live Draw
+            </button>
+          </div>
+        </div>
         <div className="draw-header-actions">
-          {locked ? (
-            <span className="lock-badge">🔒 Predictions locked</span>
+          {tournament.selections_unlocked ? (
+            <span
+              className={`lock-badge lock-badge--unlocked${user?.is_admin ? ' lock-badge--admin' : ''}`}
+              onClick={user?.is_admin ? () => unlockMutation.mutate() : undefined}
+            >
+              🔓 Predictions UNLOCKED
+            </span>
+          ) : locked ? (
+            <div style={{ position: 'relative' }}>
+              <span
+                className={`lock-badge${user?.is_admin ? ' lock-badge--admin' : ''}`}
+                onClick={user?.is_admin ? () => setShowUnlockConfirm(v => !v) : undefined}
+              >
+                🔒 Predictions locked
+              </span>
+              {showUnlockConfirm && (
+                <div className="unlock-confirm">
+                  <p>Unlock predictions for this tournament?<br /><span className="unlock-confirm-sub">Players will be able to make picks.</span></p>
+                  <div className="unlock-confirm-actions">
+                    <button className="btn-primary" onClick={() => unlockMutation.mutate()} disabled={unlockMutation.isPending}>
+                      {unlockMutation.isPending ? 'Unlocking…' : 'Unlock'}
+                    </button>
+                    <button className="btn-secondary" onClick={() => setShowUnlockConfirm(false)}>Cancel</button>
+                  </div>
+                </div>
+              )}
+            </div>
           ) : (
             tournament.closing_time && (() => {
               const dt = new Date(tournament.closing_time + 'Z')
@@ -164,6 +257,15 @@ export default function TournamentDraw() {
               )
             })()
           )}
+          {user?.is_admin && (
+            <button
+              className="btn-admin-refresh"
+              onClick={() => refreshMutation.mutate()}
+              disabled={refreshMutation.isPending}
+            >
+              {refreshMutation.isPending ? '⏳ Updating…' : '↻ Update Draw'}
+            </button>
+          )}
           {user && !locked && (
             <span className="saved-badge">
               {saveMutation.isPending ? '⏳ Saving…' : pickedCount > 0 ? `✓ ${pickedCount}/${totalPredictable} picks saved` : ''}
@@ -172,21 +274,22 @@ export default function TournamentDraw() {
           {!user && (
             <Link to="/login" className="btn-primary">Log in to make picks</Link>
           )}
-          <div className="draw-status-level">
-            <span className="draw-meta-right">
-              {tournament.draw_released_direct_at
-                ? <span className="draw-confirmed">✓ DA</span>
-                : tournament.draw_release_direct
-                  ? <span className="draw-pending-label">DA: {new Date(tournament.draw_release_direct + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                  : null}
-              {tournament.draw_released_qualifiers_at
-                ? <span className="draw-confirmed">✓ Qual</span>
-                : tournament.draw_release_qualifiers
-                  ? <span className="draw-pending-label">Qual: {new Date(tournament.draw_release_qualifiers + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                  : null}
-            </span>
-            <span className="draw-level">{tourLabel}</span>
-          </div>
+          {tournament.status === 'open' && (
+            <div className="draw-status-level">
+              <span className="draw-meta-right">
+                {tournament.draw_released_direct_at
+                  ? <span className="draw-confirmed">✓ DA</span>
+                  : tournament.draw_release_direct
+                    ? <span className="draw-pending-label">DA: {new Date(tournament.draw_release_direct + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                    : null}
+                {tournament.draw_released_qualifiers_at
+                  ? <span className="draw-confirmed">✓ Qual</span>
+                  : tournament.draw_release_qualifiers
+                    ? <span className="draw-pending-label">Qual: {new Date(tournament.draw_release_qualifiers + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                    : null}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -198,30 +301,31 @@ export default function TournamentDraw() {
 
       {celebrating && <CelebrationOverlay />}
 
-      <div className="draw-mode-toggle">
-        <button
-          className={clsx('draw-mode-btn', { active: viewMode === 'picks' })}
-          onClick={() => setViewMode('picks')}
-        >
-          My Picks
-        </button>
-        <button
-          className={clsx('draw-mode-btn', { active: viewMode === 'live' })}
-          onClick={() => setViewMode('live')}
-        >
-          Live Draw
-        </button>
-      </div>
+      <div className="draw-body">
+        <DrawSidebar
+          tournamentId={Number(id)}
+          tournament={tournament}
+          selectedUserId={viewedUserId}
+          onSelectUser={(uid, uname) => {
+            setViewedUserId(uid)
+            setViewedUserName(uname ?? null)
+            if (uid != null) setViewMode('picks')
+          }}
+        />
 
-      <BracketView
-        tournament={tournament}
-        matches={matches}
-        players={players}
-        picks={user ? picks : {}}
-        onPick={handlePick}
-        locked={!user || locked}
-        mode={viewMode}
-      />
+        <div className="draw-main">
+          <BracketView
+            tournament={tournament}
+            matches={matches}
+            players={players}
+            picks={user ? activePicks : {}}
+            onPick={viewingOther ? () => {} : handlePick}
+            locked={!user || locked || viewingOther}
+            mode={viewMode}
+            picksOwner={picksOwner}
+          />
+        </div>
+      </div>
     </div>
   )
 }

@@ -1,4 +1,6 @@
+import random
 import secrets
+import string
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Optional
 
@@ -31,10 +33,13 @@ class League(Base):
     # For "custom" mode: {round_number (str): points (int)}
     custom_points: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     is_public: Mapped[bool] = mapped_column(Boolean, default=False)
-    # Random code for private league invitations
+    show_real_name: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Random 5-char uppercase alphanumeric invite code
     invite_code: Mapped[str] = mapped_column(
-        String, unique=True, default=lambda: secrets.token_urlsafe(8)
+        String, unique=True,
+        default=lambda: ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
     )
+    allow_member_invites: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
@@ -55,6 +60,8 @@ class LeagueMember(Base):
     joined_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
+
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
 
     league: Mapped["League"] = relationship("League", back_populates="members")
     user: Mapped["User"] = relationship("User", back_populates="memberships")

@@ -1,7 +1,8 @@
-import { Link } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { listTournaments } from '../api/tournaments'
-import { listLeagues } from '../api/leagues'
+import { listLeagues, createLeague, joinLeague } from '../api/leagues'
 import { getEntryStatus } from '../api/predictions'
 import { useAuth } from '../store/auth'
 import './Home.css'
@@ -12,14 +13,6 @@ function fmtDate(s) {
   return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-function fmtQueryTime(ts) {
-  if (!ts) return null
-  const d = new Date(ts)
-  const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
-    .replace(' AM', 'am').replace(' PM', 'pm')
-  return `${date}, ${time}`
-}
 
 function fmtDateRange(start, end) {
   if (!start) return ''
@@ -77,7 +70,7 @@ function DrawDates({ t, section }) {
 
 function TournamentCard({ t, section, pickStatus: ps }) {
   const pickState = ps?.[t.id] ?? null  // 'complete' | 'partial' | null
-  const catShort = t.category ? t.category.replace(/^(ATP|WTA)\s+/, '') : ''
+  const catShort = t.category ?? ''
   const surface = t.surface ? t.surface.replace(/\s*\(.*?\)/g, '') : ''
   const city = t.city ? t.city : ''
   const hasDrawData = t.status === 'completed' || !!t.draw_released_direct_at
@@ -86,30 +79,34 @@ function TournamentCard({ t, section, pickStatus: ps }) {
   const inner = (
     <>
       <div className="home-card-title-row">
-        <span className="home-card-title">
-          {t.name}
-          {t.start_date && (
-            <span className="home-card-dates">{fmtDateRange(t.start_date, t.end_date)}</span>
-          )}
+        <span className="home-card-title">{t.name}</span>
+        <span className="home-card-title-right">
+          {t.start_date && <span className="home-card-dates">{fmtDateRange(t.start_date, t.end_date)}</span>}
+          {catShort && <span className="home-card-level">{catShort}</span>}
         </span>
-        {catShort && <span className="home-card-level">{catShort}</span>}
       </div>
       <div className="home-card-sub-row">
-        <span className="home-card-sub">{city}{city && surface ? ' · ' : ''}{surface}</span>
-        <DrawDates t={t} section={section} />
-      </div>
-      {(section === 'active' || section === 'open') && (
-        <div className="home-card-bottom-row">
-          <span className="home-card-modified">
-            {t.last_scraped_at ? `Last modified: ${fmtModified(t.last_scraped_at)}` : ''}
-          </span>
+        <span className="home-card-sub">{city}</span>
+        <span className="home-card-sub-center">
           {section === 'active' && pickState === 'complete'
             ? <span className="home-card-entered competing">★ Competing</span>
-            : pickState === 'complete'
-              ? <span className="home-card-entered complete">✓ Picks entered</span>
-              : pickState === 'partial'
-                ? <span className="home-card-entered partial">⚠ Picks incomplete</span>
-                : <span className="home-card-entered none">✕ Picks not started</span>
+            : section === 'lastweek' && pickState === 'complete'
+              ? <span className="home-card-entered competing">★ Competed</span>
+              : (section === 'open' || section === 'upcoming')
+                ? <DrawDates t={t} section={section} />
+                : null
+          }
+        </span>
+        <span className="home-card-surface">{surface}</span>
+      </div>
+      {section === 'open' && (
+        <div className="home-card-bottom-row">
+          <span />
+          {pickState === 'complete'
+            ? <span className="home-card-entered complete">✓ Picks entered</span>
+            : pickState === 'partial'
+              ? <span className="home-card-entered partial">⚠ Picks incomplete</span>
+              : <span className="home-card-entered none">✕ Picks not started</span>
           }
         </div>
       )}
@@ -162,7 +159,12 @@ function Section({ title, description, tournaments, section, pickStatus, emptyMe
 function getSection(t) {
   if (t.status === 'active') return 'active'
   if (t.status === 'open') return 'open'
-  if (t.status === 'completed') return null
+  if (t.status === 'completed' && t.end_date) {
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    const end = new Date(t.end_date + 'T00:00:00')
+    const daysAgo = (today - end) / (1000 * 60 * 60 * 24)
+    if (daysAgo >= 0 && daysAgo <= 7) return 'lastweek'
+  }
   if (t.status === 'upcoming' && t.start_date) {
     const today = new Date(); today.setHours(0, 0, 0, 0)
     const in7Days = new Date(today); in7Days.setDate(today.getDate() + 8)
@@ -172,9 +174,112 @@ function getSection(t) {
   return null
 }
 
+function Modal({ title, onClose, children }) {
+  return (
+    <div className="home-modal-overlay" onClick={onClose}>
+      <div className="home-modal" onClick={e => e.stopPropagation()}>
+        <div className="home-modal-header">
+          <h3>{title}</h3>
+          <button className="home-modal-close" onClick={onClose}>✕</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function CreateLeagueModal({ onClose }) {
+  const qc = useQueryClient()
+  const navigate = useNavigate()
+  const [name, setName] = useState('')
+  const [mode, setMode] = useState('classic')
+  const [showRealName, setShowRealName] = useState(false)
+  const [customPoints, setCustomPoints] = useState('')
+  const [error, setError] = useState('')
+
+  const mutation = useMutation({
+    mutationFn: createLeague,
+    onSuccess: (lg) => { qc.invalidateQueries(['leagues']); navigate(`/leagues/${lg.id}`) },
+    onError: (e) => setError(e.response?.data?.detail || 'Failed to create'),
+  })
+
+  const submit = (e) => {
+    e.preventDefault()
+    const payload = { name, scoring_mode: mode, is_public: false, show_real_name: showRealName }
+    if (mode === 'custom') {
+      try { payload.custom_points = JSON.parse(customPoints) }
+      catch { setError('custom_points must be valid JSON'); return }
+    }
+    mutation.mutate(payload)
+  }
+
+  return (
+    <Modal title="Create League" onClose={onClose}>
+      <form onSubmit={submit} className="home-modal-form">
+        <label className="home-modal-label">Name</label>
+        <input className="home-modal-input" value={name} onChange={e => setName(e.target.value)} required placeholder="My Fantasy Group" autoFocus />
+        <label className="home-modal-label">Scoring mode</label>
+        <select className="home-modal-input" value={mode} onChange={e => setMode(e.target.value)}>
+          <option value="classic">Classic Bracket (1→2→4→8…)</option>
+          <option value="atp_wta">ATP/WTA Points Mirror</option>
+          <option value="upset_bonus">Classic + Upset Bonus</option>
+          <option value="custom">Custom</option>
+        </select>
+        {mode === 'custom' && (
+          <>
+            <label className="home-modal-label">Points per round (JSON)</label>
+            <input className="home-modal-input" value={customPoints} onChange={e => setCustomPoints(e.target.value)}
+              placeholder='{"1":1,"2":2,"3":4,"4":8,"5":16,"6":32,"7":128}' />
+          </>
+        )}
+        <label className="home-modal-check">
+          <input type="checkbox" checked={showRealName} onChange={e => setShowRealName(e.target.checked)} />
+          Show real name on hover
+        </label>
+        {error && <p className="home-modal-error">{error}</p>}
+        <button type="submit" className="btn-primary" disabled={mutation.isPending}>
+          {mutation.isPending ? 'Creating…' : 'Create League'}
+        </button>
+      </form>
+    </Modal>
+  )
+}
+
+function JoinLeagueModal({ onClose }) {
+  const qc = useQueryClient()
+  const [code, setCode] = useState('')
+  const [error, setError] = useState('')
+
+  const mutation = useMutation({
+    mutationFn: (code) => joinLeague(code),
+    onSuccess: () => { qc.invalidateQueries(['leagues']); onClose() },
+    onError: (e) => setError(e.response?.data?.detail || 'Failed to join'),
+  })
+
+  const submit = (e) => {
+    e.preventDefault()
+    setError('')
+    mutation.mutate(code)
+  }
+
+  return (
+    <Modal title="Join a League" onClose={onClose}>
+      <form onSubmit={submit} className="home-modal-form">
+        <label className="home-modal-label">Invite Code</label>
+        <input className="home-modal-input" value={code} onChange={e => setCode(e.target.value)} required placeholder="e.g. F5KP1" autoFocus />
+        {error && <p className="home-modal-error">{error}</p>}
+        <button type="submit" className="btn-primary" disabled={!code || mutation.isPending}>
+          {mutation.isPending ? 'Joining…' : 'Join League'}
+        </button>
+      </form>
+    </Modal>
+  )
+}
+
 export default function Home() {
   const { user } = useAuth()
-  const { data: tournaments, dataUpdatedAt } = useQuery({ queryKey: ['tournaments'], queryFn: listTournaments })
+  const [modal, setModal] = useState(null)  // 'create' | 'join' | null
+  const { data: tournaments } = useQuery({ queryKey: ['tournaments'], queryFn: listTournaments })
   const { data: leagues } = useQuery({ queryKey: ['leagues'], queryFn: listLeagues, enabled: !!user })
   const { data: enteredList } = useQuery({
     queryKey: ['entry-status'],
@@ -186,6 +291,7 @@ export default function Home() {
   const dataLoaded = tournaments !== undefined
   const active = tournaments?.filter(t => getSection(t) === 'active') || []
   const open = tournaments?.filter(t => getSection(t) === 'open') || []
+  const lastWeek = tournaments?.filter(t => getSection(t) === 'lastweek') || []
   const upcoming = tournaments?.filter(t => getSection(t) === 'upcoming') || []
 
   return (
@@ -193,66 +299,83 @@ export default function Home() {
       {!user && (
         <div className="hero">
           <div className="hero-cta">
-            <Link to="/register" className="btn-clay">Get started</Link>
+            <Link to="/register" className="btn-clay">Create Account</Link>
             <Link to="/login" className="btn-secondary">Log in</Link>
           </div>
         </div>
       )}
 
-      <div className="home-sections">
-        {dataLoaded && (
-          <div className="home-main-title-row">
-            <h2 className="home-main-title">Tournaments</h2>
-            <span className="last-queried">Last queried: {fmtQueryTime(dataUpdatedAt)}</span>
-          </div>
-        )}
+      <div className="dashboard">
+        <h1 className="dashboard-title">Dashboard</h1>
+        <div className="dashboard-columns">
 
-        <Section
-          title="Active"
-          description="Matches are underway. Selection is closed."
-          tournaments={active}
-          section="active"
-          pickStatus={pickStatus}
-          emptyMessage={dataLoaded ? 'No active tournaments at this time.' : null}
-        />
-
-        <Section
-          title="Open"
-          description="Direct Acceptance draw is set — no matches yet. Selection is OPEN."
-          tournaments={open}
-          section="open"
-          pickStatus={pickStatus}
-          emptyMessage={dataLoaded ? 'No open tournaments at this time.' : null}
-        />
-
-        <Section
-          title="Upcoming"
-          description="Starting within 8 days — draw not yet released."
-          tournaments={upcoming}
-          section="upcoming"
-          pickStatus={pickStatus}
-        />
-
-        {user && leagues && leagues.length > 0 && (
-          <section className="home-section">
-            <div className="home-section-header">
-              <h2>My Leagues</h2>
+          <div className="dashboard-panel dashboard-panel--tournaments">
+            <div className="home-sections">
+              <Section
+                title="Active"
+                description="Matches are underway. 🔒 Selection is closed."
+                tournaments={active}
+                section="active"
+                pickStatus={pickStatus}
+                emptyMessage={dataLoaded ? 'No active tournaments at this time.' : null}
+              />
+              <Section
+                title="Open"
+                description={open.length > 0 ? "The draw has been created. Matches have not yet begun. Make your picks now!" : null}
+                tournaments={open}
+                section="open"
+                pickStatus={pickStatus}
+                emptyMessage={dataLoaded ? 'No open tournaments at this time.' : null}
+              />
+              <Section
+                title="Last Week"
+                description="Completed in the past 7 days."
+                tournaments={lastWeek}
+                section="lastweek"
+                pickStatus={pickStatus}
+              />
+              <Section
+                title="Next Week"
+                description="Starting within 8 days — draw not yet released."
+                tournaments={upcoming}
+                section="upcoming"
+                pickStatus={pickStatus}
+              />
             </div>
-            <div className="home-grid">
-              {leagues.map(lg => (
-                <Link key={lg.id} to={`/leagues/${lg.id}`} className="home-card">
-                  <div className="home-card-meta">{lg.member_count} member{lg.member_count !== 1 ? 's' : ''}</div>
-                  <div className="home-card-title">{lg.name}</div>
-                  <div className="home-card-sub">{lg.scoring_mode}</div>
-                  <div className={`status-badge status-${lg.is_public ? 'public' : 'private'}`}>
-                    {lg.is_public ? 'Public' : 'Private'}
-                  </div>
+          </div>
+
+          <div className="dashboard-panel dashboard-panel--leagues">
+            <h2 className="dashboard-panel-title">Leagues</h2>
+            {user && (
+              <div className="league-sidebar-actions">
+                <button className="league-sidebar-btn" onClick={() => setModal('create')}>Create</button>
+                <button className="league-sidebar-btn" onClick={() => setModal('join')}>Join</button>
+              </div>
+            )}
+            <div className="league-sidebar-list">
+              <Link to="/leagues" className="league-sidebar-card league-sidebar-card--global">
+                <div className="league-sidebar-card-name">🌍 Global</div>
+                <div className="league-sidebar-card-sub">All players</div>
+              </Link>
+              {user && leagues && leagues.map(lg => (
+                <Link key={lg.id} to={`/leagues/${lg.id}`} className="league-sidebar-card">
+                  <div className="league-sidebar-card-name">{lg.name}</div>
+                  <div className="league-sidebar-card-sub">{lg.member_count} member{lg.member_count !== 1 ? 's' : ''}</div>
                 </Link>
               ))}
+              {!user && (
+                <p className="league-sidebar-login">
+                  <Link to="/login">Log in</Link> to see your private leagues.
+                </p>
+              )}
             </div>
-          </section>
-        )}
+          </div>
+
+        </div>
       </div>
+
+      {modal === 'create' && <CreateLeagueModal onClose={() => setModal(null)} />}
+      {modal === 'join'   && <JoinLeagueModal   onClose={() => setModal(null)} />}
     </div>
   )
 }
