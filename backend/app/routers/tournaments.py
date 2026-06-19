@@ -498,11 +498,23 @@ async def _do_scrape(tournament: Tournament, db: AsyncSession, force_refresh: bo
     if parsed.end_date:
         tournament.end_date = parsed.end_date
 
-    # Record actual draw release dates when detected
-    if parsed.has_direct_draw and not tournament.draw_released_direct_at:
-        tournament.draw_released_direct_at = date.today()
-        logger.info("Tournament %s: Direct acceptance draw released on %s",
-                   tournament.wiki_page_title, date.today())
+    # Record actual draw release dates when detected.
+    # Only stamp draw_released_direct_at once the draw is substantially complete
+    # (≥60% of expected draw_size).  A Wikipedia page with only a handful of seeded
+    # players doesn't represent a released draw.
+    da_players = [p for p in parsed.players if p.entry_type not in ("Q", "LL")]
+    draw_substantially_complete = len(da_players) >= tournament.draw_size * 0.60
+    if parsed.has_direct_draw and draw_substantially_complete:
+        if not tournament.draw_released_direct_at:
+            tournament.draw_released_direct_at = date.today()
+            logger.info("Tournament %s: Direct acceptance draw released on %s (%d players)",
+                       tournament.wiki_page_title, date.today(), len(da_players))
+    elif tournament.draw_released_direct_at and not draw_substantially_complete \
+            and tournament.status not in ("active", "completed"):
+        # Draw was stamped prematurely (e.g. only seeds visible) — revert until complete
+        tournament.draw_released_direct_at = None
+        logger.info("Tournament %s: Clearing premature draw release (%d/%d players present)",
+                   tournament.wiki_page_title, len(da_players), tournament.draw_size)
 
     if parsed.has_qualifiers and not tournament.draw_released_qualifiers_at:
         tournament.draw_released_qualifiers_at = date.today()
