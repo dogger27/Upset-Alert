@@ -129,7 +129,7 @@ function Section({ title, description, accent, live, items, section, pickStatus,
         description={description}
         accent={accent}
         live={live}
-        count={items.length || undefined}
+        count={items.length}
       />
       {items.length ? (
         <div style={{ display: 'flex', gap: 22, paddingLeft: 4 }}>
