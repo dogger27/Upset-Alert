@@ -429,7 +429,7 @@ async def leaderboard(
     )
     total_matches = total_matches_result.scalar_one()
 
-    # Only include members who have picks for ALL non-bye matches
+    # Score all league members; those with no picks score 0
     scores = []
     for member in league.members:
         preds_result = await db.execute(
@@ -440,8 +440,6 @@ async def leaderboard(
             )
         )
         preds = preds_result.scalars().all()
-        if len(preds) < total_matches:
-            continue
         score = score_user(member.user_id, preds, completed_matches, tournament, league)
         scores.append((member.user, score))
 
