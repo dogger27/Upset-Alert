@@ -5,6 +5,9 @@ import { listTournaments } from '../api/tournaments'
 import { listLeagues, createLeague, joinLeague } from '../api/leagues'
 import { getEntryStatus } from '../api/predictions'
 import { useAuth } from '../store/auth'
+import { TournamentCard } from '../components/design/TournamentCard.jsx'
+import { SectionHeader } from '../components/design/SectionHeader.jsx'
+import { LeagueCard } from '../components/design/LeagueCard.jsx'
 import './Home.css'
 
 function fmtDate(s) {
@@ -12,7 +15,6 @@ function fmtDate(s) {
   const [y, m, d] = s.split('-').map(Number)
   return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
-
 
 function fmtDateRange(start, end) {
   if (!start) return ''
@@ -22,138 +24,16 @@ function fmtDateRange(start, end) {
   const e = new Date(end + 'T00:00:00')
   const sameMonth = s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear()
   return sameMonth
-    ? `${mo(s)} ${s.getDate()} - ${e.getDate()}`
-    : `${mo(s)} ${s.getDate()} - ${mo(e)} ${e.getDate()}`
+    ? `${mo(s)} ${s.getDate()} – ${e.getDate()}`
+    : `${mo(s)} ${s.getDate()} – ${mo(e)} ${e.getDate()}`
 }
 
-function fmtModified(iso) {
-  if (!iso) return null
-  const d = new Date(iso.endsWith('Z') || iso.includes('+') ? iso : iso + 'Z')
-  const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
-    .replace(' AM', 'am').replace(' PM', 'pm')
-  return `${date}, ${time}`
-}
-
-function DrawDates({ t, section }) {
-  const daConfirmed = !!t.draw_released_direct_at
-  const qualConfirmed = !!t.draw_released_qualifiers_at
-
-  if (section === 'active') {
-    return <div className="home-card-draw">🔒 Selection closed</div>
-  }
-
-  if (section === 'open') {
-    return (
-      <div className="home-card-draw">
-        <span className="draw-confirmed">✓ DA</span>
-        {qualConfirmed
-          ? <span className="draw-confirmed">✓ Qual</span>
-          : t.draw_release_qualifiers
-            ? <span className="draw-pending">Qual: {fmtDate(t.draw_release_qualifiers)}</span>
-            : null}
-      </div>
-    )
-  }
-
-  if (section === 'upcoming') {
-    return (
-      <div className="home-card-draw">
-        {t.draw_release_direct && <span className="draw-pending">DA: {fmtDate(t.draw_release_direct)}</span>}
-        {t.draw_release_qualifiers && <span className="draw-pending">Qual: {fmtDate(t.draw_release_qualifiers)}</span>}
-      </div>
-    )
-  }
-
-  return null
-}
-
-function TournamentCard({ t, section, pickStatus: ps }) {
-  const pickState = ps?.[t.id] ?? null  // 'complete' | 'partial' | null
-  const catShort = t.category ?? ''
-  const surface = t.surface ? t.surface.replace(/\s*\(.*?\)/g, '') : ''
-  const city = t.city ? t.city : ''
-  const hasDrawData = t.status === 'completed' || !!t.draw_released_direct_at
-
-  const cardClass = `home-card home-card-${t.gender === 'M' ? 'men' : 'women'}${!hasDrawData ? ' home-card-upcoming' : ''}`
-  const inner = (
-    <>
-      <div className="home-card-title-row">
-        <span className="home-card-title">{t.name}</span>
-        <span className="home-card-title-right">
-          {t.start_date && <span className="home-card-dates">{fmtDateRange(t.start_date, t.end_date)}</span>}
-          {catShort && <span className="home-card-level">{catShort}</span>}
-        </span>
-      </div>
-      <div className="home-card-sub-row">
-        <span className="home-card-sub">{city}</span>
-        <span className="home-card-sub-center">
-          {section === 'active' && pickState === 'complete'
-            ? <span className="home-card-entered competing">★ Competing</span>
-            : section === 'lastweek' && pickState === 'complete'
-              ? <span className="home-card-entered competing">★ Competed</span>
-              : (section === 'open' || section === 'upcoming')
-                ? <DrawDates t={t} section={section} />
-                : null
-          }
-        </span>
-        <span className="home-card-surface">{surface}</span>
-      </div>
-      {section === 'open' && (
-        <div className="home-card-bottom-row">
-          <span />
-          {pickState === 'complete'
-            ? <span className="home-card-entered complete">✓ Picks entered</span>
-            : pickState === 'partial'
-              ? <span className="home-card-entered partial">⚠ Picks incomplete</span>
-              : <span className="home-card-entered none">✕ Picks not started</span>
-          }
-        </div>
-      )}
-    </>
-  )
-
-  if (!hasDrawData) {
-    return <div className={cardClass}>{inner}</div>
-  }
-  return <Link to={`/tournaments/${t.id}`} className={cardClass}>{inner}</Link>
-}
-
-function GenderCol({ label, tournaments, section, pickStatus }) {
-  return (
-    <div className="home-gender-col">
-      <div className="home-gender-header">{label}</div>
-      {tournaments.length > 0 ? tournaments.map(t => (
-        <TournamentCard key={t.id} t={t} section={section} pickStatus={pickStatus} />
-      )) : (
-        <p className="home-gender-empty">—</p>
-      )}
-    </div>
-  )
-}
-
-function Section({ title, description, tournaments, section, pickStatus, emptyMessage }) {
-  if (!tournaments.length && !emptyMessage) return null
-
-  const mens = tournaments.filter(t => t.gender === 'M')
-  const womens = tournaments.filter(t => t.gender === 'F')
-
-  return (
-    <section className="home-section">
-      <div className="home-section-header">
-        <h2>{title}</h2>
-        <p className="home-section-desc">{description}</p>
-      </div>
-      {tournaments.length > 0 ? (
-        <div className="home-gender-columns">
-          <GenderCol label="ATP" tournaments={mens} section={section} pickStatus={pickStatus} />
-          <GenderCol label="WTA" tournaments={womens} section={section} pickStatus={pickStatus} />
-        </div>
-      ) : (
-        <p className="home-empty-section">{emptyMessage}</p>
-      )}
-    </section>
-  )
+function tierFromCategory(category) {
+  const cat = (category || '').toUpperCase()
+  if (cat.includes('SLAM') || cat.includes('GRAND')) return 'GS'
+  if (cat.includes('1000')) return '1000'
+  if (cat.includes('500')) return '500'
+  return '250'
 }
 
 function getSection(t) {
@@ -167,17 +47,109 @@ function getSection(t) {
   }
   if (t.status === 'upcoming' && t.start_date) {
     const today = new Date(); today.setHours(0, 0, 0, 0)
-    const in7Days = new Date(today); in7Days.setDate(today.getDate() + 8)
+    const in8Days = new Date(today); in8Days.setDate(today.getDate() + 8)
     const start = new Date(t.start_date + 'T00:00:00')
-    if (start > today && start <= in7Days) return 'upcoming'
+    if (start > today && start <= in8Days) return 'upcoming'
   }
   return null
+}
+
+function TCard({ t, section, pickStatus }) {
+  const pickState = pickStatus?.[t.id] ?? 'none'
+  const tour = t.gender === 'M' ? 'ATP' : 'WTA'
+  const tier = tierFromCategory(t.category)
+  const surface = (t.surface || 'hard').replace(/\s*\(.*?\)/g, '').trim().toLowerCase()
+  const dateRange = fmtDateRange(t.start_date, t.end_date)
+  const hasDrawData = t.status === 'completed' || !!t.draw_released_direct_at
+  const drawDates = section === 'upcoming' ? {
+    da: t.draw_release_direct ? fmtDate(t.draw_release_direct) : null,
+    qual: t.draw_release_qualifiers ? fmtDate(t.draw_release_qualifiers) : null,
+  } : null
+
+  return (
+    <TournamentCard
+      tour={tour}
+      name={t.name}
+      city={t.city}
+      surface={surface}
+      tier={tier}
+      dateRange={dateRange}
+      section={section}
+      pickState={pickState}
+      drawDates={drawDates}
+      to={hasDrawData ? `/tournaments/${t.id}` : undefined}
+    />
+  )
+}
+
+function GenderCol({ label, tour, tournaments, section, pickStatus }) {
+  const accent = tour === 'ATP' ? 'var(--atp-600)' : 'var(--wta-600)'
+  const borderColor = tour === 'ATP' ? 'var(--atp-100)' : 'var(--wta-100)'
+
+  if (!tournaments.length) return <div style={{ width: 400 }} />
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 9, width: 400 }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 7,
+        fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '0.82rem',
+        letterSpacing: '0.1em', textTransform: 'uppercase', color: accent,
+        paddingBottom: 6, borderBottom: `2px solid ${borderColor}`,
+      }}>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: accent }} />
+        {label}
+      </div>
+      {tournaments.map(t => (
+        <TCard key={t.id} t={t} section={section} pickStatus={pickStatus} />
+      ))}
+    </div>
+  )
+}
+
+const SECTION_BG = {
+  open:    'rgba(201,120,58,0.07)',   // faint clay tint
+  active:  'rgba(45,106,79,0.07)',    // faint green tint
+  muted:   'rgba(147,163,156,0.10)',  // neutral gray tint
+}
+
+function Section({ title, description, accent, live, items, section, pickStatus, emptyMessage }) {
+  if (!items.length && !emptyMessage) return null
+  const atp = items.filter(t => t.gender === 'M')
+  const wta = items.filter(t => t.gender === 'F')
+  const bg = SECTION_BG[accent] || SECTION_BG.muted
+  return (
+    <section style={{
+      display: 'flex', flexDirection: 'column', gap: 16,
+      background: bg, border: '1px solid var(--border-strong)',
+      borderRadius: 'var(--radius-lg)', padding: '20px 24px 22px',
+      boxShadow: 'var(--shadow-xs)',
+    }}>
+      <SectionHeader
+        title={title}
+        description={description}
+        accent={accent}
+        live={live}
+        count={items.length || undefined}
+      />
+      {items.length ? (
+        <div style={{ display: 'flex', gap: 22, paddingLeft: 4 }}>
+          <GenderCol label="ATP" tour="ATP" tournaments={atp} section={section} pickStatus={pickStatus} />
+          <GenderCol label="WTA" tour="WTA" tournaments={wta} section={section} pickStatus={pickStatus} />
+        </div>
+      ) : (
+        <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: 'var(--text-muted)', fontStyle: 'italic', margin: 0, paddingLeft: 4 }}>
+          {emptyMessage}
+        </p>
+      )}
+    </section>
+  )
 }
 
 function Modal({ title, onClose, children }) {
   return (
     <div className="home-modal-overlay" onClick={onClose}>
-      <div className="home-modal" onClick={e => e.stopPropagation()}>
+      <div className="home-modal" onClick={e => e.stopPropagation()}
+        style={{ animation: 'ua-rise 0.22s var(--ease-out)' }}>
         <div className="home-modal-header">
           <h3>{title}</h3>
           <button className="home-modal-close" onClick={onClose}>✕</button>
@@ -192,9 +164,7 @@ function CreateLeagueModal({ onClose }) {
   const qc = useQueryClient()
   const navigate = useNavigate()
   const [name, setName] = useState('')
-  const [mode, setMode] = useState('classic')
   const [showRealName, setShowRealName] = useState(false)
-  const [customPoints, setCustomPoints] = useState('')
   const [error, setError] = useState('')
 
   const mutation = useMutation({
@@ -205,12 +175,7 @@ function CreateLeagueModal({ onClose }) {
 
   const submit = (e) => {
     e.preventDefault()
-    const payload = { name, scoring_mode: mode, is_public: false, show_real_name: showRealName }
-    if (mode === 'custom') {
-      try { payload.custom_points = JSON.parse(customPoints) }
-      catch { setError('custom_points must be valid JSON'); return }
-    }
-    mutation.mutate(payload)
+    mutation.mutate({ name, scoring_mode: 'classic', is_public: false, show_real_name: showRealName })
   }
 
   return (
@@ -218,20 +183,6 @@ function CreateLeagueModal({ onClose }) {
       <form onSubmit={submit} className="home-modal-form">
         <label className="home-modal-label">Name</label>
         <input className="home-modal-input" value={name} onChange={e => setName(e.target.value)} required placeholder="My Fantasy Group" autoFocus />
-        <label className="home-modal-label">Scoring mode</label>
-        <select className="home-modal-input" value={mode} onChange={e => setMode(e.target.value)}>
-          <option value="classic">Classic Bracket (1→2→4→8…)</option>
-          <option value="atp_wta">ATP/WTA Points Mirror</option>
-          <option value="upset_bonus">Classic + Upset Bonus</option>
-          <option value="custom">Custom</option>
-        </select>
-        {mode === 'custom' && (
-          <>
-            <label className="home-modal-label">Points per round (JSON)</label>
-            <input className="home-modal-input" value={customPoints} onChange={e => setCustomPoints(e.target.value)}
-              placeholder='{"1":1,"2":2,"3":4,"4":8,"5":16,"6":32,"7":128}' />
-          </>
-        )}
         <label className="home-modal-check">
           <input type="checkbox" checked={showRealName} onChange={e => setShowRealName(e.target.checked)} />
           Show real name on hover
@@ -266,7 +217,7 @@ function JoinLeagueModal({ onClose }) {
     <Modal title="Join a League" onClose={onClose}>
       <form onSubmit={submit} className="home-modal-form">
         <label className="home-modal-label">Invite Code</label>
-        <input className="home-modal-input" value={code} onChange={e => setCode(e.target.value)} required placeholder="e.g. F5KP1" autoFocus />
+        <input className="home-modal-input home-modal-input--mono" value={code} onChange={e => setCode(e.target.value)} required placeholder="e.g. F5KP1" autoFocus />
         {error && <p className="home-modal-error">{error}</p>}
         <button type="submit" className="btn-primary" disabled={!code || mutation.isPending}>
           {mutation.isPending ? 'Joining…' : 'Join League'}
@@ -278,7 +229,7 @@ function JoinLeagueModal({ onClose }) {
 
 export default function Home() {
   const { user } = useAuth()
-  const [modal, setModal] = useState(null)  // 'create' | 'join' | null
+  const [modal, setModal] = useState(null)
   const { data: tournaments } = useQuery({ queryKey: ['tournaments'], queryFn: listTournaments })
   const { data: leagues } = useQuery({ queryKey: ['leagues'], queryFn: listLeagues, enabled: !!user })
   const { data: enteredList } = useQuery({
@@ -286,16 +237,16 @@ export default function Home() {
     queryFn: getEntryStatus,
     enabled: !!user,
   })
-  const pickStatus = enteredList || null  // {tournament_id: 'complete' | 'partial'}
+  const pickStatus = enteredList || null
 
   const dataLoaded = tournaments !== undefined
-  const active = tournaments?.filter(t => getSection(t) === 'active') || []
-  const open = tournaments?.filter(t => getSection(t) === 'open') || []
+  const active   = tournaments?.filter(t => getSection(t) === 'active')   || []
+  const open     = tournaments?.filter(t => getSection(t) === 'open')     || []
   const lastWeek = tournaments?.filter(t => getSection(t) === 'lastweek') || []
   const upcoming = tournaments?.filter(t => getSection(t) === 'upcoming') || []
 
   return (
-    <div className="home">
+    <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
       {!user && (
         <div className="hero">
           <div className="hero-cta">
@@ -305,72 +256,99 @@ export default function Home() {
         </div>
       )}
 
-      <div className="dashboard">
-        <h1 className="dashboard-title">Dashboard</h1>
-        <div className="dashboard-columns">
+      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '26px 28px 56px' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 22 }}>
+          <div>
+            <h1 style={{
+              fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: '2.75rem',
+              letterSpacing: '0.01em', lineHeight: 1, color: 'var(--ink-900)', textTransform: 'uppercase',
+            }}>Dashboard</h1>
+          </div>
+        </div>
 
-          <div className="dashboard-panel dashboard-panel--tournaments">
-            <div className="home-sections">
-              <Section
-                title="Open"
-                description={open.length > 0 ? "The draw has been created. Matches have not yet begun. Make your picks now!" : null}
-                tournaments={open}
-                section="open"
-                pickStatus={pickStatus}
-                emptyMessage={dataLoaded ? 'No open tournaments at this time.' : null}
-              />
-              <Section
-                title="Active"
-                description="Matches are underway. 🔒 Selection is closed."
-                tournaments={active}
-                section="active"
-                pickStatus={pickStatus}
-                emptyMessage={dataLoaded ? 'No active tournaments at this time.' : null}
-              />
-              <Section
-                title="Next Week"
-                description="Starting within 8 days — draw not yet released."
-                tournaments={upcoming}
-                section="upcoming"
-                pickStatus={pickStatus}
-              />
-              <Section
-                title="Last Week"
-                description="Completed in the past 7 days."
-                tournaments={lastWeek}
-                section="lastweek"
-                pickStatus={pickStatus}
-              />
-            </div>
+        <div style={{ display: 'flex', gap: 22, alignItems: 'flex-start' }}>
+          {/* Tournaments column — don't stretch; let content width drive */}
+          <div style={{ flex: '0 0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <Section
+              title="Open"
+              accent="open"
+              live
+              description="The draw is out — get your picks locked in now."
+              items={open}
+              section="open"
+              pickStatus={pickStatus}
+              emptyMessage={dataLoaded ? 'No open tournaments at this time.' : null}
+            />
+            <Section
+              title="Active"
+              accent="active"
+              description="Matches are underway. 🔒 Selection is closed."
+              items={active}
+              section="active"
+              pickStatus={pickStatus}
+              emptyMessage={dataLoaded ? 'No active tournaments at this time.' : null}
+            />
+            <Section
+              title="Next Week"
+              accent="muted"
+              description="Starting within 8 days — draw not yet released."
+              items={upcoming}
+              section="upcoming"
+              pickStatus={pickStatus}
+            />
+            <Section
+              title="Last Week"
+              accent="muted"
+              description="Completed in the past 7 days."
+              items={lastWeek}
+              section="lastweek"
+              pickStatus={pickStatus}
+            />
           </div>
 
-          <div className="dashboard-panel dashboard-panel--leagues">
-            <h2 className="dashboard-panel-title">Leagues</h2>
+          {/* Leagues sidebar */}
+          <aside style={{
+            width: 256, flexShrink: 0,
+            background: 'rgba(45,106,79,0.07)', border: '1px solid var(--border-strong)',
+            borderRadius: 'var(--radius-lg)', padding: '22px 20px',
+            position: 'sticky', top: 20,
+          }}>
+            <h2 style={{
+              fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: '1.2rem',
+              letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-700)',
+              marginBottom: 14,
+            }}>Leagues</h2>
+
             {user && (
-              <div className="league-sidebar-actions">
+              <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
                 <button className="league-sidebar-btn" onClick={() => setModal('create')}>Create</button>
                 <button className="league-sidebar-btn" onClick={() => setModal('join')}>Join</button>
               </div>
             )}
-            <div className="league-sidebar-list">
-              <Link to="/leagues" className="league-sidebar-card league-sidebar-card--global">
-                <div className="league-sidebar-card-name">🌍 Global</div>
-                <div className="league-sidebar-card-sub">All players</div>
-              </Link>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <LeagueCard
+                name="Global"
+                sublabel="All players"
+                global
+                icon="🌍"
+                to="/leagues"
+              />
               {user && leagues && leagues.map(lg => (
-                <Link key={lg.id} to={`/leagues/${lg.id}`} className="league-sidebar-card">
-                  <div className="league-sidebar-card-name">{lg.name}</div>
-                  <div className="league-sidebar-card-sub">{lg.member_count} member{lg.member_count !== 1 ? 's' : ''}</div>
-                </Link>
+                <LeagueCard
+                  key={lg.id}
+                  name={lg.name}
+                  sublabel={`${lg.member_count} member${lg.member_count !== 1 ? 's' : ''}`}
+                  to={`/leagues/${lg.id}`}
+                />
               ))}
               {!user && (
-                <p className="league-sidebar-login">
+                <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)', margin: '0.5rem 0 0' }}>
                   <Link to="/login">Log in</Link> to see your private leagues.
                 </p>
               )}
             </div>
-          </div>
-
+          </aside>
         </div>
       </div>
 

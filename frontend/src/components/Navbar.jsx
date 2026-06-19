@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../store/auth'
 import './Navbar.css'
 
 export default function Navbar() {
   const { user, logout, updateProfile } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [menuOpen, setMenuOpen] = useState(false)
   const [editing, setEditing] = useState(false)
   const [username, setUsername] = useState('')
@@ -74,13 +75,21 @@ export default function Navbar() {
     navigate('/')
   }
 
+  const isActive = (path) => path === '/' ? location.pathname === '/' : location.pathname.startsWith(path)
+
   return (
     <nav className="navbar">
       <div className="navbar-left" />
-      <Link to="/" className="navbar-brand">Upset Alert</Link>
+      <Link to="/" className="navbar-brand">
+        <span className="navbar-brand-dot" />
+        <span className="navbar-brand-text">
+          <span className="navbar-brand-upset">Upset</span>{' '}
+          <span className="navbar-brand-alert">Alert</span>
+        </span>
+      </Link>
       <div className="navbar-links">
-        <Link to="/">Dashboard</Link>
-        <Link to="/tournaments">Tournaments</Link>
+        <Link to="/" className={isActive('/') && !isActive('/tournaments') ? 'navbar-active' : ''}>Dashboard</Link>
+        <Link to="/tournaments" className={isActive('/tournaments') ? 'navbar-active' : ''}>Tournaments</Link>
         {user ? (
           <>
             {user.is_admin && <Link to="/admin" className="navbar-admin-btn">Admin</Link>}

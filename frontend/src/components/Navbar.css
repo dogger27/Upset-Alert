@@ -2,48 +2,89 @@
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  padding: 0 1.5rem;
-  height: 56px;
-  background: var(--green-dark);
-  color: white;
+  padding: 0 24px;
+  height: 60px;
+  background: var(--green-800);
+  color: #fff;
   position: sticky;
   top: 0;
   z-index: 100;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  box-shadow: var(--shadow-md);
 }
 
-.navbar-left { /* spacer to balance the right-side links */ }
+.navbar-left { /* spacer to balance right-side nav */ }
 
+/* ── Wordmark ── */
 .navbar-brand {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: white;
-  letter-spacing: 0.01em;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  text-decoration: none;
+  justify-self: center;
   white-space: nowrap;
 }
-.navbar-brand:hover { text-decoration: none; color: white; opacity: 0.9; }
+.navbar-brand:hover { text-decoration: none; opacity: 0.9; }
 
+.navbar-brand-dot {
+  position: relative;
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+.navbar-brand-dot::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--clay-300);
+  box-shadow: 0 0 0 4px rgba(232,168,124,0.28);
+}
+
+.navbar-brand-text {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 1.5rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+.navbar-brand-upset { color: #fff; }
+.navbar-brand-alert { color: var(--clay-300); }
+
+/* ── Right-side nav ── */
 .navbar-links {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 1.25rem;
+  gap: 22px;
 }
 
 .navbar-links a {
-  color: rgba(255,255,255,0.85);
+  font-family: var(--font-body);
+  font-weight: 500;
   font-size: 0.9rem;
+  color: rgba(255,255,255,0.78);
+  text-decoration: none;
+  position: relative;
+  padding-bottom: 2px;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
 }
-.navbar-links a:hover { color: white; text-decoration: none; }
+.navbar-links a:hover { color: #fff; text-decoration: none; }
+.navbar-links a.navbar-active {
+  font-weight: 700;
+  color: #fff;
+  border-bottom-color: var(--green-300);
+}
 
 .navbar-admin-btn {
-  border: 1.5px solid rgba(255,255,255,0.45);
+  border: 1.5px solid rgba(255,255,255,0.45) !important;
   border-radius: 6px;
   padding: 0.2rem 0.65rem !important;
   transition: border-color 0.15s, background 0.15s;
 }
 .navbar-admin-btn:hover {
-  border-color: white;
+  border-color: white !important;
   background: rgba(255,255,255,0.1);
 }
 
@@ -55,24 +96,24 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--green-light);
+  color: var(--green-300);
   background: none;
-  border: 1.5px solid rgba(255,255,255,0.25);
+  border: 1.5px solid rgba(255,255,255,0.3);
   cursor: pointer;
   padding: 0;
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background var(--dur) var(--ease-out), border-color var(--dur) var(--ease-out);
 }
 .navbar-user:hover {
   background: rgba(255,255,255,0.1);
-  border-color: rgba(255,255,255,0.5);
+  border-color: rgba(255,255,255,0.6);
 }
 
 .navbar-user-icon {
-  width: 18px;
-  height: 18px;
+  width: 17px;
+  height: 17px;
   flex-shrink: 0;
 }
 
