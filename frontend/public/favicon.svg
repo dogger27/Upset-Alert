@@ -1,8 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <!-- Dark green background -->
-  <rect width="32" height="32" rx="7" fill="#1b4332"/>
-  <!-- Outer glow ring -->
-  <circle cx="16" cy="16" r="9" fill="rgba(232,168,124,0.28)"/>
-  <!-- Clay dot -->
-  <circle cx="16" cy="16" r="5.5" fill="#e8a87c"/>
+  <!-- Outer ring: very light clay -->
+  <circle cx="16" cy="16" r="14" fill="rgba(201,120,58,0.28)"/>
+  <!-- Inner dot: solid clay -->
+  <circle cx="16" cy="16" r="8" fill="#c9783a"/>
 </svg>
