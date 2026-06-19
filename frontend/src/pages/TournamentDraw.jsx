@@ -31,10 +31,14 @@ export default function TournamentDraw() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['draw', id],
     queryFn: () => getDraw(Number(id)),
-    // Poll every 2 min for active tournaments so live scores stay fresh
+    // Poll every 2 min for active tournaments (live scores) and any unlocked tournament
+    // so non-admins see the unlock state change without a manual refresh
     refetchInterval: (query) => {
-      const status = query.state.data?.tournament?.status
-      return status === 'active' ? 2 * 60 * 1000 : false
+      const t = query.state.data?.tournament
+      if (!t) return false
+      if (t.status === 'active' || t.selections_unlocked) return 2 * 60 * 1000
+      if (t.status === 'upcoming' || t.status === 'open') return 2 * 60 * 1000
+      return false
     },
   })
 
@@ -126,8 +130,8 @@ export default function TournamentDraw() {
   if (isLoading) return <div className="page-loading">Loading draw…</div>
   if (error) return <div className="page-error">Failed to load draw.</div>
 
-  const { tournament, matches, players } = data
-  const locked = tournament.is_locked
+  const { tournament, matches, draw_entries: players } = data
+  const locked = tournament.is_locked && !tournament.selections_unlocked
   const picksOwner = viewMode === 'picks' ? (viewingOther ? viewedUserName : user?.username) ?? null : null
 
   // When viewing another user's picks, build their picks map from fetched predictions

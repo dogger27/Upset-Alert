@@ -47,8 +47,8 @@ class Tournament(Base):
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
 
-    players: Mapped[list["Player"]] = relationship(
-        "Player", back_populates="tournament", cascade="all, delete-orphan"
+    draw_entries: Mapped[list["DrawEntry"]] = relationship(
+        "DrawEntry", back_populates="tournament", cascade="all, delete-orphan"
     )
     matches: Mapped[list["Match"]] = relationship(
         "Match", back_populates="tournament", cascade="all, delete-orphan"
@@ -118,10 +118,10 @@ class Tournament(Base):
         return f"Round of {p}"
 
 
-class Player(Base):
-    """A player entry in a specific tournament draw."""
+class DrawEntry(Base):
+    """A player's entry in a specific tournament draw."""
 
-    __tablename__ = "players"
+    __tablename__ = "draw_entries"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     tournament_id: Mapped[int] = mapped_column(ForeignKey("tournaments.id"), nullable=False, index=True)
@@ -134,10 +134,12 @@ class Player(Base):
     bracket_position: Mapped[int] = mapped_column(Integer, nullable=False)
     # Official ATP/WTA ranking at time of draw
     ranking: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Date of birth (populated from TE player pages when available)
+    date_of_birth: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     # Foreign key into te_players — set once on first resolution, never changes
     te_player_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
-    tournament: Mapped["Tournament"] = relationship("Tournament", back_populates="players")
+    tournament: Mapped["Tournament"] = relationship("Tournament", back_populates="draw_entries")
 
 
 class Match(Base):
@@ -150,9 +152,9 @@ class Match(Base):
     round_number: Mapped[int] = mapped_column(Integer, nullable=False)   # 1 = first round
     match_number: Mapped[int] = mapped_column(Integer, nullable=False)   # 1-indexed within round
     # Player IDs — R1 matches are populated by the scraper; later rounds fill in as results arrive
-    player1_id: Mapped[Optional[int]] = mapped_column(ForeignKey("players.id"), nullable=True)
-    player2_id: Mapped[Optional[int]] = mapped_column(ForeignKey("players.id"), nullable=True)
-    winner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("players.id"), nullable=True)
+    player1_id: Mapped[Optional[int]] = mapped_column(ForeignKey("draw_entries.id"), nullable=True)
+    player2_id: Mapped[Optional[int]] = mapped_column(ForeignKey("draw_entries.id"), nullable=True)
+    winner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("draw_entries.id"), nullable=True)
     is_bye: Mapped[bool] = mapped_column(Integer, default=False)
     # [[p1_s1, p1_s2, ...], [p2_s1, p2_s2, ...]] — set scores as strings
     scores_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
@@ -161,6 +163,6 @@ class Match(Base):
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     tournament: Mapped["Tournament"] = relationship("Tournament", back_populates="matches")
-    player1: Mapped[Optional["Player"]] = relationship("Player", foreign_keys=[player1_id])
-    player2: Mapped[Optional["Player"]] = relationship("Player", foreign_keys=[player2_id])
-    winner: Mapped[Optional["Player"]] = relationship("Player", foreign_keys=[winner_id])
+    player1: Mapped[Optional["DrawEntry"]] = relationship("DrawEntry", foreign_keys=[player1_id])
+    player2: Mapped[Optional["DrawEntry"]] = relationship("DrawEntry", foreign_keys=[player2_id])
+    winner: Mapped[Optional["DrawEntry"]] = relationship("DrawEntry", foreign_keys=[winner_id])

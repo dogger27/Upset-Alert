@@ -19,7 +19,7 @@ from typing import Optional
 
 from app.models.league import League
 from app.models.prediction import UserPrediction
-from app.models.tournament import Match, Player, Tournament
+from app.models.tournament import DrawEntry, Match, Tournament
 
 
 # ---------------------------------------------------------------------------
@@ -127,7 +127,7 @@ def score_user(
             bonus = 0
 
             if use_upset_bonus:
-                winner: Optional[Player] = match.winner
+                winner: Optional[DrawEntry] = match.winner
                 loser_id = (
                     match.player2_id
                     if match.winner_id == match.player1_id

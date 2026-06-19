@@ -37,9 +37,10 @@ _TE_HEADERS = {
     "Accept-Language": "en-US,en;q=0.9",
 }
 _TE_ROW_RE = re.compile(
-    r'<td class="rank first">(\d+)\.</td>.*?<td class="t-name"><a href="[^"]+">(.*?)</a></td>',
+    r'<td class="rank first">(\d+)\.</td>.*?<td class="t-name"><a href="([^"]+)">(.*?)</a></td>',
     re.DOTALL,
 )
+_TE_SLUG_RE = re.compile(r'^/player/([^/]+)/?$')
 
 # Per-(gender, week_date): (te_index, rank_by_te_id)
 # Avoids reloading thousands of rows from SQLite on every assign_rankings call.
@@ -165,15 +166,16 @@ def _build_te_index(te_players: list) -> dict[frozenset, list[int]]:
 # Tennis Explorer scraper
 # ---------------------------------------------------------------------------
 
-async def _scrape_te(gender: str) -> list[tuple[str, int]]:
+async def _scrape_te(gender: str) -> list[tuple[str, int, Optional[str]]]:
     """
     Scrape all pages of Tennis Explorer rankings for the given gender.
-    Returns [(name_raw, rank), ...] in TE's "Surname Firstname" format.
+    Returns [(name_raw, rank, te_slug), ...] in TE's "Surname Firstname" format.
+    te_slug is the URL slug from the player's TE profile, e.g. "sinner-jannik".
     """
     import httpx
 
     url = _TE_URLS[gender]
-    results: list[tuple[str, int]] = []
+    results: list[tuple[str, int, Optional[str]]] = []
     try:
         async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
             page = 1
@@ -183,8 +185,10 @@ async def _scrape_te(gender: str) -> list[tuple[str, int]]:
                 rows = _TE_ROW_RE.findall(resp.text)
                 if not rows:
                     break
-                for rank_str, raw_name in rows:
-                    results.append((raw_name.strip(), int(rank_str)))
+                for rank_str, href, raw_name in rows:
+                    slug_m = _TE_SLUG_RE.match(href)
+                    slug = slug_m.group(1) if slug_m else None
+                    results.append((raw_name.strip(), int(rank_str), slug))
                 page += 1
                 await asyncio.sleep(0.1)
         logger.info("Tennis Explorer %s scrape: %d players across %d pages", gender, len(results), page - 1)
@@ -227,13 +231,15 @@ async def ensure_te_week(gender: str, week_date: date, db: AsyncSession) -> bool
         p.name_raw: p for p in existing_players_res.scalars()
     }
 
-    for name_raw, rank in raw_rows:
+    for name_raw, rank, slug in raw_rows:
         tp = existing_by_raw.get(name_raw)
         if tp is None:
-            tp = TePlayer(gender=gender, name_raw=name_raw, name_norm=_norm(name_raw))
+            tp = TePlayer(gender=gender, name_raw=name_raw, name_norm=_norm(name_raw), te_slug=slug)
             db.add(tp)
             await db.flush()
             existing_by_raw[name_raw] = tp
+        elif slug and tp.te_slug is None:
+            tp.te_slug = slug
 
         snap = await db.get(TeRankingsSnapshot, (tp.id, week_date))
         if snap is None:
@@ -299,3 +305,102 @@ async def assign_rankings(
                 player.te_player_id = te_id
 
         player.ranking = rank_by_te_id.get(player.te_player_id) if player.te_player_id else None
+
+
+# ---------------------------------------------------------------------------
+# Date-of-birth scraper
+# ---------------------------------------------------------------------------
+
+# TE page format: Age: 24 (16. 8. 2001)  →  day=16, month=8, year=2001
+_DOB_RE = re.compile(r'Age:\s*\d+\s*\((\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})\)')
+
+
+async def _fetch_te_player_dob(te_slug: str) -> Optional[date]:
+    """Scrape DOB from a TE player profile page. Returns None on any failure."""
+    import httpx
+
+    url = f"https://www.tennisexplorer.com/player/{te_slug}/"
+    try:
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+            resp = await client.get(url, headers=_TE_HEADERS)
+            resp.raise_for_status()
+            html = resp.text
+    except Exception as exc:
+        logger.debug("DOB fetch failed for %s: %s", te_slug, exc)
+        return None
+
+    m = _DOB_RE.search(html)
+    if m:
+        try:
+            return date(int(m.group(3)), int(m.group(2)), int(m.group(1)))
+        except ValueError:
+            pass
+    return None
+
+
+async def prefetch_dob_for_draw(tournament_id: int) -> None:
+    """
+    After a draw is refreshed, fetch DOB from TE for any linked te_players
+    in this draw that are still missing it. Creates its own DB session.
+    """
+    from app.database import AsyncSessionLocal
+    from app.models.rankings import TePlayer
+    from app.models.tournament import DrawEntry
+
+    async with AsyncSessionLocal() as db:
+        res = await db.execute(
+            select(TePlayer)
+            .join(DrawEntry, DrawEntry.te_player_id == TePlayer.id)
+            .where(
+                DrawEntry.tournament_id == tournament_id,
+                TePlayer.te_slug.isnot(None),
+                TePlayer.date_of_birth.is_(None),
+            )
+            .distinct()
+        )
+        missing = res.scalars().all()
+        if not missing:
+            return
+
+        logger.info("DOB prefetch: %d player(s) for tournament %d", len(missing), tournament_id)
+        for tp in missing:
+            dob = await _fetch_te_player_dob(tp.te_slug)
+            if dob:
+                tp.date_of_birth = dob
+                logger.debug("DOB %s → %s", tp.te_slug, dob)
+            await asyncio.sleep(0.3)
+
+        await db.commit()
+        logger.info("DOB prefetch complete for tournament %d", tournament_id)
+
+
+async def backfill_all_dob() -> dict:
+    """
+    Admin backfill: fetch DOB for every te_player with a slug but no DOB yet.
+    Creates its own DB session. Safe to call multiple times (skips already set).
+    """
+    from app.database import AsyncSessionLocal
+    from app.models.rankings import TePlayer
+
+    async with AsyncSessionLocal() as db:
+        res = await db.execute(
+            select(TePlayer).where(
+                TePlayer.te_slug.isnot(None),
+                TePlayer.date_of_birth.is_(None),
+            )
+        )
+        missing = res.scalars().all()
+        total = len(missing)
+        logger.info("DOB backfill: %d te_players to process", total)
+
+        updated = 0
+        for tp in missing:
+            dob = await _fetch_te_player_dob(tp.te_slug)
+            if dob:
+                tp.date_of_birth = dob
+                updated += 1
+            await asyncio.sleep(0.3)
+
+        await db.commit()
+        logger.info("DOB backfill complete: %d/%d updated", updated, total)
+        return {"total": total, "updated": updated, "failed": total - updated}

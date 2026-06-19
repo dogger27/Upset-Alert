@@ -1,4 +1,5 @@
 from datetime import date
+from typing import Optional
 
 from sqlalchemy import Date, ForeignKey, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -15,6 +16,8 @@ class TePlayer(Base):
     gender: Mapped[str] = mapped_column(String(1), nullable=False)
     name_raw: Mapped[str] = mapped_column(String, nullable=False, unique=True)  # "Sinner Jannik"
     name_norm: Mapped[str] = mapped_column(String, nullable=False)              # "sinner jannik"
+    te_slug: Mapped[Optional[str]] = mapped_column(String, nullable=True)       # "sinner-jannik" (TE URL slug for H2H)
+    date_of_birth: Mapped[Optional[date]] = mapped_column(Date, nullable=True)  # fetched from TE player page
 
     snapshots: Mapped[list["TeRankingsSnapshot"]] = relationship(
         "TeRankingsSnapshot", back_populates="player", cascade="all, delete-orphan"

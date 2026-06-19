@@ -90,6 +90,11 @@ async def _refresh_active_tournaments(force_refresh: bool = False) -> None:
                 await _do_scrape(t, db, force_refresh=force_refresh)
                 await db.commit()
                 logger.info("Refreshed %s %s (%s)", t.year, t.name, t.gender)
+                # Prefetch H2H and DOB for any new matchups/players (uses own sessions)
+                from app.services.h2h import prefetch_h2h_for_draw
+                from app.services.rankings import prefetch_dob_for_draw
+                await prefetch_h2h_for_draw(t.id)
+                await prefetch_dob_for_draw(t.id)
             except Exception as exc:
                 logger.warning("Failed to refresh %s: %s", t.wiki_page_title, exc)
                 await db.rollback()
@@ -153,6 +158,9 @@ def start_scheduler() -> None:
     # Force-refresh on startup to catch any results that arrived while the
     # server was down.
     asyncio.create_task(_refresh_active_tournaments(force_refresh=True))
+    # Backfill DOB for any te_players missing it (no-op if all already set).
+    from app.services.rankings import backfill_all_dob
+    asyncio.create_task(backfill_all_dob())
 
 
 def stop_scheduler() -> None:

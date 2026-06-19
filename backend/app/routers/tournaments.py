@@ -8,10 +8,11 @@ from sqlalchemy.orm import selectinload
 from app.core.auth import get_current_user
 from app.database import get_db
 from app.models.prediction import UserPrediction
-from app.models.tournament import Match, Player, Tournament
+from app.models.rankings import TePlayer
+from app.models.tournament import DrawEntry, Match, Tournament
 from app.models.user import User
 from app.schemas.league import LeaderboardEntry
-from app.schemas.tournament import DrawOut, MatchOut, PlayerOut, TournamentCreate, TournamentOut
+from app.schemas.tournament import DrawEntryOut, DrawOut, MatchOut, TournamentCreate, TournamentOut
 from app.schemas.user import UserPublicOut
 from app.services.rankings import assign_rankings
 from app.services.scraper import scrape_tournament
@@ -150,7 +151,7 @@ async def backfill_rankings(
     for t in tournaments:
         try:
             ref_date = t.start_date or date.today()
-            players_res = await db.execute(select(Player).where(Player.tournament_id == t.id))
+            players_res = await db.execute(select(DrawEntry).where(DrawEntry.tournament_id == t.id))
             players = players_res.scalars().all()
 
             before = [p.ranking for p in players]
@@ -167,6 +168,17 @@ async def backfill_rankings(
             failed.append(t.name)
 
     return {"updated_players": updated_total, "failed": failed}
+
+
+@router.post("/backfill-dob", response_model=dict)
+async def backfill_dob(
+    _: User = Depends(get_current_user),
+):
+    """Admin: fetch date-of-birth from TE for all te_players missing it."""
+    from app.services.rankings import backfill_all_dob
+    import asyncio
+    asyncio.create_task(backfill_all_dob())
+    return {"status": "started"}
 
 
 @router.post("/sync-tournaments", response_model=dict)
@@ -342,9 +354,23 @@ async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(404, "Tournament not found")
 
     players_result = await db.execute(
-        select(Player).where(Player.tournament_id == tournament_id).order_by(Player.bracket_position)
+        select(DrawEntry).where(DrawEntry.tournament_id == tournament_id).order_by(DrawEntry.bracket_position)
     )
     players = players_result.scalars().all()
+
+    # Bulk-load te_slug and date_of_birth from te_players for all players with a TE identity
+    te_ids = [p.te_player_id for p in players if p.te_player_id is not None]
+    te_slug_map: dict[int, str] = {}
+    te_dob_map: dict[int, "date"] = {}
+    if te_ids:
+        te_res = await db.execute(
+            select(TePlayer.id, TePlayer.te_slug, TePlayer.date_of_birth).where(TePlayer.id.in_(te_ids))
+        )
+        for row in te_res:
+            if row.te_slug:
+                te_slug_map[row.id] = row.te_slug
+            if row.date_of_birth:
+                te_dob_map[row.id] = row.date_of_birth
 
     matches_result = await db.execute(
         select(Match)
@@ -358,15 +384,21 @@ async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
     )
     matches = matches_result.scalars().all()
 
+    def _player_out(p: DrawEntry) -> DrawEntryOut:
+        out = DrawEntryOut.model_validate(p)
+        out.te_slug = te_slug_map.get(p.te_player_id) if p.te_player_id else None
+        out.date_of_birth = te_dob_map.get(p.te_player_id) if p.te_player_id else None
+        return out
+
     match_outs = []
     for m in matches:
         match_outs.append(MatchOut(
             id=m.id,
             round_number=m.round_number,
             match_number=m.match_number,
-            player1=PlayerOut.model_validate(m.player1) if m.player1 else None,
-            player2=PlayerOut.model_validate(m.player2) if m.player2 else None,
-            winner=PlayerOut.model_validate(m.winner) if m.winner else None,
+            player1=_player_out(m.player1) if m.player1 else None,
+            player2=_player_out(m.player2) if m.player2 else None,
+            winner=_player_out(m.winner) if m.winner else None,
             is_bye=m.is_bye,
             status=m.status,
             round_name=t.round_name(m.round_number),
@@ -376,7 +408,7 @@ async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
     t.latest_result_at = max((m.completed_at for m in matches if m.completed_at), default=None)
     return DrawOut(
         tournament=TournamentOut.model_validate(t),
-        players=[PlayerOut.model_validate(p) for p in players],
+        draw_entries=[_player_out(p) for p in players],
         matches=match_outs,
     )
 
@@ -387,12 +419,19 @@ async def refresh_draw(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
+    import asyncio
+    from app.services.h2h import prefetch_h2h_for_draw
+    from app.services.rankings import prefetch_dob_for_draw
+
     t = await db.get(Tournament, tournament_id)
     if not t:
         raise HTTPException(404, "Tournament not found")
     await _do_scrape(t, db, force_refresh=True)
     await db.commit()
     await db.refresh(t)
+    # Kick off background tasks — neither blocks the response
+    asyncio.create_task(prefetch_h2h_for_draw(tournament_id))
+    asyncio.create_task(prefetch_dob_for_draw(tournament_id))
     return t
 
 
@@ -477,9 +516,9 @@ async def _do_scrape(tournament: Tournament, db: AsyncSession, force_refresh: bo
 
     # Load existing players and matches indexed for upsert
     existing_players_res = await db.execute(
-        select(Player).where(Player.tournament_id == tournament.id)
+        select(DrawEntry).where(DrawEntry.tournament_id == tournament.id)
     )
-    existing_players: dict[int, Player] = {
+    existing_players: dict[int, DrawEntry] = {
         p.bracket_position: p for p in existing_players_res.scalars()
     }
     existing_matches_res = await db.execute(
@@ -504,7 +543,7 @@ async def _do_scrape(tournament: Tournament, db: AsyncSession, force_refresh: bo
     # Upsert players — update in place to preserve any FK references
     pos_to_player_id: dict[int, int] = {}
     seen_positions: set[int] = set()
-    upserted_players: list[Player] = []
+    upserted_players: list[DrawEntry] = []
     for pe in parsed.players:
         seen_positions.add(pe.bracket_position)
         if pe.bracket_position in existing_players:
@@ -514,7 +553,7 @@ async def _do_scrape(tournament: Tournament, db: AsyncSession, force_refresh: bo
             player.seed = pe.seed
             player.entry_type = pe.entry_type
         else:
-            player = Player(
+            player = DrawEntry(
                 tournament_id=tournament.id,
                 name=pe.name,
                 nationality=pe.nationality,

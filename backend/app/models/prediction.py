@@ -8,7 +8,7 @@ from app.database import Base
 
 if TYPE_CHECKING:
     from app.models.user import User
-    from app.models.tournament import Match, Player
+    from app.models.tournament import Match, DrawEntry
 
 
 class UserPrediction(Base):
@@ -28,7 +28,7 @@ class UserPrediction(Base):
     tournament_id: Mapped[int] = mapped_column(ForeignKey("tournaments.id"), nullable=False, index=True)
     match_id: Mapped[int] = mapped_column(ForeignKey("matches.id"), nullable=False, index=True)
     predicted_winner_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("players.id"), nullable=True
+        ForeignKey("draw_entries.id"), nullable=True
     )
     submitted_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
@@ -36,6 +36,6 @@ class UserPrediction(Base):
 
     user: Mapped["User"] = relationship("User", back_populates="predictions")
     match: Mapped["Match"] = relationship("Match", foreign_keys=[match_id])
-    predicted_winner: Mapped[Optional["Player"]] = relationship(
-        "Player", foreign_keys=[predicted_winner_id]
+    predicted_winner: Mapped[Optional["DrawEntry"]] = relationship(
+        "DrawEntry", foreign_keys=[predicted_winner_id]
     )

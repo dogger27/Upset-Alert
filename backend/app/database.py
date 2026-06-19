@@ -57,6 +57,16 @@ async def _migrate(conn):
         "CREATE INDEX IF NOT EXISTS idx_te_snap_week ON te_rankings_snapshots(week_date)",
         "ALTER TABLE players ADD COLUMN te_player_id INTEGER",
         "ALTER TABLE tournaments ADD COLUMN selections_unlocked BOOLEAN DEFAULT 0",
+        "ALTER TABLE te_players ADD COLUMN te_slug VARCHAR",
+        (
+            "CREATE TABLE IF NOT EXISTS h2h_cache "
+            "(slug_a VARCHAR NOT NULL, slug_b VARCHAR NOT NULL, "
+            "fetched_at DATETIME NOT NULL, data_json JSON NOT NULL, "
+            "PRIMARY KEY (slug_a, slug_b))"
+        ),
+        "ALTER TABLE players ADD COLUMN date_of_birth DATE",
+        "ALTER TABLE te_players ADD COLUMN date_of_birth DATE",
+        "ALTER TABLE players RENAME TO draw_entries",
     ]
     for sql in migrations:
         try:

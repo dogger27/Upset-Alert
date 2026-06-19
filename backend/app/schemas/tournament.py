@@ -65,7 +65,7 @@ class TournamentOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class PlayerOut(BaseModel):
+class DrawEntryOut(BaseModel):
     id: int
     name: str
     nationality: Optional[str]
@@ -73,6 +73,8 @@ class PlayerOut(BaseModel):
     entry_type: Optional[str]
     bracket_position: int
     ranking: Optional[int] = None
+    date_of_birth: Optional[date] = None
+    te_slug: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -81,9 +83,9 @@ class MatchOut(BaseModel):
     id: int
     round_number: int
     match_number: int
-    player1: Optional[PlayerOut]
-    player2: Optional[PlayerOut]
-    winner: Optional[PlayerOut]
+    player1: Optional[DrawEntryOut]
+    player2: Optional[DrawEntryOut]
+    winner: Optional[DrawEntryOut]
     is_bye: bool
     status: str
     round_name: Optional[str] = None
@@ -94,5 +96,5 @@ class MatchOut(BaseModel):
 
 class DrawOut(BaseModel):
     tournament: TournamentOut
-    players: list[PlayerOut]
+    draw_entries: list[DrawEntryOut]
     matches: list[MatchOut]

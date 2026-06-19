@@ -8,8 +8,31 @@
  * Both modes colour the whole match cell green (correct pick) or red (wrong pick).
  */
 
+import { useState } from 'react'
 import clsx from 'clsx'
+import H2HPanel from './H2HPanel'
 import './BracketView.css'
+
+// IOC 3-letter → ISO 2-letter for flag emoji generation
+const IOC_TO_ISO2 = {
+  AUS:'AU', USA:'US', GBR:'GB', FRA:'FR', GER:'DE', ESP:'ES', ITA:'IT',
+  RUS:'RU', CAN:'CA', JPN:'JP', CHN:'CN', KOR:'KR', ARG:'AR', BRA:'BR',
+  SUI:'CH', AUT:'AT', BEL:'BE', NED:'NL', DEN:'DK', NOR:'NO', SWE:'SE',
+  FIN:'FI', POL:'PL', CZE:'CZ', SVK:'SK', HUN:'HU', ROU:'RO', BUL:'BG',
+  SRB:'RS', CRO:'HR', SLO:'SI', BIH:'BA', MKD:'MK', GRE:'GR', TUR:'TR',
+  POR:'PT', GEO:'GE', KAZ:'KZ', UKR:'UA', BLR:'BY', LAT:'LV', LTU:'LT',
+  EST:'EE', ISR:'IL', RSA:'ZA', EGY:'EG', MAR:'MA', TUN:'TN', NGR:'NG',
+  CHI:'CL', COL:'CO', PER:'PE', URU:'UY', VEN:'VE', ECU:'EC', BOL:'BO',
+  PAR:'PY', MEX:'MX', IND:'IN', PAK:'PK', THA:'TH', VIE:'VN', INA:'ID',
+  MAS:'MY', PHI:'PH', TPE:'TW', HKG:'HK', NZL:'NZ', BAH:'BS', DOM:'DO',
+  HAI:'HT', PUR:'PR', TTO:'TT', JAM:'JM', BAR:'BB', GUA:'GT', CRC:'CR',
+  MON:'MC', LUX:'LU', ISL:'IS', IRL:'IE', CYP:'CY', MLT:'MT',
+}
+
+function nationalityIso2(nat) {
+  if (!nat) return null
+  return IOC_TO_ISO2[nat.toUpperCase()] ?? (nat.length === 2 ? nat.toUpperCase() : null)
+}
 
 function computeDrawRanks(players) {
   const ranks = {}
@@ -101,7 +124,7 @@ function PlayerRow({
   playerId, playerById, drawRanks,
   isPicked, isWinner, isEliminated, isProjected, isDeadPick,
   scores, retired, onClick, locked,
-  showTypeSlot, showScores, markWinner, showRowBg,
+  showTypeSlot, showScores, markWinner, showRowBg, showFlag,
 }) {
   const player = playerId != null ? playerById[playerId] : null
 
@@ -110,10 +133,11 @@ function PlayerRow({
 
   if (player) {
     const rank = drawRanks?.[player.id]
+    const rankTitle = player.ranking != null ? `Rank: ${player.ranking}` : undefined
     if (player.seed != null) {
-      leftBadge = <span className="pos-badge seeded">{player.seed}</span>
+      leftBadge = <span className="pos-badge seeded" title={rankTitle}>{player.seed}</span>
     } else if (rank != null) {
-      leftBadge = <span className="pos-badge unseeded">{rank}</span>
+      leftBadge = <span className="pos-badge unseeded" title={rankTitle}>{rank}</span>
     }
 
     if (player.entry_type) {
@@ -159,6 +183,12 @@ function PlayerRow({
       {retired && <span className="ret-badge">ret.</span>}
       {showTick && <span className="pick-result correct" title={correctPick ? 'Correct pick' : 'Winner'}>✓</span>}
       {wrongPick && <span className="pick-result wrong" title="Wrong pick">✗</span>}
+      {showFlag && player.nationality && (() => {
+        const iso2 = nationalityIso2(player.nationality)
+        return iso2
+          ? <span className={`fi fi-${iso2.toLowerCase()} player-flag`} title={player.nationality} />
+          : null
+      })()}
       {showScores && scores && scores.length > 0 && (
         <span className="score-row">
           {scores.map((s, i) => <ScoreCell key={i} val={s} />)}
@@ -172,7 +202,7 @@ function playerNeedsTypeSlot(p) {
   return !!p?.entry_type
 }
 
-function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick, locked, style, mode, lossRound }) {
+function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick, locked, style, mode, lossRound, onH2H }) {
   const { p1: p1id, p2: p2id } = resolvedPlayers || { p1: match.player1?.id, p2: match.player2?.id }
   const pickedId = picks[match.id]
   const actualWinnerId = match.winner?.id
@@ -194,6 +224,9 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
   const p2 = p2id != null ? playerById[p2id] : null
   const showTypeSlot = playerNeedsTypeSlot(p1) || playerNeedsTypeSlot(p2)
   const showScores = mode === 'live'
+
+  // H2H strip: live mode only, both players must have TE slugs
+  const h2hAvailable = mode === 'live' && !!p1?.te_slug && !!p2?.te_slug
 
   if (match.is_bye) {
     return (
@@ -218,39 +251,53 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
         'needs-pick': needsPick,
         'correct-pick': correctPick,
         'wrong-pick': wrongPick,
+        'match-box--h2h': h2hAvailable,
       })}
       style={style}
     >
-      <PlayerRow
-        playerId={p1id} playerById={playerById} drawRanks={drawRanks}
-        isPicked={pickedId === p1id}
-        isWinner={actualWinnerId === p1id}
-        isEliminated={actualWinnerId != null && actualWinnerId !== p1id && p1id != null}
-        isDeadPick={p1DeadPick}
-        isProjected={p1IsProjected}
-        scores={p1Scores}
-        retired={ret.p1}
-        onClick={p1id != null ? () => onPick(match.id, p1id) : undefined}
-        locked={locked}
-        showTypeSlot={showTypeSlot}
-        showScores={showScores}
-        markWinner={mode === 'live'}
-      />
-      <PlayerRow
-        playerId={p2id} playerById={playerById} drawRanks={drawRanks}
-        isPicked={pickedId === p2id}
-        isWinner={actualWinnerId === p2id}
-        isEliminated={actualWinnerId != null && actualWinnerId !== p2id && p2id != null}
-        isDeadPick={p2DeadPick}
-        isProjected={p2IsProjected}
-        scores={p2Scores}
-        retired={ret.p2}
-        onClick={p2id != null ? () => onPick(match.id, p2id) : undefined}
-        locked={locked}
-        showTypeSlot={showTypeSlot}
-        showScores={showScores}
-        markWinner={mode === 'live'}
-      />
+      <div className="match-box-main">
+        <PlayerRow
+          playerId={p1id} playerById={playerById} drawRanks={drawRanks}
+          isPicked={pickedId === p1id}
+          isWinner={actualWinnerId === p1id}
+          isEliminated={actualWinnerId != null && actualWinnerId !== p1id && p1id != null}
+          isDeadPick={p1DeadPick}
+          isProjected={p1IsProjected}
+          scores={p1Scores}
+          retired={ret.p1}
+          onClick={p1id != null ? () => onPick(match.id, p1id) : undefined}
+          locked={locked}
+          showTypeSlot={showTypeSlot}
+          showScores={showScores}
+          markWinner={mode === 'live'}
+          showFlag={mode === 'picks'}
+        />
+        <PlayerRow
+          playerId={p2id} playerById={playerById} drawRanks={drawRanks}
+          isPicked={pickedId === p2id}
+          isWinner={actualWinnerId === p2id}
+          isEliminated={actualWinnerId != null && actualWinnerId !== p2id && p2id != null}
+          isDeadPick={p2DeadPick}
+          isProjected={p2IsProjected}
+          scores={p2Scores}
+          retired={ret.p2}
+          onClick={p2id != null ? () => onPick(match.id, p2id) : undefined}
+          locked={locked}
+          showTypeSlot={showTypeSlot}
+          showScores={showScores}
+          markWinner={mode === 'live'}
+          showFlag={mode === 'picks'}
+        />
+      </div>
+      {h2hAvailable && (
+        <button
+          className="h2h-strip"
+          onClick={() => onH2H(p1, p2)}
+          title={`Head-to-head: ${p1.name} vs ${p2.name}`}
+        >
+          <span className="h2h-strip-label">H2H</span>
+        </button>
+      )}
     </div>
   )
 }
@@ -287,6 +334,8 @@ function ConnectorLines({ leftMatches, rightMatches, totalH }) {
 // ---------------------------------------------------------------------------
 
 export default function BracketView({ tournament, matches, players, picks, onPick, locked, mode = 'picks', picksOwner = null }) {
+  const [h2hPlayers, setH2HPlayers] = useState(null) // { p1, p2 } player objects
+
   const playerById = Object.fromEntries(players.map(p => [p.id, p]))
   const drawRanks = computeDrawRanks(players)
   const resolved = resolveMatchPlayers(matches, picks, mode)
@@ -314,6 +363,17 @@ export default function BracketView({ tournament, matches, players, picks, onPic
   const totalH = r1Count * SLOT_BASE
 
   return (
+    <>
+    {h2hPlayers && (
+      <H2HPanel
+        slug1={h2hPlayers.p1.te_slug}
+        slug2={h2hPlayers.p2.te_slug}
+        player1={h2hPlayers.p1}
+        player2={h2hPlayers.p2}
+        tournSurface={tournament?.surface}
+        onClose={() => setH2HPlayers(null)}
+      />
+    )}
     <div className="bracket-scroll">
       <div className="bracket-labels" style={{ paddingLeft: 0 }}>
         {roundNums.map((rn, i) => (
@@ -348,6 +408,7 @@ export default function BracketView({ tournament, matches, players, picks, onPic
                       locked={locked}
                       mode={mode}
                       lossRound={lossRound}
+                      onH2H={(p1, p2) => setH2HPlayers({ p1, p2 })}
                       style={{ position: 'absolute', top, left: 6, right: 6 }}
                     />
                   )
@@ -367,5 +428,6 @@ export default function BracketView({ tournament, matches, players, picks, onPic
         })}
       </div>
     </div>
+    </>
   )
 }

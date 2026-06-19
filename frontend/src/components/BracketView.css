@@ -57,6 +57,41 @@
   overflow: hidden;
   background: white;
   box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  display: flex;
+}
+
+.match-box-main {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* ── H2H strip ── */
+.h2h-strip {
+  width: 14px;
+  flex-shrink: 0;
+  background: #eff6ff;
+  border: none;
+  border-left: 1px solid #d0d0d0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: background 0.12s;
+}
+.h2h-strip:hover { background: #dbeafe; }
+
+.h2h-strip-label {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  transform: rotate(180deg);
+  font-size: 0.52rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: #2563eb;
+  text-transform: uppercase;
+  user-select: none;
 }
 
 .match-box.bye {
@@ -240,3 +275,13 @@
 
 .player-row.winner .score-cell { font-weight: 700; }
 .player-row.eliminated .score-cell { opacity: 0.7; }
+
+.player-flag {
+  flex-shrink: 0;
+  width: 18px !important;
+  height: 13px !important;
+  margin-left: auto;
+  margin-right: 2px;
+  border-radius: 1px;
+  opacity: 0.9;
+}
