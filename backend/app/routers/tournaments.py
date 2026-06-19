@@ -500,10 +500,10 @@ async def _do_scrape(tournament: Tournament, db: AsyncSession, force_refresh: bo
 
     # Record actual draw release dates when detected.
     # Only stamp draw_released_direct_at once the draw is substantially complete
-    # (≥60% of expected draw_size).  A Wikipedia page with only a handful of seeded
-    # players doesn't represent a released draw.
+    # (≥85% of expected draw_size — essentially all DA slots filled).
+    # A page with only a handful of seeded players is not a released draw.
     da_players = [p for p in parsed.players if p.entry_type not in ("Q", "LL")]
-    draw_substantially_complete = len(da_players) >= tournament.draw_size * 0.60
+    draw_substantially_complete = len(da_players) >= tournament.draw_size * 0.85
     if parsed.has_direct_draw and draw_substantially_complete:
         if not tournament.draw_released_direct_at:
             tournament.draw_released_direct_at = date.today()
