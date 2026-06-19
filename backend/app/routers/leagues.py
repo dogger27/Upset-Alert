@@ -96,16 +96,10 @@ async def create_league(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if body.scoring_mode not in ("classic", "atp_wta", "upset_bonus", "custom"):
-        raise HTTPException(400, "Invalid scoring_mode")
-    if body.scoring_mode == "custom" and not body.custom_points:
-        raise HTTPException(400, "custom_points required for custom scoring mode")
-
     league = League(
         name=body.name,
         owner_id=current_user.id,
-        scoring_mode=body.scoring_mode,
-        custom_points=body.custom_points,
+        scoring_mode="classic",
         is_public=body.is_public,
         show_real_name=body.show_real_name,
         allow_member_invites=body.allow_member_invites,
@@ -180,10 +174,6 @@ async def update_league(
 
     if body.name is not None:
         league.name = body.name
-    if body.scoring_mode is not None:
-        league.scoring_mode = body.scoring_mode
-    if body.custom_points is not None:
-        league.custom_points = body.custom_points
     if body.is_public is not None:
         league.is_public = body.is_public
     if body.show_real_name is not None:
