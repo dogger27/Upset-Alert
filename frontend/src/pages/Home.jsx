@@ -312,14 +312,6 @@ export default function Home() {
           <div className="dashboard-panel dashboard-panel--tournaments">
             <div className="home-sections">
               <Section
-                title="Active"
-                description="Matches are underway. 🔒 Selection is closed."
-                tournaments={active}
-                section="active"
-                pickStatus={pickStatus}
-                emptyMessage={dataLoaded ? 'No active tournaments at this time.' : null}
-              />
-              <Section
                 title="Open"
                 description={open.length > 0 ? "The draw has been created. Matches have not yet begun. Make your picks now!" : null}
                 tournaments={open}
@@ -328,17 +320,25 @@ export default function Home() {
                 emptyMessage={dataLoaded ? 'No open tournaments at this time.' : null}
               />
               <Section
-                title="Last Week"
-                description="Completed in the past 7 days."
-                tournaments={lastWeek}
-                section="lastweek"
+                title="Active"
+                description="Matches are underway. 🔒 Selection is closed."
+                tournaments={active}
+                section="active"
                 pickStatus={pickStatus}
+                emptyMessage={dataLoaded ? 'No active tournaments at this time.' : null}
               />
               <Section
                 title="Next Week"
                 description="Starting within 8 days — draw not yet released."
                 tournaments={upcoming}
                 section="upcoming"
+                pickStatus={pickStatus}
+              />
+              <Section
+                title="Last Week"
+                description="Completed in the past 7 days."
+                tournaments={lastWeek}
+                section="lastweek"
                 pickStatus={pickStatus}
               />
             </div>
