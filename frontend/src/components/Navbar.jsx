@@ -88,8 +88,9 @@ export default function Navbar() {
         </span>
       </Link>
       <div className="navbar-links">
-        <Link to="/" className={isActive('/') && !isActive('/tournaments') ? 'navbar-active' : ''}>Dashboard</Link>
-        <Link to="/tournaments" className={isActive('/tournaments') ? 'navbar-active' : ''}>Tournaments</Link>
+        {/^\/tournaments\/[^/]+/.test(location.pathname) && (
+          <Link to="/" className="">Dashboard</Link>
+        )}
         {user ? (
           <>
             {user.is_admin && <Link to="/admin" className="navbar-admin-btn">Admin</Link>}

@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { refreshAllCompleted, syncTournaments } from '../api/tournaments'
 import { useAuth } from '../store/auth'
-import { Navigate } from 'react-router-dom'
+import { Navigate, Link } from 'react-router-dom'
 import './Admin.css'
 
 const CURRENT_YEAR = new Date().getFullYear()
@@ -28,6 +28,16 @@ export default function Admin() {
   return (
     <div className="admin-page">
       <h1>Admin</h1>
+
+      <div className="card admin-section" style={{ width: 'fit-content' }}>
+        <h2>Tournaments</h2>
+        <p className="muted" style={{ marginBottom: '1rem', fontSize: '0.88rem' }}>
+          View all tournaments, draw status, Wikipedia links, and scraping details.
+        </p>
+        <Link to="/tournaments" className="btn-secondary" style={{ display: 'inline-block' }}>
+          Open Tournaments Table →
+        </Link>
+      </div>
 
       <div className="card admin-section" style={{ width: 'fit-content' }}>
         <h2>Data</h2>
