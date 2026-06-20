@@ -211,6 +211,61 @@
   border-color: #86efac;
 }
 
+.btn-clear-selections {
+  font-size: 0.82rem;
+  font-weight: 600;
+  font-family: inherit;
+  color: #991b1b;
+  background: #fff1f2;
+  border: 1px solid #fecaca;
+  padding: 0.3em 0.85em;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.btn-clear-selections:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+.btn-danger {
+  font-size: 0.88rem;
+  font-weight: 600;
+  font-family: inherit;
+  color: #fff;
+  background: #dc2626;
+  border: none;
+  padding: 0.45em 1.1em;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-danger:hover { background: #b91c1c; }
+
+@keyframes toast-show {
+  0%   { opacity: 0; transform: translateX(-50%) translateY(10px); }
+  8%   { opacity: 1; transform: translateX(-50%) translateY(0); }
+  65%  { opacity: 1; transform: translateX(-50%) translateY(0); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(6px); }
+}
+
+.clear-toast {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1f2937;
+  color: #fff;
+  padding: 0.65rem 1.4rem;
+  border-radius: 999px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  z-index: 9998;
+  pointer-events: none;
+  animation: toast-show 3.5s ease forwards;
+  white-space: nowrap;
+}
+
 .lock-badge {
   font-size: 0.82rem;
   color: #92400e;
@@ -315,4 +370,56 @@
   box-shadow: 0 6px 30px rgba(34, 197, 94, 0.45);
   animation: celebrate-banner 3.4s ease forwards;
   white-space: nowrap;
+}
+
+/* Auto-populate confirmation modal */
+.auto-populate-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fade-in 0.15s ease;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.auto-populate-modal {
+  background: #fff;
+  border-radius: 14px;
+  padding: 1.75rem 2rem;
+  max-width: 360px;
+  width: calc(100% - 2rem);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.18);
+  animation: modal-drop 0.18s ease;
+}
+
+@keyframes modal-drop {
+  from { transform: translateY(-12px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.auto-populate-modal-title {
+  margin: 0 0 0.6rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.auto-populate-modal-body {
+  margin: 0 0 1.25rem;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.auto-populate-modal-actions {
+  display: flex;
+  gap: 0.6rem;
+  justify-content: flex-end;
 }
