@@ -244,6 +244,11 @@ export default function Home() {
   })
   const pickStatus = enteredList || null
 
+  const memberLeagues = leagues?.filter(lg => lg.members?.some(m => m.id === user?.id)) ?? []
+  const nonMemberLeagues = user?.is_admin
+    ? (leagues?.filter(lg => !lg.members?.some(m => m.id === user?.id)) ?? [])
+    : []
+
   const dataLoaded = tournaments !== undefined
   const active   = tournaments?.filter(t => getSection(t) === 'active')   || []
   const open     = tournaments?.filter(t => getSection(t) === 'open')     || []
@@ -339,7 +344,7 @@ export default function Home() {
                 icon="🌍"
                 to="/leagues"
               />
-              {user && leagues && leagues.map(lg => (
+              {user && memberLeagues.map(lg => (
                 <LeagueCard
                   key={lg.id}
                   name={lg.name}
@@ -347,6 +352,28 @@ export default function Home() {
                   to={`/leagues/${lg.id}`}
                 />
               ))}
+              {nonMemberLeagues.length > 0 && (
+                <>
+                  <div style={{
+                    borderTop: '1px solid var(--border)',
+                    margin: '6px 0 2px',
+                  }} />
+                  <div style={{
+                    fontFamily: 'var(--font-body)', fontSize: '0.7rem',
+                    color: 'var(--text-muted)', letterSpacing: '0.05em',
+                    textTransform: 'uppercase', paddingLeft: 2, marginBottom: 4,
+                  }}>Other Leagues</div>
+                  {nonMemberLeagues.map(lg => (
+                    <LeagueCard
+                      key={lg.id}
+                      name={lg.name}
+                      sublabel={`${lg.member_count} member${lg.member_count !== 1 ? 's' : ''}`}
+                      to={`/leagues/${lg.id}`}
+                      style={{ opacity: 0.75 }}
+                    />
+                  ))}
+                </>
+              )}
               {!user && (
                 <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)', margin: '0.5rem 0 0' }}>
                   <Link to="/login">Log in</Link> to see your private leagues.

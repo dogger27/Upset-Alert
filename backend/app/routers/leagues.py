@@ -64,13 +64,13 @@ async def list_leagues(
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_user),
 ):
-    """Return public leagues plus the current user's private leagues."""
-    stmt = (
-        select(League)
-        .options(selectinload(League.owner), selectinload(League.members).selectinload(LeagueMember.user))
-        .where(League.is_public == True)
-    )
-    if current_user:
+    """Return public leagues plus the current user's private leagues. Admins see all leagues."""
+    if current_user and current_user.is_admin:
+        stmt = (
+            select(League)
+            .options(selectinload(League.owner), selectinload(League.members).selectinload(LeagueMember.user))
+        )
+    elif current_user:
         from sqlalchemy import or_
         stmt = (
             select(League)
@@ -84,6 +84,12 @@ async def list_leagues(
                 )
             )
             .distinct()
+        )
+    else:
+        stmt = (
+            select(League)
+            .options(selectinload(League.owner), selectinload(League.members).selectinload(LeagueMember.user))
+            .where(League.is_public == True)
         )
     result = await db.execute(stmt)
     leagues = result.scalars().all()
@@ -471,6 +477,8 @@ def _check_access(league: League, user: Optional[User]) -> None:
         return
     if user is None:
         raise HTTPException(403, "Login required to view this private league")
+    if user.is_admin:
+        return
     is_member = any(m.user_id == user.id for m in league.members)
     if not is_member and league.owner_id != user.id:
         raise HTTPException(403, "You are not a member of this league")
