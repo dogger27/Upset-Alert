@@ -125,6 +125,7 @@ function PlayerRow({
   isPicked, isWinner, isEliminated, isProjected, isDeadPick,
   scores, retired, onClick, locked,
   showTypeSlot, showScores, markWinner, showRowBg, showFlag,
+  qualifierNum,
 }) {
   const player = playerId != null ? playerById[playerId] : null
 
@@ -154,7 +155,7 @@ function PlayerRow({
       <div className="player-row empty">
         <span className="badge-left-slot" />
         {showTypeSlot && <span className="badge-type-slot" />}
-        <span className="pname muted">{player?.entry_type === 'Q' ? 'Qualifier' : 'TBD'}</span>
+        <span className="pname muted">{player?.entry_type === 'Q' ? `Qualifier${qualifierNum != null ? ` ${qualifierNum}` : ''}` : 'TBD'}</span>
       </div>
     )
   }
@@ -202,7 +203,7 @@ function playerNeedsTypeSlot(p) {
   return !!p?.entry_type
 }
 
-function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick, locked, style, mode, lossRound, onH2H }) {
+function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick, locked, style, mode, lossRound, onH2H, qualifierNums }) {
   const { p1: p1id, p2: p2id } = resolvedPlayers || { p1: match.player1?.id, p2: match.player2?.id }
   const pickedId = picks[match.id]
   const actualWinnerId = match.winner?.id
@@ -271,6 +272,7 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
           showScores={showScores}
           markWinner={mode === 'live'}
           showFlag={mode === 'picks'}
+          qualifierNum={qualifierNums?.[p1id]}
         />
         <PlayerRow
           playerId={p2id} playerById={playerById} drawRanks={drawRanks}
@@ -287,6 +289,7 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
           showScores={showScores}
           markWinner={mode === 'live'}
           showFlag={mode === 'picks'}
+          qualifierNum={qualifierNums?.[p2id]}
         />
       </div>
       {h2hAvailable && (
@@ -339,6 +342,13 @@ export default function BracketView({ tournament, matches, players, picks, onPic
   const playerById = Object.fromEntries(players.map(p => [p.id, p]))
   const drawRanks = computeDrawRanks(players)
   const resolved = resolveMatchPlayers(matches, picks, mode)
+
+  // Number unplaced Q slots by bracket position: Qualifier 1, Qualifier 2, …
+  const qualifierNums = {}
+  const unplacedQs = players
+    .filter(p => p.entry_type === 'Q' && !p.name)
+    .sort((a, b) => a.bracket_position - b.bracket_position)
+  unplacedQs.forEach((p, i) => { qualifierNums[p.id] = i + 1 })
 
   // Build lossRound: playerId → round number they actually lost (for picks-mode strikethrough)
   const lossRound = {}
@@ -409,6 +419,7 @@ export default function BracketView({ tournament, matches, players, picks, onPic
                       mode={mode}
                       lossRound={lossRound}
                       onH2H={(p1, p2) => setH2HPlayers({ p1, p2 })}
+                      qualifierNums={qualifierNums}
                       style={{ position: 'absolute', top, left: 6, right: 6 }}
                     />
                   )
