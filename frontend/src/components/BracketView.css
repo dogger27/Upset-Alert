@@ -52,9 +52,10 @@
 
 /* ── Match box ── */
 .match-box {
+  position: relative;
   border: 1px solid #d0d0d0;
   border-radius: 5px;
-  overflow: hidden;
+  overflow: visible;
   background: white;
   box-shadow: 0 1px 3px rgba(0,0,0,0.08);
   display: flex;
@@ -64,7 +65,66 @@
   flex: 1;
   min-width: 0;
   overflow: hidden;
+  border-radius: 5px 0 0 5px;
 }
+
+/* ── Upset bell (centered on the divider between the two player rows) ── */
+.upset-bell {
+  position: absolute;
+  top: 50%;
+  left: -17px;
+  transform: translateY(-50%);
+  font-size: 2rem;
+  line-height: 1;
+  z-index: 2;
+  user-select: none;
+  cursor: default;
+}
+
+.upset-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1b4332;
+  border-radius: 5px;
+  padding: 5px 12px 5px 9px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+  z-index: 20;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+}
+
+.upset-bell:hover .upset-tooltip {
+  opacity: 1;
+}
+
+.upset-tooltip-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--clay-300);
+  box-shadow: 0 0 0 3px rgba(232,168,124,0.28);
+  flex-shrink: 0;
+}
+
+.upset-tooltip-text {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 1rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.upset-tooltip-upset  { color: #fff; }
+.upset-tooltip-alert  { color: var(--clay-300); }
+.upset-tooltip-exclaim { color: #fff; }
 
 /* ── H2H strip ── */
 .h2h-strip {

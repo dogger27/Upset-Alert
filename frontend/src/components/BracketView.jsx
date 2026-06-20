@@ -235,6 +235,17 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
   // H2H strip: both players must have TE slugs (works in live and picks mode)
   const h2hAvailable = !!p1?.te_slug && !!p2?.te_slug
 
+  // Upset: lower-ranked player won (picks mode: user's pick; live mode: actual result)
+  const rank1 = drawRanks[p1id] ?? Infinity
+  const rank2 = drawRanks[p2id] ?? Infinity
+  const expectedWinnerId = rank1 <= rank2 ? p1id : p2id
+  const bothKnown = p1id != null && p2id != null
+  const isUpsetPick = bothKnown && (
+    mode === 'picks'
+      ? pickedId != null && pickedId !== expectedWinnerId
+      : actualWinnerId != null && actualWinnerId !== expectedWinnerId
+  )
+
   if (match.is_bye) {
     return (
       <div className="match-box bye" style={style}>
@@ -262,6 +273,19 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
       })}
       style={style}
     >
+      {isUpsetPick && (
+        <span className="upset-bell">
+          🔔
+          <span className="upset-tooltip">
+            <span className="upset-tooltip-dot" />
+            <span className="upset-tooltip-text">
+              <span className="upset-tooltip-upset">Upset </span>
+              <span className="upset-tooltip-alert">Alert</span>
+              <span className="upset-tooltip-exclaim">!</span>
+            </span>
+          </span>
+        </span>
+      )}
       <div className="match-box-main">
         <PlayerRow
           playerId={p1id} playerById={playerById} drawRanks={drawRanks}
