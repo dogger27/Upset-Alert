@@ -10,7 +10,7 @@ Ranking page slugs look like: "sinner-8b8e8", "alcaraz-5ab70"
 import asyncio
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy import and_, or_, select
@@ -18,7 +18,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
-_CACHE_TTL_HOURS = 24
+def _week_start_utc() -> datetime:
+    """Return Monday 00:00:00 UTC of the current week."""
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    return now - timedelta(days=now.weekday(), hours=now.hour, minutes=now.minute, seconds=now.second, microseconds=now.microsecond)
 
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
@@ -224,18 +227,22 @@ async def _scrape_h2h(slug_a: str, slug_b: str) -> dict:
 # ---------------------------------------------------------------------------
 
 async def get_h2h(slug1: str, slug2: str, db: AsyncSession) -> dict:
-    """Return H2H data. Fetches exactly once per pair — never retried on failure."""
+    """Return H2H data, refreshing the cache if it was fetched before Monday of the current week."""
     from app.models.h2h import H2HCache
 
     slug_a, slug_b = _canonical_pair(slug1, slug2)
 
     cached = await db.get(H2HCache, (slug_a, slug_b))
-    if cached:
-        return cached.data_json  # return as-is regardless of error or age
+    if cached and cached.fetched_at >= _week_start_utc():
+        return cached.data_json
 
     data = await _scrape_h2h(slug_a, slug_b)
     now = datetime.now(timezone.utc).replace(tzinfo=None)
-    db.add(H2HCache(slug_a=slug_a, slug_b=slug_b, fetched_at=now, data_json=data))
+    if cached:
+        cached.fetched_at = now
+        cached.data_json = data
+    else:
+        db.add(H2HCache(slug_a=slug_a, slug_b=slug_b, fetched_at=now, data_json=data))
     await db.commit()
     return data
 
