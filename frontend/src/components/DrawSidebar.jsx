@@ -41,6 +41,10 @@ export default function DrawSidebar({ tournamentId, tournament, selectedUserId, 
     lg.members?.some(m => m.id === user?.id)
   ) ?? []
 
+  const nonMemberLeagues = user?.is_admin
+    ? (leagues?.filter(lg => !lg.members?.some(m => m.id === user?.id)) ?? [])
+    : []
+
   const isGlobal = selectedLeagueId === 'global'
 
   const { data: globalStandings } = useQuery({
@@ -114,6 +118,13 @@ export default function DrawSidebar({ tournamentId, tournament, selectedUserId, 
               {myLeagues.map(lg => (
                 <option key={lg.id} value={lg.id}>{lg.name}{lg.member_count > 0 ? ` (${lg.member_count})` : ''}</option>
               ))}
+              {nonMemberLeagues.length > 0 && (
+                <optgroup label="Other Leagues">
+                  {nonMemberLeagues.map(lg => (
+                    <option key={lg.id} value={lg.id}>{lg.name}{lg.member_count > 0 ? ` (${lg.member_count})` : ''}</option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           </div>
 
