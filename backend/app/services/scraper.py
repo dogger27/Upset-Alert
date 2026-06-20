@@ -61,6 +61,7 @@ class ParsedDraw:
     city: Optional[str] = None
     country: Optional[str] = None
     wiki_page_id: Optional[int] = None
+    resolved_title: Optional[str] = None  # set when title fallback succeeded
 
 
 # ---------------------------------------------------------------------------
@@ -784,9 +785,20 @@ async def scrape_tournament(
     page_id: Optional[int] = None,
     force_refresh: bool = False,
 ) -> ParsedDraw:
-    wikitext, resolved_id = await fetch_wikitext(wiki_page_title, page_id=page_id, force_refresh=force_refresh)
+    effective_title = wiki_page_title
+    try:
+        wikitext, resolved_id = await fetch_wikitext(wiki_page_title, page_id=page_id, force_refresh=force_refresh)
+    except ValueError:
+        # Gendered title (e.g. "– Women's singles") may not exist; try gender-neutral "– Singles"
+        alt_title = re.sub(r"\s*–\s*(Men's|Women's)\s+singles$", " – Singles", wiki_page_title, flags=re.IGNORECASE)
+        if alt_title == wiki_page_title:
+            raise
+        wikitext, resolved_id = await fetch_wikitext(alt_title, force_refresh=force_refresh)
+        effective_title = alt_title
     parsed = parse_draw(wikitext)
     parsed.wiki_page_id = resolved_id or None
+    if effective_title != wiki_page_title:
+        parsed.resolved_title = effective_title
 
     # Extract location from infobox
     parsed.city, parsed.country = _parse_infobox_location(wikitext)

@@ -470,6 +470,10 @@ async def _do_scrape(tournament: Tournament, db: AsyncSession, force_refresh: bo
     )
     if parsed.wiki_page_id and tournament.wiki_page_id is None:
         tournament.wiki_page_id = parsed.wiki_page_id
+    if parsed.resolved_title:
+        logger.info("Correcting wiki_page_title for %s: %r → %r",
+                    tournament.name, tournament.wiki_page_title, parsed.resolved_title)
+        tournament.wiki_page_title = parsed.resolved_title
 
     if parsed.draw_size:
         tournament.draw_size = parsed.draw_size
