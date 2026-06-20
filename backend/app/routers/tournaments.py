@@ -506,7 +506,7 @@ async def _do_scrape(tournament: Tournament, db: AsyncSession, force_refresh: bo
 
     # Record actual draw release dates when detected.
     # Only stamp draw_released_direct_at once the draw is substantially complete
-    # (≥85% of expected draw_size — essentially all DA slots filled).
+    # (≥50% of non-Q/LL slots — generous threshold to avoid missing real draws).
     # A page with only a handful of seeded players is not a released draw.
     da_players = [p for p in parsed.players if p.name and p.entry_type not in ("Q", "LL")]
     # Q/LL placeholders (named or unnamed) occupy fixed slots that will never be
@@ -514,7 +514,7 @@ async def _do_scrape(tournament: Tournament, db: AsyncSession, force_refresh: bo
     q_ll_count = sum(1 for p in parsed.players if p.entry_type in ("Q", "LL"))
     effective_da_size = max(tournament.draw_size - q_ll_count, 0)
     draw_substantially_complete = (
-        tournament.draw_size > 0 and len(da_players) >= effective_da_size * 0.85
+        tournament.draw_size > 0 and len(da_players) >= effective_da_size * 0.50
     )
     if parsed.has_direct_draw and draw_substantially_complete:
         if not tournament.draw_released_direct_at:
