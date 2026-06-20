@@ -26,7 +26,12 @@ export default function TournamentDraw() {
   const initialModeSet = useRef(false)
   const [celebrating, setCelebrating] = useState(false)
   const [showUnlockConfirm, setShowUnlockConfirm] = useState(false)
+  const [pendingAutoPicks, setPendingAutoPicks] = useState(null)
+  const [showClearConfirm, setShowClearConfirm] = useState(false)
+  const [clearToast, setClearToast] = useState(null)
+  const clearToastKeyRef = useRef(0)
   const celebrateTimerRef = useRef(null)
+  const clearToastTimerRef = useRef(null)
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['draw', id],
@@ -90,15 +95,25 @@ export default function TournamentDraw() {
     onSuccess: () => { qc.invalidateQueries(['draw', id]); setShowUnlockConfirm(false) },
   })
 
-  const autoPopulatePicks = () => {
-    if (!data) return
-    const isLocked = data.tournament.is_locked && !data.tournament.selections_unlocked
-    if (isLocked) return
+  const applyPicksAndCelebrate = (newPicks) => {
+    setPicks(newPicks)
+    if (user) saveMutation.mutate(newPicks)
+    if (data) {
+      const total = data.matches.filter(m => !m.is_bye).length
+      const filled = Object.values(newPicks).filter(v => v != null).length
+      if (total > 0 && filled >= total) {
+        if (celebrateTimerRef.current) clearTimeout(celebrateTimerRef.current)
+        setCelebrating(true)
+        celebrateTimerRef.current = setTimeout(() => setCelebrating(false), 3600)
+      }
+    }
+  }
 
+  const computeAutoPicks = () => {
+    if (!data) return null
     const allPlayers = data.draw_entries
     const allMatches = data.matches
 
-    // Mirror computeDrawRanks from BracketView
     const drawRanks = {}
     const seeded = allPlayers.filter(p => p.seed != null)
     for (const p of seeded) drawRanks[p.id] = p.seed
@@ -116,8 +131,7 @@ export default function TournamentDraw() {
     for (const m of allMatches) byKey[`${m.round_number}:${m.match_number}`] = m
 
     const newPicks = {}
-    const resolvedWinner = {} // matchId → winnerId based on auto-picks
-
+    const resolvedWinner = {}
     const roundNums = [...new Set(allMatches.map(m => m.round_number))].sort((a, b) => a - b)
 
     for (const rn of roundNums) {
@@ -153,8 +167,102 @@ export default function TournamentDraw() {
       }
     }
 
-    setPicks(newPicks)
-    if (user && !isLocked) saveMutation.mutate(newPicks)
+    return newPicks
+  }
+
+  const autoPopulatePicks = () => {
+    if (!data) return
+    const isLocked = data.tournament.is_locked && !data.tournament.selections_unlocked
+    if (isLocked) return
+
+    const newPicks = computeAutoPicks()
+    if (!newPicks) return
+
+    const hasConflict = Object.entries(newPicks).some(
+      ([matchId, winnerId]) => picks[Number(matchId)] != null && picks[Number(matchId)] !== winnerId
+    )
+
+    if (hasConflict) {
+      setPendingAutoPicks(newPicks)
+    } else {
+      applyPicksAndCelebrate(newPicks)
+    }
+  }
+
+  const countPicksAndUpsets = () => {
+    if (!data) return { total: 0, upsets: 0 }
+    const allPlayers = data.draw_entries
+    const allMatches = data.matches
+
+    const drawRanks = {}
+    const seeded = allPlayers.filter(p => p.seed != null)
+    for (const p of seeded) drawRanks[p.id] = p.seed
+    const unseeded = allPlayers
+      .filter(p => p.seed == null && p.name)
+      .sort((a, b) => {
+        if (a.ranking != null && b.ranking != null) return a.ranking - b.ranking
+        if (a.ranking != null) return -1
+        if (b.ranking != null) return 1
+        return a.bracket_position - b.bracket_position
+      })
+    unseeded.forEach((p, i) => { drawRanks[p.id] = seeded.length + i + 1 })
+
+    const byKey = {}
+    for (const m of allMatches) byKey[`${m.round_number}:${m.match_number}`] = m
+
+    let total = 0
+    let upsets = 0
+    const resolvedAdvancer = {}
+    const roundNums = [...new Set(allMatches.map(m => m.round_number))].sort((a, b) => a - b)
+
+    for (const rn of roundNums) {
+      const roundMatches = allMatches
+        .filter(m => m.round_number === rn)
+        .sort((a, b) => a.match_number - b.match_number)
+
+      for (const m of roundMatches) {
+        if (m.is_bye) { resolvedAdvancer[m.id] = m.player1?.id ?? null; continue }
+
+        let p1id, p2id
+        if (rn === 1) {
+          p1id = m.player1?.id ?? null
+          p2id = m.player2?.id ?? null
+        } else {
+          const f1 = byKey[`${rn - 1}:${m.match_number * 2 - 1}`]
+          const f2 = byKey[`${rn - 1}:${m.match_number * 2}`]
+          p1id = f1 ? resolvedAdvancer[f1.id] : null
+          p2id = f2 ? resolvedAdvancer[f2.id] : null
+        }
+
+        const userPick = picks[m.id]
+        if (userPick != null) {
+          total++
+          if (p1id != null && p2id != null) {
+            const rank1 = drawRanks[p1id] ?? Infinity
+            const rank2 = drawRanks[p2id] ?? Infinity
+            const expectedWinner = rank1 <= rank2 ? p1id : p2id
+            if (userPick !== expectedWinner) upsets++
+          }
+          resolvedAdvancer[m.id] = userPick
+        } else {
+          resolvedAdvancer[m.id] = null
+        }
+      }
+    }
+
+    return { total, upsets }
+  }
+
+  const handleClearSelections = () => {
+    const { total } = countPicksAndUpsets()
+    const cleared = Object.fromEntries(Object.keys(picks).map(k => [k, null]))
+    setPicks(cleared)
+    if (user) saveMutation.mutate(cleared)
+    setShowClearConfirm(false)
+    clearToastKeyRef.current += 1
+    setClearToast({ key: clearToastKeyRef.current, msg: `${total} selection${total !== 1 ? 's' : ''} cleared` })
+    if (clearToastTimerRef.current) clearTimeout(clearToastTimerRef.current)
+    clearToastTimerRef.current = setTimeout(() => setClearToast(null), 3500)
   }
 
   const handlePick = (matchId, playerId) => {
@@ -346,6 +454,14 @@ export default function TournamentDraw() {
               Auto-Populate Picks
             </button>
           )}
+          {user && !locked && !viewingOther && pickedCount > 0 && (
+            <button
+              className="btn-clear-selections"
+              onClick={() => setShowClearConfirm(true)}
+            >
+              Clear Selections
+            </button>
+          )}
           {user && !locked && (
             <span className="saved-badge">
               {saveMutation.isPending ? '⏳ Saving…' : pickedCount > 0 ? `✓ ${pickedCount}/${totalPredictable} picks saved` : ''}
@@ -380,6 +496,59 @@ export default function TournamentDraw() {
       )}
 
       {celebrating && <CelebrationOverlay />}
+
+      {pendingAutoPicks && (
+        <div className="auto-populate-overlay" onClick={() => setPendingAutoPicks(null)}>
+          <div className="auto-populate-modal" onClick={e => e.stopPropagation()}>
+            <h3 className="auto-populate-modal-title">Replace existing picks?</h3>
+            <p className="auto-populate-modal-body">
+              You already have picks that differ from the auto-populated selections.
+              Replace them with seed-based picks?
+            </p>
+            <div className="auto-populate-modal-actions">
+              <button
+                className="btn-primary"
+                onClick={() => { applyPicksAndCelebrate(pendingAutoPicks); setPendingAutoPicks(null) }}
+              >
+                Replace my picks
+              </button>
+              <button
+                className="btn-secondary"
+                onClick={() => setPendingAutoPicks(null)}
+              >
+                Keep my picks
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showClearConfirm && (() => {
+        const { total, upsets } = countPicksAndUpsets()
+        return (
+          <div className="auto-populate-overlay" onClick={() => setShowClearConfirm(false)}>
+            <div className="auto-populate-modal" onClick={e => e.stopPropagation()}>
+              <h3 className="auto-populate-modal-title">Clear all selections?</h3>
+              <p className="auto-populate-modal-body">
+                This will clear {total} match selection{total !== 1 ? 's' : ''}
+                {upsets > 0 ? `, including ${upsets} upset${upsets !== 1 ? 's' : ''}` : ''}.
+              </p>
+              <div className="auto-populate-modal-actions">
+                <button className="btn-secondary" onClick={() => setShowClearConfirm(false)}>
+                  Cancel
+                </button>
+                <button className="btn-danger" onClick={handleClearSelections}>
+                  Clear selections
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {clearToast && (
+        <div key={clearToast.key} className="clear-toast">{clearToast.msg}</div>
+      )}
 
       <div className="draw-body">
         <DrawSidebar
