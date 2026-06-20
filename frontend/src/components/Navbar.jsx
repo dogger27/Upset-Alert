@@ -84,7 +84,7 @@ export default function Navbar() {
         <span className="navbar-brand-dot" />
         <span className="navbar-brand-text">
           <span className="navbar-brand-upset">Upset</span>{' '}
-          <span className="navbar-brand-alert">Alert</span>
+          <span className="navbar-brand-alert">Alert</span><span className="navbar-brand-exclaim">!</span>
         </span>
       </Link>
       <div className="navbar-links">
