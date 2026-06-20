@@ -55,8 +55,34 @@ function flipScore(score) {
   }).join(', ')
 }
 
+function EloInfoPopup({ onClose }) {
+  return (
+    <div className="h2h-elo-popup-backdrop" onClick={onClose}>
+      <div className="h2h-elo-popup" onClick={e => e.stopPropagation()}>
+        <div className="h2h-elo-popup-header">
+          <span className="h2h-elo-popup-title">About Elo Rating</span>
+          <button className="h2h-elo-popup-close" onClick={onClose}>✕</button>
+        </div>
+        <p className="h2h-elo-popup-body">
+          Elo measures a player's overall career strength based on match results,
+          weighted by opponent quality. A win over a top-10 player boosts your
+          rating more than a win over a qualifier.
+        </p>
+        <div className="h2h-elo-popup-tiers">
+          <div><span className="h2h-elo-tier-num">2100+</span><span className="h2h-elo-tier-label">Elite — top 5–10</span></div>
+          <div><span className="h2h-elo-tier-num">1900–2100</span><span className="h2h-elo-tier-label">Top 50</span></div>
+          <div><span className="h2h-elo-tier-num">1700–1900</span><span className="h2h-elo-tier-label">Top 100–200</span></div>
+          <div><span className="h2h-elo-tier-num">Below 1700</span><span className="h2h-elo-tier-label">Fringe / lower ranked</span></div>
+        </div>
+        <p className="h2h-elo-popup-source">Source: tennisabstract.com · Updated weekly</p>
+      </div>
+    </div>
+  )
+}
+
 export default function H2HPanel({ slug1, slug2, player1, player2, tournSurface, onClose }) {
   const [surfFilter, setSurfFilter] = useState('all') // 'all' | 'surface'
+  const [showEloInfo, setShowEloInfo] = useState(false)
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['h2h', slug1, slug2],
@@ -101,6 +127,7 @@ export default function H2HPanel({ slug1, slug2, player1, player2, tournSurface,
 
   return (
     <div className="h2h-backdrop" onClick={onClose}>
+      {showEloInfo && <EloInfoPopup onClose={() => setShowEloInfo(false)} />}
       <div className="h2h-panel" onClick={e => e.stopPropagation()}>
         <button className="h2h-close" onClick={onClose} aria-label="Close">✕</button>
 
@@ -149,16 +176,7 @@ export default function H2HPanel({ slug1, slug2, player1, player2, tournSurface,
           {showElo && <>
             <div className="h2h-label h2h-label-with-info">
               Elo
-              <span className="h2h-info-icon">
-                ⓘ
-                <span className="h2h-tooltip">
-                  Elo rates a player's overall career strength based on match results, adjusted for opponent quality. Updated after each tournament.<br /><br />
-                  <strong>~2100+</strong> Elite (top 5–10)<br />
-                  <strong>~1900–2100</strong> Top 50<br />
-                  <strong>~1700–1900</strong> Top 100–200<br /><br />
-                  Higher = stronger player. Source: tennisabstract.com
-                </span>
-              </span>
+              <button className="h2h-info-btn" onClick={() => setShowEloInfo(true)} aria-label="About Elo">ⓘ</button>
             </div>
             <div className="h2h-col-val h2h-meta-val">{elo_p1 ?? '—'}</div>
             <div />
