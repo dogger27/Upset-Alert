@@ -13,6 +13,7 @@ import asyncio
 import json
 import logging
 import re
+from datetime import datetime, timedelta, timezone
 from typing import Callable, Optional
 
 import httpx
@@ -20,6 +21,8 @@ import httpx
 logger = logging.getLogger(__name__)
 
 WIKIMEDIA_STREAM_URL = "https://stream.wikimedia.org/v2/stream/recentchange"
+# Don't replay more than this on reconnect — avoids a flood after a long outage
+_MAX_REPLAY_WINDOW = timedelta(hours=1)
 
 _SEASON_PAGE_RE = re.compile(r'^\d{4} (ATP|WTA) Tour$')
 
@@ -32,6 +35,7 @@ class EventStreamListener:
         self.client: Optional[httpx.AsyncClient] = None
         self.running = False
         self._on_season_page_edit: Optional[Callable] = None
+        self._last_event_ts: Optional[str] = None  # ISO 8601 dt from last event
 
     # ── Public subscription API ──────────────────────────────────────────────
 
@@ -82,8 +86,22 @@ class EventStreamListener:
                 logger.warning("EventStreams connection lost: %s. Reconnecting in 5s…", exc)
                 await asyncio.sleep(5)
 
+    def _stream_url(self) -> str:
+        """Build the stream URL, resuming from the last known position when available."""
+        if self._last_event_ts:
+            try:
+                last = datetime.fromisoformat(self._last_event_ts.replace("Z", "+00:00"))
+                cutoff = datetime.now(timezone.utc) - _MAX_REPLAY_WINDOW
+                since = max(last, cutoff)
+                ts = since.strftime("%Y-%m-%dT%H:%M:%SZ")
+                logger.info("EventStreams reconnecting from %s", ts)
+                return f"{WIKIMEDIA_STREAM_URL}?since={ts}"
+            except Exception:
+                pass
+        return WIKIMEDIA_STREAM_URL
+
     async def _stream_events(self) -> None:
-        async with self.client.stream("GET", WIKIMEDIA_STREAM_URL) as response:
+        async with self.client.stream("GET", self._stream_url()) as response:
             async for line in response.aiter_lines():
                 if not line or not self.running:
                     continue
@@ -91,7 +109,11 @@ class EventStreamListener:
                     try:
                         data_str = line[5:].strip()
                         if data_str:
-                            await self._handle_event(json.loads(data_str))
+                            event = json.loads(data_str)
+                            # Record stream position from every event (not just enwiki)
+                            if dt := (event.get("meta") or {}).get("dt"):
+                                self._last_event_ts = dt
+                            await self._handle_event(event)
                     except json.JSONDecodeError:
                         pass
                     except Exception as exc:
