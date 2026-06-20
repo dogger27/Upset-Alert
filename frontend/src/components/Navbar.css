@@ -50,6 +50,7 @@
 }
 .navbar-brand-upset { color: #fff; }
 .navbar-brand-alert { color: var(--clay-300); }
+.navbar-brand-exclaim { color: #fff; }
 
 /* ── Right-side nav ── */
 .navbar-links {
