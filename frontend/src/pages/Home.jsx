@@ -66,6 +66,10 @@ function TCard({ t, section, pickStatus }) {
     qual: t.draw_release_qualifiers ? fmtDate(t.draw_release_qualifiers) : null,
   } : null
 
+  const wikiUrl = section === 'upcoming' && t.wiki_page_id
+    ? `https://en.wikipedia.org/wiki?curid=${t.wiki_page_id}`
+    : undefined
+
   return (
     <TournamentCard
       tour={tour}
@@ -78,6 +82,7 @@ function TCard({ t, section, pickStatus }) {
       pickState={pickState}
       drawDates={drawDates}
       to={hasDrawData ? `/tournaments/${t.id}` : undefined}
+      wikiUrl={wikiUrl}
     />
   )
 }

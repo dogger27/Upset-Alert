@@ -69,7 +69,20 @@ function renderFooter({ section, pickState, drawDates }) {
   return null
 }
 
-export function TournamentCard({ tour = 'ATP', name, city, surface = 'grass', tier = '500', dateRange, section = 'open', pickState = null, drawDates = null, to }) {
+function GlobeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"
+      strokeLinecap="round" strokeLinejoin="round"
+      style={{ width: 15, height: 15, display: 'block' }}
+    >
+      <circle cx="12" cy="12" r="10" />
+      <ellipse cx="12" cy="12" rx="4" ry="10" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+    </svg>
+  )
+}
+
+export function TournamentCard({ tour = 'ATP', name, city, surface = 'grass', tier = '500', dateRange, section = 'open', pickState = null, drawDates = null, to, wikiUrl }) {
   const [hover, setHover] = useState(false)
   const isATP = String(tour).toUpperCase() === 'ATP'
   const accent = isATP ? 'var(--atp-500)' : 'var(--wta-500)'
@@ -121,6 +134,27 @@ export function TournamentCard({ tour = 'ATP', name, city, surface = 'grass', ti
           </div>
         )}
       </div>
+      {wikiUrl && (
+        <a
+          href={wikiUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={e => e.stopPropagation()}
+          title="View draw on Wikipedia"
+          style={{
+            position: 'absolute', bottom: 10, right: 10,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            width: 24, height: 24, borderRadius: '50%',
+            color: 'var(--text-muted)',
+            opacity: 0.55,
+            transition: 'opacity var(--dur)',
+          }}
+          onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+          onMouseLeave={e => e.currentTarget.style.opacity = '0.55'}
+        >
+          <GlobeIcon />
+        </a>
+      )}
     </>
   )
 
