@@ -194,6 +194,23 @@
 }
 .btn-admin-refresh:disabled { opacity: 0.6; cursor: default; }
 
+.btn-auto-populate {
+  font-size: 0.82rem;
+  font-weight: 600;
+  font-family: inherit;
+  color: #166534;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  padding: 0.3em 0.85em;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.btn-auto-populate:hover {
+  background: #dcfce7;
+  border-color: #86efac;
+}
+
 .lock-badge {
   font-size: 0.82rem;
   color: #92400e;
