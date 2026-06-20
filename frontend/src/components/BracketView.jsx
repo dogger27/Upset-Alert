@@ -151,11 +151,17 @@ function PlayerRow({
   }
 
   if (!player || (player.entry_type === 'Q' && !player.name)) {
+    const isQ = player?.entry_type === 'Q'
+    const label = isQ ? `Qualifier${qualifierNum != null ? ` ${qualifierNum}` : ''}` : 'TBD'
+    const isClickable = isQ && !locked && onClick
     return (
-      <div className="player-row empty">
+      <div
+        className={clsx('player-row', { picked: isQ && isPicked, clickable: isClickable })}
+        onClick={isClickable ? onClick : undefined}
+      >
         <span className="badge-left-slot" />
         {showTypeSlot && <span className="badge-type-slot" />}
-        <span className="pname muted">{player?.entry_type === 'Q' ? `Qualifier${qualifierNum != null ? ` ${qualifierNum}` : ''}` : 'TBD'}</span>
+        <span className="pname muted">{label}</span>
       </div>
     )
   }
@@ -266,7 +272,7 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
           isProjected={p1IsProjected}
           scores={p1Scores}
           retired={ret.p1}
-          onClick={mode === 'picks' && p1id != null && !(p1?.entry_type === 'Q' && !p1?.name) ? () => onPick(match.id, p1id) : undefined}
+          onClick={mode === 'picks' && p1id != null ? () => onPick(match.id, p1id) : undefined}
           locked={locked}
           showTypeSlot={showTypeSlot}
           showScores={showScores}
@@ -283,7 +289,7 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
           isProjected={p2IsProjected}
           scores={p2Scores}
           retired={ret.p2}
-          onClick={mode === 'picks' && p2id != null && !(p2?.entry_type === 'Q' && !p2?.name) ? () => onPick(match.id, p2id) : undefined}
+          onClick={mode === 'picks' && p2id != null ? () => onPick(match.id, p2id) : undefined}
           locked={locked}
           showTypeSlot={showTypeSlot}
           showScores={showScores}
