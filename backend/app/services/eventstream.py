@@ -85,7 +85,7 @@ class EventStreamListener:
             return
 
         action = event.get("type")
-        if action != "edit":
+        if action not in ("edit", "new"):
             return
 
         title = event.get("title", "")
@@ -96,7 +96,8 @@ class EventStreamListener:
         if title not in self.subscriptions:
             return
 
-        logger.info("Tournament draw updated on Wikipedia: %s (bot=%s)", title, event.get("bot"))
+        verb = "created" if action == "new" else "updated"
+        logger.info("Tournament draw %s on Wikipedia: %s (bot=%s)", verb, title, event.get("bot"))
 
         # Trigger scrape for this tournament
         from app.database import AsyncSessionLocal
