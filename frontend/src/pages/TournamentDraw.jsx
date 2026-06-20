@@ -462,9 +462,9 @@ export default function TournamentDraw() {
               Clear Selections
             </button>
           )}
-          {user && !locked && (
+          {user && !locked && (saveMutation.isPending || pickedCount > 0) && (
             <span className="saved-badge">
-              {saveMutation.isPending ? '⏳ Saving…' : pickedCount > 0 ? `✓ ${pickedCount}/${totalPredictable} picks saved` : ''}
+              {saveMutation.isPending ? '⏳ Saving…' : `✓ ${pickedCount}/${totalPredictable} picks saved`}
             </span>
           )}
           {!user && (
