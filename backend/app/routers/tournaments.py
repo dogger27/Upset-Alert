@@ -362,15 +362,18 @@ async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
     te_ids = [p.te_player_id for p in players if p.te_player_id is not None]
     te_slug_map: dict[int, str] = {}
     te_dob_map: dict[int, "date"] = {}
+    te_elo_map: dict[int, int] = {}
     if te_ids:
         te_res = await db.execute(
-            select(TePlayer.id, TePlayer.te_slug, TePlayer.date_of_birth).where(TePlayer.id.in_(te_ids))
+            select(TePlayer.id, TePlayer.te_slug, TePlayer.date_of_birth, TePlayer.elo).where(TePlayer.id.in_(te_ids))
         )
         for row in te_res:
             if row.te_slug:
                 te_slug_map[row.id] = row.te_slug
             if row.date_of_birth:
                 te_dob_map[row.id] = row.date_of_birth
+            if row.elo:
+                te_elo_map[row.id] = row.elo
 
     matches_result = await db.execute(
         select(Match)
@@ -388,6 +391,7 @@ async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
         out = DrawEntryOut.model_validate(p)
         out.te_slug = te_slug_map.get(p.te_player_id) if p.te_player_id else None
         out.date_of_birth = te_dob_map.get(p.te_player_id) if p.te_player_id else None
+        out.elo = te_elo_map.get(p.te_player_id) if p.te_player_id else None
         return out
 
     match_outs = []

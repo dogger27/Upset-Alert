@@ -72,6 +72,8 @@ export default function H2HPanel({ slug1, slug2, player1, player2, tournSurface,
 
   const rank_p1 = player1?.ranking ?? null
   const rank_p2 = player2?.ranking ?? null
+  const elo_p1 = player1?.elo ?? null
+  const elo_p2 = player2?.elo ?? null
   const age_p1 = calcAge(player1?.date_of_birth)
   const age_p2 = calcAge(player2?.date_of_birth)
 
@@ -93,8 +95,9 @@ export default function H2HPanel({ slug1, slug2, player1, player2, tournSurface,
   const displayMatches = surfFilter === 'surface'
     ? matches.filter(m => surfKeys.includes(m.surface))
     : matches
-  const showAge = age_p1 != null || age_p2 != null
   const showRank = rank_p1 != null || rank_p2 != null
+  const showElo = elo_p1 != null || elo_p2 != null
+  const showAge = age_p1 != null || age_p2 != null
 
   return (
     <div className="h2h-backdrop" onClick={onClose}>
@@ -140,6 +143,14 @@ export default function H2HPanel({ slug1, slug2, player1, player2, tournSurface,
             <div className="h2h-col-val h2h-meta-val">{rank_p1 ?? '—'}</div>
             <div />
             <div className="h2h-col-val h2h-meta-val">{rank_p2 ?? '—'}</div>
+          </>}
+
+          {/* Elo row */}
+          {showElo && <>
+            <div className="h2h-label">Elo</div>
+            <div className="h2h-col-val h2h-meta-val">{elo_p1 ?? '—'}</div>
+            <div />
+            <div className="h2h-col-val h2h-meta-val">{elo_p2 ?? '—'}</div>
           </>}
 
           {/* Age row */}

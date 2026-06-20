@@ -74,6 +74,7 @@ class DrawEntryOut(BaseModel):
     bracket_position: int
     ranking: Optional[int] = None
     date_of_birth: Optional[date] = None
+    elo: Optional[int] = None
     te_slug: Optional[str] = None
 
     model_config = {"from_attributes": True}
