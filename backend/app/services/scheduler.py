@@ -159,14 +159,21 @@ async def _sync_subscriptions() -> None:
             )
         )
         tournaments = result.scalars().all()
-        # Always keep season pages subscribed — they're the source of draw titles
-        active_titles = {t.wiki_page_title for t in tournaments} | _season_pages()
 
-        for title in active_titles - eventstream.subscriptions:
-            await eventstream.subscribe(title)
+    # Tournament draw pages: use page_id when known, title-only when page doesn't exist yet
+    wanted: dict[str, int | None] = {t.wiki_page_title: t.wiki_page_id for t in tournaments}
 
-        for title in eventstream.subscriptions - active_titles:
-            await eventstream.unsubscribe(title)
+    # Season pages: always subscribed by title (we don't store their page IDs)
+    for title in _season_pages():
+        wanted[title] = None
+
+    current = eventstream.subscriptions
+    for title, page_id in wanted.items():
+        if title not in current:
+            await eventstream.subscribe(title, page_id=page_id)
+
+    for title in current - set(wanted):
+        await eventstream.unsubscribe(title)
 
 
 def start_scheduler() -> None:
