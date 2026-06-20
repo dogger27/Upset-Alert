@@ -116,7 +116,11 @@ async def find_existing_match(
     return None
 
 
-def _apply_update(existing: Tournament, discovered: DiscoveredTournament) -> bool:
+async def _apply_update(
+    existing: Tournament,
+    discovered: DiscoveredTournament,
+    db: AsyncSession,
+) -> bool:
     """Update *existing* from *discovered*. Returns True if any field changed."""
     changed = False
     for attr, val in [
@@ -135,10 +139,11 @@ def _apply_update(existing: Tournament, discovered: DiscoveredTournament) -> boo
             setattr(existing, attr, val)
             changed = True
 
-    # Always recalculate estimated draw release dates — these are formula-derived
-    # estimates and should stay in sync with the current formula
+    # Recalculate estimated draw release dates using category-specific history
     if discovered.start_date and discovered.category:
-        direct, qual = calculate_draw_release_dates(discovered.start_date, discovered.category, discovered.gender)
+        direct, qual = await calculate_draw_release_dates(
+            discovered.start_date, discovered.category, discovered.gender, db=db
+        )
         if direct and existing.draw_release_direct != direct:
             existing.draw_release_direct = direct
             changed = True
@@ -173,7 +178,7 @@ async def sync_season(
 
         if existing:
             old_title = existing.wiki_page_title
-            changed = _apply_update(existing, d)
+            changed = await _apply_update(existing, d, db)
             if changed:
                 if old_title != d.wiki_page_title:
                     logger.info(
@@ -198,8 +203,8 @@ async def sync_season(
             continue
 
         # New tournament
-        draw_direct, draw_qualifiers = calculate_draw_release_dates(
-            d.start_date, d.category, d.gender
+        draw_direct, draw_qualifiers = await calculate_draw_release_dates(
+            d.start_date, d.category, d.gender, db=db
         )
         t = Tournament(
             name=d.name,

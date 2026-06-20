@@ -27,6 +27,8 @@ class Tournament(Base):
     draw_release_qualifiers: Mapped[Optional[date]] = mapped_column(Date, nullable=True)  # Expected Qualifiers Added date
     draw_released_direct_at: Mapped[Optional[date]] = mapped_column(Date, nullable=True)  # Actual Direct Acceptance release date
     draw_released_qualifiers_at: Mapped[Optional[date]] = mapped_column(Date, nullable=True)  # Actual Qualifiers Added date
+    da_days_before: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)    # start_date - draw_released_direct_at (days)
+    qual_days_before: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # start_date - draw_released_qualifiers_at (days)
     city: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     country: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     wiki_page_title: Mapped[str] = mapped_column(String, nullable=False)

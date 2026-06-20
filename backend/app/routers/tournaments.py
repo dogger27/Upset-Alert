@@ -515,8 +515,11 @@ async def _do_scrape(tournament: Tournament, db: AsyncSession, force_refresh: bo
     if parsed.has_direct_draw and draw_substantially_complete:
         if not tournament.draw_released_direct_at:
             tournament.draw_released_direct_at = date.today()
-            logger.info("Tournament %s: Direct acceptance draw released on %s (%d players)",
-                       tournament.wiki_page_title, date.today(), len(da_players))
+            if tournament.start_date:
+                tournament.da_days_before = (tournament.start_date - date.today()).days
+            logger.info("Tournament %s: Direct acceptance draw released on %s (%d players, %s days before start)",
+                       tournament.wiki_page_title, date.today(), len(da_players),
+                       tournament.da_days_before)
     elif tournament.draw_released_direct_at and not draw_substantially_complete \
             and tournament.status not in ("active", "completed"):
         # Draw was stamped prematurely (e.g. only seeds visible) — revert until complete
@@ -526,8 +529,10 @@ async def _do_scrape(tournament: Tournament, db: AsyncSession, force_refresh: bo
 
     if parsed.has_qualifiers and not tournament.draw_released_qualifiers_at:
         tournament.draw_released_qualifiers_at = date.today()
-        logger.info("Tournament %s: Qualifiers added on %s",
-                   tournament.wiki_page_title, date.today())
+        if tournament.start_date:
+            tournament.qual_days_before = (tournament.start_date - date.today()).days
+        logger.info("Tournament %s: Qualifiers added on %s (%s days before start)",
+                   tournament.wiki_page_title, date.today(), tournament.qual_days_before)
 
     # If final match has a winner, tournament is completed regardless of current date
     if parsed.has_final_winner:
