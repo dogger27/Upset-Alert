@@ -168,12 +168,26 @@ async def _sync_subscriptions() -> None:
         wanted[title] = None
 
     current = eventstream.subscriptions
+    added = removed = 0
     for title, page_id in wanted.items():
         if title not in current:
             await eventstream.subscribe(title, page_id=page_id)
+            added += 1
 
     for title in current - set(wanted):
         await eventstream.unsubscribe(title)
+        removed += 1
+
+    # Log full subscription state so we can verify page_ids are correct
+    with_id = {pid: t for t, pid in wanted.items() if pid is not None}
+    without_id = [t for t, pid in wanted.items() if pid is None]
+    logger.info(
+        "_sync_subscriptions: added=%d removed=%d | "
+        "id_subs=%d %s | title_only=%d %s",
+        added, removed,
+        len(with_id), with_id,
+        len(without_id), without_id,
+    )
 
 
 def start_scheduler() -> None:

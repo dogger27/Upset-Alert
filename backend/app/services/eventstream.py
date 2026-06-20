@@ -27,6 +27,9 @@ _MAX_REPLAY_WINDOW = timedelta(hours=1)
 _SEASON_PAGE_RE = re.compile(r'^\d{4} (ATP|WTA) Tour$')
 
 
+_HEARTBEAT_INTERVAL = 60  # seconds
+
+
 class EventStreamListener:
 
     def __init__(self):
@@ -36,6 +39,8 @@ class EventStreamListener:
         self.running = False
         self._on_season_page_edit: Optional[Callable] = None
         self._last_event_ts: Optional[str] = None  # ISO 8601 dt from last event
+        self._enwiki_count: int = 0           # enwiki events since last heartbeat
+        self._heartbeat_task: Optional[asyncio.Task] = None
 
     # ── Public subscription API ──────────────────────────────────────────────
 
@@ -68,13 +73,31 @@ class EventStreamListener:
         self.running = True
         self.client = httpx.AsyncClient(timeout=None)
         asyncio.create_task(self._listen_loop())
+        self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
         logger.info("EventStreams listener started")
 
     async def stop(self) -> None:
         self.running = False
+        if self._heartbeat_task:
+            self._heartbeat_task.cancel()
         if self.client:
             await self.client.aclose()
         logger.info("EventStreams listener stopped")
+
+    async def _heartbeat_loop(self) -> None:
+        while self.running:
+            await asyncio.sleep(_HEARTBEAT_INTERVAL)
+            count = self._enwiki_count
+            self._enwiki_count = 0
+            id_sub_summary = {pid: title for pid, title in self._id_subs.items()}
+            logger.info(
+                "EventStreams heartbeat: %d enwiki events in last %ds | "
+                "id_subs=%d %s | title_subs=%d %s | last_event_ts=%s",
+                count, _HEARTBEAT_INTERVAL,
+                len(self._id_subs), list(id_sub_summary.keys()),
+                len(self._title_subs), list(self._title_subs),
+                self._last_event_ts,
+            )
 
     # ── Internal ─────────────────────────────────────────────────────────────
 
@@ -129,6 +152,9 @@ class EventStreamListener:
 
         title = event.get("title", "")
         page_id = event.get("pageid")  # integer, present on edit/new events
+
+        self._enwiki_count += 1
+        logger.debug("enwiki %s pageid=%s title=%r", action, page_id, title)
 
         # ── Match by page ID (reliable, immune to renames) ──────────────────
         if page_id and page_id in self._id_subs:
