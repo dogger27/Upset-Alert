@@ -138,7 +138,7 @@ def _apply_update(existing: Tournament, discovered: DiscoveredTournament) -> boo
     # Always recalculate estimated draw release dates — these are formula-derived
     # estimates and should stay in sync with the current formula
     if discovered.start_date and discovered.category:
-        direct, qual = calculate_draw_release_dates(discovered.start_date, discovered.category)
+        direct, qual = calculate_draw_release_dates(discovered.start_date, discovered.category, discovered.gender)
         if direct and existing.draw_release_direct != direct:
             existing.draw_release_direct = direct
             changed = True
@@ -199,7 +199,7 @@ async def sync_season(
 
         # New tournament
         draw_direct, draw_qualifiers = calculate_draw_release_dates(
-            d.start_date, d.category
+            d.start_date, d.category, d.gender
         )
         t = Tournament(
             name=d.name,
