@@ -71,7 +71,15 @@ class EventStreamListener:
         if self.running:
             return
         self.running = True
-        self.client = httpx.AsyncClient(timeout=None)
+        self.client = httpx.AsyncClient(
+            timeout=None,
+            headers={
+                "User-Agent": (
+                    "UpsetAlert/1.0 (https://upsetalert.paulwiens.com; "
+                    "pdwiens@gmail.com) python-httpx"
+                )
+            },
+        )
         asyncio.create_task(self._listen_loop())
         self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
         logger.info("EventStreams listener started")
@@ -124,7 +132,15 @@ class EventStreamListener:
         return WIKIMEDIA_STREAM_URL
 
     async def _stream_events(self) -> None:
-        async with self.client.stream("GET", self._stream_url()) as response:
+        url = self._stream_url()
+        logger.info("EventStreams connecting: %s", url)
+        async with self.client.stream("GET", url) as response:
+            if response.status_code != 200:
+                body = await response.aread()
+                raise RuntimeError(
+                    f"HTTP {response.status_code} from EventStreams: {body[:200]}"
+                )
+            logger.info("EventStreams connected (HTTP 200)")
             async for line in response.aiter_lines():
                 if not line or not self.running:
                     continue
