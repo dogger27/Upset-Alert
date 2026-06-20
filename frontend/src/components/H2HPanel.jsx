@@ -147,7 +147,19 @@ export default function H2HPanel({ slug1, slug2, player1, player2, tournSurface,
 
           {/* Elo row */}
           {showElo && <>
-            <div className="h2h-label">Elo</div>
+            <div className="h2h-label h2h-label-with-info">
+              Elo
+              <span className="h2h-info-icon">
+                ⓘ
+                <span className="h2h-tooltip">
+                  Elo rates a player's overall career strength based on match results, adjusted for opponent quality. Updated after each tournament.<br /><br />
+                  <strong>~2100+</strong> Elite (top 5–10)<br />
+                  <strong>~1900–2100</strong> Top 50<br />
+                  <strong>~1700–1900</strong> Top 100–200<br /><br />
+                  Higher = stronger player. Source: tennisabstract.com
+                </span>
+              </span>
+            </div>
             <div className="h2h-col-val h2h-meta-val">{elo_p1 ?? '—'}</div>
             <div />
             <div className="h2h-col-val h2h-meta-val">{elo_p2 ?? '—'}</div>

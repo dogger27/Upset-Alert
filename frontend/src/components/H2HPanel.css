@@ -177,6 +177,47 @@
 .h2h-round   { color: var(--text-muted); white-space: nowrap; }
 .h2h-tourn   { color: var(--text); }
 
+/* ── Elo info tooltip ── */
+.h2h-label-with-info {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.h2h-info-icon {
+  position: relative;
+  font-size: 0.65rem;
+  color: #bbb;
+  cursor: default;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.h2h-info-icon:hover { color: #888; }
+
+.h2h-tooltip {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: -8px;
+  width: 210px;
+  background: #222;
+  color: #f0f0f0;
+  font-size: 0.67rem;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  padding: 0.5rem 0.6rem;
+  border-radius: 6px;
+  line-height: 1.5;
+  z-index: 300;
+  white-space: normal;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.h2h-info-icon:hover .h2h-tooltip { display: block; }
+
 /* ── States ── */
 .h2h-loading,
 .h2h-error,
