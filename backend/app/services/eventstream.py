@@ -7,13 +7,16 @@ Subscribes to changes on tournament draw pages and triggers immediate scrapes.
 import asyncio
 import json
 import logging
-from typing import Optional, Set
+import re
+from typing import Callable, Optional, Set
 
 import httpx
 
 logger = logging.getLogger(__name__)
 
 WIKIMEDIA_STREAM_URL = "https://stream.wikimedia.org/v2/stream/recentchange"
+
+_SEASON_PAGE_RE = re.compile(r'^\d{4} (ATP|WTA) Tour$')
 
 
 class EventStreamListener:
@@ -23,6 +26,7 @@ class EventStreamListener:
         self.subscriptions: Set[str] = set()  # Set of wiki_page_titles to watch
         self.client: Optional[httpx.AsyncClient] = None
         self.running = False
+        self._on_season_page_edit: Optional[Callable] = None
 
     async def start(self) -> None:
         """Start the EventStreams listener."""
@@ -92,14 +96,20 @@ class EventStreamListener:
         if not title:
             return
 
-        # Check if this is a page we're subscribed to
         if title not in self.subscriptions:
             return
 
+        # Season page edited — re-run title discovery to pick up new/corrected draw links
+        if _SEASON_PAGE_RE.match(title):
+            logger.info("Season page edited: %s — refreshing tournament titles", title)
+            if self._on_season_page_edit:
+                asyncio.create_task(self._on_season_page_edit(title))
+            return
+
+        # Draw page created or updated — scrape it immediately
         verb = "created" if action == "new" else "updated"
         logger.info("Tournament draw %s on Wikipedia: %s (bot=%s)", verb, title, event.get("bot"))
 
-        # Trigger scrape for this tournament
         from app.database import AsyncSessionLocal
         from app.models.tournament import Tournament
         from app.routers.tournaments import _do_scrape

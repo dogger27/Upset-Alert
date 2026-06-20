@@ -100,8 +100,58 @@ async def _refresh_active_tournaments(force_refresh: bool = False) -> None:
                 await db.rollback()
 
 
+def _season_pages() -> set[str]:
+    year = datetime.now(timezone.utc).year
+    return {f"{year} ATP Tour", f"{year} WTA Tour"}
+
+
+async def _on_season_page_edit(season_title: str) -> None:
+    """Re-run title discovery when a season page is edited, update wiki_page_titles."""
+    import re
+    from sqlalchemy import and_
+    from app.services.scraper import fetch_wikitext
+    from app.services.discovery import parse_season_schedule
+
+    m = re.match(r'^(\d{4}) (ATP|WTA) Tour$', season_title)
+    if not m:
+        return
+    year = int(m.group(1))
+    gender = 'M' if m.group(2) == 'ATP' else 'F'
+
+    try:
+        wikitext, _ = await fetch_wikitext(season_title, force_refresh=True)
+        discovered = parse_season_schedule(wikitext, year, gender)
+
+        async with AsyncSessionLocal() as db:
+            updated = 0
+            for d in discovered:
+                result = await db.execute(
+                    select(Tournament).where(
+                        and_(
+                            Tournament.year == year,
+                            Tournament.gender == gender,
+                            Tournament.name == d.name,
+                            Tournament.wiki_page_title != d.wiki_page_title,
+                        )
+                    )
+                )
+                t = result.scalar_one_or_none()
+                if t and d.wiki_page_title:
+                    logger.info("Season page edit: correcting %s title %r → %r",
+                                t.name, t.wiki_page_title, d.wiki_page_title)
+                    t.wiki_page_title = d.wiki_page_title
+                    updated += 1
+            if updated:
+                await db.commit()
+                logger.info("Updated %d tournament title(s) from %s edit", updated, season_title)
+
+        await _sync_subscriptions()
+    except Exception as exc:
+        logger.warning("Failed to refresh titles from season page %s: %s", season_title, exc)
+
+
 async def _sync_subscriptions() -> None:
-    """Sync EventStreams subscriptions with active/pending tournaments."""
+    """Sync EventStreams subscriptions with active/pending tournaments + season pages."""
     async with AsyncSessionLocal() as db:
         result = await db.execute(
             select(Tournament).where(
@@ -109,13 +159,12 @@ async def _sync_subscriptions() -> None:
             )
         )
         tournaments = result.scalars().all()
-        active_titles = {t.wiki_page_title for t in tournaments}
+        # Always keep season pages subscribed — they're the source of draw titles
+        active_titles = {t.wiki_page_title for t in tournaments} | _season_pages()
 
-        # Subscribe to new tournaments
         for title in active_titles - eventstream.subscriptions:
             await eventstream.subscribe(title)
 
-        # Unsubscribe from completed tournaments
         for title in eventstream.subscriptions - active_titles:
             await eventstream.unsubscribe(title)
 
@@ -146,6 +195,7 @@ def start_scheduler() -> None:
         id="sync_subscriptions",
         misfire_grace_time=120,
     )
+    eventstream._on_season_page_edit = _on_season_page_edit
     scheduler.start()
     logger.info("Tournament discovery scheduled (daily at midnight UTC)")
     logger.info("Active tournament refresh scheduled (every 30 min)")
