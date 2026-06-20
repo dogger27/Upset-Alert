@@ -90,6 +90,73 @@ export default function TournamentDraw() {
     onSuccess: () => { qc.invalidateQueries(['draw', id]); setShowUnlockConfirm(false) },
   })
 
+  const autoPopulatePicks = () => {
+    if (!data) return
+    const isLocked = data.tournament.is_locked && !data.tournament.selections_unlocked
+    if (isLocked) return
+
+    const allPlayers = data.draw_entries
+    const allMatches = data.matches
+
+    // Mirror computeDrawRanks from BracketView
+    const drawRanks = {}
+    const seeded = allPlayers.filter(p => p.seed != null)
+    for (const p of seeded) drawRanks[p.id] = p.seed
+    const unseeded = allPlayers
+      .filter(p => p.seed == null && p.name)
+      .sort((a, b) => {
+        if (a.ranking != null && b.ranking != null) return a.ranking - b.ranking
+        if (a.ranking != null) return -1
+        if (b.ranking != null) return 1
+        return a.bracket_position - b.bracket_position
+      })
+    unseeded.forEach((p, i) => { drawRanks[p.id] = seeded.length + i + 1 })
+
+    const byKey = {}
+    for (const m of allMatches) byKey[`${m.round_number}:${m.match_number}`] = m
+
+    const newPicks = {}
+    const resolvedWinner = {} // matchId → winnerId based on auto-picks
+
+    const roundNums = [...new Set(allMatches.map(m => m.round_number))].sort((a, b) => a - b)
+
+    for (const rn of roundNums) {
+      const roundMatches = allMatches
+        .filter(m => m.round_number === rn)
+        .sort((a, b) => a.match_number - b.match_number)
+
+      for (const m of roundMatches) {
+        if (m.is_bye) {
+          resolvedWinner[m.id] = m.player1?.id ?? null
+          continue
+        }
+
+        let p1id, p2id
+        if (rn === 1) {
+          p1id = m.player1?.id ?? null
+          p2id = m.player2?.id ?? null
+        } else {
+          const f1 = byKey[`${rn - 1}:${m.match_number * 2 - 1}`]
+          const f2 = byKey[`${rn - 1}:${m.match_number * 2}`]
+          p1id = f1 ? resolvedWinner[f1.id] : null
+          p2id = f2 ? resolvedWinner[f2.id] : null
+        }
+
+        if (p1id == null || p2id == null) continue
+
+        const rank1 = drawRanks[p1id] ?? Infinity
+        const rank2 = drawRanks[p2id] ?? Infinity
+        const winnerId = rank1 <= rank2 ? p1id : p2id
+
+        newPicks[m.id] = winnerId
+        resolvedWinner[m.id] = winnerId
+      }
+    }
+
+    setPicks(newPicks)
+    if (user && !isLocked) saveMutation.mutate(newPicks)
+  }
+
   const handlePick = (matchId, playerId) => {
     const newPicks = { ...picks }
     const oldPlayerId = newPicks[matchId]
@@ -268,6 +335,15 @@ export default function TournamentDraw() {
               disabled={refreshMutation.isPending}
             >
               {refreshMutation.isPending ? '⏳ Updating…' : '↻ Update Draw'}
+            </button>
+          )}
+          {user && !locked && !viewingOther && viewMode === 'picks' && (
+            <button
+              className="btn-auto-populate"
+              onClick={autoPopulatePicks}
+              title="Fill all picks using seeds and world rankings"
+            >
+              Auto-Populate Picks
             </button>
           )}
           {user && !locked && (

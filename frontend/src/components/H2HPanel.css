@@ -177,6 +177,115 @@
 .h2h-round   { color: var(--text-muted); white-space: nowrap; }
 .h2h-tourn   { color: var(--text); }
 
+/* ── Elo label + info button ── */
+.h2h-label-with-info {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.h2h-info-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.65rem;
+  color: #bbb;
+  cursor: pointer;
+  line-height: 1;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+.h2h-info-btn:hover { color: #666; }
+
+/* ── Elo info popup ── */
+.h2h-elo-popup-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.h2h-elo-popup {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.22);
+  width: min(320px, 100%);
+  padding: 1.25rem 1.4rem 1rem;
+  position: relative;
+}
+
+.h2h-elo-popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.h2h-elo-popup-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.h2h-elo-popup-close {
+  background: none;
+  border: none;
+  font-size: 0.85rem;
+  color: #aaa;
+  cursor: pointer;
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+  line-height: 1;
+}
+.h2h-elo-popup-close:hover { background: #f0f0f0; color: #555; }
+
+.h2h-elo-popup-body {
+  font-size: 0.8rem;
+  color: #555;
+  line-height: 1.55;
+  margin: 0 0 0.9rem;
+}
+
+.h2h-elo-popup-tiers {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 0.7rem 0.85rem;
+  margin-bottom: 0.85rem;
+}
+
+.h2h-elo-popup-tiers > div {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+}
+
+.h2h-elo-tier-num {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text);
+  min-width: 85px;
+  font-variant-numeric: tabular-nums;
+}
+
+.h2h-elo-tier-label {
+  font-size: 0.75rem;
+  color: #666;
+}
+
+.h2h-elo-popup-source {
+  font-size: 0.68rem;
+  color: #aaa;
+  margin: 0;
+  text-align: right;
+}
+
 /* ── States ── */
 .h2h-loading,
 .h2h-error,

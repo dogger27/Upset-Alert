@@ -150,6 +150,11 @@ async def _on_season_page_edit(season_title: str) -> None:
         logger.warning("Failed to refresh titles from season page %s: %s", season_title, exc)
 
 
+async def _refresh_elo() -> None:
+    from app.services.rankings import refresh_elo_ratings
+    await refresh_elo_ratings()
+
+
 async def _sync_subscriptions() -> None:
     """Sync EventStreams subscriptions with active/pending tournaments + season pages."""
     async with AsyncSessionLocal() as db:
@@ -216,6 +221,15 @@ def start_scheduler() -> None:
         id="sync_subscriptions",
         misfire_grace_time=120,
     )
+    scheduler.add_job(
+        _refresh_elo,
+        "cron",
+        day_of_week="mon",
+        hour=1,
+        minute=30,
+        id="refresh_elo",
+        misfire_grace_time=3600,
+    )
     eventstream._on_season_page_edit = _on_season_page_edit
     scheduler.start()
     logger.info("Tournament discovery scheduled (daily at midnight UTC)")
@@ -230,8 +244,9 @@ def start_scheduler() -> None:
     # server was down.
     asyncio.create_task(_refresh_active_tournaments(force_refresh=True))
     # Backfill DOB for any te_players missing it (no-op if all already set).
-    from app.services.rankings import backfill_all_dob
+    from app.services.rankings import backfill_all_dob, refresh_elo_ratings
     asyncio.create_task(backfill_all_dob())
+    asyncio.create_task(refresh_elo_ratings())
 
 
 def stop_scheduler() -> None:

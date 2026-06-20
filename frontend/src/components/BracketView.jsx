@@ -232,8 +232,8 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
   const showTypeSlot = playerNeedsTypeSlot(p1) || playerNeedsTypeSlot(p2)
   const showScores = mode === 'live'
 
-  // H2H strip: live mode only, both players must have TE slugs
-  const h2hAvailable = mode === 'live' && !!p1?.te_slug && !!p2?.te_slug
+  // H2H strip: both players must have TE slugs (works in live and picks mode)
+  const h2hAvailable = !!p1?.te_slug && !!p2?.te_slug
 
   if (match.is_bye) {
     return (

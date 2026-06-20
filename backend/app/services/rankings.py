@@ -404,3 +404,68 @@ async def backfill_all_dob() -> dict:
         await db.commit()
         logger.info("DOB backfill complete: %d/%d updated", updated, total)
         return {"total": total, "updated": updated, "failed": total - updated}
+
+
+# ---------------------------------------------------------------------------
+# Tennis Abstract Elo ratings
+# ---------------------------------------------------------------------------
+
+_TA_ELO_URLS = {
+    "M": "https://tennisabstract.com/reports/atp_elo_ratings.html",
+    "F": "https://tennisabstract.com/reports/wta_elo_ratings.html",
+}
+
+_TA_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "text/html,*/*",
+}
+
+
+async def _fetch_ta_elo_page(gender: str) -> dict[frozenset, int]:
+    """Scrape Tennis Abstract Elo page; return {frozenset(name_tokens) → elo}."""
+    import html as html_lib
+    import httpx
+
+    url = _TA_ELO_URLS[gender]
+    async with httpx.AsyncClient(timeout=30, follow_redirects=True, headers=_TA_HEADERS) as client:
+        resp = await client.get(url)
+        resp.raise_for_status()
+
+    result: dict[frozenset, int] = {}
+    for row_m in re.finditer(r'<tr[^>]*>(.*?)</tr>', resp.text, re.DOTALL):
+        cells = re.findall(r'<td[^>]*>(.*?)</td>', row_m.group(1), re.DOTALL)
+        if len(cells) < 4:
+            continue
+        name = html_lib.unescape(re.sub(r'<[^>]+>', '', cells[1])).strip()
+        try:
+            elo = round(float(cells[3].strip()))
+        except (ValueError, IndexError):
+            continue
+        if name:
+            result[frozenset(name.lower().split())] = elo
+    return result
+
+
+async def refresh_elo_ratings() -> None:
+    """Fetch Elo from Tennis Abstract and update te_players.elo for both genders."""
+    from app.database import AsyncSessionLocal
+    from app.models.rankings import TePlayer
+
+    for gender in ("M", "F"):
+        try:
+            elo_map = await _fetch_ta_elo_page(gender)
+            logger.info("ELO page fetched for gender=%s: %d entries", gender, len(elo_map))
+            async with AsyncSessionLocal() as db:
+                res = await db.execute(select(TePlayer).where(TePlayer.gender == gender))
+                players = res.scalars().all()
+                updated = 0
+                for tp in players:
+                    tokens = frozenset(tp.name_norm.split())
+                    new_elo = elo_map.get(tokens)
+                    if new_elo and tp.elo != new_elo:
+                        tp.elo = new_elo
+                        updated += 1
+                await db.commit()
+                logger.info("ELO refresh (%s): %d/%d players updated", gender, updated, len(players))
+        except Exception as exc:
+            logger.warning("ELO refresh failed for gender=%s: %s", gender, exc)
