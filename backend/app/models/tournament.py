@@ -99,7 +99,7 @@ class Tournament(Base):
         if self.draw_released_direct_at:
             if self.start_date and (self.start_date - today).days > 30:
                 return "upcoming"
-            if self.status == "active" and self.start_date and today >= self.start_date:
+            if self.status == "active" and self.start_date and today >= self.start_date and not close:
                 return "active"
             return "open"
 
