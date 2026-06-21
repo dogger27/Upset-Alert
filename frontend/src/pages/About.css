@@ -1,0 +1,178 @@
+.about-page {
+  min-height: 100vh;
+  background: var(--bg);
+  padding: 40px 28px 72px;
+}
+
+.about-container {
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+.about-header {
+  margin-bottom: 36px;
+}
+
+.about-title {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 2.75rem;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  color: var(--ink-900);
+  text-transform: uppercase;
+}
+
+.about-body {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+/* ── Bio card ── */
+.about-bio-card {
+  display: flex;
+  gap: 36px;
+  align-items: flex-start;
+  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: 32px;
+  box-shadow: var(--shadow-xs);
+}
+
+.about-photo {
+  width: 180px;
+  height: 240px;
+  object-fit: cover;
+  object-position: center top;
+  border-radius: 10px;
+  flex-shrink: 0;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.13);
+}
+
+.about-bio-text {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.about-name {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 2rem;
+  letter-spacing: 0.02em;
+  color: var(--ink-900);
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.about-tagline {
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--green-600);
+  letter-spacing: 0.02em;
+}
+
+.about-desc {
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  color: var(--ink-700);
+  line-height: 1.65;
+}
+
+/* ── Sections ── */
+.about-section {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.about-section-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.35rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-800);
+  border-bottom: 2px solid var(--green-200);
+  padding-bottom: 8px;
+}
+
+/* ── Feature grid ── */
+.about-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.about-card {
+  background: rgba(45,106,79,0.06);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: 22px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: var(--shadow-xs);
+}
+
+.about-card-icon {
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.about-card-heading {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-800);
+}
+
+.about-card-body {
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  color: var(--ink-600);
+  line-height: 1.6;
+}
+
+/* ── Prose ── */
+.about-prose {
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  color: var(--ink-700);
+  line-height: 1.7;
+}
+
+.about-prose a {
+  color: var(--green-600);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.about-prose a:hover {
+  color: var(--green-700);
+}
+
+/* ── Responsive ── */
+@media (max-width: 700px) {
+  .about-bio-card {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 24px;
+  }
+
+  .about-photo {
+    width: 140px;
+    height: 190px;
+  }
+
+  .about-grid {
+    grid-template-columns: 1fr;
+  }
+}
