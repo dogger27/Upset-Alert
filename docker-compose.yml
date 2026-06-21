@@ -1,0 +1,13 @@
+services:
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8001:8001"
+    volumes:
+      - ./backend/tennis_fantasy.db:/data/tennis_fantasy.db
+      - /home/paulwiens/upsetalert/logs:/logs
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:////data/tennis_fantasy.db
+      - LOG_FILE=/logs/backend.log
+      - SECRET_KEY=${SECRET_KEY:-change-me-to-a-long-random-string}
