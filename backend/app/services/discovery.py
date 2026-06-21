@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Optional
 
-from app.services.scraper import fetch_wikitext
+from app.services.scraper import fetch_wikitext, snap_to_monday
 
 # ---------------------------------------------------------------------------
 # Types
@@ -295,6 +295,8 @@ def parse_season_schedule(wikitext: str, year: int, gender: str) -> list[Discove
         )
         surface = _surface(ctx)
         start_date, sched_end_date = _lookup_date(date_index, pos)
+        if start_date:
+            start_date = snap_to_monday(start_date)
         city, country = _location(ctx)
 
         results.append(DiscoveredTournament(
