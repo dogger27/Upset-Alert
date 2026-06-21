@@ -15,7 +15,7 @@ from app.schemas.league import LeaderboardEntry
 from app.schemas.tournament import DrawEntryOut, DrawOut, MatchOut, TournamentCreate, TournamentOut
 from app.schemas.user import UserPublicOut
 from app.services.rankings import assign_rankings
-from app.services.scraper import scrape_tournament
+from app.services.scraper import scrape_tournament, snap_to_monday
 from app.services.scoring import UserScore, rank_users
 
 router = APIRouter(prefix="/tournaments", tags=["tournaments"])
@@ -502,9 +502,13 @@ async def _do_scrape(tournament: Tournament, db: AsyncSession, force_refresh: bo
             tournament.day1_start_minute or 0,
         )
 
-    # Authoritative dates from the tournament's own infobox
+    # Authoritative dates from the tournament's own infobox (general Wikipedia page).
+    # If the general page parse failed, snap whatever date we have to Monday —
+    # schedule pages can include qualifying days which shift the date by 1-2 days.
     if parsed.start_date:
         tournament.start_date = parsed.start_date
+    elif tournament.start_date:
+        tournament.start_date = snap_to_monday(tournament.start_date)
     if parsed.end_date:
         tournament.end_date = parsed.end_date
 

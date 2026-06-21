@@ -89,12 +89,14 @@ class Tournament(Base):
         if self.start_date and (today - self.start_date).days > 14:
             return "completed"
 
-        # Closing time passed → active
+        # Closing time passed → active, but only once the tournament has actually started.
+        # If closing_time passed but start_date is still in the future, remain "open"
+        # (selections locked, but matches haven't begun — qualifying vs main draw gap).
         close = self.closing_time
         if close:
             now = datetime.now(timezone.utc)
             c = close if close.tzinfo else close.replace(tzinfo=timezone.utc)
-            if now >= c:
+            if now >= c and (not self.start_date or today >= self.start_date):
                 return "active"
 
         # DA draw published → open, unless the start date has arrived and the

@@ -111,6 +111,17 @@ def _parse_infobox_location(wikitext: str) -> tuple[Optional[str], Optional[str]
     return city, country
 
 
+from datetime import timedelta as _timedelta
+
+
+def snap_to_monday(d: date) -> date:
+    """Round d to the nearest Monday (tennis tournaments always start on Monday)."""
+    offset = d.isoweekday() - 1  # Mon=0 … Sun=6
+    if offset <= 3:
+        return d - _timedelta(days=offset)   # round back
+    return d + _timedelta(days=7 - offset)   # round forward
+
+
 # Captures all content of the date field until the next infobox field or closing }}
 _INFOBOX_DATE_RE = re.compile(
     r"\|\s*date\s*=\s*(.*?)(?=\n\s*\|[a-z _]|\n\s*\}\}|\Z)",
