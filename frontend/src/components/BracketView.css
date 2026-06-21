@@ -203,6 +203,11 @@
 
 .player-row.picked {
   font-weight: 600;
+  background: rgba(21, 128, 61, 0.11);
+}
+
+.player-row.picked.clickable:hover {
+  background: rgba(21, 128, 61, 0.20);
 }
 
 .player-row.winner {

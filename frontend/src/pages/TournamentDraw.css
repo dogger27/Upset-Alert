@@ -87,7 +87,12 @@
   border-bottom: 2px solid var(--border);
 }
 
-.draw-header-top { min-width: 0; align-self: start; }
+.draw-header-top {
+  min-width: 0;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+}
 
 .draw-header-center {
   display: flex;
@@ -126,6 +131,7 @@
   font-size: 1.05rem;
   font-weight: 500;
   color: var(--text-muted);
+  margin-top: auto;
 }
 
 .draw-title-level {

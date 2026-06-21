@@ -371,11 +371,11 @@ export default function TournamentDraw() {
           {tournament.latest_result_at && (
             <p className="draw-last-modified">Latest result: {fmtModified(tournament.latest_result_at)}</p>
           )}
-        </div>
-        <div className="draw-header-center">
           {tournament.start_date && (
             <span className="draw-title-dates">{fmtDateRange(tournament.start_date, tournament.end_date)}</span>
           )}
+        </div>
+        <div className="draw-header-center">
           <div className="draw-mode-buttons">
             <button
               className={clsx('draw-mode-btn', { active: viewMode === 'picks' })}
@@ -390,6 +390,20 @@ export default function TournamentDraw() {
               Live Draw
             </button>
           </div>
+          {user && !locked && !viewingOther && viewMode === 'picks' && (
+            <button
+              className="btn-auto-populate"
+              onClick={autoPopulatePicks}
+              title="Fill all picks using seeds and world rankings"
+            >
+              Auto-Populate Picks
+            </button>
+          )}
+          {user && !locked && (saveMutation.isPending || pickedCount > 0) && (
+            <span className="saved-badge">
+              {saveMutation.isPending ? '⏳ Saving…' : `✓ ${pickedCount}/${totalPredictable} picks saved`}
+            </span>
+          )}
         </div>
         <div className="draw-header-actions">
           {tournament.selections_unlocked ? (
@@ -445,15 +459,6 @@ export default function TournamentDraw() {
               {refreshMutation.isPending ? '⏳ Updating…' : '↻ Update Draw'}
             </button>
           )}
-          {user && !locked && !viewingOther && viewMode === 'picks' && (
-            <button
-              className="btn-auto-populate"
-              onClick={autoPopulatePicks}
-              title="Fill all picks using seeds and world rankings"
-            >
-              Auto-Populate Picks
-            </button>
-          )}
           {user && !locked && !viewingOther && pickedCount > 0 && (
             <button
               className="btn-clear-selections"
@@ -461,11 +466,6 @@ export default function TournamentDraw() {
             >
               Clear Selections
             </button>
-          )}
-          {user && !locked && (saveMutation.isPending || pickedCount > 0) && (
-            <span className="saved-badge">
-              {saveMutation.isPending ? '⏳ Saving…' : `✓ ${pickedCount}/${totalPredictable} picks saved`}
-            </span>
           )}
           {!user && (
             <Link to="/login" className="btn-primary">Log in to make picks</Link>
