@@ -60,7 +60,8 @@
   gap: 22px;
 }
 
-.navbar-links a {
+.navbar-links a,
+.navbar-links .navbar-label {
   font-family: var(--font-body);
   font-weight: 500;
   font-size: 0.9rem;
@@ -72,7 +73,8 @@
   transition: color 0.15s, border-color 0.15s;
 }
 .navbar-links a:hover { color: #fff; text-decoration: none; }
-.navbar-links a.navbar-active {
+.navbar-links a.navbar-active,
+.navbar-links .navbar-label.navbar-active {
   font-weight: 700;
   color: #fff;
   border-bottom-color: var(--green-300);
