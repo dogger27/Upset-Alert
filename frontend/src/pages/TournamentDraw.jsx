@@ -73,12 +73,12 @@ export default function TournamentDraw() {
     }
   }, [savedPreds, data])
 
-  // Set initial view mode once: 'picks' if user has picks, otherwise 'live'
+  // Set initial view mode once: always 'picks' for open tournaments, or if user has picks
   useEffect(() => {
-    if (initialModeSet.current || savedPreds === undefined) return
+    if (initialModeSet.current || savedPreds === undefined || !data) return
     initialModeSet.current = true
-    if (savedPreds.some(p => p.predicted_winner_id != null)) setViewMode('picks')
-  }, [savedPreds])
+    if (data.tournament.status === 'open' || savedPreds.some(p => p.predicted_winner_id != null)) setViewMode('picks')
+  }, [savedPreds, data])
 
   const saveMutation = useMutation({
     mutationFn: (latestPicks) => savePredictions(Number(id), latestPicks),
@@ -514,9 +514,20 @@ export default function TournamentDraw() {
               </button>
               <button
                 className="btn-secondary"
-                onClick={() => setPendingAutoPicks(null)}
+                onClick={() => {
+                  const merged = { ...pendingAutoPicks }
+                  Object.entries(picks).forEach(([mid, wid]) => { if (wid != null) merged[Number(mid)] = wid })
+                  applyPicksAndCelebrate(merged)
+                  setPendingAutoPicks(null)
+                }}
               >
                 Keep my picks
+              </button>
+              <button
+                className="btn-secondary"
+                onClick={() => setPendingAutoPicks(null)}
+              >
+                Cancel
               </button>
             </div>
           </div>
