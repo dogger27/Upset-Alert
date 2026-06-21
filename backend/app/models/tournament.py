@@ -78,6 +78,9 @@ class Tournament(Base):
         - completed: scraper detected final winner, or 14-day safety fallback
         """
         if self.status == "completed":
+            # Stay active through the end_date day; only flip to completed the day after
+            if self.end_date and date.today() <= self.end_date:
+                return "active"
             return "completed"
 
         today = date.today()
