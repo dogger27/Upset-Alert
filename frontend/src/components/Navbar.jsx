@@ -88,10 +88,10 @@ export default function Navbar() {
         </span>
       </Link>
       <div className="navbar-links">
-        <Link to="/" className={isActive('/') ? 'navbar-active' : ''}>Dashboard</Link>
         {/^\/tournaments\/[^/]+/.test(location.pathname) && (
           <span className="navbar-label navbar-active">Draw</span>
         )}
+        <Link to="/" className={isActive('/') ? 'navbar-active' : ''}>Dashboard</Link>
         <Link to="/about" className={isActive('/about') ? 'navbar-active' : ''}>About</Link>
         {user ? (
           <>
