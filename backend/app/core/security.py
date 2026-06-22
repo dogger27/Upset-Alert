@@ -36,6 +36,25 @@ def decode_token(token: str) -> Optional[str]:
         return None
 
 
+def create_email_verification_token(email: str) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(hours=24)
+    return jwt.encode(
+        {"sub": email, "exp": expire, "type": "email_verification"},
+        settings.secret_key,
+        algorithm=settings.algorithm,
+    )
+
+
+def verify_email_verification_token(token: str) -> Optional[str]:
+    try:
+        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        if payload.get("type") != "email_verification":
+            return None
+        return payload.get("sub")
+    except JWTError:
+        return None
+
+
 def create_password_reset_token(email: str) -> str:
     expire = datetime.now(timezone.utc) + timedelta(hours=1)
     return jwt.encode(

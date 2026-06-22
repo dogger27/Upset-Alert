@@ -28,6 +28,28 @@ async def send_async(params: resend.Emails.SendParams) -> None:
     await asyncio.to_thread(_send, params)
 
 
+async def send_verification(email: str, username: str, token: str) -> None:
+    verify_url = f"{BASE_URL}/verify-email?token={token}"
+    await send_async({
+        "from": FROM,
+        "to": [email],
+        "subject": "Verify your Upset Alert email",
+        "html": f"""
+        <div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:32px 24px">
+          <h1 style="font-size:24px;margin-bottom:8px">Hi {username}, verify your email</h1>
+          <p style="color:#444;line-height:1.6">
+            Click the button below to verify your email address and activate your account.
+            This link expires in 24 hours.
+          </p>
+          <a href="{verify_url}" style="display:inline-block;margin-top:24px;padding:12px 24px;
+             background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
+            Verify Email
+          </a>
+        </div>
+        """,
+    })
+
+
 async def send_welcome(email: str, username: str) -> None:
     await send_async({
         "from": FROM,
@@ -44,9 +66,6 @@ async def send_welcome(email: str, username: str) -> None:
              background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
             Go to Upset Alert
           </a>
-          <p style="margin-top:32px;font-size:13px;color:#888">
-            Questions? Reply to this email and we'll get back to you.
-          </p>
         </div>
         """,
     })
