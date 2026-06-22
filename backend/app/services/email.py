@@ -28,7 +28,7 @@ async def send_async(params: resend.Emails.SendParams) -> None:
     await asyncio.to_thread(_send, params)
 
 
-async def send_verification(email: str, username: str, token: str) -> None:
+async def send_verification(email: str, username: str, token: str, code: str) -> None:
     verify_url = f"{BASE_URL}/verify-email?token={token}"
     await send_async({
         "from": FROM,
@@ -38,10 +38,15 @@ async def send_verification(email: str, username: str, token: str) -> None:
         <div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:32px 24px">
           <h1 style="font-size:24px;margin-bottom:8px">Hi {username}, verify your email</h1>
           <p style="color:#444;line-height:1.6">
-            Click the button below to verify your email address and activate your account.
-            This link expires in 24 hours.
+            Enter this code on the site, or click the button below. Expires in 24 hours.
           </p>
-          <a href="{verify_url}" style="display:inline-block;margin-top:24px;padding:12px 24px;
+          <div style="margin:24px 0;text-align:center">
+            <span style="display:inline-block;font-size:36px;font-weight:700;letter-spacing:10px;
+                         padding:16px 24px;background:#f3f4f6;border-radius:8px;color:#111">
+              {code}
+            </span>
+          </div>
+          <a href="{verify_url}" style="display:inline-block;padding:12px 24px;
              background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
             Verify Email
           </a>

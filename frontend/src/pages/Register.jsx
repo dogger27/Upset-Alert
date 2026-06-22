@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../store/auth'
+import client from '../api/client'
 import './AuthForm.css'
 
 export default function Register() {
@@ -12,6 +13,10 @@ export default function Register() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [registered, setRegistered] = useState(false)
+  const [code, setCode] = useState('')
+  const [codeError, setCodeError] = useState('')
+  const [codeLoading, setCodeLoading] = useState(false)
+  const [verified, setVerified] = useState(false)
   const { register } = useAuth()
 
   const submit = async (e) => {
@@ -28,16 +33,55 @@ export default function Register() {
     }
   }
 
+  const submitCode = async (e) => {
+    e.preventDefault()
+    setCodeError(''); setCodeLoading(true)
+    try {
+      await client.post('/auth/verify-email-code', { email, code })
+      setVerified(true)
+    } catch (err) {
+      setCodeError(err.response?.data?.detail || 'Invalid or expired code')
+    } finally {
+      setCodeLoading(false)
+    }
+  }
+
   return (
     <div className="auth-page">
       <div className="auth-card card">
-        {registered ? (
+        {verified ? (
+          <>
+            <h2>Email verified!</h2>
+            <p style={{ color: 'var(--text-muted)', lineHeight: 1.6 }}>
+              Your account is active. You can now log in.
+            </p>
+            <p className="auth-footer"><Link to="/login">Log in</Link></p>
+          </>
+        ) : registered ? (
           <>
             <h2>Check your email</h2>
             <p style={{ color: 'var(--text-muted)', lineHeight: 1.6 }}>
-              We sent a verification link to <strong>{email}</strong>.
-              Click it to activate your account.
+              We sent a 6-digit code to <strong>{email}</strong>.
+              Enter it below or click the link in the email.
             </p>
+            <form onSubmit={submitCode} style={{ marginTop: '1rem' }}>
+              <label>Verification code</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                pattern="\d{6}"
+                placeholder="000000"
+                value={code}
+                onChange={e => setCode(e.target.value.replace(/\D/g, ''))}
+                style={{ letterSpacing: '0.25em', fontSize: '1.5rem', textAlign: 'center' }}
+                autoFocus
+              />
+              {codeError && <p className="error">{codeError}</p>}
+              <button type="submit" className="btn-primary" disabled={codeLoading || code.length !== 6}>
+                {codeLoading ? 'Verifying…' : 'Verify'}
+              </button>
+            </form>
             <p className="auth-footer"><Link to="/login">Back to log in</Link></p>
           </>
         ) : (
@@ -66,3 +110,4 @@ export default function Register() {
     </div>
   )
 }
+
