@@ -102,6 +102,7 @@ async def _mark_verified(user: User, db: AsyncSession) -> None:
     user.verification_code_expires = None
     await db.commit()
     await email_service.send_welcome(user.email, user.username)
+    await email_service.send_new_user_notification(user.email, user.username)
 
 
 @router.get("/verify-email", status_code=status.HTTP_204_NO_CONTENT)

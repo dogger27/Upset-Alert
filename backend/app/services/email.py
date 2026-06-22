@@ -100,6 +100,19 @@ async def send_password_reset(email: str, reset_token: str) -> None:
     })
 
 
+async def send_new_user_notification(new_email: str, new_username: str) -> None:
+    await send_async({
+        "from": FROM,
+        "to": ["pdwiens@gmail.com"],
+        "subject": f"New user: {new_username}",
+        "html": f"""
+        <div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:32px 24px">
+          <p><strong>{new_username}</strong> ({new_email}) just verified their account on Upset Alert.</p>
+        </div>
+        """,
+    })
+
+
 async def send_draw_notification(emails: list[str], tournament_name: str, tournament_id: int) -> None:
     tournament_url = f"{BASE_URL}/tournaments/{tournament_id}"
     await send_async({
