@@ -8,6 +8,7 @@ export default function Register() {
   const [username, setUsername] = useState('')
   const [fullName, setFullName] = useState('')
   const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [registered, setRegistered] = useState(false)
@@ -16,6 +17,7 @@ export default function Register() {
   const submit = async (e) => {
     e.preventDefault()
     setError(''); setLoading(true)
+    if (password !== confirm) { setError('Passwords do not match'); setLoading(false); return }
     try {
       await register(email, username, fullName, password)
       setRegistered(true)
@@ -50,6 +52,8 @@ export default function Register() {
               <input type="email" autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} required />
               <label>Password</label>
               <input type="password" autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} required minLength={8} />
+              <label>Confirm Password</label>
+              <input type="password" autoComplete="new-password" value={confirm} onChange={e => setConfirm(e.target.value)} required minLength={8} />
               {error && <p className="error">{error}</p>}
               <button type="submit" className="btn-primary" disabled={loading}>
                 {loading ? 'Creating…' : 'Create account'}
