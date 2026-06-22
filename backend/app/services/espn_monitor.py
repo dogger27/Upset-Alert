@@ -1,21 +1,28 @@
 """
 ESPN Live Score Monitor.
 
-Polls ESPN ATP/WTA scoreboards every 60 seconds while tournaments have their
-draw released but picks not yet locked. The moment a main-draw match is
-confirmed in-progress (ESPN STATUS_IN_PROGRESS + player found in our draw):
-  1. Writes picks_locked_at = now        — idempotency guard, prevents re-fire
-  2. Overwrites closing_time = now       — makes is_locked True immediately
-  3. Emails every user who has picks     — via Resend
-  4. SSE-broadcasts to open browsers    — via broadcaster pub/sub
+Polls ESPN ATP/WTA scoreboards every 60 seconds. Performs two jobs per cycle:
 
-Name matching reuses _norm() from rankings.py (battle-tested against thousands
-of real player names from Tennis Explorer). Token-set algebra handles:
-  - Accents / diacritics stripped on both sides
-  - Name-order variants (Zheng Qinwen ↔ Qinwen Zheng)
-  - Compound surnames (Auger-Aliassime, Davidovich Fokina)
+  JOB 1 — Picks locking (narrow window: start_date ± a few days)
+    When a STATUS_IN_PROGRESS match features a player from our draw:
+      • Sets picks_locked_at = now  (idempotency guard)
+      • Overwrites closing_time = now  (is_locked becomes True immediately)
+      • Emails every verified user with picks
+      • SSE-broadcasts to connected browsers
+
+  JOB 2 — Match results (full tournament window)
+    When a STATUS_FINAL match features both players in our draw:
+      • Locates the pending Match record by player pair lookup
+      • Sets winner_id + scores_json (integer set scores, no tiebreak)
+      • Wikipedia will later overwrite scores_json with tiebreak annotations
+        when the EventStream or 30-min poll fires — no special handling needed
+
+Name matching reuses _norm() from rankings.py (token-set algebra):
+  - Accent / diacritic stripping on both sides
+  - Order-independent frozensets (Zheng Qinwen ↔ Qinwen Zheng)
+  - Compound surnames and extra name components (subset rules)
   - Nickname variants (Caty ↔ Catherine McNally) via unique-token rule
-  - German umlaut expansion mismatch (müller→mueller vs muller) via fallback
+  - German umlaut expansion mismatch via collapsed-vowel fallback
 """
 
 import asyncio
@@ -27,7 +34,7 @@ import httpx
 from sqlalchemy import select
 
 from app.database import AsyncSessionLocal
-from app.models.tournament import DrawEntry, Tournament
+from app.models.tournament import DrawEntry, Match, Tournament
 from app.services.rankings import _norm
 
 logger = logging.getLogger(__name__)
@@ -36,13 +43,12 @@ _ESPN_ATP_URL = "http://site.api.espn.com/apis/site/v2/sports/tennis/atp/scorebo
 _ESPN_WTA_URL = "http://site.api.espn.com/apis/site/v2/sports/tennis/wta/scoreboard"
 _ESPN_URLS = {"M": _ESPN_ATP_URL, "F": _ESPN_WTA_URL}
 
-# Words stripped from tournament names before overlap scoring.
 _FILLER = {"open", "the", "powered", "by", "cup", "championships", "masters",
            "international", "tennis", "classic"}
 
-# How close to start_date we begin watching (days before / after).
-_WATCH_BEFORE_DAYS = 1
-_WATCH_AFTER_DAYS = 3
+_LOCK_BEFORE_DAYS = 1   # start watching for picks-lock N days before start_date
+_LOCK_AFTER_DAYS  = 3   # stop watching N days after start_date
+_RESULT_AFTER_DAYS = 16  # keep syncing results up to N days after start_date
 
 
 # ---------------------------------------------------------------------------
@@ -66,47 +72,54 @@ def _umlaut_variants(ts: frozenset) -> list:
 
 def _build_draw_index(entries: list) -> tuple[list, dict]:
     """
+    Build matching structures from a list of DrawEntry objects.
+
     Returns:
-        all_sets  — list of per-player token frozensets
-        tok_index — single token → list of player frozensets containing it
-                    (used for unique-token Rule 4)
+        pairs     — [(frozenset_of_tokens, DrawEntry), ...]
+        tok_index — {single_token: [DrawEntry, ...]} for unique-token lookup
     """
-    all_sets: list = []
+    pairs: list = []
     tok_index: dict = {}
     for entry in entries:
         if not entry.name:
             continue
         ts = _tokenize(entry.name)
-        all_sets.append(ts)
+        pairs.append((ts, entry))
         for tok in ts:
-            tok_index.setdefault(tok, []).append(ts)
-    return all_sets, tok_index
+            tok_index.setdefault(tok, []).append(entry)
+    return pairs, tok_index
 
 
-def _player_in_draw(espn_name: str, all_sets: list, tok_index: dict) -> bool:
+def _find_entry(espn_name: str, pairs: list, tok_index: dict) -> Optional[DrawEntry]:
+    """
+    Return the DrawEntry whose name best matches espn_name, or None.
+    Applies Rules 1-4 from rankings.py token-set algebra plus umlaut fallback.
+    """
     espn_ts = _tokenize(espn_name)
     if not espn_ts:
-        return False
+        return None
 
-    for espn_variant in _umlaut_variants(espn_ts):
-        # Rule 1: exact token set (order-independent — handles Zheng Qinwen)
-        # Rule 2: espn ⊂ our player (our name has extra components)
-        # Rule 3: our player ⊂ espn (espn name has extra components, |ours| ≥ 2)
-        for player_ts in all_sets:
-            if espn_variant == player_ts:
-                return True
-            if espn_variant < player_ts:
-                return True
-            if len(player_ts) >= 2 and player_ts < espn_variant:
-                return True
+    for variant in _umlaut_variants(espn_ts):
+        # Rules 1-3: set algebra (order-independent)
+        for player_ts, entry in pairs:
+            if variant == player_ts:
+                return entry
+            if variant < player_ts:          # ESPN name ⊂ our name
+                return entry
+            if len(player_ts) >= 2 and player_ts < variant:  # our name ⊂ ESPN
+                return entry
 
         # Rule 4: unique identifying token (handles Caty ↔ Catherine McNally)
-        for tok in espn_variant:
+        for tok in variant:
             hits = tok_index.get(tok, [])
             if len(hits) == 1:
-                return True
+                return hits[0]
 
-    return False
+    return None
+
+
+def _player_in_draw(espn_name: str, pairs: list, tok_index: dict) -> bool:
+    return _find_entry(espn_name, pairs, tok_index) is not None
 
 
 # ---------------------------------------------------------------------------
@@ -115,8 +128,8 @@ def _player_in_draw(espn_name: str, all_sets: list, tok_index: dict) -> bool:
 
 def _names_match(our_name: str, espn_name: str) -> bool:
     """
-    True if our tournament name's significant tokens are substantially contained
-    in the ESPN event name. ESPN names often have extra sponsor prefixes/suffixes.
+    True if our tournament name's significant tokens substantially overlap
+    with the ESPN event name. ESPN names often have sponsor prefixes/suffixes.
     """
     our_toks = set(_norm(our_name).split()) - _FILLER
     espn_toks = set(_norm(espn_name).split())
@@ -141,26 +154,62 @@ async def _fetch_events(gender: str) -> list:
         return []
 
 
-def _live_players(event: dict, gender: str) -> list:
-    """
-    Return full names of players in STATUS_IN_PROGRESS singles competitions
-    for the given gender grouping.
-    """
-    gender_label = "Men's" if gender == "M" else "Women's"
-    players = []
+def _gender_label(gender: str) -> str:
+    return "Men's" if gender == "M" else "Women's"
+
+
+def _singles_comps(event: dict, gender: str, status: str) -> list:
+    """Return competitions with the given status from the correct gender grouping."""
+    label = _gender_label(gender)
+    comps = []
     for group in event.get("groupings", []):
         gname = group.get("grouping", {}).get("displayName", "")
-        if "Singles" not in gname or gender_label not in gname:
+        if "Singles" not in gname or label not in gname:
             continue
         for comp in group.get("competitions", []):
-            state = comp.get("status", {}).get("type", {}).get("name", "")
-            if state != "STATUS_IN_PROGRESS":
-                continue
-            for c in comp.get("competitors", []):
-                name = c.get("athlete", {}).get("fullName", "")
-                if name and name != "TBD":
-                    players.append(name)
-    return players
+            if comp.get("status", {}).get("type", {}).get("name", "") == status:
+                comps.append(comp)
+    return comps
+
+
+def _comp_live_players(comp: dict) -> list:
+    """Full names of all players in a competition."""
+    return [
+        c.get("athlete", {}).get("fullName", "")
+        for c in comp.get("competitors", [])
+        if c.get("athlete", {}).get("fullName", "") not in ("", "TBD")
+    ]
+
+
+def _comp_result(comp: dict) -> Optional[tuple]:
+    """
+    Parse a STATUS_FINAL competition.
+    Returns (winner_name, loser_name, winner_set_scores, loser_set_scores)
+    where set scores are lists of integer strings e.g. ["6", "4", "7"].
+    Returns None if result cannot be reliably determined.
+    """
+    competitors = comp.get("competitors", [])
+    if len(competitors) != 2:
+        return None
+
+    winner = next((c for c in competitors if c.get("winner")), None)
+    loser  = next((c for c in competitors if not c.get("winner")), None)
+    if not winner or not loser:
+        return None
+
+    w_name = winner.get("athlete", {}).get("fullName", "")
+    l_name = loser.get("athlete", {}).get("fullName", "")
+    if not w_name or not l_name or "TBD" in (w_name, l_name):
+        return None
+
+    def scores(competitor: dict) -> list:
+        return [
+            str(int(ls["value"]))
+            for ls in competitor.get("linescores", [])
+            if ls.get("value") is not None
+        ]
+
+    return w_name, l_name, scores(winner), scores(loser)
 
 
 # ---------------------------------------------------------------------------
@@ -185,78 +234,127 @@ class ESPNMonitor:
         self._running = False
 
     # ------------------------------------------------------------------
+    # Poll cycle
+    # ------------------------------------------------------------------
 
     async def _poll(self) -> None:
         today = date.today()
-        window_start = today - timedelta(days=_WATCH_BEFORE_DAYS)
-        window_end = today + timedelta(days=_WATCH_AFTER_DAYS)
+
+        # Job 1 watchlist: narrow window around start_date for picks locking
+        lock_start  = today - timedelta(days=_LOCK_BEFORE_DAYS)
+        lock_end    = today + timedelta(days=_LOCK_AFTER_DAYS)
+
+        # Job 2 watchlist: full tournament window for match results
+        result_cutoff = today - timedelta(days=_RESULT_AFTER_DAYS)
 
         async with AsyncSessionLocal() as db:
-            result = await db.execute(
+            lock_res = await db.execute(
                 select(Tournament).where(
                     Tournament.picks_locked_at.is_(None),
                     Tournament.draw_released_direct_at.isnot(None),
                     Tournament.status != "completed",
                     Tournament.start_date.isnot(None),
-                    Tournament.start_date >= window_start,
-                    Tournament.start_date <= window_end,
+                    Tournament.start_date >= lock_start,
+                    Tournament.start_date <= lock_end,
                 )
             )
-            watchlist = result.scalars().all()
+            lock_list = lock_res.scalars().all()
 
-        if not watchlist:
+            result_res = await db.execute(
+                select(Tournament).where(
+                    Tournament.draw_released_direct_at.isnot(None),
+                    Tournament.status != "completed",
+                    Tournament.start_date.isnot(None),
+                    Tournament.start_date >= result_cutoff,
+                )
+            )
+            result_list = result_res.scalars().all()
+
+        # Unique set of tournaments needing attention
+        all_ids   = {t.id for t in lock_list} | {t.id for t in result_list}
+        by_id     = {t.id: t for t in lock_list + result_list}
+        lock_ids  = {t.id for t in lock_list}
+        result_ids = {t.id for t in result_list}
+
+        if not all_ids:
             return
 
-        logger.debug("ESPN poll: watching %d tournament(s)", len(watchlist))
+        logger.debug(
+            "ESPN poll: %d lock-watch, %d result-watch",
+            len(lock_ids), len(result_ids),
+        )
 
-        # Fetch both scoreboards once per cycle regardless of how many tournaments
         atp_events = await _fetch_events("M")
         wta_events = await _fetch_events("F")
         espn_events = {"M": atp_events, "F": wta_events}
 
-        for tournament in watchlist:
-            await self._check_tournament(tournament, espn_events[tournament.gender])
+        for tid in all_ids:
+            tournament = by_id[tid]
+            events = espn_events[tournament.gender]
 
-    async def _check_tournament(self, tournament: Tournament, events: list) -> None:
-        # Step 1: find the matching ESPN event by name
-        espn_event = next(
-            (e for e in events if _names_match(tournament.name, e.get("name", ""))),
-            None,
-        )
-        if espn_event is None:
-            logger.debug("ESPN: no event match for '%s' (%s)", tournament.name, tournament.gender)
-            return
-
-        # Step 2: get in-progress player names for our gender grouping
-        live = _live_players(espn_event, tournament.gender)
-        if not live:
-            return
-
-        # Step 3: load our draw and build the matching index
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(
-                select(DrawEntry).where(DrawEntry.tournament_id == tournament.id)
+            espn_event = next(
+                (e for e in events if _names_match(tournament.name, e.get("name", ""))),
+                None,
             )
-            entries = result.scalars().all()
+            if espn_event is None:
+                logger.debug(
+                    "ESPN: no event match for '%s' (%s)",
+                    tournament.name, tournament.gender,
+                )
+                continue
 
-        if not entries:
-            return
+            # Load draw entries once — used by both jobs
+            async with AsyncSessionLocal() as db:
+                de_res = await db.execute(
+                    select(DrawEntry).where(DrawEntry.tournament_id == tid)
+                )
+                entries = de_res.scalars().all()
 
-        all_sets, tok_index = _build_draw_index(entries)
+            if not entries:
+                continue
 
-        # Step 4: check each live player against our draw
-        trigger_name = next(
-            (n for n in live if _player_in_draw(n, all_sets, tok_index)),
-            None,
-        )
-        if trigger_name is None:
-            return
+            pairs, tok_index = _build_draw_index(entries)
 
-        logger.info(
-            "ESPN LIVE MATCH DETECTED — %d %s (%s): '%s' is in progress",
-            tournament.year, tournament.name, tournament.gender, trigger_name,
-        )
-        await self._on_match_start(tournament.id, trigger_name)
+            # Job 1: picks locking
+            if tid in lock_ids:
+                await self._check_lock(tournament, espn_event, pairs, tok_index)
+
+            # Job 2: match results
+            if tid in result_ids:
+                n = await self._sync_results(tournament, espn_event, pairs, tok_index)
+                if n:
+                    logger.info(
+                        "ESPN: updated %d match result(s) for %d %s",
+                        n, tournament.year, tournament.name,
+                    )
+
+    # ------------------------------------------------------------------
+    # Job 1: picks locking
+    # ------------------------------------------------------------------
+
+    async def _check_lock(
+        self,
+        tournament: Tournament,
+        espn_event: dict,
+        pairs: list,
+        tok_index: dict,
+    ) -> None:
+        live_comps = _singles_comps(espn_event, tournament.gender, "STATUS_IN_PROGRESS")
+        trigger_name = None
+        for comp in live_comps:
+            for name in _comp_live_players(comp):
+                if _player_in_draw(name, pairs, tok_index):
+                    trigger_name = name
+                    break
+            if trigger_name:
+                break
+
+        if trigger_name:
+            logger.info(
+                "ESPN LIVE MATCH DETECTED — %d %s (%s): '%s' is in progress",
+                tournament.year, tournament.name, tournament.gender, trigger_name,
+            )
+            await self._on_match_start(tournament.id, trigger_name)
 
     async def _on_match_start(self, tournament_id: int, trigger_name: str) -> None:
         from app.models.prediction import UserPrediction
@@ -272,7 +370,7 @@ class ESPNMonitor:
                 return  # already handled (race guard)
 
             tournament.picks_locked_at = now
-            tournament.closing_time = now  # replace the hardcoded estimate
+            tournament.closing_time = now
 
             result = await db.execute(
                 select(User.email).join(
@@ -283,24 +381,101 @@ class ESPNMonitor:
                 ).distinct()
             )
             emails = [row[0] for row in result.all()]
-
-            name = tournament.name
-            year = tournament.year
-            tid = tournament.id
+            name, year, tid = tournament.name, tournament.year, tournament.id
             await db.commit()
 
-        # SSE push first — browsers refresh immediately
         await broadcaster.publish(tournament_id)
 
-        # Email
         if emails:
             await send_match_start_notification(emails, name, year, tid)
             logger.info(
-                "Picks locked: %d %s — notified %d user(s), trigger player: %s",
+                "Picks locked: %d %s — notified %d user(s), trigger: %s",
                 year, name, len(emails), trigger_name,
             )
         else:
-            logger.info(
-                "Picks locked: %d %s — no verified users with picks to notify",
-                year, name,
+            logger.info("Picks locked: %d %s — no verified users with picks", year, name)
+
+    # ------------------------------------------------------------------
+    # Job 2: match results
+    # ------------------------------------------------------------------
+
+    async def _sync_results(
+        self,
+        tournament: Tournament,
+        espn_event: dict,
+        pairs: list,
+        tok_index: dict,
+    ) -> int:
+        """
+        For every STATUS_FINAL singles competition whose players are in our draw,
+        update the corresponding pending Match record with winner + set scores.
+        Returns the number of matches updated.
+
+        Score format stored: [["6","4","7"], ["3","6","6"]]
+        Wikipedia will later refine to: [["6","4","7(5)"], ["3","6","6(7)"]]
+        when it rewrites scores_json on its next scrape. No special handling needed —
+        the Wikipedia scraper always overwrites scores_json unconditionally.
+        """
+        final_comps = _singles_comps(espn_event, tournament.gender, "STATUS_FINAL")
+        if not final_comps:
+            return 0
+
+        updated = 0
+        now = datetime.now(timezone.utc)
+
+        async with AsyncSessionLocal() as db:
+            # Load pending matches (both players known, no winner yet, not a bye)
+            m_res = await db.execute(
+                select(Match).where(
+                    Match.tournament_id == tournament.id,
+                    Match.winner_id.is_(None),
+                    Match.player1_id.isnot(None),
+                    Match.player2_id.isnot(None),
+                    Match.is_bye == False,
+                )
             )
+            pending = m_res.scalars().all()
+            if not pending:
+                return 0
+
+            # Index by both player-ID orderings for O(1) lookup
+            by_players: dict[tuple, Match] = {}
+            for m in pending:
+                by_players[(m.player1_id, m.player2_id)] = m
+                by_players[(m.player2_id, m.player1_id)] = m
+
+            for comp in final_comps:
+                result = _comp_result(comp)
+                if not result:
+                    continue
+
+                w_name, l_name, w_scores, l_scores = result
+
+                w_entry = _find_entry(w_name, pairs, tok_index)
+                l_entry = _find_entry(l_name, pairs, tok_index)
+                if not w_entry or not l_entry:
+                    continue  # players not in our draw (qualifiers, etc.)
+                if w_entry.id == l_entry.id:
+                    continue  # name collision — skip rather than corrupt
+
+                match = by_players.get((w_entry.id, l_entry.id))
+                if not match:
+                    continue  # match not found (wrong round / players not set yet)
+
+                # Align scores to player1/player2 bracket order
+                if match.player1_id == w_entry.id:
+                    match.scores_json = [w_scores, l_scores]
+                else:
+                    match.scores_json = [l_scores, w_scores]
+
+                match.winner_id = w_entry.id
+                match.status = "completed"
+                match.completed_at = now
+                updated += 1
+
+            if updated:
+                await db.commit()
+                from app.services import broadcaster
+                await broadcaster.publish(tournament.id)
+
+        return updated
