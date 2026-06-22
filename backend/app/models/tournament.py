@@ -41,6 +41,9 @@ class Tournament(Base):
     # When the draw closes for predictions (= first main-draw match start time).
     # Populated once the exact schedule is known; NULL means predictions are not yet locked.
     closing_time: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Set by the ESPN live monitor the moment a main-draw match is confirmed in progress.
+    # Acts as an idempotency guard — once set, the monitor never fires again for this tournament.
+    picks_locked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     # upcoming / open / active / completed
     status: Mapped[str] = mapped_column(String, default="upcoming")
     selections_unlocked: Mapped[bool] = mapped_column(Boolean, default=False)

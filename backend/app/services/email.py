@@ -113,6 +113,33 @@ async def send_new_user_notification(new_email: str, new_username: str) -> None:
     })
 
 
+async def send_match_start_notification(
+    emails: list[str], tournament_name: str, year: int, tournament_id: int
+) -> None:
+    tournament_url = f"{BASE_URL}/tournaments/{tournament_id}"
+    await send_async({
+        "from": FROM,
+        "to": emails,
+        "subject": f"Play has started — {tournament_name} {year}",
+        "html": f"""
+        <div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:32px 24px">
+          <h1 style="font-size:24px;margin-bottom:8px">The first match is underway!</h1>
+          <p style="color:#444;line-height:1.6">
+            <strong>{tournament_name} {year}</strong> is officially live — a main-draw match
+            has just started. Your picks are now locked.
+          </p>
+          <a href="{tournament_url}" style="display:inline-block;margin-top:24px;padding:12px 24px;
+             background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
+            View Draw &amp; Picks
+          </a>
+          <p style="margin-top:24px;font-size:13px;color:#888">
+            Good luck — let's see those upsets!
+          </p>
+        </div>
+        """,
+    })
+
+
 async def send_draw_notification(emails: list[str], tournament_name: str, tournament_id: int) -> None:
     tournament_url = f"{BASE_URL}/tournaments/{tournament_id}"
     await send_async({
