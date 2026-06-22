@@ -393,8 +393,6 @@ class ESPNMonitor:
             await self._on_match_start(tournament.id, trigger_name)
 
     async def _on_match_start(self, tournament_id: int, trigger_name: str) -> None:
-        from app.models.prediction import UserPrediction
-        from app.models.user import User
         from app.services import broadcaster
         from app.services.email import send_match_start_notification
 
@@ -407,29 +405,16 @@ class ESPNMonitor:
 
             tournament.picks_locked_at = now
             tournament.closing_time = now
-
-            result = await db.execute(
-                select(User.email).join(
-                    UserPrediction, UserPrediction.user_id == User.id
-                ).where(
-                    UserPrediction.tournament_id == tournament_id,
-                    User.email_verified == True,
-                ).distinct()
-            )
-            emails = [row[0] for row in result.all()]
             name, year, tid = tournament.name, tournament.year, tournament.id
             await db.commit()
 
         await broadcaster.publish(tournament_id)
 
-        if emails:
-            await send_match_start_notification(emails, name, year, tid)
-            logger.info(
-                "Picks locked: %d %s — notified %d user(s), trigger: %s",
-                year, name, len(emails), trigger_name,
-            )
-        else:
-            logger.info("Picks locked: %d %s — no verified users with picks", year, name)
+        await send_match_start_notification(["pdwiens@gmail.com"], name, year, tid)
+        logger.info(
+            "Picks locked: %d %s — trigger: %s",
+            year, name, trigger_name,
+        )
 
     # ------------------------------------------------------------------
     # Job 2: live scores
