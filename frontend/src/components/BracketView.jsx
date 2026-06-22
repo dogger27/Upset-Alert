@@ -232,7 +232,7 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
   const p1 = p1id != null ? playerById[p1id] : null
   const p2 = p2id != null ? playerById[p2id] : null
   const showTypeSlot = playerNeedsTypeSlot(p1) || playerNeedsTypeSlot(p2)
-  const showScores = mode === 'live' || isLive
+  const showScores = mode === 'live'
 
   // H2H strip: both players must have TE slugs (works in live and picks mode)
   const h2hAvailable = !!p1?.te_slug && !!p2?.te_slug
@@ -276,7 +276,7 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
       })}
       style={style}
     >
-      {isLive && <span className="live-badge">● Live</span>}
+      {isLive && <span className="in-progress-badge">In Progress</span>}
       {isUpsetPick && (
         <span className="upset-bell">
           🔔
