@@ -205,6 +205,7 @@ export default function Navbar() {
                         <>
                           <div className="notif-section">
                             <p className="notif-section-title">Draw open for selections</p>
+                            <p className="notif-section-desc">Email when a new draw is published and picks are open</p>
                             <div className="notif-two-col">
                               <div className="notif-col">
                                 <p className="notif-col-heading">Men</p>
