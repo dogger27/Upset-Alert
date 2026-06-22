@@ -668,9 +668,18 @@ async def _do_scrape(tournament: Tournament, db: AsyncSession, force_refresh: bo
 
     # Auto-set tournament status
     from datetime import date as _date
+    today = _date.today()
     total_matches = len(parsed.matches)
     completed = sum(1 for m in parsed.matches if m.winner_position is not None)
-    started = tournament.start_date is None or tournament.start_date <= _date.today()
+
+    # Snap start_date to today on first detected match activity.
+    # Qualifying rounds begin before the Wikipedia-reported main-draw start date,
+    # so use the real play date rather than Wikipedia's potentially lagging value.
+    has_activity = completed > 0 or any(m.scores for m in parsed.matches)
+    if has_activity and tournament.start_date and today < tournament.start_date:
+        tournament.start_date = today
+
+    started = tournament.start_date is None or tournament.start_date <= today
     if completed == total_matches and completed > 0:
         tournament.status = "completed"
     elif completed > 0 and started:
