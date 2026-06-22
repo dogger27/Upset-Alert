@@ -42,8 +42,7 @@ async def notify_round_complete(tournament_id: int, round_number: int) -> None:
             return
 
         round_name = tournament.round_name(round_number)
-
-        # All completed matches up to and including this round
+        is_final_round = round_number == tournament.num_rounds
         m_res = await db.execute(
             select(Match)
             .options(selectinload(Match.player1), selectinload(Match.player2), selectinload(Match.winner))
@@ -79,8 +78,10 @@ async def notify_round_complete(tournament_id: int, round_number: int) -> None:
         if not eligible:
             return
 
-        # Users opted into round_standings who participated
-        opted_res = await db.execute(
+        # Users opted into round_standings who participated.
+        # For the final round: exclude users who also have tournament_end enabled —
+        # they'll get the tournament-completion email and don't need a duplicate.
+        round_prefs_res = await db.execute(
             select(NotificationPreference.user_id)
             .join(User, User.id == NotificationPreference.user_id)
             .where(
@@ -89,7 +90,21 @@ async def notify_round_complete(tournament_id: int, round_number: int) -> None:
                 User.email_verified == True,
             )
         )
-        to_notify = {r[0] for r in opted_res.all()}
+        round_pref_ids = {r[0] for r in round_prefs_res.all()}
+
+        if is_final_round:
+            # Find who has tournament_end; subtract them — they'll get the completion email
+            end_pref_res = await db.execute(
+                select(NotificationPreference.user_id)
+                .where(
+                    NotificationPreference.pref_key == "tournament_end",
+                    NotificationPreference.user_id.in_(round_pref_ids),
+                )
+            )
+            has_end_pref = {r[0] for r in end_pref_res.all()}
+            to_notify = round_pref_ids - has_end_pref
+        else:
+            to_notify = round_pref_ids
         if not to_notify:
             return
 
