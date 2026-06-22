@@ -47,10 +47,11 @@ export default function ResetPassword() {
     <div className="auth-page">
       <div className="auth-card card">
         <h2>Reset password</h2>
-        <form onSubmit={submit}>
+        <form onSubmit={submit} autoComplete="on">
           <label>New password</label>
           <input
             type="password"
+            autoComplete="new-password"
             value={password}
             onChange={e => setPassword(e.target.value)}
             minLength={8}
@@ -59,6 +60,7 @@ export default function ResetPassword() {
           <label>Confirm password</label>
           <input
             type="password"
+            autoComplete="new-password"
             value={confirm}
             onChange={e => setConfirm(e.target.value)}
             required
