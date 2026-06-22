@@ -505,12 +505,15 @@ async def _do_scrape(tournament: Tournament, db: AsyncSession, force_refresh: bo
     # Authoritative dates from the tournament's own infobox (general Wikipedia page).
     # If the general page parse failed, snap whatever date we have to Monday —
     # schedule pages can include qualifying days which shift the date by 1-2 days.
-    if parsed.start_date:
-        tournament.start_date = parsed.start_date
-    elif tournament.start_date:
-        tournament.start_date = snap_to_monday(tournament.start_date)
-    if parsed.end_date:
-        tournament.end_date = parsed.end_date
+    # Skip date updates once the tournament is active/completed: qualifying can
+    # start a day before the Wikipedia-reported date, and Wikipedia lags real play.
+    if tournament.status not in ("active", "completed"):
+        if parsed.start_date:
+            tournament.start_date = parsed.start_date
+        elif tournament.start_date:
+            tournament.start_date = snap_to_monday(tournament.start_date)
+        if parsed.end_date:
+            tournament.end_date = parsed.end_date
 
     # Record actual draw release dates when detected.
     # Only stamp draw_released_direct_at once the draw is substantially complete
