@@ -70,6 +70,12 @@ async def _migrate(conn):
         "ALTER TABLE tournaments ADD COLUMN picks_locked_at DATETIME",
         "ALTER TABLE te_players ADD COLUMN elo INTEGER",
         "ALTER TABLE matches ADD COLUMN live_scores_json JSON",
+        (
+            "CREATE TABLE IF NOT EXISTS notification_preferences "
+            "(user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, "
+            "pref_key VARCHAR NOT NULL, "
+            "PRIMARY KEY (user_id, pref_key))"
+        ),
     ]
     for sql in migrations:
         try:

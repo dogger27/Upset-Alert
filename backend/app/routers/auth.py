@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import get_current_user
@@ -158,6 +158,52 @@ async def reset_password(body: dict, db: AsyncSession = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=400, detail="Invalid or expired reset link")
     user.password_hash = hash_password(new_password)
+    await db.commit()
+
+
+@router.get("/me/notifications")
+async def get_notification_prefs(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    from app.models.league import League, LeagueMember
+    from app.models.notification import NotificationPreference
+
+    keys_result = await db.execute(
+        select(NotificationPreference.pref_key).where(
+            NotificationPreference.user_id == current_user.id
+        )
+    )
+    enabled_keys = [r[0] for r in keys_result.all()]
+
+    leagues_result = await db.execute(
+        select(League)
+        .join(LeagueMember, LeagueMember.league_id == League.id)
+        .where(LeagueMember.user_id == current_user.id)
+        .order_by(League.name)
+    )
+    leagues = [{"id": lg.id, "name": lg.name} for lg in leagues_result.scalars().all()]
+
+    return {"enabled_keys": enabled_keys, "leagues": leagues}
+
+
+@router.put("/me/notifications", status_code=status.HTTP_204_NO_CONTENT)
+async def put_notification_prefs(
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    from app.models.notification import NotificationPreference
+
+    enabled_keys: list[str] = body.get("enabled_keys", [])
+
+    await db.execute(
+        delete(NotificationPreference).where(
+            NotificationPreference.user_id == current_user.id
+        )
+    )
+    for key in set(enabled_keys):
+        db.add(NotificationPreference(user_id=current_user.id, pref_key=key))
     await db.commit()
 
 
