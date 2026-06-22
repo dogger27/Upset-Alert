@@ -159,22 +159,23 @@
   box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.18), 0 1px 3px rgba(0,0,0,0.08);
 }
 
-.live-badge {
+.in-progress-badge {
   position: absolute;
-  top: -9px;
+  top: 50%;
   left: 50%;
-  transform: translateX(-50%);
-  background: #16a34a;
-  color: #fff;
-  font-size: 0.48rem;
+  transform: translate(-50%, -50%);
+  background: #fff;
+  border: 1px solid #16a34a;
+  color: #16a34a;
+  font-size: 0.46rem;
   font-weight: 800;
-  letter-spacing: 0.09em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  padding: 1px 6px;
+  padding: 1px 7px;
   border-radius: 10px;
   white-space: nowrap;
   line-height: 1.5;
-  z-index: 5;
+  z-index: 3;
   pointer-events: none;
 }
 
