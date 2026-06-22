@@ -10,16 +10,15 @@ export default function Register() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const { register, login } = useAuth()
-  const navigate = useNavigate()
+  const [registered, setRegistered] = useState(false)
+  const { register } = useAuth()
 
   const submit = async (e) => {
     e.preventDefault()
     setError(''); setLoading(true)
     try {
       await register(email, username, fullName, password)
-      await login(email, password)
-      navigate('/')
+      setRegistered(true)
     } catch (err) {
       setError(err.response?.data?.detail || 'Registration failed')
     } finally {
@@ -30,22 +29,35 @@ export default function Register() {
   return (
     <div className="auth-page">
       <div className="auth-card card">
-        <h2>Create account</h2>
-        <form onSubmit={submit}>
-          <label>User Name</label>
-          <input value={username} onChange={e => setUsername(e.target.value)} required placeholder="Your unique handle" />
-          <label>Full Name</label>
-          <input value={fullName} onChange={e => setFullName(e.target.value)} required placeholder="Your full name" />
-          <label>Email</label>
-          <input type="email" value={email} onChange={e => setEmail(e.target.value)} required />
-          <label>Password</label>
-          <input type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={8} />
-          {error && <p className="error">{error}</p>}
-          <button type="submit" className="btn-primary" disabled={loading}>
-            {loading ? 'Creating…' : 'Create account'}
-          </button>
-        </form>
-        <p className="auth-footer">Already have an account? <Link to="/login">Log in</Link></p>
+        {registered ? (
+          <>
+            <h2>Check your email</h2>
+            <p style={{ color: 'var(--text-muted)', lineHeight: 1.6 }}>
+              We sent a verification link to <strong>{email}</strong>.
+              Click it to activate your account.
+            </p>
+            <p className="auth-footer"><Link to="/login">Back to log in</Link></p>
+          </>
+        ) : (
+          <>
+            <h2>Create account</h2>
+            <form onSubmit={submit} autoComplete="on">
+              <label>Username</label>
+              <input autoComplete="username" value={username} onChange={e => setUsername(e.target.value)} required placeholder="Your unique handle" />
+              <label>Full Name</label>
+              <input autoComplete="name" value={fullName} onChange={e => setFullName(e.target.value)} required placeholder="Your full name" />
+              <label>Email</label>
+              <input type="email" autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} required />
+              <label>Password</label>
+              <input type="password" autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} required minLength={8} />
+              {error && <p className="error">{error}</p>}
+              <button type="submit" className="btn-primary" disabled={loading}>
+                {loading ? 'Creating…' : 'Create account'}
+              </button>
+            </form>
+            <p className="auth-footer">Already have an account? <Link to="/login">Log in</Link></p>
+          </>
+        )}
       </div>
     </div>
   )

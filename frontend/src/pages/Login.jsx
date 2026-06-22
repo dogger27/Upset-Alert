@@ -31,11 +31,11 @@ export default function Login() {
       <div className="auth-card card">
         <h2>Log in</h2>
         {successMessage && <p style={{ color: 'var(--success, green)', marginBottom: '0.5rem' }}>{successMessage}</p>}
-        <form onSubmit={submit}>
+        <form onSubmit={submit} autoComplete="on">
           <label>Email</label>
-          <input type="email" value={email} onChange={e => setEmail(e.target.value)} required />
+          <input type="email" autoComplete="username" value={email} onChange={e => setEmail(e.target.value)} required />
           <label>Password</label>
-          <input type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+          <input type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} required />
           {error && <p className="error">{error}</p>}
           <button type="submit" className="btn-primary" disabled={loading}>
             {loading ? 'Logging in…' : 'Log in'}
