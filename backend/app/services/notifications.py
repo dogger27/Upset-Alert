@@ -43,6 +43,8 @@ async def notify_round_complete(tournament_id: int, round_number: int) -> None:
 
         round_name = tournament.round_name(round_number)
         is_final_round = round_number == tournament.num_rounds
+        t_name = tournament.name
+        t_year = tournament.year
         m_res = await db.execute(
             select(Match)
             .options(selectinload(Match.player1), selectinload(Match.player2), selectinload(Match.winner))
@@ -171,11 +173,11 @@ async def notify_round_complete(tournament_id: int, round_number: int) -> None:
             continue
         try:
             await send_round_complete_notification(
-                email, tournament.name, tournament.year, tournament_id, round_name, groups,
+                email, t_name, t_year, tournament_id, round_name, groups,
             )
             logger.info(
                 "Round-complete email sent to user %d (%d group(s)) — %d %s %s",
-                uid, len(groups), tournament.year, tournament.name, round_name,
+                uid, len(groups), t_year, t_name, round_name,
             )
         except Exception as exc:
             logger.warning("Failed to send round-complete email to user %d: %s", uid, exc)
