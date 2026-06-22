@@ -45,11 +45,11 @@ export default function Register() {
             <h2>Create account</h2>
             <form onSubmit={submit} autoComplete="on">
               <label>Username</label>
-              <input autoComplete="username" value={username} onChange={e => setUsername(e.target.value)} required placeholder="Your unique handle" />
+              <input autoComplete="nickname" value={username} onChange={e => setUsername(e.target.value)} required placeholder="Your unique handle" />
               <label>Full Name</label>
               <input autoComplete="name" value={fullName} onChange={e => setFullName(e.target.value)} required placeholder="Your full name" />
               <label>Email</label>
-              <input type="email" autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} required />
+              <input type="email" autoComplete="username" value={email} onChange={e => setEmail(e.target.value)} required />
               <label>Password</label>
               <input type="password" autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} required minLength={8} />
               <label>Confirm Password</label>
