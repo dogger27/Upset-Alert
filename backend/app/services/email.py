@@ -1,0 +1,140 @@
+import asyncio
+import logging
+from typing import Optional
+
+import resend
+
+from app.core.config import settings
+
+logger = logging.getLogger(__name__)
+
+FROM = "Upset Alert <info@upsetalert.ca>"
+BASE_URL = "https://upsetalert.ca"
+
+
+def _setup():
+    resend.api_key = settings.resend_api_key
+
+
+def _send(params: resend.Emails.SendParams) -> None:
+    _setup()
+    try:
+        resend.Emails.send(params)
+    except Exception as e:
+        logger.error("Failed to send email to %s: %s", params.get("to"), e)
+
+
+async def send_async(params: resend.Emails.SendParams) -> None:
+    await asyncio.to_thread(_send, params)
+
+
+async def send_welcome(email: str, username: str) -> None:
+    await send_async({
+        "from": FROM,
+        "to": [email],
+        "subject": "Welcome to Upset Alert!",
+        "html": f"""
+        <div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:32px 24px">
+          <h1 style="font-size:24px;margin-bottom:8px">Welcome to Upset Alert, {username}!</h1>
+          <p style="color:#444;line-height:1.6">
+            You're all set to start picking upsets and climbing the leaderboard.
+            Head over to the site to join a league and make your first picks.
+          </p>
+          <a href="{BASE_URL}" style="display:inline-block;margin-top:24px;padding:12px 24px;
+             background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
+            Go to Upset Alert
+          </a>
+          <p style="margin-top:32px;font-size:13px;color:#888">
+            Questions? Reply to this email and we'll get back to you.
+          </p>
+        </div>
+        """,
+    })
+
+
+async def send_password_reset(email: str, reset_token: str) -> None:
+    reset_url = f"{BASE_URL}/reset-password?token={reset_token}"
+    await send_async({
+        "from": FROM,
+        "to": [email],
+        "subject": "Reset your Upset Alert password",
+        "html": f"""
+        <div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:32px 24px">
+          <h1 style="font-size:24px;margin-bottom:8px">Reset your password</h1>
+          <p style="color:#444;line-height:1.6">
+            Click the button below to reset your password. This link expires in 1 hour.
+          </p>
+          <a href="{reset_url}" style="display:inline-block;margin-top:24px;padding:12px 24px;
+             background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
+            Reset Password
+          </a>
+          <p style="margin-top:24px;font-size:13px;color:#888">
+            If you didn't request this, you can safely ignore this email.
+          </p>
+        </div>
+        """,
+    })
+
+
+async def send_draw_notification(emails: list[str], tournament_name: str, tournament_id: int) -> None:
+    tournament_url = f"{BASE_URL}/tournaments/{tournament_id}"
+    await send_async({
+        "from": FROM,
+        "to": emails,
+        "subject": f"Draw released: {tournament_name}",
+        "html": f"""
+        <div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:32px 24px">
+          <h1 style="font-size:24px;margin-bottom:8px">The draw is live!</h1>
+          <p style="color:#444;line-height:1.6">
+            The draw for <strong>{tournament_name}</strong> has been released.
+            Head over to make your picks before play begins.
+          </p>
+          <a href="{tournament_url}" style="display:inline-block;margin-top:24px;padding:12px 24px;
+             background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
+            Make Your Picks
+          </a>
+        </div>
+        """,
+    })
+
+
+async def send_round_standings(
+    emails: list[str],
+    tournament_name: str,
+    tournament_id: int,
+    round_name: str,
+    standings: list[dict],
+) -> None:
+    tournament_url = f"{BASE_URL}/tournaments/{tournament_id}"
+    rows = "".join(
+        f"<tr><td style='padding:8px 12px'>{i+1}</td>"
+        f"<td style='padding:8px 12px'>{s['username']}</td>"
+        f"<td style='padding:8px 12px;text-align:right'>{s['score']}</td></tr>"
+        for i, s in enumerate(standings[:10])
+    )
+    await send_async({
+        "from": FROM,
+        "to": emails,
+        "subject": f"{tournament_name} — {round_name} standings",
+        "html": f"""
+        <div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:32px 24px">
+          <h1 style="font-size:24px;margin-bottom:8px">{round_name} complete</h1>
+          <p style="color:#444;margin-bottom:16px">Here are the current standings for
+            <strong>{tournament_name}</strong>:</p>
+          <table style="width:100%;border-collapse:collapse;font-size:14px">
+            <thead>
+              <tr style="background:#f3f4f6">
+                <th style="padding:8px 12px;text-align:left">#</th>
+                <th style="padding:8px 12px;text-align:left">Player</th>
+                <th style="padding:8px 12px;text-align:right">Score</th>
+              </tr>
+            </thead>
+            <tbody>{rows}</tbody>
+          </table>
+          <a href="{tournament_url}" style="display:inline-block;margin-top:24px;padding:12px 24px;
+             background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
+            View Full Standings
+          </a>
+        </div>
+        """,
+    })

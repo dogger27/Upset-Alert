@@ -55,7 +55,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",               # Vite dev server
-        "https://upsetalert.paulwiens.com",        # Production (Pages)
+        "https://upsetalert.paulwiens.com",    # Legacy production
+        "https://upsetalert.ca",               # Primary domain
+        "https://www.upsetalert.ca",           # www variant
     ],
     allow_credentials=True,
     allow_methods=["*"],
