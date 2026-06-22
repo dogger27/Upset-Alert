@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../store/auth'
 import './AuthForm.css'
 
@@ -10,6 +10,8 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const { login } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  const successMessage = location.state?.message
 
   const submit = async (e) => {
     e.preventDefault()
@@ -28,6 +30,7 @@ export default function Login() {
     <div className="auth-page">
       <div className="auth-card card">
         <h2>Log in</h2>
+        {successMessage && <p style={{ color: 'var(--success, green)', marginBottom: '0.5rem' }}>{successMessage}</p>}
         <form onSubmit={submit}>
           <label>Email</label>
           <input type="email" value={email} onChange={e => setEmail(e.target.value)} required />
@@ -38,6 +41,7 @@ export default function Login() {
             {loading ? 'Logging in…' : 'Log in'}
           </button>
         </form>
+        <p className="auth-footer"><Link to="/forgot-password">Forgot password?</Link></p>
         <p className="auth-footer">No account? <Link to="/register">Sign up</Link></p>
       </div>
     </div>

@@ -10,6 +10,8 @@ import TournamentDraw from './pages/TournamentDraw'
 import LeagueDetail from './pages/LeagueDetail'
 import Admin from './pages/Admin'
 import About from './pages/About'
+import ForgotPassword from './pages/ForgotPassword'
+import ResetPassword from './pages/ResetPassword'
 
 function RequireAuth({ children }) {
   const { user, loading } = useAuth()
@@ -41,6 +43,8 @@ export default function App() {
         <Route path="/leagues/:id" element={<LeagueDetail />} />
         <Route path="/admin" element={<RequireAdmin><Admin /></RequireAdmin>} />
         <Route path="/about" element={<About />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </>
