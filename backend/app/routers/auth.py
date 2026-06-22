@@ -4,10 +4,17 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import get_current_user
-from app.core.security import create_access_token, hash_password, verify_password
+from app.core.security import (
+    create_access_token,
+    create_password_reset_token,
+    hash_password,
+    verify_password,
+    verify_password_reset_token,
+)
 from app.database import get_db
 from app.models.user import User
 from app.schemas.user import ChangePassword, Token, UserOut, UserPublicOut, UserRegister, UserUpdate
+from app.services import email as email_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -36,6 +43,7 @@ async def register(body: UserRegister, db: AsyncSession = Depends(get_db)):
     db.add(user)
     await db.commit()
     await db.refresh(user)
+    await email_service.send_welcome(user.email, user.username)
     return user
 
 
@@ -74,6 +82,33 @@ async def update_me(
     await db.commit()
     await db.refresh(current_user)
     return current_user
+
+
+@router.post("/forgot-password", status_code=status.HTTP_204_NO_CONTENT)
+async def forgot_password(body: dict, db: AsyncSession = Depends(get_db)):
+    email = body.get("email", "").lower().strip()
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+    if user:
+        token = create_password_reset_token(user.email)
+        await email_service.send_password_reset(user.email, token)
+
+
+@router.post("/reset-password", status_code=status.HTTP_204_NO_CONTENT)
+async def reset_password(body: dict, db: AsyncSession = Depends(get_db)):
+    token = body.get("token", "")
+    new_password = body.get("password", "")
+    email = verify_password_reset_token(token)
+    if not email:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset link")
+    if len(new_password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset link")
+    user.password_hash = hash_password(new_password)
+    await db.commit()
 
 
 @router.patch("/me/password", status_code=status.HTTP_204_NO_CONTENT)
