@@ -176,6 +176,9 @@ class Match(Base):
     is_bye: Mapped[bool] = mapped_column(Integer, default=False)
     # [[p1_s1, p1_s2, ...], [p2_s1, p2_s2, ...]] — set scores as strings
     scores_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    # Live set/game scores from ESPN while match is in progress; cleared on completion.
+    # Non-null ↔ match is currently in progress.
+    live_scores_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     # pending / completed
     status: Mapped[str] = mapped_column(String, default="pending")
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

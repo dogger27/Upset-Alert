@@ -10,10 +10,16 @@ Polls ESPN ATP/WTA scoreboards every 60 seconds. Performs two jobs per cycle:
       • Emails every verified user with picks
       • SSE-broadcasts to connected browsers
 
-  JOB 2 — Match results (full tournament window)
+  JOB 2 — Live scores (full tournament window)
+    When a STATUS_IN_PROGRESS match features both players in our draw:
+      • Locates the Match record and writes current set/game scores to live_scores_json
+      • live_scores_json non-null ↔ match is in progress; cleared when match completes
+
+  JOB 3 — Match results (full tournament window)
     When a STATUS_FINAL match features both players in our draw:
       • Locates the pending Match record by player pair lookup
       • Sets winner_id + scores_json (integer set scores, no tiebreak)
+      • Clears live_scores_json
       • Wikipedia will later overwrite scores_json with tiebreak annotations
         when the EventStream or 30-min poll fires — no special handling needed
 
@@ -181,6 +187,32 @@ def _comp_live_players(comp: dict) -> list:
     ]
 
 
+def _comp_live_scores(comp: dict) -> Optional[tuple]:
+    """
+    Parse a STATUS_IN_PROGRESS competition.
+    Returns (name_a, name_b, scores_a, scores_b) where scores are current
+    set/game counts as integer strings, e.g. (["6", "4"], ["3", 2"]).
+    Returns None if either player is unknown.
+    """
+    competitors = comp.get("competitors", [])
+    if len(competitors) != 2:
+        return None
+    a, b = competitors[0], competitors[1]
+    name_a = a.get("athlete", {}).get("fullName", "")
+    name_b = b.get("athlete", {}).get("fullName", "")
+    if not name_a or not name_b or "TBD" in (name_a, name_b):
+        return None
+
+    def scores(c: dict) -> list:
+        return [
+            str(int(ls["value"]))
+            for ls in c.get("linescores", [])
+            if ls.get("value") is not None
+        ]
+
+    return name_a, name_b, scores(a), scores(b)
+
+
 def _comp_result(comp: dict) -> Optional[tuple]:
     """
     Parse a STATUS_FINAL competition.
@@ -319,7 +351,11 @@ class ESPNMonitor:
             if tid in lock_ids:
                 await self._check_lock(tournament, espn_event, pairs, tok_index)
 
-            # Job 2: match results
+            # Job 2: live scores
+            if tid in result_ids:
+                await self._sync_live(tournament, espn_event, pairs, tok_index)
+
+            # Job 3: match results
             if tid in result_ids:
                 n = await self._sync_results(tournament, espn_event, pairs, tok_index)
                 if n:
@@ -396,7 +432,72 @@ class ESPNMonitor:
             logger.info("Picks locked: %d %s — no verified users with picks", year, name)
 
     # ------------------------------------------------------------------
-    # Job 2: match results
+    # Job 2: live scores
+    # ------------------------------------------------------------------
+
+    async def _sync_live(
+        self,
+        tournament: Tournament,
+        espn_event: dict,
+        pairs: list,
+        tok_index: dict,
+    ) -> None:
+        """
+        For every STATUS_IN_PROGRESS match where both players are in our draw,
+        write current set/game counts to live_scores_json.
+        Also clears live_scores_json for any draw match that is no longer in progress
+        (e.g. it just finished and _sync_results hasn't fired yet, or it was abandoned).
+        Broadcasts if anything changed.
+        """
+        live_comps = _singles_comps(espn_event, tournament.gender, "STATUS_IN_PROGRESS")
+
+        # Map (entry_id_a, entry_id_b) → (scores_a, scores_b) for in-progress matches
+        in_progress: dict[tuple, tuple] = {}
+        for comp in live_comps:
+            result = _comp_live_scores(comp)
+            if not result:
+                continue
+            name_a, name_b, sc_a, sc_b = result
+            entry_a = _find_entry(name_a, pairs, tok_index)
+            entry_b = _find_entry(name_b, pairs, tok_index)
+            if not entry_a or not entry_b or entry_a.id == entry_b.id:
+                continue
+            in_progress[(entry_a.id, entry_b.id)] = (sc_a, sc_b)
+            in_progress[(entry_b.id, entry_a.id)] = (sc_b, sc_a)
+
+        async with AsyncSessionLocal() as db:
+            m_res = await db.execute(
+                select(Match).where(
+                    Match.tournament_id == tournament.id,
+                    Match.winner_id.is_(None),
+                    Match.player1_id.isnot(None),
+                    Match.player2_id.isnot(None),
+                    Match.is_bye == False,
+                )
+            )
+            pending = m_res.scalars().all()
+            changed = 0
+
+            for m in pending:
+                key = (m.player1_id, m.player2_id)
+                live = in_progress.get(key)
+                if live:
+                    new_val = [live[0], live[1]]
+                    if m.live_scores_json != new_val:
+                        m.live_scores_json = new_val
+                        changed += 1
+                elif m.live_scores_json is not None:
+                    # Match was live but no longer in ESPN's in-progress list
+                    m.live_scores_json = None
+                    changed += 1
+
+            if changed:
+                await db.commit()
+                from app.services import broadcaster
+                await broadcaster.publish(tournament.id)
+
+    # ------------------------------------------------------------------
+    # Job 3: match results
     # ------------------------------------------------------------------
 
     async def _sync_results(
@@ -471,6 +572,7 @@ class ESPNMonitor:
                 match.winner_id = w_entry.id
                 match.status = "completed"
                 match.completed_at = now
+                match.live_scores_json = None  # clear live indicator
                 updated += 1
 
             if updated:

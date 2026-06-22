@@ -90,7 +90,8 @@ class MatchOut(BaseModel):
     is_bye: bool
     status: str
     round_name: Optional[str] = None
-    scores: Optional[list] = None  # [[p1_s1, p1_s2, ...], [p2_s1, p2_s2, ...]]
+    scores: Optional[list] = None       # [[p1_s1, p1_s2, ...], [p2_s1, p2_s2, ...]] — final
+    live_scores: Optional[list] = None  # same shape but current partial scores while in progress
 
     model_config = {"from_attributes": True}
 

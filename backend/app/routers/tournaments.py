@@ -407,6 +407,7 @@ async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
             status=m.status,
             round_name=t.round_name(m.round_number),
             scores=m.scores_json,
+            live_scores=m.live_scores_json,
         ))
 
     t.latest_result_at = max((m.completed_at for m in matches if m.completed_at), default=None)

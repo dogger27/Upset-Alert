@@ -222,15 +222,17 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
   const p1DeadPick = mode === 'picks' && p1id != null && lossRound[p1id] != null && lossRound[p1id] < match.round_number
   const p2DeadPick = mode === 'picks' && p2id != null && lossRound[p2id] != null && lossRound[p2id] < match.round_number
 
-  const scores = match.scores
+  const isLive = match.live_scores != null
+  // Live scores take priority; final scores shown only in live mode
+  const scores = isLive ? match.live_scores : match.scores
   const p1Scores = scores?.[0] ?? null
   const p2Scores = scores?.[1] ?? null
-  const ret = hasRetirement(scores)
+  const ret = hasRetirement(match.scores)  // retirement markers only on final scores
 
   const p1 = p1id != null ? playerById[p1id] : null
   const p2 = p2id != null ? playerById[p2id] : null
   const showTypeSlot = playerNeedsTypeSlot(p1) || playerNeedsTypeSlot(p2)
-  const showScores = mode === 'live'
+  const showScores = mode === 'live' || isLive
 
   // H2H strip: both players must have TE slugs (works in live and picks mode)
   const h2hAvailable = !!p1?.te_slug && !!p2?.te_slug
@@ -270,9 +272,11 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
         'correct-pick': correctPick,
         'wrong-pick': wrongPick,
         'match-box--h2h': h2hAvailable,
+        'match-box--live': isLive,
       })}
       style={style}
     >
+      {isLive && <span className="live-badge">● Live</span>}
       {isUpsetPick && (
         <span className="upset-bell">
           🔔
