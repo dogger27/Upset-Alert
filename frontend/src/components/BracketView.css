@@ -155,8 +155,8 @@
 }
 
 .match-box--live {
-  border-color: #16a34a;
-  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.18), 0 1px 3px rgba(0,0,0,0.08);
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18), 0 1px 3px rgba(0,0,0,0.08);
 }
 
 .in-progress-badge {
@@ -164,9 +164,9 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: #fff;
-  border: 1px solid #16a34a;
-  color: #16a34a;
+  background: #eff6ff;
+  border: 1px solid #2563eb;
+  color: #1d4ed8;
   font-size: 0.46rem;
   font-weight: 800;
   letter-spacing: 0.08em;
