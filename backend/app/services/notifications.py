@@ -25,6 +25,148 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# Round-complete notification
+# ---------------------------------------------------------------------------
+
+async def notify_round_complete(tournament_id: int, round_number: int) -> None:
+    """
+    For every participant who opted into 'round_standings', send ONE email
+    showing their standing after this round in every qualifying group.
+    Groups / global with fewer than 2 participants are excluded.
+    """
+    from app.services.email import send_round_complete_notification
+
+    async with AsyncSessionLocal() as db:
+        tournament = await db.get(Tournament, tournament_id)
+        if not tournament:
+            return
+
+        round_name = tournament.round_name(round_number)
+
+        # All completed matches up to and including this round
+        m_res = await db.execute(
+            select(Match)
+            .options(selectinload(Match.player1), selectinload(Match.player2), selectinload(Match.winner))
+            .where(Match.tournament_id == tournament_id, Match.status == "completed")
+        )
+        completed_matches = m_res.scalars().all()
+
+        # Total non-bye matches in the draw
+        total_res = await db.execute(
+            select(func.count()).where(
+                Match.tournament_id == tournament_id,
+                Match.is_bye == False,
+            )
+        )
+        total_matches = total_res.scalar_one()
+        if total_matches == 0:
+            return
+
+        # Predictions
+        pred_res = await db.execute(
+            select(UserPrediction).where(
+                UserPrediction.tournament_id == tournament_id,
+                UserPrediction.predicted_winner_id.isnot(None),
+            )
+        )
+        all_preds = pred_res.scalars().all()
+
+        preds_by_user: dict[int, list] = defaultdict(list)
+        for p in all_preds:
+            preds_by_user[p.user_id].append(p)
+
+        eligible = {uid for uid, preds in preds_by_user.items() if len(preds) >= total_matches}
+        if not eligible:
+            return
+
+        # Users opted into round_standings who participated
+        opted_res = await db.execute(
+            select(NotificationPreference.user_id)
+            .join(User, User.id == NotificationPreference.user_id)
+            .where(
+                NotificationPreference.pref_key == "round_standings",
+                NotificationPreference.user_id.in_(eligible),
+                User.email_verified == True,
+            )
+        )
+        to_notify = {r[0] for r in opted_res.all()}
+        if not to_notify:
+            return
+
+        # Global scores
+        global_scores = {
+            uid: score_user(uid, preds_by_user[uid], completed_matches, tournament, None)
+            for uid in eligible
+        }
+        global_ranked = rank_users(list(global_scores.values()))
+        global_rank_of = {s.user_id: i + 1 for i, s in enumerate(global_ranked)}
+
+        # Per-league scores (≥2 participants only)
+        lg_res = await db.execute(
+            select(League).options(selectinload(League.members))
+        )
+        all_leagues = lg_res.scalars().all()
+
+        league_data: dict[int, dict] = {}
+        for lg in all_leagues:
+            member_ids = {m.user_id for m in lg.members}
+            participants = eligible & member_ids
+            if len(participants) < 2:
+                continue
+            lg_scores = {
+                uid: score_user(uid, preds_by_user[uid], completed_matches, tournament, None)
+                for uid in participants
+            }
+            lg_ranked = rank_users(list(lg_scores.values()))
+            league_data[lg.id] = {
+                "name":    lg.name,
+                "rank_of": {s.user_id: i + 1 for i, s in enumerate(lg_ranked)},
+                "total":   len(participants),
+                "points":  {s.user_id: s.total_points for s in lg_ranked},
+            }
+
+        user_league_ids: dict[int, list] = defaultdict(list)
+        for lg_id, data in league_data.items():
+            for uid in data["rank_of"]:
+                user_league_ids[uid].append(lg_id)
+
+        users_res = await db.execute(
+            select(User.id, User.email).where(User.id.in_(to_notify))
+        )
+        user_email = {r[0]: r[1] for r in users_res.all()}
+
+    for uid in to_notify:
+        email = user_email.get(uid)
+        if not email:
+            continue
+
+        groups = []
+        if len(eligible) >= 2:
+            groups.append(("Global", global_rank_of[uid], len(eligible), global_scores[uid].total_points))
+        for lg_id in sorted(user_league_ids.get(uid, [])):
+            data = league_data[lg_id]
+            groups.append((
+                data["name"],
+                data["rank_of"][uid],
+                data["total"],
+                data["points"][uid],
+            ))
+
+        if not groups:
+            continue
+        try:
+            await send_round_complete_notification(
+                email, tournament.name, tournament.year, tournament_id, round_name, groups,
+            )
+            logger.info(
+                "Round-complete email sent to user %d (%d group(s)) — %d %s %s",
+                uid, len(groups), tournament.year, tournament.name, round_name,
+            )
+        except Exception as exc:
+            logger.warning("Failed to send round-complete email to user %d: %s", uid, exc)
+
+
+# ---------------------------------------------------------------------------
 # Draw-released notification
 # ---------------------------------------------------------------------------
 
