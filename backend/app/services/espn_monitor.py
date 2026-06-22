@@ -37,7 +37,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.database import AsyncSessionLocal
 from app.models.tournament import DrawEntry, Match, Tournament
@@ -507,6 +507,7 @@ class ESPNMonitor:
             return 0
 
         updated = 0
+        rounds_updated: set[int] = set()
         now = datetime.now(timezone.utc)
 
         async with AsyncSessionLocal() as db:
@@ -559,10 +560,27 @@ class ESPNMonitor:
                 match.completed_at = now
                 match.live_scores_json = None  # clear live indicator
                 updated += 1
+                rounds_updated.add(match.round_number)
 
             if updated:
                 await db.commit()
                 from app.services import broadcaster
                 await broadcaster.publish(tournament.id)
+
+                # Check whether any of the rounds we just wrote results into
+                # are now fully complete; if so, fire round-standings emails.
+                for rn in rounds_updated:
+                    incomplete = await db.execute(
+                        select(func.count()).where(
+                            Match.tournament_id == tournament.id,
+                            Match.round_number == rn,
+                            Match.is_bye == False,
+                            Match.winner_id.is_(None),
+                        )
+                    )
+                    if incomplete.scalar_one() == 0:
+                        from app.services.notifications import notify_round_complete
+                        asyncio.create_task(notify_round_complete(tournament.id, rn))
+                        logger.info("Round %d complete for tournament %d — notification queued", rn, tournament.id)
 
         return updated
