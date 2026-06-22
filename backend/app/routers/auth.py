@@ -6,8 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth import get_current_user
 from app.core.security import (
     create_access_token,
+    create_email_verification_token,
     create_password_reset_token,
     hash_password,
+    verify_email_verification_token,
     verify_password,
     verify_password_reset_token,
 )
@@ -43,7 +45,8 @@ async def register(body: UserRegister, db: AsyncSession = Depends(get_db)):
     db.add(user)
     await db.commit()
     await db.refresh(user)
-    await email_service.send_welcome(user.email, user.username)
+    token = create_email_verification_token(user.email)
+    await email_service.send_verification(user.email, user.username, token)
     return user
 
 
@@ -56,6 +59,8 @@ async def login(
     user = result.scalar_one_or_none()
     if not user or not verify_password(form.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Incorrect email or password")
+    if not user.email_verified:
+        raise HTTPException(status_code=403, detail="Please verify your email address before logging in")
     token = create_access_token(str(user.id))
     return Token(access_token=token)
 
@@ -82,6 +87,21 @@ async def update_me(
     await db.commit()
     await db.refresh(current_user)
     return current_user
+
+
+@router.get("/verify-email", status_code=status.HTTP_204_NO_CONTENT)
+async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
+    email = verify_email_verification_token(token)
+    if not email:
+        raise HTTPException(status_code=400, detail="Invalid or expired verification link")
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid or expired verification link")
+    if not user.email_verified:
+        user.email_verified = True
+        await db.commit()
+        await email_service.send_welcome(user.email, user.username)
 
 
 @router.post("/forgot-password", status_code=status.HTTP_204_NO_CONTENT)
