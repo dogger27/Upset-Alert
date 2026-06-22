@@ -89,14 +89,31 @@ async def _refresh_active_tournaments(force_refresh: bool = False) -> None:
         logger.info("Daily refresh: %d tournaments to check", len(tournaments))
         for t in tournaments:
             try:
+                prev_draw_released = t.draw_released_direct_at
+                prev_status = t.status
+
                 await _do_scrape(t, db, force_refresh=force_refresh)
                 await db.commit()
                 logger.info("Refreshed %s %s (%s)", t.year, t.name, t.gender)
+
                 # Prefetch H2H and DOB for any new matchups/players (uses own sessions)
                 from app.services.h2h import prefetch_h2h_for_draw
                 from app.services.rankings import prefetch_dob_for_draw
                 await prefetch_h2h_for_draw(t.id)
                 await prefetch_dob_for_draw(t.id)
+
+                # Fire notifications as background tasks so they don't block the scrape loop
+                from app.services.notifications import notify_draw_released, notify_tournament_complete
+                just_released = prev_draw_released is None and t.draw_released_direct_at is not None
+                just_completed = prev_status != "completed" and t.status == "completed"
+                if just_released:
+                    asyncio.create_task(notify_draw_released(
+                        t.id, t.category or "", t.gender, t.year, t.name,
+                    ))
+                if just_completed:
+                    asyncio.create_task(notify_tournament_complete(
+                        t.id, t.name, t.year, t.category or "", t.num_rounds, t.draw_size,
+                    ))
             except Exception as exc:
                 logger.warning("Failed to refresh %s: %s", t.wiki_page_title, exc)
                 await db.rollback()
