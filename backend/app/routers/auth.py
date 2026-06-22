@@ -95,11 +95,21 @@ async def update_me(
     return current_user
 
 
+_DEFAULT_NOTIF_PREFS = [
+    "draw_open:Grand Slam:M",
+    "draw_open:Grand Slam:F",
+    "tournament_end",
+]
+
+
 async def _mark_verified(user: User, db: AsyncSession) -> None:
     """Set email_verified and clear the code, then send welcome email."""
+    from app.models.notification import NotificationPreference
     user.email_verified = True
     user.verification_code = None
     user.verification_code_expires = None
+    for key in _DEFAULT_NOTIF_PREFS:
+        db.add(NotificationPreference(user_id=user.id, pref_key=key))
     await db.commit()
     await email_service.send_welcome(user.email, user.username)
     await email_service.send_new_user_notification(user.email, user.username)

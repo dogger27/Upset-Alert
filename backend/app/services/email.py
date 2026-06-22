@@ -162,6 +162,50 @@ async def send_draw_notification(emails: list[str], tournament_name: str, tourna
     })
 
 
+async def send_tournament_complete_notification(
+    email: str,
+    tournament_name: str,
+    year: int,
+    tournament_id: int,
+    groups: list[tuple],  # [(group_name, rank, total_participants, points), ...]
+) -> None:
+    """One email per user covering their standing in every group they participated in."""
+    tournament_url = f"{BASE_URL}/tournaments/{tournament_id}"
+    rows = "".join(
+        f"<tr>"
+        f"<td style='padding:8px 12px'>{name}</td>"
+        f"<td style='padding:8px 12px;text-align:center'>#{rank}&nbsp;/&nbsp;{total}</td>"
+        f"<td style='padding:8px 12px;text-align:right'>{int(pts)}&nbsp;pts</td>"
+        f"</tr>"
+        for name, rank, total, pts in groups
+    )
+    await send_async({
+        "from": FROM,
+        "to": [email],
+        "subject": f"{tournament_name} {year} — your final standings",
+        "html": f"""
+        <div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:32px 24px">
+          <h1 style="font-size:24px;margin-bottom:8px">{tournament_name} {year} is complete!</h1>
+          <p style="color:#444;line-height:1.6">Here are your final standings across all groups:</p>
+          <table style="width:100%;border-collapse:collapse;font-size:14px;margin:16px 0">
+            <thead>
+              <tr style="background:#f3f4f6">
+                <th style="padding:8px 12px;text-align:left">Group</th>
+                <th style="padding:8px 12px;text-align:center">Rank</th>
+                <th style="padding:8px 12px;text-align:right">Points</th>
+              </tr>
+            </thead>
+            <tbody>{rows}</tbody>
+          </table>
+          <a href="{tournament_url}" style="display:inline-block;margin-top:8px;padding:12px 24px;
+             background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
+            View Draw &amp; Standings
+          </a>
+        </div>
+        """,
+    })
+
+
 async def send_round_standings(
     emails: list[str],
     tournament_name: str,

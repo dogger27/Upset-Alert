@@ -3,12 +3,14 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../store/auth'
 import './Navbar.css'
 
-const DRAW_CATS = [
-  { key: 'draw_open:Grand Slam:M', label: 'Grand Slam Men' },
-  { key: 'draw_open:Grand Slam:F', label: 'Grand Slam Women' },
+const DRAW_CATS_MEN = [
+  { key: 'draw_open:Grand Slam:M', label: 'Grand Slam' },
   { key: 'draw_open:ATP 1000',     label: 'ATP 1000' },
   { key: 'draw_open:ATP 500',      label: 'ATP 500' },
   { key: 'draw_open:ATP 250',      label: 'ATP 250' },
+]
+const DRAW_CATS_WOMEN = [
+  { key: 'draw_open:Grand Slam:F', label: 'Grand Slam' },
   { key: 'draw_open:WTA 1000',     label: 'WTA 1000' },
   { key: 'draw_open:WTA 500',      label: 'WTA 500' },
   { key: 'draw_open:WTA 250',      label: 'WTA 250' },
@@ -75,7 +77,6 @@ export default function Navbar() {
       const { default: client } = await import('../api/client')
       const { data } = await client.get('/auth/me/notifications')
       setNotifSelected(new Set(data.enabled_keys))
-      setNotifLeagues(data.leagues)
     } catch {
       setNotifError('Failed to load preferences')
     } finally {
@@ -204,60 +205,60 @@ export default function Navbar() {
                         <>
                           <div className="notif-section">
                             <p className="notif-section-title">Draw open for selections</p>
-                            {DRAW_CATS.map(cat => (
-                              <label key={cat.key} className="notif-check-row">
-                                <input
-                                  type="checkbox"
-                                  checked={notifSelected.has(cat.key)}
-                                  onChange={() => toggleNotif(cat.key)}
-                                />
-                                {cat.label}
-                              </label>
-                            ))}
+                            <div className="notif-two-col">
+                              <div className="notif-col">
+                                <p className="notif-col-heading">Men</p>
+                                {DRAW_CATS_MEN.map(cat => (
+                                  <label key={cat.key} className="notif-check-row">
+                                    <input
+                                      type="checkbox"
+                                      checked={notifSelected.has(cat.key)}
+                                      onChange={() => toggleNotif(cat.key)}
+                                    />
+                                    {cat.label}
+                                  </label>
+                                ))}
+                              </div>
+                              <div className="notif-col">
+                                <p className="notif-col-heading">Women</p>
+                                {DRAW_CATS_WOMEN.map(cat => (
+                                  <label key={cat.key} className="notif-check-row">
+                                    <input
+                                      type="checkbox"
+                                      checked={notifSelected.has(cat.key)}
+                                      onChange={() => toggleNotif(cat.key)}
+                                    />
+                                    {cat.label}
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
                           </div>
 
                           <div className="notif-section">
                             <p className="notif-section-title">Round standings email</p>
+                            <p className="notif-section-desc">After each completed round — covers all groups you're in</p>
                             <label className="notif-check-row">
                               <input
                                 type="checkbox"
-                                checked={notifSelected.has('round_standings:global')}
-                                onChange={() => toggleNotif('round_standings:global')}
+                                checked={notifSelected.has('round_standings')}
+                                onChange={() => toggleNotif('round_standings')}
                               />
-                              Global
+                              Enabled
                             </label>
-                            {notifLeagues.map(lg => (
-                              <label key={lg.id} className="notif-check-row">
-                                <input
-                                  type="checkbox"
-                                  checked={notifSelected.has(`round_standings:league:${lg.id}`)}
-                                  onChange={() => toggleNotif(`round_standings:league:${lg.id}`)}
-                                />
-                                {lg.name}
-                              </label>
-                            ))}
                           </div>
 
                           <div className="notif-section">
                             <p className="notif-section-title">Tournament complete standings</p>
+                            <p className="notif-section-desc">When a tournament ends — covers all groups you're in</p>
                             <label className="notif-check-row">
                               <input
                                 type="checkbox"
-                                checked={notifSelected.has('tournament_end:global')}
-                                onChange={() => toggleNotif('tournament_end:global')}
+                                checked={notifSelected.has('tournament_end')}
+                                onChange={() => toggleNotif('tournament_end')}
                               />
-                              Global
+                              Enabled
                             </label>
-                            {notifLeagues.map(lg => (
-                              <label key={lg.id} className="notif-check-row">
-                                <input
-                                  type="checkbox"
-                                  checked={notifSelected.has(`tournament_end:league:${lg.id}`)}
-                                  onChange={() => toggleNotif(`tournament_end:league:${lg.id}`)}
-                                />
-                                {lg.name}
-                              </label>
-                            ))}
                           </div>
 
                           {notifError && <p className="profile-edit-error" style={{ padding: '0 1rem' }}>{notifError}</p>}

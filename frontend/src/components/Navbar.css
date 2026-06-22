@@ -287,7 +287,14 @@
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-muted, #6b7280);
+  margin-bottom: 0.2rem;
+}
+
+.notif-section-desc {
+  font-size: 0.75rem;
+  color: var(--text-muted, #6b7280);
   margin-bottom: 0.5rem;
+  font-style: italic;
 }
 
 .notif-check-row {
@@ -306,4 +313,19 @@
   height: 14px;
   cursor: pointer;
   accent-color: var(--green-mid, #4a7c59);
+}
+
+.notif-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 0.5rem;
+}
+
+.notif-col-heading {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-muted, #6b7280);
+  margin-bottom: 0.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
