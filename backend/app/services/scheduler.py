@@ -13,11 +13,13 @@ from sqlalchemy import select
 
 from app.database import AsyncSessionLocal
 from app.models.tournament import Tournament
+from app.services.espn_monitor import ESPNMonitor
 from app.services.eventstream import EventStreamListener
 
 logger = logging.getLogger(__name__)
 scheduler = AsyncIOScheduler()
 eventstream = EventStreamListener()
+espn_monitor = ESPNMonitor()
 
 
 async def _auto_discover_tournaments() -> None:
@@ -237,6 +239,7 @@ def start_scheduler() -> None:
     logger.info("EventStreams listener started for real-time draw updates")
     logger.info("Subscription sync scheduled (every 5 min)")
     asyncio.create_task(eventstream.start())
+    asyncio.create_task(espn_monitor.start())
     # Subscribe immediately on startup so EventStreams catches edits from the
     # first second — don't wait up to 5 min for the interval job to fire.
     asyncio.create_task(_sync_subscriptions())
@@ -253,4 +256,5 @@ def stop_scheduler() -> None:
     import asyncio
 
     asyncio.create_task(eventstream.stop())
+    espn_monitor.stop()
     scheduler.shutdown(wait=False)

@@ -67,6 +67,8 @@ async def _migrate(conn):
         "ALTER TABLE players ADD COLUMN date_of_birth DATE",
         "ALTER TABLE te_players ADD COLUMN date_of_birth DATE",
         "ALTER TABLE players RENAME TO draw_entries",
+        "ALTER TABLE tournaments ADD COLUMN picks_locked_at DATETIME",
+        "ALTER TABLE te_players ADD COLUMN elo INTEGER",
     ]
     for sql in migrations:
         try:
