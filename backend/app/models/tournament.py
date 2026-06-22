@@ -73,39 +73,47 @@ class Tournament(Base):
         Status progression: upcoming → open → active → completed
 
         - upcoming:  no draw data yet
-        - open:      DA draw published, closing time not yet reached
-        - active:    closing time passed, or scraper detected match results
+        - open:      draw published, closing time not yet reached
+        - active:    matches underway (scraper confirmed) or safely past start date
         - completed: scraper detected final winner, or 14-day safety fallback
         """
         if self.status == "completed":
-            # Stay active through the end_date day; only flip to completed the day after
             if self.end_date and date.today() <= self.end_date:
                 return "active"
             return "completed"
 
         today = date.today()
+        now = datetime.now(timezone.utc)
 
         # 14-day safety fallback
         if self.start_date and (today - self.start_date).days > 14:
             return "completed"
 
-        # Closing time passed → active, but only once the tournament has actually started.
-        # If closing_time passed but start_date is still in the future, remain "open"
-        # (selections locked, but matches haven't begun — qualifying vs main draw gap).
         close = self.closing_time
-        if close:
-            now = datetime.now(timezone.utc)
-            c = close if close.tzinfo else close.replace(tzinfo=timezone.utc)
-            if now >= c and (not self.start_date or today >= self.start_date):
-                return "active"
+        c = close.replace(tzinfo=timezone.utc) if (close and not close.tzinfo) else close
 
-        # DA draw published → open, unless the start date has arrived and the
-        # scraper already detected match results (closing_time not yet set)
+        # Closing time passed AND we are past the start date → active.
+        # Do NOT fire this on the start date itself: wait for the scraper to
+        # confirm results, so picks-locked-but-no-matches-yet doesn't show "Active".
+        if c and now >= c and self.start_date and today > self.start_date:
+            return "active"
+
         if self.draw_released_direct_at:
             if self.start_date and (self.start_date - today).days > 30:
                 return "upcoming"
-            if self.status == "active" and self.start_date and today >= self.start_date and not close:
+
+            if self.status == "active" and self.start_date and today >= self.start_date:
+                if today > self.start_date:
+                    # Past start date: always trust the scraper
+                    return "active"
+                if c is not None and now >= c:
+                    # On start date: trust scraper only once picks are locked
+                    return "active"
+
+            # Fallback: draw released and we're past the start date
+            if self.start_date and today > self.start_date:
                 return "active"
+
             return "open"
 
         return "upcoming"
