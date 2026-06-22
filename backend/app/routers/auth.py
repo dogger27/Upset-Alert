@@ -1,3 +1,6 @@
+import secrets
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
@@ -42,11 +45,14 @@ async def register(body: UserRegister, db: AsyncSession = Depends(get_db)):
         display_name=body.full_name,
         password_hash=hash_password(body.password),
     )
+    code = f"{secrets.randbelow(1000000):06d}"
+    user.verification_code = code
+    user.verification_code_expires = datetime.now(timezone.utc) + timedelta(hours=24)
     db.add(user)
     await db.commit()
     await db.refresh(user)
     token = create_email_verification_token(user.email)
-    await email_service.send_verification(user.email, user.username, token)
+    await email_service.send_verification(user.email, user.username, token, code)
     return user
 
 
@@ -89,6 +95,15 @@ async def update_me(
     return current_user
 
 
+async def _mark_verified(user: User, db: AsyncSession) -> None:
+    """Set email_verified and clear the code, then send welcome email."""
+    user.email_verified = True
+    user.verification_code = None
+    user.verification_code_expires = None
+    await db.commit()
+    await email_service.send_welcome(user.email, user.username)
+
+
 @router.get("/verify-email", status_code=status.HTTP_204_NO_CONTENT)
 async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
     email = verify_email_verification_token(token)
@@ -99,9 +114,23 @@ async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=400, detail="Invalid or expired verification link")
     if not user.email_verified:
-        user.email_verified = True
-        await db.commit()
-        await email_service.send_welcome(user.email, user.username)
+        await _mark_verified(user, db)
+
+
+@router.post("/verify-email-code", status_code=status.HTTP_204_NO_CONTENT)
+async def verify_email_code(body: dict, db: AsyncSession = Depends(get_db)):
+    email = body.get("email", "").lower().strip()
+    code = body.get("code", "").strip()
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+    invalid = HTTPException(status_code=400, detail="Invalid or expired code")
+    if not user or user.email_verified:
+        raise invalid
+    if not user.verification_code or user.verification_code != code:
+        raise invalid
+    if not user.verification_code_expires or datetime.now(timezone.utc) > user.verification_code_expires:
+        raise invalid
+    await _mark_verified(user, db)
 
 
 @router.post("/forgot-password", status_code=status.HTTP_204_NO_CONTENT)
