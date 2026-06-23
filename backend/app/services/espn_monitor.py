@@ -156,10 +156,11 @@ async def _fetch_events(gender: str) -> list:
             resp.raise_for_status()
             return resp.json().get("events", [])
     except Exception as exc:
+        err_msg = str(exc) or type(exc).__name__
         logger.warning("ESPN %s fetch failed: %s", gender, exc)
         from app.services.system_log import app_log
-        await app_log("error", "espn", f"ESPN {gender} API failed: {exc}",
-                      {"gender": gender, "error": str(exc)},
+        await app_log("error", "espn", f"ESPN {gender} API failed: {err_msg}",
+                      {"gender": gender, "error": err_msg, "exc_type": type(exc).__name__},
                       dedup_key=f"espn_api_fail_{gender}", dedup_hours=2)
         return []
 
@@ -405,7 +406,7 @@ class ESPNMonitor:
 
     async def _on_match_start(self, tournament_id: int, trigger_name: str) -> None:
         from app.services import broadcaster
-        from app.services.email import send_match_start_notification
+        from app.services.notifications import notify_match_start
 
         now = datetime.now(timezone.utc)
 
@@ -421,7 +422,7 @@ class ESPNMonitor:
 
         await broadcaster.publish(tournament_id)
 
-        await send_match_start_notification(["pdwiens@gmail.com"], name, year, tid)
+        asyncio.create_task(notify_match_start(tid, name, year))
         logger.info(
             "Picks locked: %d %s — trigger: %s",
             year, name, trigger_name,

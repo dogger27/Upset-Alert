@@ -25,7 +25,6 @@ _LOGO_HEADER = """<table width="100%" cellpadding="0" cellspacing="0" border="0"
           </td>
         </tr>
       </table>
-      <p style="margin:12px 0 0;color:#e8a87c;font-family:sans-serif;font-weight:900;font-size:15px;letter-spacing:0.12em;text-transform:uppercase">Upset Alert</p>
     </td>
   </tr>
 </table>"""

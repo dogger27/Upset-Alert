@@ -185,6 +185,36 @@ async def notify_round_complete(tournament_id: int, round_number: int) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Match-start notification
+# ---------------------------------------------------------------------------
+
+async def notify_match_start(tournament_id: int, name: str, year: int) -> None:
+    """Email all users opted-in to 'match_start' for this tournament."""
+    from app.services.email import send_match_start_notification
+    from app.services.system_log import app_log
+
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(User.email)
+            .join(NotificationPreference, NotificationPreference.user_id == User.id)
+            .where(
+                NotificationPreference.pref_key == "match_start",
+                User.email_verified == True,
+            )
+        )
+        emails = [r[0] for r in result.all()]
+
+    if not emails:
+        logger.debug("notify_match_start: no opted-in users for tournament %d", tournament_id)
+        return
+
+    await send_match_start_notification(emails, name, year, tournament_id)
+    await app_log("info", "notifications",
+                  f"Match-start email sent to {len(emails)} user(s) for {year} {name}",
+                  {"tournament_id": tournament_id, "recipient_count": len(emails)})
+
+
+# ---------------------------------------------------------------------------
 # Draw-released notification
 # ---------------------------------------------------------------------------
 
