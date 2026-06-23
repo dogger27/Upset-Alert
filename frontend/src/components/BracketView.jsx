@@ -447,6 +447,7 @@ export default function BracketView({ tournament, matches, players, picks, onPic
         player1={h2hPlayers.p1}
         player2={h2hPlayers.p2}
         tournSurface={tournament?.surface}
+        tournGender={tournament?.gender}
         onClose={() => setH2HPlayers(null)}
       />
     )}
