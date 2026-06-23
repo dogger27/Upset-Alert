@@ -5,7 +5,9 @@ Background scheduler:
 - Dynamic subscriptions: subscribes on tournament add, unsubscribes on completion
 """
 
+import asyncio
 import logging
+import traceback
 from datetime import date, datetime, timedelta, timezone
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -116,12 +118,15 @@ async def _refresh_active_tournaments(force_refresh: bool = False) -> None:
                 if just_completed:
                     asyncio.create_task(notify_tournament_complete(t.id))
             except Exception as exc:
-                logger.warning("Failed to refresh %s: %s", t.wiki_page_title, exc)
+                tb = traceback.format_exc()
+                logger.warning("Failed to refresh %s: %s\n%s", t.wiki_page_title, exc, tb)
                 await db.rollback()
                 from app.services.system_log import app_log
                 await app_log("error", "scheduler", f"Failed to refresh '{t.name}': {exc}",
                               {"tournament_id": t.id, "tournament_name": t.name,
-                               "wiki_title": t.wiki_page_title, "error": str(exc)})
+                               "wiki_title": t.wiki_page_title, "error": str(exc),
+                               "traceback": tb},
+                              dedup_key=f"refresh_fail_{t.id}_{type(exc).__name__}", dedup_hours=1.0)
 
 
 def _season_pages() -> set[str]:
@@ -220,8 +225,6 @@ async def _sync_subscriptions() -> None:
 
 
 def start_scheduler() -> None:
-    import asyncio
-
     scheduler.add_job(
         _auto_discover_tournaments,
         "cron",
