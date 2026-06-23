@@ -75,7 +75,7 @@ function EloInfoPopup({ onClose }) {
   )
 }
 
-export default function H2HPanel({ slug1, slug2, player1, player2, tournSurface, onClose }) {
+export default function H2HPanel({ slug1, slug2, player1, player2, tournSurface, tournGender, onClose }) {
   const [surfFilter, setSurfFilter] = useState('all') // 'all' | 'surface'
   const [showEloInfo, setShowEloInfo] = useState(false)
 
@@ -161,16 +161,16 @@ export default function H2HPanel({ slug1, slug2, player1, player2, tournSurface,
 
           {/* Rank row */}
           {showRank && <>
-            <div className="h2h-label">Rank</div>
-            <div className="h2h-col-val h2h-meta-val">{rank_p1 ?? '—'}</div>
+            <div className="h2h-label">{tournGender === 'F' ? 'Rank (WTA)' : 'Rank (ATP)'}</div>
+            <div className="h2h-col-val h2h-meta-val">{rank_p1 != null ? `#${rank_p1}` : '—'}</div>
             <div />
-            <div className="h2h-col-val h2h-meta-val">{rank_p2 ?? '—'}</div>
+            <div className="h2h-col-val h2h-meta-val">{rank_p2 != null ? `#${rank_p2}` : '—'}</div>
           </>}
 
           {/* Elo row */}
           {showElo && <>
             <div className="h2h-label h2h-label-with-info">
-              Elo Rank
+              Rank (Elo)
               <button className="h2h-info-btn" onClick={() => setShowEloInfo(true)} aria-label="About Elo">ⓘ</button>
             </div>
             <div className="h2h-col-val h2h-meta-val">{elo_rank_p1 != null ? `#${elo_rank_p1}` : '—'}</div>
