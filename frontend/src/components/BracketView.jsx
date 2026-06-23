@@ -8,7 +8,8 @@
  * Both modes colour the whole match cell green (correct pick) or red (wrong pick).
  */
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import H2HPanel from './H2HPanel'
 import './BracketView.css'
@@ -214,6 +215,9 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
   const pickedId = picks[match.id]
   const actualWinnerId = match.winner?.id
 
+  const bellRef = useRef(null)
+  const [tipPos, setTipPos] = useState(null)
+
   // "Projected" italic only applies in live mode (slot filled by cascade, not yet official)
   const p1IsProjected = mode === 'live' && !match.player1 && p1id != null
   const p2IsProjected = mode === 'live' && !match.player2 && p2id != null
@@ -278,17 +282,28 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
     >
       {isLive && <span className="in-progress-badge">In Progress</span>}
       {isUpsetPick && (
-        <span className="upset-bell">
+        <span
+          ref={bellRef}
+          className="upset-bell"
+          onMouseEnter={() => {
+            const r = bellRef.current?.getBoundingClientRect()
+            if (r) setTipPos({ x: r.left + r.width / 2, y: r.top })
+          }}
+          onMouseLeave={() => setTipPos(null)}
+        >
           🔔
-          <span className="upset-tooltip">
-            <span className="upset-tooltip-dot" />
-            <span className="upset-tooltip-text">
-              <span className="upset-tooltip-upset">Upset </span>
-              <span className="upset-tooltip-alert">Alert</span>
-              <span className="upset-tooltip-exclaim">!</span>
-            </span>
-          </span>
         </span>
+      )}
+      {isUpsetPick && tipPos && createPortal(
+        <span className="upset-tooltip" style={{ position: 'fixed', left: tipPos.x, top: tipPos.y - 8, transform: 'translate(-50%, -100%)' }}>
+          <span className="upset-tooltip-dot" />
+          <span className="upset-tooltip-text">
+            <span className="upset-tooltip-upset">Upset </span>
+            <span className="upset-tooltip-alert">Alert</span>
+            <span className="upset-tooltip-exclaim">!</span>
+          </span>
+        </span>,
+        document.body
       )}
       <div className="match-box-main">
         <PlayerRow
