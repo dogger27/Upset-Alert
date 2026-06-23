@@ -10,3 +10,4 @@ export const login = (email, password) => {
 export const getMe = () => client.get('/auth/me').then(r => r.data)
 export const updateMe = (data) => client.patch('/auth/me', data).then(r => r.data)
 export const listUsers = () => client.get('/auth/users').then(r => r.data)
+export const listAdminUsers = () => client.get('/auth/admin/users').then(r => r.data)

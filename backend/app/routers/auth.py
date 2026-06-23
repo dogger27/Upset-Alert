@@ -18,7 +18,7 @@ from app.core.security import (
 )
 from app.database import get_db
 from app.models.user import User
-from app.schemas.user import ChangePassword, Token, UserOut, UserPublicOut, UserRegister, UserUpdate
+from app.schemas.user import ChangePassword, Token, UserAdminOut, UserOut, UserPublicOut, UserRegister, UserUpdate
 from app.services import email as email_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -28,6 +28,33 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 async def list_users(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).order_by(User.display_name))
     return result.scalars().all()
+
+
+@router.get("/admin/users", response_model=list[UserAdminOut])
+async def admin_list_users(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin only")
+    result = await db.execute(
+        select(User)
+        .where(User.email_verified == True)
+        .order_by(User.created_at.desc())
+    )
+    users = result.scalars().all()
+    return [
+        {
+            "id": u.id,
+            "email": u.email,
+            "username": u.username,
+            "display_name": u.display_name,
+            "email_verified": u.email_verified,
+            "is_admin": u.is_admin,
+            "created_at": u.created_at.strftime("%Y-%m-%d") if u.created_at else None,
+        }
+        for u in users
+    ]
 
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
