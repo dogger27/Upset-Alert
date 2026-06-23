@@ -269,7 +269,7 @@ export default function Tournaments() {
                             style={{ background: GENDER_COLORS[t.gender] || '#fff', cursor: hasDrawData ? 'pointer' : 'default' }}
                             onClick={hasDrawData ? () => navigate(`/tournaments/${t.id}`) : undefined}
                           >
-                            <td className="td-star">{isCompeting && <span className="competing-star" title="You are Competing!">★</span>}</td>
+                            <td className="td-star">{isCompeting && <span className="competing-star">★</span>}</td>
                             <td className="muted td-left">{fmtDate(t.start_date)}</td>
                             <td>{t.category ? t.category.replace(/^(ATP|WTA)\s+/, '') : '—'}</td>
                             <td className="td-left">
