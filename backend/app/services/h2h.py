@@ -217,11 +217,17 @@ async def _scrape_h2h(slug_a: str, slug_b: str) -> dict:
             resp.raise_for_status()
             html = resp.text
     except Exception as exc:
-        logger.warning("H2H scrape failed for %s vs %s: %s", slug_a, slug_b, exc)
-        from app.services.system_log import app_log
-        await app_log("warning", "h2h", f"H2H scrape failed: {slug_a} vs {slug_b}",
-                      {"slug_a": slug_a, "slug_b": slug_b, "error": str(exc)},
-                      dedup_key=f"h2h_fail_{slug_a}_{slug_b}", dedup_hours=6)
+        import httpx as _httpx
+        is_network_err = isinstance(exc, (_httpx.ConnectError, _httpx.ConnectTimeout))
+        if is_network_err:
+            # DNS / connection failure — environment can't reach TE; skip app_log noise
+            logger.debug("H2H unreachable for %s vs %s: %s", slug_a, slug_b, exc)
+        else:
+            logger.warning("H2H scrape failed for %s vs %s: %s", slug_a, slug_b, exc)
+            from app.services.system_log import app_log
+            await app_log("warning", "h2h", f"H2H scrape failed: {slug_a} vs {slug_b}",
+                          {"slug_a": slug_a, "slug_b": slug_b, "error": str(exc)},
+                          dedup_key=f"h2h_fail_{slug_a}_{slug_b}", dedup_hours=6)
         return {**_empty(slug_a, slug_b, slug_a, slug_b), "error": str(exc)}
 
     return _parse_h2h_html(html, slug_a, slug_b)
