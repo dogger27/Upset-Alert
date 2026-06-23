@@ -601,6 +601,8 @@ async def _do_scrape(tournament: Tournament, db: AsyncSession, force_refresh: bo
         seen_positions.add(pe.bracket_position)
         if pe.bracket_position in existing_players:
             player = existing_players[pe.bracket_position]
+            if player.name != pe.name:
+                player.te_player_id = None  # name changed (withdrawal/replacement) — re-match on next assign_rankings
             player.name = pe.name
             player.nationality = pe.nationality
             player.seed = pe.seed
