@@ -118,6 +118,15 @@
   line-height: 1.05;
 }
 
+/* Best-value highlight pill */
+.h2h-best {
+  background: #c0392b;
+  color: #fff;
+  border-radius: 6px;
+  padding: 1px 7px;
+  display: inline-block;
+}
+
 /* Divider spanning all 4 grid columns */
 .h2h-divider {
   grid-column: 1 / -1;

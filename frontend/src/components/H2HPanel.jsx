@@ -46,6 +46,11 @@ function calcAge(dob) {
   return age
 }
 
+function bestCls(val, other, lowerIsBetter = false) {
+  if (val == null || other == null || val === other) return ''
+  return (lowerIsBetter ? val < other : val > other) ? 'h2h-best' : ''
+}
+
 function flipScore(score) {
   if (!score) return score
   return score.split(', ').map(set => {
@@ -140,9 +145,9 @@ export default function H2HPanel({ slug1, slug2, player1, player2, tournSurface,
               className={`h2h-label h2h-filter-btn${surfFilter === 'all' ? ' h2h-filter-active' : ''}`}
               onClick={() => setSurfFilter('all')}
             >Overall</button>
-            <div className="h2h-col-val h2h-wins">{wins_p1}</div>
+            <div className="h2h-col-val h2h-wins"><span className={bestCls(wins_p1, wins_p2)}>{wins_p1}</span></div>
             <div />
-            <div className="h2h-col-val h2h-wins">{wins_p2}</div>
+            <div className="h2h-col-val h2h-wins"><span className={bestCls(wins_p2, wins_p1)}>{wins_p2}</span></div>
           </>}
 
           {/* Surface row — click to filter matches by surface */}
@@ -151,9 +156,9 @@ export default function H2HPanel({ slug1, slug2, player1, player2, tournSurface,
               className={`h2h-label h2h-filter-btn${surfFilter === 'surface' ? ' h2h-filter-active' : ''}`}
               onClick={() => setSurfFilter('surface')}
             >{surfLabel}</button>
-            <div className="h2h-col-val h2h-wins">{surf_p1}</div>
+            <div className="h2h-col-val h2h-wins"><span className={bestCls(surf_p1, surf_p2)}>{surf_p1}</span></div>
             <div />
-            <div className="h2h-col-val h2h-wins">{surf_p2}</div>
+            <div className="h2h-col-val h2h-wins"><span className={bestCls(surf_p2, surf_p1)}>{surf_p2}</span></div>
           </>}
 
           {/* Divider */}
@@ -162,9 +167,9 @@ export default function H2HPanel({ slug1, slug2, player1, player2, tournSurface,
           {/* Rank row */}
           {showRank && <>
             <div className="h2h-label">{tournGender === 'F' ? 'Rank (WTA)' : 'Rank (ATP)'}</div>
-            <div className="h2h-col-val h2h-meta-val">{rank_p1 != null ? `#${rank_p1}` : '—'}</div>
+            <div className="h2h-col-val h2h-meta-val"><span className={bestCls(rank_p1, rank_p2, true)}>{rank_p1 != null ? `#${rank_p1}` : '—'}</span></div>
             <div />
-            <div className="h2h-col-val h2h-meta-val">{rank_p2 != null ? `#${rank_p2}` : '—'}</div>
+            <div className="h2h-col-val h2h-meta-val"><span className={bestCls(rank_p2, rank_p1, true)}>{rank_p2 != null ? `#${rank_p2}` : '—'}</span></div>
           </>}
 
           {/* Elo row */}
