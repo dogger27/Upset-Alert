@@ -171,7 +171,7 @@ export default function H2HPanel({ slug1, slug2, player1, player2, tournSurface,
           {showElo && <>
             <div className="h2h-label h2h-label-with-info">
               Rank (Elo)
-              <button className="h2h-info-btn" onClick={() => setShowEloInfo(true)} aria-label="About Elo">ⓘ</button>
+              <button className="h2h-info-btn" onClick={e => { e.stopPropagation(); setShowEloInfo(true) }} aria-label="About Elo">ⓘ</button>
             </div>
             <div className="h2h-col-val h2h-meta-val">{elo_rank_p1 != null ? `#${elo_rank_p1}` : '—'}</div>
             <div />

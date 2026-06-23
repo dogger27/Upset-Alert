@@ -44,7 +44,7 @@
 /*  columns: [label] [p1-value] [vs] [p2-value]  */
 .h2h-header {
   display: grid;
-  grid-template-columns: 68px 1fr 44px 1fr;
+  grid-template-columns: 86px 1fr 44px 1fr;
   align-items: center;
   row-gap: 0.18rem;
   padding: 1.1rem 1.5rem 1rem 1.25rem;
