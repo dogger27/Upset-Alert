@@ -93,19 +93,23 @@ async def _refresh_active_tournaments(force_refresh: bool = False) -> None:
         tournaments = result.scalars().all()
         logger.info("Daily refresh: %d tournaments to check", len(tournaments))
         for t in tournaments:
+            # Capture before any DB operation can expire these attributes
+            t_id = t.id
+            t_name = t.name
+            t_wiki = t.wiki_page_title
             try:
                 prev_draw_released = t.draw_released_direct_at
                 prev_status = t.status
 
                 await _do_scrape(t, db, force_refresh=force_refresh)
                 await db.commit()
-                logger.info("Refreshed %s %s (%s)", t.year, t.name, t.gender)
+                logger.info("Refreshed %s %s (%s)", t.year, t_name, t.gender)
 
                 # Prefetch H2H and DOB for any new matchups/players (uses own sessions)
                 from app.services.h2h import prefetch_h2h_for_draw
                 from app.services.rankings import prefetch_dob_for_draw
-                await prefetch_h2h_for_draw(t.id)
-                await prefetch_dob_for_draw(t.id)
+                await prefetch_h2h_for_draw(t_id)
+                await prefetch_dob_for_draw(t_id)
 
                 # Fire notifications as background tasks so they don't block the scrape loop
                 from app.services.notifications import notify_draw_released, notify_tournament_complete
@@ -113,20 +117,20 @@ async def _refresh_active_tournaments(force_refresh: bool = False) -> None:
                 just_completed = prev_status != "completed" and t.status == "completed"
                 if just_released:
                     asyncio.create_task(notify_draw_released(
-                        t.id, t.category or "", t.gender, t.year, t.name,
+                        t_id, t.category or "", t.gender, t.year, t_name,
                     ))
                 if just_completed:
-                    asyncio.create_task(notify_tournament_complete(t.id))
+                    asyncio.create_task(notify_tournament_complete(t_id))
             except Exception as exc:
                 tb = traceback.format_exc()
-                logger.warning("Failed to refresh %s: %s\n%s", t.wiki_page_title, exc, tb)
+                logger.warning("Failed to refresh %s: %s\n%s", t_wiki, exc, tb)
                 await db.rollback()
                 from app.services.system_log import app_log
-                await app_log("error", "scheduler", f"Failed to refresh '{t.name}': {exc}",
-                              {"tournament_id": t.id, "tournament_name": t.name,
-                               "wiki_title": t.wiki_page_title, "error": str(exc),
+                await app_log("error", "scheduler", f"Failed to refresh '{t_name}': {exc}",
+                              {"tournament_id": t_id, "tournament_name": t_name,
+                               "wiki_title": t_wiki, "error": str(exc),
                                "traceback": tb},
-                              dedup_key=f"refresh_fail_{t.id}_{type(exc).__name__}", dedup_hours=1.0)
+                              dedup_key=f"refresh_fail_{t_id}_{type(exc).__name__}", dedup_hours=1.0)
 
 
 def _season_pages() -> set[str]:
