@@ -224,4 +224,13 @@ class EventStreamListener:
                     await _do_scrape(tournament, db, force_refresh=True)
                     await db.commit()
         except Exception as exc:
+            import traceback
+            tb = traceback.format_exc()
             logger.warning("Failed to scrape %s: %s", title, exc)
+            from app.services.system_log import app_log
+            await app_log(
+                "error", "scheduler",
+                f"EventStream scrape failed for '{title}': {exc}",
+                {"wiki_title": title, "error": str(exc), "traceback": tb},
+                dedup_key=f"eventstream_fail_{title}_{type(exc).__name__}", dedup_hours=1.0,
+            )
