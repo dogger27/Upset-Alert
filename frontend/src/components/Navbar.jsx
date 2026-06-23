@@ -237,6 +237,19 @@ export default function Navbar() {
                           </div>
 
                           <div className="notif-section">
+                            <p className="notif-section-title">Play starts</p>
+                            <p className="notif-section-desc">When the first match begins and picks are locked</p>
+                            <label className="notif-check-row">
+                              <input
+                                type="checkbox"
+                                checked={notifSelected.has('match_start')}
+                                onChange={() => toggleNotif('match_start')}
+                              />
+                              Enabled
+                            </label>
+                          </div>
+
+                          <div className="notif-section">
                             <p className="notif-section-title">Round standings email</p>
                             <p className="notif-section-desc">After each completed round — covers all groups you're in</p>
                             <label className="notif-check-row">
