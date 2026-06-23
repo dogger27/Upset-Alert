@@ -20,6 +20,7 @@ function fmtTime(iso) {
   return d.toLocaleString('en-CA', {
     month: 'short', day: 'numeric',
     hour: '2-digit', minute: '2-digit', hour12: false,
+    timeZone: 'America/Los_Angeles',
   })
 }
 
