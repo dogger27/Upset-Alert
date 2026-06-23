@@ -80,6 +80,11 @@ export default function Admin() {
     onSuccess: () => qc.invalidateQueries(['admin-logs']),
   })
 
+  const clearAllMutation = useMutation({
+    mutationFn: () => clearLogs(0),
+    onSuccess: () => qc.invalidateQueries(['admin-logs']),
+  })
+
   if (!user) return <Navigate to="/login" replace />
 
   const errorCount = logs.filter(l => l.level === 'error').length
@@ -235,10 +240,18 @@ export default function Admin() {
               <button
                 className="btn-secondary btn-sm"
                 onClick={() => clearMutation.mutate()}
-                disabled={clearMutation.isPending}
+                disabled={clearMutation.isPending || clearAllMutation.isPending}
                 title="Delete logs older than 30 days"
               >
                 {clearMutation.isPending ? 'Clearing…' : 'Clear old'}
+              </button>
+              <button
+                className="btn-secondary btn-sm btn-danger-sm"
+                onClick={() => window.confirm('Delete all log entries?') && clearAllMutation.mutate()}
+                disabled={clearMutation.isPending || clearAllMutation.isPending}
+                title="Delete all log entries"
+              >
+                {clearAllMutation.isPending ? 'Clearing…' : 'Clear all'}
               </button>
             </div>
           </div>

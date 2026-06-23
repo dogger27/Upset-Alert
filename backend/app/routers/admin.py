@@ -54,7 +54,10 @@ async def clear_logs(
 ):
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin only")
-    cutoff = datetime.now(timezone.utc) - timedelta(days=older_than_days)
-    result = await db.execute(delete(SystemLog).where(SystemLog.created_at < cutoff))
+    if older_than_days == 0:
+        result = await db.execute(delete(SystemLog))
+    else:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=older_than_days)
+        result = await db.execute(delete(SystemLog).where(SystemLog.created_at < cutoff))
     await db.commit()
     return {"deleted": result.rowcount}
