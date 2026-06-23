@@ -11,12 +11,24 @@ logger = logging.getLogger(__name__)
 FROM = "Upset Alert <info@upsetalert.ca>"
 BASE_URL = "https://upsetalert.ca"
 
-_LOGO_HEADER = """<div style="background:#1b4332;padding:28px 24px 20px;text-align:center;border-radius:8px 8px 0 0">
-  <div style="display:inline-block;width:72px;height:72px;border-radius:50%;background:#3d5538;margin:0 auto 12px;position:relative;text-align:center;line-height:72px">
-    <div style="display:inline-block;width:43px;height:43px;border-radius:50%;background:#c9783a;vertical-align:middle"></div>
-  </div>
-  <p style="margin:0;color:#e8a87c;font-family:sans-serif;font-weight:900;font-size:15px;letter-spacing:0.12em;text-transform:uppercase">Upset Alert</p>
-</div>"""
+_LOGO_HEADER = """<table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#1b4332" style="background:#1b4332">
+  <tr>
+    <td align="center" bgcolor="#1b4332" style="background:#1b4332;padding:28px 24px 16px">
+      <table cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto">
+        <tr>
+          <td width="72" height="72" bgcolor="#3d5538" style="background:#3d5538;border-radius:36px;width:72px;height:72px" align="center" valign="middle">
+            <table cellpadding="0" cellspacing="0" border="0" align="center">
+              <tr>
+                <td width="43" height="43" bgcolor="#c9783a" style="background:#c9783a;border-radius:22px;width:43px;height:43px;font-size:0;line-height:0">&nbsp;</td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+      <p style="margin:12px 0 0;color:#e8a87c;font-family:sans-serif;font-weight:900;font-size:15px;letter-spacing:0.12em;text-transform:uppercase">Upset Alert</p>
+    </td>
+  </tr>
+</table>"""
 
 _WRAP_OPEN  = '<div style="font-family:sans-serif;max-width:560px;margin:0 auto;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb">'
 _WRAP_CLOSE = '</div>'
