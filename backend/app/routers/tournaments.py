@@ -641,6 +641,8 @@ async def _do_scrape(tournament: Tournament, db: AsyncSession, force_refresh: bo
             match.is_bye = mr.is_bye
             match.scores_json = mr.scores
             match.status = "completed" if w_id else "pending"
+            if w_id:
+                match.live_scores_json = None
         else:
             match = Match(
                 tournament_id=tournament.id,

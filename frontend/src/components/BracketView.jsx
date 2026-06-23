@@ -58,6 +58,7 @@ const MATCH_H = 58
 const LABEL_H = 30
 const SLOT_BASE = 82
 const COL_W = 252
+const COL_W_SCORES = 300
 const COL_GAP = 24
 
 
@@ -210,7 +211,7 @@ function playerNeedsTypeSlot(p) {
   return !!p?.entry_type
 }
 
-function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick, locked, style, mode, lossRound, onH2H, qualifierNums }) {
+function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick, locked, style, mode, lossRound, onH2H, qualifierNums, forceTypeSlot }) {
   const { p1: p1id, p2: p2id } = resolvedPlayers || { p1: match.player1?.id, p2: match.player2?.id }
   const pickedId = picks[match.id]
   const actualWinnerId = match.winner?.id
@@ -235,7 +236,7 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
 
   const p1 = p1id != null ? playerById[p1id] : null
   const p2 = p2id != null ? playerById[p2id] : null
-  const showTypeSlot = playerNeedsTypeSlot(p1) || playerNeedsTypeSlot(p2)
+  const showTypeSlot = forceTypeSlot || playerNeedsTypeSlot(p1) || playerNeedsTypeSlot(p2)
   const showScores = mode === 'live'
 
   // H2H strip: both players must have TE slugs (works in live and picks mode)
@@ -418,6 +419,22 @@ export default function BracketView({ tournament, matches, players, picks, onPic
   }
   const roundNums = Object.keys(rounds).map(Number).sort((a, b) => a - b)
 
+  const roundHasScores = {}
+  for (const rn of roundNums) {
+    roundHasScores[rn] = rounds[rn].some(
+      m => (m.scores && m.scores.length > 0) || m.live_scores != null
+    )
+  }
+
+  const roundHasTypeSlot = {}
+  for (const rn of roundNums) {
+    roundHasTypeSlot[rn] = rounds[rn].some(m => {
+      const { p1: p1id, p2: p2id } = resolved[m.id] || { p1: m.player1?.id, p2: m.player2?.id }
+      return playerNeedsTypeSlot(p1id != null ? playerById[p1id] : null)
+          || playerNeedsTypeSlot(p2id != null ? playerById[p2id] : null)
+    })
+  }
+
   const r1Count = rounds[roundNums[0]]?.length ?? 1
   const totalH = r1Count * SLOT_BASE
 
@@ -435,24 +452,28 @@ export default function BracketView({ tournament, matches, players, picks, onPic
     )}
     <div className="bracket-scroll">
       <div className="bracket-labels" style={{ paddingLeft: 0 }}>
-        {roundNums.map((rn, i) => (
-          <div key={rn} style={{ display: 'flex', flexShrink: 0 }}>
-            <div className="round-label" style={{ width: COL_W }}>
-              {rounds[rn][0]?.round_name || `Round ${rn}`}
+        {roundNums.map((rn, i) => {
+          const colW = roundHasScores[rn] ? COL_W_SCORES : COL_W
+          return (
+            <div key={rn} style={{ display: 'flex', flexShrink: 0 }}>
+              <div className="round-label" style={{ width: colW }}>
+                {rounds[rn][0]?.round_name || `Round ${rn}`}
+              </div>
+              {i < roundNums.length - 1 && <div style={{ width: COL_GAP }} />}
             </div>
-            {i < roundNums.length - 1 && <div style={{ width: COL_GAP }} />}
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       <div className="bracket-body" style={{ height: totalH }}>
         {roundNums.map((rn, colIdx) => {
+          const colW = roundHasScores[rn] ? COL_W_SCORES : COL_W
           const roundMatches = [...rounds[rn]].sort((a, b) => a.match_number - b.match_number)
           const slotH = totalH / roundMatches.length
 
           return (
             <div key={rn} style={{ display: 'flex', flexShrink: 0 }}>
-              <div className="bracket-col" style={{ width: COL_W, height: totalH }}>
+              <div className="bracket-col" style={{ width: colW, height: totalH }}>
                 {roundMatches.map((m, i) => {
                   const top = i * slotH + (slotH - MATCH_H) / 2
                   return (
@@ -469,6 +490,7 @@ export default function BracketView({ tournament, matches, players, picks, onPic
                       lossRound={lossRound}
                       onH2H={(p1, p2) => setH2HPlayers({ p1, p2 })}
                       qualifierNums={qualifierNums}
+                      forceTypeSlot={roundHasTypeSlot[rn]}
                       style={{ position: 'absolute', top, left: 6, right: 6 }}
                     />
                   )

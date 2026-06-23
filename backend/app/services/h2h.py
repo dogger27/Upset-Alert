@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy import and_, or_, select
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -242,11 +243,13 @@ async def get_h2h(slug1: str, slug2: str, db: AsyncSession) -> dict:
 
     data = await _scrape_h2h(slug_a, slug_b)
     now = datetime.now(timezone.utc).replace(tzinfo=None)
-    if cached:
-        cached.fetched_at = now
-        cached.data_json = data
-    else:
-        db.add(H2HCache(slug_a=slug_a, slug_b=slug_b, fetched_at=now, data_json=data))
+    stmt = sqlite_insert(H2HCache).values(
+        slug_a=slug_a, slug_b=slug_b, fetched_at=now, data_json=data
+    ).on_conflict_do_update(
+        index_elements=["slug_a", "slug_b"],
+        set_={"fetched_at": now, "data_json": data},
+    )
+    await db.execute(stmt)
     await db.commit()
     return data
 
@@ -337,7 +340,13 @@ async def prefetch_h2h_for_draw(tournament_id: int) -> None:
         for slug_a, slug_b in to_fetch:
             data = await _scrape_h2h(slug_a, slug_b)
             now = datetime.now(timezone.utc).replace(tzinfo=None)
-            db.add(H2HCache(slug_a=slug_a, slug_b=slug_b, fetched_at=now, data_json=data))
+            stmt = sqlite_insert(H2HCache).values(
+                slug_a=slug_a, slug_b=slug_b, fetched_at=now, data_json=data
+            ).on_conflict_do_update(
+                index_elements=["slug_a", "slug_b"],
+                set_={"fetched_at": now, "data_json": data},
+            )
+            await db.execute(stmt)
             await db.flush()
             await asyncio.sleep(0.4)  # be polite to TE
 

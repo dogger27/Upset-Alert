@@ -41,7 +41,11 @@ async def _auto_discover_tournaments() -> None:
                 await db.rollback()
                 logger.warning("Failed to sync tournaments for %d: %s", year, exc)
                 from app.services.system_log import app_log
-                await app_log("error", "scheduler", f"Tournament discovery failed for {year}: {exc}",
+                # "Page not found" for a future year is expected — Wikipedia page won't
+                # exist until later in the year. Log as warning, not error.
+                is_future_not_found = year > current_year and "Page not found" in str(exc)
+                level = "warning" if is_future_not_found else "error"
+                await app_log(level, "scheduler", f"Tournament discovery failed for {year}: {exc}",
                               {"year": year, "error": str(exc)})
 
     # Sync EventStream subscriptions after DB is updated
@@ -93,6 +97,7 @@ async def _refresh_active_tournaments(force_refresh: bool = False) -> None:
         tournaments = result.scalars().all()
         logger.info("Daily refresh: %d tournaments to check", len(tournaments))
         for t in tournaments:
+            await asyncio.sleep(1)  # throttle Wikipedia requests to avoid 429s
             # Capture before any DB operation can expire these attributes
             t_id = t.id
             t_name = t.name
