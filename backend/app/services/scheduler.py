@@ -111,9 +111,7 @@ async def _refresh_active_tournaments(force_refresh: bool = False) -> None:
                         t.id, t.category or "", t.gender, t.year, t.name,
                     ))
                 if just_completed:
-                    asyncio.create_task(notify_tournament_complete(
-                        t.id, t.name, t.year, t.category or "", t.num_rounds, t.draw_size,
-                    ))
+                    asyncio.create_task(notify_tournament_complete(t.id))
             except Exception as exc:
                 logger.warning("Failed to refresh %s: %s", t.wiki_page_title, exc)
                 await db.rollback()

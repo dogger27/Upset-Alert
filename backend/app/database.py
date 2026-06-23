@@ -76,6 +76,7 @@ async def _migrate(conn):
             "pref_key VARCHAR NOT NULL, "
             "PRIMARY KEY (user_id, pref_key))"
         ),
+        "ALTER TABLE tournaments ADD COLUMN completion_notified_at DATETIME",
     ]
     for sql in migrations:
         try:

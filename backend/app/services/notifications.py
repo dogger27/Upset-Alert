@@ -234,24 +234,28 @@ async def notify_draw_released(
 # Tournament-completion notification
 # ---------------------------------------------------------------------------
 
-async def notify_tournament_complete(
-    tournament_id: int,
-    name: str,
-    year: int,
-    category: str,
-    num_rounds: int,
-    draw_size: int,
-) -> None:
+async def notify_tournament_complete(tournament_id: int) -> None:
     """
     For every participant who opted into 'tournament_end', send ONE email
     showing their final standing in every group (global + all leagues).
+    Idempotent: sets completion_notified_at on first call; subsequent calls no-op.
     """
     from app.services.email import send_tournament_complete_notification
+    from datetime import datetime, timezone as tz
 
     async with AsyncSessionLocal() as db:
         tournament = await db.get(Tournament, tournament_id)
         if not tournament:
             return
+
+        # Idempotency guard — whichever trigger fires first wins
+        if tournament.completion_notified_at is not None:
+            return
+        tournament.completion_notified_at = datetime.now(tz.utc)
+        await db.commit()
+
+        t_name = tournament.name
+        t_year = tournament.year
 
         # All completed matches (needed for scoring)
         m_res = await db.execute(
@@ -368,10 +372,10 @@ async def notify_tournament_complete(
         if not groups:
             continue
         try:
-            await send_tournament_complete_notification(email, name, year, tournament_id, groups)
+            await send_tournament_complete_notification(email, t_name, t_year, tournament_id, groups)
             logger.info(
                 "Tournament-complete email sent to user %d (%d group(s)) for %d %s",
-                uid, len(groups), year, name,
+                uid, len(groups), t_year, t_name,
             )
         except Exception as exc:
             logger.warning("Failed to send completion email to user %d: %s", uid, exc)
