@@ -178,9 +178,9 @@ export default function H2HPanel({ slug1, slug2, player1, player2, tournSurface,
               Rank (Elo)
               <button className="h2h-info-btn" onClick={e => { e.stopPropagation(); setShowEloInfo(true) }} aria-label="About Elo">ⓘ</button>
             </div>
-            <div className="h2h-col-val h2h-meta-val">{elo_rank_p1 != null ? `#${elo_rank_p1}` : '—'}</div>
+            <div className="h2h-col-val h2h-meta-val"><span className={bestCls(elo_rank_p1, elo_rank_p2, true)}>{elo_rank_p1 != null ? `#${elo_rank_p1}` : '—'}</span></div>
             <div />
-            <div className="h2h-col-val h2h-meta-val">{elo_rank_p2 != null ? `#${elo_rank_p2}` : '—'}</div>
+            <div className="h2h-col-val h2h-meta-val"><span className={bestCls(elo_rank_p2, elo_rank_p1, true)}>{elo_rank_p2 != null ? `#${elo_rank_p2}` : '—'}</span></div>
           </>}
 
           {/* Age row */}
