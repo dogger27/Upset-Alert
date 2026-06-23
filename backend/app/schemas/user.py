@@ -39,6 +39,18 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = None
 
 
+class UserAdminOut(BaseModel):
+    id: int
+    email: str
+    username: Optional[str] = None
+    display_name: str
+    email_verified: bool
+    is_admin: bool
+    created_at: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
 class ChangePassword(BaseModel):
     current_password: str
     new_password: str

@@ -1,30 +1,70 @@
 .admin-page { max-width: 1600px; margin: 0 auto; padding: 2rem 1.5rem; }
 .admin-page h1 { font-size: 1.5rem; margin-bottom: 1.5rem; }
 
-.admin-section { margin-bottom: 2rem; }
-.admin-section h2 { font-size: 1.1rem; margin-bottom: 1rem; }
+.admin-section { margin-bottom: 1.5rem; }
+.admin-section h2 { font-size: 1.1rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
 
-.preset-row {
-  display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center;
-  margin-bottom: 1.25rem; padding-bottom: 1.25rem; border-bottom: 1px solid var(--border);
+/* Two-column layout: Tournaments (fixed) + Users (fills remaining) */
+.admin-grid {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+  align-items: start;
 }
-.preset-btn { font-size: 0.75rem; padding: 0.3rem 0.6rem; }
+@media (max-width: 860px) {
+  .admin-grid { grid-template-columns: 1fr; }
+}
 
-.admin-form { display: flex; flex-direction: column; gap: 0.75rem; }
-.form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.75rem; }
-.form-row { display: flex; flex-direction: column; gap: 0.25rem; }
-.form-row label { font-size: 0.8rem; font-weight: 600; color: var(--text-muted); }
-.admin-form button[type="submit"] { align-self: flex-start; margin-top: 0.5rem; }
+/* Count badge next to heading */
+.admin-count {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface-sunken);
+  padding: 0.1rem 0.5rem;
+  border-radius: var(--radius-pill);
+}
 
-.admin-table-wrap { display: inline-block; min-width: 100%; }
-.admin-table { width: auto; border-collapse: collapse; font-size: 0.88rem; margin-top: 0.5rem; }
+/* Link button inside Tournaments card */
+.admin-link-btn { display: inline-block; margin-bottom: 1.25rem; }
+
+/* Action list */
+.admin-actions { border-top: 1px solid var(--border); }
+
+.admin-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.admin-action:last-child { border-bottom: none; padding-bottom: 0; }
+
+.admin-action-meta { display: flex; flex-direction: column; gap: 0.2rem; }
+.admin-action-name { font-size: 0.88rem; font-weight: 600; }
+.admin-action-desc { font-size: 0.75rem; color: var(--text-muted); }
+
+.admin-action-ctrl { display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0; }
+
+.action-result { font-size: 0.8rem; }
+.action-result.success { color: var(--success); }
+.action-result.error   { color: var(--danger); }
+
+/* Users table */
+.admin-table-wrap { overflow-x: auto; }
+.admin-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
 .admin-table th {
-  text-align: center; padding: 0.5rem 0.4rem;
+  text-align: center; padding: 0.5rem 1rem;
   border-bottom: 2px solid var(--border); color: var(--text-muted);
   font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em;
 }
-.admin-table td { padding: 0.6rem 0.4rem; border-bottom: 1px solid var(--border); vertical-align: middle; text-align: center; }
-.admin-table td.td-left { text-align: left; }
+.admin-table td { padding: 0.6rem 1rem; border-bottom: 1px solid var(--border); vertical-align: middle; text-align: center; }
+.admin-table td.td-left   { text-align: left; }
+.admin-table td.td-muted  { color: var(--text-muted); }
+.admin-table td.td-nowrap { white-space: nowrap; }
 .admin-table tr:last-child td { border-bottom: none; }
 .admin-table tr.clickable-row:hover td {
   border-top: 1px solid #aaa;
@@ -32,23 +72,43 @@
 }
 .admin-table tr.clickable-row:hover td:first-child { border-left: 1px solid #aaa; }
 .admin-table tr.clickable-row:hover td:last-child  { border-right: 1px solid #aaa; }
-/* Override the bottom border of the row immediately above the hovered row so it
-   matches — otherwise border-collapse lets the neighbour's border win on top. */
 .admin-table tr:has(+ tr.clickable-row:hover) td   { border-bottom: 1px solid #aaa; }
 .admin-table tr.status-group-header td {
-  padding: 0.5rem 0.4rem 0.25rem;
+  padding: 0.5rem 1rem 0.25rem;
   font-size: 0.9rem; font-weight: 800; text-transform: uppercase;
-  letter-spacing: 0.06em; color: var(--text-muted); font-weight: 800;
+  letter-spacing: 0.06em; color: var(--text-muted);
   border-bottom: 1px solid var(--border); background: transparent;
   text-align: left;
 }
 
-/* Scraping explainer */
+/* Scraping explainer — collapsible <details> */
+.scraping-explainer { max-width: 720px; }
+
+.scraping-explainer summary {
+  font-family: var(--font-display);
+  font-weight: var(--fw-bold);
+  font-size: 1.1rem;
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  user-select: none;
+}
+.scraping-explainer summary::after {
+  content: '▸';
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  transition: transform var(--dur) var(--ease-out);
+}
+.scraping-explainer[open] summary::after { transform: rotate(90deg); }
+.scraping-explainer summary::-webkit-details-marker { display: none; }
+
 .scraping-explainer p { font-size: 0.88rem; color: var(--text-muted); margin: 0.4rem 0 0; line-height: 1.55; }
 
 .scraping-step { padding: 1rem 0; border-bottom: 1px solid var(--border); }
 .scraping-step:last-child { border-bottom: none; padding-bottom: 0; }
-.scraping-step:first-child { padding-top: 0; }
+.scraping-step:first-child { padding-top: 1rem; }
 
 .scraping-step-header {
   display: flex; align-items: center; gap: 0.6rem;
@@ -63,15 +123,12 @@
 .scraping-step-header strong { font-size: 0.95rem; }
 .scraping-schedule {
   margin-left: auto; font-size: 0.75rem; color: var(--text-muted);
-  background: var(--bg-alt, #f3f4f6); padding: 0.15rem 0.5rem;
-  border-radius: 999px; white-space: nowrap;
+  background: var(--surface-sunken); padding: 0.15rem 0.5rem;
+  border-radius: var(--radius-pill); white-space: nowrap;
 }
 
 .scraping-links { display: flex; gap: 0.75rem; margin: 0.5rem 0; flex-wrap: wrap; }
-.scraping-links a {
-  font-size: 0.85rem; font-weight: 600;
-  color: var(--clay); text-decoration: none;
-}
+.scraping-links a { font-size: 0.85rem; font-weight: 600; color: var(--clay); text-decoration: none; }
 .scraping-links a:hover { text-decoration: underline; }
 
 .scraping-list {
