@@ -38,6 +38,12 @@
   border-radius: 50%;
   background: var(--clay-300);
   box-shadow: 0 0 0 4px rgba(232,168,124,0.28);
+  animation: logo-ring-pulse 2.8s ease-in-out infinite;
+}
+
+@keyframes logo-ring-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(232,168,124,0.15); }
+  50%       { box-shadow: 0 0 0 6px rgba(232,168,124,0.42); }
 }
 
 .navbar-brand-text {
