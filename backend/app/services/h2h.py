@@ -219,9 +219,13 @@ async def _scrape_h2h(slug_a: str, slug_b: str) -> dict:
     except Exception as exc:
         import httpx as _httpx
         is_network_err = isinstance(exc, (_httpx.ConnectError, _httpx.ConnectTimeout))
-        if is_network_err:
-            # DNS / connection failure — environment can't reach TE; skip app_log noise
-            logger.debug("H2H unreachable for %s vs %s: %s", slug_a, slug_b, exc)
+        is_rate_limited = (
+            isinstance(exc, _httpx.HTTPStatusError)
+            and exc.response.status_code in (403, 429)
+        )
+        if is_network_err or is_rate_limited:
+            # DNS/connection failure or TE bot-block — don't spam app_log
+            logger.debug("H2H blocked/unreachable for %s vs %s: %s", slug_a, slug_b, exc)
         else:
             logger.warning("H2H scrape failed for %s vs %s: %s", slug_a, slug_b, exc)
             from app.services.system_log import app_log
@@ -354,7 +358,7 @@ async def prefetch_h2h_for_draw(tournament_id: int) -> None:
             )
             await db.execute(stmt)
             await db.flush()
-            await asyncio.sleep(0.4)  # be polite to TE
+            await asyncio.sleep(2.0)  # TE blocks bursts; 0.4s was too aggressive
 
         await db.commit()
         logger.info("H2H prefetch complete for tournament %d", tournament_id)
