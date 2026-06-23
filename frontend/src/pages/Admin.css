@@ -181,6 +181,15 @@
   padding: 0.2rem 0.6rem;
 }
 
+.btn-danger-sm {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.btn-danger-sm:hover:not(:disabled) {
+  background: var(--danger);
+  color: #fff;
+}
+
 .logs-empty {
   font-size: 0.88rem;
   color: var(--text-muted);
