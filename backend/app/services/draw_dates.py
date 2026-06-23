@@ -6,7 +6,7 @@ from typing import Optional
 # Hardcoded fallbacks used when there is insufficient historical data (< MIN_SAMPLES)
 _DEFAULTS: dict[str, tuple[int, int]] = {
     # (da_days_before, qual_days_before)
-    "Grand Slam":  (8, 3),
+    "Grand Slam":  (3, 3),
     "ATP 1000":    (5, 3),
     "WTA 1000":    (5, 3),
     "ATP 500":     (4, 1),

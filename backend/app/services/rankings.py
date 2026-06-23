@@ -194,6 +194,10 @@ async def _scrape_te(gender: str) -> list[tuple[str, int, Optional[str]]]:
         logger.info("Tennis Explorer %s scrape: %d players across %d pages", gender, len(results), page - 1)
     except Exception as exc:
         logger.warning("Tennis Explorer %s scrape failed: %s", gender, exc)
+        from app.services.system_log import app_log
+        await app_log("error", "rankings", f"Tennis Explorer {gender} scrape failed: {exc}",
+                      {"gender": gender, "error": str(exc)},
+                      dedup_key=f"te_scrape_fail_{gender}", dedup_hours=2)
 
     return results
 
@@ -222,6 +226,10 @@ async def ensure_te_week(gender: str, week_date: date, db: AsyncSession) -> bool
     raw_rows = await _scrape_te(gender)
     if len(raw_rows) < 50:
         logger.warning("TE %s scrape returned only %d players — aborting", gender, len(raw_rows))
+        from app.services.system_log import app_log
+        await app_log("warning", "rankings", f"TE {gender} scrape returned only {len(raw_rows)} players — aborting",
+                      {"gender": gender, "count": len(raw_rows)},
+                      dedup_key=f"te_scrape_low_{gender}", dedup_hours=2)
         return False
 
     existing_players_res = await db.execute(
@@ -298,11 +306,17 @@ async def assign_rankings(
     else:
         te_index, rank_by_te_id = _week_cache[cache_key]
 
+    from app.services.system_log import app_log
     for player in players:
         if player.te_player_id is None:
             te_id = _match_token_set(player.name, te_index)
             if te_id is not None:
                 player.te_player_id = te_id
+            elif player.name and player.entry_type not in ("Q", "LL"):
+                await app_log("warning", "rankings",
+                              f"Player name not matched in TE: {player.name!r}",
+                              {"player_name": player.name, "gender": gender},
+                              dedup_key=f"match_fail_{player.name.lower()}", dedup_hours=24)
 
         player.ranking = rank_by_te_id.get(player.te_player_id) if player.te_player_id else None
 
@@ -469,3 +483,7 @@ async def refresh_elo_ratings() -> None:
                 logger.info("ELO refresh (%s): %d/%d players updated", gender, updated, len(players))
         except Exception as exc:
             logger.warning("ELO refresh failed for gender=%s: %s", gender, exc)
+            from app.services.system_log import app_log
+            await app_log("error", "rankings", f"ELO refresh failed for {gender}: {exc}",
+                          {"gender": gender, "error": str(exc)},
+                          dedup_key=f"elo_fail_{gender}", dedup_hours=6)

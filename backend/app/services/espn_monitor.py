@@ -157,6 +157,10 @@ async def _fetch_events(gender: str) -> list:
             return resp.json().get("events", [])
     except Exception as exc:
         logger.warning("ESPN %s fetch failed: %s", gender, exc)
+        from app.services.system_log import app_log
+        await app_log("error", "espn", f"ESPN {gender} API failed: {exc}",
+                      {"gender": gender, "error": str(exc)},
+                      dedup_key=f"espn_api_fail_{gender}", dedup_hours=2)
         return []
 
 
@@ -333,6 +337,13 @@ class ESPNMonitor:
                     "ESPN: no event match for '%s' (%s)",
                     tournament.name, tournament.gender,
                 )
+                if tid in lock_ids:
+                    from app.services.system_log import app_log
+                    await app_log("warning", "espn",
+                                  f"No ESPN event found for '{tournament.name}' — picks may not auto-lock",
+                                  {"tournament_id": tournament.id, "tournament_name": tournament.name,
+                                   "gender": tournament.gender},
+                                  dedup_key=f"espn_no_match_{tournament.id}")
                 continue
 
             # Load draw entries once — used by both jobs

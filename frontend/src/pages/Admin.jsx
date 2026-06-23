@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { refreshAllCompleted, syncTournaments } from '../api/tournaments'
 import { listAdminUsers } from '../api/auth'
+import { getLogs, clearLogs } from '../api/admin'
 import { useAuth } from '../store/auth'
 import { Navigate, Link } from 'react-router-dom'
+import { useState } from 'react'
 import './Admin.css'
 
 const CURRENT_YEAR = new Date().getFullYear()
@@ -10,14 +12,56 @@ const CURRENT_YEAR = new Date().getFullYear()
 const ATP_URL = `https://en.wikipedia.org/wiki/${CURRENT_YEAR}_ATP_Tour`
 const WTA_URL = `https://en.wikipedia.org/wiki/${CURRENT_YEAR}_WTA_Tour`
 
+const CATEGORIES = ['rankings', 'espn', 'h2h', 'scheduler', 'notifications', 'discovery', 'scraper']
+
+function fmtTime(iso) {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  return d.toLocaleString('en-CA', {
+    month: 'short', day: 'numeric',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  })
+}
+
+function LogDetail({ detail }) {
+  const [open, setOpen] = useState(false)
+  if (!detail || Object.keys(detail).length === 0) return null
+  return (
+    <span className="log-detail-wrap">
+      <button className="log-detail-toggle" onClick={() => setOpen(o => !o)}>
+        {open ? '▾' : '▸'}
+      </button>
+      {open && (
+        <span className="log-detail-popup">
+          {Object.entries(detail).map(([k, v]) => (
+            <span key={k} className="log-detail-row">
+              <span className="log-detail-key">{k}</span>
+              <span className="log-detail-val">{String(v)}</span>
+            </span>
+          ))}
+        </span>
+      )}
+    </span>
+  )
+}
+
 export default function Admin() {
   const { user } = useAuth()
   const qc = useQueryClient()
+  const [levelFilter, setLevelFilter] = useState('')
+  const [catFilter, setCatFilter] = useState('')
 
   const { data: adminUsers = [], isLoading: usersLoading } = useQuery({
     queryKey: ['admin-users'],
     queryFn: listAdminUsers,
     enabled: !!user,
+  })
+
+  const { data: logs = [], isLoading: logsLoading, dataUpdatedAt } = useQuery({
+    queryKey: ['admin-logs', levelFilter, catFilter],
+    queryFn: () => getLogs({ level: levelFilter || undefined, category: catFilter || undefined }),
+    enabled: !!user,
+    refetchInterval: 30_000,
   })
 
   const refreshMutation = useMutation({
@@ -30,7 +74,15 @@ export default function Admin() {
     onSuccess: () => qc.invalidateQueries(['tournaments']),
   })
 
+  const clearMutation = useMutation({
+    mutationFn: () => clearLogs(30),
+    onSuccess: () => qc.invalidateQueries(['admin-logs']),
+  })
+
   if (!user) return <Navigate to="/login" replace />
+
+  const errorCount = logs.filter(l => l.level === 'error').length
+  const warnCount  = logs.filter(l => l.level === 'warning').length
 
   return (
     <div className="admin-page">
@@ -138,6 +190,94 @@ export default function Admin() {
           )}
         </div>
 
+      </div>
+
+      {/* System Logs */}
+      <div className="card admin-section logs-section">
+        <div className="logs-header">
+          <h2>
+            System Logs
+            {errorCount > 0 && <span className="admin-count log-count-error">{errorCount} error{errorCount !== 1 ? 's' : ''}</span>}
+            {warnCount > 0  && <span className="admin-count log-count-warn">{warnCount} warning{warnCount !== 1 ? 's' : ''}</span>}
+            {errorCount === 0 && warnCount === 0 && logs.length > 0 && (
+              <span className="admin-count">all clear</span>
+            )}
+          </h2>
+          <div className="logs-controls">
+            <div className="log-filters">
+              <select
+                className="log-filter-select"
+                value={levelFilter}
+                onChange={e => setLevelFilter(e.target.value)}
+              >
+                <option value="">All levels</option>
+                <option value="error">Errors</option>
+                <option value="warning">Warnings</option>
+              </select>
+              <select
+                className="log-filter-select"
+                value={catFilter}
+                onChange={e => setCatFilter(e.target.value)}
+              >
+                <option value="">All categories</option>
+                {CATEGORIES.map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+            <div className="logs-meta">
+              {dataUpdatedAt ? (
+                <span className="log-refresh-time">
+                  Updated {new Date(dataUpdatedAt).toLocaleTimeString('en-CA', { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              ) : null}
+              <button
+                className="btn-secondary btn-sm"
+                onClick={() => clearMutation.mutate()}
+                disabled={clearMutation.isPending}
+                title="Delete logs older than 30 days"
+              >
+                {clearMutation.isPending ? 'Clearing…' : 'Clear old'}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {logsLoading ? (
+          <p className="muted" style={{ fontSize: '0.88rem' }}>Loading…</p>
+        ) : logs.length === 0 ? (
+          <p className="logs-empty">No log entries{levelFilter || catFilter ? ' for this filter' : ''}.</p>
+        ) : (
+          <div className="admin-table-wrap">
+            <table className="admin-table logs-table">
+              <thead>
+                <tr>
+                  <th className="td-left log-col-time">Time</th>
+                  <th className="log-col-level">Level</th>
+                  <th className="log-col-cat">Category</th>
+                  <th className="td-left">Message</th>
+                </tr>
+              </thead>
+              <tbody>
+                {logs.map(log => (
+                  <tr key={log.id} className={`log-row log-row-${log.level}`}>
+                    <td className="td-left td-muted td-nowrap log-col-time">{fmtTime(log.created_at)}</td>
+                    <td className="log-col-level">
+                      <span className={`log-badge log-badge-${log.level}`}>{log.level}</span>
+                    </td>
+                    <td className="log-col-cat">
+                      <span className="log-cat">{log.category}</span>
+                    </td>
+                    <td className="td-left log-message">
+                      {log.message}
+                      <LogDetail detail={log.detail} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       <details className="card admin-section scraping-explainer">

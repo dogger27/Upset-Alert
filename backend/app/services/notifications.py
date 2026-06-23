@@ -9,6 +9,7 @@ independent of the caller's transaction.
 import asyncio
 import logging
 from collections import defaultdict
+from typing import Optional
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
@@ -187,7 +188,7 @@ async def notify_round_complete(tournament_id: int, round_number: int) -> None:
 # Draw-released notification
 # ---------------------------------------------------------------------------
 
-def _draw_pref_key(category: str, gender: str) -> str | None:
+def _draw_pref_key(category: str, gender: str) -> Optional[str]:
     cat = category or ""
     if "Slam" in cat or "Grand" in cat:
         return f"draw_open:Grand Slam:{gender}"
