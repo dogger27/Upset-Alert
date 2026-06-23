@@ -11,8 +11,10 @@ logger = logging.getLogger(__name__)
 FROM = "Upset Alert <info@upsetalert.ca>"
 BASE_URL = "https://upsetalert.ca"
 
-_LOGO_HEADER = f"""<div style="background:#1b4332;padding:28px 24px 20px;text-align:center;border-radius:8px 8px 0 0">
-  <img src="{BASE_URL}/email-logo.png" width="72" height="72" alt="" style="display:block;margin:0 auto 10px" />
+_LOGO_HEADER = """<div style="background:#1b4332;padding:28px 24px 20px;text-align:center;border-radius:8px 8px 0 0">
+  <div style="display:inline-block;width:72px;height:72px;border-radius:50%;background:#3d5538;margin:0 auto 12px;position:relative;text-align:center;line-height:72px">
+    <div style="display:inline-block;width:43px;height:43px;border-radius:50%;background:#c9783a;vertical-align:middle"></div>
+  </div>
   <p style="margin:0;color:#e8a87c;font-family:sans-serif;font-weight:900;font-size:15px;letter-spacing:0.12em;text-transform:uppercase">Upset Alert</p>
 </div>"""
 
