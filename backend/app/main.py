@@ -37,8 +37,9 @@ import app.models.league  # noqa: F401
 import app.models.tournament  # noqa: F401
 import app.models.rankings  # noqa: F401
 import app.models.h2h  # noqa: F401
+import app.models.system_log  # noqa: F401
 from app.services.scheduler import start_scheduler, stop_scheduler
-from app.routers import auth, discovery, h2h, leagues, predictions, tournaments
+from app.routers import admin, auth, discovery, h2h, leagues, predictions, tournaments
 
 
 @asynccontextmanager
@@ -64,6 +65,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(admin.router)
 app.include_router(auth.router)
 app.include_router(tournaments.router)
 app.include_router(discovery.router)

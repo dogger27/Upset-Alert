@@ -113,6 +113,14 @@ async def find_existing_match(
         "Ambiguous match for %s %s (%s %s) — %d candidates, skipping upsert",
         year, discovered.name, discovered.gender, discovered.category, len(candidates),
     )
+    from app.services.system_log import app_log
+    await app_log(
+        "warning", "discovery",
+        f"Ambiguous tournament match — '{discovered.name}' {year} skipped",
+        {"name": discovered.name, "year": year, "gender": discovered.gender,
+         "category": discovered.category, "candidates": len(candidates)},
+        dedup_key=f"ambiguous_{year}_{discovered.name}", dedup_hours=24,
+    )
     return None
 
 

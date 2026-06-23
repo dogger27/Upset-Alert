@@ -676,8 +676,11 @@ async def _do_scrape(tournament: Tournament, db: AsyncSession, force_refresh: bo
     # Snap start_date to today on first detected match activity.
     # Qualifying rounds begin before the Wikipedia-reported main-draw start date,
     # so use the real play date rather than Wikipedia's potentially lagging value.
+    # Guard: only snap after the main draw is released — otherwise qualifying activity
+    # would prematurely move the start_date forward by a week or more.
     has_activity = completed > 0 or any(m.scores for m in parsed.matches)
-    if has_activity and tournament.start_date and today < tournament.start_date:
+    if (has_activity and tournament.start_date and today < tournament.start_date
+            and tournament.draw_released_direct_at is not None):
         tournament.start_date = today
 
     started = tournament.start_date is None or tournament.start_date <= today

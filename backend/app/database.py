@@ -77,6 +77,16 @@ async def _migrate(conn):
             "PRIMARY KEY (user_id, pref_key))"
         ),
         "ALTER TABLE tournaments ADD COLUMN completion_notified_at DATETIME",
+        (
+            "CREATE TABLE IF NOT EXISTS system_logs "
+            "(id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "created_at DATETIME NOT NULL, "
+            "level VARCHAR NOT NULL, "
+            "category VARCHAR NOT NULL, "
+            "message VARCHAR NOT NULL, "
+            "detail_json JSON)"
+        ),
+        "CREATE INDEX IF NOT EXISTS idx_sys_logs_created ON system_logs(created_at DESC)",
     ]
     for sql in migrations:
         try:

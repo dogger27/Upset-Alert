@@ -38,6 +38,9 @@ async def _auto_discover_tournaments() -> None:
             except Exception as exc:
                 await db.rollback()
                 logger.warning("Failed to sync tournaments for %d: %s", year, exc)
+                from app.services.system_log import app_log
+                await app_log("error", "scheduler", f"Tournament discovery failed for {year}: {exc}",
+                              {"year": year, "error": str(exc)})
 
     # Sync EventStream subscriptions after DB is updated
     await _sync_subscriptions()
@@ -115,6 +118,10 @@ async def _refresh_active_tournaments(force_refresh: bool = False) -> None:
             except Exception as exc:
                 logger.warning("Failed to refresh %s: %s", t.wiki_page_title, exc)
                 await db.rollback()
+                from app.services.system_log import app_log
+                await app_log("error", "scheduler", f"Failed to refresh '{t.name}': {exc}",
+                              {"tournament_id": t.id, "tournament_name": t.name,
+                               "wiki_title": t.wiki_page_title, "error": str(exc)})
 
 
 def _season_pages() -> set[str]:

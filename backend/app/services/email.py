@@ -16,16 +16,24 @@ def _setup():
     resend.api_key = settings.resend_api_key
 
 
-def _send(params: resend.Emails.SendParams) -> None:
+def _send(params: resend.Emails.SendParams) -> bool:
     _setup()
     try:
         resend.Emails.send(params)
+        return True
     except Exception as e:
         logger.error("Failed to send email to %s: %s", params.get("to"), e)
+        return False
 
 
 async def send_async(params: resend.Emails.SendParams) -> None:
-    await asyncio.to_thread(_send, params)
+    success = await asyncio.to_thread(_send, params)
+    if not success:
+        from app.services.system_log import app_log
+        to = params.get("to", [])
+        subject = params.get("subject", "")
+        await app_log("error", "notifications", f"Email send failed: {subject!r}",
+                      {"to": to, "subject": subject})
 
 
 async def send_verification(email: str, username: str, token: str, code: str) -> None:
