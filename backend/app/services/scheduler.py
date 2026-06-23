@@ -97,7 +97,7 @@ async def _refresh_active_tournaments(force_refresh: bool = False) -> None:
         tournaments = result.scalars().all()
         logger.info("Daily refresh: %d tournaments to check", len(tournaments))
         for t in tournaments:
-            await asyncio.sleep(1)  # throttle Wikipedia requests to avoid 429s
+            await asyncio.sleep(5)  # throttle Wikipedia requests to avoid 429s
             # Capture before any DB operation can expire these attributes
             t_id = t.id
             t_name = t.name
