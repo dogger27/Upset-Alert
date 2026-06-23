@@ -66,14 +66,9 @@ function EloInfoPopup({ onClose }) {
         <p className="h2h-elo-popup-body">
           Elo measures a player's overall career strength based on match results,
           weighted by opponent quality. A win over a top-10 player boosts your
-          rating more than a win over a qualifier.
+          rating more than a win over a qualifier. The rank shown is each player's
+          position among all active players on tour — #1 is the strongest.
         </p>
-        <div className="h2h-elo-popup-tiers">
-          <div><span className="h2h-elo-tier-num">2100+</span><span className="h2h-elo-tier-label">Elite — top 5–10</span></div>
-          <div><span className="h2h-elo-tier-num">1900–2100</span><span className="h2h-elo-tier-label">Top 50</span></div>
-          <div><span className="h2h-elo-tier-num">1700–1900</span><span className="h2h-elo-tier-label">Top 100–200</span></div>
-          <div><span className="h2h-elo-tier-num">Below 1700</span><span className="h2h-elo-tier-label">Fringe / lower ranked</span></div>
-        </div>
         <p className="h2h-elo-popup-source">Source: tennisabstract.com · Updated weekly</p>
       </div>
     </div>
@@ -98,8 +93,8 @@ export default function H2HPanel({ slug1, slug2, player1, player2, tournSurface,
 
   const rank_p1 = player1?.ranking ?? null
   const rank_p2 = player2?.ranking ?? null
-  const elo_p1 = player1?.elo ?? null
-  const elo_p2 = player2?.elo ?? null
+  const elo_rank_p1 = player1?.elo_rank ?? null
+  const elo_rank_p2 = player2?.elo_rank ?? null
   const age_p1 = calcAge(player1?.date_of_birth)
   const age_p2 = calcAge(player2?.date_of_birth)
 
@@ -122,7 +117,7 @@ export default function H2HPanel({ slug1, slug2, player1, player2, tournSurface,
     ? matches.filter(m => surfKeys.includes(m.surface))
     : matches
   const showRank = rank_p1 != null || rank_p2 != null
-  const showElo = elo_p1 != null || elo_p2 != null
+  const showElo = elo_rank_p1 != null || elo_rank_p2 != null
   const showAge = age_p1 != null || age_p2 != null
 
   return (
@@ -175,12 +170,12 @@ export default function H2HPanel({ slug1, slug2, player1, player2, tournSurface,
           {/* Elo row */}
           {showElo && <>
             <div className="h2h-label h2h-label-with-info">
-              Elo
+              Elo Rank
               <button className="h2h-info-btn" onClick={() => setShowEloInfo(true)} aria-label="About Elo">ⓘ</button>
             </div>
-            <div className="h2h-col-val h2h-meta-val">{elo_p1 ?? '—'}</div>
+            <div className="h2h-col-val h2h-meta-val">{elo_rank_p1 != null ? `#${elo_rank_p1}` : '—'}</div>
             <div />
-            <div className="h2h-col-val h2h-meta-val">{elo_p2 ?? '—'}</div>
+            <div className="h2h-col-val h2h-meta-val">{elo_rank_p2 != null ? `#${elo_rank_p2}` : '—'}</div>
           </>}
 
           {/* Age row */}

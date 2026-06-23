@@ -363,6 +363,7 @@ async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
     te_slug_map: dict[int, str] = {}
     te_dob_map: dict[int, "date"] = {}
     te_elo_map: dict[int, int] = {}
+    te_elo_rank_map: dict[int, int] = {}
     if te_ids:
         te_res = await db.execute(
             select(TePlayer.id, TePlayer.te_slug, TePlayer.date_of_birth, TePlayer.elo).where(TePlayer.id.in_(te_ids))
@@ -374,6 +375,16 @@ async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
                 te_dob_map[row.id] = row.date_of_birth
             if row.elo:
                 te_elo_map[row.id] = row.elo
+
+        # Compute Elo rank among all same-gender players (higher Elo = lower rank number)
+        elo_rank_res = await db.execute(
+            select(TePlayer.id, TePlayer.elo)
+            .where(TePlayer.gender == t.gender, TePlayer.elo.isnot(None))
+            .order_by(TePlayer.elo.desc())
+        )
+        for rank, row in enumerate(elo_rank_res, start=1):
+            if row.id in set(te_ids):
+                te_elo_rank_map[row.id] = rank
 
     matches_result = await db.execute(
         select(Match)
@@ -392,6 +403,7 @@ async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
         out.te_slug = te_slug_map.get(p.te_player_id) if p.te_player_id else None
         out.date_of_birth = te_dob_map.get(p.te_player_id) if p.te_player_id else None
         out.elo = te_elo_map.get(p.te_player_id) if p.te_player_id else None
+        out.elo_rank = te_elo_rank_map.get(p.te_player_id) if p.te_player_id else None
         return out
 
     match_outs = []
