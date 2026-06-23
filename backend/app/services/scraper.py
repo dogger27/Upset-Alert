@@ -298,20 +298,33 @@ async def fetch_wikitext(
         params["titles"] = page_title
         params["redirects"] = 1  # follow redirects so "– Men's singles" → "– Singles" works
 
-    headers = {"User-Agent": "TennisFantasyLeague/1.0 (https://github.com/local/tennis-fantasy; contact@example.com)"}
+    import asyncio as _asyncio
+    headers = {"User-Agent": "TennisFantasyLeague/1.0 (https://upsetalert.ca; pdwiens@gmail.com)"}
     async with httpx.AsyncClient(timeout=30, headers=headers) as client:
         resp = await client.get(WIKI_API, params=params)
         if resp.status_code == 429:
-            # Rate-limited — serve stale cache rather than failing the whole scrape
-            if os.path.exists(path):
-                import logging as _logging
-                _logging.getLogger(__name__).warning(
-                    "Wikipedia 429 for page %s/%s — using stale cache", page_title, page_id
-                )
-                with open(path, "r", encoding="utf-8") as f:
-                    resolved_id = page_id if page_id is not None else 0
-                    return f.read(), resolved_id
-            resp.raise_for_status()  # no cache to fall back to — propagate
+            import logging as _logging
+            _log = _logging.getLogger(__name__)
+            # Honour Retry-After header if present, otherwise wait 10s then retry once
+            retry_after = int(resp.headers.get("Retry-After", 10))
+            retry_after = min(retry_after, 60)  # cap at 60s
+            _log.warning(
+                "Wikipedia 429 for page %s/%s — waiting %ds then retrying",
+                page_title, page_id, retry_after,
+            )
+            await _asyncio.sleep(retry_after)
+            resp = await client.get(WIKI_API, params=params)
+            if resp.status_code == 429:
+                # Still rate-limited after retry — serve stale cache or fail
+                if os.path.exists(path):
+                    _log.warning(
+                        "Wikipedia still 429 after retry for %s/%s — using stale cache",
+                        page_title, page_id,
+                    )
+                    with open(path, "r", encoding="utf-8") as f:
+                        resolved_id = page_id if page_id is not None else 0
+                        return f.read(), resolved_id
+                resp.raise_for_status()  # no cache to fall back to — propagate
         resp.raise_for_status()
     data = resp.json()
     pages = data["query"]["pages"]
