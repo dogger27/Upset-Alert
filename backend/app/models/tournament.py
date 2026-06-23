@@ -44,6 +44,7 @@ class Tournament(Base):
     # Set by the ESPN live monitor the moment a main-draw match is confirmed in progress.
     # Acts as an idempotency guard — once set, the monitor never fires again for this tournament.
     picks_locked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    completion_notified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     # upcoming / open / active / completed
     status: Mapped[str] = mapped_column(String, default="upcoming")
     selections_unlocked: Mapped[bool] = mapped_column(Boolean, default=False)

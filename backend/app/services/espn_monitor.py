@@ -583,4 +583,17 @@ class ESPNMonitor:
                         asyncio.create_task(notify_round_complete(tournament.id, rn))
                         logger.info("Round %d complete for tournament %d — notification queued", rn, tournament.id)
 
+                # Check whether the whole tournament is now complete
+                total_incomplete = await db.execute(
+                    select(func.count()).where(
+                        Match.tournament_id == tournament.id,
+                        Match.is_bye == False,
+                        Match.winner_id.is_(None),
+                    )
+                )
+                if total_incomplete.scalar_one() == 0:
+                    from app.services.notifications import notify_tournament_complete
+                    asyncio.create_task(notify_tournament_complete(tournament.id))
+                    logger.info("Tournament %d fully complete — completion notification queued", tournament.id)
+
         return updated
