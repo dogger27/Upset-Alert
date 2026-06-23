@@ -36,7 +36,7 @@ async def get_logs(
     return [
         {
             "id": log.id,
-            "created_at": log.created_at.isoformat() if log.created_at else None,
+            "created_at": (log.created_at.isoformat() + "Z") if log.created_at else None,
             "level": log.level,
             "category": log.category,
             "message": log.message,
