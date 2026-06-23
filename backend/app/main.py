@@ -3,8 +3,13 @@ import logging.handlers
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+import traceback
+
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.database import init_db
 
@@ -72,6 +77,25 @@ app.include_router(discovery.router)
 app.include_router(leagues.router)
 app.include_router(predictions.router)
 app.include_router(h2h.router)
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    if isinstance(exc, HTTPException):
+        return await http_exception_handler(request, exc)
+    if isinstance(exc, RequestValidationError):
+        return await request_validation_exception_handler(request, exc)
+    tb = traceback.format_exc()
+    from app.services.system_log import app_log
+    await app_log(
+        "error", "api",
+        f"{type(exc).__name__} on {request.method} {request.url.path}: {exc}",
+        {"method": request.method, "path": str(request.url.path),
+         "error": str(exc), "traceback": tb},
+        dedup_key=f"api_{request.method}_{request.url.path}_{type(exc).__name__}",
+        dedup_hours=1.0,
+    )
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
 @app.get("/health")
