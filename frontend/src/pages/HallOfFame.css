@@ -1,0 +1,172 @@
+.hof-page {
+  min-height: 100vh;
+  background: var(--bg);
+  padding: 40px 28px 72px;
+}
+
+.hof-container {
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+.hof-header {
+  margin-bottom: 36px;
+}
+
+.hof-title {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 2.75rem;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  color: var(--ink-900);
+  text-transform: uppercase;
+}
+
+.hof-subtitle {
+  margin-top: 8px;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+/* ── States ── */
+.hof-state {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  padding: 2rem 0;
+}
+.hof-state--error { color: #dc2626; }
+
+.hof-empty {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  padding: 1rem 0;
+}
+
+/* ── Sections ── */
+.hof-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+}
+
+.hof-section {}
+
+.hof-tier-heading {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-900);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--green-600, #2d6a4f);
+  display: inline-block;
+}
+
+/* ── Card ── */
+.hof-card {
+  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+  overflow: hidden;
+}
+
+/* ── Table ── */
+.hof-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.hof-table th {
+  text-align: left;
+  padding: 9px 16px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #888;
+  border-bottom: 1px solid var(--border-strong);
+  background: rgba(45,106,79,0.03);
+}
+
+.hof-th--rank { width: 48px; }
+.hof-th--num  { text-align: right; }
+
+.hof-table td {
+  padding: 10px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  vertical-align: middle;
+}
+
+.hof-table tr:last-child td { border-bottom: none; }
+
+.hof-row--top1 td { background: rgba(212,175,55,0.07); }
+.hof-row--top2 td { background: rgba(160,160,160,0.07); }
+.hof-row--top3 td { background: rgba(160,82,45,0.07); }
+
+.hof-rank {
+  font-size: 1.05rem;
+  text-align: center;
+}
+
+.hof-username {
+  font-weight: 700;
+  color: var(--ink-900);
+}
+
+.hof-tourn {
+  color: var(--ink-700);
+}
+
+.hof-gender {
+  display: inline-block;
+  font-size: 0.67rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  background: var(--bg-subtle, #f3f4f6);
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin-right: 6px;
+}
+
+.hof-year {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.hof-points {
+  font-weight: 700;
+  color: var(--ink-800);
+  text-align: right;
+}
+
+.hof-muted {
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.hof-link-cell {
+  text-align: right;
+}
+
+.hof-view-link {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--green-600, #2d6a4f);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.hof-view-link:hover { text-decoration: underline; }
+
+@media (max-width: 600px) {
+  .hof-table th:nth-child(5),
+  .hof-table td:nth-child(5) { display: none; }
+
+  .hof-title { font-size: 2rem; }
+}

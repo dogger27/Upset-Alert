@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
@@ -234,6 +235,67 @@ async def apply_all_schedules(
 
     await db.commit()
     return {"schedule_fields_set": schedule_set, "closing_times_set": closing_set}
+
+
+def _tier(category: Optional[str]) -> str:
+    cat = (category or "").upper()
+    if "SLAM" in cat or "GRAND" in cat:
+        return "Grand Slam"
+    if "1000" in cat:
+        return "1000"
+    if "500" in cat:
+        return "500"
+    return "250"
+
+
+_TIER_ORDER = ["Grand Slam", "1000", "500", "250"]
+
+
+@router.get("/hall-of-fame")
+async def hall_of_fame(db: AsyncSession = Depends(get_db)):
+    from app.models.draw_history import TournamentResult
+
+    res = await db.execute(
+        select(
+            TournamentResult.tournament_id,
+            TournamentResult.points,
+            TournamentResult.correct_count,
+            Tournament.name,
+            Tournament.year,
+            Tournament.gender,
+            Tournament.category,
+            User.username,
+        )
+        .join(Tournament, Tournament.id == TournamentResult.tournament_id)
+        .join(User, User.id == TournamentResult.user_id)
+        .where(TournamentResult.league_id.is_(None))
+        .order_by(TournamentResult.points.desc())
+    )
+    rows = res.all()
+
+    by_tier: dict[str, list] = {t: [] for t in _TIER_ORDER}
+    seen: dict[str, set] = {t: set() for t in _TIER_ORDER}  # (username, tournament_id) per tier
+
+    for row in rows:
+        tier = _tier(row.category)
+        key = (row.username, row.tournament_id)
+        if key in seen[tier]:
+            continue
+        if len(by_tier[tier]) >= 10:
+            continue
+        seen[tier].add(key)
+        by_tier[tier].append({
+            "rank": len(by_tier[tier]) + 1,
+            "username": row.username,
+            "points": row.points,
+            "correct_count": row.correct_count,
+            "tournament_id": row.tournament_id,
+            "tournament_name": row.name,
+            "tournament_year": row.year,
+            "tournament_gender": row.gender,
+        })
+
+    return [{"tier": tier, "entries": by_tier[tier]} for tier in _TIER_ORDER]
 
 
 @router.get("/{tournament_id}", response_model=TournamentOut)
