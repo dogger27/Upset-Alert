@@ -486,7 +486,20 @@ async def _do_scrape(tournament: Tournament, db: AsyncSession, force_refresh: bo
         force_refresh=force_refresh,
     )
     if parsed.wiki_page_id and tournament.wiki_page_id is None:
-        tournament.wiki_page_id = parsed.wiki_page_id
+        # Guard against UNIQUE violation if another record already claims this page_id
+        clash = await db.execute(
+            select(Tournament.id).where(
+                Tournament.wiki_page_id == parsed.wiki_page_id,
+                Tournament.id != tournament.id,
+            )
+        )
+        if clash.scalar_one_or_none() is None:
+            tournament.wiki_page_id = parsed.wiki_page_id
+        else:
+            logger.debug(
+                "wiki_page_id %s already claimed by another record; skipping for %s",
+                parsed.wiki_page_id, tournament.wiki_page_title,
+            )
     if parsed.resolved_title:
         logger.info("Correcting wiki_page_title for %s: %r → %r",
                     tournament.name, tournament.wiki_page_title, parsed.resolved_title)
