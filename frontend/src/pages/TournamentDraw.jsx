@@ -125,7 +125,8 @@ export default function TournamentDraw() {
         if (b.ranking != null) return 1
         return a.bracket_position - b.bracket_position
       })
-    unseeded.forEach((p, i) => { drawRanks[p.id] = seeded.length + i + 1 })
+    const autoOffset = seeded.reduce((max, p) => Math.max(max, p.seed), 0)
+    unseeded.forEach((p, i) => { drawRanks[p.id] = autoOffset + i + 1 })
 
     const byKey = {}
     for (const m of allMatches) byKey[`${m.round_number}:${m.match_number}`] = m
@@ -205,7 +206,8 @@ export default function TournamentDraw() {
         if (b.ranking != null) return 1
         return a.bracket_position - b.bracket_position
       })
-    unseeded.forEach((p, i) => { drawRanks[p.id] = seeded.length + i + 1 })
+    const countOffset = seeded.reduce((max, p) => Math.max(max, p.seed), 0)
+    unseeded.forEach((p, i) => { drawRanks[p.id] = countOffset + i + 1 })
 
     const byKey = {}
     for (const m of allMatches) byKey[`${m.round_number}:${m.match_number}`] = m
