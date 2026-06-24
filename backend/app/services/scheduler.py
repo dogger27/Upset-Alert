@@ -195,38 +195,30 @@ async def _on_season_page_edit(season_title: str) -> None:
 
 async def _refresh_weekly_rankings() -> None:
     """
-    Weekly guarantee: ensure te_rankings_snapshots has data for the current week
-    for both genders. Runs Sunday 6pm PDT; no-op if already populated this week.
+    Best-effort weekly rankings check (Sunday 6pm PDT).
+    Scrapes TE for both genders if this week's data is missing.
+    No retries, no error alerts — rankings may simply not be published
+    this week (grand slam or other ATP/WTA schedule reason).
     """
     from app.services.rankings import ensure_te_week
-    from app.services.system_log import app_log
 
     today = date.today()
     week_date = today - timedelta(days=today.weekday())  # Monday anchor
 
     logger.info("Weekly rankings check: week %s", week_date)
     scraped_any = False
-    try:
-        async with AsyncSessionLocal() as db:
-            for gender in ("M", "F"):
-                scraped = await ensure_te_week(gender, week_date, db)
-                if scraped:
-                    scraped_any = True
-            if scraped_any:
-                await db.commit()
-    except Exception as exc:
-        logger.warning("Weekly rankings refresh failed: %s", exc)
-        await app_log("error", "scheduler", f"Weekly rankings refresh failed: {exc}",
-                      {"week_date": str(week_date), "error": str(exc)},
-                      dedup_key=f"weekly_rankings_fail_{week_date}", dedup_hours=24)
-        return
+    async with AsyncSessionLocal() as db:
+        for gender in ("M", "F"):
+            scraped = await ensure_te_week(gender, week_date, db, log_errors=False)
+            if scraped:
+                scraped_any = True
+        if scraped_any:
+            await db.commit()
 
     if scraped_any:
-        logger.info("Weekly rankings refresh: stored new rankings for week %s", week_date)
-        await app_log("info", "rankings", f"Weekly rankings refreshed for week {week_date}",
-                      {"week_date": str(week_date)})
+        logger.info("Weekly rankings: stored new data for week %s", week_date)
     else:
-        logger.info("Weekly rankings: week %s already populated — no scrape needed", week_date)
+        logger.info("Weekly rankings: week %s already populated or not yet published", week_date)
 
 
 async def _refresh_elo() -> None:
