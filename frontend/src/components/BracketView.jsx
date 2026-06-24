@@ -198,8 +198,8 @@ function PlayerRow({
     >
       <span className="badge-left-slot">{leftBadge}</span>
       {showTypeSlot && <span className="badge-type-slot">{typeBadge}</span>}
-      {isServing && <TennisBall />}
       <span className="pname">{player.name}</span>
+      {isServing && <TennisBall />}
       {retired && <span className="ret-badge">ret.</span>}
       {showTick && <span className="pick-result correct" title={correctPick ? 'Correct pick' : 'Winner'}>✓</span>}
       {wrongPick && <span className="pick-result wrong" title="Wrong pick">✗</span>}
