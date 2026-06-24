@@ -506,7 +506,12 @@ class ESPNMonitor:
                 key = (m.player1_id, m.player2_id)
                 live = in_progress.get(key)
                 if live:
-                    new_val = [live[0], live[1], live[2], live[3]]  # [p1_scores, p2_scores, serving, set_wins_p1]
+                    # When ESPN omits possession, keep the last known serving indicator
+                    # to avoid the ball flickering off between polls
+                    new_serving = live[2]
+                    if new_serving is None and m.live_scores_json and len(m.live_scores_json) > 2:
+                        new_serving = m.live_scores_json[2]
+                    new_val = [live[0], live[1], new_serving, live[3]]  # [p1_scores, p2_scores, serving, set_wins_p1]
                     if m.live_scores_json != new_val:
                         m.live_scores_json = new_val
                         changed += 1
