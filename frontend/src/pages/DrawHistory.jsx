@@ -41,7 +41,7 @@ export default function DrawHistory() {
     <div className="dh-page">
       <div className="dh-container">
         <div className="dh-header">
-          <h1 className="dh-title">Draw History</h1>
+          <h1 className="dh-title">My Draw History</h1>
         </div>
 
         {isLoading && <div className="dh-state">Loading…</div>}

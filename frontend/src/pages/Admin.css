@@ -1,20 +1,65 @@
 .admin-page { max-width: 1600px; margin: 0 auto; padding: 2rem 1.5rem; }
-.admin-page h1 { font-size: 1.5rem; margin-bottom: 1.5rem; }
+.admin-page h1 { font-size: 1.5rem; margin-bottom: 1rem; }
+
+/* Sub-navigation tab bar */
+.admin-subnav {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.admin-subnav-btn {
+  all: unset;
+  cursor: pointer;
+  padding: 0.45rem 1rem;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color var(--dur) var(--ease-out), border-color var(--dur) var(--ease-out);
+  white-space: nowrap;
+}
+.admin-subnav-btn:hover { color: var(--text); }
+.admin-subnav-btn.active {
+  color: var(--clay);
+  border-bottom-color: var(--clay);
+  font-weight: 600;
+}
+
+.admin-tab-content { min-height: 200px; }
+
+/* Filters bar shared across Players + Rankings */
+.admin-filters-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.admin-search-form {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.admin-search-input {
+  font-size: 0.82rem;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  width: 180px;
+}
+.admin-search-input:focus { outline: none; border-color: var(--clay); }
 
 .admin-section { margin-bottom: 1.5rem; }
 .admin-section h2 { font-size: 1.1rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
 
-/* Two-column layout: Tournaments (fixed) + Users (fills remaining) */
-.admin-grid {
-  display: grid;
-  grid-template-columns: 360px 1fr;
-  gap: 1.5rem;
-  margin-bottom: 1.5rem;
-  align-items: start;
-}
-@media (max-width: 860px) {
-  .admin-grid { grid-template-columns: 1fr; }
-}
 
 /* Count badge next to heading */
 .admin-count {

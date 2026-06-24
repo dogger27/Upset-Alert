@@ -251,7 +251,9 @@ async def get_draw_history(
     current_user: User = Depends(get_current_user),
 ):
     from app.models.draw_history import TournamentResult
-    from app.models.tournament import Tournament
+    from app.models.tournament import Tournament, Match
+    from app.models.prediction import UserPrediction
+    from sqlalchemy import func
 
     res = await db.execute(
         select(TournamentResult)
@@ -265,13 +267,41 @@ async def get_draw_history(
     if not tourn_ids:
         return []
 
+    # Count total non-bye matches per tournament
+    match_counts_res = await db.execute(
+        select(Match.tournament_id, func.count().label("total"))
+        .where(Match.tournament_id.in_(tourn_ids), Match.is_bye == False)
+        .group_by(Match.tournament_id)
+    )
+    total_matches = {row.tournament_id: row.total for row in match_counts_res}
+
+    # Count user's completed predictions per tournament
+    pred_counts_res = await db.execute(
+        select(UserPrediction.tournament_id, func.count().label("total"))
+        .where(
+            UserPrediction.tournament_id.in_(tourn_ids),
+            UserPrediction.user_id == current_user.id,
+            UserPrediction.predicted_winner_id.isnot(None),
+        )
+        .group_by(UserPrediction.tournament_id)
+    )
+    user_preds = {row.tournament_id: row.total for row in pred_counts_res}
+
+    # Only include tournaments where user made all predictions
+    competed_ids = {
+        tid for tid in tourn_ids
+        if user_preds.get(tid, 0) >= total_matches.get(tid, 1)
+    }
+
     t_res = await db.execute(
-        select(Tournament).where(Tournament.id.in_(tourn_ids))
+        select(Tournament).where(Tournament.id.in_(competed_ids))
     )
     tournaments = {t.id: t for t in t_res.scalars().all()}
 
     by_tourn: dict[int, list] = {}
     for r in rows:
+        if r.tournament_id not in competed_ids:
+            continue
         by_tourn.setdefault(r.tournament_id, []).append({
             "league_id": r.league_id,
             "league_name": r.league_name,
@@ -283,6 +313,8 @@ async def get_draw_history(
 
     result = []
     for tid in tourn_ids:
+        if tid not in competed_ids:
+            continue
         t = tournaments.get(tid)
         if not t:
             continue
