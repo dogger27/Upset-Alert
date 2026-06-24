@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import get_current_user
@@ -20,6 +20,7 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas.user import ChangePassword, Token, UserAdminOut, UserOut, UserPublicOut, UserRegister, UserUpdate
 from app.services import email as email_service
+from app.services.system_log import app_log
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -242,6 +243,120 @@ async def put_notification_prefs(
     for key in set(enabled_keys):
         db.add(NotificationPreference(user_id=current_user.id, pref_key=key))
     await db.commit()
+
+
+@router.get("/me/draw-history")
+async def get_draw_history(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    from app.models.draw_history import TournamentResult
+    from app.models.tournament import Tournament
+
+    res = await db.execute(
+        select(TournamentResult)
+        .where(TournamentResult.user_id == current_user.id)
+        .order_by(TournamentResult.tournament_id.desc(), TournamentResult.league_id.nullsfirst())
+    )
+    rows = res.scalars().all()
+
+    # Group by tournament
+    tourn_ids = list(dict.fromkeys(r.tournament_id for r in rows))
+    if not tourn_ids:
+        return []
+
+    t_res = await db.execute(
+        select(Tournament).where(Tournament.id.in_(tourn_ids))
+    )
+    tournaments = {t.id: t for t in t_res.scalars().all()}
+
+    by_tourn: dict[int, list] = {}
+    for r in rows:
+        by_tourn.setdefault(r.tournament_id, []).append({
+            "league_id": r.league_id,
+            "league_name": r.league_name,
+            "rank": r.rank,
+            "total_participants": r.total_participants,
+            "points": r.points,
+            "correct_count": r.correct_count,
+        })
+
+    result = []
+    for tid in tourn_ids:
+        t = tournaments.get(tid)
+        if not t:
+            continue
+        result.append({
+            "tournament_id": tid,
+            "name": t.name,
+            "year": t.year,
+            "gender": t.gender,
+            "surface": t.surface,
+            "category": t.category,
+            "results": by_tourn[tid],
+        })
+    return result
+
+
+@router.post("/admin/backfill-draw-history", status_code=200)
+async def backfill_draw_history(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Admin-only: recompute and save TournamentResult rows for all completed tournaments."""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admins only")
+
+    from app.models.tournament import Tournament, Match
+    from app.models.prediction import UserPrediction
+    from app.models.league import League
+    from app.models.draw_history import TournamentResult
+    from app.services.scoring import rank_users, score_user
+    from app.services.notifications import _persist_tournament_results
+    from sqlalchemy.orm import selectinload
+    from collections import defaultdict
+
+    t_res = await db.execute(
+        select(Tournament).where(Tournament.status == "completed")
+    )
+    tournaments = t_res.scalars().all()
+
+    lg_res = await db.execute(select(League).options(selectinload(League.members)))
+    all_leagues = lg_res.scalars().all()
+
+    saved = 0
+    for tournament in tournaments:
+        m_res = await db.execute(
+            select(Match)
+            .options(selectinload(Match.player1), selectinload(Match.player2), selectinload(Match.winner))
+            .where(Match.tournament_id == tournament.id, Match.status == "completed")
+        )
+        completed_matches = m_res.scalars().all()
+        if not completed_matches:
+            continue
+
+        pred_res = await db.execute(
+            select(UserPrediction).where(
+                UserPrediction.tournament_id == tournament.id,
+                UserPrediction.predicted_winner_id.isnot(None),
+            )
+        )
+        all_preds = pred_res.scalars().all()
+        preds_by_user: dict = defaultdict(list)
+        for p in all_preds:
+            preds_by_user[p.user_id].append(p)
+
+        if not preds_by_user:
+            continue
+
+        await _persist_tournament_results(
+            db, tournament.id, set(preds_by_user.keys()),
+            preds_by_user, completed_matches, tournament, all_leagues,
+        )
+        saved += 1
+
+    await app_log("info", "admin", f"Draw history backfill complete: {saved} tournament(s) processed")
+    return {"tournaments_processed": saved}
 
 
 @router.patch("/me/password", status_code=status.HTTP_204_NO_CONTENT)

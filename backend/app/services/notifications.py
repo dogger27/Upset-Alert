@@ -262,6 +262,86 @@ async def notify_draw_released(
 
 
 # ---------------------------------------------------------------------------
+# Tournament results persistence
+# ---------------------------------------------------------------------------
+
+async def _persist_tournament_results(
+    db,
+    tournament_id: int,
+    all_participants: set,
+    preds_by_user: dict,
+    completed_matches: list,
+    tournament,
+    all_leagues: list,
+) -> None:
+    """Upsert TournamentResult rows for every participant in every group."""
+    from datetime import datetime, timezone as tz
+    from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+    from app.models.draw_history import TournamentResult
+
+    now = datetime.now(tz.utc).replace(tzinfo=None)
+
+    # Global scores
+    global_scores = {
+        uid: score_user(uid, preds_by_user[uid], completed_matches, tournament, None)
+        for uid in all_participants
+    }
+    global_ranked = rank_users(list(global_scores.values()))
+    global_rank_of = {s.user_id: i + 1 for i, s in enumerate(global_ranked)}
+    global_total = len(all_participants)
+
+    rows = []
+    for uid in all_participants:
+        s = global_scores[uid]
+        rows.append({
+            "user_id": uid,
+            "tournament_id": tournament_id,
+            "league_id": None,
+            "league_name": "Global",
+            "rank": global_rank_of[uid],
+            "total_participants": global_total,
+            "points": s.total_points,
+            "correct_count": s.correct_count,
+            "saved_at": now,
+        })
+
+    # Per-league scores
+    for lg in all_leagues:
+        member_ids = {m.user_id for m in lg.members}
+        participants = all_participants & member_ids
+        if len(participants) < 2:
+            continue
+        lg_scores = {
+            uid: score_user(uid, preds_by_user[uid], completed_matches, tournament, None)
+            for uid in participants
+        }
+        lg_ranked = rank_users(list(lg_scores.values()))
+        lg_rank_of = {s.user_id: i + 1 for i, s in enumerate(lg_ranked)}
+        for uid in participants:
+            s = lg_scores[uid]
+            rows.append({
+                "user_id": uid,
+                "tournament_id": tournament_id,
+                "league_id": lg.id,
+                "league_name": lg.name,
+                "rank": lg_rank_of[uid],
+                "total_participants": len(participants),
+                "points": s.total_points,
+                "correct_count": s.correct_count,
+                "saved_at": now,
+            })
+
+    for row in rows:
+        stmt = sqlite_insert(TournamentResult).values(**row).on_conflict_do_update(
+            index_elements=["user_id", "tournament_id", "league_id"],
+            set_={k: row[k] for k in ("rank", "total_participants", "points", "correct_count", "saved_at")},
+        )
+        await db.execute(stmt)
+    await db.commit()
+    logger.info("Saved %d result row(s) for tournament %d", len(rows), tournament_id)
+
+
+# ---------------------------------------------------------------------------
 # Tournament-completion notification
 # ---------------------------------------------------------------------------
 
@@ -319,8 +399,23 @@ async def notify_tournament_complete(tournament_id: int) -> None:
         for p in all_preds:
             preds_by_user[p.user_id].append(p)
 
-        # Only users with a complete bracket
+        # All users with any predictions (for draw history); eligible = complete bracket
+        all_participants = set(preds_by_user.keys())
         eligible = {uid for uid, preds in preds_by_user.items() if len(preds) >= total_matches}
+
+        # Load all leagues (needed for both results persistence and notifications)
+        lg_res = await db.execute(
+            select(League).options(selectinload(League.members))
+        )
+        all_leagues = lg_res.scalars().all()
+
+        # Persist final standings for ALL participants (draw history)
+        if all_participants:
+            await _persist_tournament_results(
+                db, tournament_id, all_participants, preds_by_user,
+                completed_matches, tournament, all_leagues,
+            )
+
         if not eligible:
             return
 
@@ -338,7 +433,7 @@ async def notify_tournament_complete(tournament_id: int) -> None:
         if not to_notify:
             return
 
-        # Global scores for all eligible users
+        # Recompute scores for email (eligible subset only)
         global_scores = {
             uid: score_user(uid, preds_by_user[uid], completed_matches, tournament, None)
             for uid in eligible
@@ -346,17 +441,11 @@ async def notify_tournament_complete(tournament_id: int) -> None:
         global_ranked = rank_users(list(global_scores.values()))
         global_rank_of = {s.user_id: i + 1 for i, s in enumerate(global_ranked)}
 
-        # Per-league scores (only leagues with at least one eligible participant)
-        lg_res = await db.execute(
-            select(League).options(selectinload(League.members))
-        )
-        all_leagues = lg_res.scalars().all()
-
         league_data: dict[int, dict] = {}
         for lg in all_leagues:
             member_ids = {m.user_id for m in lg.members}
             participants = eligible & member_ids
-            if len(participants) < 2:  # skip solo leagues — no competition to report
+            if len(participants) < 2:
                 continue
             lg_scores = {
                 uid: score_user(uid, preds_by_user[uid], completed_matches, tournament, None)
@@ -370,13 +459,11 @@ async def notify_tournament_complete(tournament_id: int) -> None:
                 "points":  {s.user_id: s.total_points for s in lg_ranked},
             }
 
-        # Which leagues each user participated in
         user_league_ids: dict[int, list] = defaultdict(list)
         for lg_id, data in league_data.items():
             for uid in data["rank_of"]:
                 user_league_ids[uid].append(lg_id)
 
-        # Load user email addresses
         users_res = await db.execute(
             select(User.id, User.email).where(User.id.in_(to_notify))
         )

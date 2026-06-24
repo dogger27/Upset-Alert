@@ -10,6 +10,7 @@ import TournamentDraw from './pages/TournamentDraw'
 import LeagueDetail from './pages/LeagueDetail'
 import Admin from './pages/Admin'
 import About from './pages/About'
+import DrawHistory from './pages/DrawHistory'
 import Rules from './pages/Rules'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
@@ -45,6 +46,7 @@ export default function App() {
         <Route path="/leagues/:id" element={<LeagueDetail />} />
         <Route path="/admin" element={<RequireAdmin><Admin /></RequireAdmin>} />
         <Route path="/about" element={<About />} />
+        <Route path="/draw-history" element={<DrawHistory />} />
         <Route path="/rules" element={<Rules />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />

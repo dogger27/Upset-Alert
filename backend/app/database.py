@@ -19,7 +19,8 @@ async def get_db():
 async def init_db():
     # Ensure all model modules are imported so their tables are registered with
     # Base.metadata before create_all runs.
-    import app.models.rankings  # noqa: F401
+    import app.models.rankings   # noqa: F401
+    import app.models.draw_history  # noqa: F401
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -87,6 +88,22 @@ async def _migrate(conn):
             "detail_json JSON)"
         ),
         "CREATE INDEX IF NOT EXISTS idx_sys_logs_created ON system_logs(created_at DESC)",
+        (
+            "CREATE TABLE IF NOT EXISTS tournament_results "
+            "(id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "user_id INTEGER NOT NULL, "
+            "tournament_id INTEGER NOT NULL, "
+            "league_id INTEGER, "
+            "league_name VARCHAR NOT NULL, "
+            "rank INTEGER NOT NULL, "
+            "total_participants INTEGER NOT NULL, "
+            "points REAL NOT NULL, "
+            "correct_count INTEGER NOT NULL, "
+            "saved_at DATETIME NOT NULL, "
+            "UNIQUE (user_id, tournament_id, league_id))"
+        ),
+        "CREATE INDEX IF NOT EXISTS idx_tr_user ON tournament_results(user_id)",
+        "CREATE INDEX IF NOT EXISTS idx_tr_tourn ON tournament_results(tournament_id)",
     ]
     for sql in migrations:
         try:

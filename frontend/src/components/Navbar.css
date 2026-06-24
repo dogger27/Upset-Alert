@@ -175,6 +175,8 @@
   cursor: pointer;
   font-family: inherit;
   transition: background 0.12s;
+  text-decoration: none;
+  box-sizing: border-box;
 }
 .profile-dropdown-item:hover {
   background: var(--bg-subtle, #f3f4f6);
