@@ -9,7 +9,7 @@ export default function Rules() {
         </div>
 
         <div className="about-body">
-          <div className="about-grid">
+          <div className="about-grid" style={{gridTemplateColumns: '1fr'}}>
             <div className="about-card">
               <div className="about-card-icon">🎾</div>
               <h4 className="about-card-heading">Pick the Draw</h4>
