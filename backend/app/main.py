@@ -9,6 +9,8 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+
+from app.core.middleware import RateLimitMiddleware, SecurityHeadersMiddleware
 from fastapi.responses import JSONResponse
 
 from app.database import init_db
@@ -57,13 +59,14 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Tennis Fantasy League", version="0.1.0", lifespan=lifespan)
 
+app.add_middleware(RateLimitMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173",               # Vite dev server
-        "https://upsetalert.paulwiens.com",    # Legacy production
-        "https://upsetalert.ca",               # Primary domain
-        "https://www.upsetalert.ca",           # www variant
+        "http://localhost:5173",        # Vite dev server
+        "https://upsetalert.ca",        # Primary domain
+        "https://www.upsetalert.ca",    # www variant
     ],
     allow_credentials=True,
     allow_methods=["*"],
