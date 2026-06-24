@@ -1,3 +1,10 @@
+.register-field-hint {
+  margin: -6px 0 4px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
 .auth-page {
   min-height: calc(100vh - 56px);
   display: flex;

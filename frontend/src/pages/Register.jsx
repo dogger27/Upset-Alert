@@ -92,6 +92,7 @@ export default function Register() {
               <input autoComplete="nickname" value={username} onChange={e => setUsername(e.target.value)} required placeholder="Your unique handle" />
               <label>Full Name</label>
               <input autoComplete="name" value={fullName} onChange={e => setFullName(e.target.value)} required placeholder="Your full name" />
+              <p className="register-field-hint">Only shown in private groups, and recommended for a better group experience.</p>
               <label>Email</label>
               <input type="email" autoComplete="username" value={email} onChange={e => setEmail(e.target.value)} required />
               <label>Password</label>
