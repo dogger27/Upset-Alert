@@ -65,6 +65,24 @@
   display: inline-block;
 }
 
+/* ── Two-column gender split ── */
+.hof-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.hof-gender-col {}
+
+.hof-gender-label {
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
 /* ── Card ── */
 .hof-card {
   background: #fff;
@@ -122,19 +140,6 @@
   color: var(--ink-700);
 }
 
-.hof-gender {
-  display: inline-block;
-  font-size: 0.67rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-muted);
-  background: var(--bg-subtle, #f3f4f6);
-  border-radius: 4px;
-  padding: 1px 5px;
-  margin-right: 6px;
-}
-
 .hof-year {
   color: var(--text-muted);
   font-size: 0.82rem;
@@ -164,9 +169,10 @@
 }
 .hof-view-link:hover { text-decoration: underline; }
 
-@media (max-width: 600px) {
-  .hof-table th:nth-child(5),
-  .hof-table td:nth-child(5) { display: none; }
+@media (max-width: 700px) {
+  .hof-two-col {
+    grid-template-columns: 1fr;
+  }
 
   .hof-title { font-size: 2rem; }
 }

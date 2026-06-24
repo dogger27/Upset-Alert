@@ -301,29 +301,33 @@ async def hall_of_fame(db: AsyncSession = Depends(get_db)):
     )
     rows = res.all()
 
-    by_tier: dict[str, list] = {t: [] for t in _TIER_ORDER}
+    by_tier: dict[str, dict[str, list]] = {t: {"M": [], "F": []} for t in _TIER_ORDER}
     seen: dict[str, set] = {t: set() for t in _TIER_ORDER}  # (username, tournament_id) per tier
 
     for row in rows:
         tier = _tier(row.category)
+        gender = row.gender  # "M" or "F"
         key = (row.username, row.tournament_id)
         if key in seen[tier]:
             continue
-        if len(by_tier[tier]) >= 10:
+        if len(by_tier[tier][gender]) >= 10:
             continue
         seen[tier].add(key)
-        by_tier[tier].append({
-            "rank": len(by_tier[tier]) + 1,
+        bucket = by_tier[tier][gender]
+        bucket.append({
+            "rank": len(bucket) + 1,
             "username": row.username,
             "points": row.points,
             "correct_count": row.correct_count,
             "tournament_id": row.tournament_id,
             "tournament_name": row.name,
             "tournament_year": row.year,
-            "tournament_gender": row.gender,
         })
 
-    return [{"tier": tier, "entries": by_tier[tier]} for tier in _TIER_ORDER]
+    return [
+        {"tier": tier, "men": by_tier[tier]["M"], "women": by_tier[tier]["F"]}
+        for tier in _TIER_ORDER
+    ]
 
 
 @router.get("/{tournament_id}", response_model=TournamentOut)
