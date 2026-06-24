@@ -166,11 +166,12 @@ def _build_te_index(te_players: list) -> dict[frozenset, list[int]]:
 # Tennis Explorer scraper
 # ---------------------------------------------------------------------------
 
-async def _scrape_te(gender: str) -> list[tuple[str, int, Optional[str]]]:
+async def _scrape_te(gender: str, log_errors: bool = True) -> list[tuple[str, int, Optional[str]]]:
     """
     Scrape all pages of Tennis Explorer rankings for the given gender.
     Returns [(name_raw, rank, te_slug), ...] in TE's "Surname Firstname" format.
     te_slug is the URL slug from the player's TE profile, e.g. "sinner-jannik".
+    Pass log_errors=False to suppress app_log entries (e.g. best-effort weekly check).
     """
     import httpx
 
@@ -194,10 +195,11 @@ async def _scrape_te(gender: str) -> list[tuple[str, int, Optional[str]]]:
         logger.info("Tennis Explorer %s scrape: %d players across %d pages", gender, len(results), page - 1)
     except Exception as exc:
         logger.warning("Tennis Explorer %s scrape failed: %s", gender, exc)
-        from app.services.system_log import app_log
-        await app_log("error", "rankings", f"Tennis Explorer {gender} scrape failed: {exc}",
-                      {"gender": gender, "error": str(exc)},
-                      dedup_key=f"te_scrape_fail_{gender}", dedup_hours=2)
+        if log_errors:
+            from app.services.system_log import app_log
+            await app_log("error", "rankings", f"Tennis Explorer {gender} scrape failed: {exc}",
+                          {"gender": gender, "error": str(exc)},
+                          dedup_key=f"te_scrape_fail_{gender}", dedup_hours=2)
 
     return results
 
@@ -206,11 +208,12 @@ async def _scrape_te(gender: str) -> list[tuple[str, int, Optional[str]]]:
 # DB-backed ranking management
 # ---------------------------------------------------------------------------
 
-async def ensure_te_week(gender: str, week_date: date, db: AsyncSession) -> bool:
+async def ensure_te_week(gender: str, week_date: date, db: AsyncSession, log_errors: bool = True) -> bool:
     """
     Ensure te_rankings_snapshots has data for (gender, week_date).
     Scrapes Tennis Explorer and stores results if the week is absent.
     Returns True if a scrape was performed.
+    Pass log_errors=False to suppress app_log entries (e.g. best-effort weekly check).
     """
     from app.models.rankings import TePlayer, TeRankingsSnapshot
 
@@ -223,13 +226,15 @@ async def ensure_te_week(gender: str, week_date: date, db: AsyncSession) -> bool
         return False
 
     logger.info("Scraping Tennis Explorer for %s week %s...", gender, week_date)
-    raw_rows = await _scrape_te(gender)
+    raw_rows = await _scrape_te(gender, log_errors=log_errors)
     if len(raw_rows) < 50:
-        logger.warning("TE %s scrape returned only %d players — aborting", gender, len(raw_rows))
-        from app.services.system_log import app_log
-        await app_log("warning", "rankings", f"TE {gender} scrape returned only {len(raw_rows)} players — aborting",
-                      {"gender": gender, "count": len(raw_rows)},
-                      dedup_key=f"te_scrape_low_{gender}", dedup_hours=2)
+        logger.info("TE %s scrape returned only %d players — no rankings stored for week %s",
+                    gender, len(raw_rows), week_date)
+        if log_errors:
+            from app.services.system_log import app_log
+            await app_log("warning", "rankings", f"TE {gender} scrape returned only {len(raw_rows)} players — aborting",
+                          {"gender": gender, "count": len(raw_rows)},
+                          dedup_key=f"te_scrape_low_{gender}", dedup_hours=2)
         return False
 
     existing_players_res = await db.execute(
