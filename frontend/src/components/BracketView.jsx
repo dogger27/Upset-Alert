@@ -106,6 +106,16 @@ function resolveMatchPlayers(matches, picks, mode) {
 // Sub-components
 // ---------------------------------------------------------------------------
 
+function TennisBall() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 11 11" style={{ display: 'block', flexShrink: 0 }}>
+      <circle cx="5.5" cy="5.5" r="5.5" fill="#b5e04a"/>
+      <path d="M1.5 5.5 Q5.5 2 9.5 5.5" stroke="white" strokeWidth="1.3" fill="none"/>
+      <path d="M1.5 5.5 Q5.5 9 9.5 5.5" stroke="white" strokeWidth="1.3" fill="none"/>
+    </svg>
+  )
+}
+
 function ScoreCell({ val }) {
   if (!val) return <span className="score-cell empty">·</span>
   const clean = val.replace(/r$/i, '')
@@ -127,7 +137,7 @@ function PlayerRow({
   isPicked, isWinner, isEliminated, isProjected, isDeadPick,
   scores, retired, onClick, locked,
   showTypeSlot, showScores, markWinner, showRowBg, showFlag,
-  qualifierNum,
+  qualifierNum, isServing,
 }) {
   const player = playerId != null ? playerById[playerId] : null
 
@@ -188,6 +198,7 @@ function PlayerRow({
     >
       <span className="badge-left-slot">{leftBadge}</span>
       {showTypeSlot && <span className="badge-type-slot">{typeBadge}</span>}
+      {isServing && <TennisBall />}
       <span className="pname">{player.name}</span>
       {retired && <span className="ret-badge">ret.</span>}
       {showTick && <span className="pick-result correct" title={correctPick ? 'Correct pick' : 'Winner'}>✓</span>}
@@ -233,6 +244,14 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
   const p1Scores = scores?.[0] ?? null
   const p2Scores = scores?.[1] ?? null
   const ret = hasRetirement(match.scores)  // retirement markers only on final scores
+
+  // Serving ball: live_scores[2] is 1 (p1 serving) or 2 (p2) or null
+  // Suppress during tiebreaks: both players' last game count is "6" → 6-6 in current set
+  const servingPlayer = isLive ? (match.live_scores?.[2] ?? null) : null
+  const inTiebreak = isLive && p1Scores?.length > 0 && p2Scores?.length > 0 &&
+    p1Scores[p1Scores.length - 1] === '6' && p2Scores[p2Scores.length - 1] === '6'
+  const p1Serving = servingPlayer === 1 && !inTiebreak
+  const p2Serving = servingPlayer === 2 && !inTiebreak
 
 
   const p1 = p1id != null ? playerById[p1id] : null
@@ -324,6 +343,7 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
           markWinner={mode === 'live'}
           showFlag={mode === 'picks'}
           qualifierNum={qualifierNums?.[p1id]}
+          isServing={p1Serving}
         />
         <PlayerRow
           playerId={p2id} playerById={playerById} drawRanks={drawRanks}
@@ -341,6 +361,7 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
           markWinner={mode === 'live'}
           showFlag={mode === 'picks'}
           qualifierNum={qualifierNums?.[p2id]}
+          isServing={p2Serving}
         />
       </div>
       {h2hAvailable && (

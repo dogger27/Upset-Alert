@@ -203,6 +203,8 @@ def _comp_live_scores(comp: dict) -> Optional[tuple]:
     Returns (name_a, name_b, scores_a, scores_b) where scores are current
     set/game counts as strings. Completed tiebreak sets are annotated with
     the loser's tiebreak points, e.g. "7(11)", matching the Wikipedia format.
+    Returns (name_a, name_b, scores_a, scores_b, serving) where serving is
+    1 if player A is serving (possession=True), 2 if B, None if unknown.
     Returns None if either player is unknown.
     """
     competitors = comp.get("competitors", [])
@@ -234,7 +236,15 @@ def _comp_live_scores(comp: dict) -> Optional[tuple]:
             sc_a.append(str(int(va)))
             sc_b.append(str(int(vb)))
 
-    return name_a, name_b, sc_a, sc_b
+    # possession=True means this competitor is currently serving
+    if a.get("possession"):
+        serving = 1
+    elif b.get("possession"):
+        serving = 2
+    else:
+        serving = None
+
+    return name_a, name_b, sc_a, sc_b, serving
 
 
 def _comp_result(comp: dict) -> Optional[tuple]:
@@ -473,13 +483,14 @@ class ESPNMonitor:
             result = _comp_live_scores(comp)
             if not result:
                 continue
-            name_a, name_b, sc_a, sc_b = result
+            name_a, name_b, sc_a, sc_b, serving = result
             entry_a = _find_entry(name_a, pairs, tok_index)
             entry_b = _find_entry(name_b, pairs, tok_index)
             if not entry_a or not entry_b or entry_a.id == entry_b.id:
                 continue
-            in_progress[(entry_a.id, entry_b.id)] = (sc_a, sc_b)
-            in_progress[(entry_b.id, entry_a.id)] = (sc_b, sc_a)
+            serving_b = (3 - serving) if serving else None
+            in_progress[(entry_a.id, entry_b.id)] = (sc_a, sc_b, serving)
+            in_progress[(entry_b.id, entry_a.id)] = (sc_b, sc_a, serving_b)
 
         async with AsyncSessionLocal() as db:
             m_res = await db.execute(
@@ -498,7 +509,7 @@ class ESPNMonitor:
                 key = (m.player1_id, m.player2_id)
                 live = in_progress.get(key)
                 if live:
-                    new_val = [live[0], live[1]]
+                    new_val = [live[0], live[1], live[2]]  # [p1_scores, p2_scores, serving: 1|2|null]
                     if m.live_scores_json != new_val:
                         m.live_scores_json = new_val
                         changed += 1
