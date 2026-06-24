@@ -234,6 +234,7 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
   const p2Scores = scores?.[1] ?? null
   const ret = hasRetirement(match.scores)  // retirement markers only on final scores
 
+
   const p1 = p1id != null ? playerById[p1id] : null
   const p2 = p2id != null ? playerById[p2id] : null
   const showTypeSlot = forceTypeSlot || playerNeedsTypeSlot(p1) || playerNeedsTypeSlot(p2)

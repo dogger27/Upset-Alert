@@ -13,12 +13,13 @@ Polls ESPN ATP/WTA scoreboards every 60 seconds. Performs two jobs per cycle:
   JOB 2 — Live scores (full tournament window)
     When a STATUS_IN_PROGRESS match features both players in our draw:
       • Locates the Match record and writes current set/game scores to live_scores_json
+      • Completed tiebreak sets are annotated (e.g. "7(11)") using ESPN's tiebreak field
       • live_scores_json non-null ↔ match is in progress; cleared when match completes
 
   JOB 3 — Match results (full tournament window)
     When a STATUS_FINAL match features both players in our draw:
       • Locates the pending Match record by player pair lookup
-      • Sets winner_id + scores_json (integer set scores, no tiebreak)
+      • Sets winner_id + scores_json (integer set scores only — no tiebreak annotation)
       • Clears live_scores_json
       • Wikipedia will later overwrite scores_json with tiebreak annotations
         when the EventStream or 30-min poll fires — no special handling needed
@@ -200,7 +201,8 @@ def _comp_live_scores(comp: dict) -> Optional[tuple]:
     """
     Parse a STATUS_IN_PROGRESS competition.
     Returns (name_a, name_b, scores_a, scores_b) where scores are current
-    set/game counts as integer strings, e.g. (["6", "4"], ["3", 2"]).
+    set/game counts as strings. Completed tiebreak sets are annotated with
+    the loser's tiebreak points, e.g. "7(11)", matching the Wikipedia format.
     Returns None if either player is unknown.
     """
     competitors = comp.get("competitors", [])
@@ -212,14 +214,27 @@ def _comp_live_scores(comp: dict) -> Optional[tuple]:
     if not name_a or not name_b or "TBD" in (name_a, name_b):
         return None
 
-    def scores(c: dict) -> list:
-        return [
-            str(int(ls["value"]))
-            for ls in c.get("linescores", [])
-            if ls.get("value") is not None
-        ]
+    sc_a, sc_b = [], []
+    for la, lb in zip(a.get("linescores", []), b.get("linescores", [])):
+        va = la.get("value")
+        vb = lb.get("value")
+        if va is None or vb is None:
+            continue
+        ta = la.get("tiebreak")  # this player's tiebreak points (if set ended in TB)
+        tb_v = lb.get("tiebreak")
+        if ta is not None and tb_v is not None:
+            # Winner shows set score with loser's tiebreak points in parens
+            if la.get("winner"):
+                sc_a.append(f"{int(va)}({int(tb_v)})")
+                sc_b.append(str(int(vb)))
+            else:
+                sc_a.append(str(int(va)))
+                sc_b.append(f"{int(vb)}({int(ta)})")
+        else:
+            sc_a.append(str(int(va)))
+            sc_b.append(str(int(vb)))
 
-    return name_a, name_b, scores(a), scores(b)
+    return name_a, name_b, sc_a, sc_b
 
 
 def _comp_result(comp: dict) -> Optional[tuple]:
