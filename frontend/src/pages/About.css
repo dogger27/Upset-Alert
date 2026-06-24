@@ -140,6 +140,35 @@
   line-height: 1.6;
 }
 
+.about-pts-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+  margin-top: 10px;
+}
+.about-pts-table th,
+.about-pts-table td {
+  text-align: center;
+  padding: 4px 5px;
+  border: 1px solid var(--border-strong);
+}
+.about-pts-table th {
+  background: rgba(45,106,79,0.10);
+  font-weight: 700;
+  color: var(--ink-700);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.about-pts-table td:first-child {
+  font-weight: 700;
+  color: var(--ink-700);
+  text-align: left;
+  padding-left: 7px;
+}
+.about-pts-table tbody tr:nth-child(even) {
+  background: rgba(0,0,0,0.025);
+}
+
 /* ── Prose ── */
 .about-prose {
   font-family: var(--font-body);
