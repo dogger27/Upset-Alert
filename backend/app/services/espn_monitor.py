@@ -202,7 +202,7 @@ def _comp_live_scores(comp: dict) -> Optional[tuple]:
     Parse a STATUS_IN_PROGRESS competition.
     Returns (name_a, name_b, scores_a, scores_b) where scores are current
     set/game counts as strings. Completed tiebreak sets are annotated with
-    the loser's tiebreak points, e.g. "7(11)", matching the Wikipedia format.
+    the player's own tiebreak points, e.g. winner "7(13)" and loser "6(11)".
     Returns (name_a, name_b, scores_a, scores_b, serving) where serving is
     1 if player A is serving (possession=True), 2 if B, None if unknown.
     Returns None if either player is unknown.
@@ -225,13 +225,9 @@ def _comp_live_scores(comp: dict) -> Optional[tuple]:
         ta = la.get("tiebreak")  # this player's tiebreak points (if set ended in TB)
         tb_v = lb.get("tiebreak")
         if ta is not None and tb_v is not None:
-            # Winner shows set score with loser's tiebreak points in parens
-            if la.get("winner"):
-                sc_a.append(f"{int(va)}({int(tb_v)})")
-                sc_b.append(str(int(vb)))
-            else:
-                sc_a.append(str(int(va)))
-                sc_b.append(f"{int(vb)}({int(ta)})")
+            # Each player shows their own tiebreak points in parens
+            sc_a.append(f"{int(va)}({int(ta)})")
+            sc_b.append(f"{int(vb)}({int(tb_v)})")
         else:
             sc_a.append(str(int(va)))
             sc_b.append(str(int(vb)))
