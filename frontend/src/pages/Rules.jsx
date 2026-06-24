@@ -16,7 +16,7 @@ export default function Rules() {
               <p className="about-card-body">
                 When a tournament draw is released, predict the winner of every match.
                 Each correct pick earns points — later rounds are worth more, and
-                higher-tier tournaments offer bigger rewards.
+                higher-tier tournaments offer more points.
               </p>
               <table className="about-pts-table">
                 <thead>
