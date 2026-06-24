@@ -193,6 +193,42 @@ async def _on_season_page_edit(season_title: str) -> None:
         logger.warning("Failed to refresh titles from season page %s: %s", season_title, exc)
 
 
+async def _refresh_weekly_rankings() -> None:
+    """
+    Weekly guarantee: ensure te_rankings_snapshots has data for the current week
+    for both genders. Runs Sunday 6pm PDT; no-op if already populated this week.
+    """
+    from app.services.rankings import ensure_te_week
+    from app.services.system_log import app_log
+
+    today = date.today()
+    week_date = today - timedelta(days=today.weekday())  # Monday anchor
+
+    logger.info("Weekly rankings check: week %s", week_date)
+    scraped_any = False
+    try:
+        async with AsyncSessionLocal() as db:
+            for gender in ("M", "F"):
+                scraped = await ensure_te_week(gender, week_date, db)
+                if scraped:
+                    scraped_any = True
+            if scraped_any:
+                await db.commit()
+    except Exception as exc:
+        logger.warning("Weekly rankings refresh failed: %s", exc)
+        await app_log("error", "scheduler", f"Weekly rankings refresh failed: {exc}",
+                      {"week_date": str(week_date), "error": str(exc)},
+                      dedup_key=f"weekly_rankings_fail_{week_date}", dedup_hours=24)
+        return
+
+    if scraped_any:
+        logger.info("Weekly rankings refresh: stored new rankings for week %s", week_date)
+        await app_log("info", "rankings", f"Weekly rankings refreshed for week {week_date}",
+                      {"week_date": str(week_date)})
+    else:
+        logger.info("Weekly rankings: week %s already populated — no scrape needed", week_date)
+
+
 async def _refresh_elo() -> None:
     from app.services.rankings import refresh_elo_ratings
     await refresh_elo_ratings()
@@ -263,6 +299,16 @@ def start_scheduler() -> None:
         misfire_grace_time=120,
     )
     scheduler.add_job(
+        _refresh_weekly_rankings,
+        "cron",
+        day_of_week="sun",
+        hour=18,
+        minute=0,
+        timezone="America/Los_Angeles",  # PDT/PST — always fires at 6pm Pacific
+        id="refresh_weekly_rankings",
+        misfire_grace_time=3600,
+    )
+    scheduler.add_job(
         _refresh_elo,
         "cron",
         day_of_week="mon",
@@ -277,6 +323,7 @@ def start_scheduler() -> None:
     logger.info("Active tournament refresh scheduled (every 30 min)")
     logger.info("EventStreams listener started for real-time draw updates")
     logger.info("Subscription sync scheduled (every 5 min)")
+    logger.info("Weekly rankings refresh scheduled (Sunday 6pm PDT)")
     asyncio.create_task(eventstream.start())
     asyncio.create_task(espn_monitor.start())
     # Subscribe immediately on startup so EventStreams catches edits from the
