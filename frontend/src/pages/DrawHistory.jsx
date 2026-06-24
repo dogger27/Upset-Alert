@@ -67,6 +67,9 @@ export default function DrawHistory() {
                       {entry.name} <span className="dh-year">{entry.year}</span>
                     </span>
                     <span className="dh-category">{categoryShort(entry.category)}</span>
+                    <Link className="dh-picks-link" to={`/tournaments/${entry.tournament_id}`}>
+                      View my picks →
+                    </Link>
                   </div>
                 </div>
 

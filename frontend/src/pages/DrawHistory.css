@@ -71,6 +71,16 @@
   color: var(--text-muted);
 }
 
+.dh-picks-link {
+  margin-left: auto;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--green-600, #2d6a4f);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.dh-picks-link:hover { text-decoration: underline; }
+
 .dh-category {
   font-size: 0.72rem;
   font-weight: 700;
