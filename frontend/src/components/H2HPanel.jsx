@@ -36,6 +36,29 @@ function fmtName(teName) {
   return `${parts[parts.length - 1]} ${parts.slice(0, -1).join(' ')}`
 }
 
+const IOC_TO_ISO2 = {
+  AUS:'AU', USA:'US', GBR:'GB', FRA:'FR', GER:'DE', ESP:'ES', ITA:'IT',
+  RUS:'RU', CAN:'CA', JPN:'JP', CHN:'CN', KOR:'KR', ARG:'AR', BRA:'BR',
+  SUI:'CH', AUT:'AT', BEL:'BE', NED:'NL', DEN:'DK', NOR:'NO', SWE:'SE',
+  FIN:'FI', POL:'PL', CZE:'CZ', SVK:'SK', HUN:'HU', ROU:'RO', BUL:'BG',
+  SRB:'RS', CRO:'HR', SLO:'SI', BIH:'BA', MKD:'MK', GRE:'GR', TUR:'TR',
+  POR:'PT', GEO:'GE', KAZ:'KZ', UKR:'UA', BLR:'BY', LAT:'LV', LTU:'LT',
+  EST:'EE', ISR:'IL', RSA:'ZA', EGY:'EG', MAR:'MA', TUN:'TN', NGR:'NG',
+  CHI:'CL', COL:'CO', PER:'PE', URU:'UY', VEN:'VE', ECU:'EC', BOL:'BO',
+  PAR:'PY', MEX:'MX', IND:'IN', PAK:'PK', THA:'TH', VIE:'VN', INA:'ID',
+  MAS:'MY', PHI:'PH', TPE:'TW', HKG:'HK', NZL:'NZ', BAH:'BS', DOM:'DO',
+  HAI:'HT', PUR:'PR', TTO:'TT', JAM:'JM', BAR:'BB', GUA:'GT', CRC:'CR',
+  MON:'MC', LUX:'LU', ISL:'IS', IRL:'IE', CYP:'CY', MLT:'MT',
+  ALG:'DZ', MDA:'MD', ARM:'AM', AZE:'AZ', UZB:'UZ', KGZ:'KG', TJK:'TJ',
+  TKM:'TM', BIZ:'BZ', PAN:'PA', NCA:'NI', ESA:'SV', HON:'HN',
+}
+
+function iocToFlagClass(ioc) {
+  if (!ioc) return null
+  const iso = IOC_TO_ISO2[ioc.toUpperCase()]
+  return iso ? iso.toLowerCase() : null
+}
+
 function calcAge(dob) {
   if (!dob) return null
   const today = new Date()
@@ -135,9 +158,15 @@ export default function H2HPanel({ slug1, slug2, player1, player2, tournSurface,
         <div className="h2h-header">
           {/* Names row — always use our API names (Firstname Lastname order) */}
           <div className="h2h-label" />
-          <div className="h2h-col-val h2h-player-name">{player1?.name ?? fmtName(name_p1)}</div>
+          <div className="h2h-col-val h2h-player-name">
+            {iocToFlagClass(player1?.nationality) && <span className={`fi fi-${iocToFlagClass(player1.nationality)} h2h-flag`} />}
+            {player1?.name ?? fmtName(name_p1)}
+          </div>
           <div className="h2h-vs">vs</div>
-          <div className="h2h-col-val h2h-player-name">{player2?.name ?? fmtName(name_p2)}</div>
+          <div className="h2h-col-val h2h-player-name">
+            {iocToFlagClass(player2?.nationality) && <span className={`fi fi-${iocToFlagClass(player2.nationality)} h2h-flag`} />}
+            {player2?.name ?? fmtName(name_p2)}
+          </div>
 
           {/* Overall row — click to show all matches */}
           {data && <>
