@@ -54,7 +54,8 @@ function getSection(t) {
   return null
 }
 
-function TCard({ t, section, pickStatus }) {
+function TCard({ t, section, pickStatus, onLoginRequired }) {
+  const { user } = useAuth()
   const pickState = pickStatus?.[t.id] ?? 'none'
   const tour = t.gender === 'M' ? 'ATP' : 'WTA'
   const tier = tierFromCategory(t.category)
@@ -70,6 +71,8 @@ function TCard({ t, section, pickStatus }) {
     ? `https://en.wikipedia.org/wiki?curid=${t.wiki_page_id}`
     : undefined
 
+  const toLink = hasDrawData ? `/tournaments/${t.id}` : undefined
+
   return (
     <TournamentCard
       tour={tour}
@@ -81,13 +84,14 @@ function TCard({ t, section, pickStatus }) {
       section={section}
       pickState={pickState}
       drawDates={drawDates}
-      to={hasDrawData ? `/tournaments/${t.id}` : undefined}
+      to={user ? toLink : undefined}
+      onGuestClick={!user && toLink ? onLoginRequired : undefined}
       wikiUrl={wikiUrl}
     />
   )
 }
 
-function GenderCol({ label, tour, tournaments, section, pickStatus }) {
+function GenderCol({ label, tour, tournaments, section, pickStatus, onLoginRequired }) {
   const accent = tour === 'ATP' ? 'var(--atp-600)' : 'var(--wta-600)'
   const borderColor = tour === 'ATP' ? 'var(--atp-100)' : 'var(--wta-100)'
 
@@ -105,7 +109,7 @@ function GenderCol({ label, tour, tournaments, section, pickStatus }) {
         {label}
       </div>
       {tournaments.map(t => (
-        <TCard key={t.id} t={t} section={section} pickStatus={pickStatus} />
+        <TCard key={t.id} t={t} section={section} pickStatus={pickStatus} onLoginRequired={onLoginRequired} />
       ))}
     </div>
   )
@@ -117,7 +121,7 @@ const SECTION_BG = {
   muted:   'rgba(147,163,156,0.10)',  // neutral gray tint
 }
 
-function Section({ title, description, accent, live, items, section, pickStatus, emptyMessage }) {
+function Section({ title, description, accent, live, items, section, pickStatus, emptyMessage, onLoginRequired }) {
   if (!items.length && !emptyMessage) return null
   const atp = items.filter(t => t.gender === 'M')
   const wta = items.filter(t => t.gender === 'F')
@@ -138,8 +142,8 @@ function Section({ title, description, accent, live, items, section, pickStatus,
       />
       {items.length ? (
         <div style={{ display: 'flex', gap: 22, paddingLeft: 4 }}>
-          <GenderCol label="ATP" tour="ATP" tournaments={atp} section={section} pickStatus={pickStatus} />
-          <GenderCol label="WTA" tour="WTA" tournaments={wta} section={section} pickStatus={pickStatus} />
+          <GenderCol label="ATP" tour="ATP" tournaments={atp} section={section} pickStatus={pickStatus} onLoginRequired={onLoginRequired} />
+          <GenderCol label="WTA" tour="WTA" tournaments={wta} section={section} pickStatus={pickStatus} onLoginRequired={onLoginRequired} />
         </div>
       ) : (
         <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: 'var(--text-muted)', fontStyle: 'italic', margin: 0, paddingLeft: 4 }}>
@@ -197,6 +201,20 @@ function CreateLeagueModal({ onClose }) {
           {mutation.isPending ? 'Creating…' : 'Create League'}
         </button>
       </form>
+    </Modal>
+  )
+}
+
+function LoginRequiredModal({ onClose }) {
+  return (
+    <Modal title="Login Required" onClose={onClose}>
+      <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.92rem', color: 'var(--ink-700)', margin: '0 0 20px' }}>
+        Please log in to view the draw and make match predictions!
+      </p>
+      <div style={{ display: 'flex', gap: 10 }}>
+        <Link to="/login" className="btn-secondary" style={{ flex: 1, textAlign: 'center' }}>Log in</Link>
+        <Link to="/register" className="btn-clay" style={{ flex: 1, textAlign: 'center' }}>Create Account</Link>
+      </div>
     </Modal>
   )
 }
@@ -287,6 +305,7 @@ export default function Home() {
               items={open}
               section="open"
               pickStatus={pickStatus}
+              onLoginRequired={() => setModal('login-required')}
               emptyMessage={dataLoaded ? 'No open tournaments at this time.' : null}
             />
             <Section
@@ -296,6 +315,7 @@ export default function Home() {
               items={active}
               section="active"
               pickStatus={pickStatus}
+              onLoginRequired={() => setModal('login-required')}
               emptyMessage={dataLoaded ? 'No active tournaments at this time.' : null}
             />
             <Section
@@ -306,18 +326,20 @@ export default function Home() {
               section="upcoming"
               pickStatus={pickStatus}
             />
-            <Section
-              title="Last Week"
-              accent="muted"
-              description="Completed in the past 7 days."
-              items={lastWeek}
-              section="lastweek"
-              pickStatus={pickStatus}
-            />
+            {user && (
+              <Section
+                title="Last Week"
+                accent="muted"
+                description="Completed in the past 7 days."
+                items={lastWeek}
+                section="lastweek"
+                pickStatus={pickStatus}
+              />
+            )}
           </div>
 
-          {/* Leagues sidebar */}
-          <aside style={{
+          {/* Leagues sidebar — only for logged-in users */}
+          {user && <aside style={{
             width: 256, flexShrink: 0,
             background: 'rgba(45,106,79,0.07)', border: '1px solid var(--border-strong)',
             borderRadius: 'var(--radius-lg)', padding: '22px 20px',
@@ -329,12 +351,10 @@ export default function Home() {
               marginBottom: 14,
             }}>Leagues</h2>
 
-            {user && (
-              <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-                <button className="league-sidebar-btn" onClick={() => setModal('create')}>Create</button>
-                <button className="league-sidebar-btn" onClick={() => setModal('join')}>Join</button>
-              </div>
-            )}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+              <button className="league-sidebar-btn" onClick={() => setModal('create')}>Create</button>
+              <button className="league-sidebar-btn" onClick={() => setModal('join')}>Join</button>
+            </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <LeagueCard
@@ -344,7 +364,7 @@ export default function Home() {
                 icon="🌍"
                 to="/leagues"
               />
-              {user && memberLeagues.map(lg => (
+              {memberLeagues.map(lg => (
                 <LeagueCard
                   key={lg.id}
                   name={lg.name}
@@ -374,18 +394,15 @@ export default function Home() {
                   ))}
                 </>
               )}
-              {!user && (
-                <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)', margin: '0.5rem 0 0' }}>
-                  <Link to="/login">Log in</Link> to see your private leagues.
-                </p>
-              )}
+
             </div>
-          </aside>
+          </aside>}
         </div>
       </div>
 
-      {modal === 'create' && <CreateLeagueModal onClose={() => setModal(null)} />}
-      {modal === 'join'   && <JoinLeagueModal   onClose={() => setModal(null)} />}
+      {modal === 'create'         && <CreateLeagueModal    onClose={() => setModal(null)} />}
+      {modal === 'join'           && <JoinLeagueModal      onClose={() => setModal(null)} />}
+      {modal === 'login-required' && <LoginRequiredModal   onClose={() => setModal(null)} />}
     </div>
   )
 }

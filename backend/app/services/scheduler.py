@@ -10,6 +10,8 @@ import logging
 import traceback
 from datetime import date, datetime, timedelta, timezone
 
+import httpx
+
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import select
 
@@ -126,6 +128,9 @@ async def _refresh_active_tournaments(force_refresh: bool = False) -> None:
                     ))
                 if just_completed:
                     asyncio.create_task(notify_tournament_complete(t_id))
+            except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout) as exc:
+                logger.debug("Network blip refreshing %s: %s", t_wiki, exc)
+                await db.rollback()
             except Exception as exc:
                 tb = traceback.format_exc()
                 logger.warning("Failed to refresh %s: %s\n%s", t_wiki, exc, tb)

@@ -82,7 +82,7 @@ function GlobeIcon() {
   )
 }
 
-export function TournamentCard({ tour = 'ATP', name, city, surface = 'grass', tier = '500', dateRange, section = 'open', pickState = null, drawDates = null, to, wikiUrl }) {
+export function TournamentCard({ tour = 'ATP', name, city, surface = 'grass', tier = '500', dateRange, section = 'open', pickState = null, drawDates = null, to, wikiUrl, onGuestClick }) {
   const [hover, setHover] = useState(false)
   const isATP = String(tour).toUpperCase() === 'ATP'
   const accent = isATP ? 'var(--atp-500)' : 'var(--wta-500)'
@@ -158,6 +158,13 @@ export function TournamentCard({ tour = 'ATP', name, city, surface = 'grass', ti
     </>
   )
 
+  if (onGuestClick && interactive) {
+    return (
+      <div style={cardStyle} onClick={onGuestClick} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+        {inner}
+      </div>
+    )
+  }
   if (to && interactive) {
     return (
       <Link to={to} style={cardStyle} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
