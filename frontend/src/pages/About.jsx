@@ -150,6 +150,14 @@ export default function About() {
           </div>
 
           <div className="about-section">
+            <h3 className="about-section-title">Contact</h3>
+            <p className="about-prose">
+              Please connect with me for bug fixes, feature requests, or a friendly hello!
+            </p>
+            <ContactForm />
+          </div>
+
+          <div className="about-section">
             <h3 className="about-section-title">Under the Hood</h3>
             <p className="about-prose">
               Tournament draws and match results are sourced from{' '}
@@ -163,13 +171,6 @@ export default function About() {
               schedules are populated from Wikipedia's season pages at the start of each year. Once
               set up, the whole pipeline runs without any user or admin input — it just works.
             </p>
-          </div>
-          <div className="about-section">
-            <h3 className="about-section-title">Contact</h3>
-            <p className="about-prose">
-              Please connect with me for bug fixes, feature requests, or a friendly hello!
-            </p>
-            <ContactForm />
           </div>
         </div>
       </div>
