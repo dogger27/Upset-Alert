@@ -191,7 +191,7 @@ export default function Navbar() {
                         onClick={() => setMenuOpen(false)}
                       >
                         Draw History
-                      </button>
+                      </Link>
                       <button className="profile-dropdown-item" onClick={openNotifications}>
                         Notifications
                       </button>
