@@ -40,7 +40,8 @@ function computeDrawRanks(players) {
   const seeded = players.filter(p => p.seed != null)
   for (const p of seeded) ranks[p.id] = p.seed
 
-  // Sort unseeded by world ranking, then assign sequential relative ranks after the seeds
+  // Sort unseeded by world ranking, then assign sequential relative ranks after the seeds.
+  // Offset = highest seed number present (not count), so withdrawn seeds don't cause collisions.
   const unseeded = players
     .filter(p => p.seed == null)
     .sort((a, b) => {
@@ -49,7 +50,7 @@ function computeDrawRanks(players) {
       if (b.ranking != null) return 1
       return a.bracket_position - b.bracket_position
     })
-  const offset = seeded.length
+  const offset = seeded.reduce((max, p) => Math.max(max, p.seed), 0)
   unseeded.forEach((p, i) => { ranks[p.id] = offset + i + 1 })
   return ranks
 }
