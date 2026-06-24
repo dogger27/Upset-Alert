@@ -506,12 +506,26 @@ class ESPNMonitor:
                 key = (m.player1_id, m.player2_id)
                 live = in_progress.get(key)
                 if live:
-                    # When ESPN omits possession, keep the last known serving indicator
-                    # to avoid the ball flickering off between polls
-                    new_serving = live[2]
-                    if new_serving is None and m.live_scores_json and len(m.live_scores_json) > 2:
-                        new_serving = m.live_scores_json[2]
-                    new_val = [live[0], live[1], new_serving, live[3]]  # [p1_scores, p2_scores, serving, set_wins_p1]
+                    raw_serving = live[2]  # from ESPN possession; may be None
+
+                    # Total completed games determines serve parity from match start.
+                    # Scores are strings like "6", "7(13)" — strip tiebreak annotation.
+                    def _gc(s: str) -> int:
+                        return int(s.split("(")[0])
+                    total_games = sum(_gc(s) for s in live[0] + live[1])
+
+                    if raw_serving is not None:
+                        # ESPN tells us who is serving; back-calculate who served first.
+                        if m.served_first is None:
+                            m.served_first = raw_serving if total_games % 2 == 0 else (3 - raw_serving)
+                        serving = raw_serving
+                    elif m.served_first is not None:
+                        # No ESPN possession signal — infer from first-server + game parity.
+                        serving = m.served_first if total_games % 2 == 0 else (3 - m.served_first)
+                    else:
+                        serving = None  # not enough data yet
+
+                    new_val = [live[0], live[1], serving, live[3]]  # [p1_scores, p2_scores, serving, set_wins_p1]
                     if m.live_scores_json != new_val:
                         m.live_scores_json = new_val
                         changed += 1

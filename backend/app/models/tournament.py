@@ -180,6 +180,8 @@ class Match(Base):
     # Live set/game scores from ESPN while match is in progress; cleared on completion.
     # Non-null ↔ match is currently in progress.
     live_scores_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    # 1 = player1 served first, 2 = player2; set once from ESPN possession + game parity
+    served_first: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # pending / completed
     status: Mapped[str] = mapped_column(String, default="pending")
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
