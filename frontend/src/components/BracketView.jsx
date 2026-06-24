@@ -117,14 +117,15 @@ function TennisBall() {
   )
 }
 
-function ScoreCell({ val }) {
+function ScoreCell({ val, bold }) {
   if (!val) return <span className="score-cell empty">·</span>
   const clean = val.replace(/r$/i, '')
   const tb = clean.match(/^(\d+)\((\d+)\)$/)
+  const style = bold ? { fontWeight: 700 } : undefined
   if (tb) return (
-    <span className="score-cell tb">{tb[1]}<sup>{tb[2]}</sup></span>
+    <span className="score-cell tb" style={style}>{tb[1]}<sup>{tb[2]}</sup></span>
   )
-  return <span className="score-cell">{clean}</span>
+  return <span className="score-cell" style={style}>{clean}</span>
 }
 
 function hasRetirement(scores) {
@@ -138,7 +139,7 @@ function PlayerRow({
   isPicked, isWinner, isEliminated, isProjected, isDeadPick,
   scores, retired, onClick, locked,
   showTypeSlot, showScores, markWinner, showRowBg, showFlag,
-  qualifierNum, isServing,
+  qualifierNum, isServing, boldScores,
 }) {
   const player = playerId != null ? playerById[playerId] : null
 
@@ -212,7 +213,7 @@ function PlayerRow({
       })()}
       {showScores && scores && scores.length > 0 && (
         <span className="score-row">
-          {scores.map((s, i) => <ScoreCell key={i} val={s} />)}
+          {scores.map((s, i) => <ScoreCell key={i} val={s} bold={boldScores?.has(i)} />)}
         </span>
       )}
     </div>
@@ -253,6 +254,12 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
     p1Scores[p1Scores.length - 1] === '6' && p2Scores[p2Scores.length - 1] === '6'
   const p1Serving = servingPlayer === 1 && !inTiebreak
   const p2Serving = servingPlayer === 2 && !inTiebreak
+
+  // Bold completed set scores for the winner of each set
+  // live_scores[3] is [true/false/null, ...] from p1's perspective
+  const setWinners = isLive ? (match.live_scores?.[3] ?? null) : null
+  const p1BoldScores = setWinners ? new Set(setWinners.flatMap((w, i) => w === true  ? [i] : [])) : null
+  const p2BoldScores = setWinners ? new Set(setWinners.flatMap((w, i) => w === false ? [i] : [])) : null
 
 
   const p1 = p1id != null ? playerById[p1id] : null
@@ -345,6 +352,7 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
           showFlag={mode === 'picks'}
           qualifierNum={qualifierNums?.[p1id]}
           isServing={p1Serving}
+          boldScores={p1BoldScores}
         />
         <PlayerRow
           playerId={p2id} playerById={playerById} drawRanks={drawRanks}
@@ -363,6 +371,7 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
           showFlag={mode === 'picks'}
           qualifierNum={qualifierNums?.[p2id]}
           isServing={p2Serving}
+          boldScores={p2BoldScores}
         />
       </div>
       {h2hAvailable && (

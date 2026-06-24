@@ -200,11 +200,10 @@ def _comp_live_players(comp: dict) -> list:
 def _comp_live_scores(comp: dict) -> Optional[tuple]:
     """
     Parse a STATUS_IN_PROGRESS competition.
-    Returns (name_a, name_b, scores_a, scores_b) where scores are current
-    set/game counts as strings. Completed tiebreak sets are annotated with
-    the player's own tiebreak points, e.g. winner "7(13)" and loser "6(11)".
-    Returns (name_a, name_b, scores_a, scores_b, serving) where serving is
-    1 if player A is serving (possession=True), 2 if B, None if unknown.
+    Returns (name_a, name_b, scores_a, scores_b, serving, set_wins_a) where:
+    - scores include own tiebreak points in parens, e.g. "7(13)" / "6(11)"
+    - serving: 1 if A is serving (possession=True), 2 if B, None if unknown
+    - set_wins_a: list of True (A won), False (B won), or None (in progress)
     Returns None if either player is unknown.
     """
     competitors = comp.get("competitors", [])
@@ -216,7 +215,7 @@ def _comp_live_scores(comp: dict) -> Optional[tuple]:
     if not name_a or not name_b or "TBD" in (name_a, name_b):
         return None
 
-    sc_a, sc_b = [], []
+    sc_a, sc_b, set_wins_a = [], [], []
     for la, lb in zip(a.get("linescores", []), b.get("linescores", [])):
         va = la.get("value")
         vb = lb.get("value")
@@ -225,14 +224,15 @@ def _comp_live_scores(comp: dict) -> Optional[tuple]:
         ta = la.get("tiebreak")  # this player's tiebreak points (if set ended in TB)
         tb_v = lb.get("tiebreak")
         if ta is not None and tb_v is not None:
-            # Each player shows their own tiebreak points in parens
             sc_a.append(f"{int(va)}({int(ta)})")
             sc_b.append(f"{int(vb)}({int(tb_v)})")
         else:
             sc_a.append(str(int(va)))
             sc_b.append(str(int(vb)))
+        # winner field present on completed sets only; absent means in progress
+        w = la.get("winner")
+        set_wins_a.append(True if w is True else (False if w is False else None))
 
-    # possession=True means this competitor is currently serving
     if a.get("possession"):
         serving = 1
     elif b.get("possession"):
@@ -240,7 +240,7 @@ def _comp_live_scores(comp: dict) -> Optional[tuple]:
     else:
         serving = None
 
-    return name_a, name_b, sc_a, sc_b, serving
+    return name_a, name_b, sc_a, sc_b, serving, set_wins_a
 
 
 def _comp_result(comp: dict) -> Optional[tuple]:
@@ -479,14 +479,15 @@ class ESPNMonitor:
             result = _comp_live_scores(comp)
             if not result:
                 continue
-            name_a, name_b, sc_a, sc_b, serving = result
+            name_a, name_b, sc_a, sc_b, serving, set_wins_a = result
             entry_a = _find_entry(name_a, pairs, tok_index)
             entry_b = _find_entry(name_b, pairs, tok_index)
             if not entry_a or not entry_b or entry_a.id == entry_b.id:
                 continue
             serving_b = (3 - serving) if serving else None
-            in_progress[(entry_a.id, entry_b.id)] = (sc_a, sc_b, serving)
-            in_progress[(entry_b.id, entry_a.id)] = (sc_b, sc_a, serving_b)
+            set_wins_b = [(not w if w is not None else None) for w in set_wins_a]
+            in_progress[(entry_a.id, entry_b.id)] = (sc_a, sc_b, serving, set_wins_a)
+            in_progress[(entry_b.id, entry_a.id)] = (sc_b, sc_a, serving_b, set_wins_b)
 
         async with AsyncSessionLocal() as db:
             m_res = await db.execute(
@@ -505,7 +506,7 @@ class ESPNMonitor:
                 key = (m.player1_id, m.player2_id)
                 live = in_progress.get(key)
                 if live:
-                    new_val = [live[0], live[1], live[2]]  # [p1_scores, p2_scores, serving: 1|2|null]
+                    new_val = [live[0], live[1], live[2], live[3]]  # [p1_scores, p2_scores, serving, set_wins_p1]
                     if m.live_scores_json != new_val:
                         m.live_scores_json = new_val
                         changed += 1
