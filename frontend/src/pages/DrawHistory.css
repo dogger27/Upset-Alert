@@ -1,0 +1,156 @@
+.dh-page {
+  min-height: 100vh;
+  background: var(--bg);
+  padding: 40px 28px 72px;
+}
+
+.dh-container {
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+.dh-header {
+  margin-bottom: 28px;
+}
+
+.dh-title {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 2.75rem;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  color: var(--ink-900);
+  text-transform: uppercase;
+}
+
+/* ── States ── */
+.dh-state {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  padding: 2rem 0;
+}
+.dh-state a { color: var(--green-600); text-decoration: underline; }
+.dh-state--error { color: #dc2626; }
+
+/* ── Card list ── */
+.dh-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dh-card {
+  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+  overflow: hidden;
+}
+
+.dh-card-header {
+  padding: 14px 20px 10px;
+  border-bottom: 1px solid var(--border-strong);
+  background: rgba(45,106,79,0.04);
+}
+
+.dh-card-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.dh-tourn-name {
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--ink-900);
+}
+
+.dh-year {
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.dh-category {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  background: var(--bg-subtle, #f3f4f6);
+  border-radius: 4px;
+  padding: 2px 7px;
+}
+
+/* Surface pill */
+.dh-surface {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 4px;
+  padding: 2px 7px;
+  color: #fff;
+}
+.dh-surface--clay  { background: #c0392b; }
+.dh-surface--grass { background: #27ae60; }
+.dh-surface--hard  { background: #2980b9; }
+
+/* ── Results table ── */
+.dh-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.dh-table th {
+  text-align: left;
+  padding: 8px 16px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #888;
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.dh-table td {
+  padding: 9px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  vertical-align: middle;
+}
+
+.dh-table tr:last-child td { border-bottom: none; }
+
+.dh-row--global td { background: rgba(45,106,79,0.04); }
+
+.dh-group-name {
+  font-weight: 600;
+  color: var(--ink-800);
+}
+
+.dh-rank {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--ink-800);
+}
+.dh-rank--gold   { color: #b8860b; }
+.dh-rank--silver { color: #666; }
+.dh-rank--bronze { color: #a0522d; }
+
+.dh-total {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.dh-points {
+  font-weight: 700;
+  color: var(--ink-800);
+}
+
+.dh-muted { color: var(--text-muted); }
+
+@media (max-width: 600px) {
+  .dh-table th:nth-child(3),
+  .dh-table td:nth-child(3) { display: none; }
+}

@@ -185,6 +185,13 @@ export default function Navbar() {
                       <button className="profile-dropdown-item" onClick={openEdit}>
                         Edit profile
                       </button>
+                      <Link
+                        className="profile-dropdown-item"
+                        to="/draw-history"
+                        onClick={() => setMenuOpen(false)}
+                      >
+                        Draw History
+                      </button>
                       <button className="profile-dropdown-item" onClick={openNotifications}>
                         Notifications
                       </button>
