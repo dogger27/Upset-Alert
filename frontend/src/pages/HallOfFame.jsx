@@ -9,6 +9,49 @@ function fetchHallOfFame() {
 
 const MEDAL = { 1: '🥇', 2: '🥈', 3: '🥉' }
 
+function GenderTable({ entries, label }) {
+  return (
+    <div className="hof-gender-col">
+      <p className="hof-gender-label">{label}</p>
+      {entries.length === 0 ? (
+        <p className="hof-empty">No results yet.</p>
+      ) : (
+        <div className="hof-card">
+          <table className="hof-table">
+            <thead>
+              <tr>
+                <th className="hof-th--rank">#</th>
+                <th>User</th>
+                <th>Tournament</th>
+                <th className="hof-th--num">Pts</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {entries.map(entry => (
+                <tr key={`${entry.username}-${entry.tournament_id}`} className={entry.rank <= 3 ? `hof-row--top${entry.rank}` : ''}>
+                  <td className="hof-rank">{MEDAL[entry.rank] ?? `#${entry.rank}`}</td>
+                  <td className="hof-username">{entry.username}</td>
+                  <td className="hof-tourn">
+                    {entry.tournament_name}{' '}
+                    <span className="hof-year">{entry.tournament_year}</span>
+                  </td>
+                  <td className="hof-points">{entry.points}</td>
+                  <td className="hof-link-cell">
+                    <Link className="hof-view-link" to={`/tournaments/${entry.tournament_id}`}>
+                      View →
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function HallOfFame() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['hall-of-fame'],
@@ -32,47 +75,10 @@ export default function HallOfFame() {
             {data.map(section => (
               <div key={section.tier} className="hof-section">
                 <h2 className="hof-tier-heading">{section.tier}</h2>
-
-                {section.entries.length === 0 ? (
-                  <p className="hof-empty">No results yet.</p>
-                ) : (
-                  <div className="hof-card">
-                    <table className="hof-table">
-                      <thead>
-                        <tr>
-                          <th className="hof-th--rank">#</th>
-                          <th>User</th>
-                          <th>Tournament</th>
-                          <th className="hof-th--num">Points</th>
-                          <th className="hof-th--num">Correct</th>
-                          <th></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {section.entries.map(entry => (
-                          <tr key={`${entry.username}-${entry.tournament_id}`} className={entry.rank <= 3 ? `hof-row--top${entry.rank}` : ''}>
-                            <td className="hof-rank">
-                              {MEDAL[entry.rank] ?? `#${entry.rank}`}
-                            </td>
-                            <td className="hof-username">{entry.username}</td>
-                            <td className="hof-tourn">
-                              <span className="hof-gender">{entry.tournament_gender === 'M' ? 'ATP' : 'WTA'}</span>
-                              {entry.tournament_name}{' '}
-                              <span className="hof-year">{entry.tournament_year}</span>
-                            </td>
-                            <td className="hof-points">{entry.points}</td>
-                            <td className="hof-muted">{entry.correct_count}</td>
-                            <td className="hof-link-cell">
-                              <Link className="hof-view-link" to={`/tournaments/${entry.tournament_id}`}>
-                                View →
-                              </Link>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                <div className="hof-two-col">
+                  <GenderTable entries={section.men} label="Men" />
+                  <GenderTable entries={section.women} label="Women" />
+                </div>
               </div>
             ))}
           </div>
