@@ -210,7 +210,7 @@ async def send_tournament_complete_notification(
           <table style="width:100%;border-collapse:collapse;font-size:14px;margin:0 0 20px">
             <thead>
               <tr style="background:#f3f4f6">
-                <th style="padding:8px 12px;text-align:left">Group</th>
+                <th style="padding:8px 12px;text-align:left">League</th>
                 <th style="padding:8px 12px;text-align:center">Rank</th>
                 <th style="padding:8px 12px;text-align:right">Points</th>
               </tr>
@@ -254,7 +254,7 @@ async def send_round_complete_notification(
           <table style="width:100%;border-collapse:collapse;font-size:14px;margin:0 0 20px">
             <thead>
               <tr style="background:#f3f4f6">
-                <th style="padding:8px 12px;text-align:left">Group</th>
+                <th style="padding:8px 12px;text-align:left">League</th>
                 <th style="padding:8px 12px;text-align:center">Rank</th>
                 <th style="padding:8px 12px;text-align:right">Points</th>
               </tr>
