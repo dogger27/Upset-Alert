@@ -254,6 +254,25 @@ _TIER_ORDER = ["Grand Slam", "1000", "500", "250"]
 @router.get("/hall-of-fame")
 async def hall_of_fame(db: AsyncSession = Depends(get_db)):
     from app.models.draw_history import TournamentResult
+    from app.models.prediction import UserPrediction
+
+    # Subqueries to enforce "competed" = user picked every non-bye match
+    pick_count_sq = (
+        select(
+            UserPrediction.tournament_id,
+            UserPrediction.user_id,
+            func.count().label("picks"),
+        )
+        .where(UserPrediction.predicted_winner_id.isnot(None))
+        .group_by(UserPrediction.tournament_id, UserPrediction.user_id)
+        .subquery()
+    )
+    match_count_sq = (
+        select(Match.tournament_id, func.count().label("total"))
+        .where(Match.is_bye == False)  # noqa: E712
+        .group_by(Match.tournament_id)
+        .subquery()
+    )
 
     res = await db.execute(
         select(
@@ -268,7 +287,16 @@ async def hall_of_fame(db: AsyncSession = Depends(get_db)):
         )
         .join(Tournament, Tournament.id == TournamentResult.tournament_id)
         .join(User, User.id == TournamentResult.user_id)
-        .where(TournamentResult.league_id.is_(None))
+        .join(
+            pick_count_sq,
+            (pick_count_sq.c.tournament_id == TournamentResult.tournament_id)
+            & (pick_count_sq.c.user_id == TournamentResult.user_id),
+        )
+        .join(match_count_sq, match_count_sq.c.tournament_id == TournamentResult.tournament_id)
+        .where(
+            TournamentResult.league_id.is_(None),
+            pick_count_sq.c.picks >= match_count_sq.c.total,
+        )
         .order_by(TournamentResult.points.desc())
     )
     rows = res.all()
