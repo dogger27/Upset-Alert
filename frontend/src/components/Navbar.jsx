@@ -157,6 +157,7 @@ export default function Navbar() {
           <span className="navbar-label navbar-active">Draw</span>
         )}
         <Link to="/" className={isActive('/') ? 'navbar-active' : ''}>Dashboard</Link>
+        <Link to="/rules" className={isActive('/rules') ? 'navbar-active' : ''}>Rules</Link>
         <Link to="/about" className={isActive('/about') ? 'navbar-active' : ''}>About</Link>
         {user ? (
           <>
