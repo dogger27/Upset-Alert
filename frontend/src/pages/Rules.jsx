@@ -22,6 +22,7 @@ export default function Rules() {
                 <thead>
                   <tr>
                     <th>Tier</th>
+                    <th>R128/96</th>
                     <th>R64</th>
                     <th>R32</th>
                     <th>R16</th>
@@ -31,10 +32,10 @@ export default function Rules() {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr><td>250</td><td>1</td><td>1</td><td>2</td><td>3</td><td>4</td><td>6</td></tr>
-                  <tr><td>500</td><td>1</td><td>1</td><td>2</td><td>4</td><td>8</td><td>12</td></tr>
-                  <tr><td>1000</td><td>1</td><td>2</td><td>4</td><td>8</td><td>12</td><td>16</td></tr>
-                  <tr><td>Slam</td><td>2</td><td>4</td><td>8</td><td>12</td><td>16</td><td>20</td></tr>
+                  <tr><td>250</td><td>—</td><td>1</td><td>1</td><td>2</td><td>3</td><td>4</td><td>6</td></tr>
+                  <tr><td>500</td><td>—</td><td>1</td><td>1</td><td>2</td><td>4</td><td>8</td><td>12</td></tr>
+                  <tr><td>1000</td><td>1</td><td>1</td><td>2</td><td>4</td><td>8</td><td>12</td><td>16</td></tr>
+                  <tr><td>Slam</td><td>1</td><td>2</td><td>4</td><td>8</td><td>12</td><td>16</td><td>20</td></tr>
                 </tbody>
               </table>
             </div>
