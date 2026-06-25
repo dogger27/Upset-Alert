@@ -292,10 +292,10 @@ function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMember
     >
       <div className="lt-progress-header">
         <span className={`lt-gender-badge lt-gender-badge--${t.gender === 'M' ? 'm' : 'f'}`}>
-          {t.gender === 'M' ? 'ATP' : 'WTA'}
+          {t.gender === 'M' ? 'ATP' : 'WTA'} {tierLabel(t.category)}
         </span>
         <span className="lt-progress-title">{t.name} {t.year}</span>
-        <span className="lt-progress-meta">{tierLabel(t.category)} · {pickerCount}/{leagueMemberCount} competing</span>
+        <span className="lt-progress-meta">{pickerCount}/{leagueMemberCount} competing</span>
       </div>
 
       {data.length === 0 ? (
