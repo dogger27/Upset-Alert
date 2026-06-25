@@ -13,8 +13,6 @@ const SCORING_LABELS = {
   custom: 'Custom',
 }
 
-const GENDER_COLORS = { M: '#edf3ff', F: '#fff0f5' }
-const GENDER_BORDERS = { M: '#93b8ff', F: '#ffb3c6' }
 
 function tierValue(category) {
   const c = (category || '').toUpperCase()
@@ -52,7 +50,7 @@ export default function LeagueDetail() {
   const [editing, setEditing] = useState(false)
   const [showInvite, setShowInvite] = useState(false)
   const [selectedTournamentId, setSelectedTournamentId] = useState(null)
-  const [sortBy, setSortBy] = useState('members')
+  const [sortBy, setSortBy] = useState('start_date')
   const [sortDir, setSortDir] = useState('desc')
 
   const handleSort = (col) => {
@@ -78,16 +76,13 @@ export default function LeagueDetail() {
     refetchInterval: 60_000,
   })
 
-  // Hooks must be called before any early returns
-  const ongoingTournaments = useMemo(
-    () => leagueTournaments.filter(lt => lt.tournament.status !== 'completed'),
-    [leagueTournaments]
-  )
-  const completedTournaments = useMemo(() => {
-    const eligible = leagueTournaments.filter(
-      lt => lt.tournament.status === 'completed' && lt.picker_count >= 2
+  // Hooks must be called before any early returns.
+  // Active/upcoming: show all. Completed: only if 2+ members competed.
+  const allTournaments = useMemo(() => {
+    const rows = leagueTournaments.filter(
+      lt => lt.tournament.status !== 'completed' || lt.picker_count >= 2
     )
-    return [...eligible].sort((a, b) => {
+    return [...rows].sort((a, b) => {
       let va, vb
       if (sortBy === 'members') {
         va = a.picker_count; vb = b.picker_count
@@ -153,44 +148,13 @@ export default function LeagueDetail() {
         </div>
       </div>
 
-      {/* Tournament cards — active / open / upcoming */}
+      {/* Tournaments table */}
       <div className="card league-tournaments-section">
         <h2>Tournaments</h2>
-        {leagueTournaments.length === 0 || (ongoingTournaments.length === 0 && completedTournaments.length === 0) ? (
+        {allTournaments.length === 0 ? (
           <p className="muted">No picks have been submitted yet. Members can make picks from the Tournaments page.</p>
-        ) : ongoingTournaments.length === 0 ? null : (
-          <div className="league-tournaments-grid">
-            {ongoingTournaments.map(({ tournament: t, picker_count }) => (
-              <button
-                key={t.id}
-                className={`league-tournament-card${selectedTournamentId === t.id ? ' selected' : ''}`}
-                style={{
-                  background: GENDER_COLORS[t.gender] || '#fff',
-                  borderColor: selectedTournamentId === t.id ? '#3b82f6' : (GENDER_BORDERS[t.gender] || '#ddd'),
-                }}
-                onClick={() => setSelectedTournamentId(t.id === selectedTournamentId ? null : t.id)}
-              >
-                <div className="ltc-name">{t.name}</div>
-                <div className="ltc-meta muted">
-                  {t.gender === 'M' ? "Men's" : "Women's"}
-                  {t.category && ` · ${t.category.replace(/^(ATP|WTA)\s+/, '')}`}
-                </div>
-                {t.city && <div className="ltc-city muted">{t.city}</div>}
-                <div className="ltc-count">
-                  <span className="ltc-count-num">{picker_count}</span>
-                  <span className="ltc-count-label"> member{picker_count !== 1 ? 's' : ''} competing</span>
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Completed tournaments table */}
-        {completedTournaments.length > 0 && (
-          <div className={`lt-completed-wrap${ongoingTournaments.length > 0 ? ' lt-completed-wrap--separator' : ''}`}>
-            {ongoingTournaments.length > 0 && (
-              <p className="lt-completed-heading">Completed</p>
-            )}
+        ) : (
+          <div className="lt-completed-wrap">
             <table className="lt-completed-table">
               <thead>
                 <tr>
@@ -198,11 +162,12 @@ export default function LeagueDetail() {
                   <th className="lt-th-gender">Tour</th>
                   <SortTh col="tier" active={sortBy === 'tier'} dir={sortDir} onSort={handleSort}>Level</SortTh>
                   <SortTh col="start_date" active={sortBy === 'start_date'} dir={sortDir} onSort={handleSort}>Date</SortTh>
+                  <th>Status</th>
                   <SortTh col="members" active={sortBy === 'members'} dir={sortDir} onSort={handleSort}>Members</SortTh>
                 </tr>
               </thead>
               <tbody>
-                {completedTournaments.map(({ tournament: t, picker_count }) => (
+                {allTournaments.map(({ tournament: t, picker_count }) => (
                   <tr
                     key={t.id}
                     className={`lt-completed-row${selectedTournamentId === t.id ? ' lt-completed-row--selected' : ''}`}
@@ -220,6 +185,11 @@ export default function LeagueDetail() {
                     <td className="lt-td-tier">{tierLabel(t.category)}</td>
                     <td className="lt-td-date">
                       {t.start_date ? new Date(t.start_date + 'T00:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }) : '—'}
+                    </td>
+                    <td>
+                      <span className={`lt-status-badge lt-status-badge--${t.status}`}>
+                        {t.status === 'completed' ? 'Completed' : t.status === 'active' ? 'Active' : 'Upcoming'}
+                      </span>
                     </td>
                     <td className="lt-td-members">
                       <span className="lt-members-num">{picker_count}</span>
