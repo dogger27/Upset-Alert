@@ -60,14 +60,15 @@ async def admin_list_users(
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 async def register(body: UserRegister, db: AsyncSession = Depends(get_db)):
-    existing = await db.execute(select(User).where(User.email == body.email))
+    email = body.email.lower().strip()
+    existing = await db.execute(select(User).where(User.email == email))
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Email already registered")
     existing_username = await db.execute(select(User).where(User.username == body.username))
     if existing_username.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Username already taken")
     user = User(
-        email=body.email,
+        email=email,
         username=body.username,
         full_name=body.full_name,
         display_name=body.full_name,
@@ -89,7 +90,7 @@ async def login(
     form: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(User).where(User.email == form.username))
+    result = await db.execute(select(User).where(User.email == form.username.lower().strip()))
     user = result.scalar_one_or_none()
     if not user or not verify_password(form.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Incorrect email or password")
