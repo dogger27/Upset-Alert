@@ -35,6 +35,7 @@ def _with_users(members) -> list:
         out.append(LeagueMemberOut(
             id=m.user.id,
             username=m.user.username,
+            full_name=m.user.full_name,
             display_name=m.user.display_name,
             email=m.user.email,
             is_admin=bool(m.is_admin),

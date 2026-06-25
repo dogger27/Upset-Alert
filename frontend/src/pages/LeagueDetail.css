@@ -243,6 +243,10 @@
 }
 .lt-progress-name {
   font-size: 0.85rem; font-weight: 600;
+  min-width: 0;
+}
+.lt-progress-name-text {
+  display: block;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .lt-bar-track {
