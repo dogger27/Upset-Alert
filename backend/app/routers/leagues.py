@@ -199,6 +199,7 @@ async def join_league_by_code(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    invite_code = invite_code.strip().upper()
     result = await db.execute(select(League).where(League.invite_code == invite_code))
     league = result.scalar_one_or_none()
     if not league:

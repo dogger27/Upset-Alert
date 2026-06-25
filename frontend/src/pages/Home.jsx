@@ -240,7 +240,7 @@ function JoinLeagueModal({ onClose }) {
     <Modal title="Join a League" onClose={onClose}>
       <form onSubmit={submit} className="home-modal-form">
         <label className="home-modal-label">Invite Code</label>
-        <input className="home-modal-input home-modal-input--mono" value={code} onChange={e => setCode(e.target.value)} required placeholder="e.g. F5KP1" autoFocus />
+        <input className="home-modal-input home-modal-input--mono" value={code} onChange={e => setCode(e.target.value.toUpperCase())} required placeholder="e.g. F5KP1" autoFocus />
         {error && <p className="home-modal-error">{error}</p>}
         <button type="submit" className="btn-primary" disabled={!code || mutation.isPending}>
           {mutation.isPending ? 'Joining…' : 'Join League'}
