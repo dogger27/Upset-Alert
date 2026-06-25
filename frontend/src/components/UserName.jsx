@@ -1,7 +1,7 @@
 import './UserName.css'
 
-export default function UserName({ user, showRealName, className = '' }) {
-  if (!showRealName || !user?.full_name) {
+export default function UserName({ user, className = '' }) {
+  if (!user?.full_name) {
     return <span className={className}>{user?.display_name}</span>
   }
   return (
