@@ -78,15 +78,11 @@ export default function LeagueDetail() {
     refetchInterval: 60_000,
   })
 
-  if (isLoading) return <div className="page-loading">Loading…</div>
-  if (!league) return null
-
-  const isOwner = user?.id === league.owner.id
-  const canInvite = isOwner || league.allow_member_invites
-  const entries = leaderboard?.entries ?? []
-  const selectedTournament = leagueTournaments.find(lt => lt.tournament.id === selectedTournamentId)?.tournament
-
-  const ongoingTournaments = leagueTournaments.filter(lt => lt.tournament.status !== 'completed')
+  // Hooks must be called before any early returns
+  const ongoingTournaments = useMemo(
+    () => leagueTournaments.filter(lt => lt.tournament.status !== 'completed'),
+    [leagueTournaments]
+  )
   const completedTournaments = useMemo(() => {
     const eligible = leagueTournaments.filter(
       lt => lt.tournament.status === 'completed' && lt.picker_count >= 2
@@ -104,6 +100,14 @@ export default function LeagueDetail() {
       return sortDir === 'desc' ? (vb > va ? 1 : -1) : (va > vb ? 1 : -1)
     })
   }, [leagueTournaments, sortBy, sortDir])
+
+  if (isLoading) return <div className="page-loading">Loading…</div>
+  if (!league) return null
+
+  const isOwner = user?.id === league.owner.id
+  const canInvite = isOwner || league.allow_member_invites
+  const entries = leaderboard?.entries ?? []
+  const selectedTournament = leagueTournaments.find(lt => lt.tournament.id === selectedTournamentId)?.tournament
 
   return (
     <div className="league-detail">
