@@ -595,9 +595,25 @@ async def _do_scrape(tournament: Tournament, db: AsyncSession, force_refresh: bo
                 parsed.wiki_page_id, tournament.wiki_page_title,
             )
     if parsed.resolved_title:
-        logger.info("Correcting wiki_page_title for %s: %r → %r",
-                    tournament.name, tournament.wiki_page_title, parsed.resolved_title)
-        tournament.wiki_page_title = parsed.resolved_title
+        # Guard against UNIQUE violation if another record already claims this resolved title.
+        # This can happen when the discovery service uses a slightly different title variant
+        # (e.g. "– Women's singles" vs "– Singles") for a tournament already in the DB.
+        title_clash = await db.execute(
+            select(Tournament.id).where(
+                Tournament.wiki_page_title == parsed.resolved_title,
+                Tournament.id != tournament.id,
+            )
+        )
+        if title_clash.scalar_one_or_none() is None:
+            logger.info("Correcting wiki_page_title for %s: %r → %r",
+                        tournament.name, tournament.wiki_page_title, parsed.resolved_title)
+            tournament.wiki_page_title = parsed.resolved_title
+        else:
+            logger.warning(
+                "Resolved title %r already owned by another record; "
+                "keeping %r for tournament %d",
+                parsed.resolved_title, tournament.wiki_page_title, tournament.id,
+            )
 
     if parsed.draw_size:
         tournament.draw_size = parsed.draw_size

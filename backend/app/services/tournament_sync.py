@@ -210,39 +210,43 @@ async def sync_season(
 
             continue
 
-        # New tournament
-        draw_direct, draw_qualifiers = await calculate_draw_release_dates(
-            d.start_date, d.category, d.gender, db=db
-        )
-        t = Tournament(
-            name=d.name,
-            year=year,
-            gender=d.gender,
-            surface=d.surface,
-            category=d.category,
-            draw_size=d.draw_size,
-            num_rounds=_num_rounds(d.draw_size),
-            start_date=d.start_date,
-            end_date=d.end_date,
-            draw_release_direct=draw_direct,
-            draw_release_qualifiers=draw_qualifiers,
-            city=d.city,
-            country=d.country,
-            wiki_page_title=d.wiki_page_title,
-            status="upcoming",
-        )
-        db.add(t)
-        await db.flush()
+        # New tournament — each insert is isolated in a savepoint so that a scrape
+        # failure (e.g. resolved wiki_page_title collides with an existing record)
+        # only rolls back this one record and leaves the rest of the sync intact.
+        try:
+            async with db.begin_nested():
+                draw_direct, draw_qualifiers = await calculate_draw_release_dates(
+                    d.start_date, d.category, d.gender, db=db
+                )
+                t = Tournament(
+                    name=d.name,
+                    year=year,
+                    gender=d.gender,
+                    surface=d.surface,
+                    category=d.category,
+                    draw_size=d.draw_size,
+                    num_rounds=_num_rounds(d.draw_size),
+                    start_date=d.start_date,
+                    end_date=d.end_date,
+                    draw_release_direct=draw_direct,
+                    draw_release_qualifiers=draw_qualifiers,
+                    city=d.city,
+                    country=d.country,
+                    wiki_page_title=d.wiki_page_title,
+                    status="upcoming",
+                )
+                db.add(t)
+                await db.flush()
 
-        if scrape_new:
-            try:
-                from app.routers.tournaments import _do_scrape
-                await _do_scrape(t, db)
-            except Exception as exc:
-                logger.warning("Failed to scrape %s: %s", t.wiki_page_title, exc)
+                if scrape_new:
+                    from app.routers.tournaments import _do_scrape
+                    await _do_scrape(t, db)
 
-        inserted += 1
-        logger.info("Added %d %s (%s)", year, d.name, d.gender)
+            inserted += 1
+            logger.info("Added %d %s (%s)", year, d.name, d.gender)
+        except Exception as exc:
+            logger.warning("Skipped new tournament %s %s: %s", year, d.name, exc)
+            skipped += 1
 
     await db.commit()
 
