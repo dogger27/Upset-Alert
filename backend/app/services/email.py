@@ -125,6 +125,31 @@ async def send_password_reset(email: str, reset_token: str) -> None:
     })
 
 
+async def send_member_joined(
+    owner_email: str,
+    owner_username: str,
+    league_name: str,
+    league_id: int,
+    new_username: str,
+) -> None:
+    league_url = f"{BASE_URL}/leagues/{league_id}"
+    await send_async({
+        "from": FROM,
+        "to": [owner_email],
+        "subject": f"{new_username} joined {league_name}",
+        "html": f"""{_WRAP_OPEN}{_LOGO_HEADER}{_BODY_OPEN}
+          <h1 style="font-size:22px;margin:0 0 12px">New member in {league_name}!</h1>
+          <p style="color:#444;line-height:1.6;margin:0 0 24px">
+            <strong>{new_username}</strong> just joined your league <strong>{league_name}</strong>.
+          </p>
+          <a href="{league_url}" style="display:inline-block;padding:12px 24px;
+             background:#1b4332;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
+            View League
+          </a>
+        {_BODY_CLOSE}{_WRAP_CLOSE}""",
+    })
+
+
 async def send_new_user_notification(new_email: str, new_username: str) -> None:
     await send_async({
         "from": FROM,

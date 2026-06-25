@@ -199,8 +199,11 @@ async def join_league_by_code(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    from app.services.email import send_member_joined
     invite_code = invite_code.strip().upper()
-    result = await db.execute(select(League).where(League.invite_code == invite_code))
+    result = await db.execute(
+        select(League).options(selectinload(League.owner)).where(League.invite_code == invite_code)
+    )
     league = result.scalar_one_or_none()
     if not league:
         raise HTTPException(404, "Invalid invite code")
@@ -216,6 +219,15 @@ async def join_league_by_code(
 
     db.add(LeagueMember(league_id=league.id, user_id=current_user.id))
     await db.commit()
+
+    if league.owner_id != current_user.id:
+        await send_member_joined(
+            owner_email=league.owner.email,
+            owner_username=league.owner.username,
+            league_name=league.name,
+            league_id=league.id,
+            new_username=current_user.username,
+        )
 
 
 @router.post("/{league_id}/join", status_code=204)
