@@ -452,15 +452,6 @@ export default function TournamentDraw() {
               )
             })()
           )}
-          {user?.is_admin && (
-            <button
-              className="btn-admin-refresh"
-              onClick={() => refreshMutation.mutate()}
-              disabled={refreshMutation.isPending}
-            >
-              {refreshMutation.isPending ? '⏳ Updating…' : '↻ Update Draw'}
-            </button>
-          )}
           {user && !locked && !viewingOther && pickedCount > 0 && (
             <button
               className="btn-clear-selections"
