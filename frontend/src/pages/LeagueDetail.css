@@ -250,8 +250,17 @@
   background: var(--bg-subtle, #f3f4f6);
   display: flex; overflow: hidden;
 }
-.lt-bar-segment { height: 100%; flex-shrink: 0; transition: width 0.3s ease; border-right: 2px solid rgba(255,255,255,0.6); }
+.lt-bar-segment {
+  height: 100%; flex-shrink: 0; transition: width 0.3s ease;
+  border-right: 2px solid rgba(255,255,255,0.6);
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
 .lt-bar-segment:last-child { border-right: none; }
+.lt-bar-label {
+  font-size: 0.7rem; font-weight: 800;
+  white-space: nowrap; user-select: none; line-height: 1;
+}
 .lt-progress-total { font-size: 0.8rem; color: var(--text-muted); font-weight: 700; text-align: right; white-space: nowrap; }
 
 /* Leaderboard */

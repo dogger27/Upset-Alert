@@ -270,7 +270,8 @@ export default function LeagueDetail() {
 }
 
 // R1=Red R2=Orange R3=Yellow R4=Green R5=Blue R6=Purple R7=Violet
-const ROUND_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#d946ef']
+const ROUND_COLORS      = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#d946ef']
+const ROUND_DARK_COLORS = ['#7f1d1d', '#7c2d12', '#713f12', '#14532d', '#1e3a8a', '#3b0764', '#4a044e']
 const ROUND_LABELS = ['R1', 'R2', 'R3', 'R4', 'QF', 'SF', 'F']
 
 function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMemberCount, showRealName, selected, onSelect }) {
@@ -325,7 +326,9 @@ function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMember
                         background: ROUND_COLORS[i],
                       }}
                       title={`${ROUND_LABELS[i]}: ${pts} pts`}
-                    />
+                    >
+                      <span className="lt-bar-label" style={{ color: ROUND_DARK_COLORS[i] }}>{pts}</span>
+                    </div>
                   ) : null)}
                 </div>
                 <span className="lt-progress-total">{entry.total} pts</span>
