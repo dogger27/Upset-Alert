@@ -284,6 +284,19 @@ export default function Navbar() {
                             </label>
                           </div>
 
+                          <div className="notif-section">
+                            <p className="notif-section-title">New member joins your league</p>
+                            <p className="notif-section-desc">Email when someone joins a league you own</p>
+                            <label className="notif-check-row">
+                              <input
+                                type="checkbox"
+                                checked={notifSelected.has('league_member_joined')}
+                                onChange={() => toggleNotif('league_member_joined')}
+                              />
+                              Enabled
+                            </label>
+                          </div>
+
                           {notifError && <p className="profile-edit-error" style={{ padding: '0 1rem' }}>{notifError}</p>}
                           <div className="profile-edit-actions" style={{ padding: '0.5rem 1rem 0.85rem' }}>
                             <button className="btn-secondary profile-edit-btn" onClick={cancelNotif} disabled={notifSaving}>
