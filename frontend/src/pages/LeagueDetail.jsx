@@ -80,7 +80,7 @@ export default function LeagueDetail() {
   // Active tournaments → bar chart visualization (always visible)
   // Non-active (upcoming + completed ≥2 members) → sortable table
   const activeTournaments = useMemo(
-    () => leagueTournaments.filter(lt => lt.tournament.status === 'active'),
+    () => leagueTournaments.filter(lt => lt.tournament.status === 'active' && lt.picker_count >= 2),
     [leagueTournaments]
   )
   const tableRows = useMemo(() => {
