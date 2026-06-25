@@ -221,13 +221,21 @@ async def join_league_by_code(
     await db.commit()
 
     if league.owner_id != current_user.id:
-        await send_member_joined(
-            owner_email=league.owner.email,
-            owner_username=league.owner.username,
-            league_name=league.name,
-            league_id=league.id,
-            new_username=current_user.username,
+        from app.models.notification import NotificationPreference
+        pref = await db.execute(
+            select(NotificationPreference).where(
+                NotificationPreference.user_id == league.owner_id,
+                NotificationPreference.pref_key == "league_member_joined",
+            )
         )
+        if pref.scalar_one_or_none():
+            await send_member_joined(
+                owner_email=league.owner.email,
+                owner_username=league.owner.username,
+                league_name=league.name,
+                league_id=league.id,
+                new_username=current_user.username,
+            )
 
 
 @router.post("/{league_id}/join", status_code=204)

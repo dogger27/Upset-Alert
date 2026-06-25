@@ -128,6 +128,7 @@ _DEFAULT_NOTIF_PREFS = [
     "draw_open:Grand Slam:M",
     "draw_open:Grand Slam:F",
     "tournament_end",
+    "league_member_joined",
 ]
 
 
