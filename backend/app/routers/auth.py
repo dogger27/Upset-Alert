@@ -163,8 +163,10 @@ async def verify_email_code(body: dict, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
     invalid = HTTPException(status_code=400, detail="Invalid or expired code")
-    if not user or user.email_verified:
+    if not user:
         raise invalid
+    if user.email_verified:
+        return  # already verified — treat as success so the user can proceed to login
     if not user.verification_code or user.verification_code != code:
         raise invalid
     if not user.verification_code_expires or datetime.now(timezone.utc) > user.verification_code_expires:
