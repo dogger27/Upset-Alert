@@ -316,9 +316,13 @@ function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMember
             {data.map(entry => (
               <div key={entry.user_id} className="lt-progress-row">
                 {entry.full_name && entry.full_name !== entry.username ? (
-                  <span className="lt-progress-name username-hover" data-tooltip={entry.full_name}>{entry.username}</span>
+                  <span className="lt-progress-name username-hover" data-tooltip={entry.full_name}>
+                    <span className="lt-progress-name-text">{entry.username}</span>
+                  </span>
                 ) : (
-                  <span className="lt-progress-name">{entry.username}</span>
+                  <span className="lt-progress-name">
+                    <span className="lt-progress-name-text">{entry.username}</span>
+                  </span>
                 )}
                 <div className="lt-bar-track">
                   {entry.round_points.map((pts, i) => pts > 0 ? (
