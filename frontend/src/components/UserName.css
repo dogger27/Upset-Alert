@@ -1,7 +1,6 @@
 .username-hover {
   position: relative;
   cursor: default;
-  border-bottom: 1px dotted var(--text-muted, #9ca3af);
 }
 
 .username-hover::after {
