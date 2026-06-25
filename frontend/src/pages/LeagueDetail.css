@@ -122,6 +122,83 @@
 .ltc-count-num { font-size: 1.25rem; font-weight: 800; color: var(--text); }
 .ltc-count-label { font-size: 0.78rem; color: var(--text-muted); }
 
+/* ── Completed tournaments table ── */
+.lt-completed-wrap { margin-top: 0; }
+.lt-completed-wrap--separator { margin-top: 1.25rem; padding-top: 1.25rem; border-top: 1px solid var(--border); }
+
+.lt-completed-heading {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+  margin: 0 0 0.65rem;
+}
+
+.lt-completed-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.lt-completed-table th {
+  text-align: left;
+  padding: 0.45rem 0.75rem;
+  border-bottom: 2px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.lt-th-sort {
+  cursor: pointer;
+  user-select: none;
+}
+.lt-th-sort:hover { color: var(--text); }
+.lt-th-active { color: var(--text) !important; }
+.lt-sort-icon { font-size: 0.65rem; opacity: 0.6; }
+
+.lt-th-tourn  { width: auto; }
+.lt-th-gender { width: 52px; }
+
+.lt-completed-table td {
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.lt-completed-table tr:last-child td { border-bottom: none; }
+
+.lt-completed-row {
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.lt-completed-row:hover td { background: var(--bg-subtle, #f9fafb); }
+.lt-completed-row--selected td { background: #eff6ff; }
+
+.lt-td-name { font-weight: 600; color: var(--ink-900); }
+.lt-td-year { font-weight: 400; color: var(--text-muted); font-size: 0.82rem; }
+
+.lt-gender-badge {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.lt-gender-badge--m { background: #edf3ff; color: #2b4ea8; }
+.lt-gender-badge--f { background: #fff0f5; color: #a83270; }
+
+.lt-td-tier { color: var(--text-muted); font-size: 0.82rem; white-space: nowrap; }
+.lt-td-date { color: var(--text-muted); font-size: 0.82rem; white-space: nowrap; }
+
+.lt-td-members { white-space: nowrap; }
+.lt-members-num { font-weight: 700; font-size: 0.95rem; color: var(--ink-900); }
+.lt-members-label { font-size: 0.78rem; color: var(--text-muted); }
+
 /* Leaderboard */
 .leaderboard-wrap { margin-bottom: 1.5rem; }
 .leaderboard-header {

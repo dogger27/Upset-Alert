@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getLeague, getLeagueTournaments, getLeaderboard, updateLeague, setMemberAdmin, removeMember, deleteLeague } from '../api/leagues'
@@ -16,6 +16,34 @@ const SCORING_LABELS = {
 const GENDER_COLORS = { M: '#edf3ff', F: '#fff0f5' }
 const GENDER_BORDERS = { M: '#93b8ff', F: '#ffb3c6' }
 
+function tierValue(category) {
+  const c = (category || '').toUpperCase()
+  if (c.includes('SLAM') || c.includes('GRAND')) return 4
+  if (c.includes('1000')) return 3
+  if (c.includes('500')) return 2
+  return 1
+}
+
+function tierLabel(category) {
+  const c = (category || '').toUpperCase()
+  if (c.includes('SLAM') || c.includes('GRAND')) return 'Grand Slam'
+  if (c.includes('1000')) return '1000'
+  if (c.includes('500')) return '500'
+  return '250'
+}
+
+function SortTh({ col, active, dir, onSort, children }) {
+  return (
+    <th
+      className={`lt-th-sort${active ? ' lt-th-active' : ''}`}
+      onClick={() => onSort(col)}
+    >
+      {children}
+      <span className="lt-sort-icon">{active ? (dir === 'desc' ? ' ▼' : ' ▲') : ' ↕'}</span>
+    </th>
+  )
+}
+
 export default function LeagueDetail() {
   const { id } = useParams()
   const { user } = useAuth()
@@ -24,6 +52,13 @@ export default function LeagueDetail() {
   const [editing, setEditing] = useState(false)
   const [showInvite, setShowInvite] = useState(false)
   const [selectedTournamentId, setSelectedTournamentId] = useState(null)
+  const [sortBy, setSortBy] = useState('members')
+  const [sortDir, setSortDir] = useState('desc')
+
+  const handleSort = (col) => {
+    if (sortBy === col) setSortDir(d => d === 'desc' ? 'asc' : 'desc')
+    else { setSortBy(col); setSortDir('desc') }
+  }
 
   const { data: league, isLoading } = useQuery({
     queryKey: ['league', id],
@@ -50,6 +85,25 @@ export default function LeagueDetail() {
   const canInvite = isOwner || league.allow_member_invites
   const entries = leaderboard?.entries ?? []
   const selectedTournament = leagueTournaments.find(lt => lt.tournament.id === selectedTournamentId)?.tournament
+
+  const ongoingTournaments = leagueTournaments.filter(lt => lt.tournament.status !== 'completed')
+  const completedTournaments = useMemo(() => {
+    const eligible = leagueTournaments.filter(
+      lt => lt.tournament.status === 'completed' && lt.picker_count >= 2
+    )
+    return [...eligible].sort((a, b) => {
+      let va, vb
+      if (sortBy === 'members') {
+        va = a.picker_count; vb = b.picker_count
+      } else if (sortBy === 'start_date') {
+        va = a.tournament.start_date || ''; vb = b.tournament.start_date || ''
+      } else {
+        va = tierValue(a.tournament.category); vb = tierValue(b.tournament.category)
+      }
+      if (va === vb) return 0
+      return sortDir === 'desc' ? (vb > va ? 1 : -1) : (va > vb ? 1 : -1)
+    })
+  }, [leagueTournaments, sortBy, sortDir])
 
   return (
     <div className="league-detail">
@@ -95,14 +149,14 @@ export default function LeagueDetail() {
         </div>
       </div>
 
-      {/* Tournament cards */}
+      {/* Tournament cards — active / open / upcoming */}
       <div className="card league-tournaments-section">
         <h2>Tournaments</h2>
-        {leagueTournaments.length === 0 ? (
+        {leagueTournaments.length === 0 || (ongoingTournaments.length === 0 && completedTournaments.length === 0) ? (
           <p className="muted">No picks have been submitted yet. Members can make picks from the Tournaments page.</p>
-        ) : (
+        ) : ongoingTournaments.length === 0 ? null : (
           <div className="league-tournaments-grid">
-            {leagueTournaments.map(({ tournament: t, picker_count }) => (
+            {ongoingTournaments.map(({ tournament: t, picker_count }) => (
               <button
                 key={t.id}
                 className={`league-tournament-card${selectedTournamentId === t.id ? ' selected' : ''}`}
@@ -124,6 +178,53 @@ export default function LeagueDetail() {
                 </div>
               </button>
             ))}
+          </div>
+        )}
+
+        {/* Completed tournaments table */}
+        {completedTournaments.length > 0 && (
+          <div className={`lt-completed-wrap${ongoingTournaments.length > 0 ? ' lt-completed-wrap--separator' : ''}`}>
+            {ongoingTournaments.length > 0 && (
+              <p className="lt-completed-heading">Completed</p>
+            )}
+            <table className="lt-completed-table">
+              <thead>
+                <tr>
+                  <th className="lt-th-tourn">Tournament</th>
+                  <th className="lt-th-gender">Tour</th>
+                  <SortTh col="tier" active={sortBy === 'tier'} dir={sortDir} onSort={handleSort}>Level</SortTh>
+                  <SortTh col="start_date" active={sortBy === 'start_date'} dir={sortDir} onSort={handleSort}>Date</SortTh>
+                  <SortTh col="members" active={sortBy === 'members'} dir={sortDir} onSort={handleSort}>Members</SortTh>
+                </tr>
+              </thead>
+              <tbody>
+                {completedTournaments.map(({ tournament: t, picker_count }) => (
+                  <tr
+                    key={t.id}
+                    className={`lt-completed-row${selectedTournamentId === t.id ? ' lt-completed-row--selected' : ''}`}
+                    onClick={() => setSelectedTournamentId(t.id === selectedTournamentId ? null : t.id)}
+                  >
+                    <td className="lt-td-name">
+                      {t.name}
+                      <span className="lt-td-year"> {t.year}</span>
+                    </td>
+                    <td className="lt-td-gender">
+                      <span className={`lt-gender-badge lt-gender-badge--${t.gender === 'M' ? 'm' : 'f'}`}>
+                        {t.gender === 'M' ? 'ATP' : 'WTA'}
+                      </span>
+                    </td>
+                    <td className="lt-td-tier">{tierLabel(t.category)}</td>
+                    <td className="lt-td-date">
+                      {t.start_date ? new Date(t.start_date + 'T00:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }) : '—'}
+                    </td>
+                    <td className="lt-td-members">
+                      <span className="lt-members-num">{picker_count}</span>
+                      <span className="lt-members-label"> / {league.member_count}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
