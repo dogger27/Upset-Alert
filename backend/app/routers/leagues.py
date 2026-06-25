@@ -535,6 +535,7 @@ async def round_scores(
         entries.append({
             "user_id": member.user_id,
             "username": member.user.username,
+            "full_name": member.user.full_name,
             "round_points": pts_list,
             "total": sum(pts_list),
         })
