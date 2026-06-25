@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getLeague, getLeagueTournaments, getLeaderboard, updateLeague, setMemberAdmin, removeMember, deleteLeague } from '../api/leagues'
+import { getLeague, getLeagueTournaments, getLeaderboard, getRoundScores, updateLeague, setMemberAdmin, removeMember, deleteLeague } from '../api/leagues'
 import { useAuth } from '../store/auth'
 import UserName from '../components/UserName'
 import './LeagueDetail.css'
@@ -77,10 +77,16 @@ export default function LeagueDetail() {
   })
 
   // Hooks must be called before any early returns.
-  // Active/upcoming: show all. Completed: only if 2+ members competed.
-  const allTournaments = useMemo(() => {
+  // Active tournaments → bar chart visualization (always visible)
+  // Non-active (upcoming + completed ≥2 members) → sortable table
+  const activeTournaments = useMemo(
+    () => leagueTournaments.filter(lt => lt.tournament.status === 'active'),
+    [leagueTournaments]
+  )
+  const tableRows = useMemo(() => {
     const rows = leagueTournaments.filter(
-      lt => lt.tournament.status !== 'completed' || lt.picker_count >= 2
+      lt => lt.tournament.status !== 'active' &&
+           (lt.tournament.status !== 'completed' || lt.picker_count >= 2)
     )
     return [...rows].sort((a, b) => {
       let va, vb
@@ -148,58 +154,72 @@ export default function LeagueDetail() {
         </div>
       </div>
 
-      {/* Tournaments table */}
+      {/* Tournaments */}
       <div className="card league-tournaments-section">
         <h2>Tournaments</h2>
-        {allTournaments.length === 0 ? (
+        {activeTournaments.length === 0 && tableRows.length === 0 ? (
           <p className="muted">No picks have been submitted yet. Members can make picks from the Tournaments page.</p>
         ) : (
-          <div className="lt-completed-wrap">
-            <table className="lt-completed-table">
-              <thead>
-                <tr>
-                  <th className="lt-th-tourn">Tournament</th>
-                  <th className="lt-th-gender">Tour</th>
-                  <SortTh col="tier" active={sortBy === 'tier'} dir={sortDir} onSort={handleSort}>Level</SortTh>
-                  <SortTh col="start_date" active={sortBy === 'start_date'} dir={sortDir} onSort={handleSort}>Date</SortTh>
-                  <th>Status</th>
-                  <SortTh col="members" active={sortBy === 'members'} dir={sortDir} onSort={handleSort}>Members</SortTh>
-                </tr>
-              </thead>
-              <tbody>
-                {allTournaments.map(({ tournament: t, picker_count }) => (
-                  <tr
-                    key={t.id}
-                    className={`lt-completed-row${selectedTournamentId === t.id ? ' lt-completed-row--selected' : ''}`}
-                    onClick={() => setSelectedTournamentId(t.id === selectedTournamentId ? null : t.id)}
-                  >
-                    <td className="lt-td-name">
-                      {t.name}
-                      <span className="lt-td-year"> {t.year}</span>
-                    </td>
-                    <td className="lt-td-gender">
-                      <span className={`lt-gender-badge lt-gender-badge--${t.gender === 'M' ? 'm' : 'f'}`}>
-                        {t.gender === 'M' ? 'ATP' : 'WTA'}
-                      </span>
-                    </td>
-                    <td className="lt-td-tier">{tierLabel(t.category)}</td>
-                    <td className="lt-td-date">
-                      {t.start_date ? new Date(t.start_date + 'T00:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }) : '—'}
-                    </td>
-                    <td>
-                      <span className={`lt-status-badge lt-status-badge--${t.status}`}>
-                        {t.status === 'completed' ? 'Completed' : t.status === 'active' ? 'Active' : 'Upcoming'}
-                      </span>
-                    </td>
-                    <td className="lt-td-members">
-                      <span className="lt-members-num">{picker_count}</span>
-                      <span className="lt-members-label"> / {league.member_count}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <>
+            {/* Active tournaments — round-by-round bar charts */}
+            {activeTournaments.map(({ tournament: t, picker_count }) => (
+              <RoundProgressChart
+                key={t.id}
+                tournament={t}
+                pickerCount={picker_count}
+                leagueId={Number(id)}
+                leagueMemberCount={league.member_count}
+                showRealName={league.show_real_name}
+                selected={selectedTournamentId === t.id}
+                onSelect={() => setSelectedTournamentId(t.id === selectedTournamentId ? null : t.id)}
+              />
+            ))}
+
+            {/* Completed + upcoming — sortable table */}
+            {tableRows.length > 0 && (
+              <div className={`lt-completed-wrap${activeTournaments.length > 0 ? ' lt-completed-wrap--separator' : ''}`}>
+                {activeTournaments.length > 0 && <p className="lt-completed-heading">Completed</p>}
+                <table className="lt-completed-table">
+                  <thead>
+                    <tr>
+                      <th className="lt-th-tourn">Tournament</th>
+                      <th className="lt-th-gender">Tour</th>
+                      <SortTh col="tier" active={sortBy === 'tier'} dir={sortDir} onSort={handleSort}>Level</SortTh>
+                      <SortTh col="start_date" active={sortBy === 'start_date'} dir={sortDir} onSort={handleSort}>Date</SortTh>
+                      <SortTh col="members" active={sortBy === 'members'} dir={sortDir} onSort={handleSort}>Members</SortTh>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tableRows.map(({ tournament: t, picker_count }) => (
+                      <tr
+                        key={t.id}
+                        className={`lt-completed-row${selectedTournamentId === t.id ? ' lt-completed-row--selected' : ''}`}
+                        onClick={() => setSelectedTournamentId(t.id === selectedTournamentId ? null : t.id)}
+                      >
+                        <td className="lt-td-name">
+                          {t.name}
+                          <span className="lt-td-year"> {t.year}</span>
+                        </td>
+                        <td className="lt-td-gender">
+                          <span className={`lt-gender-badge lt-gender-badge--${t.gender === 'M' ? 'm' : 'f'}`}>
+                            {t.gender === 'M' ? 'ATP' : 'WTA'}
+                          </span>
+                        </td>
+                        <td className="lt-td-tier">{tierLabel(t.category)}</td>
+                        <td className="lt-td-date">
+                          {t.start_date ? new Date(t.start_date + 'T00:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }) : '—'}
+                        </td>
+                        <td className="lt-td-members">
+                          <span className="lt-members-num">{picker_count}</span>
+                          <span className="lt-members-label"> / {league.member_count}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -244,6 +264,75 @@ export default function LeagueDetail() {
             </table>
           )}
         </div>
+      )}
+    </div>
+  )
+}
+
+// R1=Red R2=Orange R3=Yellow R4=Green R5=Blue R6=Purple R7=Violet
+const ROUND_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#d946ef']
+const ROUND_LABELS = ['R1', 'R2', 'R3', 'R4', 'QF', 'SF', 'F']
+
+function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMemberCount, showRealName, selected, onSelect }) {
+  const { data = [] } = useQuery({
+    queryKey: ['round-scores', leagueId, t.id],
+    queryFn: () => getRoundScores(leagueId, t.id),
+    refetchInterval: 60_000,
+  })
+
+  const maxTotal = Math.max(...data.map(e => e.total), 1)
+  // Which rounds have any points scored
+  const activeRounds = ROUND_COLORS.map((_, i) => data.some(e => e.round_points[i] > 0) ? i : null).filter(i => i !== null)
+
+  return (
+    <div
+      className={`lt-progress-block${selected ? ' lt-progress-block--selected' : ''}`}
+      onClick={onSelect}
+    >
+      <div className="lt-progress-header">
+        <span className={`lt-gender-badge lt-gender-badge--${t.gender === 'M' ? 'm' : 'f'}`}>
+          {t.gender === 'M' ? 'ATP' : 'WTA'}
+        </span>
+        <span className="lt-progress-title">{t.name} {t.year}</span>
+        <span className="lt-progress-meta">{tierLabel(t.category)} · {pickerCount}/{leagueMemberCount} competing</span>
+      </div>
+
+      {data.length === 0 ? (
+        <p className="lt-progress-empty">No picks submitted yet.</p>
+      ) : (
+        <>
+          {activeRounds.length > 0 && (
+            <div className="lt-progress-legend">
+              {activeRounds.map(i => (
+                <span key={i} className="lt-legend-item">
+                  <span className="lt-legend-dot" style={{ background: ROUND_COLORS[i] }} />
+                  {ROUND_LABELS[i]}
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="lt-progress-rows">
+            {data.map(entry => (
+              <div key={entry.user_id} className="lt-progress-row">
+                <span className="lt-progress-name">{entry.username}</span>
+                <div className="lt-bar-track">
+                  {entry.round_points.map((pts, i) => pts > 0 ? (
+                    <div
+                      key={i}
+                      className="lt-bar-segment"
+                      style={{
+                        width: `${(pts / maxTotal) * 100}%`,
+                        background: ROUND_COLORS[i],
+                      }}
+                      title={`${ROUND_LABELS[i]}: ${pts} pts`}
+                    />
+                  ) : null)}
+                </div>
+                <span className="lt-progress-total">{entry.total} pts</span>
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   )

@@ -208,6 +208,51 @@
 .lt-status-badge--completed { background: #f3f4f6; color: #6b7280; }
 .lt-status-badge--upcoming { background: #fef9c3; color: #854d0e; }
 
+/* ── Round progress bar chart ── */
+.lt-progress-block {
+  padding: 0.9rem 0.75rem;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 0.75rem;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.lt-progress-block:last-of-type { margin-bottom: 0; }
+.lt-progress-block:hover { border-color: #93c5fd; box-shadow: 0 1px 6px rgba(0,0,0,0.07); }
+.lt-progress-block--selected { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
+
+.lt-progress-header {
+  display: flex; align-items: center; gap: 0.5rem;
+  margin-bottom: 0.6rem; flex-wrap: wrap;
+}
+.lt-progress-title { font-weight: 700; font-size: 0.95rem; }
+.lt-progress-meta { font-size: 0.78rem; color: var(--text-muted); margin-left: auto; }
+.lt-progress-empty { font-size: 0.85rem; color: var(--text-muted); margin: 0; }
+
+.lt-progress-legend {
+  display: flex; gap: 0.65rem; margin-bottom: 0.6rem; flex-wrap: wrap;
+}
+.lt-legend-item { display: flex; align-items: center; gap: 3px; font-size: 0.72rem; color: var(--text-muted); font-weight: 600; }
+.lt-legend-dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+.lt-progress-rows { display: flex; flex-direction: column; gap: 0.4rem; }
+.lt-progress-row {
+  display: grid;
+  grid-template-columns: 110px 1fr 52px;
+  align-items: center; gap: 0.65rem;
+}
+.lt-progress-name {
+  font-size: 0.85rem; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.lt-bar-track {
+  height: 18px; border-radius: 3px;
+  background: var(--bg-subtle, #f3f4f6);
+  display: flex; overflow: hidden;
+}
+.lt-bar-segment { height: 100%; flex-shrink: 0; transition: width 0.3s ease; }
+.lt-progress-total { font-size: 0.8rem; color: var(--text-muted); font-weight: 700; text-align: right; white-space: nowrap; }
+
 /* Leaderboard */
 .leaderboard-wrap { margin-bottom: 1.5rem; }
 .leaderboard-header {

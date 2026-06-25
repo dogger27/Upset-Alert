@@ -472,6 +472,77 @@ async def leaderboard(
     )
 
 
+@router.get("/{league_id}/round-scores")
+async def round_scores(
+    league_id: int,
+    tournament_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
+):
+    """Per-round point breakdown for each league member in a tournament."""
+    from collections import defaultdict
+    from app.services.scoring import _points_table
+
+    result = await db.execute(
+        select(League)
+        .options(selectinload(League.members).selectinload(LeagueMember.user))
+        .where(League.id == league_id)
+    )
+    league = result.scalar_one_or_none()
+    if not league:
+        raise HTTPException(404, "League not found")
+    _check_access(league, current_user)
+
+    tournament = await db.get(Tournament, tournament_id)
+    if not tournament:
+        raise HTTPException(404, "Tournament not found")
+
+    pts_table = _points_table(tournament)
+
+    completed_matches_result = await db.execute(
+        select(Match).where(
+            Match.tournament_id == tournament_id,
+            Match.status == "completed",
+            Match.is_bye == False,
+        )
+    )
+    completed_matches = completed_matches_result.scalars().all()
+
+    entries = []
+    for member in league.members:
+        preds_result = await db.execute(
+            select(UserPrediction).where(
+                UserPrediction.user_id == member.user_id,
+                UserPrediction.tournament_id == tournament_id,
+                UserPrediction.predicted_winner_id.isnot(None),
+            )
+        )
+        preds = preds_result.scalars().all()
+        if not preds:
+            continue
+
+        pred_by_match = {p.match_id: p.predicted_winner_id for p in preds}
+        by_round: dict = defaultdict(float)
+
+        for match in completed_matches:
+            if match.winner_id is None:
+                continue
+            if pred_by_match.get(match.id) != match.winner_id:
+                continue
+            by_round[match.round_number] += pts_table.get(match.round_number, 0)
+
+        pts_list = [by_round.get(r, 0) for r in range(1, 8)]
+        entries.append({
+            "user_id": member.user_id,
+            "username": member.user.username,
+            "round_points": pts_list,
+            "total": sum(pts_list),
+        })
+
+    entries.sort(key=lambda x: -x["total"])
+    return entries
+
+
 def _check_access(league: League, user: Optional[User]) -> None:
     if league.is_public:
         return
