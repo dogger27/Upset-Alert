@@ -238,7 +238,7 @@
 .lt-progress-rows { display: flex; flex-direction: column; gap: 0.4rem; }
 .lt-progress-row {
   display: grid;
-  grid-template-columns: 110px 1fr 52px;
+  grid-template-columns: 110px 1fr 52px 80px;
   align-items: center; gap: 0.65rem;
 }
 .lt-progress-name {
@@ -271,6 +271,8 @@
     0 0 8px #fff, 0 0 16px rgba(255,255,255,0.9), 0 0 28px rgba(255,255,255,0.7);
 }
 .lt-progress-total { font-size: 0.8rem; color: var(--text-muted); font-weight: 700; text-align: right; white-space: nowrap; }
+.lt-progress-correct { font-size: 0.78rem; color: var(--text-muted); text-align: right; white-space: nowrap; }
+.lt-view-draw-btn { font-size: 0.78rem; padding: 0.2rem 0.6rem; margin-left: auto; flex-shrink: 0; }
 
 /* Leaderboard */
 .leaderboard-wrap { margin-bottom: 1.5rem; }
