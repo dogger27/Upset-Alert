@@ -683,7 +683,7 @@ function RankingsPanel({ user }) {
                 <tr key={`${r.player_id}-${r.rank}`}>
                   <td><strong>{r.rank}</strong></td>
                   <td className="td-muted">{r.gender}</td>
-                  <td className="td-left">{r.name_raw}</td>
+                  <td className="td-left">{r.name_raw.includes(' ') ? r.name_raw.split(' ').slice(1).join(' ') + ' ' + r.name_raw.split(' ')[0] : r.name_raw}</td>
                   <td className="td-left td-muted">{r.te_slug || '—'}</td>
                   <td className="td-muted td-nowrap">{r.date_of_birth || '—'}</td>
                   <td>{r.elo ?? '—'}</td>
