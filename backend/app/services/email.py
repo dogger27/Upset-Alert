@@ -167,11 +167,7 @@ async def send_match_start_notification(
     emails: list[str], tournament_name: str, year: int, tournament_id: int
 ) -> None:
     tournament_url = f"{BASE_URL}/tournaments/{tournament_id}"
-    await send_async({
-        "from": FROM,
-        "to": emails,
-        "subject": f"Play has started — {tournament_name} {year}",
-        "html": f"""{_WRAP_OPEN}{_LOGO_HEADER}{_BODY_OPEN}
+    html = f"""{_WRAP_OPEN}{_LOGO_HEADER}{_BODY_OPEN}
           <h1 style="font-size:22px;margin:0 0 12px">The first match is underway!</h1>
           <p style="color:#444;line-height:1.6;margin:0 0 24px">
             <strong>{tournament_name} {year}</strong> is officially live — a main-draw match
@@ -184,17 +180,19 @@ async def send_match_start_notification(
           <p style="margin-top:24px;font-size:13px;color:#888">
             Good luck — let's see those upsets!
           </p>
-        {_BODY_CLOSE}{_WRAP_CLOSE}""",
-    })
+        {_BODY_CLOSE}{_WRAP_CLOSE}"""
+    for email in emails:
+        await send_async({
+            "from": FROM,
+            "to": [email],
+            "subject": f"Play has started — {tournament_name} {year}",
+            "html": html,
+        })
 
 
 async def send_draw_notification(emails: list[str], tournament_name: str, tournament_id: int) -> None:
     tournament_url = f"{BASE_URL}/tournaments/{tournament_id}"
-    await send_async({
-        "from": FROM,
-        "to": emails,
-        "subject": f"Draw released: {tournament_name}",
-        "html": f"""{_WRAP_OPEN}{_LOGO_HEADER}{_BODY_OPEN}
+    html = f"""{_WRAP_OPEN}{_LOGO_HEADER}{_BODY_OPEN}
           <h1 style="font-size:22px;margin:0 0 12px">The draw is live!</h1>
           <p style="color:#444;line-height:1.6;margin:0 0 24px">
             The draw for <strong>{tournament_name}</strong> has been released.
@@ -204,8 +202,14 @@ async def send_draw_notification(emails: list[str], tournament_name: str, tourna
              background:#1b4332;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
             Make Your Picks
           </a>
-        {_BODY_CLOSE}{_WRAP_CLOSE}""",
-    })
+        {_BODY_CLOSE}{_WRAP_CLOSE}"""
+    for email in emails:
+        await send_async({
+            "from": FROM,
+            "to": [email],
+            "subject": f"Draw released: {tournament_name}",
+            "html": html,
+        })
 
 
 async def send_tournament_complete_notification(
@@ -308,11 +312,7 @@ async def send_round_standings(
         f"<td style='padding:8px 12px;text-align:right'>{s['score']}</td></tr>"
         for i, s in enumerate(standings[:10])
     )
-    await send_async({
-        "from": FROM,
-        "to": emails,
-        "subject": f"{tournament_name} — {round_name} standings",
-        "html": f"""{_WRAP_OPEN}{_LOGO_HEADER}{_BODY_OPEN}
+    html = f"""{_WRAP_OPEN}{_LOGO_HEADER}{_BODY_OPEN}
           <h1 style="font-size:22px;margin:0 0 12px">{round_name} complete</h1>
           <p style="color:#444;margin:0 0 12px">Here are the current standings for
             <strong>{tournament_name}</strong>:</p>
@@ -330,5 +330,11 @@ async def send_round_standings(
              background:#1b4332;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
             View Full Standings
           </a>
-        {_BODY_CLOSE}{_WRAP_CLOSE}""",
-    })
+        {_BODY_CLOSE}{_WRAP_CLOSE}"""
+    for email in emails:
+        await send_async({
+            "from": FROM,
+            "to": [email],
+            "subject": f"{tournament_name} — {round_name} standings",
+            "html": html,
+        })
