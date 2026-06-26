@@ -149,11 +149,23 @@ def _season_pages() -> set[str]:
 
 
 async def _on_season_page_edit(season_title: str) -> None:
-    """Re-run title discovery when a season page is edited, update wiki_page_titles."""
+    """
+    Called whenever a season overview page (e.g. "2026 ATP Tour") is edited.
+
+    The season page is authoritative for draw links: when a tournament's Singles
+    page appears (or changes), it shows up as a new/corrected wiki_page_title here.
+    We therefore:
+      1. Correct any wiki_page_title that changed, clearing the stale wiki_page_id
+         so the next scrape resolves it fresh.
+      2. Immediately re-scrape every non-completed tournament that either had its
+         title corrected OR hasn't had its draw confirmed yet and its expected draw
+         date has already arrived — because the season-page edit is the signal that
+         draw links are being added/updated.
+    """
     import re
-    from sqlalchemy import and_
     from app.services.scraper import fetch_wikitext
     from app.services.discovery import parse_season_schedule
+    from app.routers.tournaments import _do_scrape
 
     m = re.match(r'^(\d{4}) (ATP|WTA) Tour$', season_title)
     if not m:
@@ -164,33 +176,87 @@ async def _on_season_page_edit(season_title: str) -> None:
     try:
         wikitext, _ = await fetch_wikitext(season_title, force_refresh=True)
         discovered = parse_season_schedule(wikitext, year, gender)
+        disc_by_name = {d.name: d for d in discovered if d.wiki_page_title}
+
+        today = date.today()
+        to_scrape: list[int] = []  # tournament IDs to scrape
 
         async with AsyncSessionLocal() as db:
-            updated = 0
-            for d in discovered:
-                result = await db.execute(
-                    select(Tournament).where(
-                        and_(
-                            Tournament.year == year,
-                            Tournament.gender == gender,
-                            Tournament.name == d.name,
-                            Tournament.wiki_page_title != d.wiki_page_title,
-                        )
-                    )
+            result = await db.execute(
+                select(Tournament).where(
+                    Tournament.year == year,
+                    Tournament.gender == gender,
+                    Tournament.status != "completed",
                 )
-                t = result.scalar_one_or_none()
-                if t and d.wiki_page_title:
-                    logger.info("Season page edit: correcting %s title %r → %r",
-                                t.name, t.wiki_page_title, d.wiki_page_title)
+            )
+            tournaments = result.scalars().all()
+
+            title_updated = 0
+            for t in tournaments:
+                d = disc_by_name.get(t.name)
+                if d and d.wiki_page_title != t.wiki_page_title:
+                    logger.info(
+                        "Season page edit: correcting %s title %r → %r",
+                        t.name, t.wiki_page_title, d.wiki_page_title,
+                    )
                     t.wiki_page_title = d.wiki_page_title
-                    updated += 1
-            if updated:
+                    t.wiki_page_id = None  # clear stale ID — scraper will resolve fresh
+                    title_updated += 1
+                    to_scrape.append(t.id)
+
+                # Also immediately re-scrape any upcoming tournament whose expected
+                # draw date has arrived but draw isn't confirmed yet — the season edit
+                # is the signal that draw links are live on the season page.
+                if (
+                    t.id not in to_scrape
+                    and t.draw_released_direct_at is None
+                    and t.draw_release_direct is not None
+                    and t.draw_release_direct <= today
+                ):
+                    to_scrape.append(t.id)
+
+            if title_updated:
                 await db.commit()
-                logger.info("Updated %d tournament title(s) from %s edit", updated, season_title)
+                logger.info(
+                    "Season edit %s: corrected %d title(s), queued %d scrape(s)",
+                    season_title, title_updated, len(to_scrape),
+                )
+            else:
+                logger.info(
+                    "Season edit %s: no title changes; queued %d pending-draw scrape(s)",
+                    season_title, len(to_scrape),
+                )
+
+        # Scrape outside the session that did the title updates
+        if to_scrape:
+            async with AsyncSessionLocal() as db:
+                for tid in to_scrape:
+                    t = await db.get(Tournament, tid)
+                    if not t:
+                        continue
+                    try:
+                        await asyncio.sleep(2)  # throttle Wikipedia requests
+                        prev_released = t.draw_released_direct_at
+                        await _do_scrape(t, db, force_refresh=True)
+                        await db.commit()
+                        logger.info(
+                            "Season-edit scrape: %s %s (draw now: %s)",
+                            t.year, t.name, t.draw_released_direct_at,
+                        )
+                        if prev_released is None and t.draw_released_direct_at is not None:
+                            from app.services.notifications import notify_draw_released
+                            asyncio.create_task(notify_draw_released(
+                                t.id, t.category or "", t.gender, t.year, t.name,
+                            ))
+                    except Exception as exc:
+                        logger.warning(
+                            "Season-edit scrape failed for %s: %s", t.wiki_page_title, exc,
+                        )
+                        await db.rollback()
 
         await _sync_subscriptions()
     except Exception as exc:
-        logger.warning("Failed to refresh titles from season page %s: %s", season_title, exc)
+        logger.warning("Failed to handle season page edit %s: %s", season_title, exc)
 
 
 async def _refresh_weekly_rankings() -> None:
