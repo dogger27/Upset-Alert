@@ -228,6 +228,11 @@ export default function LeagueDetail() {
         <div className="leaderboard-wrap card">
           <div className="leaderboard-header">
             <h2>{selectedTournament ? `${selectedTournament.year} ${selectedTournament.name}` : 'Leaderboard'}</h2>
+            {leaderboard?.completed_matches_count > 0 && (
+              <span className="leaderboard-upsets">
+                Upsets: {leaderboard.upset_count} / {leaderboard.completed_matches_count}
+              </span>
+            )}
             <button
               className="btn-secondary"
               onClick={() => navigate(`/tournaments/${selectedTournamentId}`)}
