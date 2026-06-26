@@ -278,8 +278,8 @@
     2px 0 0 #fff, -2px 0 0 #fff, 0 2px 0 #fff, 0 -2px 0 #fff,
     0 0 8px #fff, 0 0 16px rgba(255,255,255,0.9), 0 0 28px rgba(255,255,255,0.7);
 }
-.lt-progress-total { font-size: 0.8rem; color: var(--text-muted); font-weight: 700; text-align: right; white-space: nowrap; }
-.lt-progress-correct { font-size: 0.78rem; color: var(--text-muted); text-align: right; white-space: nowrap; }
+.lt-progress-total { font-size: 0.8rem; color: var(--text-muted); font-weight: 700; text-align: center; white-space: nowrap; }
+.lt-progress-correct { font-size: 0.78rem; color: var(--text-muted); text-align: center; white-space: nowrap; }
 .lt-progress-col-header { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
 .lt-progress-header-row { margin-bottom: 0.2rem; }
 /* Leaderboard */
