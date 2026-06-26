@@ -147,9 +147,12 @@ export default function Navbar() {
       <div className="navbar-left" />
       <Link to="/" className="navbar-brand">
         <span className="navbar-brand-dot" />
-        <span className="navbar-brand-text">
-          <span className="navbar-brand-upset">Upset</span>{' '}
-          <span className="navbar-brand-alert">Alert</span><span className="navbar-brand-exclaim">!</span>
+        <span className="navbar-brand-col">
+          <span className="navbar-brand-text">
+            <span className="navbar-brand-upset">Upset</span>{' '}
+            <span className="navbar-brand-alert">Alert</span><span className="navbar-brand-exclaim">!</span>
+          </span>
+          <span className="navbar-brand-slogan">Fantasy Tennis / Bracket Challenge at its finest</span>
         </span>
       </Link>
       <div className="navbar-links">

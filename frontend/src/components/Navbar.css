@@ -46,6 +46,12 @@
   50%       { box-shadow: 0 0 0 6px rgba(232,168,124,0.42); }
 }
 
+.navbar-brand-col {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
 .navbar-brand-text {
   font-family: var(--font-display);
   font-weight: 900;
@@ -53,6 +59,17 @@
   letter-spacing: 0.03em;
   text-transform: uppercase;
   line-height: 1;
+}
+
+.navbar-brand-slogan {
+  font-family: var(--font-body);
+  font-size: 0.6rem;
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.52);
+  line-height: 1;
+  white-space: nowrap;
 }
 .navbar-brand-upset { color: #fff; }
 .navbar-brand-alert { color: var(--clay-300); }
