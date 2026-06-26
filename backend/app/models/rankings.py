@@ -22,6 +22,7 @@ class TePlayer(Base):
     last_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)    # "Auger Aliassime"
     date_of_birth: Mapped[Optional[date]] = mapped_column(Date, nullable=True)  # fetched from TE player page
     nationality: Mapped[Optional[str]] = mapped_column(String, nullable=True)   # "Canada" — from TE profile "Country:" field
+    # NOTE: elo and elo_rank belong on TeRankingsSnapshot, not here.
 
     snapshots: Mapped[list["TeRankingsSnapshot"]] = relationship(
         "TeRankingsSnapshot", back_populates="player", cascade="all, delete-orphan"
