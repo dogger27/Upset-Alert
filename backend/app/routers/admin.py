@@ -75,7 +75,7 @@ async def get_players(
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin only")
 
-    q = select(TePlayer).order_by(TePlayer.elo.desc().nullslast(), TePlayer.name_norm)
+    q = select(TePlayer).order_by(TePlayer.last_name.nullslast(), TePlayer.first_name, TePlayer.name_norm)
     if gender:
         q = q.where(TePlayer.gender == gender)
     if search:
@@ -89,11 +89,9 @@ async def get_players(
         {
             "id": p.id,
             "gender": p.gender,
-            "name_raw": p.name_raw,
-            "name_norm": p.name_norm,
-            "te_slug": p.te_slug,
+            "first_name": p.first_name,
+            "last_name": p.last_name,
             "date_of_birth": p.date_of_birth.isoformat() if p.date_of_birth else None,
-            "elo": p.elo,
         }
         for p in players
     ]
@@ -143,7 +141,7 @@ async def get_rankings(
     return [
         {
             "rank": snap.rank,
-            "elo_rank": player.elo_rank,
+            "elo_rank": snap.elo_rank,
             "points": snap.points,
             "player_id": player.id,
             "name_raw": player.name_raw,

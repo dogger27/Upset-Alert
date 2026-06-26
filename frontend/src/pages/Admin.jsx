@@ -589,27 +589,25 @@ function PlayersPanel({ user }) {
           <table className="admin-table">
             <thead>
               <tr>
-                <th>ID</th>
-                <th>G</th>
-                <th className="td-left">Name (raw)</th>
-                <th className="td-left">Name (norm)</th>
-                <th className="td-left">TE Slug</th>
+                <th className="td-left">First</th>
+                <th className="td-left">Last</th>
                 <th>DOB</th>
-                <th>Elo</th>
+                <th>Age</th>
               </tr>
             </thead>
             <tbody>
-              {players.map(p => (
-                <tr key={p.id}>
-                  <td className="td-muted">{p.id}</td>
-                  <td className="td-muted">{p.gender}</td>
-                  <td className="td-left">{p.name_raw}</td>
-                  <td className="td-left td-muted">{p.name_norm}</td>
-                  <td className="td-left td-muted">{p.te_slug || '—'}</td>
-                  <td className="td-muted td-nowrap">{p.date_of_birth || '—'}</td>
-                  <td>{p.elo ?? '—'}</td>
-                </tr>
-              ))}
+              {players.map(p => {
+                const dob = p.date_of_birth ? new Date(p.date_of_birth) : null
+                const age = dob ? Math.floor((Date.now() - dob.getTime()) / (1000 * 60 * 60 * 24 * 365.25)) : null
+                return (
+                  <tr key={p.id}>
+                    <td className="td-left">{p.first_name || '—'}</td>
+                    <td className="td-left">{p.last_name || '—'}</td>
+                    <td className="td-muted td-nowrap">{p.date_of_birth || '—'}</td>
+                    <td className="td-muted">{age ?? '—'}</td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>

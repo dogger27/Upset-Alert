@@ -390,6 +390,29 @@ async def _fetch_te_player_profile(te_slug: str) -> tuple[Optional[date], Option
     return dob, name_display
 
 
+def _split_display_name(name_raw: str, name_display: str) -> tuple[Optional[str], Optional[str]]:
+    """
+    Given TE raw name ("Surname First") and display name ("First Surname"),
+    determine the first/last split by finding the suffix of name_raw tokens
+    that matches the prefix of name_display tokens.
+
+    Returns (first_name, last_name) or (None, None) if the split is ambiguous.
+    """
+    raw_tokens = name_raw.split()
+    disp_tokens = name_display.split()
+    if len(raw_tokens) != len(disp_tokens) or len(raw_tokens) < 2:
+        return None, None
+
+    raw_lower = [t.lower() for t in raw_tokens]
+    disp_lower = [t.lower() for t in disp_tokens]
+
+    for fn_count in range(1, len(raw_tokens)):
+        if raw_lower[-fn_count:] == disp_lower[:fn_count] and raw_lower[:-fn_count] == disp_lower[fn_count:]:
+            return " ".join(disp_tokens[:fn_count]), " ".join(disp_tokens[fn_count:])
+
+    return None, None
+
+
 async def prefetch_dob_for_draw(tournament_id: int) -> None:
     """
     After a draw is refreshed, fetch DOB and display name from TE for any linked
@@ -421,6 +444,10 @@ async def prefetch_dob_for_draw(tournament_id: int) -> None:
                 tp.date_of_birth = dob
             if name_display:
                 tp.name_display = name_display
+                first_name, last_name = _split_display_name(tp.name_raw, name_display)
+                if first_name:
+                    tp.first_name = first_name
+                    tp.last_name = last_name
             await asyncio.sleep(0.3)
 
         await db.commit()
@@ -459,6 +486,10 @@ async def backfill_all_dob() -> dict:
                 changed = True
             if name_display and tp.name_display is None:
                 tp.name_display = name_display
+                first_name, last_name = _split_display_name(tp.name_raw, name_display)
+                if first_name:
+                    tp.first_name = first_name
+                    tp.last_name = last_name
                 changed = True
             if changed:
                 updated += 1
@@ -467,11 +498,6 @@ async def backfill_all_dob() -> dict:
         await db.commit()
         logger.info("Profile backfill complete: %d/%d updated", updated, total)
         return {"total": total, "updated": updated, "failed": total - updated}
-
-
-# ---------------------------------------------------------------------------
-# Tennis Abstract Elo ratings
-# ---------------------------------------------------------------------------
 
 _TA_ELO_URLS = {
     "M": "https://tennisabstract.com/reports/atp_elo_ratings.html",
@@ -510,37 +536,63 @@ async def _fetch_ta_elo_page(gender: str) -> dict[frozenset, int]:
 
 
 async def refresh_elo_ratings() -> None:
-    """Fetch Elo from Tennis Abstract and update te_players.elo for both genders."""
+    """
+    Fetch Elo from Tennis Abstract and store on te_rankings_snapshots for the
+    most recent ranking week. Elo is weekly data and does not belong on te_players.
+    """
     from app.database import AsyncSessionLocal
-    from app.models.rankings import TePlayer
+    from app.models.rankings import TePlayer, TeRankingsSnapshot
 
     for gender in ("M", "F"):
         try:
             elo_map = await _fetch_ta_elo_page(gender)
             logger.info("ELO page fetched for gender=%s: %d entries", gender, len(elo_map))
             async with AsyncSessionLocal() as db:
-                res = await db.execute(select(TePlayer).where(TePlayer.gender == gender))
-                players = res.scalars().all()
-                updated = 0
-                for tp in players:
-                    tokens = frozenset(tp.name_norm.split())
-                    new_elo = elo_map.get(tokens)
-                    if new_elo and tp.elo != new_elo:
-                        tp.elo = new_elo
-                        updated += 1
-                # Assign elo_rank: sort by elo desc; players without elo get None
+                # Find the most recent ranking week for this gender.
+                week_res = await db.execute(
+                    select(TeRankingsSnapshot.week_date)
+                    .join(TePlayer, TeRankingsSnapshot.player_id == TePlayer.id)
+                    .where(TePlayer.gender == gender)
+                    .order_by(TeRankingsSnapshot.week_date.desc())
+                    .limit(1)
+                )
+                week_date = week_res.scalar_one_or_none()
+                if week_date is None:
+                    logger.info("ELO refresh (%s): no ranking week found, skipping", gender)
+                    continue
+
+                # Load all snapshots for that week alongside player name_norm.
+                snap_res = await db.execute(
+                    select(TeRankingsSnapshot, TePlayer.name_norm)
+                    .join(TePlayer, TeRankingsSnapshot.player_id == TePlayer.id)
+                    .where(
+                        TePlayer.gender == gender,
+                        TeRankingsSnapshot.week_date == week_date,
+                    )
+                )
+                rows = snap_res.all()
+
+                # Assign elo to each snapshot row.
+                for snap, name_norm in rows:
+                    tokens = frozenset(name_norm.split())
+                    snap.elo = elo_map.get(tokens) or None
+
+                # Assign elo_rank: sort by elo desc; unmatched players get None.
                 ranked = sorted(
-                    [tp for tp in players if tp.elo is not None],
-                    key=lambda p: p.elo,
+                    [(snap, snap.elo) for snap, _ in rows if snap.elo is not None],
+                    key=lambda t: t[1],
                     reverse=True,
                 )
-                for rank, tp in enumerate(ranked, start=1):
-                    tp.elo_rank = rank
-                for tp in players:
-                    if tp.elo is None:
-                        tp.elo_rank = None
+                ranked_ids = {snap.player_id for snap, _ in ranked}
+                for pos, (snap, _) in enumerate(ranked, start=1):
+                    snap.elo_rank = pos
+                for snap, _ in rows:
+                    if snap.player_id not in ranked_ids:
+                        snap.elo_rank = None
+
                 await db.commit()
-                logger.info("ELO refresh (%s): %d/%d players updated, %d ranked", gender, updated, len(players), len(ranked))
+                logger.info("ELO refresh (%s): %d/%d players ranked for week %s",
+                            gender, len(elo_by_snap), len(rows), week_date)
         except Exception as exc:
             logger.warning("ELO refresh failed for gender=%s: %s", gender, exc)
             from app.services.system_log import app_log

@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 from app.core.auth import get_current_user
 from app.database import get_db
 from app.models.prediction import UserPrediction
-from app.models.rankings import TePlayer
+from app.models.rankings import TePlayer, TeRankingsSnapshot
 from app.models.tournament import DrawEntry, Match, Tournament
 from app.models.user import User
 from app.schemas.league import LeaderboardEntry
@@ -456,11 +456,10 @@ async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
     te_ids = [p.te_player_id for p in players if p.te_player_id is not None]
     te_slug_map: dict[int, str] = {}
     te_dob_map: dict[int, "date"] = {}
-    te_elo_map: dict[int, int] = {}
     te_elo_rank_map: dict[int, int] = {}
     if te_ids:
         te_res = await db.execute(
-            select(TePlayer.id, TePlayer.te_slug, TePlayer.date_of_birth, TePlayer.elo, TePlayer.elo_rank)
+            select(TePlayer.id, TePlayer.te_slug, TePlayer.date_of_birth)
             .where(TePlayer.id.in_(te_ids))
         )
         for row in te_res:
@@ -468,10 +467,21 @@ async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
                 te_slug_map[row.id] = row.te_slug
             if row.date_of_birth:
                 te_dob_map[row.id] = row.date_of_birth
-            if row.elo:
-                te_elo_map[row.id] = row.elo
+
+        # ELO rank lives in the most recent rankings snapshot, not on te_players.
+        elo_snap_res = await db.execute(
+            select(TeRankingsSnapshot.player_id, TeRankingsSnapshot.elo_rank)
+            .where(
+                TeRankingsSnapshot.player_id.in_(te_ids),
+                TeRankingsSnapshot.elo_rank.isnot(None),
+                TeRankingsSnapshot.week_date == select(func.max(TeRankingsSnapshot.week_date))
+                    .where(TeRankingsSnapshot.player_id.in_(te_ids))
+                    .scalar_subquery(),
+            )
+        )
+        for row in elo_snap_res:
             if row.elo_rank:
-                te_elo_rank_map[row.id] = row.elo_rank
+                te_elo_rank_map[row.player_id] = row.elo_rank
 
     matches_result = await db.execute(
         select(Match)
@@ -489,7 +499,6 @@ async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
         out = DrawEntryOut.model_validate(p)
         out.te_slug = te_slug_map.get(p.te_player_id) if p.te_player_id else None
         out.date_of_birth = te_dob_map.get(p.te_player_id) if p.te_player_id else None
-        out.elo = te_elo_map.get(p.te_player_id) if p.te_player_id else None
         out.elo_rank = te_elo_rank_map.get(p.te_player_id) if p.te_player_id else None
         return out
 
