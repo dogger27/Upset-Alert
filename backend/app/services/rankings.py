@@ -431,8 +431,8 @@ async def assign_rankings(
                     player.ranking = rank_by_te_id.get(te_id)
                     continue
 
-                # Fallback 2: probe TE profile URLs to discover unranked players.
-                slug, name_display, dob, first_name, last_name = await _find_te_player(player.name)
+                # Fallback 2: TE list-players search then slug-guess for unranked players.
+                slug, name_display, dob, first_name, last_name = await _find_te_player(player.name, gender)
                 await app_log(
                     "warning" if not slug else "info",
                     "rankings",
@@ -521,22 +521,95 @@ def _parse_profile_html(html: str) -> tuple[Optional[date], Optional[str]]:
     return dob, name_display
 
 
+# TE alphabetical player list: <a href="/player/auger-aliassime/">Auger Aliassime Felix</a>
+_TE_LIST_ENTRY_RE = re.compile(r'<a\s[^>]*href="(/player/[^"]+)"[^>]*>([^<]+)</a>')
+
+
+async def _search_te_list(
+    display_name: str, gender: str
+) -> tuple[Optional[str], Optional[str]]:
+    """
+    Search TE's alphabetical /list-players/ pages for a player by display name.
+
+    TE names on the list are in "Surname Firstname" order — the same format as
+    our ranking pages — so token-set matching works directly.  This is far more
+    reliable than slug guessing because it covers hash-disambiguated slugs like
+    "ponchet-8cae2" that can never be derived from the name alone.
+
+    Returns (te_slug, name_raw_te) with name_raw_te in TE "Surname First" format,
+    or (None, None) if not found.
+    """
+    import httpx
+
+    tokens_norm = _norm(display_name).split()
+    if len(tokens_norm) < 2:
+        return None, None
+
+    target_ts = frozenset(tokens_norm)
+    te_type = "atp" if gender == "M" else "wta"
+
+    # Try the first letter of every token except the first (which is usually the
+    # given name).  Deduplication avoids fetching the same letter page twice.
+    letters_tried: set[str] = set()
+    letters = []
+    for tok in tokens_norm[1:]:
+        letter = tok[0].upper()
+        if letter not in letters_tried:
+            letters_tried.add(letter)
+            letters.append(letter)
+
+    async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+        for letter in letters:
+            try:
+                resp = await client.get(
+                    "https://www.tennisexplorer.com/list-players/",
+                    params={"type": te_type, "abc": letter},
+                    headers=_TE_HEADERS,
+                )
+                if resp.status_code != 200:
+                    await asyncio.sleep(0.3)
+                    continue
+                html = resp.text
+            except Exception as exc:
+                logger.debug("TE list-players fetch failed for letter %s: %s", letter, exc)
+                await asyncio.sleep(0.3)
+                continue
+
+            for href, link_name in _TE_LIST_ENTRY_RE.findall(html):
+                slug_m = _TE_SLUG_RE.match(href)
+                if not slug_m:
+                    continue
+                link_name = link_name.strip()
+                if not link_name:
+                    continue
+                te_ts = frozenset(_norm(link_name).split())
+                # Accept exact set match or proper subset in either direction (same
+                # logic as Rules 1–3 in _apply_rules).
+                if te_ts == target_ts or (target_ts < te_ts) or (len(te_ts) >= 2 and te_ts < target_ts):
+                    return slug_m.group(1), link_name
+
+            await asyncio.sleep(0.3)
+
+    return None, None
+
+
 async def _find_te_player(
     display_name: str,
+    gender: str = "M",
 ) -> tuple[Optional[str], Optional[str], Optional[date], Optional[str], Optional[str]]:
     """
-    Discover a TE player not yet in our rankings by probing candidate profile URLs.
+    Discover a TE player not yet in our rankings.  Three-stage fallback:
 
-    TE slugs are always derived from the player's surname. Given a Wikipedia
-    "First Last" display name we try two candidates:
-      A) all-but-first words hyphenated → "auger-aliassime", "de-minaur"
-         If this hits, the first display token is definitively the first name.
-      B) last word only → "aliassime", "sinner", "kecmanovic"
-         Works for simple "First Last" names where the slug is just the surname.
+    1. TE alphabetical list-players pages — reliable, covers all TE players
+       including those with hash-disambiguated slugs (e.g. "ponchet-8cae2").
+       Returns the TE raw name ("Surname First"), so first/last split is exact.
 
-    Each candidate is validated by comparing the TE page title's token set against
-    the display name token set.  A hash-disambiguated slug (e.g. "ponchet-8cae2")
-    cannot be guessed and will return (None, None, None, None, None).
+    2. Slug guessing — derives candidates from the Wikipedia display name and
+       validates each by fetching the profile and checking the title token set.
+       Covers compound surnames ("auger-aliassime") and simple surnames ("sinner").
+
+    3. If both fail: returns (None, None, None, None, None).  The caller creates
+       a minimal record with name_display from the Wikipedia name.
 
     Returns (te_slug, name_display, dob, first_name, last_name).
     """
@@ -549,9 +622,20 @@ async def _find_te_player(
 
     target_ts = frozenset(tokens_norm)
 
-    # Build deduplicated candidate list with a "mode" tag for name splitting.
-    # mode="compound" → first display token is the first name (slug = rest)
-    # mode="last"     → last display token is the last name (only reliable for 2-token names)
+    # ------------------------------------------------------------------
+    # Stage 1: TE alphabetical list search (authoritative)
+    # ------------------------------------------------------------------
+    slug, name_raw_te = await _search_te_list(display_name, gender)
+    if slug:
+        dob, name_display = await _fetch_te_player_profile(slug)
+        await asyncio.sleep(0.3)
+        # name_raw_te is in TE "Surname First" format — use it to split.
+        first_name, last_name = _split_display_name(name_raw_te, name_display or display_name)
+        return slug, name_display or display_name, dob, first_name, last_name
+
+    # ------------------------------------------------------------------
+    # Stage 2: slug guessing (heuristic, no hash-disambiguated slugs)
+    # ------------------------------------------------------------------
     candidates: list[tuple[str, str]] = []
     slug_a = "-".join(tokens_norm[1:])
     candidates.append((slug_a, "compound"))
@@ -560,10 +644,10 @@ async def _find_te_player(
         candidates.append((slug_b, "last"))
 
     async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
-        for slug, mode in candidates:
+        for slug_cand, mode in candidates:
             try:
                 resp = await client.get(
-                    f"https://www.tennisexplorer.com/player/{slug}/",
+                    f"https://www.tennisexplorer.com/player/{slug_cand}/",
                     headers=_TE_HEADERS,
                 )
                 if resp.status_code != 200:
@@ -571,7 +655,7 @@ async def _find_te_player(
                     continue
                 html = resp.text
             except Exception as exc:
-                logger.debug("TE slug probe failed for %r: %s", slug, exc)
+                logger.debug("TE slug probe failed for %r: %s", slug_cand, exc)
                 await asyncio.sleep(0.3)
                 continue
 
@@ -585,21 +669,16 @@ async def _find_te_player(
                 continue
 
             dob, name_display = _parse_profile_html(html)
-
-            # Determine first/last split from which candidate succeeded.
             first_name: Optional[str] = None
             last_name: Optional[str] = None
             if mode == "compound":
-                # slug == all but first word → first display token is provably the first name.
                 first_name = disp_tokens[0]
                 last_name = " ".join(disp_tokens[1:])
             elif mode == "last" and len(disp_tokens) == 2:
-                # Simple "First Last" — first token = first name.
                 first_name = disp_tokens[0]
                 last_name = disp_tokens[1]
-            # For 3+ token names found via last-word-only: split is ambiguous; leave None.
 
-            return slug, name_display or display_name, dob, first_name, last_name
+            return slug_cand, name_display or display_name, dob, first_name, last_name
 
     return None, None, None, None, None
 
@@ -689,7 +768,7 @@ async def prefetch_dob_for_draw(tournament_id: int) -> None:
 
         for tp in without_slug:
             search_name = tp.name_display or tp.name_raw
-            slug, name_display, dob, first_name, last_name = await _find_te_player(search_name)
+            slug, name_display, dob, first_name, last_name = await _find_te_player(search_name, tp.gender)
             if slug:
                 tp.te_slug = slug
             if name_display:
@@ -715,10 +794,15 @@ async def backfill_all_dob() -> dict:
     from app.models.rankings import TePlayer
     from sqlalchemy import or_
 
+    _BATCH = 50  # rows per commit — progress is visible and deploys don't erase work
+
     async with AsyncSessionLocal() as db:
-        # Phase 1: players with a known te_slug — fetch/compute what's still missing.
-        res = await db.execute(
-            select(TePlayer).where(
+        # Load IDs upfront so the batch loop is bounded regardless of HTTP failures.
+        # On restart, already-committed players are excluded by the where clause.
+
+        # Phase 1: players with a slug — fetch/compute missing fields.
+        id_res = await db.execute(
+            select(TePlayer.id).where(
                 TePlayer.te_slug.isnot(None),
                 or_(
                     TePlayer.date_of_birth.is_(None),
@@ -727,72 +811,83 @@ async def backfill_all_dob() -> dict:
                 ),
             )
         )
-        with_slug = res.scalars().all()
-        logger.info("Profile backfill phase 1: %d players with slug to process", len(with_slug))
+        p1_ids = id_res.scalars().all()
+        logger.info("Profile backfill phase 1: %d players with slug to process", len(p1_ids))
 
         updated = 0
-        for tp in with_slug:
-            changed = False
+        for batch_start in range(0, len(p1_ids), _BATCH):
+            batch_ids = p1_ids[batch_start: batch_start + _BATCH]
+            res = await db.execute(select(TePlayer).where(TePlayer.id.in_(batch_ids)))
+            batch = res.scalars().all()
 
-            # If name_display is already known, compute first/last without HTTP.
-            if tp.name_display and tp.first_name is None:
-                first_name, last_name = _split_display_name(tp.name_raw, tp.name_display)
-                if first_name:
-                    tp.first_name = first_name
-                    tp.last_name = last_name
-                    changed = True
-
-            # Only hit the network when DOB or name_display is still missing.
-            if tp.date_of_birth is None or tp.name_display is None:
-                dob, name_display = await _fetch_te_player_profile(tp.te_slug)
-                if dob and tp.date_of_birth is None:
-                    tp.date_of_birth = dob
-                    changed = True
-                if name_display and tp.name_display is None:
-                    tp.name_display = name_display
-                    first_name, last_name = _split_display_name(tp.name_raw, name_display)
+            for tp in batch:
+                changed = False
+                if tp.name_display and tp.first_name is None:
+                    first_name, last_name = _split_display_name(tp.name_raw, tp.name_display)
                     if first_name:
                         tp.first_name = first_name
                         tp.last_name = last_name
-                    changed = True
-                await asyncio.sleep(0.3)
+                        changed = True
+                if tp.date_of_birth is None or tp.name_display is None:
+                    dob, name_display = await _fetch_te_player_profile(tp.te_slug)
+                    if dob and tp.date_of_birth is None:
+                        tp.date_of_birth = dob
+                        changed = True
+                    if name_display and tp.name_display is None:
+                        tp.name_display = name_display
+                        first_name, last_name = _split_display_name(tp.name_raw, name_display)
+                        if first_name:
+                            tp.first_name = first_name
+                            tp.last_name = last_name
+                        changed = True
+                    await asyncio.sleep(0.3)
+                if changed:
+                    updated += 1
 
-            if changed:
-                updated += 1
+            await db.commit()
+            done = min(batch_start + _BATCH, len(p1_ids))
+            logger.info("Profile backfill phase 1: %d/%d committed", done, len(p1_ids))
 
-        # Phase 2: players with no te_slug (e.g. draw stubs for unranked players).
-        # Probe TE to discover their slug and fetch full profile data.
-        res2 = await db.execute(
-            select(TePlayer).where(TePlayer.te_slug.is_(None))
+        # Phase 2: players with no slug — search TE to discover and fully populate.
+        id_res2 = await db.execute(
+            select(TePlayer.id).where(TePlayer.te_slug.is_(None))
         )
-        without_slug = res2.scalars().all()
-        logger.info("Profile backfill phase 2: %d players without slug to process", len(without_slug))
+        p2_ids = id_res2.scalars().all()
+        logger.info("Profile backfill phase 2: %d players without slug to process", len(p2_ids))
 
         slug_found = 0
-        for tp in without_slug:
-            search_name = tp.name_display or tp.name_raw
-            slug, name_display, dob, first_name, last_name = await _find_te_player(search_name)
-            changed = False
-            if slug:
-                tp.te_slug = slug
-                slug_found += 1
-                changed = True
-            if name_display and tp.name_display is None:
-                tp.name_display = name_display
-                changed = True
-            if dob and tp.date_of_birth is None:
-                tp.date_of_birth = dob
-                changed = True
-            if first_name and tp.first_name is None:
-                tp.first_name = first_name
-                tp.last_name = last_name
-                changed = True
-            if changed:
-                updated += 1
-            await asyncio.sleep(0.3)
+        for batch_start in range(0, len(p2_ids), _BATCH):
+            batch_ids = p2_ids[batch_start: batch_start + _BATCH]
+            res = await db.execute(select(TePlayer).where(TePlayer.id.in_(batch_ids)))
+            batch = res.scalars().all()
 
-        total = len(with_slug) + len(without_slug)
-        await db.commit()
+            for tp in batch:
+                search_name = tp.name_display or tp.name_raw
+                slug, name_display, dob, first_name, last_name = await _find_te_player(search_name, tp.gender)
+                changed = False
+                if slug:
+                    tp.te_slug = slug
+                    slug_found += 1
+                    changed = True
+                if name_display and tp.name_display is None:
+                    tp.name_display = name_display
+                    changed = True
+                if dob and tp.date_of_birth is None:
+                    tp.date_of_birth = dob
+                    changed = True
+                if first_name and tp.first_name is None:
+                    tp.first_name = first_name
+                    tp.last_name = last_name
+                    changed = True
+                if changed:
+                    updated += 1
+                await asyncio.sleep(0.3)
+
+            await db.commit()
+            done = min(batch_start + _BATCH, len(p2_ids))
+            logger.info("Profile backfill phase 2: %d/%d committed", done, len(p2_ids))
+
+        total = len(p1_ids) + len(p2_ids)
         logger.info(
             "Profile backfill complete: %d/%d updated, %d slugs discovered",
             updated, total, slug_found,
