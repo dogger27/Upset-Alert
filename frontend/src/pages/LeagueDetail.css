@@ -282,8 +282,6 @@
 .lt-progress-correct { font-size: 0.78rem; color: var(--text-muted); text-align: right; white-space: nowrap; }
 .lt-progress-col-header { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
 .lt-progress-header-row { margin-bottom: 0.2rem; }
-.lt-view-draw-btn { font-size: 0.78rem; padding: 0.2rem 0.6rem; margin-left: auto; flex-shrink: 0; }
-
 /* Leaderboard */
 .leaderboard-wrap { margin-bottom: 1.5rem; }
 .leaderboard-header {

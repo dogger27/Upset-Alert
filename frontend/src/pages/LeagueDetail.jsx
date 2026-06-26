@@ -241,7 +241,6 @@ const ROUND_DARK_COLORS = ['#7f1d1d', '#7c2d12', '#713f12', '#14532d', '#1e3a8a'
 const ROUND_LABELS = ['R1', 'R2', 'R3', 'R4', 'QF', 'SF', 'F']
 
 function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMemberCount, showRealName, selected, onSelect }) {
-  const navigate = useNavigate()
   const { data: rawData } = useQuery({
     queryKey: ['round-scores', leagueId, t.id],
     queryFn: () => getRoundScores(leagueId, t.id),
@@ -265,12 +264,6 @@ function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMember
         </span>
         <span className="lt-progress-title">{t.name} {t.year}</span>
         <span className="lt-progress-meta">{pickerCount}/{leagueMemberCount} competing</span>
-        <button
-          className="btn-secondary lt-view-draw-btn"
-          onClick={e => { e.stopPropagation(); navigate(`/tournaments/${t.id}?league=${leagueId}`) }}
-        >
-          View Draw
-        </button>
       </div>
 
       {entries.length === 0 ? (
