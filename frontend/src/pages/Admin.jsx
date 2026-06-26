@@ -580,7 +580,7 @@ function PlayersPanel({ user }) {
     <div className="card admin-section">
       <h2>
         Players (TE)
-        <span className="admin-count">{players.length}{search || genderFilter ? '' : '+'}</span>
+        <span className="admin-count">{players.length}</span>
       </h2>
       <div className="admin-filters-bar">
         <div className="log-filters">

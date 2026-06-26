@@ -68,7 +68,7 @@ async def clear_logs(
 async def get_players(
     gender: Optional[str] = Query(None, description="M or F"),
     search: Optional[str] = Query(None),
-    limit: int = Query(500, le=2000),
+    limit: int = Query(10000, le=10000),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
