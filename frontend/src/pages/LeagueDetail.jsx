@@ -160,7 +160,7 @@ export default function LeagueDetail() {
       {/* Tournaments */}
       <div className="card league-tournaments-section">
         <h2>Tournaments</h2>
-        {activeTournaments.length === 0 && tableRows.length === 0 ? (
+        {activeTournaments.length === 0 && upcomingRows.length === 0 && completedRows.length === 0 ? (
           <p className="muted">No picks have been submitted yet. Members can make picks from the Tournaments page.</p>
         ) : (
           <>
