@@ -180,7 +180,7 @@ export default function LeagueDetail() {
 
             {/* Upcoming + completed — sortable tables */}
             {(upcomingRows.length > 0 || completedRows.length > 0) && (() => {
-              const TournRow = ({ t, picker_count }) => (
+              const TournRow = ({ tournament: t, picker_count }) => (
                 <tr
                   key={t.id}
                   className={`lt-completed-row${selectedTournamentId === t.id ? ' lt-completed-row--selected' : ''}`}
