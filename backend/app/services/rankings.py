@@ -735,7 +735,6 @@ async def prefetch_dob_for_draw(tournament_id: int) -> None:
             .where(
                 DrawEntry.tournament_id == tournament_id,
                 or_(
-                    TePlayer.date_of_birth.is_(None),
                     TePlayer.name_display.is_(None),
                     TePlayer.first_name.is_(None),
                 ),
@@ -762,17 +761,18 @@ async def prefetch_dob_for_draw(tournament_id: int) -> None:
                 if first_name:
                     tp.first_name = first_name
                     tp.last_name = last_name
-                    continue
-            dob, name_display = await _fetch_te_player_profile(tp.te_slug)
-            if dob and tp.date_of_birth is None:
-                tp.date_of_birth = dob
-            if name_display and tp.name_display is None:
-                tp.name_display = name_display
-                first_name, last_name = _split_display_name(tp.name_raw, name_display)
-                if first_name:
-                    tp.first_name = first_name
-                    tp.last_name = last_name
-            await asyncio.sleep(0.3)
+                continue
+            if tp.name_display is None:
+                dob, name_display = await _fetch_te_player_profile(tp.te_slug)
+                if dob and tp.date_of_birth is None:
+                    tp.date_of_birth = dob
+                if name_display:
+                    tp.name_display = name_display
+                    first_name, last_name = _split_display_name(tp.name_raw, name_display)
+                    if first_name:
+                        tp.first_name = first_name
+                        tp.last_name = last_name
+                await asyncio.sleep(0.3)
 
         for tp in without_slug:
             search_name = tp.name_display or tp.name_raw
@@ -808,12 +808,13 @@ async def backfill_all_dob() -> dict:
         # Load IDs upfront so the batch loop is bounded regardless of HTTP failures.
         # On restart, already-committed players are excluded by the where clause.
 
-        # Phase 1: players with a slug — fetch/compute missing fields.
+        # Phase 1: players with a slug missing name_display or first_name.
+        # DOB alone is NOT a trigger — TE doesn't publish DOB for many players,
+        # so re-fetching profiles that already have name_display+first_name is wasteful.
         id_res = await db.execute(
             select(TePlayer.id).where(
                 TePlayer.te_slug.isnot(None),
                 or_(
-                    TePlayer.date_of_birth.is_(None),
                     TePlayer.name_display.is_(None),
                     TePlayer.first_name.is_(None),
                 ),
@@ -836,12 +837,12 @@ async def backfill_all_dob() -> dict:
                         tp.first_name = first_name
                         tp.last_name = last_name
                         changed = True
-                if tp.date_of_birth is None or tp.name_display is None:
+                if tp.name_display is None:
                     dob, name_display = await _fetch_te_player_profile(tp.te_slug)
                     if dob and tp.date_of_birth is None:
                         tp.date_of_birth = dob
                         changed = True
-                    if name_display and tp.name_display is None:
+                    if name_display:
                         tp.name_display = name_display
                         first_name, last_name = _split_display_name(tp.name_raw, name_display)
                         if first_name:
