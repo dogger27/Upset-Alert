@@ -775,18 +775,22 @@ async def _do_scrape(tournament: Tournament, db: AsyncSession, force_refresh: bo
         seen_match_keys.add(key)
         if key in existing_matches:
             match = existing_matches[key]
-            if w_id and match.winner_id != w_id:
-                match.completed_at = datetime.now(timezone.utc)
-            elif not w_id:
-                match.completed_at = None
             match.player1_id = p1_id
             match.player2_id = p2_id
-            match.winner_id = w_id
             match.is_bye = mr.is_bye
-            match.scores_json = mr.scores
-            match.status = "completed" if w_id else "pending"
-            if w_id:
+            if w_id is not None:
+                # Wikipedia has a result — always trust it (includes tiebreak scores)
+                if match.winner_id != w_id:
+                    match.completed_at = datetime.now(timezone.utc)
+                match.winner_id = w_id
+                match.status = "completed"
+                match.scores_json = mr.scores
                 match.live_scores_json = None
+            elif match.winner_id is None:
+                # No result from either source — update scores/status normally
+                match.completed_at = None
+                match.scores_json = mr.scores
+                match.status = "pending"
         else:
             match = Match(
                 tournament_id=tournament.id,
