@@ -41,6 +41,8 @@ _TE_ROW_RE = re.compile(
     re.DOTALL,
 )
 _TE_SLUG_RE = re.compile(r'^/player/([^/]+)/?$')
+# TE appends "(YYYY)" to disambiguate duplicate names on ranking pages — strip before storing.
+_YEAR_BRACKET_RE = re.compile(r'\s*\(\d{4}\)\s*')
 
 # Per-(gender, week_date): (te_index, rank_by_te_id)
 # Avoids reloading thousands of rows from SQLite on every assign_rankings call.
@@ -287,7 +289,8 @@ async def _scrape_te(gender: str, week_date: Optional[date] = None, log_errors: 
                     slug_m = _TE_SLUG_RE.match(href)
                     slug = slug_m.group(1) if slug_m else None
                     points = int(pts_str) if pts_str else None
-                    results.append((raw_name.strip(), int(rank_str), slug, points))
+                    clean_name = _YEAR_BRACKET_RE.sub('', raw_name).strip()
+                    results.append((clean_name, int(rank_str), slug, points))
                 page += 1
                 await asyncio.sleep(0.1)
         logger.info("Tennis Explorer %s scrape: %d players across %d pages", gender, len(results), page - 1)
@@ -364,6 +367,16 @@ async def ensure_te_week(gender: str, week_date: date, db: AsyncSession, log_err
                 await db.flush()
             existing_by_raw[name_raw] = tp
             existing_by_ts[frozenset(_norm(name_raw).split())] = tp
+        elif slug and tp.te_slug != slug:
+            # Slug changed — TE now shows a different (typically younger) player under
+            # this name. Update to the new slug and clear profile data for re-fetch.
+            logger.info("te_player id=%d %r: slug updated %s → %s (younger player)", tp.id, name_raw, tp.te_slug, slug)
+            tp.te_slug = slug
+            tp.name_display = None
+            tp.first_name = None
+            tp.last_name = None
+            tp.date_of_birth = None
+            tp.nationality = None
         elif slug and tp.te_slug is None:
             tp.te_slug = slug
 
