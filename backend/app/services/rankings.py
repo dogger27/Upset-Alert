@@ -456,8 +456,9 @@ async def prefetch_dob_for_draw(tournament_id: int) -> None:
 
 async def backfill_all_dob() -> dict:
     """
-    Admin backfill: fetch DOB and display name for every te_player with a slug
-    that is missing either. Creates its own DB session. Safe to call multiple times.
+    Admin backfill: for every te_player with a slug that is missing DOB,
+    name_display, or first_name, fetch the TE profile page and/or compute names.
+    Creates its own DB session. Safe to call multiple times.
     """
     from app.database import AsyncSessionLocal
     from app.models.rankings import TePlayer
@@ -470,6 +471,7 @@ async def backfill_all_dob() -> dict:
                 or_(
                     TePlayer.date_of_birth.is_(None),
                     TePlayer.name_display.is_(None),
+                    TePlayer.first_name.is_(None),
                 ),
             )
         )
@@ -479,21 +481,33 @@ async def backfill_all_dob() -> dict:
 
         updated = 0
         for tp in missing:
-            dob, name_display = await _fetch_te_player_profile(tp.te_slug)
             changed = False
-            if dob and tp.date_of_birth is None:
-                tp.date_of_birth = dob
-                changed = True
-            if name_display and tp.name_display is None:
-                tp.name_display = name_display
-                first_name, last_name = _split_display_name(tp.name_raw, name_display)
+
+            # If name_display is already known, compute first/last without HTTP.
+            if tp.name_display and tp.first_name is None:
+                first_name, last_name = _split_display_name(tp.name_raw, tp.name_display)
                 if first_name:
                     tp.first_name = first_name
                     tp.last_name = last_name
-                changed = True
+                    changed = True
+
+            # Only hit the network when DOB or name_display is still missing.
+            if tp.date_of_birth is None or tp.name_display is None:
+                dob, name_display = await _fetch_te_player_profile(tp.te_slug)
+                if dob and tp.date_of_birth is None:
+                    tp.date_of_birth = dob
+                    changed = True
+                if name_display and tp.name_display is None:
+                    tp.name_display = name_display
+                    first_name, last_name = _split_display_name(tp.name_raw, name_display)
+                    if first_name:
+                        tp.first_name = first_name
+                        tp.last_name = last_name
+                    changed = True
+                await asyncio.sleep(0.3)
+
             if changed:
                 updated += 1
-            await asyncio.sleep(0.3)
 
         await db.commit()
         logger.info("Profile backfill complete: %d/%d updated", updated, total)
@@ -592,7 +606,7 @@ async def refresh_elo_ratings() -> None:
 
                 await db.commit()
                 logger.info("ELO refresh (%s): %d/%d players ranked for week %s",
-                            gender, len(elo_by_snap), len(rows), week_date)
+                            gender, len(ranked), len(rows), week_date)
         except Exception as exc:
             logger.warning("ELO refresh failed for gender=%s: %s", gender, exc)
             from app.services.system_log import app_log
