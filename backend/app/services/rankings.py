@@ -260,17 +260,32 @@ async def ensure_te_week(gender: str, week_date: date, db: AsyncSession, log_err
     existing_players_res = await db.execute(
         select(TePlayer).where(TePlayer.gender == gender)
     )
-    existing_by_raw: dict[str, TePlayer] = {
-        p.name_raw: p for p in existing_players_res.scalars()
+    all_existing = list(existing_players_res.scalars())
+    existing_by_raw: dict[str, TePlayer] = {p.name_raw: p for p in all_existing}
+    # Frozenset index catches stubs created from draw players (Wikipedia "First Last" format)
+    # that share the same token set as a newly scraped TE name ("Last First" format).
+    existing_by_ts: dict[frozenset, TePlayer] = {
+        frozenset(p.name_norm.split()): p for p in all_existing
     }
 
     for name_raw, rank, slug, points in raw_rows:
         tp = existing_by_raw.get(name_raw)
         if tp is None:
-            tp = TePlayer(gender=gender, name_raw=name_raw, name_norm=_norm(name_raw), te_slug=slug)
-            db.add(tp)
-            await db.flush()
+            # Check for a stub created from a draw player with the same token set.
+            ts = frozenset(_norm(name_raw).split())
+            tp = existing_by_ts.get(ts)
+            if tp is not None:
+                # Upgrade stub: update to TE canonical name and slug.
+                tp.name_raw = name_raw
+                tp.name_norm = _norm(name_raw)
+                if slug and tp.te_slug is None:
+                    tp.te_slug = slug
+            else:
+                tp = TePlayer(gender=gender, name_raw=name_raw, name_norm=_norm(name_raw), te_slug=slug)
+                db.add(tp)
+                await db.flush()
             existing_by_raw[name_raw] = tp
+            existing_by_ts[frozenset(_norm(name_raw).split())] = tp
         elif slug and tp.te_slug is None:
             tp.te_slug = slug
 
@@ -332,6 +347,7 @@ async def assign_rankings(
     else:
         te_index, rank_by_te_id = _week_cache[cache_key]
 
+    from app.models.rankings import TePlayer
     from app.services.system_log import app_log
     for player in players:
         if player.te_player_id is None:
@@ -343,6 +359,20 @@ async def assign_rankings(
                               f"Player name not matched in TE: {player.name!r}",
                               {"player_name": player.name, "gender": gender},
                               dedup_key=f"match_fail_{player.name.lower()}", dedup_hours=24)
+                # Create a stub so this player appears in the Players table.
+                # Wikipedia names are already in "First Last" format → use as name_display.
+                stub = TePlayer(
+                    gender=gender,
+                    name_raw=player.name,
+                    name_norm=_norm(player.name),
+                    name_display=player.name,
+                )
+                db.add(stub)
+                await db.flush()
+                player.te_player_id = stub.id
+                # Update in-memory index so the same player in the same draw matches the stub.
+                ts = frozenset(_norm(player.name).split())
+                te_index.setdefault(ts, []).append(stub.id)
 
         player.ranking = rank_by_te_id.get(player.te_player_id) if player.te_player_id else None
 
