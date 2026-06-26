@@ -182,22 +182,25 @@ def _build_te_index(te_players: list) -> dict[frozenset, list[int]]:
 # Tennis Explorer scraper
 # ---------------------------------------------------------------------------
 
-async def _scrape_te(gender: str, log_errors: bool = True) -> list[tuple[str, int, Optional[str], Optional[int]]]:
+async def _scrape_te(gender: str, week_date: Optional[date] = None, log_errors: bool = True) -> list[tuple[str, int, Optional[str], Optional[int]]]:
     """
     Scrape all pages of Tennis Explorer rankings for the given gender.
     Returns [(name_raw, rank, te_slug, points), ...] in TE's "Surname Firstname" format.
     te_slug is the URL slug from the player's TE profile, e.g. "sinner-jannik".
+    Pass week_date to scrape historical rankings for a specific date.
     Pass log_errors=False to suppress app_log entries (e.g. best-effort weekly check).
     """
     import httpx
 
     url = _TE_URLS[gender]
+    base_params: dict = {"date": week_date.isoformat()} if week_date else {}
     results: list[tuple[str, int, Optional[str], Optional[int]]] = []
     try:
         async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
             page = 1
             while True:
-                resp = await client.get(url, params={"page": page}, headers=_TE_HEADERS)
+                params = {**base_params, "page": page}
+                resp = await client.get(url, params=params, headers=_TE_HEADERS)
                 resp.raise_for_status()
                 rows = _TE_ROW_RE.findall(resp.text)
                 if not rows:
@@ -243,7 +246,7 @@ async def ensure_te_week(gender: str, week_date: date, db: AsyncSession, log_err
         return False
 
     logger.info("Scraping Tennis Explorer for %s week %s...", gender, week_date)
-    raw_rows = await _scrape_te(gender, log_errors=log_errors)
+    raw_rows = await _scrape_te(gender, week_date=week_date, log_errors=log_errors)
     if len(raw_rows) < 50:
         logger.info("TE %s scrape returned only %d players — no rankings stored for week %s",
                     gender, len(raw_rows), week_date)
