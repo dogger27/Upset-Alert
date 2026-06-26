@@ -249,6 +249,10 @@ async def _sync_subscriptions() -> None:
         if title not in current:
             await eventstream.subscribe(title, page_id=page_id)
             added += 1
+        elif page_id is not None and eventstream.current_page_id_for(title) != page_id:
+            # Title already subscribed but under a stale/wrong page_id — update it.
+            await eventstream.subscribe(title, page_id=page_id)
+            added += 1
 
     for title in current - set(wanted):
         await eventstream.unsubscribe(title)
