@@ -530,6 +530,8 @@ function PlayersPanel({ user }) {
   const [genderFilter, setGenderFilter] = useState('')
   const [search, setSearch] = useState('')
   const [searchInput, setSearchInput] = useState('')
+  const [sortCol, setSortCol] = useState('last')
+  const [sortDir, setSortDir] = useState('asc')
 
   const { data: players = [], isLoading } = useQuery({
     queryKey: ['admin-players', genderFilter, search],
@@ -544,6 +546,35 @@ function PlayersPanel({ user }) {
     e.preventDefault()
     setSearch(searchInput)
   }
+
+  function handleSort(col) {
+    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortCol(col); setSortDir('asc') }
+  }
+
+  function sortIcon(col) {
+    return (
+      <span className={`sort-icon${sortCol === col ? ' sort-active' : ''}`}>
+        {sortCol === col ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ' ⇅'}
+      </span>
+    )
+  }
+
+  const sortedPlayers = useMemo(() => {
+    return [...players].sort((a, b) => {
+      let av, bv
+      if (sortCol === 'first')    { av = a.first_name || ''; bv = b.first_name || '' }
+      else if (sortCol === 'last'){ av = a.last_name  || ''; bv = b.last_name  || '' }
+      else if (sortCol === 'dob') { av = a.date_of_birth ?? 'zzzz'; bv = b.date_of_birth ?? 'zzzz' }
+      else if (sortCol === 'age') {
+        const toAge = dob => dob ? Math.floor((Date.now() - new Date(dob).getTime()) / (1000 * 60 * 60 * 24 * 365.25)) : -1
+        av = toAge(a.date_of_birth); bv = toAge(b.date_of_birth)
+      }
+      if (av < bv) return sortDir === 'asc' ? -1 : 1
+      if (av > bv) return sortDir === 'asc' ? 1 : -1
+      return 0
+    })
+  }, [players, sortCol, sortDir])
 
   return (
     <div className="card admin-section">
@@ -585,18 +616,18 @@ function PlayersPanel({ user }) {
       ) : players.length === 0 ? (
         <p className="logs-empty">No players found.</p>
       ) : (
-        <div className="admin-table-wrap">
-          <table className="admin-table">
+        <div className="players-table-wrap">
+          <table className="admin-table players-table">
             <thead>
               <tr>
-                <th className="td-left">First</th>
-                <th className="td-left">Last</th>
-                <th>DOB</th>
-                <th>Age</th>
+                <th className="sortable th-left" onClick={() => handleSort('first')}>First{sortIcon('first')}</th>
+                <th className="sortable th-left" onClick={() => handleSort('last')}>Last{sortIcon('last')}</th>
+                <th className="sortable" onClick={() => handleSort('dob')}>DOB{sortIcon('dob')}</th>
+                <th className="sortable" onClick={() => handleSort('age')}>Age{sortIcon('age')}</th>
               </tr>
             </thead>
             <tbody>
-              {players.map(p => {
+              {sortedPlayers.map(p => {
                 const dob = p.date_of_birth ? new Date(p.date_of_birth) : null
                 const age = dob ? Math.floor((Date.now() - dob.getTime()) / (1000 * 60 * 60 * 24 * 365.25)) : null
                 return (
