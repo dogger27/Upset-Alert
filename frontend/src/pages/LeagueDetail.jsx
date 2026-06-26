@@ -280,12 +280,13 @@ function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMember
               ))}
             </div>
           )}
-          {completedMatchesCount > 0 && (
-            <div className="lt-progress-row lt-progress-header-row">
-              <span /><span /><span /><span />
+          <div className="lt-progress-row lt-progress-header-row">
+            <span /><span /><span />
+            <span className="lt-progress-total lt-progress-col-header">Score</span>
+            {completedMatchesCount > 0 && (
               <span className="lt-progress-correct lt-progress-col-header"># Correct</span>
-            </div>
-          )}
+            )}
+          </div>
           <div className="lt-progress-rows">
             {entries.map(entry => (
               <div key={entry.user_id} className="lt-progress-row">
