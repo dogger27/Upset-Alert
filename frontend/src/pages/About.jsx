@@ -126,30 +126,34 @@ export default function About() {
 
           <div className="about-section">
             <h3 className="about-section-title">Under the Hood</h3>
-            <p className="about-prose">
-              Tournament draws and match results are sourced in real time from{' '}
-              <a href="https://en.wikipedia.org" target="_blank" rel="noopener noreferrer">Wikipedia</a>.
-              As soon as a result is posted there, Upset Alert picks it up automatically — typically
-              within minutes. There's no manual step: the site watches for changes and refreshes on its own.
-            </p>
-            <p className="about-prose">
-              Player seedings reflect the official ATP and WTA world rankings, which are refreshed
-              weekly. Head-to-head records and historical match data are also tracked to surface
-              insights when viewing a draw.
-            </p>
-            <p className="about-prose">
-              Upcoming tournament schedules are loaded at the start of each season and stay current
-              automatically. Once the system is running, everything — draws, results, schedules,
-              and rankings — updates without any human intervention.
-            </p>
-            <div className="about-card" style={{marginTop: '1rem'}}>
-              <div className="about-card-icon">⚡</div>
-              <h4 className="about-card-heading">Fully Autonomous</h4>
-              <p className="about-card-body">
-                The site runs itself. Draw results are pulled automatically from Wikipedia
-                as matches are played, tournament schedules update on their own, and player
-                seedings and rankings stay current — no admin intervention required.
-              </p>
+            <div className="about-grid">
+              <div className="about-card">
+                <div className="about-card-icon">🌐</div>
+                <h4 className="about-card-heading">Real-Time Results</h4>
+                <p className="about-card-body">
+                  Tournament draws and match results are sourced from{' '}
+                  <a href="https://en.wikipedia.org" target="_blank" rel="noopener noreferrer">Wikipedia</a>.
+                  As soon as a result is posted there, Upset Alert picks it up automatically —
+                  typically within minutes, with no manual step.
+                </p>
+              </div>
+              <div className="about-card">
+                <div className="about-card-icon">📊</div>
+                <h4 className="about-card-heading">Player Data</h4>
+                <p className="about-card-body">
+                  Player seedings reflect the official ATP and WTA world rankings, refreshed weekly.
+                  Head-to-head records and historical match data are also tracked to surface
+                  insights when viewing a draw.
+                </p>
+              </div>
+              <div className="about-card">
+                <div className="about-card-icon">⚡</div>
+                <h4 className="about-card-heading">Fully Autonomous</h4>
+                <p className="about-card-body">
+                  The site runs itself. Draw results, tournament schedules, player seedings,
+                  and rankings all stay current automatically — no admin intervention required.
+                </p>
+              </div>
             </div>
           </div>
         </div>
