@@ -83,12 +83,8 @@ export default function LeagueDetail() {
     () => leagueTournaments.filter(lt => lt.tournament.status === 'active' && lt.picker_count >= 2),
     [leagueTournaments]
   )
-  const tableRows = useMemo(() => {
-    const rows = leagueTournaments.filter(
-      lt => lt.tournament.status !== 'active' &&
-           (lt.tournament.status !== 'completed' || lt.picker_count >= 2)
-    )
-    return [...rows].sort((a, b) => {
+  const { upcomingRows, completedRows } = useMemo(() => {
+    const sortFn = (a, b) => {
       let va, vb
       if (sortBy === 'members') {
         va = a.picker_count; vb = b.picker_count
@@ -99,7 +95,14 @@ export default function LeagueDetail() {
       }
       if (va === vb) return 0
       return sortDir === 'desc' ? (vb > va ? 1 : -1) : (va > vb ? 1 : -1)
-    })
+    }
+    const nonActive = leagueTournaments.filter(lt => lt.tournament.status !== 'active')
+    const upcoming = nonActive.filter(lt => lt.tournament.status !== 'completed')
+    const completed = nonActive.filter(lt => lt.tournament.status === 'completed' && lt.picker_count >= 2)
+    return {
+      upcomingRows: [...upcoming].sort(sortFn),
+      completedRows: [...completed].sort(sortFn),
+    }
   }, [leagueTournaments, sortBy, sortDir])
 
   if (isLoading) return <div className="page-loading">Loading…</div>
@@ -175,10 +178,34 @@ export default function LeagueDetail() {
               />
             ))}
 
-            {/* Completed + upcoming — sortable table */}
-            {tableRows.length > 0 && (
-              <div className={`lt-completed-wrap${activeTournaments.length > 0 ? ' lt-completed-wrap--separator' : ''}`}>
-                {activeTournaments.length > 0 && <p className="lt-completed-heading">Completed</p>}
+            {/* Upcoming + completed — sortable tables */}
+            {(upcomingRows.length > 0 || completedRows.length > 0) && (() => {
+              const TournRow = ({ t, picker_count }) => (
+                <tr
+                  key={t.id}
+                  className={`lt-completed-row${selectedTournamentId === t.id ? ' lt-completed-row--selected' : ''}`}
+                  onClick={() => setSelectedTournamentId(t.id === selectedTournamentId ? null : t.id)}
+                >
+                  <td className="lt-td-name">
+                    {t.name}
+                    <span className="lt-td-year"> {t.year}</span>
+                  </td>
+                  <td className="lt-td-gender">
+                    <span className={`lt-gender-badge lt-gender-badge--${t.gender === 'M' ? 'm' : 'f'}`}>
+                      {t.gender === 'M' ? 'ATP' : 'WTA'}
+                    </span>
+                  </td>
+                  <td className="lt-td-tier">{tierLabel(t.category)}</td>
+                  <td className="lt-td-date">
+                    {t.start_date ? new Date(t.start_date + 'T00:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }) : '—'}
+                  </td>
+                  <td className="lt-td-members">
+                    <span className="lt-members-num">{picker_count}</span>
+                    <span className="lt-members-label"> / {league.member_count}</span>
+                  </td>
+                </tr>
+              )
+              const TournTable = ({ rows }) => (
                 <table className="lt-completed-table">
                   <thead>
                     <tr>
@@ -189,36 +216,26 @@ export default function LeagueDetail() {
                       <SortTh col="members" active={sortBy === 'members'} dir={sortDir} onSort={handleSort}>Members</SortTh>
                     </tr>
                   </thead>
-                  <tbody>
-                    {tableRows.map(({ tournament: t, picker_count }) => (
-                      <tr
-                        key={t.id}
-                        className={`lt-completed-row${selectedTournamentId === t.id ? ' lt-completed-row--selected' : ''}`}
-                        onClick={() => setSelectedTournamentId(t.id === selectedTournamentId ? null : t.id)}
-                      >
-                        <td className="lt-td-name">
-                          {t.name}
-                          <span className="lt-td-year"> {t.year}</span>
-                        </td>
-                        <td className="lt-td-gender">
-                          <span className={`lt-gender-badge lt-gender-badge--${t.gender === 'M' ? 'm' : 'f'}`}>
-                            {t.gender === 'M' ? 'ATP' : 'WTA'}
-                          </span>
-                        </td>
-                        <td className="lt-td-tier">{tierLabel(t.category)}</td>
-                        <td className="lt-td-date">
-                          {t.start_date ? new Date(t.start_date + 'T00:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }) : '—'}
-                        </td>
-                        <td className="lt-td-members">
-                          <span className="lt-members-num">{picker_count}</span>
-                          <span className="lt-members-label"> / {league.member_count}</span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
+                  <tbody>{rows.map(r => <TournRow key={r.tournament.id} {...r} />)}</tbody>
                 </table>
-              </div>
-            )}
+              )
+              return (
+                <div className={`lt-completed-wrap${activeTournaments.length > 0 ? ' lt-completed-wrap--separator' : ''}`}>
+                  {upcomingRows.length > 0 && (
+                    <>
+                      {(activeTournaments.length > 0 || completedRows.length > 0) && <p className="lt-completed-heading">Upcoming</p>}
+                      <TournTable rows={upcomingRows} />
+                    </>
+                  )}
+                  {completedRows.length > 0 && (
+                    <>
+                      <p className="lt-completed-heading">Completed</p>
+                      <TournTable rows={completedRows} />
+                    </>
+                  )}
+                </div>
+              )
+            })()}
           </>
         )}
       </div>
