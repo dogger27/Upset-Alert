@@ -488,10 +488,24 @@ async def leaderboard(
         for rank_idx, score in enumerate(ranked, start=1)
     ]
 
+    def _is_upset(match) -> bool:
+        if match.winner_id is None or match.is_bye:
+            return False
+        winner = match.player1 if match.winner_id == match.player1_id else match.player2
+        loser = match.player2 if match.winner_id == match.player1_id else match.player1
+        if winner is None or loser is None or loser.seed is None:
+            return False
+        return winner.seed is None or winner.seed > loser.seed
+
+    upset_count = sum(1 for m in completed_matches if _is_upset(m))
+    completed_matches_count = len([m for m in completed_matches if not m.is_bye])
+
     return LeaderboardOut(
         league=_league_out(league, len(league.members)),
         entries=entries,
         total_matches=total_matches,
+        upset_count=upset_count,
+        completed_matches_count=completed_matches_count,
     )
 
 
