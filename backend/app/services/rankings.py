@@ -562,13 +562,19 @@ async def _search_te_list(
 
     te_type = "atp" if gender == "M" else "wta"
 
-    # Try the first letter of every token except the first (which is usually the
-    # given name).  Deduplication avoids fetching the same letter page twice.
+    # Try the first letter of every non-first token (usually the surname tokens).
+    # Also append the first token's letter as a fallback for names where the
+    # surname comes first (e.g. Chinese names: "Xu Mingge" → search X then M).
     tokens_norm = _norm(display_name).split()
     letters_tried: set[str] = set()
     letters = []
     for tok in tokens_norm[1:]:
         letter = tok[0].upper()
+        if letter not in letters_tried:
+            letters_tried.add(letter)
+            letters.append(letter)
+    if tokens_norm:
+        letter = tokens_norm[0][0].upper()
         if letter not in letters_tried:
             letters_tried.add(letter)
             letters.append(letter)
