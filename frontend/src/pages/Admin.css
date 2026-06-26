@@ -126,7 +126,9 @@
   text-align: left;
 }
 
-/* Rankings table — fit-content width + sortable headers */
+/* Players + Rankings tables — fit-content width + sortable headers */
+.players-table-wrap { width: fit-content; max-width: 100%; }
+.players-table { width: auto; }
 .rankings-table-wrap { width: fit-content; max-width: 100%; }
 .rankings-table { width: auto; }
 .admin-table th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
