@@ -153,7 +153,7 @@ export default function Navbar() {
             <span className="navbar-brand-alert">Alert</span><span className="navbar-brand-exclaim">!</span>
           </span>
         </div>
-        <span className="navbar-brand-slogan">Fantasy Tennis / Bracket Challenge at its finest</span>
+        <span className="navbar-brand-slogan">Your Wildest Fantasy Tennis</span>
       </Link>
       <div className="navbar-links">
         {/^\/tournaments\/[^/]+/.test(location.pathname) && (
