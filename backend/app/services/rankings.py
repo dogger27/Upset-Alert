@@ -446,7 +446,7 @@ async def assign_rankings(
                     continue
 
                 # Fallback 2: TE list-players search then slug-guess for unranked players.
-                slug, name_display, dob, first_name, last_name = await _find_te_player(player.name, gender)
+                slug, name_display, dob, first_name, last_name, nationality = await _find_te_player(player.name, gender)
                 await app_log(
                     "warning" if not slug else "info",
                     "rankings",
@@ -464,6 +464,7 @@ async def assign_rankings(
                     first_name=first_name,
                     last_name=last_name,
                     date_of_birth=dob,
+                    nationality=nationality,
                 )
                 db.add(new_tp)
                 await db.flush()
@@ -484,12 +485,13 @@ async def assign_rankings(
 _DOB_RE = re.compile(r'Age:\s*\d+\s*\((\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})\)')
 # TE profile page title: "Felix Auger Aliassime - Tennis Explorer" (some pages use en/em dash)
 _TITLE_RE = re.compile(r'<title>([^<]+?)\s*[-–—]\s*Tennis Explorer\s*</title>', re.IGNORECASE)
+_COUNTRY_RE = re.compile(r'Country:\s*([^<\n]+)', re.IGNORECASE)
 
 
-async def _fetch_te_player_profile(te_slug: str) -> tuple[Optional[date], Optional[str]]:
+async def _fetch_te_player_profile(te_slug: str) -> tuple[Optional[date], Optional[str], Optional[str]]:
     """
-    Scrape DOB and display name from a TE player profile page.
-    Returns (dob, name_display) — either may be None on parse failure.
+    Scrape DOB, display name, and nationality from a TE player profile page.
+    Returns (dob, name_display, nationality) — any may be None on parse failure.
     """
     import httpx
 
@@ -501,7 +503,7 @@ async def _fetch_te_player_profile(te_slug: str) -> tuple[Optional[date], Option
             html = resp.text
     except Exception as exc:
         logger.debug("Profile fetch failed for %s: %s", te_slug, exc)
-        return None, None
+        return None, None, None
 
     dob: Optional[date] = None
     dob_m = _DOB_RE.search(html)
@@ -518,11 +520,16 @@ async def _fetch_te_player_profile(te_slug: str) -> tuple[Optional[date], Option
     else:
         logger.debug("Profile title not matched for %s", te_slug)
 
-    return dob, name_display
+    nationality: Optional[str] = None
+    country_m = _COUNTRY_RE.search(html)
+    if country_m:
+        nationality = country_m.group(1).strip() or None
+
+    return dob, name_display, nationality
 
 
-def _parse_profile_html(html: str) -> tuple[Optional[date], Optional[str]]:
-    """Extract DOB and name_display from a pre-fetched TE profile page."""
+def _parse_profile_html(html: str) -> tuple[Optional[date], Optional[str], Optional[str]]:
+    """Extract DOB, name_display, and nationality from a pre-fetched TE profile page."""
     dob: Optional[date] = None
     dob_m = _DOB_RE.search(html)
     if dob_m:
@@ -534,7 +541,11 @@ def _parse_profile_html(html: str) -> tuple[Optional[date], Optional[str]]:
     title_m = _TITLE_RE.search(html)
     if title_m:
         name_display = title_m.group(1).strip() or None
-    return dob, name_display
+    nationality: Optional[str] = None
+    country_m = _COUNTRY_RE.search(html)
+    if country_m:
+        nationality = country_m.group(1).strip() or None
+    return dob, name_display, nationality
 
 
 # TE alphabetical player list: <a href="/player/auger-aliassime/">Auger Aliassime Felix</a>
@@ -629,25 +640,25 @@ async def _find_te_player(
     3. If both fail: returns (None, None, None, None, None).  The caller creates
        a minimal record with name_display from the Wikipedia name.
 
-    Returns (te_slug, name_display, dob, first_name, last_name).
+    Returns (te_slug, name_display, dob, first_name, last_name, nationality).
     """
     import httpx
 
     tokens_norm = _norm(display_name).split()
     disp_tokens = display_name.split()
     if len(tokens_norm) < 2:
-        return None, None, None, None, None
+        return None, None, None, None, None, None
 
     # ------------------------------------------------------------------
     # Stage 1: TE alphabetical list search (authoritative)
     # ------------------------------------------------------------------
     slug, name_raw_te = await _search_te_list(display_name, gender)
     if slug:
-        dob, name_display = await _fetch_te_player_profile(slug)
+        dob, name_display, nationality = await _fetch_te_player_profile(slug)
         await asyncio.sleep(0.3)
         # name_raw_te is in TE "Surname First" format — use it to split.
         first_name, last_name = _split_display_name(name_raw_te, name_display or display_name)
-        return slug, name_display or display_name, dob, first_name, last_name
+        return slug, name_display or display_name, dob, first_name, last_name, nationality
 
     # ------------------------------------------------------------------
     # Stage 2: slug guessing (heuristic, no hash-disambiguated slugs)
@@ -684,7 +695,7 @@ async def _find_te_player(
                 await asyncio.sleep(0.3)
                 continue
 
-            dob, name_display = _parse_profile_html(html)
+            dob, name_display, nationality = _parse_profile_html(html)
             first_name: Optional[str] = None
             last_name: Optional[str] = None
             if mode == "compound":
@@ -694,9 +705,9 @@ async def _find_te_player(
                 first_name = disp_tokens[0]
                 last_name = disp_tokens[1]
 
-            return slug_cand, name_display or display_name, dob, first_name, last_name
+            return slug_cand, name_display or display_name, dob, first_name, last_name, nationality
 
-    return None, None, None, None, None
+    return None, None, None, None, None, None
 
 
 def _split_display_name(name_raw: str, name_display: str) -> tuple[Optional[str], Optional[str]]:
@@ -788,7 +799,7 @@ async def prefetch_dob_for_draw(tournament_id: int) -> None:
                     tp.last_name = last_name
                 continue
             if tp.name_display is None:
-                dob, name_display = await _fetch_te_player_profile(tp.te_slug)
+                dob, name_display, nationality = await _fetch_te_player_profile(tp.te_slug)
                 if dob and tp.date_of_birth is None:
                     tp.date_of_birth = dob
                 if name_display:
@@ -797,11 +808,13 @@ async def prefetch_dob_for_draw(tournament_id: int) -> None:
                     if first_name:
                         tp.first_name = first_name
                         tp.last_name = last_name
+                if nationality and tp.nationality is None:
+                    tp.nationality = nationality
                 await asyncio.sleep(0.3)
 
         for tp in without_slug:
             search_name = tp.name_display or tp.name_raw
-            slug, name_display, dob, first_name, last_name = await _find_te_player(search_name, tp.gender)
+            slug, name_display, dob, first_name, last_name, nationality = await _find_te_player(search_name, tp.gender)
             if slug:
                 tp.te_slug = slug
             if name_display:
@@ -811,6 +824,8 @@ async def prefetch_dob_for_draw(tournament_id: int) -> None:
             if first_name and tp.first_name is None:
                 tp.first_name = first_name
                 tp.last_name = last_name
+            if nationality and tp.nationality is None:
+                tp.nationality = nationality
             await asyncio.sleep(0.3)
 
         await db.commit()
@@ -833,15 +848,16 @@ async def backfill_all_dob() -> dict:
         # Load IDs upfront so the batch loop is bounded regardless of HTTP failures.
         # On restart, already-committed players are excluded by the where clause.
 
-        # Phase 1: players with a slug missing name_display or first_name.
+        # Phase 1: players with a slug missing name_display, first_name, or nationality.
         # DOB alone is NOT a trigger — TE doesn't publish DOB for many players,
-        # so re-fetching profiles that already have name_display+first_name is wasteful.
+        # so re-fetching profiles that already have all name+nationality fields is wasteful.
         id_res = await db.execute(
             select(TePlayer.id).where(
                 TePlayer.te_slug.isnot(None),
                 or_(
                     TePlayer.name_display.is_(None),
                     TePlayer.first_name.is_(None),
+                    TePlayer.nationality.is_(None),
                 ),
             )
         )
@@ -862,22 +878,26 @@ async def backfill_all_dob() -> dict:
                         tp.first_name = first_name
                         tp.last_name = last_name
                         changed = True
-                if tp.name_display is None:
-                    dob, name_display = await _fetch_te_player_profile(tp.te_slug)
+                needs_fetch = tp.name_display is None or tp.nationality is None
+                if needs_fetch:
+                    dob, name_display, nationality = await _fetch_te_player_profile(tp.te_slug)
                     if dob and tp.date_of_birth is None:
                         tp.date_of_birth = dob
                         changed = True
-                    if name_display:
+                    if nationality and tp.nationality is None:
+                        tp.nationality = nationality
+                        changed = True
+                    if name_display and tp.name_display is None:
                         tp.name_display = name_display
                         first_name, last_name = _split_display_name(tp.name_raw, name_display)
                         if first_name:
                             tp.first_name = first_name
                             tp.last_name = last_name
                         changed = True
-                    else:
+                    elif tp.name_display is None:
                         # Slug is stale/dead — fall back to TE list search to rediscover.
                         search_name = tp.name_raw
-                        slug, nd, dob2, fn, ln = await _find_te_player(search_name, tp.gender)
+                        slug, nd, dob2, fn, ln, nat2 = await _find_te_player(search_name, tp.gender)
                         if slug:
                             tp.te_slug = slug
                         if nd:
@@ -889,6 +909,9 @@ async def backfill_all_dob() -> dict:
                         if fn:
                             tp.first_name = fn
                             tp.last_name = ln
+                            changed = True
+                        if nat2 and tp.nationality is None:
+                            tp.nationality = nat2
                             changed = True
                         if not nd:
                             logger.warning("Could not resolve name for te_player id=%d slug=%s", tp.id, tp.te_slug)
@@ -915,7 +938,7 @@ async def backfill_all_dob() -> dict:
 
             for tp in batch:
                 search_name = tp.name_display or tp.name_raw
-                slug, name_display, dob, first_name, last_name = await _find_te_player(search_name, tp.gender)
+                slug, name_display, dob, first_name, last_name, nationality = await _find_te_player(search_name, tp.gender)
                 changed = False
                 if slug:
                     tp.te_slug = slug
@@ -930,6 +953,9 @@ async def backfill_all_dob() -> dict:
                 if first_name and tp.first_name is None:
                     tp.first_name = first_name
                     tp.last_name = last_name
+                    changed = True
+                if nationality and tp.nationality is None:
+                    tp.nationality = nationality
                     changed = True
                 if changed:
                     updated += 1

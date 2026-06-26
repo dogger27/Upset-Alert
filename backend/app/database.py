@@ -114,6 +114,7 @@ async def _migrate(conn):
         "ALTER TABLE te_players ADD COLUMN last_name VARCHAR",
         "ALTER TABLE te_rankings_snapshots ADD COLUMN elo INTEGER",
         "ALTER TABLE te_rankings_snapshots ADD COLUMN elo_rank INTEGER",
+        "ALTER TABLE te_players ADD COLUMN nationality VARCHAR",
     ]
     for sql in migrations:
         try:
