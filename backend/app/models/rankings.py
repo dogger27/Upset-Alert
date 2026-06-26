@@ -19,6 +19,7 @@ class TePlayer(Base):
     te_slug: Mapped[Optional[str]] = mapped_column(String, nullable=True)       # "sinner-jannik" (TE URL slug for H2H)
     date_of_birth: Mapped[Optional[date]] = mapped_column(Date, nullable=True)  # fetched from TE player page
     elo: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)          # overall Elo from tennisabstract.com
+    elo_rank: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)     # rank by Elo among same-gender players
 
     snapshots: Mapped[list["TeRankingsSnapshot"]] = relationship(
         "TeRankingsSnapshot", back_populates="player", cascade="all, delete-orphan"
@@ -33,6 +34,7 @@ class TeRankingsSnapshot(Base):
     player_id: Mapped[int] = mapped_column(ForeignKey("te_players.id"), primary_key=True)
     week_date: Mapped[date] = mapped_column(Date, primary_key=True)
     rank: Mapped[int] = mapped_column(Integer, nullable=False)
+    points: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     player: Mapped["TePlayer"] = relationship("TePlayer", back_populates="snapshots")
 

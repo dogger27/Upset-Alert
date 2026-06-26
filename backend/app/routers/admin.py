@@ -143,12 +143,11 @@ async def get_rankings(
     return [
         {
             "rank": snap.rank,
+            "elo_rank": player.elo_rank,
+            "points": snap.points,
             "player_id": player.id,
             "name_raw": player.name_raw,
-            "gender": player.gender,
-            "te_slug": player.te_slug,
             "date_of_birth": player.date_of_birth.isoformat() if player.date_of_birth else None,
-            "elo": player.elo,
         }
         for snap, player in rows
     ]

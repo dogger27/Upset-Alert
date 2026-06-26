@@ -670,25 +670,29 @@ function RankingsPanel({ user }) {
           <table className="admin-table">
             <thead>
               <tr>
-                <th>Rank</th>
-                <th>G</th>
+                <th>Rank (ATP)</th>
+                <th>Rank (ELO)</th>
+                <th>Points</th>
                 <th className="td-left">Name</th>
-                <th className="td-left">TE Slug</th>
                 <th>DOB</th>
-                <th>Elo</th>
+                <th>Age</th>
               </tr>
             </thead>
             <tbody>
-              {rankings.map(r => (
-                <tr key={`${r.player_id}-${r.rank}`}>
-                  <td><strong>{r.rank}</strong></td>
-                  <td className="td-muted">{r.gender}</td>
-                  <td className="td-left">{r.name_raw.includes(' ') ? r.name_raw.split(' ').slice(1).join(' ') + ' ' + r.name_raw.split(' ')[0] : r.name_raw}</td>
-                  <td className="td-left td-muted">{r.te_slug || '—'}</td>
-                  <td className="td-muted td-nowrap">{r.date_of_birth || '—'}</td>
-                  <td>{r.elo ?? '—'}</td>
-                </tr>
-              ))}
+              {rankings.map(r => {
+                const dob = r.date_of_birth ? new Date(r.date_of_birth) : null
+                const age = dob ? Math.floor((Date.now() - dob.getTime()) / (1000 * 60 * 60 * 24 * 365.25)) : null
+                return (
+                  <tr key={`${r.player_id}-${r.rank}`}>
+                    <td><strong>{r.rank}</strong></td>
+                    <td className="td-muted">{r.elo_rank ?? '—'}</td>
+                    <td className="td-muted">{r.points != null ? r.points.toLocaleString() : '—'}</td>
+                    <td className="td-left">{r.name_raw.includes(' ') ? r.name_raw.split(' ').slice(1).join(' ') + ' ' + r.name_raw.split(' ')[0] : r.name_raw}</td>
+                    <td className="td-muted td-nowrap">{r.date_of_birth || '—'}</td>
+                    <td className="td-muted">{age ?? '—'}</td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
