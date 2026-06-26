@@ -24,10 +24,10 @@ function Toast({ message, onDone }) {
   return <div className="sidebar-toast">{message}</div>
 }
 
-export default function DrawSidebar({ tournamentId, tournament, selectedUserId, onSelectUser }) {
+export default function DrawSidebar({ tournamentId, tournament, selectedUserId, defaultLeagueId, onSelectUser }) {
   const { user } = useAuth()
   const [collapsed, setCollapsed] = useState(false)
-  const [selectedLeagueId, setSelectedLeagueId] = useState('global')
+  const [selectedLeagueId, setSelectedLeagueId] = useState(defaultLeagueId ?? 'global')
   const [toast, setToast] = useState(null)
   const toastKey = useRef(0)
 

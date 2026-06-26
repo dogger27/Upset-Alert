@@ -560,6 +560,7 @@ export default function TournamentDraw() {
           tournamentId={Number(id)}
           tournament={tournament}
           selectedUserId={viewedUserId}
+          defaultLeagueId={searchParams.get('league') ? Number(searchParams.get('league')) : undefined}
           onSelectUser={(uid, uname) => {
             setViewedUserId(uid)
             setViewedUserName(uname ?? null)

@@ -267,7 +267,7 @@ function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMember
         <span className="lt-progress-meta">{pickerCount}/{leagueMemberCount} competing</span>
         <button
           className="btn-secondary lt-view-draw-btn"
-          onClick={e => { e.stopPropagation(); navigate(`/tournaments/${t.id}`) }}
+          onClick={e => { e.stopPropagation(); navigate(`/tournaments/${t.id}?league=${leagueId}`) }}
         >
           View Draw
         </button>
@@ -299,7 +299,7 @@ function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMember
                 <button
                   className="lt-bracket-btn"
                   title={`View ${entry.username}'s bracket`}
-                  onClick={e => { e.stopPropagation(); window.open(`/tournaments/${t.id}?user=${entry.user_id}`, '_blank') }}
+                  onClick={e => { e.stopPropagation(); window.open(`/tournaments/${t.id}?user=${entry.user_id}&league=${leagueId}`, '_blank') }}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="17" y1="12" x2="24" y2="12"/>
