@@ -255,7 +255,7 @@ export default function LeagueDetail() {
                     <td>{e.rank}</td>
                     <td><UserName user={e.user} showRealName={league.show_real_name} /></td>
                     <td className="pts">{e.total_points}</td>
-                    <td>{e.correct_count}</td>
+                    <td>{e.correct_count}{leaderboard?.total_matches > 0 ? ` / ${leaderboard.total_matches}` : ''}</td>
                     <td>{e.champion_correct ? '✓' : '–'}</td>
                     <td>{e.finalist_correct ? '✓' : '–'}</td>
                   </tr>

@@ -58,6 +58,7 @@ class LeaderboardEntry(BaseModel):
 class LeaderboardOut(BaseModel):
     league: LeagueOut
     entries: list[LeaderboardEntry]
+    total_matches: int = 0
 
 
 class LeagueTournamentOut(BaseModel):
