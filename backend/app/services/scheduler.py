@@ -261,30 +261,37 @@ async def _on_season_page_edit(season_title: str) -> None:
 
 async def _refresh_weekly_rankings() -> None:
     """
-    Best-effort weekly rankings check (Sunday 6pm PDT).
+    Weekly rankings refresh (Sunday 6pm PDT).
     Scrapes TE for both genders if this week's data is missing.
-    No retries, no error alerts — rankings may simply not be published
-    this week (grand slam or other ATP/WTA schedule reason).
+    Errors are logged to system_logs; rankings may occasionally not be published
+    this week (grand slam weeks, ATP/WTA schedule gaps).
     """
     from app.services.rankings import ensure_te_week
+    from app.services.system_log import app_log
 
     today = date.today()
     week_date = today - timedelta(days=today.weekday())  # Monday anchor
 
     logger.info("Weekly rankings check: week %s", week_date)
-    scraped_any = False
-    async with AsyncSessionLocal() as db:
-        for gender in ("M", "F"):
-            scraped = await ensure_te_week(gender, week_date, db, log_errors=False)
-            if scraped:
-                scraped_any = True
-        if scraped_any:
-            await db.commit()
+    try:
+        scraped_any = False
+        async with AsyncSessionLocal() as db:
+            for gender in ("M", "F"):
+                scraped = await ensure_te_week(gender, week_date, db, log_errors=True)
+                if scraped:
+                    scraped_any = True
+            if scraped_any:
+                await db.commit()
 
-    if scraped_any:
-        logger.info("Weekly rankings: stored new data for week %s", week_date)
-    else:
-        logger.info("Weekly rankings: week %s already populated or not yet published", week_date)
+        if scraped_any:
+            logger.info("Weekly rankings: stored new data for week %s", week_date)
+        else:
+            logger.info("Weekly rankings: week %s already populated or not yet published", week_date)
+    except Exception as exc:
+        logger.error("Weekly rankings job failed: %s", exc)
+        await app_log("error", "rankings", f"Weekly rankings job failed: {exc}",
+                      {"week_date": str(week_date), "error": str(exc)},
+                      dedup_key="weekly_rankings_job_fail", dedup_hours=12)
 
 
 async def _refresh_elo() -> None:
