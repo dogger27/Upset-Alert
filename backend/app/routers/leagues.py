@@ -433,7 +433,7 @@ async def leaderboard(
             )
             for i, member in enumerate(league.members)
         ]
-        return LeaderboardOut(league=_league_out(league, len(league.members)), entries=entries)
+        return LeaderboardOut(league=_league_out(league, len(league.members)), entries=entries, total_matches=0)
 
     tournament = await db.get(Tournament, tournament_id)
     if not tournament:
@@ -491,6 +491,7 @@ async def leaderboard(
     return LeaderboardOut(
         league=_league_out(league, len(league.members)),
         entries=entries,
+        total_matches=total_matches,
     )
 
 
