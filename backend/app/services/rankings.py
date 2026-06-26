@@ -529,7 +529,8 @@ async def _fetch_te_player_profile(te_slug: str) -> tuple[Optional[date], Option
     name_display: Optional[str] = None
     title_m = _TITLE_RE.search(html)
     if title_m:
-        name_display = title_m.group(1).strip() or None
+        raw_title = title_m.group(1).strip()
+        name_display = _YEAR_BRACKET_RE.sub(' ', raw_title).strip() or None
     else:
         logger.debug("Profile title not matched for %s", te_slug)
 
@@ -553,7 +554,8 @@ def _parse_profile_html(html: str) -> tuple[Optional[date], Optional[str], Optio
     name_display: Optional[str] = None
     title_m = _TITLE_RE.search(html)
     if title_m:
-        name_display = title_m.group(1).strip() or None
+        raw_title = title_m.group(1).strip()
+        name_display = _YEAR_BRACKET_RE.sub(' ', raw_title).strip() or None
     nationality: Optional[str] = None
     country_m = _COUNTRY_RE.search(html)
     if country_m:
