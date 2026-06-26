@@ -121,7 +121,7 @@ async def get_rankings_weeks(
 async def get_rankings(
     week_date: str = Query(..., description="ISO date e.g. 2026-06-22"),
     gender: Optional[str] = Query(None, description="M or F"),
-    limit: int = Query(200, le=1000),
+    limit: int = Query(5000, le=5000),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

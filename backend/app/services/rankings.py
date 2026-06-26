@@ -145,10 +145,26 @@ def _apply_rules(wiki_ts: frozenset, te_index: dict[frozenset, list[int]]) -> Op
     # Rule 4: unique identifying token — handles first-name spelling variants
     # (Kasatkina/Darya vs Daria, Minnen/Greetje vs Greet, Starodubtseva/Yulia vs Yuliia).
     # If exactly one TE player has a given wiki token, that token uniquely identifies them.
+    # Rejection guard: if both wiki and TE have exclusive tokens that share no 3-char prefix,
+    # the names are contradicting (different first names sharing a surname) — skip.
+    # e.g. "Serena Williams" must not match Venus Williams via the shared "williams" token.
     for tok in wiki_ts:
         tok_hits = [id for te_ts, ids in te_index.items() if tok in te_ts for id in ids]
         if len(tok_hits) == 1:
-            return tok_hits[0]
+            te_id = tok_hits[0]
+            te_ts_match = next(te_ts for te_ts, ids in te_index.items() if te_id in ids)
+            wiki_extra = wiki_ts - te_ts_match
+            te_extra = te_ts_match - wiki_ts
+            if wiki_extra and te_extra:
+                # Both sides have tokens the other doesn't — check prefix similarity.
+                # Spelling variants (Greet/Greetje, Darya/Daria) share a 3-char prefix;
+                # completely different names (Serena/Venus) do not.
+                if not any(
+                    we[:3] == te[:3]
+                    for we in wiki_extra for te in te_extra
+                ):
+                    continue
+            return te_id
 
     return None
 
