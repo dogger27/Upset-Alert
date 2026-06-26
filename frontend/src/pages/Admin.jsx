@@ -657,7 +657,7 @@ function RankingsPanel({ user }) {
       if (sortCol === 'rank')     { av = a.rank ?? Infinity;           bv = b.rank ?? Infinity }
       else if (sortCol === 'elo') { av = a.elo_rank ?? Infinity;       bv = b.elo_rank ?? Infinity }
       else if (sortCol === 'pts') { av = a.points ?? -Infinity;        bv = b.points ?? -Infinity }
-      else if (sortCol === 'name'){ av = a.name_raw;                   bv = b.name_raw }
+      else if (sortCol === 'name'){ av = a.name_display || a.name_raw;  bv = b.name_display || b.name_raw }
       else if (sortCol === 'dob') { av = a.date_of_birth ?? 'zzzz';   bv = b.date_of_birth ?? 'zzzz' }
       else if (sortCol === 'age') { av = getAge(a.date_of_birth) ?? -1; bv = getAge(b.date_of_birth) ?? -1 }
       if (av < bv) return sortDir === 'asc' ? -1 : 1
@@ -717,7 +717,7 @@ function RankingsPanel({ user }) {
                     <td><strong>{r.rank}</strong></td>
                     <td className="td-muted">{r.elo_rank ?? '—'}</td>
                     <td className="td-muted">{r.points != null ? r.points.toLocaleString() : '—'}</td>
-                    <td className="td-left">{r.name_raw.includes(' ') ? r.name_raw.split(' ').slice(1).join(' ') + ' ' + r.name_raw.split(' ')[0] : r.name_raw}</td>
+                    <td className="td-left">{r.name_display || r.name_raw}</td>
                     <td className="td-muted td-nowrap">{r.date_of_birth || '—'}</td>
                     <td className="td-muted">{age ?? '—'}</td>
                   </tr>
