@@ -43,18 +43,8 @@ export default function Rules() {
               <div className="about-card-icon">🏆</div>
               <h4 className="about-card-heading">Leagues</h4>
               <p className="about-card-body">
-                Create a private league and share an invite code with friends, or compete in
-                the Global league against everyone. Standings are tracked across the full season
-                as tournaments complete.
-              </p>
-            </div>
-            <div className="about-card">
-              <div className="about-card-icon">⚡</div>
-              <h4 className="about-card-heading">Fully Autonomous</h4>
-              <p className="about-card-body">
-                The site runs itself. Draw results are pulled automatically from Wikipedia
-                as matches are played, tournament schedules update on their own, and player
-                seedings and rankings stay current — no admin intervention required.
+                Create a private league to compete with your friends, or compete in the Global
+                league against everyone! Compare your progress by round in the group standings.
               </p>
             </div>
           </div>

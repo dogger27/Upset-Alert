@@ -138,6 +138,15 @@ export default function About() {
               schedules are populated from Wikipedia's season pages at the start of each year. Once
               set up, the whole pipeline runs without any user or admin input — it just works.
             </p>
+            <div className="about-card" style={{marginTop: '1rem'}}>
+              <div className="about-card-icon">⚡</div>
+              <h4 className="about-card-heading">Fully Autonomous</h4>
+              <p className="about-card-body">
+                The site runs itself. Draw results are pulled automatically from Wikipedia
+                as matches are played, tournament schedules update on their own, and player
+                seedings and rankings stay current — no admin intervention required.
+              </p>
+            </div>
           </div>
         </div>
       </div>
