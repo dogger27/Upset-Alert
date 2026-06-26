@@ -350,10 +350,15 @@ async def assign_rankings(
 
 # TE page format: Age: 24 (16. 8. 2001)  →  day=16, month=8, year=2001
 _DOB_RE = re.compile(r'Age:\s*\d+\s*\((\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})\)')
+# TE profile page title: "Felix Auger Aliassime - Tennis Explorer"
+_TITLE_RE = re.compile(r'<title>([^<]+?)\s*-\s*Tennis Explorer\s*</title>', re.IGNORECASE)
 
 
-async def _fetch_te_player_dob(te_slug: str) -> Optional[date]:
-    """Scrape DOB from a TE player profile page. Returns None on any failure."""
+async def _fetch_te_player_profile(te_slug: str) -> tuple[Optional[date], Optional[str]]:
+    """
+    Scrape DOB and display name from a TE player profile page.
+    Returns (dob, name_display) — either may be None on parse failure.
+    """
     import httpx
 
     url = f"https://www.tennisexplorer.com/player/{te_slug}/"
@@ -363,22 +368,29 @@ async def _fetch_te_player_dob(te_slug: str) -> Optional[date]:
             resp.raise_for_status()
             html = resp.text
     except Exception as exc:
-        logger.debug("DOB fetch failed for %s: %s", te_slug, exc)
-        return None
+        logger.debug("Profile fetch failed for %s: %s", te_slug, exc)
+        return None, None
 
-    m = _DOB_RE.search(html)
-    if m:
+    dob: Optional[date] = None
+    dob_m = _DOB_RE.search(html)
+    if dob_m:
         try:
-            return date(int(m.group(3)), int(m.group(2)), int(m.group(1)))
+            dob = date(int(dob_m.group(3)), int(dob_m.group(2)), int(dob_m.group(1)))
         except ValueError:
             pass
-    return None
+
+    name_display: Optional[str] = None
+    title_m = _TITLE_RE.search(html)
+    if title_m:
+        name_display = title_m.group(1).strip() or None
+
+    return dob, name_display
 
 
 async def prefetch_dob_for_draw(tournament_id: int) -> None:
     """
-    After a draw is refreshed, fetch DOB from TE for any linked te_players
-    in this draw that are still missing it. Creates its own DB session.
+    After a draw is refreshed, fetch DOB and display name from TE for any linked
+    te_players in this draw that are still missing either. Creates its own DB session.
     """
     from app.database import AsyncSessionLocal
     from app.models.rankings import TePlayer
@@ -391,7 +403,7 @@ async def prefetch_dob_for_draw(tournament_id: int) -> None:
             .where(
                 DrawEntry.tournament_id == tournament_id,
                 TePlayer.te_slug.isnot(None),
-                TePlayer.date_of_birth.is_(None),
+                (TePlayer.date_of_birth.is_(None) | TePlayer.name_display.is_(None)),
             )
             .distinct()
         )
@@ -399,47 +411,58 @@ async def prefetch_dob_for_draw(tournament_id: int) -> None:
         if not missing:
             return
 
-        logger.info("DOB prefetch: %d player(s) for tournament %d", len(missing), tournament_id)
+        logger.info("Profile prefetch: %d player(s) for tournament %d", len(missing), tournament_id)
         for tp in missing:
-            dob = await _fetch_te_player_dob(tp.te_slug)
+            dob, name_display = await _fetch_te_player_profile(tp.te_slug)
             if dob:
                 tp.date_of_birth = dob
-                logger.debug("DOB %s → %s", tp.te_slug, dob)
+            if name_display:
+                tp.name_display = name_display
             await asyncio.sleep(0.3)
 
         await db.commit()
-        logger.info("DOB prefetch complete for tournament %d", tournament_id)
+        logger.info("Profile prefetch complete for tournament %d", tournament_id)
 
 
 async def backfill_all_dob() -> dict:
     """
-    Admin backfill: fetch DOB for every te_player with a slug but no DOB yet.
-    Creates its own DB session. Safe to call multiple times (skips already set).
+    Admin backfill: fetch DOB and display name for every te_player with a slug
+    that is missing either. Creates its own DB session. Safe to call multiple times.
     """
     from app.database import AsyncSessionLocal
     from app.models.rankings import TePlayer
+    from sqlalchemy import or_
 
     async with AsyncSessionLocal() as db:
         res = await db.execute(
             select(TePlayer).where(
                 TePlayer.te_slug.isnot(None),
-                TePlayer.date_of_birth.is_(None),
+                or_(
+                    TePlayer.date_of_birth.is_(None),
+                    TePlayer.name_display.is_(None),
+                ),
             )
         )
         missing = res.scalars().all()
         total = len(missing)
-        logger.info("DOB backfill: %d te_players to process", total)
+        logger.info("Profile backfill: %d te_players to process", total)
 
         updated = 0
         for tp in missing:
-            dob = await _fetch_te_player_dob(tp.te_slug)
-            if dob:
+            dob, name_display = await _fetch_te_player_profile(tp.te_slug)
+            changed = False
+            if dob and tp.date_of_birth is None:
                 tp.date_of_birth = dob
+                changed = True
+            if name_display and tp.name_display is None:
+                tp.name_display = name_display
+                changed = True
+            if changed:
                 updated += 1
             await asyncio.sleep(0.3)
 
         await db.commit()
-        logger.info("DOB backfill complete: %d/%d updated", updated, total)
+        logger.info("Profile backfill complete: %d/%d updated", updated, total)
         return {"total": total, "updated": updated, "failed": total - updated}
 
 

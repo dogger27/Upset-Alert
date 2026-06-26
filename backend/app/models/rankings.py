@@ -17,6 +17,7 @@ class TePlayer(Base):
     name_raw: Mapped[str] = mapped_column(String, nullable=False, unique=True)  # "Sinner Jannik"
     name_norm: Mapped[str] = mapped_column(String, nullable=False)              # "sinner jannik"
     te_slug: Mapped[Optional[str]] = mapped_column(String, nullable=True)       # "sinner-jannik" (TE URL slug for H2H)
+    name_display: Mapped[Optional[str]] = mapped_column(String, nullable=True)  # "Felix Auger Aliassime" from TE profile <title>
     date_of_birth: Mapped[Optional[date]] = mapped_column(Date, nullable=True)  # fetched from TE player page
     elo: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)          # overall Elo from tennisabstract.com
     elo_rank: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)     # rank by Elo among same-gender players
