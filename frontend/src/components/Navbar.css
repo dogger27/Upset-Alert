@@ -17,13 +17,20 @@
 /* ── Wordmark ── */
 .navbar-brand {
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
-  gap: 9px;
+  gap: 3px;
   text-decoration: none;
   justify-self: center;
-  white-space: nowrap;
 }
 .navbar-brand:hover { text-decoration: none; opacity: 0.9; }
+
+.navbar-brand-top {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  white-space: nowrap;
+}
 
 .navbar-brand-dot {
   position: relative;
@@ -53,6 +60,19 @@
   letter-spacing: 0.03em;
   text-transform: uppercase;
   line-height: 1;
+}
+
+.navbar-brand-slogan {
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.52);
+  line-height: 1;
+  white-space: nowrap;
+  text-align: center;
+  width: 100%;
 }
 .navbar-brand-upset { color: #fff; }
 .navbar-brand-alert { color: var(--clay-300); }

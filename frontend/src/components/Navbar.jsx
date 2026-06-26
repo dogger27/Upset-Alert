@@ -146,11 +146,14 @@ export default function Navbar() {
     <nav className="navbar">
       <div className="navbar-left" />
       <Link to="/" className="navbar-brand">
-        <span className="navbar-brand-dot" />
-        <span className="navbar-brand-text">
-          <span className="navbar-brand-upset">Upset</span>{' '}
-          <span className="navbar-brand-alert">Alert</span><span className="navbar-brand-exclaim">!</span>
-        </span>
+        <div className="navbar-brand-top">
+          <span className="navbar-brand-dot" />
+          <span className="navbar-brand-text">
+            <span className="navbar-brand-upset">Upset</span>{' '}
+            <span className="navbar-brand-alert">Alert</span><span className="navbar-brand-exclaim">!</span>
+          </span>
+        </div>
+        <span className="navbar-brand-slogan">Your Wildest Fantasy Tennis</span>
       </Link>
       <div className="navbar-links">
         {/^\/tournaments\/[^/]+/.test(location.pathname) && (
