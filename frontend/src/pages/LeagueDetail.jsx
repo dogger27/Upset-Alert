@@ -278,8 +278,8 @@ export default function LeagueDetail() {
                     <td><UserName user={e.user} showRealName={league.show_real_name} /></td>
                     <td className="pts">{e.total_points}</td>
                     <td>{e.correct_count}{leaderboard?.completed_matches_count > 0 ? ` / ${leaderboard.completed_matches_count} (${(e.correct_count / leaderboard.completed_matches_count * 100).toFixed(1)}%)` : ''}</td>
-                    <td>{e.champion_correct ? '✓' : '–'}</td>
-                    <td>{e.finalist_correct ? '✓' : '–'}</td>
+                    <td>{e.champion_correct ? '✓' : selectedTournament?.status === 'completed' ? '–' : ''}</td>
+                    <td>{e.finalist_correct ? '✓' : selectedTournament?.status === 'completed' ? '–' : ''}</td>
                   </tr>
                 ))}
               </tbody>
