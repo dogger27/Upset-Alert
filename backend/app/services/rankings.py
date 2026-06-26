@@ -37,7 +37,7 @@ _TE_HEADERS = {
     "Accept-Language": "en-US,en;q=0.9",
 }
 _TE_ROW_RE = re.compile(
-    r'<td class="rank first">(\d+)\.</td>.*?<td class="t-name"><a href="([^"]+)">(.*?)</a></td>',
+    r'<td class="rank first">(\d+)\.</td>.*?<td class="t-name"><a href="([^"]+)">(.*?)</a></td>.*?<td class="long-point">(\d+)</td>',
     re.DOTALL,
 )
 _TE_SLUG_RE = re.compile(r'^/player/([^/]+)/?$')
@@ -182,17 +182,17 @@ def _build_te_index(te_players: list) -> dict[frozenset, list[int]]:
 # Tennis Explorer scraper
 # ---------------------------------------------------------------------------
 
-async def _scrape_te(gender: str, log_errors: bool = True) -> list[tuple[str, int, Optional[str]]]:
+async def _scrape_te(gender: str, log_errors: bool = True) -> list[tuple[str, int, Optional[str], Optional[int]]]:
     """
     Scrape all pages of Tennis Explorer rankings for the given gender.
-    Returns [(name_raw, rank, te_slug), ...] in TE's "Surname Firstname" format.
+    Returns [(name_raw, rank, te_slug, points), ...] in TE's "Surname Firstname" format.
     te_slug is the URL slug from the player's TE profile, e.g. "sinner-jannik".
     Pass log_errors=False to suppress app_log entries (e.g. best-effort weekly check).
     """
     import httpx
 
     url = _TE_URLS[gender]
-    results: list[tuple[str, int, Optional[str]]] = []
+    results: list[tuple[str, int, Optional[str], Optional[int]]] = []
     try:
         async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
             page = 1
@@ -202,10 +202,11 @@ async def _scrape_te(gender: str, log_errors: bool = True) -> list[tuple[str, in
                 rows = _TE_ROW_RE.findall(resp.text)
                 if not rows:
                     break
-                for rank_str, href, raw_name in rows:
+                for rank_str, href, raw_name, pts_str in rows:
                     slug_m = _TE_SLUG_RE.match(href)
                     slug = slug_m.group(1) if slug_m else None
-                    results.append((raw_name.strip(), int(rank_str), slug))
+                    points = int(pts_str) if pts_str else None
+                    results.append((raw_name.strip(), int(rank_str), slug, points))
                 page += 1
                 await asyncio.sleep(0.1)
         logger.info("Tennis Explorer %s scrape: %d players across %d pages", gender, len(results), page - 1)
@@ -260,7 +261,7 @@ async def ensure_te_week(gender: str, week_date: date, db: AsyncSession, log_err
         p.name_raw: p for p in existing_players_res.scalars()
     }
 
-    for name_raw, rank, slug in raw_rows:
+    for name_raw, rank, slug, points in raw_rows:
         tp = existing_by_raw.get(name_raw)
         if tp is None:
             tp = TePlayer(gender=gender, name_raw=name_raw, name_norm=_norm(name_raw), te_slug=slug)
@@ -272,9 +273,10 @@ async def ensure_te_week(gender: str, week_date: date, db: AsyncSession, log_err
 
         snap = await db.get(TeRankingsSnapshot, (tp.id, week_date))
         if snap is None:
-            db.add(TeRankingsSnapshot(player_id=tp.id, week_date=week_date, rank=rank))
+            db.add(TeRankingsSnapshot(player_id=tp.id, week_date=week_date, rank=rank, points=points))
         else:
             snap.rank = rank
+            snap.points = points
 
     await db.flush()
     logger.info("Stored %d TE rankings for %s week %s", len(raw_rows), gender, week_date)
@@ -500,8 +502,19 @@ async def refresh_elo_ratings() -> None:
                     if new_elo and tp.elo != new_elo:
                         tp.elo = new_elo
                         updated += 1
+                # Assign elo_rank: sort by elo desc; players without elo get None
+                ranked = sorted(
+                    [tp for tp in players if tp.elo is not None],
+                    key=lambda p: p.elo,
+                    reverse=True,
+                )
+                for rank, tp in enumerate(ranked, start=1):
+                    tp.elo_rank = rank
+                for tp in players:
+                    if tp.elo is None:
+                        tp.elo_rank = None
                 await db.commit()
-                logger.info("ELO refresh (%s): %d/%d players updated", gender, updated, len(players))
+                logger.info("ELO refresh (%s): %d/%d players updated, %d ranked", gender, updated, len(players), len(ranked))
         except Exception as exc:
             logger.warning("ELO refresh failed for gender=%s: %s", gender, exc)
             from app.services.system_log import app_log

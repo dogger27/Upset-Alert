@@ -452,7 +452,7 @@ async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
     )
     players = players_result.scalars().all()
 
-    # Bulk-load te_slug and date_of_birth from te_players for all players with a TE identity
+    # Bulk-load TE player data for all players with a TE identity
     te_ids = [p.te_player_id for p in players if p.te_player_id is not None]
     te_slug_map: dict[int, str] = {}
     te_dob_map: dict[int, "date"] = {}
@@ -460,7 +460,8 @@ async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
     te_elo_rank_map: dict[int, int] = {}
     if te_ids:
         te_res = await db.execute(
-            select(TePlayer.id, TePlayer.te_slug, TePlayer.date_of_birth, TePlayer.elo).where(TePlayer.id.in_(te_ids))
+            select(TePlayer.id, TePlayer.te_slug, TePlayer.date_of_birth, TePlayer.elo, TePlayer.elo_rank)
+            .where(TePlayer.id.in_(te_ids))
         )
         for row in te_res:
             if row.te_slug:
@@ -469,16 +470,8 @@ async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
                 te_dob_map[row.id] = row.date_of_birth
             if row.elo:
                 te_elo_map[row.id] = row.elo
-
-        # Compute Elo rank among all same-gender players (higher Elo = lower rank number)
-        elo_rank_res = await db.execute(
-            select(TePlayer.id, TePlayer.elo)
-            .where(TePlayer.gender == t.gender, TePlayer.elo.isnot(None))
-            .order_by(TePlayer.elo.desc())
-        )
-        for rank, row in enumerate(elo_rank_res, start=1):
-            if row.id in set(te_ids):
-                te_elo_rank_map[row.id] = rank
+            if row.elo_rank:
+                te_elo_rank_map[row.id] = row.elo_rank
 
     matches_result = await db.execute(
         select(Match)
