@@ -482,8 +482,8 @@ async def assign_rankings(
 
 # TE page format: Age: 24 (16. 8. 2001)  →  day=16, month=8, year=2001
 _DOB_RE = re.compile(r'Age:\s*\d+\s*\((\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})\)')
-# TE profile page title: "Felix Auger Aliassime - Tennis Explorer"
-_TITLE_RE = re.compile(r'<title>([^<]+?)\s*-\s*Tennis Explorer\s*</title>', re.IGNORECASE)
+# TE profile page title: "Felix Auger Aliassime - Tennis Explorer" (some pages use en/em dash)
+_TITLE_RE = re.compile(r'<title>([^<]+?)\s*[-–—]\s*Tennis Explorer\s*</title>', re.IGNORECASE)
 
 
 async def _fetch_te_player_profile(te_slug: str) -> tuple[Optional[date], Optional[str]]:
@@ -515,6 +515,8 @@ async def _fetch_te_player_profile(te_slug: str) -> tuple[Optional[date], Option
     title_m = _TITLE_RE.search(html)
     if title_m:
         name_display = title_m.group(1).strip() or None
+    else:
+        logger.debug("Profile title not matched for %s", te_slug)
 
     return dob, name_display
 
@@ -697,8 +699,14 @@ def _split_display_name(name_raw: str, name_display: str) -> tuple[Optional[str]
     determine the first/last split by finding the suffix of name_raw tokens
     that matches the prefix of name_display tokens.
 
+    Falls back to fuzzy token matching (≥0.82 ratio) to handle alternate
+    spellings between the rankings page and the profile page (e.g. "Tatiana"
+    on rankings vs "Tatjana" on profile).
+
     Returns (first_name, last_name) or (None, None) if the split is ambiguous.
     """
+    from difflib import SequenceMatcher
+
     raw_tokens = name_raw.split()
     disp_tokens = name_display.split()
     if len(raw_tokens) != len(disp_tokens) or len(raw_tokens) < 2:
@@ -707,8 +715,19 @@ def _split_display_name(name_raw: str, name_display: str) -> tuple[Optional[str]
     raw_lower = [t.lower() for t in raw_tokens]
     disp_lower = [t.lower() for t in disp_tokens]
 
+    def _tokens_match(a: list[str], b: list[str]) -> bool:
+        return all(
+            SequenceMatcher(None, x, y, autojunk=False).ratio() >= 0.82
+            for x, y in zip(a, b)
+        )
+
     for fn_count in range(1, len(raw_tokens)):
-        if raw_lower[-fn_count:] == disp_lower[:fn_count] and raw_lower[:-fn_count] == disp_lower[fn_count:]:
+        raw_fn = raw_lower[-fn_count:]
+        raw_ln = raw_lower[:-fn_count]
+        disp_fn = disp_lower[:fn_count]
+        disp_ln = disp_lower[fn_count:]
+        if (raw_fn == disp_fn and raw_ln == disp_ln) or \
+                (_tokens_match(raw_fn, disp_fn) and _tokens_match(raw_ln, disp_ln)):
             return " ".join(disp_tokens[:fn_count]), " ".join(disp_tokens[fn_count:])
 
     return None, None
