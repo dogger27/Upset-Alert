@@ -126,6 +126,15 @@
   text-align: left;
 }
 
+/* Rankings table — fit-content width + sortable headers */
+.rankings-table-wrap { width: fit-content; max-width: 100%; }
+.rankings-table { width: auto; }
+.admin-table th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+.admin-table th.sortable:hover { color: var(--text); }
+.admin-table th.th-left { text-align: left; }
+.sort-icon { font-size: 0.7rem; }
+.sort-icon:not(.sort-active) { opacity: 0.35; }
+
 /* Scraping explainer — collapsible <details> */
 .scraping-explainer { max-width: 720px; }
 

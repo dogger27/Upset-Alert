@@ -5,7 +5,7 @@ import { getLogs, clearLogs, getAdminPlayers, getRankingsWeeks, getAdminRankings
 import { getEntryStatus } from '../api/predictions'
 import { useAuth } from '../store/auth'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import './Admin.css'
 import './Tournaments.css'
 
@@ -620,6 +620,8 @@ function PlayersPanel({ user }) {
 
 function RankingsPanel({ user }) {
   const [genderFilter, setGenderFilter] = useState('M')
+  const [sortCol, setSortCol] = useState('rank')
+  const [sortDir, setSortDir] = useState('asc')
 
   const { data: weeks = [] } = useQuery({
     queryKey: ['admin-rankings-weeks'],
@@ -635,6 +637,34 @@ function RankingsPanel({ user }) {
     queryFn: () => getAdminRankings({ week_date: activeWeek, gender: genderFilter || undefined }),
     enabled: !!user && !!activeWeek,
   })
+
+  const handleSort = col => {
+    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortCol(col); setSortDir('asc') }
+  }
+
+  const sortIcon = col => (
+    <span className={`sort-icon${sortCol === col ? ' sort-active' : ''}`}>
+      {sortCol === col ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ' ⇅'}
+    </span>
+  )
+
+  const sortedRankings = useMemo(() => {
+    if (!rankings.length) return rankings
+    const getAge = dob => dob ? (Date.now() - new Date(dob).getTime()) / (1000 * 60 * 60 * 24 * 365.25) : null
+    return [...rankings].sort((a, b) => {
+      let av, bv
+      if (sortCol === 'rank')     { av = a.rank ?? Infinity;           bv = b.rank ?? Infinity }
+      else if (sortCol === 'elo') { av = a.elo_rank ?? Infinity;       bv = b.elo_rank ?? Infinity }
+      else if (sortCol === 'pts') { av = a.points ?? -Infinity;        bv = b.points ?? -Infinity }
+      else if (sortCol === 'name'){ av = a.name_raw;                   bv = b.name_raw }
+      else if (sortCol === 'dob') { av = a.date_of_birth ?? 'zzzz';   bv = b.date_of_birth ?? 'zzzz' }
+      else if (sortCol === 'age') { av = getAge(a.date_of_birth) ?? -1; bv = getAge(b.date_of_birth) ?? -1 }
+      if (av < bv) return sortDir === 'asc' ? -1 : 1
+      if (av > bv) return sortDir === 'asc' ? 1 : -1
+      return 0
+    })
+  }, [rankings, sortCol, sortDir])
 
   return (
     <div className="card admin-section">
@@ -666,20 +696,20 @@ function RankingsPanel({ user }) {
       ) : rankings.length === 0 ? (
         <p className="logs-empty">No rankings for this week/gender.</p>
       ) : (
-        <div className="admin-table-wrap">
-          <table className="admin-table">
+        <div className="admin-table-wrap rankings-table-wrap">
+          <table className="admin-table rankings-table">
             <thead>
               <tr>
-                <th>Rank (ATP)</th>
-                <th>Rank (ELO)</th>
-                <th>Points</th>
-                <th className="td-left">Name</th>
-                <th>DOB</th>
-                <th>Age</th>
+                <th className="sortable" onClick={() => handleSort('rank')}>Rank (ATP){sortIcon('rank')}</th>
+                <th className="sortable" onClick={() => handleSort('elo')}>Rank (ELO){sortIcon('elo')}</th>
+                <th className="sortable" onClick={() => handleSort('pts')}>Points{sortIcon('pts')}</th>
+                <th className="sortable th-left" onClick={() => handleSort('name')}>Name{sortIcon('name')}</th>
+                <th className="sortable" onClick={() => handleSort('dob')}>DOB{sortIcon('dob')}</th>
+                <th className="sortable" onClick={() => handleSort('age')}>Age{sortIcon('age')}</th>
               </tr>
             </thead>
             <tbody>
-              {rankings.map(r => {
+              {sortedRankings.map(r => {
                 const dob = r.date_of_birth ? new Date(r.date_of_birth) : null
                 const age = dob ? Math.floor((Date.now() - dob.getTime()) / (1000 * 60 * 60 * 24 * 365.25)) : null
                 return (
