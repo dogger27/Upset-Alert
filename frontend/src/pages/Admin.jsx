@@ -565,6 +565,7 @@ function PlayersPanel({ user }) {
       let av, bv
       if (sortCol === 'first')    { av = a.first_name || ''; bv = b.first_name || '' }
       else if (sortCol === 'last'){ av = a.last_name  || ''; bv = b.last_name  || '' }
+      else if (sortCol === 'nat') { av = a.nationality || ''; bv = b.nationality || '' }
       else if (sortCol === 'dob') { av = a.date_of_birth ?? 'zzzz'; bv = b.date_of_birth ?? 'zzzz' }
       else if (sortCol === 'age') {
         const toAge = dob => dob ? Math.floor((Date.now() - new Date(dob).getTime()) / (1000 * 60 * 60 * 24 * 365.25)) : -1
@@ -622,6 +623,7 @@ function PlayersPanel({ user }) {
               <tr>
                 <th className="sortable th-left" onClick={() => handleSort('first')}>First{sortIcon('first')}</th>
                 <th className="sortable th-left" onClick={() => handleSort('last')}>Last{sortIcon('last')}</th>
+                <th className="sortable th-left" onClick={() => handleSort('nat')}>Country{sortIcon('nat')}</th>
                 <th className="sortable" onClick={() => handleSort('dob')}>DOB{sortIcon('dob')}</th>
                 <th className="sortable" onClick={() => handleSort('age')}>Age{sortIcon('age')}</th>
               </tr>
@@ -634,6 +636,7 @@ function PlayersPanel({ user }) {
                   <tr key={p.id}>
                     <td className="td-left">{p.first_name || '—'}</td>
                     <td className="td-left">{p.last_name || '—'}</td>
+                    <td className="td-left">{p.nationality || '—'}</td>
                     <td className="td-muted td-nowrap">{p.date_of_birth || '—'}</td>
                     <td className="td-muted">{age ?? '—'}</td>
                   </tr>
