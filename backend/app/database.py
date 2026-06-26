@@ -109,6 +109,11 @@ async def _migrate(conn):
         "UPDATE tournaments SET wiki_page_id = NULL WHERE wiki_page_title = '2026 Wimbledon Championships – Women''s singles' AND wiki_page_id = 80434323",
         "ALTER TABLE te_rankings_snapshots ADD COLUMN points INTEGER",
         "ALTER TABLE te_players ADD COLUMN elo_rank INTEGER",
+        "ALTER TABLE te_players ADD COLUMN name_display VARCHAR",
+        "ALTER TABLE te_players ADD COLUMN first_name VARCHAR",
+        "ALTER TABLE te_players ADD COLUMN last_name VARCHAR",
+        "ALTER TABLE te_rankings_snapshots ADD COLUMN elo INTEGER",
+        "ALTER TABLE te_rankings_snapshots ADD COLUMN elo_rank INTEGER",
     ]
     for sql in migrations:
         try:
