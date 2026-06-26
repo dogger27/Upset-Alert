@@ -868,6 +868,24 @@ async def backfill_all_dob() -> dict:
                             tp.first_name = first_name
                             tp.last_name = last_name
                         changed = True
+                    else:
+                        # Slug is stale/dead — fall back to TE list search to rediscover.
+                        search_name = tp.name_raw
+                        slug, nd, dob2, fn, ln = await _find_te_player(search_name, tp.gender)
+                        if slug:
+                            tp.te_slug = slug
+                        if nd:
+                            tp.name_display = nd
+                            changed = True
+                        if dob2 and tp.date_of_birth is None:
+                            tp.date_of_birth = dob2
+                            changed = True
+                        if fn:
+                            tp.first_name = fn
+                            tp.last_name = ln
+                            changed = True
+                        if not nd:
+                            logger.warning("Could not resolve name for te_player id=%d slug=%s", tp.id, tp.te_slug)
                     await asyncio.sleep(0.3)
                 if changed:
                     updated += 1
