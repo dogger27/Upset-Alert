@@ -44,7 +44,7 @@ _TE_SLUG_RE = re.compile(r'^/player/([^/]+)/?$')
 
 # Per-(gender, week_date): (te_index, rank_by_te_id)
 # Avoids reloading thousands of rows from SQLite on every assign_rankings call.
-_week_cache: dict[tuple, tuple[dict, dict]] = {}
+_week_cache: dict[tuple, tuple[dict, dict, dict]] = {}
 
 # ---------------------------------------------------------------------------
 # Name normalization
@@ -166,16 +166,80 @@ def _apply_rules(wiki_ts: frozenset, te_index: dict[frozenset, list[int]]) -> Op
                     continue
             return te_id
 
+    # Rule 5: wiki token is a strict prefix of a unique TE token (min 4 chars).
+    # Catches nicknames/abbreviations: "rafa" → "rafael", "stan" → "stanislas".
+    for tok in wiki_ts:
+        if len(tok) < 4:
+            continue
+        prefix_hits: list[int] = []
+        for te_ts, ids in te_index.items():
+            if any(te_tok.startswith(tok) and te_tok != tok for te_tok in te_ts):
+                prefix_hits.extend(ids)
+        if len(prefix_hits) == 1:
+            te_id = prefix_hits[0]
+            te_ts_match = next(te_ts for te_ts, ids in te_index.items() if te_id in ids)
+            wiki_extra = wiki_ts - te_ts_match
+            te_extra = te_ts_match - wiki_ts
+            if wiki_extra and te_extra:
+                if not any(we[:3] == te[:3] for we in wiki_extra for te in te_extra):
+                    continue
+            return te_id
+
     return None
 
 
-def _build_te_index(te_players: list) -> dict[frozenset, list[int]]:
-    """Build token-set → [player_id] index from a list of TePlayer ORM objects."""
+def _build_te_index(
+    te_players: list,
+) -> tuple[dict[frozenset, list[int]], dict[int, str]]:
+    """
+    Build two complementary indices from a list of TePlayer ORM objects:
+      - token-set index: frozenset → [player_id]  (for Rules 1–5)
+      - norm index:      player_id → name_norm     (for fuzzy fallback)
+    """
     index: dict[frozenset, list[int]] = {}
+    id_to_norm: dict[int, str] = {}
     for tp in te_players:
         ts = frozenset(tp.name_norm.split())
         index.setdefault(ts, []).append(tp.id)
-    return index
+        id_to_norm[tp.id] = tp.name_norm
+    return index, id_to_norm
+
+
+def _fuzzy_match_te(wiki_name: str, id_to_norm: dict[int, str]) -> Optional[int]:
+    """
+    Last-resort fuzzy fallback using difflib SequenceMatcher.
+
+    Compares the sorted-token normalized wiki name against every TE player's
+    sorted-token name_norm (order-independent). Returns a player_id only when
+    there is a unique best match ≥ 0.85 similarity that is at least 0.10 ahead
+    of the second-best candidate — tight enough to avoid false positives.
+
+    Catches genuine spelling variants (Tatjana/Tatiana, Jiri/Jiri) that Rules
+    1–5 miss because the token strings differ by more than a prefix.
+    """
+    from difflib import SequenceMatcher
+
+    wiki_sorted = " ".join(sorted(_norm(_clean_wiki_name(wiki_name)).split()))
+    if not wiki_sorted:
+        return None
+
+    best_ratio = 0.0
+    second_ratio = 0.0
+    best_id: Optional[int] = None
+
+    for te_id, te_norm in id_to_norm.items():
+        te_sorted = " ".join(sorted(te_norm.split()))
+        ratio = SequenceMatcher(None, wiki_sorted, te_sorted, autojunk=False).ratio()
+        if ratio > best_ratio:
+            second_ratio = best_ratio
+            best_ratio = ratio
+            best_id = te_id
+        elif ratio > second_ratio:
+            second_ratio = ratio
+
+    if best_ratio >= 0.85 and (best_ratio - second_ratio) >= 0.10:
+        return best_id
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -336,16 +400,16 @@ async def assign_rankings(
     cache_key = (gender, week_date)
     if cache_key not in _week_cache:
         tp_res = await db.execute(select(TePlayer).where(TePlayer.gender == gender))
-        te_index = _build_te_index(tp_res.scalars().all())
+        te_index, id_to_norm = _build_te_index(tp_res.scalars().all())
 
         snap_res = await db.execute(
             select(TeRankingsSnapshot).where(TeRankingsSnapshot.week_date == week_date)
         )
         rank_by_te_id: dict[int, int] = {s.player_id: s.rank for s in snap_res.scalars()}
-        _week_cache[cache_key] = (te_index, rank_by_te_id)
+        _week_cache[cache_key] = (te_index, rank_by_te_id, id_to_norm)
         logger.info("Loaded TE index for %s week %s into memory (%d players)", gender, week_date, len(te_index))
     else:
-        te_index, rank_by_te_id = _week_cache[cache_key]
+        te_index, rank_by_te_id, id_to_norm = _week_cache[cache_key]
 
     from app.models.rankings import TePlayer
     from app.services.system_log import app_log
@@ -355,7 +419,19 @@ async def assign_rankings(
             if te_id is not None:
                 player.te_player_id = te_id
             elif player.name and player.entry_type not in ("Q", "LL"):
-                # Not in our TE rankings — probe TE directly to find the player's profile.
+                # Fallback 1: fuzzy difflib match against all TE players in our DB.
+                # Catches spelling variants (Tatjana/Tatiana) that token rules miss.
+                te_id = _fuzzy_match_te(player.name, id_to_norm)
+                if te_id is not None:
+                    player.te_player_id = te_id
+                    await app_log("info", "rankings",
+                                  f"Fuzzy-matched {player.name!r} to TE player {te_id}",
+                                  {"player_name": player.name, "te_id": te_id},
+                                  dedup_key=f"fuzzy_match_{player.name.lower()}", dedup_hours=168)
+                    player.ranking = rank_by_te_id.get(te_id)
+                    continue
+
+                # Fallback 2: probe TE profile URLs to discover unranked players.
                 slug, name_display, dob, first_name, last_name = await _find_te_player(player.name)
                 await app_log(
                     "warning" if not slug else "info",
@@ -378,9 +454,10 @@ async def assign_rankings(
                 db.add(new_tp)
                 await db.flush()
                 player.te_player_id = new_tp.id
-                # Update in-memory index so the same player in this draw session matches.
+                # Update in-memory indices so the same player in this draw session matches.
                 ts = frozenset(_norm(player.name).split())
                 te_index.setdefault(ts, []).append(new_tp.id)
+                id_to_norm[new_tp.id] = _norm(player.name)
 
         player.ranking = rank_by_te_id.get(player.te_player_id) if player.te_player_id else None
 
