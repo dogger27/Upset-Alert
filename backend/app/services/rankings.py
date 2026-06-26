@@ -188,6 +188,20 @@ def _apply_rules(wiki_ts: frozenset, te_index: dict[frozenset, list[int]]) -> Op
     return None
 
 
+def _name_matches(wiki_name: str, te_name: str) -> bool:
+    """
+    True if wiki_name and te_name refer to the same player.
+
+    Builds a single-entry mini-index for te_name and routes through the full
+    _match_token_set pipeline: all 5 rules (exact set, subset, prefix, fuzzy
+    token) plus the umlaut fallback (ö→oe etc.).  This is the single source of
+    truth for name comparison used everywhere — _search_te_list, slug-probe
+    validation, and any future callers.
+    """
+    mini = {frozenset(_norm(te_name).split()): [0]}
+    return _match_token_set(wiki_name, mini) is not None
+
+
 def _build_te_index(
     te_players: list,
 ) -> tuple[dict[frozenset, list[int]], dict[int, str]]:
@@ -541,15 +555,14 @@ async def _search_te_list(
     """
     import httpx
 
-    tokens_norm = _norm(display_name).split()
-    if len(tokens_norm) < 2:
+    if len(_norm(display_name).split()) < 2:
         return None, None
 
-    target_ts = frozenset(tokens_norm)
     te_type = "atp" if gender == "M" else "wta"
 
     # Try the first letter of every token except the first (which is usually the
     # given name).  Deduplication avoids fetching the same letter page twice.
+    tokens_norm = _norm(display_name).split()
     letters_tried: set[str] = set()
     letters = []
     for tok in tokens_norm[1:]:
@@ -582,10 +595,7 @@ async def _search_te_list(
                 link_name = link_name.strip()
                 if not link_name:
                     continue
-                te_ts = frozenset(_norm(link_name).split())
-                # Accept exact set match or proper subset in either direction (same
-                # logic as Rules 1–3 in _apply_rules).
-                if te_ts == target_ts or (target_ts < te_ts) or (len(te_ts) >= 2 and te_ts < target_ts):
+                if _name_matches(display_name, link_name):
                     return slug_m.group(1), link_name
 
             await asyncio.sleep(0.3)
@@ -619,8 +629,6 @@ async def _find_te_player(
     disp_tokens = display_name.split()
     if len(tokens_norm) < 2:
         return None, None, None, None, None
-
-    target_ts = frozenset(tokens_norm)
 
     # ------------------------------------------------------------------
     # Stage 1: TE alphabetical list search (authoritative)
@@ -664,7 +672,7 @@ async def _find_te_player(
                 await asyncio.sleep(0.3)
                 continue
             page_name = title_m.group(1).strip()
-            if frozenset(_norm(page_name).split()) != target_ts:
+            if not _name_matches(display_name, page_name):
                 await asyncio.sleep(0.3)
                 continue
 
