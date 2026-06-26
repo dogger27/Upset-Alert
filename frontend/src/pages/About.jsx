@@ -127,16 +127,20 @@ export default function About() {
           <div className="about-section">
             <h3 className="about-section-title">Under the Hood</h3>
             <p className="about-prose">
-              Tournament draws and match results are sourced from{' '}
+              Tournament draws and match results are sourced in real time from{' '}
               <a href="https://en.wikipedia.org" target="_blank" rel="noopener noreferrer">Wikipedia</a>.
-              A background scraper monitors Wikipedia's event stream for edits to tournament pages
-              and re-fetches draw data automatically whenever the article changes. This means results
-              appear on the site within minutes of being updated on Wikipedia, with no manual step in between.
+              As soon as a result is posted there, Upset Alert picks it up automatically — typically
+              within minutes. There's no manual step: the site watches for changes and refreshes on its own.
             </p>
             <p className="about-prose">
-              Player seedings are drawn from the ATP and WTA official rankings, and upcoming tournament
-              schedules are populated from Wikipedia's season pages at the start of each year. Once
-              set up, the whole pipeline runs without any user or admin input — it just works.
+              Player seedings reflect the official ATP and WTA world rankings, which are refreshed
+              weekly. Head-to-head records and historical match data are also tracked to surface
+              insights when viewing a draw.
+            </p>
+            <p className="about-prose">
+              Upcoming tournament schedules are loaded at the start of each season and stay current
+              automatically. Once the system is running, everything — draws, results, schedules,
+              and rankings — updates without any human intervention.
             </p>
             <div className="about-card" style={{marginTop: '1rem'}}>
               <div className="about-card-icon">⚡</div>
