@@ -181,12 +181,7 @@ export default function LeagueDetail() {
                     {t.name}
                     <span className="lt-td-year"> {t.year}</span>
                   </td>
-                  <td className="lt-td-gender">
-                    <span className={`lt-gender-badge lt-gender-badge--${t.gender === 'M' ? 'm' : 'f'}`}>
-                      {t.gender === 'M' ? 'ATP' : 'WTA'}
-                    </span>
-                  </td>
-                  <td className="lt-td-tier">{tierLabel(t.category)}</td>
+                  <td className="lt-td-tier">{t.gender === 'M' ? 'ATP' : 'WTA'} {tierLabel(t.category)}</td>
                   <td className="lt-td-date">
                     {t.start_date ? new Date(t.start_date + 'T00:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }) : '—'}
                   </td>
@@ -201,9 +196,8 @@ export default function LeagueDetail() {
                   <thead>
                     <tr>
                       <th className="lt-th-tourn">Tournament</th>
-                      <th className="lt-th-gender">Tour</th>
-                      <SortTh col="tier" active={sortBy === 'tier'} dir={sortDir} onSort={handleSort}>Level</SortTh>
-                      <SortTh col="start_date" active={sortBy === 'start_date'} dir={sortDir} onSort={handleSort}>Date</SortTh>
+                      <SortTh col="tier" active={sortBy === 'tier'} dir={sortDir} onSort={handleSort}>Category</SortTh>
+                      <SortTh col="start_date" active={sortBy === 'start_date'} dir={sortDir} onSort={handleSort}>Start Date</SortTh>
                       <SortTh col="members" active={sortBy === 'members'} dir={sortDir} onSort={handleSort}>Members</SortTh>
                     </tr>
                   </thead>
