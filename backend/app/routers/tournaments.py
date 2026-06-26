@@ -579,8 +579,10 @@ async def _do_scrape(tournament: Tournament, db: AsyncSession, force_refresh: bo
         page_id=tournament.wiki_page_id,
         force_refresh=force_refresh,
     )
-    if parsed.wiki_page_id and tournament.wiki_page_id is None:
-        # Guard against UNIQUE violation if another record already claims this page_id
+    if parsed.wiki_page_id and parsed.wiki_page_id != tournament.wiki_page_id:
+        # Either first-time resolution (was None) or a correction from the scraper's
+        # wrong-page retry (stored ID pointed to e.g. the general event page).
+        # Guard against UNIQUE violation if another record already claims this page_id.
         clash = await db.execute(
             select(Tournament.id).where(
                 Tournament.wiki_page_id == parsed.wiki_page_id,
@@ -588,6 +590,11 @@ async def _do_scrape(tournament: Tournament, db: AsyncSession, force_refresh: bo
             )
         )
         if clash.scalar_one_or_none() is None:
+            if tournament.wiki_page_id is not None:
+                logger.warning(
+                    "Correcting wiki_page_id for %s: %s → %s (wrong page was stored)",
+                    tournament.wiki_page_title, tournament.wiki_page_id, parsed.wiki_page_id,
+                )
             tournament.wiki_page_id = parsed.wiki_page_id
         else:
             logger.debug(

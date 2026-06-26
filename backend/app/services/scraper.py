@@ -813,6 +813,12 @@ def _general_page_title(singles_title: str) -> Optional[str]:
     return stripped if stripped != singles_title else None
 
 
+_BRACKET_MARKER = "TeamBracket"
+
+import logging as _logging
+_scraper_logger = _logging.getLogger(__name__)
+
+
 async def scrape_tournament(
     wiki_page_title: str,
     year: int = 0,
@@ -830,6 +836,26 @@ async def scrape_tournament(
             raise
         wikitext, resolved_id = await fetch_wikitext(alt_title, force_refresh=force_refresh)
         effective_title = alt_title
+
+    # If a specific page_id was provided but the fetched page has no bracket templates,
+    # the stored page_id may point to the wrong Wikipedia article (e.g. the general
+    # tournament overview page instead of the singles draw page). Retry by title alone
+    # so Wikipedia resolves the current canonical target.
+    if page_id is not None and _BRACKET_MARKER not in wikitext:
+        try:
+            fresh_wikitext, fresh_id = await fetch_wikitext(wiki_page_title, force_refresh=True)
+            if fresh_id is not None and fresh_id != resolved_id:
+                _scraper_logger.warning(
+                    "page_id %s has no bracket templates for %r; "
+                    "title lookup resolved to page_id %s — using corrected page",
+                    page_id, wiki_page_title, fresh_id,
+                )
+                wikitext, resolved_id = fresh_wikitext, fresh_id
+        except Exception as exc:
+            _scraper_logger.debug(
+                "Title-based page_id correction retry failed for %r: %s", wiki_page_title, exc
+            )
+
     parsed = parse_draw(wikitext)
     parsed.wiki_page_id = resolved_id or None
     if effective_title != wiki_page_title:
