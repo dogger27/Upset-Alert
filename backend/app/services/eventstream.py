@@ -44,13 +44,27 @@ class EventStreamListener:
 
     # ── Public subscription API ──────────────────────────────────────────────
 
+    def current_page_id_for(self, title: str) -> Optional[int]:
+        """Return the page_id currently subscribed for this title, or None."""
+        return next((pid for pid, t in self._id_subs.items() if t == title), None)
+
     async def subscribe(self, title: str, page_id: Optional[int] = None) -> None:
         if page_id:
-            if page_id not in self._id_subs:
-                self._id_subs[page_id] = title
+            # If this title is already subscribed under a DIFFERENT page_id, remove
+            # the stale entry first — this happens when a wrong page_id gets corrected.
+            old_pid = self.current_page_id_for(title)
+            if old_pid is not None and old_pid != page_id:
+                del self._id_subs[old_pid]
+                logger.info(
+                    "Updated ID subscription for %r: page_id %d → %d",
+                    title, old_pid, page_id,
+                )
+            self._id_subs[page_id] = title
+            self._title_subs.discard(title)  # promote away from title-only if needed
+            if old_pid != page_id:
                 logger.debug("Subscribed by ID %d (%s)", page_id, title)
         else:
-            if title not in self._title_subs:
+            if title not in self._title_subs and title not in set(self._id_subs.values()):
                 self._title_subs.add(title)
                 logger.debug("Subscribed by title %r (no page ID yet)", title)
 
