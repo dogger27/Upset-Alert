@@ -104,6 +104,9 @@ async def _migrate(conn):
         ),
         "CREATE INDEX IF NOT EXISTS idx_tr_user ON tournament_results(user_id)",
         "CREATE INDEX IF NOT EXISTS idx_tr_tourn ON tournament_results(tournament_id)",
+        "ALTER TABLE matches ADD COLUMN served_first INTEGER",
+        # Clear wrong page_id: 80434323 is the general Wimbledon event page, not Women's Singles
+        "UPDATE tournaments SET wiki_page_id = NULL WHERE wiki_page_title = '2026 Wimbledon Championships – Women''s singles' AND wiki_page_id = 80434323",
     ]
     for sql in migrations:
         try:
