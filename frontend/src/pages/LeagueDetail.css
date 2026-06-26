@@ -250,7 +250,7 @@
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .lt-bar-track {
-  height: 26px; border-radius: 3px;
+  height: 34px; border-radius: 3px;
   background: var(--bg-subtle, #f3f4f6);
   display: flex; overflow: hidden;
 }
@@ -262,13 +262,13 @@
 }
 .lt-bar-segment:last-child { border-right: none; }
 .lt-bar-label {
-  font-size: 1.05rem; font-weight: 800;
+  font-size: 1.3rem; font-weight: 900;
   white-space: nowrap; user-select: none; line-height: 1;
   text-shadow:
-    0 0 4px #fff, 0 0 8px #fff,
-    0 0 14px rgba(255,255,255,0.85),
-    1px 1px 0 rgba(255,255,255,0.6),
-    -1px -1px 0 rgba(255,255,255,0.6);
+    1px 0 0 #fff, -1px 0 0 #fff, 0 1px 0 #fff, 0 -1px 0 #fff,
+    1px 1px 0 #fff, -1px 1px 0 #fff, 1px -1px 0 #fff, -1px -1px 0 #fff,
+    2px 0 0 #fff, -2px 0 0 #fff, 0 2px 0 #fff, 0 -2px 0 #fff,
+    0 0 8px #fff, 0 0 16px rgba(255,255,255,0.9), 0 0 28px rgba(255,255,255,0.7);
 }
 .lt-progress-total { font-size: 0.8rem; color: var(--text-muted); font-weight: 700; text-align: right; white-space: nowrap; }
 
