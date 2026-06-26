@@ -493,9 +493,19 @@ async def leaderboard(
             return False
         winner = match.player1 if match.winner_id == match.player1_id else match.player2
         loser = match.player2 if match.winner_id == match.player1_id else match.player1
-        if winner is None or loser is None or loser.seed is None:
+        if winner is None or loser is None:
             return False
-        return winner.seed is None or winner.seed > loser.seed
+        # Seeded players always rank above unseeded (mirrors frontend computeDrawRanks)
+        if loser.seed is not None and winner.seed is None:
+            return True   # unseeded beats seeded
+        if winner.seed is not None and loser.seed is None:
+            return False  # seeded beats unseeded
+        if winner.seed is not None and loser.seed is not None:
+            return winner.seed > loser.seed
+        # Both unseeded: compare ATP/WTA rankings
+        if winner.ranking is None or loser.ranking is None:
+            return False
+        return winner.ranking > loser.ranking
 
     upset_count = sum(1 for m in completed_matches if _is_upset(m))
     completed_matches_count = len([m for m in completed_matches if not m.is_bye])

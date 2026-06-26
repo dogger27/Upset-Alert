@@ -262,9 +262,13 @@
 }
 .lt-bar-segment:last-child { border-right: none; }
 .lt-bar-label {
-  font-size: 0.85rem; font-weight: 800;
+  font-size: 1.05rem; font-weight: 800;
   white-space: nowrap; user-select: none; line-height: 1;
-  text-shadow: 0 0 3px rgba(255,255,255,0.9), 0 0 6px rgba(255,255,255,0.7);
+  text-shadow:
+    0 0 4px #fff, 0 0 8px #fff,
+    0 0 14px rgba(255,255,255,0.85),
+    1px 1px 0 rgba(255,255,255,0.6),
+    -1px -1px 0 rgba(255,255,255,0.6);
 }
 .lt-progress-total { font-size: 0.8rem; color: var(--text-muted); font-weight: 700; text-align: right; white-space: nowrap; }
 
