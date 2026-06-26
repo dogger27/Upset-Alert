@@ -578,7 +578,7 @@ function PlayersPanel({ user }) {
   }, [players, sortCol, sortDir])
 
   return (
-    <div className="card admin-section">
+    <div className="card admin-section" style={{ width: 'fit-content' }}>
       <h2>
         Players (TE)
         <span className="admin-count">{players.length}</span>
@@ -699,7 +699,7 @@ function RankingsPanel({ user }) {
   }, [rankings, sortCol, sortDir])
 
   return (
-    <div className="card admin-section">
+    <div className="card admin-section" style={{ width: 'fit-content' }}>
       <h2>Rankings</h2>
       <div className="admin-filters-bar">
         <div className="log-filters">
