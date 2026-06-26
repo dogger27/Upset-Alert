@@ -283,6 +283,10 @@
   text-transform: uppercase; letter-spacing: 0.04em;
 }
 .leaderboard-table td { padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); }
+.leaderboard-table th:nth-child(3),
+.leaderboard-table th:nth-child(4),
+.leaderboard-table td:nth-child(3),
+.leaderboard-table td:nth-child(4) { text-align: center; }
 .leaderboard-table .pts { font-weight: 700; color: var(--green-dark); }
 .leaderboard-table .my-row { background: #f0fdf4; font-weight: 600; }
 .leaderboard-table tr:last-child td { border-bottom: none; }
