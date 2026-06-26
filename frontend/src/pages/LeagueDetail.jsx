@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getLeague, getLeagueTournaments, getLeaderboard, getRoundScores, updateLeague, setMemberAdmin, removeMember, deleteLeague } from '../api/leagues'
+import { getLeague, getLeagueTournaments, getRoundScores, updateLeague, setMemberAdmin, removeMember, deleteLeague } from '../api/leagues'
 import { useAuth } from '../store/auth'
 import UserName from '../components/UserName'
 import './LeagueDetail.css'
@@ -69,13 +69,6 @@ export default function LeagueDetail() {
     refetchInterval: 60_000,
   })
 
-  const { data: leaderboard } = useQuery({
-    queryKey: ['leaderboard', id, selectedTournamentId],
-    queryFn: () => getLeaderboard(Number(id), selectedTournamentId),
-    enabled: !!selectedTournamentId,
-    refetchInterval: 60_000,
-  })
-
   // Hooks must be called before any early returns.
   // Active tournaments → bar chart visualization (always visible)
   // Non-active (upcoming + completed ≥2 members) → sortable table
@@ -110,8 +103,6 @@ export default function LeagueDetail() {
 
   const isOwner = user?.id === league.owner.id
   const canInvite = isOwner || league.allow_member_invites
-  const entries = leaderboard?.entries ?? []
-  const selectedTournament = leagueTournaments.find(lt => lt.tournament.id === selectedTournamentId)?.tournament
 
   return (
     <div className="league-detail">
@@ -240,53 +231,6 @@ export default function LeagueDetail() {
         )}
       </div>
 
-      {/* Leaderboard */}
-      {selectedTournamentId && (
-        <div className="leaderboard-wrap card">
-          <div className="leaderboard-header">
-            <h2>{selectedTournament ? `${selectedTournament.year} ${selectedTournament.name}` : 'Leaderboard'}</h2>
-            {leaderboard?.completed_matches_count > 0 && (
-              <span className="leaderboard-upsets">
-                Upsets: {leaderboard.upset_count} / {leaderboard.completed_matches_count}
-              </span>
-            )}
-            <button
-              className="btn-secondary"
-              onClick={() => navigate(`/tournaments/${selectedTournamentId}`)}
-            >
-              View Draw
-            </button>
-          </div>
-          {entries.length === 0 ? (
-            <p className="muted">No picks submitted yet for this tournament.</p>
-          ) : (
-            <table className="leaderboard-table">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Player</th>
-                  <th>Points</th>
-                  <th>Correct</th>
-                  <th>Champion</th>
-                  <th>Finalist</th>
-                </tr>
-              </thead>
-              <tbody>
-                {entries.map(e => (
-                  <tr key={e.user.id} className={e.user.id === user?.id ? 'my-row' : ''}>
-                    <td>{e.rank}</td>
-                    <td><UserName user={e.user} showRealName={league.show_real_name} /></td>
-                    <td className="pts">{e.total_points}</td>
-                    <td>{e.correct_count}{leaderboard?.completed_matches_count > 0 ? ` / ${leaderboard.completed_matches_count} (${(e.correct_count / leaderboard.completed_matches_count * 100).toFixed(1)}%)` : ''}</td>
-                    <td>{e.champion_correct ? '✓' : selectedTournament?.status === 'completed' ? '–' : ''}</td>
-                    <td>{e.finalist_correct ? '✓' : selectedTournament?.status === 'completed' ? '–' : ''}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
     </div>
   )
 }
@@ -297,15 +241,18 @@ const ROUND_DARK_COLORS = ['#7f1d1d', '#7c2d12', '#713f12', '#14532d', '#1e3a8a'
 const ROUND_LABELS = ['R1', 'R2', 'R3', 'R4', 'QF', 'SF', 'F']
 
 function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMemberCount, showRealName, selected, onSelect }) {
-  const { data = [] } = useQuery({
+  const navigate = useNavigate()
+  const { data: rawData } = useQuery({
     queryKey: ['round-scores', leagueId, t.id],
     queryFn: () => getRoundScores(leagueId, t.id),
     refetchInterval: 60_000,
   })
 
-  const maxTotal = Math.max(...data.map(e => e.total), 1)
-  // Which rounds have any points scored
-  const activeRounds = ROUND_COLORS.map((_, i) => data.some(e => e.round_points[i] > 0) ? i : null).filter(i => i !== null)
+  const entries = rawData?.entries ?? []
+  const completedMatchesCount = rawData?.completed_matches_count ?? 0
+
+  const maxTotal = Math.max(...entries.map(e => e.total), 1)
+  const activeRounds = ROUND_COLORS.map((_, i) => entries.some(e => e.round_points[i] > 0) ? i : null).filter(i => i !== null)
 
   return (
     <div
@@ -318,9 +265,15 @@ function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMember
         </span>
         <span className="lt-progress-title">{t.name} {t.year}</span>
         <span className="lt-progress-meta">{pickerCount}/{leagueMemberCount} competing</span>
+        <button
+          className="btn-secondary lt-view-draw-btn"
+          onClick={e => { e.stopPropagation(); navigate(`/tournaments/${t.id}`) }}
+        >
+          View Draw
+        </button>
       </div>
 
-      {data.length === 0 ? (
+      {entries.length === 0 ? (
         <p className="lt-progress-empty">No picks submitted yet.</p>
       ) : (
         <>
@@ -335,7 +288,7 @@ function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMember
             </div>
           )}
           <div className="lt-progress-rows">
-            {data.map(entry => (
+            {entries.map(entry => (
               <div key={entry.user_id} className="lt-progress-row">
                 {entry.full_name && entry.full_name !== entry.username ? (
                   <span className="lt-progress-name username-hover" data-tooltip={entry.full_name}>
@@ -362,6 +315,11 @@ function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMember
                   ) : null)}
                 </div>
                 <span className="lt-progress-total">{entry.total} pts</span>
+                {completedMatchesCount > 0 && (
+                  <span className="lt-progress-correct">
+                    {entry.correct_count}/{completedMatchesCount}
+                  </span>
+                )}
               </div>
             ))}
           </div>

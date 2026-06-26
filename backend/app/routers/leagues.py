@@ -570,6 +570,7 @@ async def round_scores(
 
         pred_by_match = {p.match_id: p.predicted_winner_id for p in preds}
         by_round: dict = defaultdict(float)
+        correct_count = 0
 
         for match in completed_matches:
             if match.winner_id is None:
@@ -577,6 +578,7 @@ async def round_scores(
             if pred_by_match.get(match.id) != match.winner_id:
                 continue
             by_round[match.round_number] += pts_table.get(match.round_number, 0)
+            correct_count += 1
 
         pts_list = [by_round.get(r, 0) for r in range(1, 8)]
         entries.append({
@@ -585,10 +587,14 @@ async def round_scores(
             "full_name": member.user.full_name,
             "round_points": pts_list,
             "total": sum(pts_list),
+            "correct_count": correct_count,
         })
 
     entries.sort(key=lambda x: -x["total"])
-    return entries
+    return {
+        "entries": entries,
+        "completed_matches_count": len(completed_matches),
+    }
 
 
 def _check_access(league: League, user: Optional[User]) -> None:
