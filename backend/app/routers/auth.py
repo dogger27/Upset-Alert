@@ -171,7 +171,10 @@ async def verify_email_code(body: dict, db: AsyncSession = Depends(get_db)):
         return  # already verified — treat as success so the user can proceed to login
     if not user.verification_code or user.verification_code != code:
         raise invalid
-    if not user.verification_code_expires or datetime.now(timezone.utc) > user.verification_code_expires:
+    expires = user.verification_code_expires
+    if expires and expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)
+    if not expires or datetime.now(timezone.utc) > expires:
         raise invalid
     await _mark_verified(user, db)
 
