@@ -21,6 +21,9 @@ MIN_SAMPLES = 3  # minimum historical entries before we trust the average
 def _key(category: Optional[str], gender: Optional[str]) -> str:
     """Normalise category + gender into a lookup key."""
     cat = (category or "").strip()
+    # Grand Slam is stored without ATP/WTA prefix — keep it as-is
+    if "Grand Slam" in cat or "Slam" in cat:
+        return cat
     # Prefix ATP/WTA if not already present
     if gender == "M" and not cat.startswith("ATP"):
         cat = f"ATP {cat.replace('ATP ', '').replace('WTA ', '')}"
@@ -87,7 +90,9 @@ async def calculate_draw_release_dates(
             if len(qual_vals) >= MIN_SAMPLES:
                 qual_days = qual_vals[len(qual_vals) // 2]
 
-    return (
-        start_date - timedelta(days=da_days),
-        start_date - timedelta(days=qual_days),
-    )
+    da_date = start_date - timedelta(days=da_days)
+    # Grand Slams place all players (including qualifier slots) in the draw at the
+    # same time as direct acceptance — qual date equals DA date.
+    if "Grand Slam" in (category or ""):
+        return da_date, da_date
+    return da_date, start_date - timedelta(days=qual_days)
