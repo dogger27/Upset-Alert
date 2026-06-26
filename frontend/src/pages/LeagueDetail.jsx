@@ -290,6 +290,24 @@ function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMember
           <div className="lt-progress-rows">
             {entries.map(entry => (
               <div key={entry.user_id} className="lt-progress-row">
+                <button
+                  className="lt-bracket-btn"
+                  title={`View ${entry.username}'s bracket`}
+                  onClick={e => { e.stopPropagation(); window.open(`/tournaments/${t.id}?user=${entry.user_id}`, '_blank') }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="17" y1="12" x2="24" y2="12"/>
+                    <polyline points="17,6 17,18"/>
+                    <line x1="10" y1="6" x2="17" y2="6"/>
+                    <line x1="10" y1="18" x2="17" y2="18"/>
+                    <polyline points="10,3 10,9"/>
+                    <polyline points="10,15 10,21"/>
+                    <line x1="3" y1="3" x2="10" y2="3"/>
+                    <line x1="3" y1="9" x2="10" y2="9"/>
+                    <line x1="3" y1="15" x2="10" y2="15"/>
+                    <line x1="3" y1="21" x2="10" y2="21"/>
+                  </svg>
+                </button>
                 {entry.full_name && entry.full_name !== entry.username ? (
                   <span className="lt-progress-name username-hover" data-tooltip={entry.full_name}>
                     <span className="lt-progress-name-text">{entry.username}</span>

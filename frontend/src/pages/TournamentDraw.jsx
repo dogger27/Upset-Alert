@@ -3,7 +3,7 @@
  * Logged-in users can make / update predictions until the lock time.
  */
 import { useState, useEffect, useRef } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
 import { getDraw, refreshDraw, toggleUnlockSelections } from '../api/tournaments'
@@ -15,13 +15,14 @@ import './TournamentDraw.css'
 
 export default function TournamentDraw() {
   const { id } = useParams()
+  const [searchParams] = useSearchParams()
   const { user } = useAuth()
   const qc = useQueryClient()
 
   // All state declared first
   const [picks, setPicks] = useState({})
   const [viewMode, setViewMode] = useState('live')
-  const [viewedUserId, setViewedUserId] = useState(null)
+  const [viewedUserId, setViewedUserId] = useState(() => { const u = searchParams.get('user'); return u ? Number(u) : null })
   const [viewedUserName, setViewedUserName] = useState(null)
   const initialModeSet = useRef(false)
   const [celebrating, setCelebrating] = useState(false)
@@ -73,11 +74,11 @@ export default function TournamentDraw() {
     }
   }, [savedPreds, data])
 
-  // Set initial view mode once: always 'picks' for open tournaments, or if user has picks
+  // Set initial view mode once: always 'picks' for open tournaments, or if user has picks, or if ?user= param present
   useEffect(() => {
     if (initialModeSet.current || savedPreds === undefined || !data) return
     initialModeSet.current = true
-    if (data.tournament.status === 'open' || savedPreds.some(p => p.predicted_winner_id != null)) setViewMode('picks')
+    if (searchParams.get('user') || data.tournament.status === 'open' || savedPreds.some(p => p.predicted_winner_id != null)) setViewMode('picks')
   }, [savedPreds, data])
 
   const saveMutation = useMutation({
