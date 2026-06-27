@@ -370,13 +370,10 @@ export default function TournamentDraw() {
             <span className="draw-meta-left">
               {[tournament.city, surface].filter(Boolean).join(' · ')}
             </span>
+            {tournament.start_date && (
+              <span className="draw-title-dates">{fmtDateRange(tournament.start_date, tournament.end_date)}</span>
+            )}
           </div>
-          {tournament.latest_result_at && (
-            <p className="draw-last-modified">Latest result: {fmtModified(tournament.latest_result_at)}</p>
-          )}
-          {tournament.start_date && (
-            <span className="draw-title-dates">{fmtDateRange(tournament.start_date, tournament.end_date)}</span>
-          )}
         </div>
         <div className="draw-header-center">
           <div className="draw-mode-buttons">
