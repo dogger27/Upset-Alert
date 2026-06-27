@@ -55,12 +55,14 @@ function TournamentCard({ entry }) {
     <div className="dh-card">
       <div className="dh-card-header">
         <div className="dh-card-title">
-          {catLabel && (
-            <span className={`dh-category ${isATP ? 'dh-category--atp' : 'dh-category--wta'}`}>
-              {catLabel}
-            </span>
-          )}
-          <span className="dh-tourn-name">{entry.name}</span>
+          <span className="dh-title-left">
+            {catLabel && (
+              <span className={`dh-category ${isATP ? 'dh-category--atp' : 'dh-category--wta'}`}>
+                {catLabel}
+              </span>
+            )}
+            <span className="dh-tourn-name">{entry.name}</span>
+          </span>
           <span className={`dh-surface dh-surface--right ${surfaceClass(entry.surface)}`}>
             {entry.surface || '—'}
           </span>
@@ -71,7 +73,7 @@ function TournamentCard({ entry }) {
             <span className="dh-bottom-points">Points: <strong>{r0.points}</strong></span>
             <span className="dh-bottom-correct">Correct: <strong>{r0.correct_count} / {entry.total_matches}</strong>{pct}</span>
             <Link className="dh-picks-link" to={`/tournaments/${entry.tournament_id}`}>
-              View my picks →
+              My Picks →
             </Link>
           </div>
         )}
