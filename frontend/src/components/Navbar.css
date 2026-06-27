@@ -206,6 +206,8 @@ a.profile-dropdown-item:visited {
   color: var(--text, #111);
   font-size: 0.88rem;
   font-weight: 400;
+  padding-bottom: 0.65rem;
+  border-bottom: none;
 }
 .profile-dropdown-item--danger {
   color: #dc2626;
