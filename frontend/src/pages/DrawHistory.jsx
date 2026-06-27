@@ -55,15 +55,15 @@ function TournamentCard({ entry }) {
     <div className="dh-card">
       <div className="dh-card-header">
         <div className="dh-card-title">
-          <span className={`dh-surface ${surfaceClass(entry.surface)}`}>
-            {entry.surface || '—'}
-          </span>
           {catLabel && (
             <span className={`dh-category ${isATP ? 'dh-category--atp' : 'dh-category--wta'}`}>
               {catLabel}
             </span>
           )}
           <span className="dh-tourn-name">{entry.name}</span>
+          <span className={`dh-surface dh-surface--right ${surfaceClass(entry.surface)}`}>
+            {entry.surface || '—'}
+          </span>
         </div>
         {dateRange && <div className="dh-card-dates">{dateRange}</div>}
         {r0 && (
@@ -86,8 +86,7 @@ function TournamentCard({ entry }) {
           <div key={i} className={`dh-result-row${r.league_id == null ? ' dh-row--global' : ''}`}>
             <span className="dh-group-name">{r.league_name}</span>
             <span className="dh-rank-cell">
-              <span className={`dh-rank ${rankBadge(r.rank)}`}>#{r.rank}</span>
-              <span className="dh-total"> / {r.total_participants}</span>
+              <span className={`dh-rank ${rankBadge(r.rank)}`}>#{r.rank} / {r.total_participants}</span>
             </span>
           </div>
         ))}
