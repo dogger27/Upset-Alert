@@ -98,7 +98,7 @@ export default function DrawHistory() {
                         <td className="dh-muted">{r.total_participants}</td>
                         <td className="dh-points">{r.points}</td>
                         <td className="dh-muted">
-                          {r.correct_count}/{entry.total_matches}{entry.total_matches > 0 ? ` (${(r.correct_count / entry.total_matches * 100).toFixed(1)}%)` : ''}
+                          {r.correct_count} / {entry.total_matches}{entry.total_matches > 0 ? ` (${(r.correct_count / entry.total_matches * 100).toFixed(1)}%)` : ''}
                         </td>
                       </tr>
                     ))}
