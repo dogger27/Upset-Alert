@@ -224,17 +224,23 @@
 }
 .btn-admin-refresh:disabled { opacity: 0.6; cursor: default; }
 
-.btn-auto-populate {
+.btn-auto-populate,
+.btn-clear-selections {
   font-size: 0.82rem;
   font-weight: 600;
   font-family: inherit;
-  color: #166534;
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
   padding: 0.3em 0.85em;
   border-radius: 20px;
   cursor: pointer;
+  width: 100%;
+  text-align: center;
   transition: background 0.15s, border-color 0.15s;
+}
+
+.btn-auto-populate {
+  color: #166534;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
 }
 .btn-auto-populate:hover {
   background: #dcfce7;
@@ -242,16 +248,9 @@
 }
 
 .btn-clear-selections {
-  font-size: 0.82rem;
-  font-weight: 600;
-  font-family: inherit;
   color: #991b1b;
   background: #fff1f2;
   border: 1px solid #fecaca;
-  padding: 0.3em 0.85em;
-  border-radius: 20px;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
 }
 .btn-clear-selections:hover {
   background: #fee2e2;
