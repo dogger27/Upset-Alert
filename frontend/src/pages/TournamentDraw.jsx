@@ -460,8 +460,8 @@ export default function TournamentDraw() {
             })()
           )}
           {showPicksBadge && (
-            <span className={`saved-badge${!saveMutation.isPending && pickedCount < totalPredictable ? ' saved-badge--incomplete' : ''}`}>
-              {saveMutation.isPending ? '⏳ Saving…' : pickedCount < totalPredictable
+            <span className={`saved-badge${pickedCount < totalPredictable ? ' saved-badge--incomplete' : ''}`}>
+              {pickedCount < totalPredictable
                 ? `⚠ ${pickedCount}/${totalPredictable} picks saved — Populate to COMPETE`
                 : `✓ ${pickedCount}/${totalPredictable} picks saved`}
             </span>
