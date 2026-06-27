@@ -453,17 +453,50 @@ def _extract_scores(params: dict, rd: int, slot_a: int, slot_b: int) -> Optional
     return [scores_a, scores_b] if (scores_a or scores_b) else None
 
 
+_INNER_TEMPLATE_RE = re.compile(r'\{\{[^{}]*\}\}')
+_WRAPPER_TEMPLATE_NAMES = frozenset({
+    'nowrap', 'small', 'plaintext', 'nobr', 'bigger', 'smaller', 'nowrap2',
+})
+
+
+def _strip_seed_templates(v: str) -> str:
+    """Iteratively strip display wrapper templates: {{nowrap|X}} → X, {{small|X}} → X."""
+    prev = None
+    while prev != v:
+        prev = v
+        m = _INNER_TEMPLATE_RE.search(v)
+        if not m:
+            break
+        inner = m.group(0)[2:-2]
+        if '|' in inner:
+            name, content = inner.split('|', 1)
+            if name.strip().lower() in _WRAPPER_TEMPLATE_NAMES:
+                v = v[:m.start()] + content + v[m.end():]
+                continue
+        v = v[:m.start()] + v[m.end():]
+    return v.strip()
+
+
 def _parse_seed(raw: str) -> tuple[Optional[int], Optional[str]]:
-    """Returns (seed_int, entry_type)."""
-    v = raw.strip()
+    """Returns (seed_int, entry_type). Handles compound values like '20/WC'."""
+    v = _strip_seed_templates(raw.strip())
     if not v:
         return None, None
+    # Handle compound "seed/entry_type" like "20/WC"
+    if '/' in v:
+        parts = v.split('/', 1)
+        try:
+            seed = int(parts[0].strip())
+            et = parts[1].strip()
+            return seed, et if et in ENTRY_TYPES else None
+        except ValueError:
+            pass
     if v in ENTRY_TYPES:
         return None, v
     try:
         return int(v), None
     except ValueError:
-        return None, v if v else None
+        return None, None
 
 
 # ---------------------------------------------------------------------------
