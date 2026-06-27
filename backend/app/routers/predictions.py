@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth import get_current_user, get_optional_user
 from app.database import get_db
 from app.models.prediction import UserPrediction
-from app.models.tournament import Match, Tournament
+from app.models.tournament import Match, Draw
 from app.models.user import User
 from app.schemas.prediction import PredictionOut, PredictionSet
 
@@ -21,21 +21,21 @@ async def get_entry_status(
 ):
     """Returns {tournament_id: 'complete' | 'partial'} for tournaments with at least one pick."""
     totals_result = await db.execute(
-        select(Match.tournament_id, func.count().label("total"))
+        select(Match.draw_id, func.count().label("total"))
         .where(Match.is_bye == False)
-        .group_by(Match.tournament_id)
+        .group_by(Match.draw_id)
     )
-    total_by_t = {r.tournament_id: r.total for r in totals_result}
+    total_by_t = {r.draw_id: r.total for r in totals_result}
 
     picks_result = await db.execute(
-        select(UserPrediction.tournament_id, func.count().label("pick_count"))
+        select(UserPrediction.draw_id, func.count().label("pick_count"))
         .where(
             UserPrediction.user_id == current_user.id,
             UserPrediction.predicted_winner_id.isnot(None),
         )
-        .group_by(UserPrediction.tournament_id)
+        .group_by(UserPrediction.draw_id)
     )
-    picks_by_t = {r.tournament_id: r.pick_count for r in picks_result}
+    picks_by_t = {r.draw_id: r.pick_count for r in picks_result}
 
     result = {}
     for t_id, total in total_by_t.items():
@@ -59,7 +59,7 @@ async def get_predictions(
     result = await db.execute(
         select(UserPrediction).where(
             UserPrediction.user_id == uid,
-            UserPrediction.tournament_id == tournament_id,
+            UserPrediction.draw_id == tournament_id,
         )
     )
     return result.scalars().all()
@@ -72,7 +72,7 @@ async def save_predictions(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    tournament = await db.get(Tournament, tournament_id)
+    tournament = await db.get(Draw, tournament_id)
     if not tournament:
         raise HTTPException(404, "Tournament not found")
     if tournament.is_locked:
@@ -84,7 +84,7 @@ async def save_predictions(
         result = await db.execute(
             select(Match.id).where(
                 Match.id.in_(match_ids),
-                Match.tournament_id == tournament_id,
+                Match.draw_id == tournament_id,
             )
         )
         valid_ids = set(result.scalars().all())
@@ -109,7 +109,7 @@ async def save_predictions(
         else:
             pred = UserPrediction(
                 user_id=current_user.id,
-                tournament_id=tournament_id,
+                draw_id=tournament_id,
                 match_id=match_id,
                 predicted_winner_id=winner_id,
             )
@@ -120,7 +120,7 @@ async def save_predictions(
     result = await db.execute(
         select(UserPrediction).where(
             UserPrediction.user_id == current_user.id,
-            UserPrediction.tournament_id == tournament_id,
+            UserPrediction.draw_id == tournament_id,
         )
     )
     return result.scalars().all()

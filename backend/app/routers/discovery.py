@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import get_current_user
 from app.database import get_db
-from app.models.tournament import Tournament
+from app.models.tournament import Draw
 from app.models.user import User
 from app.routers.tournaments import _do_scrape
 from app.services.discovery import discover_tournaments
@@ -38,7 +38,7 @@ async def get_discovered(
 
     # Check which are already in DB
     existing = await db.execute(
-        select(Tournament.wiki_page_title).where(Tournament.year == year)
+        select(Draw.wiki_page_title).where(Draw.year == year)
     )
     existing_titles = {r[0] for r in existing}
 
@@ -78,14 +78,14 @@ async def add_discovered(
 
     # Check not already added
     existing = await db.execute(
-        select(Tournament).where(Tournament.wiki_page_title == body.wiki_page_title)
+        select(Draw).where(Draw.wiki_page_title == body.wiki_page_title)
     )
     if existing.scalar_one_or_none():
         raise HTTPException(400, "Tournament already added")
 
     start = date.fromisoformat(body.start_date) if body.start_date else None
 
-    t = Tournament(
+    t = Draw(
         name=" ".join(body.name.split()),
         year=body.year,
         gender=body.gender,

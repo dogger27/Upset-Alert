@@ -25,7 +25,7 @@ from typing import Optional
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.tournament import Tournament, TournamentCategory, TournamentCategoryVariant
+from app.models.tournament import Draw, DrawCategory, DrawCategoryVariant
 from app.services.discovery import DiscoveredTournament
 from app.services.draw_dates import calculate_draw_release_dates, compute_entry_ranking_week, compute_seed_ranking_week
 
@@ -44,7 +44,7 @@ async def _resolve_variant_id(
         return None
 
     res = await db.execute(
-        select(TournamentCategoryVariant).where(TournamentCategoryVariant.category_name == category)
+        select(DrawCategoryVariant).where(DrawCategoryVariant.category_name == category)
     )
     variants = res.scalars().all()
     if not variants:
@@ -84,12 +84,12 @@ async def find_existing_match(
     db: AsyncSession,
     discovered: DiscoveredTournament,
     year: int,
-) -> Optional[Tournament]:
+) -> Optional[Draw]:
     """Return the best existing DB record for *discovered*, or None."""
 
     # 1. Exact wiki_page_title
     res = await db.execute(
-        select(Tournament).where(Tournament.wiki_page_title == discovered.wiki_page_title)
+        select(Draw).where(Draw.wiki_page_title == discovered.wiki_page_title)
     )
     exact = res.scalar_one_or_none()
     if exact:
@@ -101,14 +101,14 @@ async def find_existing_match(
     # 2. Same year / gender / category + date within 7 days
     date_str = discovered.start_date.isoformat()
     res = await db.execute(
-        select(Tournament)
+        select(Draw)
         .where(
-            Tournament.year == year,
-            Tournament.gender == discovered.gender,
-            Tournament.category == discovered.category,
-            Tournament.start_date.isnot(None),
+            Draw.year == year,
+            Draw.gender == discovered.gender,
+            Draw.category == discovered.category,
+            Draw.start_date.isnot(None),
             func.abs(
-                func.julianday(Tournament.start_date) - func.julianday(date_str)
+                func.julianday(Draw.start_date) - func.julianday(date_str)
             ) <= 7,
         )
     )
@@ -119,7 +119,7 @@ async def find_existing_match(
 
     if len(candidates) == 1:
         # For 1000s and Grand Slams, a single date-match is definitive
-        cat_row = await db.get(TournamentCategory, discovered.category)
+        cat_row = await db.get(DrawCategory, discovered.category)
         if cat_row and cat_row.one_per_slot:
             return candidates[0]
         # For 500s and 250s, require city or name agreement as a sanity check
@@ -159,7 +159,7 @@ async def find_existing_match(
 
 
 async def _apply_update(
-    existing: Tournament,
+    existing: Draw,
     discovered: DiscoveredTournament,
     db: AsyncSession,
 ) -> bool:
@@ -271,7 +271,7 @@ async def sync_season(
                     d.start_date, d.category, d.gender, db=db
                 )
                 variant_id = await _resolve_variant_id(db, d.category, d.draw_size, d.name)
-                t = Tournament(
+                t = Draw(
                     name=d.name,
                     year=year,
                     gender=d.gender,
@@ -332,34 +332,34 @@ async def _find_duplicates(db: AsyncSession, year: int) -> list:
     # Strategy 1: identical name + gender
     res = await db.execute(
         select(
-            Tournament.name,
-            Tournament.gender,
-            Tournament.category,
-            Tournament.start_date,
+            Draw.name,
+            Draw.gender,
+            Draw.category,
+            Draw.start_date,
             func.count().label("n"),
         )
-        .where(Tournament.year == year)
-        .group_by(Tournament.name, Tournament.gender)
+        .where(Draw.year == year)
+        .group_by(Draw.name, Draw.gender)
         .having(func.count() > 1)
     )
     results.extend(res.all())
 
     # Strategy 2: same slot in one-per-slot tiers (1000/Grand Slam only)
     # ATP/WTA 500 run two simultaneous events per week so they are intentionally excluded.
-    one_per_slot_subq = select(TournamentCategory.name).where(TournamentCategory.one_per_slot == True)
+    one_per_slot_subq = select(DrawCategory.name).where(DrawCategory.one_per_slot == True)
     res = await db.execute(
         select(
-            Tournament.category,
-            Tournament.gender,
-            Tournament.start_date,
+            Draw.category,
+            Draw.gender,
+            Draw.start_date,
             func.count().label("n"),
         )
         .where(
-            Tournament.year == year,
-            Tournament.category.in_(one_per_slot_subq),
-            Tournament.start_date.isnot(None),
+            Draw.year == year,
+            Draw.category.in_(one_per_slot_subq),
+            Draw.start_date.isnot(None),
         )
-        .group_by(Tournament.gender, Tournament.category, Tournament.start_date)
+        .group_by(Draw.gender, Draw.category, Draw.start_date)
         .having(func.count() > 1)
     )
     results.extend(res.all())

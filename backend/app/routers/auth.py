@@ -258,41 +258,41 @@ async def get_draw_history(
     current_user: User = Depends(get_current_user),
 ):
     from app.models.draw_history import TournamentResult
-    from app.models.tournament import Tournament, Match
+    from app.models.tournament import Draw, Match
     from app.models.prediction import UserPrediction
     from sqlalchemy import func
 
     res = await db.execute(
         select(TournamentResult)
         .where(TournamentResult.user_id == current_user.id)
-        .order_by(TournamentResult.tournament_id.desc(), TournamentResult.league_id.nullsfirst())
+        .order_by(TournamentResult.draw_id.desc(), TournamentResult.league_id.nullsfirst())
     )
     rows = res.scalars().all()
 
     # Group by tournament
-    tourn_ids = list(dict.fromkeys(r.tournament_id for r in rows))
+    tourn_ids = list(dict.fromkeys(r.draw_id for r in rows))
     if not tourn_ids:
         return []
 
     # Count total non-bye matches per tournament
     match_counts_res = await db.execute(
-        select(Match.tournament_id, func.count().label("total"))
-        .where(Match.tournament_id.in_(tourn_ids), Match.is_bye == False)
-        .group_by(Match.tournament_id)
+        select(Match.draw_id, func.count().label("total"))
+        .where(Match.draw_id.in_(tourn_ids), Match.is_bye == False)
+        .group_by(Match.draw_id)
     )
-    total_matches = {row.tournament_id: row.total for row in match_counts_res}
+    total_matches = {row.draw_id: row.total for row in match_counts_res}
 
     # Count user's completed predictions per tournament
     pred_counts_res = await db.execute(
-        select(UserPrediction.tournament_id, func.count().label("total"))
+        select(UserPrediction.draw_id, func.count().label("total"))
         .where(
-            UserPrediction.tournament_id.in_(tourn_ids),
+            UserPrediction.draw_id.in_(tourn_ids),
             UserPrediction.user_id == current_user.id,
             UserPrediction.predicted_winner_id.isnot(None),
         )
-        .group_by(UserPrediction.tournament_id)
+        .group_by(UserPrediction.draw_id)
     )
-    user_preds = {row.tournament_id: row.total for row in pred_counts_res}
+    user_preds = {row.draw_id: row.total for row in pred_counts_res}
 
     # Only include tournaments where user made all predictions
     competed_ids = {
@@ -301,15 +301,15 @@ async def get_draw_history(
     }
 
     t_res = await db.execute(
-        select(Tournament).where(Tournament.id.in_(competed_ids))
+        select(Draw).where(Draw.id.in_(competed_ids))
     )
     tournaments = {t.id: t for t in t_res.scalars().all()}
 
     by_tourn: dict[int, list] = {}
     for r in rows:
-        if r.tournament_id not in competed_ids:
+        if r.draw_id not in competed_ids:
             continue
-        by_tourn.setdefault(r.tournament_id, []).append({
+        by_tourn.setdefault(r.draw_id, []).append({
             "league_id": r.league_id,
             "league_name": r.league_name,
             "rank": r.rank,
@@ -346,7 +346,7 @@ async def backfill_draw_history(
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admins only")
 
-    from app.models.tournament import Tournament, Match
+    from app.models.tournament import Draw, Match
     from app.models.prediction import UserPrediction
     from app.models.league import League
     from app.models.draw_history import TournamentResult
@@ -356,7 +356,7 @@ async def backfill_draw_history(
     from collections import defaultdict
 
     t_res = await db.execute(
-        select(Tournament).where(Tournament.status == "completed")
+        select(Draw).where(Draw.status == "completed")
     )
     tournaments = t_res.scalars().all()
 
@@ -368,7 +368,7 @@ async def backfill_draw_history(
         m_res = await db.execute(
             select(Match)
             .options(selectinload(Match.player1), selectinload(Match.player2), selectinload(Match.winner))
-            .where(Match.tournament_id == tournament.id, Match.status == "completed")
+            .where(Match.draw_id == tournament.id, Match.status == "completed")
         )
         completed_matches = m_res.scalars().all()
         if not completed_matches:
@@ -376,7 +376,7 @@ async def backfill_draw_history(
 
         pred_res = await db.execute(
             select(UserPrediction).where(
-                UserPrediction.tournament_id == tournament.id,
+                UserPrediction.draw_id == tournament.id,
                 UserPrediction.predicted_winner_id.isnot(None),
             )
         )
