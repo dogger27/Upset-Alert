@@ -9,7 +9,7 @@ from app.core.auth import get_current_user, get_optional_user
 from app.database import get_db
 from app.models.league import League, LeagueMember
 from app.models.prediction import UserPrediction
-from app.models.tournament import Match, Tournament
+from app.models.tournament import Match, Draw
 from app.models.user import User
 from app.schemas.league import (
     LeaderboardEntry,
@@ -351,7 +351,7 @@ async def league_tournaments(
     # Count non-null picks per (user, tournament)
     picks_result = await db.execute(
         select(
-            UserPrediction.tournament_id,
+            UserPrediction.draw_id,
             UserPrediction.user_id,
             func.count().label("pick_count"),
         )
@@ -359,33 +359,33 @@ async def league_tournaments(
             UserPrediction.user_id.in_(member_ids),
             UserPrediction.predicted_winner_id.isnot(None),
         )
-        .group_by(UserPrediction.tournament_id, UserPrediction.user_id)
+        .group_by(UserPrediction.draw_id, UserPrediction.user_id)
     )
     picks_rows = picks_result.all()
 
     # Find all relevant tournament IDs
-    t_ids = list({r.tournament_id for r in picks_rows})
+    t_ids = list({r.draw_id for r in picks_rows})
     if not t_ids:
         return []
 
     # Total non-bye matches per tournament
     totals_result = await db.execute(
-        select(Match.tournament_id, func.count().label("total"))
-        .where(Match.tournament_id.in_(t_ids), Match.is_bye == False)
-        .group_by(Match.tournament_id)
+        select(Match.draw_id, func.count().label("total"))
+        .where(Match.draw_id.in_(t_ids), Match.is_bye == False)
+        .group_by(Match.draw_id)
     )
-    total_by_t = {r.tournament_id: r.total for r in totals_result.all()}
+    total_by_t = {r.draw_id: r.total for r in totals_result.all()}
 
     # Count members who have picks for ALL non-bye matches
     from collections import defaultdict
     fully_entered = defaultdict(int)
     for r in picks_rows:
-        if r.pick_count >= total_by_t.get(r.tournament_id, 0) > 0:
-            fully_entered[r.tournament_id] += 1
+        if r.pick_count >= total_by_t.get(r.draw_id, 0) > 0:
+            fully_entered[r.draw_id] += 1
 
     out = []
     for t_id, picker_count in fully_entered.items():
-        t = await db.get(Tournament, t_id)
+        t = await db.get(Draw, t_id)
         if t:
             t.status = t.computed_status
             out.append(LeagueTournamentOut(
@@ -435,7 +435,7 @@ async def leaderboard(
         ]
         return LeaderboardOut(league=_league_out(league, len(league.members)), entries=entries, total_matches=0)
 
-    tournament = await db.get(Tournament, tournament_id)
+    tournament = await db.get(Draw, tournament_id)
     if not tournament:
         raise HTTPException(404, "Tournament not found")
 
@@ -446,14 +446,14 @@ async def leaderboard(
             selectinload(Match.player2),
             selectinload(Match.winner),
         )
-        .where(Match.tournament_id == tournament_id, Match.status == "completed")
+        .where(Match.draw_id == tournament_id, Match.status == "completed")
     )
     completed_matches = completed_matches_result.scalars().all()
 
     # Total non-bye matches — a member must have a pick for every one to be entered
     total_matches_result = await db.execute(
         select(func.count())
-        .where(Match.tournament_id == tournament_id, Match.is_bye == False)
+        .where(Match.draw_id == tournament_id, Match.is_bye == False)
     )
     total_matches = total_matches_result.scalar_one()
 
@@ -463,7 +463,7 @@ async def leaderboard(
         preds_result = await db.execute(
             select(UserPrediction).where(
                 UserPrediction.user_id == member.user_id,
-                UserPrediction.tournament_id == tournament_id,
+                UserPrediction.draw_id == tournament_id,
                 UserPrediction.predicted_winner_id.isnot(None),
             )
         )
@@ -540,7 +540,7 @@ async def round_scores(
         raise HTTPException(404, "League not found")
     _check_access(league, current_user)
 
-    tournament = await db.get(Tournament, tournament_id)
+    tournament = await db.get(Draw, tournament_id)
     if not tournament:
         raise HTTPException(404, "Tournament not found")
 
@@ -548,7 +548,7 @@ async def round_scores(
 
     completed_matches_result = await db.execute(
         select(Match).where(
-            Match.tournament_id == tournament_id,
+            Match.draw_id == tournament_id,
             Match.status == "completed",
             Match.is_bye == False,
         )
@@ -560,7 +560,7 @@ async def round_scores(
         preds_result = await db.execute(
             select(UserPrediction).where(
                 UserPrediction.user_id == member.user_id,
-                UserPrediction.tournament_id == tournament_id,
+                UserPrediction.draw_id == tournament_id,
                 UserPrediction.predicted_winner_id.isnot(None),
             )
         )

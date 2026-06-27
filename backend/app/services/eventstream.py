@@ -223,14 +223,14 @@ class EventStreamListener:
 
     async def _scrape_tournament(self, title: str) -> None:
         from app.database import AsyncSessionLocal
-        from app.models.tournament import Tournament
+        from app.models.tournament import Draw
         from app.routers.tournaments import _do_scrape
         from sqlalchemy import select
 
         try:
             async with AsyncSessionLocal() as db:
                 result = await db.execute(
-                    select(Tournament).where(Tournament.wiki_page_title == title)
+                    select(Draw).where(Draw.wiki_page_title == title)
                 )
                 tournament = result.scalar_one_or_none()
                 if tournament:

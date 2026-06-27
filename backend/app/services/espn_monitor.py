@@ -41,7 +41,7 @@ import httpx
 from sqlalchemy import func, select
 
 from app.database import AsyncSessionLocal
-from app.models.tournament import DrawEntry, Match, Tournament
+from app.models.tournament import DrawEntry, Match, Draw
 from app.services.rankings import _norm
 
 logger = logging.getLogger(__name__)
@@ -311,23 +311,23 @@ class ESPNMonitor:
 
         async with AsyncSessionLocal() as db:
             lock_res = await db.execute(
-                select(Tournament).where(
-                    Tournament.picks_locked_at.is_(None),
-                    Tournament.draw_released_direct_at.isnot(None),
-                    Tournament.status != "completed",
-                    Tournament.start_date.isnot(None),
-                    Tournament.start_date >= lock_start,
-                    Tournament.start_date <= lock_end,
+                select(Draw).where(
+                    Draw.picks_locked_at.is_(None),
+                    Draw.draw_released_direct_at.isnot(None),
+                    Draw.status != "completed",
+                    Draw.start_date.isnot(None),
+                    Draw.start_date >= lock_start,
+                    Draw.start_date <= lock_end,
                 )
             )
             lock_list = lock_res.scalars().all()
 
             result_res = await db.execute(
-                select(Tournament).where(
-                    Tournament.draw_released_direct_at.isnot(None),
-                    Tournament.status != "completed",
-                    Tournament.start_date.isnot(None),
-                    Tournament.start_date >= result_cutoff,
+                select(Draw).where(
+                    Draw.draw_released_direct_at.isnot(None),
+                    Draw.status != "completed",
+                    Draw.start_date.isnot(None),
+                    Draw.start_date >= result_cutoff,
                 )
             )
             result_list = result_res.scalars().all()
@@ -375,7 +375,7 @@ class ESPNMonitor:
             # Load draw entries once — used by both jobs
             async with AsyncSessionLocal() as db:
                 de_res = await db.execute(
-                    select(DrawEntry).where(DrawEntry.tournament_id == tid)
+                    select(DrawEntry).where(DrawEntry.draw_id == tid)
                 )
                 entries = de_res.scalars().all()
 
@@ -407,7 +407,7 @@ class ESPNMonitor:
 
     async def _check_lock(
         self,
-        tournament: Tournament,
+        tournament: Draw,
         espn_event: dict,
         pairs: list,
         tok_index: dict,
@@ -436,7 +436,7 @@ class ESPNMonitor:
         now = datetime.now(timezone.utc)
 
         async with AsyncSessionLocal() as db:
-            tournament = await db.get(Tournament, tournament_id)
+            tournament = await db.get(Draw, tournament_id)
             if tournament is None or tournament.picks_locked_at is not None:
                 return  # already handled (race guard)
 
@@ -459,7 +459,7 @@ class ESPNMonitor:
 
     async def _sync_live(
         self,
-        tournament: Tournament,
+        tournament: Draw,
         espn_event: dict,
         pairs: list,
         tok_index: dict,
@@ -492,7 +492,7 @@ class ESPNMonitor:
         async with AsyncSessionLocal() as db:
             m_res = await db.execute(
                 select(Match).where(
-                    Match.tournament_id == tournament.id,
+                    Match.draw_id == tournament.id,
                     Match.winner_id.is_(None),
                     Match.player1_id.isnot(None),
                     Match.player2_id.isnot(None),
@@ -545,7 +545,7 @@ class ESPNMonitor:
 
     async def _sync_results(
         self,
-        tournament: Tournament,
+        tournament: Draw,
         espn_event: dict,
         pairs: list,
         tok_index: dict,
@@ -572,7 +572,7 @@ class ESPNMonitor:
             # Load pending matches (both players known, no winner yet, not a bye)
             m_res = await db.execute(
                 select(Match).where(
-                    Match.tournament_id == tournament.id,
+                    Match.draw_id == tournament.id,
                     Match.winner_id.is_(None),
                     Match.player1_id.isnot(None),
                     Match.player2_id.isnot(None),
@@ -630,7 +630,7 @@ class ESPNMonitor:
                 for rn in rounds_updated:
                     incomplete = await db.execute(
                         select(func.count()).where(
-                            Match.tournament_id == tournament.id,
+                            Match.draw_id == tournament.id,
                             Match.round_number == rn,
                             Match.is_bye == False,
                             Match.winner_id.is_(None),
@@ -644,7 +644,7 @@ class ESPNMonitor:
                 # Check whether the whole tournament is now complete
                 total_incomplete = await db.execute(
                     select(func.count()).where(
-                        Match.tournament_id == tournament.id,
+                        Match.draw_id == tournament.id,
                         Match.is_bye == False,
                         Match.winner_id.is_(None),
                     )

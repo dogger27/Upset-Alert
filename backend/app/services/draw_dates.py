@@ -105,9 +105,9 @@ def _key(category: Optional[str], gender: Optional[str]) -> str:
 async def _db_defaults(category: Optional[str], gender: Optional[str], db) -> Optional[tuple[int, int]]:
     """Load default_da_days / default_qual_days from tournament_categories if available."""
     from sqlalchemy import select as sa_select
-    from app.models.tournament import TournamentCategory
+    from app.models.tournament import DrawCategory
     key = _key(category, gender)
-    row = await db.get(TournamentCategory, key)
+    row = await db.get(DrawCategory, key)
     if row and row.default_da_days is not None and row.default_qual_days is not None:
         return row.default_da_days, row.default_qual_days
     return None
@@ -145,21 +145,21 @@ async def calculate_draw_release_dates(
         if db_vals:
             da_days, qual_days = db_vals
         from sqlalchemy import select
-        from app.models.tournament import Tournament
+        from app.models.tournament import Draw
 
         # Match on the full "WTA 500" / "ATP 1000" key — never mix across categories
         key = _key(category, gender)
 
         rows = await db.execute(
             select(
-                Tournament.da_days_before,
-                Tournament.qual_days_before,
+                Draw.da_days_before,
+                Draw.qual_days_before,
             ).where(
-                Tournament.category == key,
-                Tournament.da_days_before.isnot(None),
-                Tournament.da_days_before > 0,
-                Tournament.da_days_before <= 14,   # exclude implausible outliers
-            ).order_by(Tournament.da_days_before)
+                Draw.category == key,
+                Draw.da_days_before.isnot(None),
+                Draw.da_days_before > 0,
+                Draw.da_days_before <= 14,   # exclude implausible outliers
+            ).order_by(Draw.da_days_before)
         )
         records = rows.all()
 

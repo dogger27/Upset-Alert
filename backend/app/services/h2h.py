@@ -280,7 +280,7 @@ async def prefetch_h2h_for_draw(tournament_id: int) -> None:
         matches_res = await db.execute(
             select(Match.player1_id, Match.player2_id)
             .where(
-                Match.tournament_id == tournament_id,
+                Match.draw_id == tournament_id,
                 Match.is_bye == False,
                 Match.player1_id.isnot(None),
                 Match.player2_id.isnot(None),

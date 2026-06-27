@@ -12,14 +12,16 @@ class TournamentCreate(BaseModel):
     wiki_page_title: str
     start_date: Optional[date] = None
     end_date: Optional[date] = None
-    venue_timezone: Optional[str] = None   # IANA timezone, e.g. "Europe/London"
+    venue_timezone: Optional[str] = None
     day1_start_hour: Optional[int] = None
     day1_start_minute: Optional[int] = None
     closing_time: Optional[datetime] = None
 
 
 class TournamentOut(BaseModel):
+    """Serialises a Draw (individual gender draw). Named TournamentOut for API backwards-compat."""
     id: int
+    tournament_id: Optional[int] = None
     name: str
     year: int
     gender: str
@@ -55,18 +57,27 @@ class TournamentOut(BaseModel):
 
     @property
     def computed_status(self) -> str:
-        """Return computed status based on dates."""
         from datetime import date
         now = date.today()
-
         if self.end_date and now > self.end_date:
             return "completed"
         if self.start_date and now < self.start_date:
             return "upcoming"
         if self.start_date and self.end_date and self.start_date <= now <= self.end_date:
             return "active"
-
         return self.status
+
+    model_config = {"from_attributes": True}
+
+
+class TournamentEventOut(BaseModel):
+    """Serialises a Tournament (the real-world event grouping M+F draws)."""
+    id: int
+    name: str
+    year: int
+    city: Optional[str]
+    country: Optional[str]
+    surface: Optional[str]
 
     model_config = {"from_attributes": True}
 
@@ -96,8 +107,8 @@ class MatchOut(BaseModel):
     is_bye: bool
     status: str
     round_name: Optional[str] = None
-    scores: Optional[list] = None       # [[p1_s1, p1_s2, ...], [p2_s1, p2_s2, ...]] — final
-    live_scores: Optional[list] = None  # same shape but current partial scores while in progress
+    scores: Optional[list] = None
+    live_scores: Optional[list] = None
 
     model_config = {"from_attributes": True}
 

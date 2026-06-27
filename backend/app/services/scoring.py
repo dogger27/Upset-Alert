@@ -21,7 +21,7 @@ from typing import Optional
 
 from app.models.league import League
 from app.models.prediction import UserPrediction
-from app.models.tournament import DrawEntry, Match, Tournament
+from app.models.tournament import DrawEntry, Match, Draw
 
 
 # ---------------------------------------------------------------------------
@@ -37,7 +37,7 @@ _CLASSIC_BY_TIER: dict[str, dict[int, int]] = {
 }
 
 
-def _tier(tournament: Tournament) -> str:
+def _tier(tournament: Draw) -> str:
     cat = (tournament.category or "").upper()
     if "SLAM" in cat or "GRAND" in cat:
         return "GS"
@@ -48,7 +48,7 @@ def _tier(tournament: Tournament) -> str:
     return "250"
 
 
-def _points_table(tournament: Tournament) -> dict[int, int]:
+def _points_table(tournament: Draw) -> dict[int, int]:
     """Map round_number → points for Classic Mode."""
     by_rff = _CLASSIC_BY_TIER[_tier(tournament)]
     n = tournament.num_rounds
@@ -81,7 +81,7 @@ def score_user(
     user_id: int,
     predictions: list[UserPrediction],
     completed_matches: list[Match],
-    tournament: Tournament,
+    tournament: Draw,
     league: League,
 ) -> UserScore:
     pts_table = _points_table(tournament)

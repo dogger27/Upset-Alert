@@ -16,7 +16,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import select
 
 from app.database import AsyncSessionLocal
-from app.models.tournament import Tournament
+from app.models.tournament import Draw
 from app.services.espn_monitor import ESPNMonitor
 from app.services.eventstream import EventStreamListener
 
@@ -72,26 +72,26 @@ async def _refresh_active_tournaments(force_refresh: bool = False) -> None:
 
     async with AsyncSessionLocal() as db:
         result = await db.execute(
-            select(Tournament).where(
-                Tournament.status != "completed",
+            select(Draw).where(
+                Draw.status != "completed",
                 or_(
                     # Group 1: active window (started within last 14 days)
                     (
-                        Tournament.start_date.isnot(None) &
-                        (Tournament.start_date <= today) &
-                        (Tournament.start_date >= today - timedelta(days=14))
+                        Draw.start_date.isnot(None) &
+                        (Draw.start_date <= today) &
+                        (Draw.start_date >= today - timedelta(days=14))
                     ),
                     # Group 2: upcoming — DA draw date has arrived, not yet confirmed
                     (
-                        Tournament.draw_release_direct.isnot(None) &
-                        (Tournament.draw_release_direct <= today) &
-                        Tournament.draw_released_direct_at.is_(None)
+                        Draw.draw_release_direct.isnot(None) &
+                        (Draw.draw_release_direct <= today) &
+                        Draw.draw_released_direct_at.is_(None)
                     ),
                     # Group 3: upcoming — Qual date has arrived, not yet confirmed
                     (
-                        Tournament.draw_release_qualifiers.isnot(None) &
-                        (Tournament.draw_release_qualifiers <= today) &
-                        Tournament.draw_released_qualifiers_at.is_(None)
+                        Draw.draw_release_qualifiers.isnot(None) &
+                        (Draw.draw_release_qualifiers <= today) &
+                        Draw.draw_released_qualifiers_at.is_(None)
                     ),
                 )
             )
@@ -183,10 +183,10 @@ async def _on_season_page_edit(season_title: str) -> None:
 
         async with AsyncSessionLocal() as db:
             result = await db.execute(
-                select(Tournament).where(
-                    Tournament.year == year,
-                    Tournament.gender == gender,
-                    Tournament.status != "completed",
+                select(Draw).where(
+                    Draw.year == year,
+                    Draw.gender == gender,
+                    Draw.status != "completed",
                 )
             )
             tournaments = result.scalars().all()
@@ -231,7 +231,7 @@ async def _on_season_page_edit(season_title: str) -> None:
         if to_scrape:
             async with AsyncSessionLocal() as db:
                 for tid in to_scrape:
-                    t = await db.get(Tournament, tid)
+                    t = await db.get(Draw, tid)
                     if not t:
                         continue
                     try:
@@ -303,8 +303,8 @@ async def _sync_subscriptions() -> None:
     """Sync EventStreams subscriptions with active/pending tournaments + season pages."""
     async with AsyncSessionLocal() as db:
         result = await db.execute(
-            select(Tournament).where(
-                Tournament.status.in_(["upcoming", "open", "active"])
+            select(Draw).where(
+                Draw.status.in_(["upcoming", "open", "active"])
             )
         )
         tournaments = result.scalars().all()

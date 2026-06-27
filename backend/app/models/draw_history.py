@@ -14,7 +14,7 @@ class TournamentResult(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
-    tournament_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    draw_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     league_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)   # NULL = global
     league_name: Mapped[str] = mapped_column(String, nullable=False)           # "Global" or league name
     rank: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -24,5 +24,5 @@ class TournamentResult(Base):
     saved_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (
-        UniqueConstraint("user_id", "tournament_id", "league_id", name="uq_result_user_tourn_league"),
+        UniqueConstraint("user_id", "draw_id", "league_id", name="uq_result_user_tourn_league"),
     )

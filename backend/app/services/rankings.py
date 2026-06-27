@@ -795,7 +795,7 @@ async def prefetch_dob_for_draw(tournament_id: int) -> None:
             select(TePlayer)
             .join(DrawEntry, DrawEntry.te_player_id == TePlayer.id)
             .where(
-                DrawEntry.tournament_id == tournament_id,
+                DrawEntry.draw_id == tournament_id,
                 or_(
                     TePlayer.name_display.is_(None),
                     TePlayer.first_name.is_(None),

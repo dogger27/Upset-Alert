@@ -18,7 +18,7 @@ from app.database import AsyncSessionLocal
 from app.models.league import League, LeagueMember
 from app.models.notification import NotificationPreference
 from app.models.prediction import UserPrediction
-from app.models.tournament import Match, Tournament
+from app.models.tournament import Match, Draw
 from app.models.user import User
 from app.services.scoring import rank_users, score_user
 
@@ -38,7 +38,7 @@ async def notify_round_complete(tournament_id: int, round_number: int) -> None:
     from app.services.email import send_round_complete_notification
 
     async with AsyncSessionLocal() as db:
-        tournament = await db.get(Tournament, tournament_id)
+        tournament = await db.get(Draw, tournament_id)
         if not tournament:
             return
 
@@ -49,14 +49,14 @@ async def notify_round_complete(tournament_id: int, round_number: int) -> None:
         m_res = await db.execute(
             select(Match)
             .options(selectinload(Match.player1), selectinload(Match.player2), selectinload(Match.winner))
-            .where(Match.tournament_id == tournament_id, Match.status == "completed")
+            .where(Match.draw_id == tournament_id, Match.status == "completed")
         )
         completed_matches = m_res.scalars().all()
 
         # Total non-bye matches in the draw
         total_res = await db.execute(
             select(func.count()).where(
-                Match.tournament_id == tournament_id,
+                Match.draw_id == tournament_id,
                 Match.is_bye == False,
             )
         )
@@ -67,7 +67,7 @@ async def notify_round_complete(tournament_id: int, round_number: int) -> None:
         # Predictions
         pred_res = await db.execute(
             select(UserPrediction).where(
-                UserPrediction.tournament_id == tournament_id,
+                UserPrediction.draw_id == tournament_id,
                 UserPrediction.predicted_winner_id.isnot(None),
             )
         )
@@ -355,7 +355,7 @@ async def notify_tournament_complete(tournament_id: int) -> None:
     from datetime import datetime, timezone as tz
 
     async with AsyncSessionLocal() as db:
-        tournament = await db.get(Tournament, tournament_id)
+        tournament = await db.get(Draw, tournament_id)
         if not tournament:
             return
 
@@ -372,13 +372,13 @@ async def notify_tournament_complete(tournament_id: int) -> None:
         m_res = await db.execute(
             select(Match)
             .options(selectinload(Match.player1), selectinload(Match.player2), selectinload(Match.winner))
-            .where(Match.tournament_id == tournament_id, Match.status == "completed")
+            .where(Match.draw_id == tournament_id, Match.status == "completed")
         )
         completed_matches = m_res.scalars().all()
 
         total_res = await db.execute(
             select(func.count()).where(
-                Match.tournament_id == tournament_id,
+                Match.draw_id == tournament_id,
                 Match.is_bye == False,
             )
         )
@@ -389,7 +389,7 @@ async def notify_tournament_complete(tournament_id: int) -> None:
         # All predictions for this tournament
         pred_res = await db.execute(
             select(UserPrediction).where(
-                UserPrediction.tournament_id == tournament_id,
+                UserPrediction.draw_id == tournament_id,
                 UserPrediction.predicted_winner_id.isnot(None),
             )
         )

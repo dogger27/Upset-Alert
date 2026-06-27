@@ -10,7 +10,7 @@ from app.core.auth import get_current_user
 from app.database import get_db
 from app.models.prediction import UserPrediction
 from app.models.rankings import TePlayer, TeRankingsSnapshot
-from app.models.tournament import DrawEntry, Match, Tournament
+from app.models.tournament import DrawEntry, Match, Draw
 from app.models.user import User
 from app.schemas.league import LeaderboardEntry
 from app.schemas.tournament import DrawEntryOut, DrawOut, MatchOut, TournamentCreate, TournamentOut
@@ -25,14 +25,14 @@ router = APIRouter(prefix="/tournaments", tags=["tournaments"])
 @router.get("", response_model=list[TournamentOut])
 async def list_tournaments(db: AsyncSession = Depends(get_db)):
     lat_subq = (
-        select(Match.tournament_id, func.max(Match.completed_at).label("lat"))
-        .group_by(Match.tournament_id)
+        select(Match.draw_id, func.max(Match.completed_at).label("lat"))
+        .group_by(Match.draw_id)
         .subquery()
     )
     result = await db.execute(
-        select(Tournament, lat_subq.c.lat)
-        .outerjoin(lat_subq, Tournament.id == lat_subq.c.tournament_id)
-        .order_by(Tournament.year.desc(), Tournament.name)
+        select(Draw, lat_subq.c.lat)
+        .outerjoin(lat_subq, Draw.id == lat_subq.c.draw_id)
+        .order_by(Draw.year.desc(), Draw.name)
     )
     rows = result.all()
     tournaments = []
@@ -49,7 +49,7 @@ async def create_tournament(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    t = Tournament(
+    t = Draw(
         name=" ".join(body.name.split()),  # collapse any accidental extra spaces
         year=body.year,
         gender=body.gender,
@@ -89,23 +89,23 @@ async def refresh_all_completed(
     logger = logging.getLogger(__name__)
     today = date.today()
     result = await db.execute(
-        select(Tournament).where(
+        select(Draw).where(
             and_(
-                Tournament.status != "completed",
+                Draw.status != "completed",
                 or_(
                     # Already started
-                    and_(Tournament.start_date != None, Tournament.start_date <= today),
+                    and_(Draw.start_date != None, Draw.start_date <= today),
                     # DA draw date has passed but not yet confirmed
                     and_(
-                        Tournament.draw_release_direct != None,
-                        Tournament.draw_release_direct <= today,
-                        Tournament.draw_released_direct_at == None,
+                        Draw.draw_release_direct != None,
+                        Draw.draw_release_direct <= today,
+                        Draw.draw_released_direct_at == None,
                     ),
                     # Qualifier date has passed but not yet confirmed
                     and_(
-                        Tournament.draw_release_qualifiers != None,
-                        Tournament.draw_release_qualifiers <= today,
-                        Tournament.draw_released_qualifiers_at == None,
+                        Draw.draw_release_qualifiers != None,
+                        Draw.draw_release_qualifiers <= today,
+                        Draw.draw_released_qualifiers_at == None,
                     ),
                 )
             )
@@ -120,7 +120,7 @@ async def refresh_all_completed(
     for t_id, t_name, t_title in tournament_info:
         try:
             # Re-fetch fresh each time so a previous rollback doesn't leave a stale object
-            t = await db.get(Tournament, t_id)
+            t = await db.get(Draw, t_id)
             if t is None or t.status == "completed":
                 continue
             await _do_scrape(t, db, force_refresh=True)
@@ -143,7 +143,7 @@ async def backfill_rankings(
     from datetime import date
     logger = logging.getLogger(__name__)
 
-    tournaments_res = await db.execute(select(Tournament))
+    tournaments_res = await db.execute(select(Draw))
     tournaments = tournaments_res.scalars().all()
 
     updated_total = 0
@@ -152,7 +152,7 @@ async def backfill_rankings(
     for t in tournaments:
         try:
             ref_date = t.entry_ranking_week or t.start_date or date.today()
-            players_res = await db.execute(select(DrawEntry).where(DrawEntry.tournament_id == t.id))
+            players_res = await db.execute(select(DrawEntry).where(DrawEntry.draw_id == t.id))
             players = players_res.scalars().all()
 
             before = [p.ranking for p in players]
@@ -222,7 +222,7 @@ async def apply_all_schedules(
     from app.services.tournament_schedule import apply_schedule, apply_closing_time
     logger = logging.getLogger(__name__)
 
-    result = await db.execute(select(Tournament))
+    result = await db.execute(select(Draw))
     tournaments = result.scalars().all()
 
     schedule_set = closing_set = 0
@@ -259,40 +259,40 @@ async def hall_of_fame(db: AsyncSession = Depends(get_db)):
     # Subqueries to enforce "competed" = user picked every non-bye match
     pick_count_sq = (
         select(
-            UserPrediction.tournament_id,
+            UserPrediction.draw_id,
             UserPrediction.user_id,
             func.count().label("picks"),
         )
         .where(UserPrediction.predicted_winner_id.isnot(None))
-        .group_by(UserPrediction.tournament_id, UserPrediction.user_id)
+        .group_by(UserPrediction.draw_id, UserPrediction.user_id)
         .subquery()
     )
     match_count_sq = (
-        select(Match.tournament_id, func.count().label("total"))
+        select(Match.draw_id, func.count().label("total"))
         .where(Match.is_bye == False)  # noqa: E712
-        .group_by(Match.tournament_id)
+        .group_by(Match.draw_id)
         .subquery()
     )
 
     res = await db.execute(
         select(
-            TournamentResult.tournament_id,
+            TournamentResult.draw_id,
             TournamentResult.points,
             TournamentResult.correct_count,
-            Tournament.name,
-            Tournament.year,
-            Tournament.gender,
-            Tournament.category,
+            Draw.name,
+            Draw.year,
+            Draw.gender,
+            Draw.category,
             User.username,
         )
-        .join(Tournament, Tournament.id == TournamentResult.tournament_id)
+        .join(Tournament, Draw.id == TournamentResult.draw_id)
         .join(User, User.id == TournamentResult.user_id)
         .join(
             pick_count_sq,
-            (pick_count_sq.c.tournament_id == TournamentResult.tournament_id)
+            (pick_count_sq.c.draw_id == TournamentResult.draw_id)
             & (pick_count_sq.c.user_id == TournamentResult.user_id),
         )
-        .join(match_count_sq, match_count_sq.c.tournament_id == TournamentResult.tournament_id)
+        .join(match_count_sq, match_count_sq.c.draw_id == TournamentResult.draw_id)
         .where(
             TournamentResult.league_id.is_(None),
             pick_count_sq.c.picks >= match_count_sq.c.total,
@@ -307,7 +307,7 @@ async def hall_of_fame(db: AsyncSession = Depends(get_db)):
     for row in rows:
         tier = _tier(row.category)
         gender = row.gender  # "M" or "F"
-        key = (row.username, row.tournament_id)
+        key = (row.username, row.draw_id)
         if key in seen[tier]:
             continue
         if len(by_tier[tier][gender]) >= 10:
@@ -319,7 +319,7 @@ async def hall_of_fame(db: AsyncSession = Depends(get_db)):
             "username": row.username,
             "points": row.points,
             "correct_count": row.correct_count,
-            "tournament_id": row.tournament_id,
+            "tournament_id": row.draw_id,
             "tournament_name": row.name,
             "tournament_year": row.year,
         })
@@ -332,11 +332,11 @@ async def hall_of_fame(db: AsyncSession = Depends(get_db)):
 
 @router.get("/{tournament_id}", response_model=TournamentOut)
 async def get_tournament(tournament_id: int, db: AsyncSession = Depends(get_db)):
-    t = await db.get(Tournament, tournament_id)
+    t = await db.get(Draw, tournament_id)
     if not t:
         raise HTTPException(404, "Tournament not found")
     lat = await db.execute(
-        select(func.max(Match.completed_at)).where(Match.tournament_id == tournament_id)
+        select(func.max(Match.completed_at)).where(Match.draw_id == tournament_id)
     )
     t.latest_result_at = lat.scalar_one_or_none()
     return t
@@ -347,7 +347,7 @@ async def tournament_competitors(tournament_id: int, db: AsyncSession = Depends(
     """Return all users who have submitted complete picks for this tournament."""
     total_result = await db.execute(
         select(func.count())
-        .where(Match.tournament_id == tournament_id, Match.is_bye == False)
+        .where(Match.draw_id == tournament_id, Match.is_bye == False)
     )
     total = total_result.scalar_one()
     if total == 0:
@@ -356,7 +356,7 @@ async def tournament_competitors(tournament_id: int, db: AsyncSession = Depends(
     sub = (
         select(UserPrediction.user_id)
         .where(
-            UserPrediction.tournament_id == tournament_id,
+            UserPrediction.draw_id == tournament_id,
             UserPrediction.predicted_winner_id.isnot(None),
         )
         .group_by(UserPrediction.user_id)
@@ -371,12 +371,12 @@ async def tournament_competitors(tournament_id: int, db: AsyncSession = Depends(
 @router.get("/{tournament_id}/standings", response_model=list[LeaderboardEntry])
 async def global_standings(tournament_id: int, db: AsyncSession = Depends(get_db)):
     """Global standings for a tournament using classic scoring (no league)."""
-    tournament = await db.get(Tournament, tournament_id)
+    tournament = await db.get(Draw, tournament_id)
     if not tournament:
         raise HTTPException(404, "Tournament not found")
 
     total_result = await db.execute(
-        select(func.count()).where(Match.tournament_id == tournament_id, Match.is_bye == False)
+        select(func.count()).where(Match.draw_id == tournament_id, Match.is_bye == False)
     )
     total_matches = total_result.scalar_one()
     if total_matches == 0:
@@ -385,7 +385,7 @@ async def global_standings(tournament_id: int, db: AsyncSession = Depends(get_db
     completed_result = await db.execute(
         select(Match)
         .options(selectinload(Match.player1), selectinload(Match.player2), selectinload(Match.winner))
-        .where(Match.tournament_id == tournament_id, Match.status == "completed")
+        .where(Match.draw_id == tournament_id, Match.status == "completed")
     )
     completed_matches = completed_result.scalars().all()
 
@@ -395,7 +395,7 @@ async def global_standings(tournament_id: int, db: AsyncSession = Depends(get_db
 
     sub = (
         select(UserPrediction.user_id)
-        .where(UserPrediction.tournament_id == tournament_id, UserPrediction.predicted_winner_id.isnot(None))
+        .where(UserPrediction.draw_id == tournament_id, UserPrediction.predicted_winner_id.isnot(None))
         .group_by(UserPrediction.user_id)
         .having(func.count() >= total_matches)
     )
@@ -407,7 +407,7 @@ async def global_standings(tournament_id: int, db: AsyncSession = Depends(get_db
         preds_result = await db.execute(
             select(UserPrediction).where(
                 UserPrediction.user_id == user.id,
-                UserPrediction.tournament_id == tournament_id,
+                UserPrediction.draw_id == tournament_id,
                 UserPrediction.predicted_winner_id.isnot(None),
             )
         )
@@ -443,12 +443,12 @@ async def global_standings(tournament_id: int, db: AsyncSession = Depends(get_db
 
 @router.get("/{tournament_id}/draw", response_model=DrawOut)
 async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
-    t = await db.get(Tournament, tournament_id)
+    t = await db.get(Draw, tournament_id)
     if not t:
         raise HTTPException(404, "Tournament not found")
 
     players_result = await db.execute(
-        select(DrawEntry).where(DrawEntry.tournament_id == tournament_id).order_by(DrawEntry.bracket_position)
+        select(DrawEntry).where(DrawEntry.draw_id == tournament_id).order_by(DrawEntry.bracket_position)
     )
     players = players_result.scalars().all()
 
@@ -482,7 +482,7 @@ async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
 
     matches_result = await db.execute(
         select(Match)
-        .where(Match.tournament_id == tournament_id)
+        .where(Match.draw_id == tournament_id)
         .options(
             selectinload(Match.player1),
             selectinload(Match.player2),
@@ -533,7 +533,7 @@ async def refresh_draw(
     from app.services.h2h import prefetch_h2h_for_draw
     from app.services.rankings import prefetch_dob_for_draw
 
-    t = await db.get(Tournament, tournament_id)
+    t = await db.get(Draw, tournament_id)
     if not t:
         raise HTTPException(404, "Tournament not found")
     await _do_scrape(t, db, force_refresh=True)
@@ -553,7 +553,7 @@ async def toggle_unlock_selections(
 ):
     if not current_user.is_admin:
         raise HTTPException(403, "Admin only")
-    t = await db.get(Tournament, tournament_id)
+    t = await db.get(Draw, tournament_id)
     if not t:
         raise HTTPException(404, "Tournament not found")
     t.selections_unlocked = not t.selections_unlocked
@@ -566,7 +566,7 @@ async def toggle_unlock_selections(
 # Internal scrape helper
 # ---------------------------------------------------------------------------
 
-async def _do_scrape(tournament: Tournament, db: AsyncSession, force_refresh: bool = False) -> None:
+async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = False) -> None:
     from datetime import date
     import logging
     logger = logging.getLogger(__name__)
@@ -583,9 +583,9 @@ async def _do_scrape(tournament: Tournament, db: AsyncSession, force_refresh: bo
         # wrong-page retry (stored ID pointed to e.g. the general event page).
         # Guard against UNIQUE violation if another record already claims this page_id.
         clash = await db.execute(
-            select(Tournament.id).where(
-                Tournament.wiki_page_id == parsed.wiki_page_id,
-                Tournament.id != tournament.id,
+            select(Draw.id).where(
+                Draw.wiki_page_id == parsed.wiki_page_id,
+                Draw.id != tournament.id,
             )
         )
         if clash.scalar_one_or_none() is None:
@@ -605,9 +605,9 @@ async def _do_scrape(tournament: Tournament, db: AsyncSession, force_refresh: bo
         # This can happen when the discovery service uses a slightly different title variant
         # (e.g. "– Women's singles" vs "– Singles") for a tournament already in the DB.
         title_clash = await db.execute(
-            select(Tournament.id).where(
-                Tournament.wiki_page_title == parsed.resolved_title,
-                Tournament.id != tournament.id,
+            select(Draw.id).where(
+                Draw.wiki_page_title == parsed.resolved_title,
+                Draw.id != tournament.id,
             )
         )
         if title_clash.scalar_one_or_none() is None:
@@ -698,13 +698,13 @@ async def _do_scrape(tournament: Tournament, db: AsyncSession, force_refresh: bo
 
     # Load existing players and matches indexed for upsert
     existing_players_res = await db.execute(
-        select(DrawEntry).where(DrawEntry.tournament_id == tournament.id)
+        select(DrawEntry).where(DrawEntry.draw_id == tournament.id)
     )
     existing_players: dict[int, DrawEntry] = {
         p.bracket_position: p for p in existing_players_res.scalars()
     }
     existing_matches_res = await db.execute(
-        select(Match).where(Match.tournament_id == tournament.id)
+        select(Match).where(Match.draw_id == tournament.id)
     )
     existing_matches: dict[tuple, Match] = {
         (m.round_number, m.match_number): m for m in existing_matches_res.scalars()
@@ -738,7 +738,7 @@ async def _do_scrape(tournament: Tournament, db: AsyncSession, force_refresh: bo
             player.entry_type = pe.entry_type
         else:
             player = DrawEntry(
-                tournament_id=tournament.id,
+                draw_id=tournament.id,
                 name=pe.name,
                 nationality=pe.nationality,
                 seed=pe.seed,
@@ -792,7 +792,7 @@ async def _do_scrape(tournament: Tournament, db: AsyncSession, force_refresh: bo
                 match.status = "pending"
         else:
             match = Match(
-                tournament_id=tournament.id,
+                draw_id=tournament.id,
                 round_number=mr.round_number,
                 match_number=mr.match_number,
                 player1_id=p1_id,
