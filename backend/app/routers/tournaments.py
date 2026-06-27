@@ -151,7 +151,7 @@ async def backfill_rankings(
 
     for t in tournaments:
         try:
-            ref_date = t.seed_ranking_week or t.start_date or date.today()
+            ref_date = t.entry_ranking_week or t.start_date or date.today()
             players_res = await db.execute(select(DrawEntry).where(DrawEntry.tournament_id == t.id))
             players = players_res.scalars().all()
 
@@ -752,7 +752,7 @@ async def _do_scrape(tournament: Tournament, db: AsyncSession, force_refresh: bo
 
     if roster_changed:
         try:
-            ref_date = tournament.seed_ranking_week or tournament.start_date or date.today()
+            ref_date = tournament.entry_ranking_week or tournament.start_date or date.today()
             await assign_rankings(upserted_players, tournament.gender, ref_date, db)
             logger.info("Roster change in %s — rankings assigned", tournament.name)
         except Exception as exc:
