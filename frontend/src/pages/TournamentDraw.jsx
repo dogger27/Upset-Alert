@@ -349,7 +349,7 @@ export default function TournamentDraw() {
     <div className="draw-page">
       <div className="draw-header">
         <div className="draw-header-top">
-          <div className="draw-title-row">
+          <div className="draw-name-block">
             <h1 className="draw-title">
               {tournament.name}
               {catShort && <span className="draw-title-level">{tourLabel}</span>}
@@ -365,15 +365,15 @@ export default function TournamentDraw() {
                 </a>
               )}
             </h1>
-          </div>
-          <div className="draw-meta-row">
             <span className="draw-meta-left">
               {[tournament.city, surface].filter(Boolean).join(' · ')}
             </span>
-            {tournament.start_date && (
-              <span className="draw-title-dates">{fmtDateRange(tournament.start_date, tournament.end_date)}</span>
-            )}
           </div>
+          {tournament.start_date && (
+            <div className="draw-dates-zone">
+              <span className="draw-title-dates">{fmtDateRange(tournament.start_date, tournament.end_date)}</span>
+            </div>
+          )}
         </div>
         <div className="draw-header-center">
           <div className="draw-mode-buttons">
@@ -390,24 +390,27 @@ export default function TournamentDraw() {
               Live Draw
             </button>
           </div>
-          {user && !locked && !viewingOther && viewMode === 'picks' && (
-            <button
-              className="btn-auto-populate"
-              onClick={autoPopulatePicks}
-              title="Fill all picks using seeds and world rankings"
-            >
-              Auto-Populate Picks
-            </button>
-          )}
-          {user && !locked && (saveMutation.isPending || pickedCount > 0) && (
-            <span className={`saved-badge${!saveMutation.isPending && pickedCount < totalPredictable ? ' saved-badge--incomplete' : ''}`}>
-              {saveMutation.isPending ? '⏳ Saving…' : pickedCount < totalPredictable
-                ? `⚠ ${pickedCount}/${totalPredictable} picks saved — update to compete`
-                : `✓ ${pickedCount}/${totalPredictable} picks saved`}
-            </span>
-          )}
         </div>
-        <div className="draw-header-actions">
+        <div className="draw-header-right">
+          <div className="draw-picks-zone">
+            {user && !locked && !viewingOther && viewMode === 'picks' && (
+              <button
+                className="btn-auto-populate"
+                onClick={autoPopulatePicks}
+                title="Fill all picks using seeds and world rankings"
+              >
+                Auto-Populate Picks
+              </button>
+            )}
+            {user && !locked && (saveMutation.isPending || pickedCount > 0) && (
+              <span className={`saved-badge${!saveMutation.isPending && pickedCount < totalPredictable ? ' saved-badge--incomplete' : ''}`}>
+                {saveMutation.isPending ? '⏳ Saving…' : pickedCount < totalPredictable
+                  ? `⚠ ${pickedCount}/${totalPredictable} picks saved — update to compete`
+                  : `✓ ${pickedCount}/${totalPredictable} picks saved`}
+              </span>
+            )}
+          </div>
+          <div className="draw-header-actions">
           {tournament.selections_unlocked ? (
             <span
               className={`lock-badge lock-badge--unlocked${user?.is_admin ? ' lock-badge--admin' : ''}`}
@@ -479,6 +482,7 @@ export default function TournamentDraw() {
               </span>
             </div>
           )}
+          </div>
         </div>
       </div>
 
