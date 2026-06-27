@@ -25,29 +25,53 @@ QUAL_ENTRY_DAYS_BEFORE: dict[str, int] = {
     "WTA 250":    21,
 }
 
+# Days before the tournament Monday that seedings are confirmed (post-withdrawal acceptance list).
+# Grand Slams use 28 days (4 weeks = qual entry deadline); all tour events use 14 days (2 weeks).
+# Use this snapshot when looking up inferred rankings in te_rankings_snapshots.
+SEED_DAYS_BEFORE: dict[str, int] = {
+    "Grand Slam": 28,
+    "ATP 1000":   14,
+    "WTA 1000":   14,
+    "ATP 500":    14,
+    "WTA 500":    14,
+    "ATP 250":    14,
+    "WTA 250":    14,
+}
 
-def compute_entry_ranking_week(start_date: date, category: Optional[str]) -> Optional[date]:
-    """
-    Return the Monday of the ranking snapshot used for main-draw seeding/acceptance.
 
-    The snapshot Monday is always `entry_days_before` days before the Monday of the
-    tournament week (which is always a Monday itself since days_before is a multiple of 7).
-    Returns None if start_date or category is missing / unrecognised.
-    """
-    if not start_date or not category:
+def _lookup_days(table: dict[str, int], category: Optional[str]) -> Optional[int]:
+    """Return days value for category, with loose prefix matching as fallback."""
+    if not category:
         return None
-    days_before = ENTRY_DAYS_BEFORE.get(category)
-    if days_before is None:
-        # Try stripping ATP/WTA prefix for lookup (handles stored values like "1000" without prefix)
-        for key, val in ENTRY_DAYS_BEFORE.items():
+    days = table.get(category)
+    if days is None:
+        for key, val in table.items():
             if key in category or category in key:
-                days_before = val
-                break
+                return val
+    return days
+
+
+def _ranking_week(start_date: Optional[date], category: Optional[str], table: dict[str, int]) -> Optional[date]:
+    if not start_date:
+        return None
+    days_before = _lookup_days(table, category)
     if days_before is None:
         return None
-    # Snap start_date to its Monday (weekday() == 0 for Monday)
     tournament_monday = start_date - timedelta(days=start_date.weekday())
     return tournament_monday - timedelta(days=days_before)
+
+
+def compute_entry_ranking_week(start_date: date, category: Optional[str]) -> Optional[date]:
+    """Monday of the ranking snapshot that determines direct-acceptance cutoff.
+    Grand Slams = 42 days before tournament Monday; all others = 28 days."""
+    return _ranking_week(start_date, category, ENTRY_DAYS_BEFORE)
+
+
+def compute_seed_ranking_week(start_date: date, category: Optional[str]) -> Optional[date]:
+    """Monday of the ranking snapshot that drives actual seed order within the bracket.
+    Grand Slams = 28 days before tournament Monday; all others = 14 days.
+    Use this when looking up inferred rankings in te_rankings_snapshots."""
+    return _ranking_week(start_date, category, SEED_DAYS_BEFORE)
 
 # Hardcoded fallbacks used when there is insufficient historical data (< MIN_SAMPLES)
 _DEFAULTS: dict[str, tuple[int, int]] = {

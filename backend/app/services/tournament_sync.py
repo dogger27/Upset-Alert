@@ -27,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tournament import Tournament
 from app.services.discovery import DiscoveredTournament
-from app.services.draw_dates import calculate_draw_release_dates, compute_entry_ranking_week
+from app.services.draw_dates import calculate_draw_release_dates, compute_entry_ranking_week, compute_seed_ranking_week
 
 logger = logging.getLogger(__name__)
 
@@ -159,10 +159,15 @@ async def _apply_update(
             existing.draw_release_qualifiers = qual
             changed = True
 
-    # Recompute entry_ranking_week whenever category or start_date may have changed
+    # Recompute ranking weeks whenever category or start_date may have changed
     erw = compute_entry_ranking_week(existing.start_date, existing.category)
     if erw != existing.entry_ranking_week:
         existing.entry_ranking_week = erw
+        changed = True
+
+    srw = compute_seed_ranking_week(existing.start_date, existing.category)
+    if srw != existing.seed_ranking_week:
+        existing.seed_ranking_week = srw
         changed = True
 
     return changed
