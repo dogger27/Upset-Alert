@@ -160,13 +160,13 @@ export default function DrawHistory() {
               <div className="dh-year-label">{yr}</div>
               <div className="dh-year-columns">
                 <div className="dh-column">
-                  <div className="dh-column-label dh-column-label--atp">ATP (M)</div>
+                  <div className="dh-column-label dh-column-label--atp">ATP</div>
                   {atp.length > 0
                     ? atp.map(e => <TournamentCard key={e.tournament_id} entry={e} />)
                     : <div className="dh-column-empty">—</div>}
                 </div>
                 <div className="dh-column">
-                  <div className="dh-column-label dh-column-label--wta">WTA (F)</div>
+                  <div className="dh-column-label dh-column-label--wta">WTA</div>
                   {wta.length > 0
                     ? wta.map(e => <TournamentCard key={e.tournament_id} entry={e} />)
                     : <div className="dh-column-empty">—</div>}
