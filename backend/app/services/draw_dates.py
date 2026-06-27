@@ -102,6 +102,17 @@ def _key(category: Optional[str], gender: Optional[str]) -> str:
     return cat
 
 
+async def _db_defaults(category: Optional[str], gender: Optional[str], db) -> Optional[tuple[int, int]]:
+    """Load default_da_days / default_qual_days from tournament_categories if available."""
+    from sqlalchemy import select as sa_select
+    from app.models.tournament import TournamentCategory
+    key = _key(category, gender)
+    row = await db.get(TournamentCategory, key)
+    if row and row.default_da_days is not None and row.default_qual_days is not None:
+        return row.default_da_days, row.default_qual_days
+    return None
+
+
 def get_defaults(category: Optional[str], gender: Optional[str]) -> tuple[int, int]:
     """Return hardcoded (da_days_before, qual_days_before) for this category/gender."""
     key = _key(category, gender)
@@ -130,6 +141,9 @@ async def calculate_draw_release_dates(
     da_days, qual_days = get_defaults(category, gender)
 
     if db is not None:
+        db_vals = await _db_defaults(category, gender, db)
+        if db_vals:
+            da_days, qual_days = db_vals
         from sqlalchemy import select
         from app.models.tournament import Tournament
 

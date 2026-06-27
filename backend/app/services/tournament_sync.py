@@ -25,20 +25,53 @@ from typing import Optional
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.tournament import Tournament
+from app.models.tournament import Tournament, TournamentCategory, TournamentCategoryVariant
 from app.services.discovery import DiscoveredTournament
 from app.services.draw_dates import calculate_draw_release_dates, compute_entry_ranking_week, compute_seed_ranking_week
 
 logger = logging.getLogger(__name__)
 
-# ATP/WTA 500 run 2 simultaneous events per week, so they are NOT unique per slot.
-# Only Masters 1000 and Grand Slams have exactly one tournament per gender per week.
-_UNIQUE_PER_SLOT = {"ATP 500", "WTA 500", "ATP 1000", "WTA 1000", "Grand Slam"}
-_ONE_PER_SLOT = {"ATP 1000", "WTA 1000", "Grand Slam"}
-
 
 def _num_rounds(draw_size: int) -> int:
     return max(1, math.ceil(math.log2(draw_size))) if draw_size > 0 else 1
+
+
+async def _resolve_variant_id(
+    db: AsyncSession, category: Optional[str], draw_size: int, name: str
+) -> Optional[int]:
+    """Return the tournament_categories_variants.id that best matches this tournament."""
+    if not category:
+        return None
+
+    res = await db.execute(
+        select(TournamentCategoryVariant).where(TournamentCategoryVariant.category_name == category)
+    )
+    variants = res.scalars().all()
+    if not variants:
+        return None
+
+    if category == "Grand Slam":
+        n = name.lower()
+        for label, kw in [
+            ("Australian Open", "australian"),
+            ("French Open",     "french"),
+            ("French Open",     "roland"),
+            ("Wimbledon",       "wimbledon"),
+            ("US Open",         "us open"),
+        ]:
+            if kw in n:
+                match = next((v for v in variants if v.label == label), None)
+                if match:
+                    return match.id
+
+    # For all other categories (and Grand Slam fallback): match on draw_size
+    size_match = next((v for v in variants if v.draw_size == draw_size), None)
+    if size_match:
+        return size_match.id
+
+    # Fall back to the default variant for this category
+    default = next((v for v in variants if v.is_default), None)
+    return default.id if default else None
 
 
 def _name_overlap(a: str, b: str) -> bool:
@@ -86,7 +119,8 @@ async def find_existing_match(
 
     if len(candidates) == 1:
         # For 1000s and Grand Slams, a single date-match is definitive
-        if discovered.category in _ONE_PER_SLOT:
+        cat_row = await db.get(TournamentCategory, discovered.category)
+        if cat_row and cat_row.one_per_slot:
             return candidates[0]
         # For 500s and 250s, require city or name agreement as a sanity check
         c = candidates[0]
@@ -170,6 +204,13 @@ async def _apply_update(
         existing.seed_ranking_week = srw
         changed = True
 
+    # Assign variant_id if missing or if draw_size/category just changed
+    if existing.variant_id is None:
+        vid = await _resolve_variant_id(db, existing.category, existing.draw_size, existing.name)
+        if vid:
+            existing.variant_id = vid
+            changed = True
+
     return changed
 
 
@@ -229,6 +270,7 @@ async def sync_season(
                 draw_direct, draw_qualifiers = await calculate_draw_release_dates(
                     d.start_date, d.category, d.gender, db=db
                 )
+                variant_id = await _resolve_variant_id(db, d.category, d.draw_size, d.name)
                 t = Tournament(
                     name=d.name,
                     year=year,
@@ -244,6 +286,7 @@ async def sync_season(
                     city=d.city,
                     country=d.country,
                     wiki_page_title=d.wiki_page_title,
+                    variant_id=variant_id,
                     status="upcoming",
                 )
                 db.add(t)
@@ -303,6 +346,7 @@ async def _find_duplicates(db: AsyncSession, year: int) -> list:
 
     # Strategy 2: same slot in one-per-slot tiers (1000/Grand Slam only)
     # ATP/WTA 500 run two simultaneous events per week so they are intentionally excluded.
+    one_per_slot_subq = select(TournamentCategory.name).where(TournamentCategory.one_per_slot == True)
     res = await db.execute(
         select(
             Tournament.category,
@@ -312,7 +356,7 @@ async def _find_duplicates(db: AsyncSession, year: int) -> list:
         )
         .where(
             Tournament.year == year,
-            Tournament.category.in_(_ONE_PER_SLOT),
+            Tournament.category.in_(one_per_slot_subq),
             Tournament.start_date.isnot(None),
         )
         .group_by(Tournament.gender, Tournament.category, Tournament.start_date)

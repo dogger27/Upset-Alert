@@ -43,6 +43,10 @@ class TournamentOut(BaseModel):
     closing_time: Optional[datetime]
     entry_ranking_week: Optional[date] = None
     seed_ranking_week: Optional[date] = None
+    variant_id: Optional[int] = None
+    logo_path: Optional[str] = None
+    num_byes: int = 0
+    scoring_tier: str = "250"
     status: str
     selections_unlocked: bool = False
     last_scraped_at: Optional[datetime]
