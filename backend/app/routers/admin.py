@@ -93,6 +93,7 @@ async def get_players(
             "last_name": p.last_name,
             "date_of_birth": p.date_of_birth.isoformat() if p.date_of_birth else None,
             "nationality": p.nationality,
+            "te_slug": p.te_slug,
         }
         for p in players
     ]
