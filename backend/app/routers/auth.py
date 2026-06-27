@@ -332,6 +332,7 @@ async def get_draw_history(
             "gender": t.gender,
             "surface": t.surface,
             "category": t.category,
+            "total_matches": total_matches.get(tid, 0),
             "results": by_tourn[tid],
         })
     return result
