@@ -23,11 +23,83 @@ function surfaceClass(surface) {
   return 'dh-surface--hard'
 }
 
-function rankBadge(rank, total) {
+function rankBadge(rank) {
   if (rank === 1) return 'dh-rank--gold'
   if (rank === 2) return 'dh-rank--silver'
   if (rank === 3) return 'dh-rank--bronze'
   return ''
+}
+
+function fmtDateRange(start, end) {
+  if (!start) return null
+  const s = new Date(start + 'T00:00:00')
+  const fmt = (d, opts) => d.toLocaleDateString('en-US', opts)
+  if (!end) return fmt(s, { month: 'long', day: 'numeric' })
+  const e = new Date(end + 'T00:00:00')
+  if (s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear()) {
+    return `${fmt(s, { month: 'long', day: 'numeric' })} – ${e.getDate()}`
+  }
+  return `${fmt(s, { month: 'long', day: 'numeric' })} – ${fmt(e, { month: 'long', day: 'numeric' })}`
+}
+
+function TournamentCard({ entry }) {
+  const isATP = entry.gender === 'M'
+  const catLabel = entry.category ? `${isATP ? 'ATP' : 'WTA'} ${categoryShort(entry.category)}` : null
+  const dateRange = fmtDateRange(entry.start_date, entry.end_date)
+  const r0 = entry.results[0]
+  const pct = entry.total_matches > 0
+    ? ` (${(r0.correct_count / entry.total_matches * 100).toFixed(1)}%)`
+    : ''
+
+  return (
+    <div className="dh-card">
+      <div className="dh-card-header">
+        <div className="dh-card-title">
+          <span className={`dh-surface ${surfaceClass(entry.surface)}`}>
+            {entry.surface || '—'}
+          </span>
+          {catLabel && (
+            <span className={`dh-category ${isATP ? 'dh-category--atp' : 'dh-category--wta'}`}>
+              {catLabel}
+            </span>
+          )}
+          <span className="dh-tourn-name">{entry.name}</span>
+        </div>
+        <div className="dh-card-meta">
+          {dateRange && <span className="dh-card-dates">{dateRange}</span>}
+          <Link className="dh-picks-link" to={`/tournaments/${entry.tournament_id}`}>
+            View my picks →
+          </Link>
+        </div>
+        {r0 && (
+          <div className="dh-card-stats">
+            <span>Points: <strong>{r0.points}</strong></span>
+            <span>Correct: <strong>{r0.correct_count} / {entry.total_matches}</strong>{pct}</span>
+          </div>
+        )}
+      </div>
+
+      <table className="dh-table">
+        <thead>
+          <tr>
+            <th>Group</th>
+            <th>Rank</th>
+          </tr>
+        </thead>
+        <tbody>
+          {entry.results.map((r, i) => (
+            <tr key={i} className={r.league_id == null ? 'dh-row--global' : ''}>
+              <td className="dh-group-name">{r.league_name}</td>
+              <td>
+                <span className={`dh-rank ${rankBadge(r.rank)}`}>#{r.rank}</span>
+                <span className="dh-total"> / {r.total_participants}</span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
 }
 
 export default function DrawHistory() {
@@ -36,6 +108,21 @@ export default function DrawHistory() {
     queryFn: fetchDrawHistory,
     staleTime: 5 * 60 * 1000,
   })
+
+  // Group by year, sort by start_date within each year, years descending
+  const byYear = {}
+  if (data) {
+    const sorted = [...data].sort((a, b) => {
+      if (!a.start_date) return 1
+      if (!b.start_date) return -1
+      return a.start_date.localeCompare(b.start_date)
+    })
+    for (const entry of sorted) {
+      const y = entry.year ?? new Date(entry.start_date + 'T00:00:00').getFullYear()
+      ;(byYear[y] ??= []).push(entry)
+    }
+  }
+  const years = Object.keys(byYear).sort((a, b) => b - a)
 
   return (
     <div className="dh-page">
@@ -54,60 +141,32 @@ export default function DrawHistory() {
           </div>
         )}
 
-        {data && data.length > 0 && (
-          <div className="dh-list">
-            {data.map(entry => (
-              <div key={entry.tournament_id} className="dh-card">
-                <div className="dh-card-header">
-                  <div className="dh-card-title">
-                    <span className={`dh-surface ${surfaceClass(entry.surface)}`}>
-                      {entry.surface || '—'}
-                    </span>
-                    {entry.category && (
-                      <span className="dh-category">
-                        {entry.gender === 'M' ? 'ATP' : 'WTA'} {categoryShort(entry.category)}
-                      </span>
-                    )}
-                    <span className="dh-tourn-name">{entry.name}</span>
-                    <Link className="dh-picks-link" to={`/tournaments/${entry.tournament_id}`}>
-                      View my picks →
-                    </Link>
-                  </div>
-                  {entry.results[0] && (
-                    <div className="dh-card-stats">
-                      <span>Points: <strong>{entry.results[0].points}</strong></span>
-                      <span>Correct: <strong>{entry.results[0].correct_count} / {entry.total_matches}</strong>{entry.total_matches > 0 ? ` (${(entry.results[0].correct_count / entry.total_matches * 100).toFixed(1)}%)` : ''}</span>
-                    </div>
-                  )}
+        {years.map(year => {
+          const entries = byYear[year]
+          const atpEntries = entries.filter(e => e.gender === 'M')
+          const wtaEntries = entries.filter(e => e.gender !== 'M')
+          return (
+            <div key={year} className="dh-year-section">
+              <h2 className="dh-year-label">{year}</h2>
+              <div className="dh-year-columns">
+                <div className="dh-column">
+                  <div className="dh-column-label dh-column-label--atp">ATP</div>
+                  {atpEntries.length === 0
+                    ? <div className="dh-column-empty">—</div>
+                    : atpEntries.map(e => <TournamentCard key={e.tournament_id} entry={e} />)
+                  }
                 </div>
-
-                <table className="dh-table">
-                  <thead>
-                    <tr>
-                      <th>Group</th>
-                      <th>Rank</th>
-                      <th>Players</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {entry.results.map((r, i) => (
-                      <tr key={i} className={r.league_id == null ? 'dh-row--global' : ''}>
-                        <td className="dh-group-name">{r.league_name}</td>
-                        <td>
-                          <span className={`dh-rank ${rankBadge(r.rank, r.total_participants)}`}>
-                            #{r.rank}
-                          </span>
-                          <span className="dh-total"> / {r.total_participants}</span>
-                        </td>
-                        <td className="dh-muted">{r.total_participants}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div className="dh-column">
+                  <div className="dh-column-label dh-column-label--wta">WTA</div>
+                  {wtaEntries.length === 0
+                    ? <div className="dh-column-empty">—</div>
+                    : wtaEntries.map(e => <TournamentCard key={e.tournament_id} entry={e} />)
+                  }
+                </div>
               </div>
-            ))}
-          </div>
-        )}
+            </div>
+          )
+        })}
       </div>
     </div>
   )
