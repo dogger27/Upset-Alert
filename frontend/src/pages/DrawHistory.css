@@ -60,6 +60,15 @@
   flex-wrap: wrap;
 }
 
+.dh-card-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 8px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
 .dh-tourn-name {
   font-weight: 700;
   font-size: 1rem;
@@ -163,4 +172,5 @@
 @media (max-width: 600px) {
   .dh-table th:nth-child(3),
   .dh-table td:nth-child(3) { display: none; }
+  .dh-card-stats { font-size: 0.78rem; }
 }
