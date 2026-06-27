@@ -399,12 +399,13 @@ export default function TournamentDraw() {
                 Auto-Populate Picks
               </button>
             )}
-            {user && !locked && (saveMutation.isPending || pickedCount > 0) && (
-              <span className={`saved-badge${!saveMutation.isPending && pickedCount < totalPredictable ? ' saved-badge--incomplete' : ''}`}>
-                {saveMutation.isPending ? '⏳ Saving…' : pickedCount < totalPredictable
-                  ? `⚠ ${pickedCount}/${totalPredictable} picks saved — update to compete`
-                  : `✓ ${pickedCount}/${totalPredictable} picks saved`}
-              </span>
+            {user && !locked && !viewingOther && pickedCount > 0 && (
+              <button
+                className="btn-clear-selections"
+                onClick={() => setShowClearConfirm(true)}
+              >
+                Clear Selections
+              </button>
             )}
           </div>
           <div className="draw-header-actions">
@@ -452,13 +453,12 @@ export default function TournamentDraw() {
               )
             })()
           )}
-          {user && !locked && !viewingOther && pickedCount > 0 && (
-            <button
-              className="btn-clear-selections"
-              onClick={() => setShowClearConfirm(true)}
-            >
-              Clear Selections
-            </button>
+          {user && !locked && (saveMutation.isPending || pickedCount > 0) && (
+            <span className={`saved-badge${!saveMutation.isPending && pickedCount < totalPredictable ? ' saved-badge--incomplete' : ''}`}>
+              {saveMutation.isPending ? '⏳ Saving…' : pickedCount < totalPredictable
+                ? `⚠ ${pickedCount}/${totalPredictable} picks saved — update to compete`
+                : `✓ ${pickedCount}/${totalPredictable} picks saved`}
+            </span>
           )}
           {!user && (
             <Link to="/login" className="btn-primary">Log in to make picks</Link>
