@@ -63,10 +63,12 @@ export default function DrawHistory() {
                     <span className={`dh-surface ${surfaceClass(entry.surface)}`}>
                       {entry.surface || '—'}
                     </span>
-                    <span className="dh-tourn-name">
-                      {entry.name} <span className="dh-year">{entry.year}</span>
-                    </span>
-                    <span className="dh-category">{categoryShort(entry.category)}</span>
+                    {entry.category && (
+                      <span className="dh-category">
+                        {entry.gender === 'M' ? 'ATP' : 'WTA'} {categoryShort(entry.category)}
+                      </span>
+                    )}
+                    <span className="dh-tourn-name">{entry.name}</span>
                     <Link className="dh-picks-link" to={`/tournaments/${entry.tournament_id}`}>
                       View my picks →
                     </Link>
