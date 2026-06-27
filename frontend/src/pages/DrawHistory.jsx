@@ -77,25 +77,21 @@ function TournamentCard({ entry }) {
         )}
       </div>
 
-      <table className="dh-table">
-        <thead>
-          <tr>
-            <th>Group</th>
-            <th className="dh-col-rank">Rank</th>
-          </tr>
-        </thead>
-        <tbody>
-          {entry.results.map((r, i) => (
-            <tr key={i} className={r.league_id == null ? 'dh-row--global' : ''}>
-              <td className="dh-group-name">{r.league_name}</td>
-              <td className="dh-col-rank">
-                <span className={`dh-rank ${rankBadge(r.rank)}`}>#{r.rank}</span>
-                <span className="dh-total"> / {r.total_participants}</span>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="dh-results">
+        <div className="dh-results-header">
+          <span>Group</span>
+          <span>Rank</span>
+        </div>
+        {entry.results.map((r, i) => (
+          <div key={i} className={`dh-result-row${r.league_id == null ? ' dh-row--global' : ''}`}>
+            <span className="dh-group-name">{r.league_name}</span>
+            <span className="dh-rank-cell">
+              <span className={`dh-rank ${rankBadge(r.rank)}`}>#{r.rank}</span>
+              <span className="dh-total"> / {r.total_participants}</span>
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
