@@ -73,6 +73,12 @@ export default function DrawHistory() {
                       View my picks →
                     </Link>
                   </div>
+                  {entry.results[0] && (
+                    <div className="dh-card-stats">
+                      <span>Points: <strong>{entry.results[0].points}</strong></span>
+                      <span>Correct: <strong>{entry.results[0].correct_count} / {entry.total_matches}</strong>{entry.total_matches > 0 ? ` (${(entry.results[0].correct_count / entry.total_matches * 100).toFixed(1)}%)` : ''}</span>
+                    </div>
+                  )}
                 </div>
 
                 <table className="dh-table">
@@ -81,8 +87,6 @@ export default function DrawHistory() {
                       <th>Group</th>
                       <th>Rank</th>
                       <th>Players</th>
-                      <th>Points</th>
-                      <th>Correct</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -96,10 +100,6 @@ export default function DrawHistory() {
                           <span className="dh-total"> / {r.total_participants}</span>
                         </td>
                         <td className="dh-muted">{r.total_participants}</td>
-                        <td className="dh-points">{r.points}</td>
-                        <td className="dh-muted">
-                          {r.correct_count} / {entry.total_matches}{entry.total_matches > 0 ? ` (${(r.correct_count / entry.total_matches * 100).toFixed(1)}%)` : ''}
-                        </td>
                       </tr>
                     ))}
                   </tbody>
