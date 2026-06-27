@@ -103,12 +103,6 @@
   justify-content: center;
 }
 
-.draw-dates-zone {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
 
 .draw-header-center {
   display: flex;
@@ -189,7 +183,6 @@
   gap: 1rem;
   font-size: 0.85rem;
   color: var(--text-muted);
-  margin-bottom: 0.25rem;
 }
 
 .draw-meta-left { display: flex; align-items: center; gap: 0.4rem; }
