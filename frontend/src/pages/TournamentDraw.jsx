@@ -403,8 +403,10 @@ export default function TournamentDraw() {
             </button>
           )}
           {user && !locked && (saveMutation.isPending || pickedCount > 0) && (
-            <span className="saved-badge">
-              {saveMutation.isPending ? '⏳ Saving…' : `✓ ${pickedCount}/${totalPredictable} picks saved`}
+            <span className={`saved-badge${!saveMutation.isPending && pickedCount < totalPredictable ? ' saved-badge--incomplete' : ''}`}>
+              {saveMutation.isPending ? '⏳ Saving…' : pickedCount < totalPredictable
+                ? `⚠ ${pickedCount}/${totalPredictable} picks saved — update to compete`
+                : `✓ ${pickedCount}/${totalPredictable} picks saved`}
             </span>
           )}
         </div>
