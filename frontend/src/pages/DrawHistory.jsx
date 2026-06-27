@@ -65,16 +65,14 @@ function TournamentCard({ entry }) {
           )}
           <span className="dh-tourn-name">{entry.name}</span>
         </div>
-        <div className="dh-card-meta">
-          {dateRange && <span className="dh-card-dates">{dateRange}</span>}
-          <Link className="dh-picks-link" to={`/tournaments/${entry.tournament_id}`}>
-            View my picks →
-          </Link>
-        </div>
+        {dateRange && <div className="dh-card-dates">{dateRange}</div>}
         {r0 && (
-          <div className="dh-card-stats">
-            <span>Points: <strong>{r0.points}</strong></span>
-            <span>Correct: <strong>{r0.correct_count} / {entry.total_matches}</strong>{pct}</span>
+          <div className="dh-card-bottom-row">
+            <span className="dh-bottom-points">Points: <strong>{r0.points}</strong></span>
+            <span className="dh-bottom-correct">Correct: <strong>{r0.correct_count} / {entry.total_matches}</strong>{pct}</span>
+            <Link className="dh-picks-link" to={`/tournaments/${entry.tournament_id}`}>
+              View my picks →
+            </Link>
           </div>
         )}
       </div>
@@ -83,14 +81,14 @@ function TournamentCard({ entry }) {
         <thead>
           <tr>
             <th>Group</th>
-            <th>Rank</th>
+            <th className="dh-col-rank">Rank</th>
           </tr>
         </thead>
         <tbody>
           {entry.results.map((r, i) => (
             <tr key={i} className={r.league_id == null ? 'dh-row--global' : ''}>
               <td className="dh-group-name">{r.league_name}</td>
-              <td>
+              <td className="dh-col-rank">
                 <span className={`dh-rank ${rankBadge(r.rank)}`}>#{r.rank}</span>
                 <span className="dh-total"> / {r.total_participants}</span>
               </td>
