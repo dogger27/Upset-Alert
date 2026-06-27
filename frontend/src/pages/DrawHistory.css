@@ -165,16 +165,17 @@
 .dh-category--atp { background: #dbeafe; color: #1d4ed8; }
 .dh-category--wta { background: #fce7f3; color: #be185d; }
 
-/* ── Results table ── */
-.dh-table {
-  width: auto;
-  border-collapse: collapse;
+/* ── Results rows ── */
+.dh-results {
   font-size: 0.83rem;
+  border-top: 1px solid var(--border-strong);
 }
 
-.dh-table th {
-  text-align: left;
-  padding: 6px 16px;
+.dh-results-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 5px 16px;
   font-size: 0.65rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -183,26 +184,22 @@
   border-bottom: 1px solid var(--border-strong);
 }
 
-.dh-table td {
-  padding: 8px 16px;
+.dh-result-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 7px 16px;
   border-bottom: 1px solid #f0f0f0;
-  vertical-align: middle;
 }
-
-.dh-table tr:last-child td { border-bottom: none; }
-
-.dh-row--global td { background: rgba(45,106,79,0.04); }
+.dh-result-row:last-child { border-bottom: none; }
+.dh-result-row.dh-row--global { background: rgba(45,106,79,0.04); }
 
 .dh-group-name {
   font-weight: 600;
   color: var(--ink-800);
 }
 
-.dh-col-rank {
-  padding-left: 6px;
-  white-space: nowrap;
-  width: 1%;
-}
+.dh-rank-cell { white-space: nowrap; }
 
 .dh-rank {
   font-weight: 700;
