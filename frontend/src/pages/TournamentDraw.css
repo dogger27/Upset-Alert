@@ -185,7 +185,7 @@
   color: var(--text-muted);
 }
 
-.draw-meta-left { display: flex; align-items: center; gap: 0.4rem; }
+.draw-meta-left { font-variant-numeric: lining-nums; }
 .draw-meta-sep { opacity: 0.4; }
 .draw-meta-right { display: flex; align-items: center; gap: 0.75rem; }
 
