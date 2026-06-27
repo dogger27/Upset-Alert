@@ -325,6 +325,18 @@
   font-weight: 600;
 }
 
+.saved-badge--incomplete {
+  color: #fff;
+  background: #dc2626;
+  font-size: 0.88rem;
+  animation: badge-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes badge-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.75; }
+}
+
 .page-loading, .page-error {
   padding: 3rem;
   text-align: center;
