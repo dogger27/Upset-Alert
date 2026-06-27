@@ -295,7 +295,7 @@ async def _persist_tournament_results(
         s = global_scores[uid]
         rows.append({
             "user_id": uid,
-            "tournament_id": tournament_id,
+            "draw_id": tournament_id,
             "league_id": None,
             "league_name": "Global",
             "rank": global_rank_of[uid],
@@ -321,7 +321,7 @@ async def _persist_tournament_results(
             s = lg_scores[uid]
             rows.append({
                 "user_id": uid,
-                "tournament_id": tournament_id,
+                "draw_id": tournament_id,
                 "league_id": lg.id,
                 "league_name": lg.name,
                 "rank": lg_rank_of[uid],
@@ -333,7 +333,7 @@ async def _persist_tournament_results(
 
     for row in rows:
         stmt = sqlite_insert(TournamentResult).values(**row).on_conflict_do_update(
-            index_elements=["user_id", "tournament_id", "league_id"],
+            index_elements=["user_id", "draw_id", "league_id"],
             set_={k: row[k] for k in ("rank", "total_participants", "points", "correct_count", "saved_at")},
         )
         await db.execute(stmt)
