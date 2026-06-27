@@ -449,7 +449,7 @@ async def assign_rankings(
             te_id = _match_token_set(player.name, te_index)
             if te_id is not None:
                 player.te_player_id = te_id
-            elif player.name and player.entry_type not in ("Q", "LL"):
+            elif player.name:
                 # Fallback 1: fuzzy difflib match against all TE players in our DB.
                 # Catches spelling variants (Tatjana/Tatiana) that token rules miss.
                 te_id = _fuzzy_match_te(player.name, id_to_norm)
