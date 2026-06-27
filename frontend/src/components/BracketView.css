@@ -3,7 +3,7 @@
   overflow-x: auto;
   overflow-y: auto;
   max-height: calc(100vh - 130px);
-  padding: 0 0.75rem 1rem;
+  padding: 1rem 0.75rem 1rem;
   background: var(--bg);
 }
 
