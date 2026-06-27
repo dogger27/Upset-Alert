@@ -19,9 +19,48 @@ class TournamentCategory(Base):
     entry_days_before: Mapped[int] = mapped_column(Integer, nullable=False)       # main-draw entry cutoff: 42 (GS) or 28
     qual_entry_days_before: Mapped[int] = mapped_column(Integer, nullable=False)  # qualifying cutoff: 28 (GS) or 21
     seed_days_before: Mapped[int] = mapped_column(Integer, nullable=False)        # seeding snapshot: 28 (GS) or 14
-    default_draw_size: Mapped[int] = mapped_column(Integer, nullable=False)
-    alt_draw_size: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # second valid draw size for this tier
-    logo_path: Mapped[Optional[str]] = mapped_column(String, nullable=True)       # path to tier logo asset
+    default_draw_size: Mapped[int] = mapped_column(Integer, nullable=False)       # kept for backwards compat; see variants
+    alt_draw_size: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # kept for backwards compat; see variants
+    # Metadata fields — drive scheduling/sync/scoring logic from DB instead of hardcoded sets
+    sort_order: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)         # 0=GS, 1=1000, 2=500, 3=250
+    scoring_tier: Mapped[Optional[str]] = mapped_column(String, nullable=True)        # "GS" / "1000" / "500" / "250"
+    unique_per_slot: Mapped[bool] = mapped_column(Integer, nullable=False, default=False)  # 500/1000/GS ≠ multiple per week slot
+    one_per_slot: Mapped[bool] = mapped_column(Integer, nullable=False, default=False)    # only 1000/GS guarantee one per slot
+    default_da_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)   # expected days before start for DA release
+    default_qual_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True) # expected days before start for qual release
+    wikipedia_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)      # category-level Wikipedia list page
+
+    variants: Mapped[list["TournamentCategoryVariant"]] = relationship(
+        "TournamentCategoryVariant", back_populates="category", lazy="select"
+    )
+
+
+class TournamentCategoryVariant(Base):
+    """
+    A specific draw-size configuration within a category.
+
+    Most categories have a standard variant and one or two exceptions:
+      ATP 1000:  96-draw (standard) or 56-draw (Paris, Monte-Carlo)
+      ATP 500:   32-draw (standard) or 48-draw (Washington)
+      ATP 250:   28-draw (standard), 32-draw, or 48-draw (Winston-Salem)
+      WTA 1000:  96-draw (standard) or 56-draw (Qatar, Dubai, Wuhan)
+      WTA 500:   28-draw (standard), 30-draw (Adelaide), 32-draw, or 48-draw (Charleston, Brisbane)
+      WTA 250:   32-draw (uniform — single variant)
+      Grand Slam: 128-draw, one named variant per Slam for its logo
+    """
+
+    __tablename__ = "tournament_categories_variants"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    category_name: Mapped[str] = mapped_column(String, ForeignKey("tournament_categories.name"), nullable=False)
+    draw_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    num_byes: Mapped[int] = mapped_column(Integer, nullable=False)   # 2^num_rounds − draw_size
+    num_rounds: Mapped[int] = mapped_column(Integer, nullable=False)
+    logo_path: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    is_default: Mapped[bool] = mapped_column(Integer, nullable=False, default=False)
+    label: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+
+    category: Mapped["TournamentCategory"] = relationship("TournamentCategory", back_populates="variants")
 
 
 class Tournament(Base):
@@ -69,6 +108,10 @@ class Tournament(Base):
     # Grand Slams = 28 days (4 weeks) before tournament Monday; all others = 14 days (2 weeks).
     # Use this week when looking up inferred rankings in te_rankings_snapshots.
     seed_ranking_week: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    # FK into tournament_categories_variants — determines draw_size, num_byes, and logo_path.
+    variant_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("tournament_categories_variants.id"), nullable=True
+    )
     # upcoming / open / active / completed
     status: Mapped[str] = mapped_column(String, default="upcoming")
     selections_unlocked: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -77,12 +120,36 @@ class Tournament(Base):
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
 
+    variant: Mapped[Optional["TournamentCategoryVariant"]] = relationship(
+        "TournamentCategoryVariant", lazy="joined", foreign_keys=[variant_id]
+    )
+
     draw_entries: Mapped[list["DrawEntry"]] = relationship(
         "DrawEntry", back_populates="tournament", cascade="all, delete-orphan"
     )
     matches: Mapped[list["Match"]] = relationship(
         "Match", back_populates="tournament", cascade="all, delete-orphan"
     )
+
+    @property
+    def logo_path(self) -> Optional[str]:
+        return self.variant.logo_path if self.variant else None
+
+    @property
+    def num_byes(self) -> int:
+        return self.variant.num_byes if self.variant else 0
+
+    @property
+    def scoring_tier(self) -> str:
+        """Tier key for the scoring table: GS / 1000 / 500 / 250."""
+        cat = (self.category or "").upper()
+        if "SLAM" in cat or "GRAND" in cat:
+            return "GS"
+        if "1000" in cat:
+            return "1000"
+        if "500" in cat:
+            return "500"
+        return "250"
 
     @property
     def is_locked(self) -> bool:
