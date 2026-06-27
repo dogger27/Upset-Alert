@@ -365,15 +365,12 @@ export default function TournamentDraw() {
                 </a>
               )}
             </h1>
-            <span className="draw-meta-left">
-              {[tournament.city, surface].filter(Boolean).join(' · ')}
-            </span>
-          </div>
-          {tournament.start_date && (
-            <div className="draw-dates-zone">
-              <span className="draw-title-dates">{fmtDateRange(tournament.start_date, tournament.end_date)}</span>
+            <div className="draw-meta-row">
+              <span className="draw-meta-left">
+                {[tournament.city, surface, tournament.start_date ? fmtDateRange(tournament.start_date, tournament.end_date) : null].filter(Boolean).join(' · ')}
+              </span>
             </div>
-          )}
+          </div>
         </div>
         <div className="draw-header-center">
           <div className="draw-mode-buttons">
