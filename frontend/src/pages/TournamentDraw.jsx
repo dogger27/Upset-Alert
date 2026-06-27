@@ -305,6 +305,8 @@ export default function TournamentDraw() {
     }
   }
 
+  const everHadPicksRef = useRef(false)
+
   if (isLoading) return <div className="page-loading">Loading draw…</div>
   if (error) return <div className="page-error">Failed to load draw.</div>
 
@@ -322,7 +324,6 @@ export default function TournamentDraw() {
   const totalPredictable = matches.filter(m => !m.is_bye).length
 
   // Once picks > 0 this session, keep the badge visible through any transient refetch resets
-  const everHadPicksRef = useRef(false)
   if (pickedCount > 0) everHadPicksRef.current = true
   const showPicksBadge = user && !locked && (saveMutation.isPending || everHadPicksRef.current || pickedCount > 0)
 
