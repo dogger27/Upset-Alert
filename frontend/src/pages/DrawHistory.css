@@ -102,7 +102,15 @@
   flex-wrap: nowrap;
 }
 
-.dh-surface--right { margin-left: auto; flex-shrink: 0; }
+.dh-title-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.dh-surface--right { flex-shrink: 0; margin-left: 20px; }
 
 .dh-card-dates {
   font-size: 0.78rem;
