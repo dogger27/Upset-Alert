@@ -178,6 +178,11 @@
   box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2), 0 1px 3px rgba(0,0,0,0.08);
 }
 
+.match-box.missing-pick {
+  border-color: #dc2626;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.25), 0 1px 3px rgba(0,0,0,0.08);
+}
+
 .match-box.correct-pick {
   background: #dcfce7;
   border-color: #16a34a;

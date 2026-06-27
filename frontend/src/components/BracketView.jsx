@@ -294,6 +294,9 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
   // Orange: picks mode only, when a player slot is still TBD
   const needsPick = mode === 'picks' && (p1id == null || p2id == null)
 
+  // Red outline: both players known but no pick made (and user can still pick)
+  const missingPick = mode === 'picks' && !needsPick && onPick != null && pickedId == null
+
   const correctPick = mode === 'picks' && actualWinnerId != null && pickedId != null && pickedId === actualWinnerId
   const wrongPick   = mode === 'picks' && ((actualWinnerId != null && pickedId != null && pickedId !== actualWinnerId)
                     || (p1DeadPick && p2DeadPick))
@@ -302,6 +305,7 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
     <div
       className={clsx('match-box', {
         'needs-pick': needsPick,
+        'missing-pick': missingPick,
         'correct-pick': correctPick,
         'wrong-pick': wrongPick,
         'match-box--h2h': h2hAvailable,
