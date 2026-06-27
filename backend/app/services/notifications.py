@@ -276,7 +276,6 @@ async def _persist_tournament_results(
 ) -> None:
     """Upsert TournamentResult rows for every participant in every group."""
     from datetime import datetime, timezone as tz
-    from sqlalchemy.dialects.sqlite import insert as sqlite_insert
     from app.models.draw_history import TournamentResult
 
     now = datetime.now(tz.utc).replace(tzinfo=None)
@@ -331,12 +330,13 @@ async def _persist_tournament_results(
                 "saved_at": now,
             })
 
+    # Delete existing results for this tournament before re-inserting.
+    # ON CONFLICT DO UPDATE cannot match NULL league_id in SQLite (NULL != NULL),
+    # so upsert silently inserts duplicates for Global rows.
+    from sqlalchemy import delete as _delete
+    await db.execute(_delete(TournamentResult).where(TournamentResult.draw_id == tournament_id))
     for row in rows:
-        stmt = sqlite_insert(TournamentResult).values(**row).on_conflict_do_update(
-            index_elements=["user_id", "draw_id", "league_id"],
-            set_={k: row[k] for k in ("rank", "total_participants", "points", "correct_count", "saved_at")},
-        )
-        await db.execute(stmt)
+        db.add(TournamentResult(**row))
     await db.commit()
     logger.info("Saved %d result row(s) for tournament %d", len(rows), tournament_id)
 
