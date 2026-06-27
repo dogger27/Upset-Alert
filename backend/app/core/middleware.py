@@ -33,7 +33,7 @@ _AUTH_PATHS = frozenset({
     "/auth/reset-password",
 })
 _AUTH_LIMIT = 8      # per minute
-_API_LIMIT = 100     # per minute per IP (general endpoints)
+_API_LIMIT = 300     # per minute per IP (general endpoints)
 _WINDOW = 60.0       # seconds
 
 
