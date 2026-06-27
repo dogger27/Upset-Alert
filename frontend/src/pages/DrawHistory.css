@@ -53,8 +53,7 @@
   grid-template-columns: 1fr 1fr;
   gap: 20px;
   align-items: start;
-  width: fit-content;
-  min-width: 100%;
+  width: max-content;
 }
 
 .dh-column {
@@ -120,13 +119,14 @@
 .dh-card-bottom-row {
   display: flex;
   align-items: center;
+  gap: 1em;
   margin-top: 8px;
   font-size: 0.8rem;
   color: var(--text-muted);
 }
 
-.dh-bottom-points  { flex: 1; text-align: left; }
-.dh-bottom-correct { flex: 1; text-align: center; }
+.dh-bottom-points  { white-space: nowrap; }
+.dh-bottom-correct { white-space: nowrap; }
 
 
 .dh-picks-link {
@@ -135,7 +135,7 @@
   color: var(--green-600, #2d6a4f);
   text-decoration: none;
   white-space: nowrap;
-  text-align: right;
+  margin-left: auto;
 }
 .dh-picks-link:hover { text-decoration: underline; }
 
