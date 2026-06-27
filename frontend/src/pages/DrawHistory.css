@@ -80,8 +80,10 @@
   padding: 8px 0;
 }
 
-/* ── Card ── */
+/* ── Card — shared CSS grid so stats row and results rows share column widths ── */
 .dh-card {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
   background: #fff;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
@@ -89,17 +91,15 @@
   overflow: hidden;
 }
 
-.dh-card-header {
-  padding: 12px 16px 10px;
-  border-bottom: 1px solid var(--border-strong);
-  background: rgba(45,106,79,0.04);
-}
-
+/* Full-width rows */
 .dh-card-title {
+  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: nowrap;
+  padding: 12px 16px 6px;
+  background: rgba(45,106,79,0.04);
 }
 
 .dh-title-left {
@@ -113,9 +113,11 @@
 .dh-surface--right { flex-shrink: 0; margin-left: 20px; }
 
 .dh-card-dates {
+  grid-column: 1 / -1;
   font-size: 0.78rem;
   color: var(--text-muted);
-  margin-top: 4px;
+  padding: 0 16px 4px;
+  background: rgba(45,106,79,0.04);
 }
 
 .dh-tourn-name {
@@ -124,26 +126,38 @@
   color: var(--ink-900);
 }
 
-.dh-card-bottom-row {
-  display: flex;
-  align-items: center;
-  gap: 1em;
-  margin-top: 8px;
-  font-size: 0.8rem;
-  color: var(--text-muted);
+.dh-divider {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--border-strong);
 }
 
-.dh-bottom-points  { white-space: nowrap; }
-.dh-bottom-correct { white-space: nowrap; }
-
-
+/* Stats row — col1 | col2 | col3 */
+.dh-bottom-points {
+  padding: 6px 32px 8px 16px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  align-self: center;
+  background: rgba(45,106,79,0.04);
+}
+.dh-bottom-correct {
+  padding: 6px 0 8px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  align-self: center;
+  background: rgba(45,106,79,0.04);
+}
 .dh-picks-link {
+  padding: 6px 16px 8px 0;
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--green-600, #2d6a4f);
   text-decoration: none;
   white-space: nowrap;
-  margin-left: auto;
+  justify-self: end;
+  align-self: center;
+  background: rgba(45,106,79,0.04);
 }
 .dh-picks-link:hover { text-decoration: underline; }
 
@@ -175,17 +189,10 @@
 .dh-category--atp { background: #dbeafe; color: #1d4ed8; }
 .dh-category--wta { background: #fce7f3; color: #be185d; }
 
-/* ── Results rows ── */
-.dh-results {
-  font-size: 0.83rem;
-  border-top: 1px solid var(--border-strong);
-}
+/* ── Results rows (grid cells, same columns as stats row above) ── */
 
-.dh-results-header {
-  display: flex;
-  align-items: center;
-  gap: 32px;
-  padding: 5px 16px;
+/* Column headers */
+.dh-col-label {
   font-size: 0.65rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -193,23 +200,35 @@
   color: #888;
   border-bottom: 1px solid var(--border-strong);
 }
+.dh-col-label--group { padding: 5px 32px 5px 16px; }
+.dh-col-label--rank  { padding: 5px 0 5px; }
+.dh-col-label--end   { padding: 5px 16px 5px 0; }
 
-.dh-result-row {
-  display: flex;
-  align-items: center;
-  gap: 32px;
-  padding: 7px 16px;
-  border-bottom: 1px solid #f0f0f0;
-}
-.dh-result-row:last-child { border-bottom: none; }
-.dh-result-row.dh-row--global { background: rgba(45,106,79,0.04); }
-
+/* Result row cells */
 .dh-group-name {
   font-weight: 600;
+  font-size: 0.83rem;
   color: var(--ink-800);
+  padding: 7px 32px 7px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  align-self: center;
+}
+.dh-rank-cell {
+  white-space: nowrap;
+  padding: 7px 0 7px;
+  border-bottom: 1px solid #f0f0f0;
+  align-self: center;
+}
+.dh-row-end {
+  padding: 7px 16px 7px 0;
+  border-bottom: 1px solid #f0f0f0;
 }
 
-.dh-rank-cell { white-space: nowrap; }
+.dh-group-name.dh-row-last,
+.dh-rank-cell.dh-row-last,
+.dh-row-end.dh-row-last { border-bottom: none; }
+
+.dh-row--global { background: rgba(45,106,79,0.04); }
 
 .dh-rank {
   font-weight: 400;
@@ -219,8 +238,6 @@
 .dh-rank--gold   { color: #b8860b; font-weight: 600; }
 .dh-rank--silver { color: #666; }
 .dh-rank--bronze { color: #a0522d; }
-
-.dh-muted { color: var(--text-muted); }
 
 @media (max-width: 640px) {
   .dh-year-columns {

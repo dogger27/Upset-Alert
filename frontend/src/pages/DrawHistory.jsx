@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import client from '../api/client'
@@ -53,46 +54,55 @@ function TournamentCard({ entry }) {
 
   return (
     <div className="dh-card">
-      <div className="dh-card-header">
-        <div className="dh-card-title">
-          <span className="dh-title-left">
-            {catLabel && (
-              <span className={`dh-category ${isATP ? 'dh-category--atp' : 'dh-category--wta'}`}>
-                {catLabel}
-              </span>
-            )}
-            <span className="dh-tourn-name">{entry.name}</span>
-          </span>
-          <span className={`dh-surface dh-surface--right ${surfaceClass(entry.surface)}`}>
-            {entry.surface || '—'}
-          </span>
-        </div>
-        {dateRange && <div className="dh-card-dates">{dateRange}</div>}
-        {r0 && (
-          <div className="dh-card-bottom-row">
-            <span className="dh-bottom-points">Points: <strong>{r0.points}</strong></span>
-            <span className="dh-bottom-correct">Correct: <strong>{r0.correct_count} / {entry.total_matches}</strong>{pct}</span>
-            <Link className="dh-picks-link" to={`/tournaments/${entry.tournament_id}`}>
-              My Picks →
-            </Link>
-          </div>
-        )}
+      {/* Title — spans all 3 grid columns */}
+      <div className="dh-card-title">
+        <span className="dh-title-left">
+          {catLabel && (
+            <span className={`dh-category ${isATP ? 'dh-category--atp' : 'dh-category--wta'}`}>
+              {catLabel}
+            </span>
+          )}
+          <span className="dh-tourn-name">{entry.name}</span>
+        </span>
+        <span className={`dh-surface dh-surface--right ${surfaceClass(entry.surface)}`}>
+          {entry.surface || '—'}
+        </span>
       </div>
 
-      <div className="dh-results">
-        <div className="dh-results-header">
-          <span>Group</span>
-          <span>Rank</span>
-        </div>
-        {entry.results.map((r, i) => (
-          <div key={i} className={`dh-result-row${r.league_id == null ? ' dh-row--global' : ''}`}>
-            <span className="dh-group-name">{r.league_name}</span>
-            <span className="dh-rank-cell">
+      {/* Dates — spans all 3 grid columns */}
+      {dateRange && <div className="dh-card-dates">{dateRange}</div>}
+
+      {/* Stats — 3 separate grid cells (col1 | col2 | col3) */}
+      {r0 && <>
+        <span className="dh-bottom-points">Points: <strong>{r0.points}</strong></span>
+        <span className="dh-bottom-correct">Correct: <strong>{r0.correct_count} / {entry.total_matches}</strong>{pct}</span>
+        <Link className="dh-picks-link" to={`/tournaments/${entry.tournament_id}`}>My Picks →</Link>
+      </>}
+
+      {/* Section divider — spans all 3 grid columns */}
+      <div className="dh-divider" />
+
+      {/* Column headers — 3 grid cells */}
+      <span className="dh-col-label dh-col-label--group">Group</span>
+      <span className="dh-col-label dh-col-label--rank">Rank</span>
+      <span className="dh-col-label dh-col-label--end" />
+
+      {/* Result rows — 3 grid cells each */}
+      {entry.results.map((r, i) => {
+        const isGlobal = r.league_id == null
+        const isLast = i === entry.results.length - 1
+        const cls = (base) =>
+          [base, isGlobal ? 'dh-row--global' : '', isLast ? 'dh-row-last' : ''].filter(Boolean).join(' ')
+        return (
+          <Fragment key={i}>
+            <span className={cls('dh-group-name')}>{r.league_name}</span>
+            <span className={cls('dh-rank-cell')}>
               <span className={`dh-rank ${rankBadge(r.rank)}`}>#{r.rank} / {r.total_participants}</span>
             </span>
-          </div>
-        ))}
-      </div>
+            <span className={cls('dh-row-end')} />
+          </Fragment>
+        )
+      })}
     </div>
   )
 }
@@ -113,11 +123,24 @@ export default function DrawHistory() {
       return a.start_date.localeCompare(b.start_date)
     })
     for (const entry of sorted) {
-      const y = entry.year ?? new Date(entry.start_date + 'T00:00:00').getFullYear()
-      ;(byYear[y] ??= []).push(entry)
+      const yr = entry.year ?? (entry.start_date ? entry.start_date.slice(0, 4) : '?')
+      if (!byYear[yr]) byYear[yr] = []
+      byYear[yr].push(entry)
     }
   }
+
   const years = Object.keys(byYear).sort((a, b) => b - a)
+
+  if (isLoading) return <div className="dh-page"><div className="dh-container"><p className="dh-state">Loading…</p></div></div>
+  if (isError)   return <div className="dh-page"><div className="dh-container"><p className="dh-state dh-state--error">Failed to load draw history.</p></div></div>
+  if (!data || data.length === 0) return (
+    <div className="dh-page">
+      <div className="dh-container">
+        <div className="dh-header"><h1 className="dh-title">My Draw History</h1></div>
+        <p className="dh-state">No completed tournaments yet. <Link to="/tournaments">Browse tournaments →</Link></p>
+      </div>
+    </div>
+  )
 
   return (
     <div className="dh-page">
@@ -126,37 +149,27 @@ export default function DrawHistory() {
           <h1 className="dh-title">My Draw History</h1>
         </div>
 
-        {isLoading && <div className="dh-state">Loading…</div>}
-        {isError && <div className="dh-state dh-state--error">Could not load draw history.</div>}
+        {years.map(yr => {
+          const entries = byYear[yr]
+          const atp = entries.filter(e => e.gender === 'M')
+          const wta = entries.filter(e => e.gender === 'F')
+          const maxLen = Math.max(atp.length, wta.length)
 
-        {data && data.length === 0 && (
-          <div className="dh-state">
-            You haven't competed in any draws yet.{' '}
-            <Link to="/">Browse tournaments</Link> to get started.
-          </div>
-        )}
-
-        {years.map(year => {
-          const entries = byYear[year]
-          const atpEntries = entries.filter(e => e.gender === 'M')
-          const wtaEntries = entries.filter(e => e.gender !== 'M')
           return (
-            <div key={year} className="dh-year-section">
-              <h2 className="dh-year-label">{year}</h2>
+            <div key={yr} className="dh-year-section">
+              <div className="dh-year-label">{yr}</div>
               <div className="dh-year-columns">
                 <div className="dh-column">
-                  <div className="dh-column-label dh-column-label--atp">ATP</div>
-                  {atpEntries.length === 0
-                    ? <div className="dh-column-empty">—</div>
-                    : atpEntries.map(e => <TournamentCard key={e.tournament_id} entry={e} />)
-                  }
+                  <div className="dh-column-label dh-column-label--atp">ATP (M)</div>
+                  {atp.length > 0
+                    ? atp.map(e => <TournamentCard key={e.tournament_id} entry={e} />)
+                    : <div className="dh-column-empty">—</div>}
                 </div>
                 <div className="dh-column">
-                  <div className="dh-column-label dh-column-label--wta">WTA</div>
-                  {wtaEntries.length === 0
-                    ? <div className="dh-column-empty">—</div>
-                    : wtaEntries.map(e => <TournamentCard key={e.tournament_id} entry={e} />)
-                  }
+                  <div className="dh-column-label dh-column-label--wta">WTA (F)</div>
+                  {wta.length > 0
+                    ? wta.map(e => <TournamentCard key={e.tournament_id} entry={e} />)
+                    : <div className="dh-column-empty">—</div>}
                 </div>
               </div>
             </div>
