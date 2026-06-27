@@ -157,6 +157,8 @@ class DrawEntry(Base):
     date_of_birth: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     # Foreign key into te_players — set once on first resolution, never changes
     te_player_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # TE slug copied from te_players; null means no TE match found for this draw player
+    te_slug: Mapped[Optional[str]] = mapped_column(String, nullable=True)
 
     tournament: Mapped["Tournament"] = relationship("Tournament", back_populates="draw_entries")
 

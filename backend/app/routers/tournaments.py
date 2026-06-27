@@ -454,17 +454,14 @@ async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
 
     # Bulk-load TE player data for all players with a TE identity
     te_ids = [p.te_player_id for p in players if p.te_player_id is not None]
-    te_slug_map: dict[int, str] = {}
     te_dob_map: dict[int, "date"] = {}
     te_elo_rank_map: dict[int, int] = {}
     if te_ids:
         te_res = await db.execute(
-            select(TePlayer.id, TePlayer.te_slug, TePlayer.date_of_birth)
+            select(TePlayer.id, TePlayer.date_of_birth)
             .where(TePlayer.id.in_(te_ids))
         )
         for row in te_res:
-            if row.te_slug:
-                te_slug_map[row.id] = row.te_slug
             if row.date_of_birth:
                 te_dob_map[row.id] = row.date_of_birth
 
@@ -497,7 +494,7 @@ async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
 
     def _player_out(p: DrawEntry) -> DrawEntryOut:
         out = DrawEntryOut.model_validate(p)
-        out.te_slug = te_slug_map.get(p.te_player_id) if p.te_player_id else None
+        # te_slug comes directly from draw_entries column now
         out.date_of_birth = te_dob_map.get(p.te_player_id) if p.te_player_id else None
         out.elo_rank = te_elo_rank_map.get(p.te_player_id) if p.te_player_id else None
         return out

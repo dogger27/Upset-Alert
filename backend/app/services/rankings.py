@@ -206,19 +206,23 @@ def _name_matches(wiki_name: str, te_name: str) -> bool:
 
 def _build_te_index(
     te_players: list,
-) -> tuple[dict[frozenset, list[int]], dict[int, str]]:
+) -> tuple[dict[frozenset, list[int]], dict[int, str], dict[int, str]]:
     """
-    Build two complementary indices from a list of TePlayer ORM objects:
+    Build three complementary indices from a list of TePlayer ORM objects:
       - token-set index: frozenset → [player_id]  (for Rules 1–5)
       - norm index:      player_id → name_norm     (for fuzzy fallback)
+      - slug index:      player_id → te_slug       (to stamp on draw_entries)
     """
     index: dict[frozenset, list[int]] = {}
     id_to_norm: dict[int, str] = {}
+    id_to_slug: dict[int, str] = {}
     for tp in te_players:
         ts = frozenset(tp.name_norm.split())
         index.setdefault(ts, []).append(tp.id)
         id_to_norm[tp.id] = tp.name_norm
-    return index, id_to_norm
+        if tp.te_slug:
+            id_to_slug[tp.id] = tp.te_slug
+    return index, id_to_norm, id_to_slug
 
 
 def _fuzzy_match_te(wiki_name: str, id_to_norm: dict[int, str]) -> Optional[int]:
@@ -427,16 +431,16 @@ async def assign_rankings(
     cache_key = (gender, week_date)
     if cache_key not in _week_cache:
         tp_res = await db.execute(select(TePlayer).where(TePlayer.gender == gender))
-        te_index, id_to_norm = _build_te_index(tp_res.scalars().all())
+        te_index, id_to_norm, id_to_slug = _build_te_index(tp_res.scalars().all())
 
         snap_res = await db.execute(
             select(TeRankingsSnapshot).where(TeRankingsSnapshot.week_date == week_date)
         )
         rank_by_te_id: dict[int, int] = {s.player_id: s.rank for s in snap_res.scalars()}
-        _week_cache[cache_key] = (te_index, rank_by_te_id, id_to_norm)
+        _week_cache[cache_key] = (te_index, rank_by_te_id, id_to_norm, id_to_slug)
         logger.info("Loaded TE index for %s week %s into memory (%d players)", gender, week_date, len(te_index))
     else:
-        te_index, rank_by_te_id, id_to_norm = _week_cache[cache_key]
+        te_index, rank_by_te_id, id_to_norm, id_to_slug = _week_cache[cache_key]
 
     from app.models.rankings import TePlayer
     from app.services.system_log import app_log
@@ -451,6 +455,7 @@ async def assign_rankings(
                 te_id = _fuzzy_match_te(player.name, id_to_norm)
                 if te_id is not None:
                     player.te_player_id = te_id
+                    player.te_slug = id_to_slug.get(te_id)
                     await app_log("info", "rankings",
                                   f"Fuzzy-matched {player.name!r} to TE player {te_id}",
                                   {"player_name": player.name, "te_id": te_id},
@@ -482,11 +487,17 @@ async def assign_rankings(
                 db.add(new_tp)
                 await db.flush()
                 player.te_player_id = new_tp.id
+                player.te_slug = slug
                 # Update in-memory indices so the same player in this draw session matches.
                 ts = frozenset(_norm(player.name).split())
                 te_index.setdefault(ts, []).append(new_tp.id)
                 id_to_norm[new_tp.id] = _norm(player.name)
+                if slug:
+                    id_to_slug[new_tp.id] = slug
 
+        # Stamp te_slug from the index (covers newly matched and backfill of existing).
+        if player.te_player_id and not player.te_slug:
+            player.te_slug = id_to_slug.get(player.te_player_id)
         player.ranking = rank_by_te_id.get(player.te_player_id) if player.te_player_id else None
 
 
