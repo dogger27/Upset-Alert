@@ -16,8 +16,9 @@ class TournamentCategory(Base):
     __tablename__ = "tournament_categories"
 
     name: Mapped[str] = mapped_column(String, primary_key=True)   # "Grand Slam", "ATP 1000", …
-    entry_days_before: Mapped[int] = mapped_column(Integer, nullable=False)       # main-draw snapshot: 42 or 28
-    qual_entry_days_before: Mapped[int] = mapped_column(Integer, nullable=False)  # qualifying snapshot: 28 or 21
+    entry_days_before: Mapped[int] = mapped_column(Integer, nullable=False)       # main-draw entry cutoff: 42 (GS) or 28
+    qual_entry_days_before: Mapped[int] = mapped_column(Integer, nullable=False)  # qualifying cutoff: 28 (GS) or 21
+    seed_days_before: Mapped[int] = mapped_column(Integer, nullable=False)        # seeding snapshot: 28 (GS) or 14
     default_draw_size: Mapped[int] = mapped_column(Integer, nullable=False)
     alt_draw_size: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # second valid draw size for this tier
     logo_path: Mapped[Optional[str]] = mapped_column(String, nullable=True)       # path to tier logo asset
@@ -61,9 +62,13 @@ class Tournament(Base):
     # Acts as an idempotency guard — once set, the monitor never fires again for this tournament.
     picks_locked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     completion_notified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    # Monday of the ranking snapshot used to determine seeds / direct acceptance.
-    # Computed from category: Grand Slams = 42 days before tournament Monday; all others = 28 days.
+    # Monday of the ranking snapshot used to determine direct-acceptance cutoff.
+    # Grand Slams = 42 days (6 weeks) before tournament Monday; all others = 28 days (4 weeks).
     entry_ranking_week: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    # Monday of the ranking snapshot that drives actual seed order within the bracket.
+    # Grand Slams = 28 days (4 weeks) before tournament Monday; all others = 14 days (2 weeks).
+    # Use this week when looking up inferred rankings in te_rankings_snapshots.
+    seed_ranking_week: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     # upcoming / open / active / completed
     status: Mapped[str] = mapped_column(String, default="upcoming")
     selections_unlocked: Mapped[bool] = mapped_column(Boolean, default=False)
