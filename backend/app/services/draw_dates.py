@@ -1,7 +1,53 @@
-"""Calculate draw release dates based on historical data and tournament category."""
+"""Calculate draw release dates and entry ranking weeks based on tournament category."""
 
 from datetime import date, timedelta
 from typing import Optional
+
+# Days before the tournament Monday that the entry ranking snapshot is taken.
+# Grand Slams use 42 days (6 weeks); all ATP/WTA tour events use 28 days (4 weeks).
+ENTRY_DAYS_BEFORE: dict[str, int] = {
+    "Grand Slam": 42,
+    "ATP 1000":   28,
+    "WTA 1000":   28,
+    "ATP 500":    28,
+    "WTA 500":    28,
+    "ATP 250":    28,
+    "WTA 250":    28,
+}
+
+QUAL_ENTRY_DAYS_BEFORE: dict[str, int] = {
+    "Grand Slam": 28,
+    "ATP 1000":   21,
+    "WTA 1000":   21,
+    "ATP 500":    21,
+    "WTA 500":    21,
+    "ATP 250":    21,
+    "WTA 250":    21,
+}
+
+
+def compute_entry_ranking_week(start_date: date, category: Optional[str]) -> Optional[date]:
+    """
+    Return the Monday of the ranking snapshot used for main-draw seeding/acceptance.
+
+    The snapshot Monday is always `entry_days_before` days before the Monday of the
+    tournament week (which is always a Monday itself since days_before is a multiple of 7).
+    Returns None if start_date or category is missing / unrecognised.
+    """
+    if not start_date or not category:
+        return None
+    days_before = ENTRY_DAYS_BEFORE.get(category)
+    if days_before is None:
+        # Try stripping ATP/WTA prefix for lookup (handles stored values like "1000" without prefix)
+        for key, val in ENTRY_DAYS_BEFORE.items():
+            if key in category or category in key:
+                days_before = val
+                break
+    if days_before is None:
+        return None
+    # Snap start_date to its Monday (weekday() == 0 for Monday)
+    tournament_monday = start_date - timedelta(days=start_date.weekday())
+    return tournament_monday - timedelta(days=days_before)
 
 # Hardcoded fallbacks used when there is insufficient historical data (< MIN_SAMPLES)
 _DEFAULTS: dict[str, tuple[int, int]] = {

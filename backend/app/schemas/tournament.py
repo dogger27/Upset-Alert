@@ -41,6 +41,7 @@ class TournamentOut(BaseModel):
     day1_start_hour: Optional[int]
     day1_start_minute: Optional[int]
     closing_time: Optional[datetime]
+    entry_ranking_week: Optional[date] = None
     status: str
     selections_unlocked: bool = False
     last_scraped_at: Optional[datetime]
