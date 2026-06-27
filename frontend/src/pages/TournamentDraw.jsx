@@ -321,6 +321,11 @@ export default function TournamentDraw() {
   const pickedCount = Object.values(picks).filter(v => v != null).length
   const totalPredictable = matches.filter(m => !m.is_bye).length
 
+  // Once picks > 0 this session, keep the badge visible through any transient refetch resets
+  const everHadPicksRef = useRef(false)
+  if (pickedCount > 0) everHadPicksRef.current = true
+  const showPicksBadge = user && !locked && (saveMutation.isPending || everHadPicksRef.current || pickedCount > 0)
+
   // Header helpers
   const catShort = tournament.category ? tournament.category.replace(/^(ATP|WTA)\s+/, '') : ''
   const tourLabel = `${tournament.gender === 'M' ? 'ATP' : 'WTA'}${catShort ? ' ' + catShort : ''}`
@@ -453,7 +458,7 @@ export default function TournamentDraw() {
               )
             })()
           )}
-          {user && !locked && (saveMutation.isPending || pickedCount > 0) && (
+          {showPicksBadge && (
             <span className={`saved-badge${!saveMutation.isPending && pickedCount < totalPredictable ? ' saved-badge--incomplete' : ''}`}>
               {saveMutation.isPending ? '⏳ Saving…' : pickedCount < totalPredictable
                 ? `⚠ ${pickedCount}/${totalPredictable} picks saved — Populate to COMPETE`
