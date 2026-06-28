@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueries } from '@tanstack/react-query'
 import { listLeagues, getLeaderboard } from '../api/leagues'
 import { getGlobalStandings } from '../api/tournaments'
 import { useAuth } from '../store/auth'
@@ -41,9 +41,26 @@ export default function DrawSidebar({ tournamentId, tournament, selectedUserId, 
     lg.members?.some(m => m.id === user?.id)
   ) ?? []
 
-  const nonMemberLeagues = user?.is_admin
-    ? (leagues?.filter(lg => !lg.members?.some(m => m.id === user?.id)) ?? [])
-    : []
+  // Fetch leaderboard for every user league in parallel to get per-draw picker counts
+  const leagueLeaderboardResults = useQueries({
+    queries: myLeagues.map(lg => ({
+      queryKey: ['leaderboard', lg.id, tournamentId],
+      queryFn: () => getLeaderboard(lg.id, tournamentId),
+      enabled: !!user,
+    })),
+  })
+
+  // null = still loading; 0 = no pickers; N = N pickers
+  const leaguePickerCount = {}
+  myLeagues.forEach((lg, i) => {
+    const d = leagueLeaderboardResults[i]
+    leaguePickerCount[lg.id] = d?.isLoading ? null : (d?.data?.entries?.length ?? 0)
+  })
+
+  // Only show leagues where ≥1 member competed; show all while still loading
+  const visibleLeagues = myLeagues.filter(lg =>
+    leaguePickerCount[lg.id] === null || leaguePickerCount[lg.id] > 0
+  )
 
   const isGlobal = selectedLeagueId === 'global'
 
@@ -115,16 +132,14 @@ export default function DrawSidebar({ tournamentId, tournament, selectedUserId, 
               }}
             >
               <option value="global">Global{globalEntries.length > 0 ? ` (${globalEntries.length})` : ''}</option>
-              {myLeagues.map(lg => (
-                <option key={lg.id} value={lg.id}>{lg.name}{lg.member_count > 0 ? ` (${lg.member_count})` : ''}</option>
-              ))}
-              {nonMemberLeagues.length > 0 && (
-                <optgroup label="Other Leagues">
-                  {nonMemberLeagues.map(lg => (
-                    <option key={lg.id} value={lg.id}>{lg.name}{lg.member_count > 0 ? ` (${lg.member_count})` : ''}</option>
-                  ))}
-                </optgroup>
-              )}
+              {visibleLeagues.map(lg => {
+                const count = leaguePickerCount[lg.id]
+                return (
+                  <option key={lg.id} value={lg.id}>
+                    {lg.name}{count != null ? ` (${count})` : ''}
+                  </option>
+                )
+              })}
             </select>
           </div>
 
