@@ -330,6 +330,72 @@ async def hall_of_fame(db: AsyncSession = Depends(get_db)):
     ]
 
 
+@router.get("/global-gs-totals")
+async def global_gs_totals(db: AsyncSession = Depends(get_db)):
+    """Grand Slam point totals for ALL verified users this year, with is_admin flag."""
+    from datetime import date
+    from collections import defaultdict
+    from app.services.scoring import _points_table
+
+    year = date.today().year
+    gs_result = await db.execute(
+        select(Draw).where(Draw.year == year, Draw.category.ilike('%grand slam%'))
+    )
+    gs_draws = gs_result.scalars().all()
+
+    users_result = await db.execute(
+        select(User).where(User.email_verified == True).order_by(User.username)
+    )
+    users = users_result.scalars().all()
+    user_ids = [u.id for u in users]
+
+    atp: dict = defaultdict(float)
+    wta: dict = defaultdict(float)
+
+    for draw in gs_draws:
+        pts_table = _points_table(draw)
+        cm_result = await db.execute(
+            select(Match).where(
+                Match.draw_id == draw.id,
+                Match.status == "completed",
+                Match.is_bye == False,
+            )
+        )
+        completed = cm_result.scalars().all()
+        if not completed:
+            continue
+        for user_id in user_ids:
+            preds_result = await db.execute(
+                select(UserPrediction).where(
+                    UserPrediction.user_id == user_id,
+                    UserPrediction.draw_id == draw.id,
+                    UserPrediction.predicted_winner_id.isnot(None),
+                )
+            )
+            pred_by_match = {p.match_id: p.predicted_winner_id for p in preds_result.scalars().all()}
+            for m in completed:
+                if m.winner_id and pred_by_match.get(m.id) == m.winner_id:
+                    pts = pts_table.get(m.round_number, 0)
+                    if draw.gender == 'M':
+                        atp[user_id] += pts
+                    else:
+                        wta[user_id] += pts
+
+    entries = [
+        {
+            "user_id": u.id,
+            "username": u.username,
+            "full_name": u.full_name,
+            "is_admin": u.is_admin,
+            "atp_points": int(atp[u.id]),
+            "wta_points": int(wta[u.id]),
+        }
+        for u in users
+    ]
+    entries.sort(key=lambda x: -(x["atp_points"] + x["wta_points"]))
+    return {"year": year, "members": entries}
+
+
 @router.get("/global-draws", response_model=list[LeagueTournamentOut])
 async def global_draws(db: AsyncSession = Depends(get_db)):
     """Draws where at least one user has fully entered picks, with global picker counts."""
