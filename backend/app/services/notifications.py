@@ -20,7 +20,7 @@ from app.models.notification import NotificationPreference
 from app.models.prediction import UserPrediction
 from app.models.tournament import Match, Draw
 from app.models.user import User
-from app.services.scoring import rank_users, score_user
+from app.services.scoring import rank_users, score_user, _points_table
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +111,18 @@ async def notify_round_complete(tournament_id: int, round_number: int) -> None:
         if not to_notify:
             return
 
+        # Points for only the just-completed round (to determine round winner)
+        pts_table = _points_table(tournament)
+        round_matches = [m for m in completed_matches if m.round_number == round_number]
+        round_pts_by_user: dict[int, float] = {}
+        for uid in eligible:
+            pred_map = {p.match_id: p.predicted_winner_id for p in preds_by_user[uid]}
+            round_pts_by_user[uid] = sum(
+                pts_table.get(m.round_number, 0)
+                for m in round_matches
+                if m.winner_id and pred_map.get(m.id) == m.winner_id
+            )
+
         # Global scores
         global_scores = {
             uid: score_user(uid, preds_by_user[uid], completed_matches, tournament, None)
@@ -118,6 +130,11 @@ async def notify_round_complete(tournament_id: int, round_number: int) -> None:
         }
         global_ranked = rank_users(list(global_scores.values()))
         global_rank_of = {s.user_id: i + 1 for i, s in enumerate(global_ranked)}
+
+        max_global_round = max(round_pts_by_user.values(), default=0)
+        global_round_winner_ids = [
+            uid for uid, pts in round_pts_by_user.items() if pts == max_global_round and pts > 0
+        ]
 
         # Per-league scores (≥2 participants only)
         lg_res = await db.execute(
@@ -136,11 +153,14 @@ async def notify_round_complete(tournament_id: int, round_number: int) -> None:
                 for uid in participants
             }
             lg_ranked = rank_users(list(lg_scores.values()))
+            lg_round_pts = {uid: round_pts_by_user[uid] for uid in participants}
+            max_lg_round = max(lg_round_pts.values(), default=0)
             league_data[lg.id] = {
                 "name":    lg.name,
                 "rank_of": {s.user_id: i + 1 for i, s in enumerate(lg_ranked)},
                 "total":   len(participants),
                 "points":  {s.user_id: s.total_points for s in lg_ranked},
+                "round_winners": [uid for uid, pts in lg_round_pts.items() if pts == max_lg_round and pts > 0],
             }
 
         user_league_ids: dict[int, list] = defaultdict(list)
@@ -149,18 +169,23 @@ async def notify_round_complete(tournament_id: int, round_number: int) -> None:
                 user_league_ids[uid].append(lg_id)
 
         users_res = await db.execute(
-            select(User.id, User.email).where(User.id.in_(to_notify))
+            select(User.id, User.email, User.username).where(User.id.in_(eligible))
         )
-        user_email = {r[0]: r[1] for r in users_res.all()}
+        user_info = {r[0]: {"email": r[1], "username": r[2]} for r in users_res.all()}
+
+    def _winner_label(winner_ids: list[int]) -> str:
+        if not winner_ids:
+            return "—"
+        return ", ".join(user_info[uid]["username"] for uid in winner_ids if uid in user_info)
 
     for uid in to_notify:
-        email = user_email.get(uid)
+        email = user_info.get(uid, {}).get("email")
         if not email:
             continue
 
         groups = []
         if len(eligible) >= 2:
-            groups.append(("Global", global_rank_of[uid], len(eligible), global_scores[uid].total_points))
+            groups.append(("Global", global_rank_of[uid], len(eligible), global_scores[uid].total_points, _winner_label(global_round_winner_ids)))
         for lg_id in sorted(user_league_ids.get(uid, [])):
             data = league_data[lg_id]
             groups.append((
@@ -168,6 +193,7 @@ async def notify_round_complete(tournament_id: int, round_number: int) -> None:
                 data["rank_of"][uid],
                 data["total"],
                 data["points"][uid],
+                _winner_label(data["round_winners"]),
             ))
 
         if not groups:

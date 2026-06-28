@@ -263,6 +263,18 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
     return Math.max(...vals, 1)
   })
 
+  // A round is complete when the next round has started, or it's the last played round and the final was played
+  const completedRoundNums = new Set(
+    roundsWithMatches.filter((r, i) => i < roundsWithMatches.length - 1 || finalPlayed)
+  )
+  // For each active column, the set of user_ids who won that round (null = round not yet complete or no points)
+  const roundWinnerSets = activeRounds.map((roundIdx) => {
+    if (!completedRoundNums.has(roundIdx + 1)) return null
+    const maxPts = Math.max(...entries.map(e => e.round_points[roundIdx] ?? 0))
+    if (maxPts <= 0) return null
+    return new Set(entries.filter(e => (e.round_points[roundIdx] ?? 0) === maxPts).map(e => e.user_id))
+  })
+
   return (
     <div className="lt-progress-block">
       <div className="lt-progress-header">
@@ -349,10 +361,14 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                   {activeRounds.map((i, col) => {
                     const pts = entry.round_points[i]
                     const fillPct = (pts / perRoundMax[col]) * 100
+                    const isWinner = roundWinnerSets[col]?.has(entry.user_id) ?? false
                     return (
                       <div key={i} className="lt-bar-col" style={{ flex: perRoundMax[col] }} title={`${getRoundLabel(i, numRounds)}: ${pts} pts`}>
                         {pts > 0 ? (
-                          <div className="lt-bar-segment" style={{ width: `${fillPct}%`, background: ROUND_COLORS[i] }}>
+                          <div
+                            className={`lt-bar-segment${isWinner ? ' lt-bar-winner' : ''}`}
+                            style={{ width: `${fillPct}%`, background: ROUND_COLORS[i] }}
+                          >
                             <span className="lt-bar-label" style={{ color: ROUND_DARK_COLORS[i] }}>{pts}</span>
                           </div>
                         ) : (
