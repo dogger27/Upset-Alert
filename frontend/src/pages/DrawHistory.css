@@ -100,7 +100,7 @@
 /* ── Card — shared CSS grid so stats row and results rows share column widths ── */
 .dh-card {
   display: grid;
-  grid-template-columns: auto auto 1fr;
+  grid-template-columns: auto 1fr auto;
   background: #fff;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
@@ -165,12 +165,13 @@
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
-  padding: 2px 4px;
+  padding: 3px 5px;
   border-radius: 4px;
+  border: 1px solid var(--border-strong);
   text-decoration: none;
-  transition: color 0.15s, background 0.15s;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
-.dh-bracket-link:hover { color: var(--green-600); background: var(--bg-subtle); }
+.dh-bracket-link:hover { color: var(--green-600); background: var(--bg-subtle); border-color: var(--green-400); }
 
 /* Category badge */
 .dh-category {
@@ -196,33 +197,34 @@
   color: #888;
   border-bottom: 1px solid var(--border-strong);
 }
-.dh-col-label--group { padding: 5px 32px 5px 16px; }
-.dh-col-label--rank  { padding: 5px 0 5px; }
-.dh-col-label--end   { padding: 5px 16px 5px 0; }
+.dh-col-label--icon  { padding: 5px 0 5px 16px; width: 32px; }
+.dh-col-label--group { padding: 5px 32px 5px 8px; }
+.dh-col-label--rank  { padding: 5px 16px 5px 0; }
 
 /* Result row cells */
+.dh-row-icon {
+  padding: 7px 0 7px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  align-self: center;
+}
 .dh-group-name {
   font-weight: 600;
   font-size: 0.83rem;
   color: var(--ink-800);
-  padding: 7px 32px 7px 16px;
+  padding: 7px 32px 7px 8px;
   border-bottom: 1px solid #f0f0f0;
   align-self: center;
 }
 .dh-rank-cell {
   white-space: nowrap;
-  padding: 7px 0 7px;
+  padding: 7px 16px 7px 0;
   border-bottom: 1px solid #f0f0f0;
   align-self: center;
 }
-.dh-row-end {
-  padding: 7px 16px 7px 0;
-  border-bottom: 1px solid #f0f0f0;
-}
 
+.dh-row-icon.dh-row-last,
 .dh-group-name.dh-row-last,
-.dh-rank-cell.dh-row-last,
-.dh-row-end.dh-row-last { border-bottom: none; }
+.dh-rank-cell.dh-row-last { border-bottom: none; }
 
 .dh-row--global { background: rgba(45,106,79,0.04); }
 

@@ -87,26 +87,30 @@ function TournamentCard({ entry, userId }) {
 
       <div className="dh-divider" />
 
+      <span className="dh-col-label dh-col-label--icon" />
       <span className="dh-col-label dh-col-label--group">Group</span>
       <span className="dh-col-label dh-col-label--rank">Rank</span>
-      <span className="dh-col-label dh-col-label--end" />
 
       {entry.results.map((r, i) => {
         const isGlobal = r.league_id == null
         const isLast = i === entry.results.length - 1
         const cls = (base) =>
           [base, isGlobal ? 'dh-row--global' : '', isLast ? 'dh-row-last' : ''].filter(Boolean).join(' ')
-        const drawUrl = `/tournaments/${entry.tournament_id}?user=${userId ?? ''}${r.league_id ? `&league=${r.league_id}` : ''}`
+        const params = new URLSearchParams()
+        if (userId) params.set('user', String(userId))
+        if (r.league_id) params.set('league', String(r.league_id))
+        const qs = params.toString()
+        const drawUrl = `/tournaments/${entry.tournament_id}${qs ? '?' + qs : ''}`
         return (
           <Fragment key={i}>
-            <span className={cls('dh-group-name')}>{r.league_name}</span>
-            <span className={cls('dh-rank-cell')}>
-              <span className={`dh-rank ${rankBadge(r.rank)}`}>#{r.rank} / {r.total_participants}</span>
-            </span>
-            <span className={cls('dh-row-end')}>
+            <span className={cls('dh-row-icon')}>
               <Link to={drawUrl} className="dh-bracket-link" title={`View draw · ${r.league_name}`}>
                 <BracketIcon />
               </Link>
+            </span>
+            <span className={cls('dh-group-name')}>{r.league_name}</span>
+            <span className={cls('dh-rank-cell')}>
+              <span className={`dh-rank ${rankBadge(r.rank)}`}>#{r.rank} / {r.total_participants}</span>
             </span>
           </Fragment>
         )
