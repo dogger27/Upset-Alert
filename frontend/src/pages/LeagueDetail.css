@@ -447,6 +447,10 @@
   font-size: 0.85rem; font-weight: 600;
   min-width: 0; display: flex; align-items: center; gap: 4px;
 }
+.lt-progress-name--link {
+  color: inherit; text-decoration: none;
+}
+.lt-progress-name--link:hover .lt-progress-name-text { text-decoration: underline; color: var(--green-600); }
 .lt-place-icon { font-size: 0.95rem; flex-shrink: 0; line-height: 1; }
 .lt-progress-name-text {
   display: block;

@@ -328,15 +328,15 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
               <div key={entry.user_id} className="lt-progress-row">
                 <span className="lt-pos-num">{entryIndex + 1}.</span>
                 {entry.full_name && entry.full_name !== entry.username ? (
-                  <span className="lt-progress-name username-hover" data-tooltip={entry.full_name}>
+                  <a href={`/draw-history?user=${entry.user_id}`} target="_blank" rel="noopener noreferrer" className="lt-progress-name lt-progress-name--link username-hover" data-tooltip={entry.full_name}>
                     {finalPlayed && entryIndex < 3 && <span className="lt-place-icon">{PLACE_ICONS[entryIndex]}</span>}
                     <span className="lt-progress-name-text">{entry.username}</span>
-                  </span>
+                  </a>
                 ) : (
-                  <span className="lt-progress-name">
+                  <a href={`/draw-history?user=${entry.user_id}`} target="_blank" rel="noopener noreferrer" className="lt-progress-name lt-progress-name--link">
                     {finalPlayed && entryIndex < 3 && <span className="lt-place-icon">{PLACE_ICONS[entryIndex]}</span>}
                     <span className="lt-progress-name-text">{entry.username}</span>
-                  </span>
+                  </a>
                 )}
                 <button
                   className="lt-bracket-btn"
