@@ -131,33 +131,26 @@
   border-top: 1px solid var(--border-strong);
 }
 
-/* Stats row — col1 | col2 | col3 */
-.dh-bottom-points {
-  padding: 6px 32px 8px 16px;
+/* Stats row — full-width flex, independent of the GROUP/RANK grid columns */
+.dh-stats-row {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  padding: 6px 16px 8px;
   font-size: 0.8rem;
   color: var(--text-muted);
-  white-space: nowrap;
-  align-self: center;
   background: rgba(45,106,79,0.04);
 }
-.dh-bottom-correct {
-  padding: 6px 0 8px;
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  white-space: nowrap;
-  align-self: center;
-  background: rgba(45,106,79,0.04);
-}
+
+.dh-bottom-points  { white-space: nowrap; }
+.dh-bottom-correct { flex: 1; text-align: center; white-space: nowrap; }
+
 .dh-picks-link {
-  padding: 6px 16px 8px 0;
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--green-600, #2d6a4f);
   text-decoration: none;
   white-space: nowrap;
-  text-align: right;
-  align-self: center;
-  background: rgba(45,106,79,0.04);
 }
 .dh-picks-link:hover { text-decoration: underline; }
 

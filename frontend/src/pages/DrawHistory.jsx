@@ -72,12 +72,14 @@ function TournamentCard({ entry }) {
       {/* Dates — spans all 3 grid columns */}
       {dateRange && <div className="dh-card-dates">{dateRange}</div>}
 
-      {/* Stats — 3 separate grid cells (col1 | col2 | col3) */}
-      {r0 && <>
-        <span className="dh-bottom-points">Points: <strong>{r0.points}</strong></span>
-        <span className="dh-bottom-correct">Correct: <strong>{r0.correct_count} / {entry.total_matches}</strong>{pct}</span>
-        <Link className="dh-picks-link" to={`/tournaments/${entry.tournament_id}`}>My Picks →</Link>
-      </>}
+      {/* Stats — single full-width row, flex-centered independently of the grid columns below */}
+      {r0 && (
+        <div className="dh-stats-row">
+          <span className="dh-bottom-points">Points: <strong>{r0.points}</strong></span>
+          <span className="dh-bottom-correct">Correct: <strong>{r0.correct_count} / {entry.total_matches}</strong>{pct}</span>
+          <Link className="dh-picks-link" to={`/tournaments/${entry.tournament_id}`}>My Picks →</Link>
+        </div>
+      )}
 
       {/* Section divider — spans all 3 grid columns */}
       <div className="dh-divider" />
