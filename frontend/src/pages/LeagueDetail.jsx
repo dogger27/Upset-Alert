@@ -519,9 +519,9 @@ function LeagueSettings({ league, onDone, currentUserId }) {
                     className={`settings-admin-btn${m.is_admin ? ' active' : ''}`}
                     onClick={() => adminMutation.mutate({ userId: m.id, isAdmin: !m.is_admin })}
                     disabled={adminMutation.isPending}
-                    title={m.is_admin ? 'Remove admin' : 'Make admin'}
+                    title={m.is_admin ? 'Remove league admin' : 'Make league admin'}
                   >
-                    {m.is_admin ? 'Remove Admin' : 'Make Admin'}
+                    {m.is_admin ? 'Remove League Admin' : 'Make League Admin'}
                   </button>
                 )}
                 {!isOwner && (

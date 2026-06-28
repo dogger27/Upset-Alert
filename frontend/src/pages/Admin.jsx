@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { listTournaments } from '../api/tournaments'
-import { listAdminUsers } from '../api/auth'
+import { listAdminUsers, setUserAdmin } from '../api/auth'
 import { getLogs, clearLogs, getAdminPlayers, getRankingsWeeks, getAdminRankings } from '../api/admin'
 import { getEntryStatus } from '../api/predictions'
 import { useAuth } from '../store/auth'
@@ -68,10 +68,15 @@ function LogDetail({ detail }) {
 }
 
 function UsersPanel({ user }) {
+  const qc = useQueryClient()
   const { data: adminUsers = [], isLoading } = useQuery({
     queryKey: ['admin-users'],
     queryFn: listAdminUsers,
     enabled: !!user,
+  })
+  const adminMutation = useMutation({
+    mutationFn: ({ userId, isAdmin }) => setUserAdmin(userId, isAdmin),
+    onSuccess: () => qc.invalidateQueries(['admin-users']),
   })
   return (
     <div className="card admin-section">
@@ -101,7 +106,18 @@ function UsersPanel({ user }) {
                   <td className="td-left">{u.display_name}</td>
                   <td className="td-left td-muted">@{u.username}</td>
                   <td className="td-left td-muted">{u.email}</td>
-                  <td>{u.is_admin ? '✓' : ''}</td>
+                  <td style={{ whiteSpace: 'nowrap' }}>
+                    {u.is_admin && <span style={{ marginRight: '0.4rem' }}>✓</span>}
+                    {u.id !== user?.id && (
+                      <button
+                        className={u.is_admin ? 'settings-remove-btn' : 'settings-admin-btn'}
+                        disabled={adminMutation.isPending}
+                        onClick={() => adminMutation.mutate({ userId: u.id, isAdmin: !u.is_admin })}
+                      >
+                        {u.is_admin ? 'Remove Admin' : 'Make Admin'}
+                      </button>
+                    )}
+                  </td>
                   <td className="td-muted td-nowrap">{u.created_at}</td>
                 </tr>
               ))}
