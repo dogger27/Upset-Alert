@@ -116,7 +116,7 @@
   align-items: center;
   gap: 14px;
   margin-bottom: 36px;
-  padding: 12px 16px;
+  padding: 10px 16px 14px;
   background: rgba(45,106,79,0.06);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
@@ -126,14 +126,17 @@
   flex-direction: column;
   gap: 6px;
   flex-shrink: 0;
+  align-self: flex-start;
 }
 .dash-league-actions-header {
   font-family: var(--font-display);
   font-weight: 900;
-  font-size: 1.15rem;
-  letter-spacing: 0.06em;
+  font-size: 1.55rem;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--ink-700);
+  line-height: 1;
+  margin-bottom: 2px;
 }
 .dash-league-actions-btns {
   display: flex;
