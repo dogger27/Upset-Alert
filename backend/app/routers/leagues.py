@@ -590,7 +590,8 @@ async def round_scores(
             "correct_count": correct_count,
         })
 
-    entries.sort(key=lambda x: -x["total"])
+    # Primary: total points desc. Tiebreaker: points in latest rounds first (Final → SF → QF → …)
+    entries.sort(key=lambda x: (-x["total"],) + tuple(-rp for rp in reversed(x["round_points"])))
     rounds_with_matches = sorted({m.round_number for m in completed_matches})
     return {
         "entries": entries,
