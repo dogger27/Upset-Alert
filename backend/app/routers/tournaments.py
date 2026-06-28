@@ -12,7 +12,7 @@ from app.models.prediction import UserPrediction
 from app.models.rankings import TePlayer, TeRankingsSnapshot
 from app.models.tournament import DrawEntry, Match, Draw
 from app.models.user import User
-from app.schemas.league import LeaderboardEntry
+from app.schemas.league import LeaderboardEntry, LeagueTournamentOut
 from app.schemas.tournament import DrawEntryOut, DrawOut, MatchOut, TournamentCreate, TournamentOut
 from app.schemas.user import UserPublicOut
 from app.services.rankings import assign_rankings
@@ -328,6 +328,52 @@ async def hall_of_fame(db: AsyncSession = Depends(get_db)):
         {"tier": tier, "men": by_tier[tier]["M"], "women": by_tier[tier]["F"]}
         for tier in _TIER_ORDER
     ]
+
+
+@router.get("/global-draws", response_model=list[LeagueTournamentOut])
+async def global_draws(db: AsyncSession = Depends(get_db)):
+    """Draws where at least one user has fully entered picks, with global picker counts."""
+    from collections import defaultdict
+
+    picks_result = await db.execute(
+        select(
+            UserPrediction.draw_id,
+            UserPrediction.user_id,
+            func.count().label("pick_count"),
+        )
+        .where(UserPrediction.predicted_winner_id.isnot(None))
+        .group_by(UserPrediction.draw_id, UserPrediction.user_id)
+    )
+    picks_rows = picks_result.all()
+
+    t_ids = list({r.draw_id for r in picks_rows})
+    if not t_ids:
+        return []
+
+    totals_result = await db.execute(
+        select(Match.draw_id, func.count().label("total"))
+        .where(Match.draw_id.in_(t_ids), Match.is_bye == False)
+        .group_by(Match.draw_id)
+    )
+    total_by_t = {r.draw_id: r.total for r in totals_result.all()}
+
+    fully_entered: defaultdict = defaultdict(int)
+    for r in picks_rows:
+        if r.pick_count >= total_by_t.get(r.draw_id, 0) > 0:
+            fully_entered[r.draw_id] += 1
+
+    out = []
+    for draw_id, picker_count in fully_entered.items():
+        if picker_count < 1:
+            continue
+        t = await db.get(Draw, draw_id)
+        if t:
+            t.status = t.computed_status
+            out.append(LeagueTournamentOut(
+                tournament=TournamentOut.model_validate(t),
+                picker_count=picker_count,
+            ))
+    return out
 
 
 @router.get("/{tournament_id}", response_model=TournamentOut)

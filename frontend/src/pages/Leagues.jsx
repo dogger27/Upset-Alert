@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useParams, useNavigate, Outlet } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { listLeagues } from '../api/leagues'
-import { listTournaments } from '../api/tournaments'
+import { getGlobalDraws } from '../api/tournaments'
 import { useAuth } from '../store/auth'
 import { computeCohortInfo, getDisplayStatus, DISPLAY_STATUS_LABELS } from '../utils/drawStatus.js'
 import { RoundProgressChart } from './LeagueDetail'
@@ -48,30 +48,31 @@ export function GlobalLeagueView() {
   const [statusFilter, setStatusFilter] = useState(null)
   const [selectedTournamentId, setSelectedTournamentId] = useState(null)
 
-  const { data: tournaments = [] } = useQuery({
-    queryKey: ['tournaments'],
-    queryFn: listTournaments,
+  const { data: globalDraws = [] } = useQuery({
+    queryKey: ['global-draws'],
+    queryFn: getGlobalDraws,
     refetchInterval: 60_000,
   })
 
   const categoryGroups = useMemo(() => {
+    const tournaments = globalDraws.map(lt => lt.tournament)
     const cohortInfo = computeCohortInfo(tournaments)
     const groups = new Map()
-    for (const t of tournaments) {
-      const ds = getDisplayStatus(t, cohortInfo)
+    for (const lt of globalDraws) {
+      const ds = getDisplayStatus(lt.tournament, cohortInfo)
       if (ds === 'upcoming') continue
       if (!groups.has(ds)) groups.set(ds, { key: ds, label: DISPLAY_STATUS_LABELS[ds], order: STATUS_ORDER[ds] ?? 9, items: [] })
-      groups.get(ds).items.push(t)
+      groups.get(ds).items.push(lt)
     }
     for (const g of groups.values()) {
       g.items.sort((a, b) => {
-        const td = tierValue(b.category) - tierValue(a.category)
+        const td = tierValue(b.tournament.category) - tierValue(a.tournament.category)
         if (td !== 0) return td
-        return (b.start_date || '') > (a.start_date || '') ? 1 : -1
+        return (b.tournament.start_date || '') > (a.tournament.start_date || '') ? 1 : -1
       })
     }
     return [...groups.values()].sort((a, b) => a.order - b.order)
-  }, [tournaments])
+  }, [globalDraws])
 
   const countByStatus = Object.fromEntries(STATUS_TABS.map(s => [s, 0]))
   for (const g of categoryGroups) countByStatus[g.key] = g.items.length
@@ -111,15 +112,16 @@ export function GlobalLeagueView() {
           )}
         </div>
         {categoryGroups.length === 0 ? (
-          <p className="muted">No draws available.</p>
+          <p className="muted">No picks have been submitted yet.</p>
         ) : !visibleGroup ? (
           <p className="muted">No draws for this status.</p>
         ) : (
           <div className="lt-category-group">
-            {visibleGroup.items.map(t => (
+            {visibleGroup.items.map(({ tournament: t, picker_count }) => (
               <RoundProgressChart
                 key={t.id}
                 tournament={t}
+                pickerCount={picker_count}
                 leagueId={null}
                 leagueMemberCount={null}
                 selected={selectedTournamentId === t.id}
