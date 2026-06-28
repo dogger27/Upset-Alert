@@ -147,14 +147,19 @@ export default function DrawHistory() {
   }
 
   const years = Object.keys(byYear).sort((a, b) => b - a)
-  const pageTitle = username ? `${username}'s Draw History` : 'My Draw History'
+  const pageTitle = 'Draw History'
 
   if (isLoading) return <div className="dh-page"><div className="dh-container"><p className="dh-state">Loading…</p></div></div>
   if (isError)   return <div className="dh-page"><div className="dh-container"><p className="dh-state dh-state--error">Failed to load draw history.</p></div></div>
   if (!entries || entries.length === 0) return (
     <div className="dh-page">
       <div className="dh-container">
-        <div className="dh-header"><h1 className="dh-title">{pageTitle}</h1></div>
+        <div className="dh-header">
+          <div className="dh-header-row">
+            <h1 className="dh-title">{pageTitle}</h1>
+            {username && <span className="dh-username-label">{username}</span>}
+          </div>
+        </div>
         <p className="dh-state">No completed tournaments yet. <Link to="/">Browse tournaments →</Link></p>
       </div>
     </div>
@@ -164,7 +169,10 @@ export default function DrawHistory() {
     <div className="dh-page">
       <div className="dh-container">
         <div className="dh-header">
-          <h1 className="dh-title">{pageTitle}</h1>
+          <div className="dh-header-row">
+            <h1 className="dh-title">{pageTitle}</h1>
+            {username && <span className="dh-username-label">{username}</span>}
+          </div>
         </div>
 
         {years.map(yr => {
