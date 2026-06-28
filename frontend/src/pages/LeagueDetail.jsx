@@ -299,11 +299,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
           )}
         </div>
         <span className="lt-progress-title">{t.name} {t.year}</span>
-        <span className="lt-progress-meta">
-          {leagueMemberCount != null
-            ? `${pickerCount ?? entries.length}/${leagueMemberCount} competing`
-            : `${entries.length} competing`}
-        </span>
+        {t.surface && <span className="lt-progress-meta">{t.surface}</span>}
       </div>
 
       {toast && <LgToast key={toast.key} message={toast.msg} onDone={() => setToast(null)} />}
