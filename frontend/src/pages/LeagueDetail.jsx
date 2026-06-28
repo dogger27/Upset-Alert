@@ -70,6 +70,7 @@ export default function LeagueDetail() {
     for (const lt of leagueTournaments) {
       const status = lt.tournament.status
       if (status === 'upcoming') continue
+      if (lt.picker_count <= 1) continue
       if (!groups.has(status)) groups.set(status, { key: status, label: STATUS_LABELS[status] ?? status, order: STATUS_ORDER[status] ?? 9, items: [] })
       groups.get(status).items.push(lt)
     }
