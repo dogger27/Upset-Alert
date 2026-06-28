@@ -209,18 +209,15 @@ function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMember
         <p className="lt-progress-empty">No picks submitted yet.</p>
       ) : (
         <>
-          {activeRounds.length > 0 && (
-            <div className="lt-progress-legend">
-              {activeRounds.map(i => (
-                <span key={i} className="lt-legend-item">
-                  <span className="lt-legend-dot" style={{ background: ROUND_COLORS[i] }} />
+          <div className="lt-progress-row lt-progress-header-row">
+            <span /><span />
+            <div className="lt-bar-track">
+              {activeRounds.map((i, col) => (
+                <div key={i} className="lt-bar-col lt-bar-col--label" style={{ flex: perRoundMax[col] }}>
                   {getRoundLabel(i, numRounds)}
-                </span>
+                </div>
               ))}
             </div>
-          )}
-          <div className="lt-progress-row lt-progress-header-row">
-            <span /><span /><span />
             <span className="lt-progress-total lt-progress-col-header">Score</span>
             {completedMatchesCount > 0 && (
               <span className="lt-progress-correct lt-progress-col-header"># Correct</span>
