@@ -211,7 +211,9 @@ export default function LeagueDetail() {
               {(gsData?.members ?? league.members.map(m => ({ user_id: m.id, username: m.username, full_name: m.full_name, atp_points: null, wta_points: null }))).map(m => (
                 <tr key={m.user_id}>
                   <td className="lmt-name" title={m.username}>
-                    <UserName user={{ id: m.user_id, username: m.username, full_name: m.full_name }} showRealName={league.show_real_name} />
+                    <a href={`/draw-history?user=${m.user_id}`} target="_blank" rel="noopener noreferrer" className="lmt-name-link">
+                      <UserName user={{ id: m.user_id, username: m.username, full_name: m.full_name }} showRealName={league.show_real_name} />
+                    </a>
                   </td>
                   <td className="lmt-pts">{m.atp_points ?? '–'}</td>
                   <td className="lmt-pts">{m.wta_points ?? '–'}</td>

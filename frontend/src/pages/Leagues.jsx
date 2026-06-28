@@ -127,7 +127,7 @@ export function GlobalLeagueView() {
               {(gsData?.members ?? []).map(m => (
                 <tr key={m.user_id}>
                   <td className="lmt-name" title={m.username}>
-                    {m.username}
+                    <a href={`/draw-history?user=${m.user_id}`} target="_blank" rel="noopener noreferrer" className="lmt-name-link">{m.username}</a>
                     {m.is_admin && <span className="lmt-admin-badge">Admin</span>}
                   </td>
                   <td className="lmt-pts">{m.atp_points}</td>

@@ -360,6 +360,94 @@ async def get_draw_history(
     return result
 
 
+@router.get("/users/{user_id}/draw-history")
+async def get_user_draw_history(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    from app.models.draw_history import TournamentResult
+    from app.models.tournament import Draw, Match
+    from app.models.prediction import UserPrediction
+    from sqlalchemy import func
+
+    user_res = await db.execute(select(User).where(User.id == user_id))
+    target = user_res.scalar_one_or_none()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    res = await db.execute(
+        select(TournamentResult)
+        .where(TournamentResult.user_id == user_id)
+        .order_by(TournamentResult.draw_id.desc(), TournamentResult.league_id.nullsfirst())
+    )
+    rows = res.scalars().all()
+
+    tourn_ids = list(dict.fromkeys(r.draw_id for r in rows))
+    if not tourn_ids:
+        return {"username": target.username, "entries": []}
+
+    match_counts_res = await db.execute(
+        select(Match.draw_id, func.count().label("total"))
+        .where(Match.draw_id.in_(tourn_ids), Match.is_bye == False)
+        .group_by(Match.draw_id)
+    )
+    total_matches = {row.draw_id: row.total for row in match_counts_res}
+
+    pred_counts_res = await db.execute(
+        select(UserPrediction.draw_id, func.count().label("total"))
+        .where(
+            UserPrediction.draw_id.in_(tourn_ids),
+            UserPrediction.user_id == user_id,
+            UserPrediction.predicted_winner_id.isnot(None),
+        )
+        .group_by(UserPrediction.draw_id)
+    )
+    user_preds = {row.draw_id: row.total for row in pred_counts_res}
+
+    competed_ids = {
+        tid for tid in tourn_ids
+        if user_preds.get(tid, 0) >= total_matches.get(tid, 1)
+    }
+
+    t_res = await db.execute(select(Draw).where(Draw.id.in_(competed_ids)))
+    tournaments = {t.id: t for t in t_res.scalars().all()}
+
+    by_tourn: dict[int, list] = {}
+    for r in rows:
+        if r.draw_id not in competed_ids:
+            continue
+        by_tourn.setdefault(r.draw_id, []).append({
+            "league_id": r.league_id,
+            "league_name": r.league_name,
+            "rank": r.rank,
+            "total_participants": r.total_participants,
+            "points": r.points,
+            "correct_count": r.correct_count,
+        })
+
+    entries = []
+    for tid in tourn_ids:
+        if tid not in competed_ids:
+            continue
+        t = tournaments.get(tid)
+        if not t:
+            continue
+        entries.append({
+            "tournament_id": tid,
+            "name": t.name,
+            "year": t.year,
+            "gender": t.gender,
+            "surface": t.surface,
+            "category": t.category,
+            "start_date": t.start_date,
+            "end_date": t.end_date,
+            "total_matches": total_matches.get(tid, 0),
+            "results": by_tourn[tid],
+        })
+    return {"username": target.username, "entries": entries}
+
+
 @router.post("/admin/backfill-draw-history", status_code=200)
 async def backfill_draw_history(
     db: AsyncSession = Depends(get_db),

@@ -110,14 +110,12 @@
   min-width: 0;
 }
 
-.dh-surface--right { flex-shrink: 0; margin-left: 20px; }
-
-.dh-card-dates {
-  grid-column: 1 / -1;
-  font-size: 0.78rem;
+.dh-date-right {
+  flex-shrink: 0;
+  margin-left: 12px;
+  font-size: 0.75rem;
   color: var(--text-muted);
-  padding: 0 16px 4px;
-  background: rgba(45,106,79,0.04);
+  white-space: nowrap;
 }
 
 .dh-tourn-name {
@@ -142,32 +140,20 @@
   background: rgba(45,106,79,0.04);
 }
 
-.dh-bottom-points  { white-space: nowrap; }
-.dh-bottom-correct { flex: 1; text-align: center; white-space: nowrap; }
+.dh-bottom-points  { white-space: nowrap; margin-right: 24px; }
+.dh-bottom-correct { white-space: nowrap; }
 
-.dh-picks-link {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--green-600, #2d6a4f);
-  text-decoration: none;
-  white-space: nowrap;
-}
-.dh-picks-link:hover { text-decoration: underline; }
-
-/* Surface pill */
-.dh-surface {
-  font-size: 0.68rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+.dh-bracket-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  padding: 2px 4px;
   border-radius: 4px;
-  padding: 2px 6px;
-  color: #fff;
-  white-space: nowrap;
+  text-decoration: none;
+  transition: color 0.15s, background 0.15s;
 }
-.dh-surface--clay  { background: #c0392b; }
-.dh-surface--grass { background: #27ae60; }
-.dh-surface--hard  { background: #2980b9; }
+.dh-bracket-link:hover { color: var(--green-600); background: var(--bg-subtle); }
 
 /* Category badge */
 .dh-category {
