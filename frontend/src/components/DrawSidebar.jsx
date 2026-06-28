@@ -57,9 +57,9 @@ export default function DrawSidebar({ tournamentId, tournament, selectedUserId, 
     leaguePickerCount[lg.id] = d?.isLoading ? null : (d?.data?.entries?.length ?? 0)
   })
 
-  // Only show leagues where ≥1 member competed; show all while still loading
+  // Only show leagues where ≥2 members competed; show all while still loading
   const visibleLeagues = myLeagues.filter(lg =>
-    leaguePickerCount[lg.id] === null || leaguePickerCount[lg.id] > 0
+    leaguePickerCount[lg.id] === null || leaguePickerCount[lg.id] >= 2
   )
 
   const isGlobal = selectedLeagueId === 'global'
