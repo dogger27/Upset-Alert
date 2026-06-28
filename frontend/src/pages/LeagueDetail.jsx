@@ -76,7 +76,7 @@ export default function LeagueDetail() {
     () => leagueTournaments.filter(lt => lt.tournament.status === 'active' && lt.picker_count >= 2),
     [leagueTournaments]
   )
-  const { upcomingRows, completedRows } = useMemo(() => {
+  const { openRows, upcomingRows, completedRows } = useMemo(() => {
     const sortFn = (a, b) => {
       let va, vb
       if (sortBy === 'members') {
@@ -90,9 +90,11 @@ export default function LeagueDetail() {
       return sortDir === 'desc' ? (vb > va ? 1 : -1) : (va > vb ? 1 : -1)
     }
     const nonActive = leagueTournaments.filter(lt => lt.tournament.status !== 'active')
-    const upcoming = nonActive.filter(lt => lt.tournament.status !== 'completed')
+    const open = nonActive.filter(lt => lt.tournament.status === 'open')
+    const upcoming = nonActive.filter(lt => lt.tournament.status === 'upcoming')
     const completed = nonActive.filter(lt => lt.tournament.status === 'completed' && lt.picker_count >= 2)
     return {
+      openRows: [...open].sort(sortFn),
       upcomingRows: [...upcoming].sort(sortFn),
       completedRows: [...completed].sort(sortFn),
     }
@@ -152,7 +154,7 @@ export default function LeagueDetail() {
       {/* Tournaments */}
       <div className="card league-tournaments-section">
         <h2>Tournaments</h2>
-        {activeTournaments.length === 0 && upcomingRows.length === 0 && completedRows.length === 0 ? (
+        {activeTournaments.length === 0 && openRows.length === 0 && upcomingRows.length === 0 && completedRows.length === 0 ? (
           <p className="muted">No picks have been submitted yet. Members can make picks from the Tournaments page.</p>
         ) : (
           <>
@@ -170,8 +172,8 @@ export default function LeagueDetail() {
               />
             ))}
 
-            {/* Upcoming + completed — sortable tables */}
-            {(upcomingRows.length > 0 || completedRows.length > 0) && (() => {
+            {/* Open + upcoming + completed — sortable tables */}
+            {(openRows.length > 0 || upcomingRows.length > 0 || completedRows.length > 0) && (() => {
               const TournRow = ({ tournament: t, picker_count }) => (
                 <tr
                   key={t.id}
@@ -207,9 +209,15 @@ export default function LeagueDetail() {
               )
               return (
                 <div className={`lt-completed-wrap${activeTournaments.length > 0 ? ' lt-completed-wrap--separator' : ''}`}>
+                  {openRows.length > 0 && (
+                    <>
+                      <p className="lt-completed-heading">Open</p>
+                      <TournTable rows={openRows} />
+                    </>
+                  )}
                   {upcomingRows.length > 0 && (
                     <>
-                      {(activeTournaments.length > 0 || completedRows.length > 0) && <p className="lt-completed-heading">Upcoming</p>}
+                      <p className="lt-completed-heading">Upcoming</p>
                       <TournTable rows={upcomingRows} />
                     </>
                   )}
