@@ -34,6 +34,9 @@
   padding: 6px 14px;
   white-space: nowrap;
 }
+.leagues-action-btn:first-of-type {
+  margin-left: 1rem;
+}
 
 /* ── League selector dropdown ── */
 .league-selector {
