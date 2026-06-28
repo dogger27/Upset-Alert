@@ -83,7 +83,7 @@ export default function TournamentDraw() {
 
   // Auto-switch to 'live' when the draw locks mid-session and the user has no picks of their own
   const _isLockedNow = !!(data?.tournament?.is_locked && !data?.tournament?.selections_unlocked)
-  const _userHasPicks = savedPreds ? savedPreds.some(p => p.predicted_winner_id != null) : pickedCount > 0
+  const _userHasPicks = savedPreds ? savedPreds.some(p => p.predicted_winner_id != null) : false
   useEffect(() => {
     if (user && _isLockedNow && !_userHasPicks && viewMode === 'picks' && !viewingOther) {
       setViewMode('live')
