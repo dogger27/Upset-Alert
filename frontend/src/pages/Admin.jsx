@@ -137,7 +137,7 @@ function TournamentsPanel({ user }) {
     .formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value ?? ''
 
   const cohortInfo = computeCohortInfo(tournaments)
-  const displayStatus = t => getDisplayStatus(t, cohortInfo[t.id])
+  const displayStatus = t => getDisplayStatus(t, cohortInfo)
 
   const preYearFiltered = tournaments.filter(t => {
     if (!filterStatus.has(displayStatus(t))) return false

@@ -8,23 +8,23 @@ function LeaguesNav({ myLeagues, currentId }) {
   const navigate = useNavigate()
   return (
     <nav className="leagues-nav-panel">
-      <button
-        className={`leagues-nav-item${!currentId ? ' leagues-nav-item--active' : ''}`}
-        onClick={() => navigate('/')}
-      >
-        <span className="leagues-nav-name">Global</span>
-        <span className="leagues-nav-count">🌍</span>
-      </button>
-      {myLeagues.map(lg => (
+      <div className="leagues-nav-bubble">
         <button
-          key={lg.id}
-          className={`leagues-nav-item${currentId === lg.id ? ' leagues-nav-item--active' : ''}`}
-          onClick={() => navigate(`/leagues/${lg.id}`)}
+          className={`leagues-nav-item${!currentId ? ' leagues-nav-item--active' : ''}`}
+          onClick={() => navigate('/')}
         >
-          <span className="leagues-nav-name">{lg.name}</span>
-          <span className="leagues-nav-count">{lg.member_count}</span>
+          <span className="leagues-nav-name">Global</span>
         </button>
-      ))}
+        {myLeagues.map(lg => (
+          <button
+            key={lg.id}
+            className={`leagues-nav-item${currentId === lg.id ? ' leagues-nav-item--active' : ''}`}
+            onClick={() => navigate(`/leagues/${lg.id}`)}
+          >
+            <span className="leagues-nav-name">{lg.name}</span>
+          </button>
+        ))}
+      </div>
     </nav>
   )
 }

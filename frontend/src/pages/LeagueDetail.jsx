@@ -78,7 +78,7 @@ export default function LeagueDetail() {
     const cohortInfo = computeCohortInfo(tournaments)
     const groups = new Map()
     for (const lt of leagueTournaments) {
-      const ds = getDisplayStatus(lt.tournament, cohortInfo[lt.tournament.id])
+      const ds = getDisplayStatus(lt.tournament, cohortInfo)
       if (ds === 'upcoming') continue
       if (lt.picker_count <= 1) continue
       if (!groups.has(ds)) groups.set(ds, { key: ds, label: DISPLAY_STATUS_LABELS[ds], order: STATUS_ORDER[ds] ?? 9, items: [] })
