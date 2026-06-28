@@ -378,6 +378,7 @@ function InviteModal({ league, onClose }) {
           {copied ? '✓ Copied!' : 'Copy Invite Code'}
         </button>
 
+        <div className="invite-or-divider"><span>OR</span></div>
         <div className="invite-section-heading invite-section-heading--email">Share via Email</div>
         {sendResults ? (
           <div className="invite-email-results">
