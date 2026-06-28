@@ -321,6 +321,7 @@ export default function TournamentDraw() {
 
   const { tournament, matches, draw_entries: players } = data
   const locked = tournament.is_locked && !tournament.selections_unlocked
+  const pickedCount = Object.values(picks).filter(v => v != null).length
   const userHasPicks = savedPreds ? savedPreds.some(p => p.predicted_winner_id != null) : pickedCount > 0
   const picksDisabled = !!user && locked && !userHasPicks
   const picksOwner = viewMode === 'picks' ? (viewingOther ? viewedUserName : user?.username) ?? null : null
@@ -331,7 +332,6 @@ export default function TournamentDraw() {
     : null
 
   const activePicks = viewingOther ? (viewedPicksMap ?? {}) : picks
-  const pickedCount = Object.values(picks).filter(v => v != null).length
   const totalPredictable = matches.filter(m => !m.is_bye).length
 
   // Once picks > 0 this session, keep the badge visible through any transient refetch resets
