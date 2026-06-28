@@ -58,6 +58,26 @@ async def admin_list_users(
     ]
 
 
+@router.patch("/admin/users/{user_id}")
+async def set_user_admin(
+    user_id: int,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin only")
+    if current_user.id == user_id:
+        raise HTTPException(status_code=400, detail="Cannot change your own admin status")
+    result = await db.execute(select(User).where(User.id == user_id))
+    target = result.scalar_one_or_none()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    target.is_admin = bool(body.get("is_admin", False))
+    await db.commit()
+    return {"id": target.id, "is_admin": target.is_admin}
+
+
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 async def register(body: UserRegister, db: AsyncSession = Depends(get_db)):
     email = body.email.lower().strip()
