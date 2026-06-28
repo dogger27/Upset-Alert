@@ -123,8 +123,21 @@
 }
 .dash-league-actions {
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+  gap: 6px;
   flex-shrink: 0;
+}
+.dash-league-actions-header {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-700);
+}
+.dash-league-actions-btns {
+  display: flex;
+  gap: 8px;
 }
 .dash-league-actions .league-sidebar-btn {
   white-space: nowrap;
