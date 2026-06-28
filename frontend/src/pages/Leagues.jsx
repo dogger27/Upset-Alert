@@ -6,6 +6,8 @@ import { getGlobalDraws, getGlobalGSTotals } from '../api/tournaments'
 import { useAuth } from '../store/auth'
 import { computeCohortInfo, getDisplayStatus, DISPLAY_STATUS_LABELS } from '../utils/drawStatus.js'
 import { RoundProgressChart } from './LeagueDetail'
+import { CreateLeagueModal, JoinLeagueModal } from './Home'
+import './Home.css'
 import './Leagues.css'
 
 const STATUS_TABS = ['open', 'active', 'lastweek', 'previous']
@@ -166,6 +168,7 @@ function LeagueSelector({ myLeagues, currentId }) {
 export default function Leagues() {
   const { id } = useParams()
   const { user } = useAuth()
+  const [modal, setModal] = useState(null)
 
   const { data: allLeagues } = useQuery({
     queryKey: ['leagues'],
@@ -181,9 +184,19 @@ export default function Leagues() {
     <div className="leagues-page">
       <div className="leagues-page-top">
         <h1 className="leagues-page-title">Leagues</h1>
-        <LeagueSelector myLeagues={myLeagues} currentId={id ? Number(id) : null} />
+        <div className="leagues-top-right">
+          <LeagueSelector myLeagues={myLeagues} currentId={id ? Number(id) : null} />
+          {user && (
+            <>
+              <button className="btn-secondary leagues-action-btn" onClick={() => setModal('join')}>Join League</button>
+              <button className="btn-primary leagues-action-btn" onClick={() => setModal('create')}>Create League</button>
+            </>
+          )}
+        </div>
       </div>
       <Outlet />
+      {modal === 'create' && <CreateLeagueModal onClose={() => setModal(null)} />}
+      {modal === 'join'   && <JoinLeagueModal   onClose={() => setModal(null)} />}
     </div>
   )
 }

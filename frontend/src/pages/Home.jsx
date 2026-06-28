@@ -153,7 +153,7 @@ function Modal({ title, onClose, children }) {
   )
 }
 
-function CreateLeagueModal({ onClose }) {
+export function CreateLeagueModal({ onClose }) {
   const qc = useQueryClient()
   const navigate = useNavigate()
   const [name, setName] = useState('')
@@ -203,7 +203,7 @@ function LoginRequiredModal({ onClose }) {
   )
 }
 
-function JoinLeagueModal({ onClose }) {
+export function JoinLeagueModal({ onClose }) {
   const qc = useQueryClient()
   const [code, setCode] = useState('')
   const [error, setError] = useState('')
