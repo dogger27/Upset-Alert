@@ -331,8 +331,9 @@
 .lt-bracket-btn:hover { opacity: 1; color: var(--green-dark); }
 .lt-progress-name {
   font-size: 0.85rem; font-weight: 600;
-  min-width: 0;
+  min-width: 0; display: flex; align-items: center; gap: 4px;
 }
+.lt-place-icon { font-size: 0.95rem; flex-shrink: 0; line-height: 1; }
 .lt-progress-name-text {
   display: block;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;

@@ -189,6 +189,8 @@ function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMember
   const roundsWithMatches = rawData?.rounds_with_matches ?? []
 
   const numRounds = entries.length > 0 ? entries[0].round_points.length : (t.num_rounds ?? ROUND_COLORS.length)
+  const finalPlayed = roundsWithMatches.includes(numRounds)
+  const PLACE_ICONS = ['🏆', '🥈', '🥉']
   // rounds_with_matches is 1-indexed; convert to 0-indexed
   const activeRounds = roundsWithMatches.length > 0
     ? roundsWithMatches.map(r => r - 1)
@@ -228,7 +230,7 @@ function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMember
             )}
           </div>
           <div className="lt-progress-rows">
-            {entries.map(entry => (
+            {entries.map((entry, entryIndex) => (
               <div key={entry.user_id} className="lt-progress-row">
                 <button
                   className="lt-bracket-btn"
@@ -259,10 +261,12 @@ function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMember
                 </button>
                 {entry.full_name && entry.full_name !== entry.username ? (
                   <span className="lt-progress-name username-hover" data-tooltip={entry.full_name}>
+                    {finalPlayed && entryIndex < 3 && <span className="lt-place-icon">{PLACE_ICONS[entryIndex]}</span>}
                     <span className="lt-progress-name-text">{entry.username}</span>
                   </span>
                 ) : (
                   <span className="lt-progress-name">
+                    {finalPlayed && entryIndex < 3 && <span className="lt-place-icon">{PLACE_ICONS[entryIndex]}</span>}
                     <span className="lt-progress-name-text">{entry.username}</span>
                   </span>
                 )}
