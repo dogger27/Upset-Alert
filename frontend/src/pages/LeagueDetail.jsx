@@ -270,7 +270,7 @@ function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMember
                     const pts = entry.round_points[i]
                     const fillPct = (pts / perRoundMax[col]) * 100
                     return (
-                      <div key={i} className="lt-bar-col" title={`${getRoundLabel(i, numRounds)}: ${pts} pts`}>
+                      <div key={i} className="lt-bar-col" style={{ flex: perRoundMax[col] }} title={`${getRoundLabel(i, numRounds)}: ${pts} pts`}>
                         <div
                           className="lt-bar-segment"
                           style={{ width: `${fillPct}%`, background: ROUND_COLORS[i] }}
