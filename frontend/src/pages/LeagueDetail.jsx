@@ -112,7 +112,6 @@ export default function LeagueDetail() {
         <div>
           <h1>{league.name}</h1>
           <p className="muted">
-            {SCORING_LABELS[league.scoring_mode]} ·{' '}
             {league.member_count} member{league.member_count !== 1 ? 's' : ''}
           </p>
         </div>
