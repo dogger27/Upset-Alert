@@ -112,12 +112,11 @@
   margin-bottom: 0;
 }
 .league-members-section {
-  width: 220px;
+  width: 250px;
   flex-shrink: 0;
   position: sticky;
   top: 1rem;
   margin-bottom: 0;
-  overflow: hidden;
 }
 .league-members-section h2 { font-size: 1.1rem; margin-bottom: 0.2rem; }
 .league-members-subtitle {
