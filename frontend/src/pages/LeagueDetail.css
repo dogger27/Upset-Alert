@@ -1,4 +1,4 @@
-.league-detail { max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem; }
+.league-detail { padding: 0 0 2rem; }
 
 .league-detail-header {
   display: flex; justify-content: space-between; align-items: flex-start;
@@ -347,10 +347,17 @@
 .lt-progress-block--selected { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
 
 .lt-progress-header {
-  display: flex; align-items: center; gap: 0.5rem;
-  margin-bottom: 0.6rem; flex-wrap: wrap;
+  display: flex; align-items: center;
+  margin-bottom: 0.6rem;
+  position: relative; min-height: 1.6rem;
 }
-.lt-progress-title { font-weight: 700; font-size: 0.95rem; }
+.lt-header-left { display: flex; align-items: center; gap: 0.5rem; }
+.lt-progress-date { font-size: 0.78rem; color: var(--text-muted); white-space: nowrap; }
+.lt-progress-title {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  font-weight: 700; font-size: 0.95rem;
+  white-space: nowrap; max-width: 45%; overflow: hidden; text-overflow: ellipsis;
+}
 .lt-progress-meta { font-size: 0.78rem; color: var(--text-muted); margin-left: auto; }
 .lt-progress-empty { font-size: 0.85rem; color: var(--text-muted); margin: 0; }
 

@@ -34,6 +34,13 @@ function tierValue(category) {
   return 1
 }
 
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+function fmtDrawDate(dateStr) {
+  if (!dateStr) return ''
+  const d = new Date(dateStr + 'T00:00:00')
+  return `${MONTHS[d.getMonth()]} ${String(d.getDate()).padStart(2, '0')}`
+}
+
 function tierLabel(category) {
   const c = (category || '').toUpperCase()
   if (c.includes('SLAM') || c.includes('GRAND')) return 'Grand Slam'
@@ -242,9 +249,16 @@ function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMember
       onClick={onSelect}
     >
       <div className="lt-progress-header">
-        <span className={`lt-gender-badge lt-gender-badge--${t.gender === 'M' ? 'm' : 'f'}`}>
-          {t.gender === 'M' ? 'ATP' : 'WTA'} {tierLabel(t.category)}
-        </span>
+        <div className="lt-header-left">
+          <span className={`lt-gender-badge lt-gender-badge--${t.gender === 'M' ? 'm' : 'f'}`}>
+            {t.gender === 'M' ? 'ATP' : 'WTA'} {tierLabel(t.category)}
+          </span>
+          {(t.start_date || t.end_date) && (
+            <span className="lt-progress-date">
+              {fmtDrawDate(t.start_date)}{t.end_date ? ` – ${fmtDrawDate(t.end_date)}` : ''}
+            </span>
+          )}
+        </div>
         <span className="lt-progress-title">{t.name} {t.year}</span>
         <span className="lt-progress-meta">{pickerCount}/{leagueMemberCount} competing</span>
       </div>
