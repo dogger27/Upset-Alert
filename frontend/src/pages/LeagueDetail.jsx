@@ -165,7 +165,13 @@ export default function LeagueDetail() {
 // R1=Red R2=Orange R3=Yellow R4=Green R5=Blue R6=Purple R7=Violet
 const ROUND_COLORS      = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#d946ef']
 const ROUND_DARK_COLORS = ['#7f1d1d', '#7c2d12', '#713f12', '#14532d', '#1e3a8a', '#3b0764', '#4a044e']
-const ROUND_LABELS = ['R1', 'R2', 'R3', 'R4', 'QF', 'SF', 'F']
+function getRoundLabel(index, numRounds) {
+  const fromEnd = numRounds - 1 - index
+  if (fromEnd === 0) return 'F'
+  if (fromEnd === 1) return 'SF'
+  if (fromEnd === 2) return 'QF'
+  return `R${index + 1}`
+}
 
 function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMemberCount, showRealName, selected, onSelect }) {
   const { user } = useAuth()
@@ -180,8 +186,9 @@ function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMember
   const entries = rawData?.entries ?? []
   const completedMatchesCount = rawData?.completed_matches_count ?? 0
 
+  const numRounds = entries.length > 0 ? entries[0].round_points.length : (t.num_rounds ?? ROUND_COLORS.length)
   const maxTotal = Math.max(...entries.map(e => e.total), 1)
-  const activeRounds = ROUND_COLORS.map((_, i) => entries.some(e => e.round_points[i] > 0) ? i : null).filter(i => i !== null)
+  const activeRounds = Array.from({ length: numRounds }, (_, i) => i).filter(i => entries.some(e => e.round_points[i] > 0))
 
   return (
     <div
@@ -206,7 +213,7 @@ function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMember
               {activeRounds.map(i => (
                 <span key={i} className="lt-legend-item">
                   <span className="lt-legend-dot" style={{ background: ROUND_COLORS[i] }} />
-                  {ROUND_LABELS[i]}
+                  {getRoundLabel(i, numRounds)}
                 </span>
               ))}
             </div>
@@ -266,7 +273,7 @@ function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMember
                         width: `${(pts / maxTotal) * 100}%`,
                         background: ROUND_COLORS[i],
                       }}
-                      title={`${ROUND_LABELS[i]}: ${pts} pts`}
+                      title={`${getRoundLabel(i, numRounds)}: ${pts} pts`}
                     >
                       <span className="lt-bar-label" style={{ color: ROUND_DARK_COLORS[i] }}>{pts}</span>
                     </div>
