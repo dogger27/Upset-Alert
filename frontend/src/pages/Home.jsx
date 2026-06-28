@@ -253,7 +253,7 @@ export default function Home() {
 
   const dataLoaded = tournaments !== undefined
   const cohortInfo = computeCohortInfo(tournaments)
-  const sec = t => getHomeSection(t, cohortInfo[t.id])
+  const sec = t => getHomeSection(t, cohortInfo)
   const active   = tournaments?.filter(t => sec(t) === 'active')   || []
   const open     = tournaments?.filter(t => sec(t) === 'open')     || []
   const lastWeek = tournaments?.filter(t => sec(t) === 'lastweek') || []
