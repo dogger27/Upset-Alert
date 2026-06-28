@@ -260,7 +260,7 @@ async def send_round_complete_notification(
     year: int,
     tournament_id: int,
     round_name: str,
-    groups: list[tuple],  # [(group_name, rank, total_participants, points), ...]
+    groups: list[tuple],  # [(group_name, rank, total_participants, points, round_winner), ...]
 ) -> None:
     """One email per user showing their standing in each group after a round."""
     tournament_url = f"{BASE_URL}/tournaments/{tournament_id}"
@@ -269,8 +269,9 @@ async def send_round_complete_notification(
         f"<td style='padding:8px 12px'>{name}</td>"
         f"<td style='padding:8px 12px;text-align:center'>#{rank}&nbsp;/&nbsp;{total}</td>"
         f"<td style='padding:8px 12px;text-align:right'>{int(pts)}&nbsp;pts</td>"
+        f"<td style='padding:8px 12px;text-align:center;color:#555'>{winner}</td>"
         f"</tr>"
-        for name, rank, total, pts in groups
+        for name, rank, total, pts, winner in groups
     )
     await send_async({
         "from": FROM,
@@ -286,6 +287,7 @@ async def send_round_complete_notification(
                 <th style="padding:8px 12px;text-align:left">League</th>
                 <th style="padding:8px 12px;text-align:center">Rank</th>
                 <th style="padding:8px 12px;text-align:right">Points</th>
+                <th style="padding:8px 12px;text-align:center">{round_name} Winner</th>
               </tr>
             </thead>
             <tbody>{rows}</tbody>
