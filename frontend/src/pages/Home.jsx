@@ -332,6 +332,7 @@ export default function Home() {
           }}>Dashboard</h1>
         </div>
 
+        <div style={{ width: 'fit-content' }}>
         {user && (
           <LeagueStrip
             memberLeagues={memberLeagues}
@@ -386,6 +387,7 @@ export default function Home() {
               pickStatus={pickStatus}
             />
           )}
+        </div>
         </div>
       </div>
 

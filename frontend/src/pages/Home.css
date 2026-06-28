@@ -120,6 +120,8 @@
   background: rgba(45,106,79,0.06);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
+  width: 100%;
+  box-sizing: border-box;
 }
 .dash-league-actions {
   display: flex;
