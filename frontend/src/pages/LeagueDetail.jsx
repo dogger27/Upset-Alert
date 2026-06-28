@@ -134,71 +134,73 @@ export default function LeagueDetail() {
         <LeagueSettings league={league} onDone={() => { setEditing(false); qc.invalidateQueries(['league', id]) }} />
       )}
 
-      {/* Members */}
-      <div className="card league-members-section">
-        <h2>Members</h2>
-        <div className="league-members-list">
-          {league.members.map(m => (
-            <span key={m.id} className="league-member-chip">
-              <UserName user={m} showRealName={league.show_real_name} />
-            </span>
-          ))}
-        </div>
-      </div>
-
-      {/* Draws */}
-      <div className="card league-tournaments-section">
-        {(() => {
-          const STATUS_TABS = ['open', 'active', 'lastweek', 'previous']
-          const countByStatus = Object.fromEntries(STATUS_TABS.map(s => [s, 0]))
-          for (const g of categoryGroups) countByStatus[g.key] = g.items.length
-          const firstNonEmpty = categoryGroups[0]?.key ?? 'open'
-          const activeTab = statusFilter ?? firstNonEmpty
-          const visibleGroup = categoryGroups.find(g => g.key === activeTab)
-          return (
-            <>
-              <div className="lt-draws-header">
-                <h2>Draws</h2>
-                {categoryGroups.length > 0 && (
-                  <div className="lt-status-tabs">
-                    {STATUS_TABS.map(s => {
-                      const count = countByStatus[s]
-                      const empty = count === 0
-                      return (
-                        <button
-                          key={s}
-                          className={['lt-status-tab', activeTab === s && 'lt-status-tab--active', empty && 'lt-status-tab--empty'].filter(Boolean).join(' ')}
-                          disabled={empty}
-                          onClick={() => setStatusFilter(s)}
-                        >
-                          {DISPLAY_STATUS_LABELS[s]} ({count})
-                        </button>
-                      )
-                    })}
+      <div className="league-body-row">
+        {/* Draws */}
+        <div className="card league-tournaments-section">
+          {(() => {
+            const STATUS_TABS = ['open', 'active', 'lastweek', 'previous']
+            const countByStatus = Object.fromEntries(STATUS_TABS.map(s => [s, 0]))
+            for (const g of categoryGroups) countByStatus[g.key] = g.items.length
+            const firstNonEmpty = categoryGroups[0]?.key ?? 'open'
+            const activeTab = statusFilter ?? firstNonEmpty
+            const visibleGroup = categoryGroups.find(g => g.key === activeTab)
+            return (
+              <>
+                <div className="lt-draws-header">
+                  <h2>Draws</h2>
+                  {categoryGroups.length > 0 && (
+                    <div className="lt-status-tabs">
+                      {STATUS_TABS.map(s => {
+                        const count = countByStatus[s]
+                        const empty = count === 0
+                        return (
+                          <button
+                            key={s}
+                            className={['lt-status-tab', activeTab === s && 'lt-status-tab--active', empty && 'lt-status-tab--empty'].filter(Boolean).join(' ')}
+                            disabled={empty}
+                            onClick={() => setStatusFilter(s)}
+                          >
+                            {DISPLAY_STATUS_LABELS[s]} ({count})
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+                {categoryGroups.length === 0 ? (
+                  <p className="muted">No picks have been submitted yet. Members can make picks from the Tournaments page.</p>
+                ) : !visibleGroup ? (
+                  <p className="muted">No draws for this status.</p>
+                ) : (
+                  <div className="lt-category-group">
+                    {visibleGroup.items.map(({ tournament: t, picker_count }) => (
+                      <RoundProgressChart
+                        key={t.id}
+                        tournament={t}
+                        pickerCount={picker_count}
+                        leagueId={Number(id)}
+                        leagueMemberCount={league.member_count}
+                        showRealName={league.show_real_name}
+                      />
+                    ))}
                   </div>
                 )}
+              </>
+            )
+          })()}
+        </div>
+
+        {/* Members sidebar */}
+        <div className="card league-members-section">
+          <h2>Members</h2>
+          <div className="league-members-list">
+            {league.members.map(m => (
+              <div key={m.id} className="league-member-chip">
+                <UserName user={m} showRealName={league.show_real_name} />
               </div>
-              {categoryGroups.length === 0 ? (
-                <p className="muted">No picks have been submitted yet. Members can make picks from the Tournaments page.</p>
-              ) : !visibleGroup ? (
-                <p className="muted">No draws for this status.</p>
-              ) : (
-                <div className="lt-category-group">
-                  {visibleGroup.items.map(({ tournament: t, picker_count }) => (
-                    <RoundProgressChart
-                      key={t.id}
-                      tournament={t}
-                      pickerCount={picker_count}
-                      leagueId={Number(id)}
-                      leagueMemberCount={league.member_count}
-                      showRealName={league.show_real_name}
-                    />
-                  ))}
-                </div>
-              )}
-            </>
-          )
-        })()}
+            ))}
+          </div>
+        </div>
       </div>
 
     </div>
