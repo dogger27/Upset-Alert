@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { listTournaments } from '../api/tournaments'
+import { listTournaments, getGlobalGSTotals } from '../api/tournaments'
 import { listLeagues, createLeague, joinLeague } from '../api/leagues'
 import { getEntryStatus } from '../api/predictions'
 import { useAuth } from '../store/auth'
@@ -234,7 +234,7 @@ export function JoinLeagueModal({ onClose }) {
   )
 }
 
-function LeagueStrip({ memberLeagues, onCreateLeague, onJoinLeague }) {
+function LeagueStrip({ memberLeagues, globalCount, onCreateLeague, onJoinLeague }) {
   const scrollRef = useRef(null)
   const [canScrollLeft, setCanScrollLeft]   = useState(false)
   const [canScrollRight, setCanScrollRight] = useState(false)
@@ -270,12 +270,12 @@ function LeagueStrip({ memberLeagues, onCreateLeague, onJoinLeague }) {
       <div className="dash-league-divider" />
       <div className="dash-league-scroll-wrap">
         <div className="dash-league-scroll" ref={scrollRef}>
-          <LeagueCard name="Global" sublabel="All players" global icon="🌍" to="/leagues" style={{ minWidth: 120 }} />
+          <LeagueCard name="Global" sublabel={globalCount != null ? `${globalCount} Member${globalCount !== 1 ? 's' : ''}` : '…'} global icon="🌍" to="/leagues" style={{ minWidth: 120 }} />
           {memberLeagues.map(lg => (
             <LeagueCard
               key={lg.id}
               name={lg.name}
-              sublabel={`${lg.member_count} member${lg.member_count !== 1 ? 's' : ''}`}
+              sublabel={`${lg.member_count} Member${lg.member_count !== 1 ? 's' : ''}`}
               to={`/leagues/${lg.id}`}
               style={{ minWidth: 120 }}
             />
@@ -293,6 +293,7 @@ export default function Home() {
   const [modal, setModal] = useState(null)
   const { data: tournaments } = useQuery({ queryKey: ['tournaments'], queryFn: listTournaments })
   const { data: leagues } = useQuery({ queryKey: ['leagues'], queryFn: listLeagues, enabled: !!user })
+  const { data: gsData } = useQuery({ queryKey: ['gs-totals'], queryFn: getGlobalGSTotals, enabled: !!user })
   const { data: enteredList } = useQuery({
     queryKey: ['entry-status'],
     queryFn: getEntryStatus,
@@ -336,6 +337,7 @@ export default function Home() {
         {user && (
           <LeagueStrip
             memberLeagues={memberLeagues}
+            globalCount={gsData?.members?.length ?? null}
             onCreateLeague={() => setModal('create')}
             onJoinLeague={() => setModal('join')}
           />
