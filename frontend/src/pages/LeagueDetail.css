@@ -417,9 +417,17 @@
 }
 .lt-progress-meta { font-size: 0.78rem; color: var(--text-muted); margin-left: auto; }
 .lt-progress-empty { font-size: 0.85rem; color: var(--text-muted); margin: 0; }
-.lt-open-notice {
-  padding: 8px 0 6px;
+.lt-competitors-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+  padding: 8px 0 4px;
   border-top: 1px solid var(--border);
+}
+.lt-open-notice {
+  padding: 4px 0 6px;
 }
 .lt-open-notice-main {
   font-size: 0.85rem;

@@ -309,6 +309,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
         <p className="lt-progress-empty">No picks submitted yet.</p>
       ) : t.status === 'open' ? (
         <>
+          <div className="lt-competitors-label">Competitors</div>
           <div className="lt-open-notice">
             <p className="lt-open-notice-main">Match Predictions are In Progress.</p>
             {t.closing_time && (
@@ -334,6 +335,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
         </>
       ) : (
         <>
+          <div className="lt-competitors-label">Competitors</div>
           <div className="lt-progress-row lt-progress-header-row">
             <span /><span /><span />
             <div className="lt-bar-track">
