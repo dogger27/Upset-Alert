@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import { useParams, useNavigate, Outlet } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { listLeagues } from '../api/leagues'
@@ -7,31 +7,6 @@ import { useAuth } from '../store/auth'
 import { computeCohortInfo, getDisplayStatus, DISPLAY_STATUS_LABELS } from '../utils/drawStatus.js'
 import { RoundProgressChart } from './LeagueDetail'
 import './Leagues.css'
-
-function LeaguesNav({ myLeagues, currentId }) {
-  const navigate = useNavigate()
-  return (
-    <nav className="leagues-nav-panel">
-      <div className="leagues-nav-bubble">
-        <button
-          className={`leagues-nav-item${!currentId ? ' leagues-nav-item--active' : ''}`}
-          onClick={() => navigate('/leagues')}
-        >
-          <span className="leagues-nav-name">Global</span>
-        </button>
-        {myLeagues.map(lg => (
-          <button
-            key={lg.id}
-            className={`leagues-nav-item${currentId === lg.id ? ' leagues-nav-item--active' : ''}`}
-            onClick={() => navigate(`/leagues/${lg.id}`)}
-          >
-            <span className="leagues-nav-name">{lg.name}</span>
-          </button>
-        ))}
-      </div>
-    </nav>
-  )
-}
 
 const STATUS_TABS = ['open', 'active', 'lastweek', 'previous']
 const STATUS_ORDER = { open: 0, active: 1, lastweek: 2, previous: 3 }
@@ -53,7 +28,7 @@ export function GlobalLeagueView() {
     refetchInterval: 60_000,
   })
 
-  const categoryGroups = useMemo(() => {
+  const categoryGroups = (() => {
     const tournaments = globalDraws.map(lt => lt.tournament)
     const cohortInfo = computeCohortInfo(tournaments)
     const groups = new Map()
@@ -71,7 +46,7 @@ export function GlobalLeagueView() {
       })
     }
     return [...groups.values()].sort((a, b) => a.order - b.order)
-  }, [globalDraws])
+  })()
 
   const countByStatus = Object.fromEntries(STATUS_TABS.map(s => [s, 0]))
   for (const g of categoryGroups) countByStatus[g.key] = g.items.length
@@ -132,6 +107,29 @@ export function GlobalLeagueView() {
   )
 }
 
+function LeagueSelector({ myLeagues, currentId }) {
+  const navigate = useNavigate()
+  const value = currentId != null ? String(currentId) : 'global'
+  return (
+    <div className="league-selector">
+      <label className="league-selector-label">Selected League:</label>
+      <select
+        className="league-selector-select"
+        value={value}
+        onChange={e => {
+          const v = e.target.value
+          navigate(v === 'global' ? '/leagues' : `/leagues/${v}`)
+        }}
+      >
+        <option value="global">Global</option>
+        {myLeagues.map(lg => (
+          <option key={lg.id} value={String(lg.id)}>{lg.name}</option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
 export default function Leagues() {
   const { id } = useParams()
   const { user } = useAuth()
@@ -150,13 +148,9 @@ export default function Leagues() {
     <div className="leagues-page">
       <div className="leagues-page-top">
         <h1 className="leagues-page-title">Leagues</h1>
+        <LeagueSelector myLeagues={myLeagues} currentId={id ? Number(id) : null} />
       </div>
-      <div className="leagues-layout">
-        <LeaguesNav myLeagues={myLeagues} currentId={id ? Number(id) : null} />
-        <div className="leagues-detail-area">
-          <Outlet />
-        </div>
-      </div>
+      <Outlet />
     </div>
   )
 }
