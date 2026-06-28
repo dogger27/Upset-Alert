@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getLeague, getLeagueTournaments, getRoundScores, updateLeague, setMemberAdmin, removeMember, deleteLeague, shareLeagueByEmail } from '../api/leagues'
@@ -13,6 +13,17 @@ const SCORING_LABELS = {
   custom: 'Custom',
 }
 
+
+function fmtLockTime(closingTime) {
+  if (!closingTime) return ''
+  const d = new Date(closingTime.endsWith('Z') || closingTime.includes('+') ? closingTime : closingTime + 'Z')
+  return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
+}
+
+function LgToast({ message, onDone }) {
+  useEffect(() => { const t = setTimeout(onDone, 4000); return () => clearTimeout(t) }, [onDone])
+  return <div className="lt-toast">{message}</div>
+}
 
 function tierValue(category) {
   const c = (category || '').toUpperCase()
@@ -162,6 +173,9 @@ const ROUND_DARK_COLORS = ['#7f1d1d', '#7c2d12', '#713f12', '#14532d', '#1e3a8a'
 const ROUND_LABELS = ['R1', 'R2', 'R3', 'R4', 'QF', 'SF', 'F']
 
 function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMemberCount, showRealName, selected, onSelect }) {
+  const { user } = useAuth()
+  const [toast, setToast] = useState(null)
+  const toastKey = useRef(0)
   const { data: rawData } = useQuery({
     queryKey: ['round-scores', leagueId, t.id],
     queryFn: () => getRoundScores(leagueId, t.id),
@@ -187,6 +201,7 @@ function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMember
         <span className="lt-progress-meta">{pickerCount}/{leagueMemberCount} competing</span>
       </div>
 
+      {toast && <LgToast key={toast.key} message={toast.msg} onDone={() => setToast(null)} />}
       {entries.length === 0 ? (
         <p className="lt-progress-empty">No picks submitted yet.</p>
       ) : (
@@ -214,7 +229,16 @@ function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMember
                 <button
                   className="lt-bracket-btn"
                   title={`View ${entry.username}'s bracket`}
-                  onClick={e => { e.stopPropagation(); window.open(`/tournaments/${t.id}?user=${entry.user_id}&league=${leagueId}`, '_blank') }}
+                  onClick={e => {
+                    e.stopPropagation()
+                    if (t.status === 'open' && entry.user_id !== user?.id) {
+                      toastKey.current += 1
+                      const lockStr = fmtLockTime(t.closing_time)
+                      setToast({ key: toastKey.current, msg: `Opponents' picks will be available after pick selection closes${lockStr ? ': ' + lockStr : ''}.` })
+                      return
+                    }
+                    window.open(`/tournaments/${t.id}?user=${entry.user_id}&league=${leagueId}`, '_blank')
+                  }}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="17" y1="12" x2="24" y2="12"/>
