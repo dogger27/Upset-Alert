@@ -186,10 +186,13 @@ function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMember
 
   const entries = rawData?.entries ?? []
   const completedMatchesCount = rawData?.completed_matches_count ?? 0
+  const roundsWithMatches = rawData?.rounds_with_matches ?? []
 
   const numRounds = entries.length > 0 ? entries[0].round_points.length : (t.num_rounds ?? ROUND_COLORS.length)
-  const activeRounds = Array.from({ length: numRounds }, (_, i) => i)
-    .filter(i => entries.some(e => e.round_points[i] > 0))
+  // rounds_with_matches is 1-indexed; convert to 0-indexed
+  const activeRounds = roundsWithMatches.length > 0
+    ? roundsWithMatches.map(r => r - 1)
+    : Array.from({ length: numRounds }, (_, i) => i).filter(i => entries.some(e => e.round_points[i] > 0))
   const perRoundMax = activeRounds.map(i => Math.max(...entries.map(e => e.round_points[i]), 1))
 
   return (
@@ -269,12 +272,13 @@ function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMember
                     const fillPct = (pts / perRoundMax[col]) * 100
                     return (
                       <div key={i} className="lt-bar-col" style={{ flex: perRoundMax[col] }} title={`${getRoundLabel(i, numRounds)}: ${pts} pts`}>
-                        <div
-                          className="lt-bar-segment"
-                          style={{ width: `${fillPct}%`, background: ROUND_COLORS[i] }}
-                        >
-                          {pts > 0 && <span className="lt-bar-label" style={{ color: ROUND_DARK_COLORS[i] }}>{pts}</span>}
-                        </div>
+                        {pts > 0 ? (
+                          <div className="lt-bar-segment" style={{ width: `${fillPct}%`, background: ROUND_COLORS[i] }}>
+                            <span className="lt-bar-label" style={{ color: ROUND_DARK_COLORS[i] }}>{pts}</span>
+                          </div>
+                        ) : (
+                          <span className="lt-bar-zero">0</span>
+                        )}
                       </div>
                     )
                   })}

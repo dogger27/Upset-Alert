@@ -591,9 +591,11 @@ async def round_scores(
         })
 
     entries.sort(key=lambda x: -x["total"])
+    rounds_with_matches = sorted({m.round_number for m in completed_matches})
     return {
         "entries": entries,
         "completed_matches_count": len(completed_matches),
+        "rounds_with_matches": rounds_with_matches,
     }
 
 
