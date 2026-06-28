@@ -70,13 +70,19 @@ export default function LeagueDetail() {
   })
 
   // Hooks must be called before any early returns.
-  // Active tournaments → bar chart visualization (always visible)
-  // Non-active (upcoming + completed ≥2 members) → sortable table
-  const activeTournaments = useMemo(
-    () => leagueTournaments.filter(lt => lt.tournament.status === 'active' && lt.picker_count >= 2),
+  // active + open + completed → bar chart; upcoming only → sortable table
+  const STATUS_ORDER = { active: 0, open: 1, completed: 2 }
+  const chartTournaments = useMemo(
+    () => [...leagueTournaments]
+      .filter(lt => lt.tournament.status !== 'upcoming')
+      .sort((a, b) => {
+        const so = (STATUS_ORDER[a.tournament.status] ?? 9) - (STATUS_ORDER[b.tournament.status] ?? 9)
+        if (so !== 0) return so
+        return (b.tournament.start_date || '') > (a.tournament.start_date || '') ? 1 : -1
+      }),
     [leagueTournaments]
   )
-  const { openRows, upcomingRows, completedRows } = useMemo(() => {
+  const upcomingRows = useMemo(() => {
     const sortFn = (a, b) => {
       let va, vb
       if (sortBy === 'members') {
@@ -89,15 +95,7 @@ export default function LeagueDetail() {
       if (va === vb) return 0
       return sortDir === 'desc' ? (vb > va ? 1 : -1) : (va > vb ? 1 : -1)
     }
-    const nonActive = leagueTournaments.filter(lt => lt.tournament.status !== 'active')
-    const open = nonActive.filter(lt => lt.tournament.status === 'open')
-    const upcoming = nonActive.filter(lt => lt.tournament.status === 'upcoming')
-    const completed = nonActive.filter(lt => lt.tournament.status === 'completed' && lt.picker_count >= 2)
-    return {
-      openRows: [...open].sort(sortFn),
-      upcomingRows: [...upcoming].sort(sortFn),
-      completedRows: [...completed].sort(sortFn),
-    }
+    return [...leagueTournaments.filter(lt => lt.tournament.status === 'upcoming')].sort(sortFn)
   }, [leagueTournaments, sortBy, sortDir])
 
   if (isLoading) return <div className="page-loading">Loading…</div>
@@ -154,12 +152,12 @@ export default function LeagueDetail() {
       {/* Tournaments */}
       <div className="card league-tournaments-section">
         <h2>Tournaments</h2>
-        {activeTournaments.length === 0 && openRows.length === 0 && upcomingRows.length === 0 && completedRows.length === 0 ? (
+        {chartTournaments.length === 0 && upcomingRows.length === 0 ? (
           <p className="muted">No picks have been submitted yet. Members can make picks from the Tournaments page.</p>
         ) : (
           <>
-            {/* Active tournaments — round-by-round bar charts */}
-            {activeTournaments.map(({ tournament: t, picker_count }) => (
+            {/* Active / open / completed — bar chart visualization */}
+            {chartTournaments.map(({ tournament: t, picker_count }) => (
               <RoundProgressChart
                 key={t.id}
                 tournament={t}
@@ -172,8 +170,8 @@ export default function LeagueDetail() {
               />
             ))}
 
-            {/* Open + upcoming + completed — sortable tables */}
-            {(openRows.length > 0 || upcomingRows.length > 0 || completedRows.length > 0) && (() => {
+            {/* Upcoming only — sortable table */}
+            {upcomingRows.length > 0 && (() => {
               const TournRow = ({ tournament: t, picker_count }) => (
                 <tr
                   key={t.id}
@@ -194,39 +192,20 @@ export default function LeagueDetail() {
                   </td>
                 </tr>
               )
-              const TournTable = ({ rows }) => (
-                <table className="lt-completed-table">
-                  <thead>
-                    <tr>
-                      <th className="lt-th-tourn">Tournament</th>
-                      <SortTh col="tier" active={sortBy === 'tier'} dir={sortDir} onSort={handleSort}>Category</SortTh>
-                      <SortTh col="start_date" active={sortBy === 'start_date'} dir={sortDir} onSort={handleSort}>Start Date</SortTh>
-                      <SortTh col="members" active={sortBy === 'members'} dir={sortDir} onSort={handleSort}>Members</SortTh>
-                    </tr>
-                  </thead>
-                  <tbody>{rows.map(r => <TournRow key={r.tournament.id} {...r} />)}</tbody>
-                </table>
-              )
               return (
-                <div className={`lt-completed-wrap${activeTournaments.length > 0 ? ' lt-completed-wrap--separator' : ''}`}>
-                  {openRows.length > 0 && (
-                    <>
-                      <p className="lt-completed-heading">Open</p>
-                      <TournTable rows={openRows} />
-                    </>
-                  )}
-                  {upcomingRows.length > 0 && (
-                    <>
-                      <p className="lt-completed-heading">Upcoming</p>
-                      <TournTable rows={upcomingRows} />
-                    </>
-                  )}
-                  {completedRows.length > 0 && (
-                    <>
-                      <p className="lt-completed-heading">Completed</p>
-                      <TournTable rows={completedRows} />
-                    </>
-                  )}
+                <div className={`lt-completed-wrap${chartTournaments.length > 0 ? ' lt-completed-wrap--separator' : ''}`}>
+                  <p className="lt-completed-heading">Upcoming</p>
+                  <table className="lt-completed-table">
+                    <thead>
+                      <tr>
+                        <th className="lt-th-tourn">Tournament</th>
+                        <SortTh col="tier" active={sortBy === 'tier'} dir={sortDir} onSort={handleSort}>Category</SortTh>
+                        <SortTh col="start_date" active={sortBy === 'start_date'} dir={sortDir} onSort={handleSort}>Start Date</SortTh>
+                        <SortTh col="members" active={sortBy === 'members'} dir={sortDir} onSort={handleSort}>Members</SortTh>
+                      </tr>
+                    </thead>
+                    <tbody>{upcomingRows.map(r => <TournRow key={r.tournament.id} {...r} />)}</tbody>
+                  </table>
                 </div>
               )
             })()}
