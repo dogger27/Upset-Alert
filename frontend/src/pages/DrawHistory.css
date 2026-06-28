@@ -13,6 +13,23 @@
   margin-bottom: 28px;
 }
 
+.dh-header-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.dh-username-label {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.5rem;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
 .dh-title {
   font-family: var(--font-display);
   font-weight: 900;
