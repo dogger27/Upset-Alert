@@ -195,7 +195,10 @@ function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMember
   const activeRounds = roundsWithMatches.length > 0
     ? roundsWithMatches.map(r => r - 1)
     : Array.from({ length: numRounds }, (_, i) => i).filter(i => entries.some(e => e.round_points[i] > 0))
-  const perRoundMax = activeRounds.map(i => Math.max(...entries.map(e => e.round_points[i]), 1))
+  const perRoundMax = activeRounds.map(i => {
+    const vals = entries.map(e => e.round_points[i] ?? 0)
+    return Math.max(...vals, 1)
+  })
 
   return (
     <div
