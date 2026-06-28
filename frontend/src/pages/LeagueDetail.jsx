@@ -117,7 +117,8 @@ export default function LeagueDetail() {
         <div className="league-header-actions">
           {canInvite && (
             <button className="btn-secondary" onClick={() => setShowInvite(true)}>
-              Invite
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{verticalAlign:'-2px',marginRight:'5px'}}><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+              Share
             </button>
           )}
           {isOwner && (
@@ -354,11 +355,13 @@ function InviteModal({ league, onClose }) {
     <div className="invite-modal-overlay" onClick={onClose}>
       <div className="invite-modal" onClick={e => e.stopPropagation()}>
         <div className="invite-modal-header">
-          <h3>Invite Friends</h3>
+          <h3>Share League</h3>
           <button className="invite-modal-close" onClick={onClose}>✕</button>
         </div>
+
+        <div className="invite-section-heading">Share via Invite Code</div>
         <p className="invite-modal-msg">
-          Send this invite code to your friends! Tell them to click <strong>Join</strong> from the dashboard and enter this code.
+          Tell friends to click <strong>Join</strong> from the dashboard and enter this code.
         </p>
         <div className="invite-code-block">
           <div className="invite-code-label">Invite Code</div>
@@ -367,6 +370,11 @@ function InviteModal({ league, onClose }) {
         <button className="btn-primary invite-copy-btn" onClick={copy}>
           {copied ? '✓ Copied!' : 'Copy Invite Code'}
         </button>
+
+        <div className="invite-section-heading" style={{marginTop:'1.25rem'}}>Share via Email</div>
+        <p className="invite-modal-msg" style={{marginBottom:0}}>
+          Coming soon.
+        </p>
       </div>
     </div>
   )
