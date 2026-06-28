@@ -216,7 +216,7 @@ function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMember
       ) : (
         <>
           <div className="lt-progress-row lt-progress-header-row">
-            <span /><span />
+            <span /><span /><span />
             <div className="lt-bar-track">
               {activeRounds.map((i, col) => (
                 <div key={i} className="lt-bar-col lt-bar-col--label" style={{ flex: perRoundMax[col] }}>
@@ -232,6 +232,18 @@ function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMember
           <div className="lt-progress-rows">
             {entries.map((entry, entryIndex) => (
               <div key={entry.user_id} className="lt-progress-row">
+                <span className="lt-pos-num">{entryIndex + 1}.</span>
+                {entry.full_name && entry.full_name !== entry.username ? (
+                  <span className="lt-progress-name username-hover" data-tooltip={entry.full_name}>
+                    {finalPlayed && entryIndex < 3 && <span className="lt-place-icon">{PLACE_ICONS[entryIndex]}</span>}
+                    <span className="lt-progress-name-text">{entry.username}</span>
+                  </span>
+                ) : (
+                  <span className="lt-progress-name">
+                    {finalPlayed && entryIndex < 3 && <span className="lt-place-icon">{PLACE_ICONS[entryIndex]}</span>}
+                    <span className="lt-progress-name-text">{entry.username}</span>
+                  </span>
+                )}
                 <button
                   className="lt-bracket-btn"
                   title={`View ${entry.username}'s bracket`}
@@ -259,17 +271,6 @@ function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMember
                     <line x1="3" y1="21" x2="10" y2="21"/>
                   </svg>
                 </button>
-                {entry.full_name && entry.full_name !== entry.username ? (
-                  <span className="lt-progress-name username-hover" data-tooltip={entry.full_name}>
-                    {finalPlayed && entryIndex < 3 && <span className="lt-place-icon">{PLACE_ICONS[entryIndex]}</span>}
-                    <span className="lt-progress-name-text">{entry.username}</span>
-                  </span>
-                ) : (
-                  <span className="lt-progress-name">
-                    {finalPlayed && entryIndex < 3 && <span className="lt-place-icon">{PLACE_ICONS[entryIndex]}</span>}
-                    <span className="lt-progress-name-text">{entry.username}</span>
-                  </span>
-                )}
                 <div className="lt-bar-track">
                   {activeRounds.map((i, col) => {
                     const pts = entry.round_points[i]

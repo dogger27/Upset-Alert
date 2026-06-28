@@ -318,8 +318,12 @@
 .lt-progress-rows { display: flex; flex-direction: column; gap: 0.4rem; }
 .lt-progress-row {
   display: grid;
-  grid-template-columns: 28px 110px 1fr 52px 80px;
+  grid-template-columns: 22px 110px 28px 1fr 52px 80px;
   align-items: center; gap: 0.65rem;
+}
+.lt-pos-num {
+  font-size: 0.75rem; font-weight: 700;
+  color: var(--text-muted); text-align: right;
 }
 .lt-bracket-btn {
   background: none; border: 1.5px solid currentColor; border-radius: 4px;
