@@ -157,7 +157,47 @@
 
 /* Tournament cards */
 .league-tournaments-section { margin-bottom: 1.5rem; }
-.league-tournaments-section h2 { font-size: 1.1rem; margin-bottom: 1rem; }
+.league-tournaments-section h2 { font-size: 1.1rem; margin-bottom: 0; }
+
+.lt-draws-header {
+  display: flex; align-items: center; gap: 1.25rem;
+  flex-wrap: wrap; margin-bottom: 1rem;
+}
+
+.lt-status-tabs {
+  display: flex; gap: 0.35rem; flex-wrap: wrap;
+}
+
+.lt-status-tab {
+  padding: 0.2rem 0.65rem;
+  border: 1.5px solid var(--border);
+  border-radius: 20px;
+  background: transparent;
+  font-size: 0.78rem; font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+.lt-status-tab:hover:not(:disabled) {
+  background: var(--bg-subtle);
+  border-color: var(--text-muted);
+  color: var(--text);
+}
+.lt-status-tab--active {
+  background: var(--green-dark);
+  border-color: var(--green-dark);
+  color: #fff;
+}
+.lt-status-tab--active:hover:not(:disabled) {
+  background: var(--green-dark);
+  border-color: var(--green-dark);
+  color: #fff;
+}
+.lt-status-tab--empty {
+  opacity: 0.38;
+  cursor: default;
+}
 
 .league-tournaments-grid {
   display: flex; flex-wrap: wrap; gap: 0.75rem;

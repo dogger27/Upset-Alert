@@ -50,6 +50,7 @@ export default function LeagueDetail() {
   const [editing, setEditing] = useState(false)
   const [showInvite, setShowInvite] = useState(false)
   const [selectedTournamentId, setSelectedTournamentId] = useState(null)
+  const [statusFilter, setStatusFilter] = useState(null) // null = auto (first non-empty)
 
   const { data: league, isLoading } = useQuery({
     queryKey: ['league', id],
@@ -137,28 +138,61 @@ export default function LeagueDetail() {
         </div>
       </div>
 
-      {/* Tournaments */}
+      {/* Draws */}
       <div className="card league-tournaments-section">
-        <h2>Tournaments</h2>
-        {categoryGroups.length === 0 ? (
-          <p className="muted">No picks have been submitted yet. Members can make picks from the Tournaments page.</p>
-        ) : categoryGroups.map(group => (
-          <div key={group.key} className="lt-category-group">
-            <p className="lt-completed-heading">{group.label}</p>
-            {group.items.map(({ tournament: t, picker_count }) => (
-              <RoundProgressChart
-                key={t.id}
-                tournament={t}
-                pickerCount={picker_count}
-                leagueId={Number(id)}
-                leagueMemberCount={league.member_count}
-                showRealName={league.show_real_name}
-                selected={selectedTournamentId === t.id}
-                onSelect={() => setSelectedTournamentId(t.id === selectedTournamentId ? null : t.id)}
-              />
-            ))}
-          </div>
-        ))}
+        {(() => {
+          const STATUS_TABS = ['open', 'active', 'lastweek', 'previous']
+          const countByStatus = Object.fromEntries(STATUS_TABS.map(s => [s, 0]))
+          for (const g of categoryGroups) countByStatus[g.key] = g.items.length
+          const firstNonEmpty = categoryGroups[0]?.key ?? 'open'
+          const activeTab = statusFilter ?? firstNonEmpty
+          const visibleGroup = categoryGroups.find(g => g.key === activeTab)
+          return (
+            <>
+              <div className="lt-draws-header">
+                <h2 style={{ margin: 0 }}>Draws</h2>
+                {categoryGroups.length > 0 && (
+                  <div className="lt-status-tabs">
+                    {STATUS_TABS.map(s => {
+                      const count = countByStatus[s]
+                      const empty = count === 0
+                      return (
+                        <button
+                          key={s}
+                          className={['lt-status-tab', activeTab === s && 'lt-status-tab--active', empty && 'lt-status-tab--empty'].filter(Boolean).join(' ')}
+                          disabled={empty}
+                          onClick={() => { setStatusFilter(s); setSelectedTournamentId(null) }}
+                        >
+                          {DISPLAY_STATUS_LABELS[s]} ({count})
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+              {categoryGroups.length === 0 ? (
+                <p className="muted">No picks have been submitted yet. Members can make picks from the Tournaments page.</p>
+              ) : !visibleGroup ? (
+                <p className="muted">No draws for this status.</p>
+              ) : (
+                <div className="lt-category-group">
+                  {visibleGroup.items.map(({ tournament: t, picker_count }) => (
+                    <RoundProgressChart
+                      key={t.id}
+                      tournament={t}
+                      pickerCount={picker_count}
+                      leagueId={Number(id)}
+                      leagueMemberCount={league.member_count}
+                      showRealName={league.show_real_name}
+                      selected={selectedTournamentId === t.id}
+                      onSelect={() => setSelectedTournamentId(t.id === selectedTournamentId ? null : t.id)}
+                    />
+                  ))}
+                </div>
+              )}
+            </>
+          )
+        })()}
       </div>
 
     </div>
