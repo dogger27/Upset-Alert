@@ -81,6 +81,15 @@ export default function TournamentDraw() {
     if (searchParams.get('user') || data.tournament.status === 'open' || savedPreds.some(p => p.predicted_winner_id != null)) setViewMode('picks')
   }, [savedPreds, data])
 
+  // Auto-switch to 'live' when the draw locks mid-session and the user has no picks of their own
+  const _isLockedNow = !!(data?.tournament?.is_locked && !data?.tournament?.selections_unlocked)
+  const _userHasPicks = savedPreds ? savedPreds.some(p => p.predicted_winner_id != null) : pickedCount > 0
+  useEffect(() => {
+    if (user && _isLockedNow && !_userHasPicks && viewMode === 'picks' && !viewingOther) {
+      setViewMode('live')
+    }
+  }, [_isLockedNow, _userHasPicks, viewMode, viewingOther, user])
+
   const saveMutation = useMutation({
     mutationFn: (latestPicks) => savePredictions(Number(id), latestPicks),
     onSuccess: () => qc.invalidateQueries(['predictions', id]),
@@ -312,6 +321,8 @@ export default function TournamentDraw() {
 
   const { tournament, matches, draw_entries: players } = data
   const locked = tournament.is_locked && !tournament.selections_unlocked
+  const userHasPicks = savedPreds ? savedPreds.some(p => p.predicted_winner_id != null) : pickedCount > 0
+  const picksDisabled = !!user && locked && !userHasPicks
   const picksOwner = viewMode === 'picks' ? (viewingOther ? viewedUserName : user?.username) ?? null : null
 
   // When viewing another user's picks, build their picks map from fetched predictions
@@ -383,6 +394,8 @@ export default function TournamentDraw() {
             <button
               className={clsx('draw-mode-btn', { active: viewMode === 'picks' })}
               onClick={() => setViewMode('picks')}
+              disabled={picksDisabled}
+              title={picksDisabled ? 'You have no picks for this tournament' : undefined}
             >
               Picks
             </button>

@@ -79,6 +79,14 @@
   background: #f0f7f2;
 }
 
+.draw-mode-btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+.draw-mode-btn:disabled:hover {
+  background: white;
+}
+
 .draw-header {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
