@@ -160,6 +160,7 @@ export default function Navbar() {
           <span className="navbar-label navbar-active">Draw</span>
         )}
         <Link to="/" className={isActive('/') ? 'navbar-active' : ''}>Dashboard</Link>
+        <Link to="/leagues" className={isActive('/leagues') ? 'navbar-active' : ''}>Leagues</Link>
         <Link to="/rules" className={isActive('/rules') ? 'navbar-active' : ''}>Rules</Link>
         <Link to="/hall-of-fame" className={isActive('/hall-of-fame') ? 'navbar-active' : ''}>Hall of Fame</Link>
         <Link to="/about" className={isActive('/about') ? 'navbar-active' : ''}>About</Link>
