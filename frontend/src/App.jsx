@@ -7,6 +7,7 @@ import Login from './pages/Login'
 import Register from './pages/Register'
 import Tournaments from './pages/Tournaments'
 import TournamentDraw from './pages/TournamentDraw'
+import Leagues from './pages/Leagues'
 import LeagueDetail from './pages/LeagueDetail'
 import Admin from './pages/Admin'
 import About from './pages/About'
@@ -44,7 +45,9 @@ export default function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/tournaments" element={<RequireAdmin><Tournaments /></RequireAdmin>} />
         <Route path="/tournaments/:id" element={<TournamentDraw />} />
-        <Route path="/leagues/:id" element={<LeagueDetail />} />
+        <Route path="/leagues" element={<Leagues />}>
+          <Route path=":id" element={<LeagueDetail />} />
+        </Route>
         <Route path="/admin" element={<RequireAdmin><Admin /></RequireAdmin>} />
         <Route path="/about" element={<About />} />
         <Route path="/draw-history" element={<DrawHistory />} />
