@@ -8,6 +8,7 @@ independent of the caller's transaction.
 
 import asyncio
 import logging
+import random
 from collections import defaultdict
 from typing import Optional
 
@@ -176,7 +177,8 @@ async def notify_round_complete(tournament_id: int, round_number: int) -> None:
     def _winner_label(winner_ids: list[int]) -> str:
         if not winner_ids:
             return "—"
-        return ", ".join(user_info[uid]["username"] for uid in winner_ids if uid in user_info)
+        uid = random.choice(winner_ids)
+        return user_info[uid]["username"] if uid in user_info else "—"
 
     for uid in to_notify:
         email = user_info.get(uid, {}).get("email")
