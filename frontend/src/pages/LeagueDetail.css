@@ -101,9 +101,30 @@
 .settings-panel h3 { margin-bottom: 1rem; }
 
 /* Members */
-.league-members-section { margin-bottom: 1.5rem; }
+.league-body-row {
+  display: flex;
+  gap: 1.25rem;
+  align-items: flex-start;
+}
+.league-body-row .league-tournaments-section {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0;
+}
+.league-members-section {
+  width: 160px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 1rem;
+  margin-bottom: 0;
+}
 .league-members-section h2 { font-size: 1.1rem; margin-bottom: 0.75rem; }
-.league-members-list { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.league-members-list { display: flex; flex-direction: column; gap: 0.35rem; }
+.league-members-list .league-member-chip {
+  font-size: 0.85rem;
+  color: var(--text);
+  padding: 0.2rem 0;
+}
 .league-member-chip {
   display: inline-block; padding: 0.3rem 0.75rem;
   background: var(--bg-subtle, #f3f4f6); border: 1px solid var(--border);
@@ -156,7 +177,7 @@
 .settings-delete-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
 
 /* Tournament cards */
-.league-tournaments-section { margin-bottom: 1.5rem; }
+.league-tournaments-section { }
 .league-tournaments-section h2 { font-size: 1.1rem; margin-bottom: 0; }
 
 .lt-draws-header {
