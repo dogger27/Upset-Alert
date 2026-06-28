@@ -4,7 +4,12 @@
   padding: 26px 28px 56px;
 }
 
-.leagues-page-top { margin-bottom: 1.5rem; }
+.leagues-page-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
 
 .leagues-page-title {
   font-family: var(--font-display);
@@ -17,65 +22,34 @@
   margin: 0;
 }
 
-.leagues-layout {
-  display: flex;
-  gap: 2rem;
-  align-items: flex-start;
-}
-
-/* ── Left nav panel ── */
-.leagues-nav-panel {
-  width: 175px;
-  flex-shrink: 0;
-  position: sticky;
-  top: 1rem;
-}
-
-.leagues-nav-bubble {
-  background: white;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: var(--shadow);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.leagues-nav-item {
+/* ── League selector dropdown ── */
+.league-selector {
   display: flex;
   align-items: center;
-  width: 100%;
-  padding: 0.6rem 0.85rem;
-  border: none;
-  border-radius: 0;
-  background: transparent;
+  gap: 0.5rem;
+}
+
+.league-selector-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.league-selector-select {
   font-family: inherit;
   font-size: 0.88rem;
   font-weight: 600;
   color: var(--text);
+  border: 1.5px solid var(--border);
+  border-radius: 6px;
+  padding: 0.38rem 0.65rem;
+  background: white;
   cursor: pointer;
-  text-align: left;
-  transition: background 0.12s, color 0.12s;
-}
-.leagues-nav-item + .leagues-nav-item {
-  border-top: 1px solid var(--border);
-}
-.leagues-nav-item:hover:not(.leagues-nav-item--active) {
-  background: var(--bg-subtle, #f1f5f2);
-}
-.leagues-nav-item--active {
-  background: var(--green-dark);
-  color: #fff;
+  min-width: 140px;
 }
 
-.leagues-nav-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* ── Right detail area ── */
-.leagues-detail-area {
-  flex: 1;
-  min-width: 0;
+.league-selector-select:focus {
+  outline: 2px solid var(--green-dark);
+  outline-offset: 1px;
 }
