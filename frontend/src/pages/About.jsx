@@ -139,15 +139,6 @@ export default function About() {
                 </p>
               </div>
               <div className="about-card">
-                <div className="about-card-icon">📊</div>
-                <h4 className="about-card-heading">Player Data</h4>
-                <p className="about-card-body">
-                  Player seedings reflect the official ATP and WTA world rankings, refreshed weekly.
-                  Head-to-head records and historical match data are also tracked to surface
-                  insights when viewing a draw.
-                </p>
-              </div>
-              <div className="about-card">
                 <div className="about-card-icon">⚡</div>
                 <h4 className="about-card-heading">Fully Autonomous</h4>
                 <p className="about-card-body">
