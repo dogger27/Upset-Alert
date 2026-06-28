@@ -580,7 +580,7 @@ async def round_scores(
             by_round[match.round_number] += pts_table.get(match.round_number, 0)
             correct_count += 1
 
-        pts_list = [by_round.get(r, 0) for r in range(1, 8)]
+        pts_list = [by_round.get(r, 0) for r in range(1, (tournament.num_rounds or 7) + 1)]
         entries.append({
             "user_id": member.user_id,
             "username": member.user.username,
