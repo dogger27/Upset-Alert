@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { listTournaments } from '../api/tournaments'
@@ -234,6 +234,57 @@ export function JoinLeagueModal({ onClose }) {
   )
 }
 
+function LeagueStrip({ memberLeagues, onCreateLeague, onJoinLeague }) {
+  const scrollRef = useRef(null)
+  const [canScrollLeft, setCanScrollLeft]   = useState(false)
+  const [canScrollRight, setCanScrollRight] = useState(false)
+
+  const checkScroll = () => {
+    const el = scrollRef.current
+    if (!el) return
+    setCanScrollLeft(el.scrollLeft > 1)
+    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 1)
+  }
+
+  useEffect(() => {
+    checkScroll()
+    const el = scrollRef.current
+    if (!el) return
+    el.addEventListener('scroll', checkScroll, { passive: true })
+    const ro = new ResizeObserver(checkScroll)
+    ro.observe(el)
+    return () => { el.removeEventListener('scroll', checkScroll); ro.disconnect() }
+  }, [memberLeagues])
+
+  const scroll = (dir) => scrollRef.current?.scrollBy({ left: dir * 220, behavior: 'smooth' })
+
+  return (
+    <div className="dash-league-strip">
+      <div className="dash-league-actions">
+        <button className="league-sidebar-btn" onClick={onCreateLeague}>Create League</button>
+        <button className="league-sidebar-btn" onClick={onJoinLeague}>Join League</button>
+      </div>
+      <div className="dash-league-divider" />
+      <div className="dash-league-scroll-wrap">
+        <div className="dash-league-scroll" ref={scrollRef}>
+          <LeagueCard name="Global" sublabel="All players" global icon="🌍" to="/leagues" style={{ minWidth: 120 }} />
+          {memberLeagues.map(lg => (
+            <LeagueCard
+              key={lg.id}
+              name={lg.name}
+              sublabel={`${lg.member_count} member${lg.member_count !== 1 ? 's' : ''}`}
+              to={`/leagues/${lg.id}`}
+              style={{ minWidth: 120 }}
+            />
+          ))}
+        </div>
+        {canScrollLeft  && <button className="dash-league-arrow dash-league-arrow--left"  onClick={() => scroll(-1)}>‹</button>}
+        {canScrollRight && <button className="dash-league-arrow dash-league-arrow--right" onClick={() => scroll(1)}>›</button>}
+      </div>
+    </div>
+  )
+}
+
 export default function Home() {
   const { user } = useAuth()
   const [modal, setModal] = useState(null)
@@ -271,118 +322,61 @@ export default function Home() {
       )}
 
       <div style={{ maxWidth: 1280, margin: '0 auto', padding: '26px 28px 56px' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 22 }}>
-          <div>
-            <h1 style={{
-              fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: '2.75rem',
-              letterSpacing: '0.01em', lineHeight: 1, color: 'var(--ink-900)', textTransform: 'uppercase',
-            }}>Dashboard</h1>
-          </div>
+        <div style={{ marginBottom: 16 }}>
+          <h1 style={{
+            fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: '2.75rem',
+            letterSpacing: '0.01em', lineHeight: 1, color: 'var(--ink-900)', textTransform: 'uppercase',
+          }}>Dashboard</h1>
         </div>
 
-        <div style={{ display: 'flex', gap: 22, alignItems: 'flex-start' }}>
-          {/* Tournaments column — don't stretch; let content width drive */}
-          <div style={{ flex: '0 0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {user && (
+          <LeagueStrip
+            memberLeagues={memberLeagues}
+            onCreateLeague={() => setModal('create')}
+            onJoinLeague={() => setModal('join')}
+          />
+        )}
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <Section
+            title="Open"
+            accent="open"
+            live
+            description="The draw is out — get your picks locked in now."
+            items={open}
+            section="open"
+            pickStatus={pickStatus}
+            onLoginRequired={() => setModal('login-required')}
+            emptyMessage={dataLoaded ? 'No open tournaments at this time.' : null}
+          />
+          <Section
+            title="Active"
+            accent="active"
+            description="Matches are underway. 🔒 Selection is closed."
+            items={active}
+            section="active"
+            pickStatus={pickStatus}
+            onLoginRequired={() => setModal('login-required')}
+            emptyMessage={dataLoaded ? 'No active tournaments at this time.' : null}
+          />
+          <Section
+            title="Next Week"
+            accent="muted"
+            description="Starting within 8 days — draw not yet released."
+            items={upcoming}
+            section="upcoming"
+            pickStatus={pickStatus}
+          />
+          {user && (
             <Section
-              title="Open"
-              accent="open"
-              live
-              description="The draw is out — get your picks locked in now."
-              items={open}
-              section="open"
-              pickStatus={pickStatus}
-              onLoginRequired={() => setModal('login-required')}
-              emptyMessage={dataLoaded ? 'No open tournaments at this time.' : null}
-            />
-            <Section
-              title="Active"
-              accent="active"
-              description="Matches are underway. 🔒 Selection is closed."
-              items={active}
-              section="active"
-              pickStatus={pickStatus}
-              onLoginRequired={() => setModal('login-required')}
-              emptyMessage={dataLoaded ? 'No active tournaments at this time.' : null}
-            />
-            <Section
-              title="Next Week"
+              title="Last Week"
               accent="muted"
-              description="Starting within 8 days — draw not yet released."
-              items={upcoming}
-              section="upcoming"
+              description="Completed in the past 7 days."
+              items={lastWeek}
+              section="lastweek"
               pickStatus={pickStatus}
             />
-            {user && (
-              <Section
-                title="Last Week"
-                accent="muted"
-                description="Completed in the past 7 days."
-                items={lastWeek}
-                section="lastweek"
-                pickStatus={pickStatus}
-              />
-            )}
-          </div>
-
-          {/* Leagues sidebar — only for logged-in users */}
-          {user && <aside style={{
-            width: 256, flexShrink: 0,
-            background: 'rgba(45,106,79,0.07)', border: '1px solid var(--border-strong)',
-            borderRadius: 'var(--radius-lg)', padding: '22px 20px',
-            position: 'sticky', top: 20,
-          }}>
-            <h2 style={{
-              fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: '1.2rem',
-              letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-700)',
-              marginBottom: 14,
-            }}>Leagues</h2>
-
-            <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-              <button className="league-sidebar-btn" onClick={() => setModal('create')}>Create</button>
-              <button className="league-sidebar-btn" onClick={() => setModal('join')}>Join</button>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <LeagueCard
-                name="Global"
-                sublabel="All players"
-                global
-                icon="🌍"
-                to="/leagues"
-              />
-              {memberLeagues.map(lg => (
-                <LeagueCard
-                  key={lg.id}
-                  name={lg.name}
-                  sublabel={`${lg.member_count} member${lg.member_count !== 1 ? 's' : ''}`}
-                  to={`/leagues/${lg.id}`}
-                />
-              ))}
-              {nonMemberLeagues.length > 0 && (
-                <>
-                  <div style={{
-                    borderTop: '1px solid var(--border)',
-                    margin: '6px 0 2px',
-                  }} />
-                  <div style={{
-                    fontFamily: 'var(--font-body)', fontSize: '0.7rem',
-                    color: 'var(--text-muted)', letterSpacing: '0.05em',
-                    textTransform: 'uppercase', paddingLeft: 2, marginBottom: 4,
-                  }}>Other Leagues</div>
-                  {nonMemberLeagues.map(lg => (
-                    <LeagueCard
-                      key={lg.id}
-                      name={lg.name}
-                      sublabel={`${lg.member_count} member${lg.member_count !== 1 ? 's' : ''}`}
-                      to={`/leagues/${lg.id}`}
-                      style={{ opacity: 0.75 }}
-                    />
-                  ))}
-                </>
-              )}
-
-            </div>
-          </aside>}
+          )}
         </div>
       </div>
 
