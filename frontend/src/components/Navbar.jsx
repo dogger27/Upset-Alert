@@ -192,7 +192,7 @@ export default function Navbar() {
                       </button>
                       <Link
                         className="profile-dropdown-item"
-                        to="/draw-history"
+                        to={`/draw-history?user=${user.id}`}
                         onClick={() => setMenuOpen(false)}
                       >
                         My Draw History
