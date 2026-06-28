@@ -186,6 +186,18 @@
 .ltc-count-num { font-size: 1.25rem; font-weight: 800; color: var(--text); }
 .ltc-count-label { font-size: 0.78rem; color: var(--text-muted); }
 
+.lt-toast {
+  margin: 0.5rem 0 0.75rem;
+  padding: 10px 14px;
+  background: #1e3a5f;
+  color: #fff;
+  border-radius: 8px;
+  font-size: 0.83rem;
+  line-height: 1.4;
+  animation: lt-toast-in 0.2s ease;
+}
+@keyframes lt-toast-in { from { opacity: 0; transform: translateY(-4px) } to { opacity: 1; transform: none } }
+
 /* ── Completed tournaments table ── */
 .lt-completed-wrap { margin-top: 0; }
 .lt-completed-wrap--separator { margin-top: 1.25rem; padding-top: 1.25rem; border-top: 1px solid var(--border); }
