@@ -337,17 +337,21 @@
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .lt-bar-track {
-  height: 34px; border-radius: 3px;
-  background: var(--bg-subtle, #f3f4f6);
-  display: flex; overflow: hidden;
+  height: 34px;
+  display: flex;
+  gap: 3px;
 }
-.lt-bar-segment {
-  height: 100%; flex-shrink: 0; transition: width 0.3s ease;
-  border-right: 2px solid rgba(255,255,255,0.6);
-  display: flex; align-items: center; justify-content: center;
+.lt-bar-col {
+  flex: 1;
+  background: var(--bg-subtle, #f3f4f6);
+  border-radius: 3px;
   overflow: hidden;
 }
-.lt-bar-segment:last-child { border-right: none; }
+.lt-bar-segment {
+  height: 100%; transition: width 0.3s ease;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden; border-radius: 3px;
+}
 .lt-bar-label {
   font-size: 1.3rem; font-weight: 900;
   white-space: nowrap; user-select: none; line-height: 1;

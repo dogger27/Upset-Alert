@@ -187,8 +187,9 @@ function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMember
   const completedMatchesCount = rawData?.completed_matches_count ?? 0
 
   const numRounds = entries.length > 0 ? entries[0].round_points.length : (t.num_rounds ?? ROUND_COLORS.length)
-  const maxTotal = Math.max(...entries.map(e => e.total), 1)
-  const activeRounds = Array.from({ length: numRounds }, (_, i) => i).filter(i => entries.some(e => e.round_points[i] > 0))
+  const activeRounds = Array.from({ length: numRounds }, (_, i) => i)
+    .filter(i => entries.some(e => e.round_points[i] > 0))
+  const perRoundMax = activeRounds.map(i => Math.max(...entries.map(e => e.round_points[i]), 1))
 
   return (
     <div
@@ -265,19 +266,20 @@ function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMember
                   </span>
                 )}
                 <div className="lt-bar-track">
-                  {entry.round_points.map((pts, i) => pts > 0 ? (
-                    <div
-                      key={i}
-                      className="lt-bar-segment"
-                      style={{
-                        width: `${(pts / maxTotal) * 100}%`,
-                        background: ROUND_COLORS[i],
-                      }}
-                      title={`${getRoundLabel(i, numRounds)}: ${pts} pts`}
-                    >
-                      <span className="lt-bar-label" style={{ color: ROUND_DARK_COLORS[i] }}>{pts}</span>
-                    </div>
-                  ) : null)}
+                  {activeRounds.map((i, col) => {
+                    const pts = entry.round_points[i]
+                    const fillPct = (pts / perRoundMax[col]) * 100
+                    return (
+                      <div key={i} className="lt-bar-col" title={`${getRoundLabel(i, numRounds)}: ${pts} pts`}>
+                        <div
+                          className="lt-bar-segment"
+                          style={{ width: `${fillPct}%`, background: ROUND_COLORS[i] }}
+                        >
+                          {pts > 0 && <span className="lt-bar-label" style={{ color: ROUND_DARK_COLORS[i] }}>{pts}</span>}
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
                 <span className="lt-progress-total">{entry.total} pts</span>
                 {completedMatchesCount > 0 && (
