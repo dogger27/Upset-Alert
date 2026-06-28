@@ -178,7 +178,11 @@ async def notify_round_complete(tournament_id: int, round_number: int) -> None:
         if not winner_ids:
             return "—"
         uid = random.choice(winner_ids)
-        return user_info[uid]["username"] if uid in user_info else "—"
+        name = user_info[uid]["username"] if uid in user_info else "—"
+        others = len(winner_ids) - 1
+        if others > 0:
+            return f"{name} + {others} other{'s' if others > 1 else ''}"
+        return name
 
     for uid in to_notify:
         email = user_info.get(uid, {}).get("email")

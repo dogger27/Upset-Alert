@@ -274,6 +274,16 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
     if (maxPts <= 0) return null
     return new Set(entries.filter(e => (e.round_points[roundIdx] ?? 0) === maxPts).map(e => e.user_id))
   })
+  const userById = Object.fromEntries(entries.map(e => [e.user_id, e.username]))
+  const roundWinnerLabels = activeRounds.map((_, col) => {
+    const ws = roundWinnerSets[col]
+    if (!ws || ws.size === 0) return null
+    const names = [...ws].map(uid => userById[uid] ?? '?').sort()
+    const others = names.length - 1
+    return others > 0
+      ? `Round Winner: ${names[0]} + ${others} other${others > 1 ? 's' : ''}`
+      : `Round Winner: ${names[0]}`
+  })
 
   return (
     <div className="lt-progress-block">
@@ -362,8 +372,12 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                     const pts = entry.round_points[i]
                     const fillPct = (pts / perRoundMax[col]) * 100
                     const isWinner = roundWinnerSets[col]?.has(entry.user_id) ?? false
+                    const roundLabel = `${getRoundLabel(i, numRounds)}: ${pts} pts`
+                    const titleText = isWinner && roundWinnerLabels[col]
+                      ? `${roundWinnerLabels[col]}\n${roundLabel}`
+                      : roundLabel
                     return (
-                      <div key={i} className="lt-bar-col" style={{ flex: perRoundMax[col] }} title={`${getRoundLabel(i, numRounds)}: ${pts} pts`}>
+                      <div key={i} className="lt-bar-col" style={{ flex: perRoundMax[col] }} title={titleText}>
                         {pts > 0 ? (
                           <div
                             className={`lt-bar-segment${isWinner ? ' lt-bar-winner' : ''}`}
