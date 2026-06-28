@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useParams, useNavigate, Outlet } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { listLeagues } from '../api/leagues'
-import { getGlobalDraws } from '../api/tournaments'
+import { getGlobalDraws, getGlobalGSTotals } from '../api/tournaments'
 import { useAuth } from '../store/auth'
 import { computeCohortInfo, getDisplayStatus, DISPLAY_STATUS_LABELS } from '../utils/drawStatus.js'
 import { RoundProgressChart } from './LeagueDetail'
@@ -28,7 +28,12 @@ export function GlobalLeagueView() {
     refetchInterval: 60_000,
   })
 
-  const categoryGroups = (() => {
+  const { data: gsData } = useQuery({
+    queryKey: ['global-gs-totals'],
+    queryFn: getGlobalGSTotals,
+  })
+
+  const categoryGroups = useMemo(() => {
     const tournaments = globalDraws.map(lt => lt.tournament)
     const cohortInfo = computeCohortInfo(tournaments)
     const groups = new Map()
@@ -46,7 +51,7 @@ export function GlobalLeagueView() {
       })
     }
     return [...groups.values()].sort((a, b) => a.order - b.order)
-  })()
+  }, [globalDraws])
 
   const countByStatus = Object.fromEntries(STATUS_TABS.map(s => [s, 0]))
   for (const g of categoryGroups) countByStatus[g.key] = g.items.length
@@ -63,45 +68,73 @@ export function GlobalLeagueView() {
         </div>
       </div>
 
-      <div className="card league-tournaments-section">
-        <div className="lt-draws-header">
-          <h2>Draws</h2>
-          {categoryGroups.length > 0 && (
-            <div className="lt-status-tabs">
-              {STATUS_TABS.map(s => {
-                const count = countByStatus[s]
-                const empty = count === 0
-                return (
-                  <button
-                    key={s}
-                    className={['lt-status-tab', activeTab === s && 'lt-status-tab--active', empty && 'lt-status-tab--empty'].filter(Boolean).join(' ')}
-                    disabled={empty}
-                    onClick={() => setStatusFilter(s)}
-                  >
-                    {DISPLAY_STATUS_LABELS[s]} ({count})
-                  </button>
-                )
-              })}
+      <div className="league-body-row">
+        <div className="card league-tournaments-section">
+          <div className="lt-draws-header">
+            <h2>Draws</h2>
+            {categoryGroups.length > 0 && (
+              <div className="lt-status-tabs">
+                {STATUS_TABS.map(s => {
+                  const count = countByStatus[s]
+                  const empty = count === 0
+                  return (
+                    <button
+                      key={s}
+                      className={['lt-status-tab', activeTab === s && 'lt-status-tab--active', empty && 'lt-status-tab--empty'].filter(Boolean).join(' ')}
+                      disabled={empty}
+                      onClick={() => setStatusFilter(s)}
+                    >
+                      {DISPLAY_STATUS_LABELS[s]} ({count})
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+          {categoryGroups.length === 0 ? (
+            <p className="muted">No picks have been submitted yet.</p>
+          ) : !visibleGroup ? (
+            <p className="muted">No draws for this status.</p>
+          ) : (
+            <div className="lt-category-group">
+              {visibleGroup.items.map(({ tournament: t, picker_count }) => (
+                <RoundProgressChart
+                  key={t.id}
+                  tournament={t}
+                  pickerCount={picker_count}
+                  leagueId={null}
+                  leagueMemberCount={null}
+                />
+              ))}
             </div>
           )}
         </div>
-        {categoryGroups.length === 0 ? (
-          <p className="muted">No picks have been submitted yet.</p>
-        ) : !visibleGroup ? (
-          <p className="muted">No draws for this status.</p>
-        ) : (
-          <div className="lt-category-group">
-            {visibleGroup.items.map(({ tournament: t, picker_count }) => (
-              <RoundProgressChart
-                key={t.id}
-                tournament={t}
-                pickerCount={picker_count}
-                leagueId={null}
-                leagueMemberCount={null}
-              />
-            ))}
-          </div>
-        )}
+
+        <div className="card league-members-section">
+          <h2>Members</h2>
+          <p className="league-members-subtitle">{gsData?.year ?? new Date().getFullYear()} Grand Slam Point Tally</p>
+          <table className="league-members-table">
+            <thead>
+              <tr>
+                <th className="lmt-name" />
+                <th className="lmt-pts">ATP</th>
+                <th className="lmt-pts">WTA</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(gsData?.members ?? []).map(m => (
+                <tr key={m.user_id}>
+                  <td className="lmt-name">
+                    {m.username}
+                    {m.is_admin && <span className="lmt-admin-badge">Admin</span>}
+                  </td>
+                  <td className="lmt-pts">{m.atp_points}</td>
+                  <td className="lmt-pts">{m.wta_points}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   )
