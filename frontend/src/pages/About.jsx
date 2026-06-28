@@ -129,12 +129,16 @@ export default function About() {
             <div className="about-grid">
               <div className="about-card">
                 <div className="about-card-icon">🌐</div>
-                <h4 className="about-card-heading">Real-Time Results</h4>
+                <h4 className="about-card-heading">Data Sources</h4>
                 <p className="about-card-body">
-                  Tournament draws and match results are sourced from{' '}
-                  <a href="https://en.wikipedia.org" target="_blank" rel="noopener noreferrer">Wikipedia</a>.
-                  As soon as a result is posted there, Upset Alert picks it up automatically —
-                  typically within minutes, with no manual step.
+                  Tournament Data &amp; Draws:{' '}
+                  <a href="https://en.wikipedia.org" target="_blank" rel="noopener noreferrer">Wikipedia</a>
+                  <br />
+                  Match Results:{' '}
+                  <a href="https://www.espn.com" target="_blank" rel="noopener noreferrer">ESPN</a>
+                  <br />
+                  Weekly Rankings &amp; Player Data:{' '}
+                  <a href="https://www.tennisexplorer.com" target="_blank" rel="noopener noreferrer">Tennis Explorer</a>
                 </p>
               </div>
               <div className="about-card">
