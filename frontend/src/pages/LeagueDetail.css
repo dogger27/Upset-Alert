@@ -190,6 +190,9 @@
 .lt-completed-wrap { margin-top: 0; }
 .lt-completed-wrap--separator { margin-top: 1.25rem; padding-top: 1.25rem; border-top: 1px solid var(--border); }
 
+.lt-category-group { margin-bottom: 0.5rem; }
+.lt-category-group + .lt-category-group { margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border); }
+
 .lt-completed-heading {
   font-size: 0.72rem;
   font-weight: 700;
