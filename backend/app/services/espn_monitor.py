@@ -432,6 +432,7 @@ class ESPNMonitor:
     async def _on_match_start(self, tournament_id: int, trigger_name: str) -> None:
         from app.services import broadcaster
         from app.services.notifications import notify_match_start
+        from app.services.system_log import app_log
 
         now = datetime.now(timezone.utc)
 
@@ -440,17 +441,48 @@ class ESPNMonitor:
             if tournament is None or tournament.picks_locked_at is not None:
                 return  # already handled (race guard)
 
+            # Capture predicted closing_time before overwriting it
+            original_ct = tournament.closing_time
+
             tournament.picks_locked_at = now
             tournament.closing_time = now
             name, year, tid = tournament.name, tournament.year, tournament.id
             await db.commit()
 
+        # Build timing comparison
+        actual_str = now.strftime("%Y-%m-%d %H:%M:%S UTC")
+        if original_ct is not None:
+            ct_aware = original_ct.replace(tzinfo=timezone.utc) if original_ct.tzinfo is None else original_ct
+            diff_seconds = (now - ct_aware).total_seconds()
+            abs_min = int(abs(diff_seconds) // 60)
+            abs_sec = int(abs(diff_seconds) % 60)
+            direction = "late" if diff_seconds >= 0 else "early"
+            sign = "+" if diff_seconds >= 0 else "-"
+            predicted_str = ct_aware.strftime("%Y-%m-%d %H:%M:%S UTC")
+            diff_str = f"{sign}{abs_min}m {abs_sec}s ({direction})"
+        else:
+            predicted_str = "not set"
+            diff_str = "N/A"
+            diff_seconds = None
+
         await broadcaster.publish(tournament_id)
 
         asyncio.create_task(notify_match_start(tid, name, year))
         logger.info(
-            "Picks locked: %d %s — trigger: %s",
-            year, name, trigger_name,
+            "Picks locked: %d %s — trigger: %s | predicted=%s actual=%s diff=%s",
+            year, name, trigger_name, predicted_str, actual_str, diff_str,
+        )
+        await app_log(
+            "info", "espn",
+            f"{year} {name}: first match live — predicted {predicted_str}, actual {actual_str}, diff {diff_str}",
+            {
+                "tournament_id": tid,
+                "trigger_player": trigger_name,
+                "predicted_closing_time": predicted_str,
+                "actual_detection_time": actual_str,
+                "diff_seconds": round(diff_seconds) if diff_seconds is not None else None,
+                "diff_str": diff_str,
+            },
         )
 
     # ------------------------------------------------------------------
