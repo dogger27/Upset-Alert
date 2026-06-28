@@ -519,6 +519,81 @@ async def leaderboard(
     )
 
 
+@router.get("/{league_id}/grand-slam-totals")
+async def grand_slam_totals(
+    league_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
+):
+    """Total Grand Slam pick points this year per member, split by ATP/WTA."""
+    from datetime import date
+    from collections import defaultdict
+    from app.services.scoring import _points_table
+
+    result = await db.execute(
+        select(League)
+        .options(selectinload(League.members).selectinload(LeagueMember.user))
+        .where(League.id == league_id)
+    )
+    league = result.scalar_one_or_none()
+    if not league:
+        raise HTTPException(404, "League not found")
+    _check_access(league, current_user)
+
+    year = date.today().year
+    gs_result = await db.execute(
+        select(Draw).where(Draw.year == year, Draw.category.ilike('%grand slam%'))
+    )
+    gs_draws = gs_result.scalars().all()
+
+    member_ids = [m.user_id for m in league.members]
+    atp: dict = defaultdict(float)
+    wta: dict = defaultdict(float)
+
+    for draw in gs_draws:
+        pts_table = _points_table(draw)
+        cm_result = await db.execute(
+            select(Match).where(
+                Match.draw_id == draw.id,
+                Match.status == "completed",
+                Match.is_bye == False,
+            )
+        )
+        completed = cm_result.scalars().all()
+        if not completed:
+            continue
+
+        for user_id in member_ids:
+            preds_result = await db.execute(
+                select(UserPrediction).where(
+                    UserPrediction.user_id == user_id,
+                    UserPrediction.draw_id == draw.id,
+                    UserPrediction.predicted_winner_id.isnot(None),
+                )
+            )
+            pred_by_match = {p.match_id: p.predicted_winner_id for p in preds_result.scalars().all()}
+            for m in completed:
+                if m.winner_id and pred_by_match.get(m.id) == m.winner_id:
+                    pts = pts_table.get(m.round_number, 0)
+                    if draw.gender == 'M':
+                        atp[user_id] += pts
+                    else:
+                        wta[user_id] += pts
+
+    entries = [
+        {
+            "user_id": mem.user_id,
+            "username": mem.user.username,
+            "full_name": mem.user.full_name,
+            "atp_points": int(atp[mem.user_id]),
+            "wta_points": int(wta[mem.user_id]),
+        }
+        for mem in league.members
+    ]
+    entries.sort(key=lambda x: -(x["atp_points"] + x["wta_points"]))
+    return {"year": year, "members": entries}
+
+
 @router.get("/{league_id}/round-scores")
 async def round_scores(
     league_id: int,

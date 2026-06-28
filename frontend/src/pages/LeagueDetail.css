@@ -118,12 +118,36 @@
   top: 1rem;
   margin-bottom: 0;
 }
-.league-members-section h2 { font-size: 1.1rem; margin-bottom: 0.75rem; }
-.league-members-list { display: flex; flex-direction: column; gap: 0.35rem; }
-.league-members-list .league-member-chip {
-  font-size: 0.85rem;
-  color: var(--text);
-  padding: 0.2rem 0;
+.league-members-section h2 { font-size: 1.1rem; margin-bottom: 0.2rem; }
+.league-members-subtitle {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-style: italic;
+  margin: 0 0 0.75rem;
+}
+.league-members-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+}
+.league-members-table thead th {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--border);
+}
+.league-members-table tbody tr + tr td { border-top: 1px solid var(--border); }
+.league-members-table td { padding: 0.35rem 0; }
+.lmt-name { text-align: left; color: var(--text); }
+.lmt-pts {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  padding-left: 0.5rem;
+  white-space: nowrap;
 }
 .league-member-chip {
   display: inline-block; padding: 0.3rem 0.75rem;
