@@ -164,7 +164,11 @@ export default function DrawHistory() {
             {username && <span className="dh-username-label">{username}</span>}
           </div>
         </div>
-        <p className="dh-state">No completed tournaments yet. <Link to="/">Browse tournaments →</Link></p>
+        <p className="dh-state">
+          {username
+            ? <><strong>{username}</strong> has not yet completed any draws.</>
+            : <>You have not yet completed any draws. <Link to="/">Browse tournaments →</Link></>}
+        </p>
       </div>
     </div>
   )
