@@ -38,6 +38,12 @@ export default function Rules() {
                   <tr><td>Slam</td><td>1</td><td>2</td><td>4</td><td>8</td><td>12</td><td>16</td><td>20</td></tr>
                 </tbody>
               </table>
+              <p className="about-card-body" style={{marginTop:'0.85rem',fontSize:'0.85rem',color:'var(--text-muted)'}}>
+                <strong>Tiebreaker:</strong> If two players finish with equal points, the player
+                with more points in the Final is ranked higher. If still tied, the Semi-Final
+                is used as the next tiebreaker, then the Quarter-Final, and so on back through
+                the earlier rounds.
+              </p>
             </div>
             <div className="about-card">
               <div className="about-card-icon">🏆</div>
