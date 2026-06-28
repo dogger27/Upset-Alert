@@ -8,6 +8,7 @@ import { useAuth } from '../store/auth'
 import { TournamentCard } from '../components/design/TournamentCard.jsx'
 import { SectionHeader } from '../components/design/SectionHeader.jsx'
 import { LeagueCard } from '../components/design/LeagueCard.jsx'
+import { computeCohortInfo, getHomeSection } from '../utils/drawStatus.js'
 import './Home.css'
 
 function fmtDate(s) {
@@ -36,55 +37,6 @@ function tierFromCategory(category) {
   return '250'
 }
 
-// Cluster ALL draws (any status) where consecutive end_dates are ≤1 day apart.
-// Returns a map of id → { cohortMaxDate, cohortHasActive }.
-// A completed draw whose cohort still contains an active draw is held in Active
-// until the whole cohort finishes, then they all move to Last Week together.
-function computeCohortInfo(tournaments) {
-  const ONE_DAY_MS = 86400000
-  const withDate = (tournaments || [])
-    .filter(t => t.end_date)
-    .sort((a, b) => a.end_date.localeCompare(b.end_date))
-  if (!withDate.length) return {}
-  const result = {}
-  let clusterStart = 0
-  for (let i = 1; i <= withDate.length; i++) {
-    const isLast = i === withDate.length
-    const gap = isLast ? Infinity
-      : new Date(withDate[i].end_date + 'T00:00:00') - new Date(withDate[i - 1].end_date + 'T00:00:00')
-    if (isLast || gap > ONE_DAY_MS) {
-      const cluster = withDate.slice(clusterStart, i)
-      const cohortMaxDate = cluster[cluster.length - 1].end_date
-      const cohortHasActive = cluster.some(t => t.status === 'active')
-      for (const t of cluster) result[t.id] = { cohortMaxDate, cohortHasActive }
-      clusterStart = i
-    }
-  }
-  return result
-}
-
-function getSection(t, cohortInfo) {
-  if (t.status === 'active') return 'active'
-  if (t.status === 'open') return 'open'
-  if (t.status === 'completed') {
-    // Hold in Active if a cohort-mate is still playing
-    if (cohortInfo?.cohortHasActive) return 'active'
-    const endDate = cohortInfo?.cohortMaxDate ?? t.end_date
-    if (endDate) {
-      const today = new Date(); today.setHours(0, 0, 0, 0)
-      const end = new Date(endDate + 'T00:00:00')
-      const daysAgo = (today - end) / (1000 * 60 * 60 * 24)
-      if (daysAgo >= 0 && daysAgo <= 7) return 'lastweek'
-    }
-  }
-  if (t.status === 'upcoming' && t.start_date) {
-    const today = new Date(); today.setHours(0, 0, 0, 0)
-    const in8Days = new Date(today); in8Days.setDate(today.getDate() + 8)
-    const start = new Date(t.start_date + 'T00:00:00')
-    if (start > today && start <= in8Days) return 'upcoming'
-  }
-  return null
-}
 
 function TCard({ t, section, pickStatus, onLoginRequired }) {
   const { user } = useAuth()
@@ -301,7 +253,7 @@ export default function Home() {
 
   const dataLoaded = tournaments !== undefined
   const cohortInfo = computeCohortInfo(tournaments)
-  const sec = t => getSection(t, cohortInfo[t.id])
+  const sec = t => getHomeSection(t, cohortInfo[t.id])
   const active   = tournaments?.filter(t => sec(t) === 'active')   || []
   const open     = tournaments?.filter(t => sec(t) === 'open')     || []
   const lastWeek = tournaments?.filter(t => sec(t) === 'lastweek') || []
