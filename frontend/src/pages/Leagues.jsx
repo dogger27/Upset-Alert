@@ -46,7 +46,6 @@ function tierValue(category) {
 
 export function GlobalLeagueView() {
   const [statusFilter, setStatusFilter] = useState(null)
-  const [selectedTournamentId, setSelectedTournamentId] = useState(null)
 
   const { data: globalDraws = [] } = useQuery({
     queryKey: ['global-draws'],
@@ -102,7 +101,7 @@ export function GlobalLeagueView() {
                     key={s}
                     className={['lt-status-tab', activeTab === s && 'lt-status-tab--active', empty && 'lt-status-tab--empty'].filter(Boolean).join(' ')}
                     disabled={empty}
-                    onClick={() => { setStatusFilter(s); setSelectedTournamentId(null) }}
+                    onClick={() => setStatusFilter(s)}
                   >
                     {DISPLAY_STATUS_LABELS[s]} ({count})
                   </button>
@@ -124,8 +123,6 @@ export function GlobalLeagueView() {
                 pickerCount={picker_count}
                 leagueId={null}
                 leagueMemberCount={null}
-                selected={selectedTournamentId === t.id}
-                onSelect={() => setSelectedTournamentId(t.id === selectedTournamentId ? null : t.id)}
               />
             ))}
           </div>

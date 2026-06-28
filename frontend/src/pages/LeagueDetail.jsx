@@ -57,7 +57,7 @@ export default function LeagueDetail() {
   const qc = useQueryClient()
   const [editing, setEditing] = useState(false)
   const [showInvite, setShowInvite] = useState(false)
-  const [selectedTournamentId, setSelectedTournamentId] = useState(null)
+
   const [statusFilter, setStatusFilter] = useState(null) // null = auto (first non-empty)
 
   const { data: league, isLoading } = useQuery({
@@ -169,7 +169,7 @@ export default function LeagueDetail() {
                           key={s}
                           className={['lt-status-tab', activeTab === s && 'lt-status-tab--active', empty && 'lt-status-tab--empty'].filter(Boolean).join(' ')}
                           disabled={empty}
-                          onClick={() => { setStatusFilter(s); setSelectedTournamentId(null) }}
+                          onClick={() => setStatusFilter(s)}
                         >
                           {DISPLAY_STATUS_LABELS[s]} ({count})
                         </button>
@@ -192,8 +192,6 @@ export default function LeagueDetail() {
                       leagueId={Number(id)}
                       leagueMemberCount={league.member_count}
                       showRealName={league.show_real_name}
-                      selected={selectedTournamentId === t.id}
-                      onSelect={() => setSelectedTournamentId(t.id === selectedTournamentId ? null : t.id)}
                     />
                   ))}
                 </div>
@@ -218,7 +216,7 @@ function getRoundLabel(index, numRounds) {
   return `R${index + 1}`
 }
 
-export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMemberCount, showRealName, selected, onSelect }) {
+export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMemberCount, showRealName }) {
   const { user } = useAuth()
   const [toast, setToast] = useState(null)
   const toastKey = useRef(0)
@@ -245,10 +243,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
   })
 
   return (
-    <div
-      className={`lt-progress-block${selected ? ' lt-progress-block--selected' : ''}`}
-      onClick={onSelect}
-    >
+    <div className="lt-progress-block">
       <div className="lt-progress-header">
         <div className="lt-header-left">
           <span className={`lt-gender-badge lt-gender-badge--${t.gender === 'M' ? 'm' : 'f'}`}>
