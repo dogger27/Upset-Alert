@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getLeague, getLeagueTournaments, getRoundScores, updateLeague, setMemberAdmin, removeMember, deleteLeague, shareLeagueByEmail } from '../api/leagues'
 import { useAuth } from '../store/auth'
 import UserName from '../components/UserName'
+import { computeCohortInfo, getDisplayStatus, DISPLAY_STATUS_LABELS } from '../utils/drawStatus.js'
 import './LeagueDetail.css'
 
 const SCORING_LABELS = {
@@ -61,18 +62,19 @@ export default function LeagueDetail() {
     refetchInterval: 60_000,
   })
 
-  // Group non-upcoming tournaments by status: Open → Active → Completed.
+  // Group non-upcoming tournaments by display status: Open → Active → Last Week → Previous.
   // Within each group sort by tier desc, then start_date desc.
-  const STATUS_ORDER = { open: 0, active: 1, completed: 2 }
-  const STATUS_LABELS = { open: 'Open', active: 'Active', completed: 'Completed' }
+  const STATUS_ORDER = { open: 0, active: 1, lastweek: 2, previous: 3 }
   const categoryGroups = useMemo(() => {
+    const tournaments = leagueTournaments.map(lt => lt.tournament)
+    const cohortInfo = computeCohortInfo(tournaments)
     const groups = new Map()
     for (const lt of leagueTournaments) {
-      const status = lt.tournament.status
-      if (status === 'upcoming') continue
+      const ds = getDisplayStatus(lt.tournament, cohortInfo[lt.tournament.id])
+      if (ds === 'upcoming') continue
       if (lt.picker_count <= 1) continue
-      if (!groups.has(status)) groups.set(status, { key: status, label: STATUS_LABELS[status] ?? status, order: STATUS_ORDER[status] ?? 9, items: [] })
-      groups.get(status).items.push(lt)
+      if (!groups.has(ds)) groups.set(ds, { key: ds, label: DISPLAY_STATUS_LABELS[ds], order: STATUS_ORDER[ds] ?? 9, items: [] })
+      groups.get(ds).items.push(lt)
     }
     for (const g of groups.values()) {
       g.items.sort((a, b) => {

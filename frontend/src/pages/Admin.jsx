@@ -6,6 +6,7 @@ import { getEntryStatus } from '../api/predictions'
 import { useAuth } from '../store/auth'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useMemo } from 'react'
+import { computeCohortInfo, getDisplayStatus, DISPLAY_STATUS_LABELS } from '../utils/drawStatus.js'
 import './Admin.css'
 import './Tournaments.css'
 
@@ -19,8 +20,7 @@ const TABS = ['Users', 'Tournaments', 'Logs', 'Info', 'Players', 'Rankings']
 const CATEGORY_ORDER = { 'Grand Slam': 0, 'ATP 1000': 1, 'WTA 1000': 1, 'ATP 500': 2, 'WTA 500': 2, 'ATP 250': 3, 'WTA 250': 3 }
 const GENDER_COLORS = { M: '#edf3ff', F: '#fff0f5' }
 const CATEGORY_GROUPS = { '250': ['ATP 250', 'WTA 250'], '500': ['ATP 500', 'WTA 500'], '1000': ['ATP 1000', 'WTA 1000'], 'Grand Slam': ['Grand Slam'] }
-const STATUS_GROUP_ORDER = ['completed', 'open', 'active', 'upcoming']
-const STATUS_LABELS = { active: 'Active', open: 'Open', upcoming: 'Upcoming', completed: 'Completed' }
+const STATUS_GROUP_ORDER = ['active', 'open', 'lastweek', 'upcoming', 'previous']
 
 function fmtDate(dateStr) {
   if (!dateStr) return '—'
@@ -115,7 +115,7 @@ function UsersPanel({ user }) {
 
 function TournamentsPanel({ user }) {
   const navigate = useNavigate()
-  const [filterStatus, setFilterStatus] = useState(new Set(['upcoming', 'open', 'active']))
+  const [filterStatus, setFilterStatus] = useState(new Set(['upcoming', 'open', 'active', 'lastweek']))
   const [filterGender, setFilterGender] = useState(new Set(['M', 'F']))
   const [filterCategory, setFilterCategory] = useState(new Set(['250', '500', '1000', 'Grand Slam']))
   const [filterYear, setFilterYear] = useState(new Date().getFullYear())
@@ -136,8 +136,11 @@ function TournamentsPanel({ user }) {
   const localTzAbbr = Intl.DateTimeFormat('en-US', { timeZoneName: 'short' })
     .formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value ?? ''
 
+  const cohortInfo = computeCohortInfo(tournaments)
+  const displayStatus = t => getDisplayStatus(t, cohortInfo[t.id])
+
   const preYearFiltered = tournaments.filter(t => {
-    if (!filterStatus.has(t.status)) return false
+    if (!filterStatus.has(displayStatus(t))) return false
     if (!filterGender.has(t.gender)) return false
     if (!Array.from(filterCategory).some(sel => CATEGORY_GROUPS[sel]?.includes(t.category))) return false
     if (user) {
@@ -156,7 +159,7 @@ function TournamentsPanel({ user }) {
   }, [availableYears.join(',')])
 
   const filtered = preYearFiltered.filter(t => t.year === filterYear).sort((a, b) => {
-    const sg = STATUS_GROUP_ORDER.indexOf(a.status) - STATUS_GROUP_ORDER.indexOf(b.status)
+    const sg = STATUS_GROUP_ORDER.indexOf(displayStatus(a)) - STATUS_GROUP_ORDER.indexOf(displayStatus(b))
     if (sg !== 0) return sg
     const dateA = a.start_date ? new Date(a.start_date) : new Date(9999, 0, 0)
     const dateB = b.start_date ? new Date(b.start_date) : new Date(9999, 0, 0)
@@ -177,11 +180,11 @@ function TournamentsPanel({ user }) {
         <div style={{ display: 'flex', gap: '2.5rem', alignItems: 'flex-start' }}>
           <div>
             <h3 className="filter-label">Status</h3>
-            {[{ value: 'upcoming', label: 'Upcoming' }, { value: 'open', label: 'Open' }, { value: 'active', label: 'Active' }, { value: 'completed', label: 'Completed' }].map(({ value, label }) => (
+            {STATUS_GROUP_ORDER.map(value => (
               <label key={value} className="filter-row">
                 <input type="checkbox" checked={filterStatus.has(value)}
                   onChange={e => { const s = new Set(filterStatus); e.target.checked ? s.add(value) : s.delete(value); setFilterStatus(s) }} />
-                {label}
+                {DISPLAY_STATUS_LABELS[value]}
               </label>
             ))}
           </div>
@@ -255,24 +258,25 @@ function TournamentsPanel({ user }) {
                 {(() => {
                   const rows = []
                   STATUS_GROUP_ORDER.filter(s => filterStatus.has(s)).forEach(status => {
-                    const inGroup = filtered.filter(t => t.status === status)
+                    const inGroup = filtered.filter(t => displayStatus(t) === status)
                     rows.push(
                       <tr key={`group-${status}`} className="status-group-header">
-                        <td colSpan={11}>{STATUS_LABELS[status] ?? status}</td>
+                        <td colSpan={11}>{DISPLAY_STATUS_LABELS[status]}</td>
                       </tr>
                     )
                     if (inGroup.length === 0) {
                       rows.push(
                         <tr key={`empty-${status}`} className="status-group-empty-row">
-                          <td colSpan={11}>No {STATUS_LABELS[status].toLowerCase()} tournaments at this time</td>
+                          <td colSpan={11}>No {DISPLAY_STATUS_LABELS[status].toLowerCase()} tournaments at this time</td>
                         </tr>
                       )
                     } else {
                       inGroup.forEach(t => {
-                        const isCompleted = t.status === 'completed'
+                        const ds = displayStatus(t)
+                        const isCompleted = ds === 'lastweek' || ds === 'previous'
                         const hasDrawData = !!(isCompleted || t.draw_released_direct_at)
                         const surface = t.surface ? t.surface.replace(/\s*\(.*?\)/g, '') : '—'
-                        const isCompeting = t.status !== 'upcoming' && entryStatus[t.id] === 'complete'
+                        const isCompeting = ds !== 'upcoming' && entryStatus[t.id] === 'complete'
                         rows.push(
                           <tr
                             key={t.id}
