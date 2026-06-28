@@ -280,17 +280,19 @@ async def get_draw_history(
     from app.models.draw_history import TournamentResult
     from app.models.tournament import Draw, Match
     from app.models.prediction import UserPrediction
-    from sqlalchemy import func
+    from app.models.league import League
+    from sqlalchemy import func, case as sa_case
 
     res = await db.execute(
-        select(TournamentResult)
+        select(TournamentResult, League.name.label("current_league_name"))
+        .outerjoin(League, League.id == TournamentResult.league_id)
         .where(TournamentResult.user_id == current_user.id)
         .order_by(TournamentResult.draw_id.desc(), TournamentResult.league_id.nullsfirst())
     )
-    rows = res.scalars().all()
+    rows = res.all()
 
     # Group by tournament
-    tourn_ids = list(dict.fromkeys(r.draw_id for r in rows))
+    tourn_ids = list(dict.fromkeys(row.TournamentResult.draw_id for row in rows))
     if not tourn_ids:
         return []
 
@@ -326,12 +328,14 @@ async def get_draw_history(
     tournaments = {t.id: t for t in t_res.scalars().all()}
 
     by_tourn: dict[int, list] = {}
-    for r in rows:
+    for row in rows:
+        r = row.TournamentResult
         if r.draw_id not in competed_ids:
             continue
+        live_name = row.current_league_name if r.league_id is not None else "Global"
         by_tourn.setdefault(r.draw_id, []).append({
             "league_id": r.league_id,
-            "league_name": r.league_name,
+            "league_name": live_name,
             "rank": r.rank,
             "total_participants": r.total_participants,
             "points": r.points,
@@ -369,6 +373,7 @@ async def get_user_draw_history(
     from app.models.draw_history import TournamentResult
     from app.models.tournament import Draw, Match
     from app.models.prediction import UserPrediction
+    from app.models.league import League
     from sqlalchemy import func
 
     user_res = await db.execute(select(User).where(User.id == user_id))
@@ -377,13 +382,14 @@ async def get_user_draw_history(
         raise HTTPException(status_code=404, detail="User not found")
 
     res = await db.execute(
-        select(TournamentResult)
+        select(TournamentResult, League.name.label("current_league_name"))
+        .outerjoin(League, League.id == TournamentResult.league_id)
         .where(TournamentResult.user_id == user_id)
         .order_by(TournamentResult.draw_id.desc(), TournamentResult.league_id.nullsfirst())
     )
-    rows = res.scalars().all()
+    rows = res.all()
 
-    tourn_ids = list(dict.fromkeys(r.draw_id for r in rows))
+    tourn_ids = list(dict.fromkeys(row.TournamentResult.draw_id for row in rows))
     if not tourn_ids:
         return {"username": target.username, "entries": []}
 
@@ -414,12 +420,14 @@ async def get_user_draw_history(
     tournaments = {t.id: t for t in t_res.scalars().all()}
 
     by_tourn: dict[int, list] = {}
-    for r in rows:
+    for row in rows:
+        r = row.TournamentResult
         if r.draw_id not in competed_ids:
             continue
+        live_name = row.current_league_name if r.league_id is not None else "Global"
         by_tourn.setdefault(r.draw_id, []).append({
             "league_id": r.league_id,
-            "league_name": r.league_name,
+            "league_name": live_name,
             "rank": r.rank,
             "total_participants": r.total_participants,
             "points": r.points,
