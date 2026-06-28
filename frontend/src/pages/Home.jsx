@@ -346,7 +346,7 @@ export default function Home() {
           marginBottom: 14,
         }}>Draws</h2>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, width: 'fit-content' }}>
           <Section
             title="Open"
             accent="open"
