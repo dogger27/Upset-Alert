@@ -417,6 +417,24 @@
 }
 .lt-progress-meta { font-size: 0.78rem; color: var(--text-muted); margin-left: auto; }
 .lt-progress-empty { font-size: 0.85rem; color: var(--text-muted); margin: 0; }
+.lt-open-notice {
+  padding: 8px 0 6px;
+  border-top: 1px solid var(--border);
+}
+.lt-open-notice-main {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink-800);
+  margin: 0 0 2px;
+}
+.lt-open-notice-lock {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+.lt-progress-row--open {
+  grid-template-columns: auto 1fr;
+}
 
 .lt-bar-col--label {
   background: none;
