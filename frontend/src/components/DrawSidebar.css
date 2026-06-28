@@ -14,6 +14,7 @@
 
 .draw-sidebar--collapsed {
   width: 36px;
+  min-width: 36px;
   overflow: hidden;
 }
 
