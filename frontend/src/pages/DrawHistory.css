@@ -9,6 +9,10 @@
   margin: 0 auto;
 }
 
+.dh-content-wrap {
+  width: max-content;
+}
+
 .dh-header {
   margin-bottom: 28px;
 }
@@ -18,6 +22,7 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 16px;
+  width: 100%;
 }
 
 .dh-username-label {

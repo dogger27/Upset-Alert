@@ -172,38 +172,40 @@ export default function DrawHistory() {
   return (
     <div className="dh-page">
       <div className="dh-container">
-        <div className="dh-header">
-          <div className="dh-header-row">
-            <h1 className="dh-title">{pageTitle}</h1>
-            {username && <span className="dh-username-label">{username}</span>}
+        <div className="dh-content-wrap">
+          <div className="dh-header">
+            <div className="dh-header-row">
+              <h1 className="dh-title">{pageTitle}</h1>
+              {username && <span className="dh-username-label">{username}</span>}
+            </div>
           </div>
-        </div>
 
-        {years.map(yr => {
-          const yrEntries = byYear[yr]
-          const atp = yrEntries.filter(e => e.gender === 'M')
-          const wta = yrEntries.filter(e => e.gender === 'F')
+          {years.map(yr => {
+            const yrEntries = byYear[yr]
+            const atp = yrEntries.filter(e => e.gender === 'M')
+            const wta = yrEntries.filter(e => e.gender === 'F')
 
-          return (
-            <div key={yr} className="dh-year-section">
-              <div className="dh-year-label">{yr}</div>
-              <div className="dh-year-columns">
-                <div className="dh-column">
-                  <div className="dh-column-label dh-column-label--atp">ATP</div>
-                  {atp.length > 0
-                    ? atp.map(e => <TournamentCard key={e.tournament_id} entry={e} userId={userId} />)
-                    : <div className="dh-column-empty">—</div>}
-                </div>
-                <div className="dh-column">
-                  <div className="dh-column-label dh-column-label--wta">WTA</div>
-                  {wta.length > 0
-                    ? wta.map(e => <TournamentCard key={e.tournament_id} entry={e} userId={userId} />)
-                    : <div className="dh-column-empty">—</div>}
+            return (
+              <div key={yr} className="dh-year-section">
+                <div className="dh-year-label">{yr}</div>
+                <div className="dh-year-columns">
+                  <div className="dh-column">
+                    <div className="dh-column-label dh-column-label--atp">ATP</div>
+                    {atp.length > 0
+                      ? atp.map(e => <TournamentCard key={e.tournament_id} entry={e} userId={userId} />)
+                      : <div className="dh-column-empty">—</div>}
+                  </div>
+                  <div className="dh-column">
+                    <div className="dh-column-label dh-column-label--wta">WTA</div>
+                    {wta.length > 0
+                      ? wta.map(e => <TournamentCard key={e.tournament_id} entry={e} userId={userId} />)
+                      : <div className="dh-column-empty">—</div>}
+                  </div>
                 </div>
               </div>
-            </div>
-          )
-        })}
+            )
+          })}
+        </div>
       </div>
     </div>
   )
