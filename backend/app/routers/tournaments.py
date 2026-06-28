@@ -441,6 +441,81 @@ async def global_standings(tournament_id: int, db: AsyncSession = Depends(get_db
     ]
 
 
+@router.get("/{tournament_id}/global-round-scores")
+async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get_db)):
+    """Per-round point breakdown for ALL fully-entered users in a tournament."""
+    from collections import defaultdict
+    from app.services.scoring import _points_table
+
+    tournament = await db.get(Draw, tournament_id)
+    if not tournament:
+        raise HTTPException(404, "Tournament not found")
+
+    pts_table = _points_table(tournament)
+
+    completed_matches_result = await db.execute(
+        select(Match).where(
+            Match.draw_id == tournament_id,
+            Match.status == "completed",
+            Match.is_bye == False,
+        )
+    )
+    completed_matches = completed_matches_result.scalars().all()
+
+    total_result = await db.execute(
+        select(func.count()).where(Match.draw_id == tournament_id, Match.is_bye == False)
+    )
+    total_matches = total_result.scalar_one()
+
+    sub = (
+        select(UserPrediction.user_id)
+        .where(UserPrediction.draw_id == tournament_id, UserPrediction.predicted_winner_id.isnot(None))
+        .group_by(UserPrediction.user_id)
+        .having(func.count() >= total_matches)
+    )
+    users_result = await db.execute(select(User).where(User.id.in_(sub)))
+    users = users_result.scalars().all()
+
+    entries = []
+    for user in users:
+        preds_result = await db.execute(
+            select(UserPrediction).where(
+                UserPrediction.user_id == user.id,
+                UserPrediction.draw_id == tournament_id,
+                UserPrediction.predicted_winner_id.isnot(None),
+            )
+        )
+        preds = preds_result.scalars().all()
+        pred_by_match = {p.match_id: p.predicted_winner_id for p in preds}
+        by_round: defaultdict = defaultdict(float)
+        correct_count = 0
+        for match in completed_matches:
+            if match.winner_id is None:
+                continue
+            if pred_by_match.get(match.id) != match.winner_id:
+                continue
+            by_round[match.round_number] += pts_table.get(match.round_number, 0)
+            correct_count += 1
+
+        pts_list = [by_round.get(r, 0) for r in range(1, (tournament.num_rounds or 7) + 1)]
+        entries.append({
+            "user_id": user.id,
+            "username": user.username,
+            "full_name": user.full_name,
+            "round_points": pts_list,
+            "total": sum(pts_list),
+            "correct_count": correct_count,
+        })
+
+    entries.sort(key=lambda x: (-x["total"],) + tuple(-rp for rp in reversed(x["round_points"])))
+    rounds_with_matches = sorted({m.round_number for m in completed_matches})
+    return {
+        "entries": entries,
+        "completed_matches_count": len(completed_matches),
+        "rounds_with_matches": rounds_with_matches,
+    }
+
+
 @router.get("/{tournament_id}/draw", response_model=DrawOut)
 async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
     t = await db.get(Draw, tournament_id)

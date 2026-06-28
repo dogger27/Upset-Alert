@@ -9,4 +9,5 @@ export const refreshAllCompleted = () => client.post('/tournaments/refresh-compl
 export const syncTournaments = () => client.post('/tournaments/sync-tournaments').then(r => r.data)
 export const getTournamentCompetitors = (id) => client.get(`/tournaments/${id}/competitors`).then(r => r.data)
 export const getGlobalStandings = (id) => client.get(`/tournaments/${id}/standings`).then(r => r.data)
+export const getGlobalRoundScores = (id) => client.get(`/tournaments/${id}/global-round-scores`).then(r => r.data)
 export const toggleUnlockSelections = (id) => client.post(`/tournaments/${id}/toggle-unlock`).then(r => r.data)

@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getLeague, getLeagueTournaments, getRoundScores, updateLeague, setMemberAdmin, removeMember, deleteLeague, shareLeagueByEmail } from '../api/leagues'
+import { getGlobalRoundScores } from '../api/tournaments'
 import { useAuth } from '../store/auth'
 import UserName from '../components/UserName'
 import { computeCohortInfo, getDisplayStatus, DISPLAY_STATUS_LABELS } from '../utils/drawStatus.js'
@@ -217,13 +218,13 @@ function getRoundLabel(index, numRounds) {
   return `R${index + 1}`
 }
 
-function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMemberCount, showRealName, selected, onSelect }) {
+export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMemberCount, showRealName, selected, onSelect }) {
   const { user } = useAuth()
   const [toast, setToast] = useState(null)
   const toastKey = useRef(0)
   const { data: rawData } = useQuery({
-    queryKey: ['round-scores', leagueId, t.id],
-    queryFn: () => getRoundScores(leagueId, t.id),
+    queryKey: leagueId != null ? ['round-scores', leagueId, t.id] : ['global-round-scores', t.id],
+    queryFn: leagueId != null ? () => getRoundScores(leagueId, t.id) : () => getGlobalRoundScores(t.id),
     refetchInterval: 60_000,
   })
 
@@ -260,7 +261,11 @@ function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMember
           )}
         </div>
         <span className="lt-progress-title">{t.name} {t.year}</span>
-        <span className="lt-progress-meta">{pickerCount}/{leagueMemberCount} competing</span>
+        <span className="lt-progress-meta">
+          {leagueMemberCount != null
+            ? `${pickerCount ?? entries.length}/${leagueMemberCount} competing`
+            : `${entries.length} competing`}
+        </span>
       </div>
 
       {toast && <LgToast key={toast.key} message={toast.msg} onDone={() => setToast(null)} />}
