@@ -36,14 +36,41 @@ function tierFromCategory(category) {
   return '250'
 }
 
-function getSection(t) {
+// Group completed draws into cohorts where consecutive end_dates are ≤1 day apart.
+// All draws in a cohort share the cohort's latest end_date as their effective date,
+// so they all move from Last Week → Previous simultaneously.
+function computeCohortEndDates(tournaments) {
+  const ONE_DAY_MS = 86400000
+  const completed = (tournaments || [])
+    .filter(t => t.status === 'completed' && t.end_date)
+    .sort((a, b) => a.end_date.localeCompare(b.end_date))
+  if (!completed.length) return {}
+  const result = {}
+  let clusterStart = 0
+  for (let i = 1; i <= completed.length; i++) {
+    const isLast = i === completed.length
+    const gap = isLast ? Infinity
+      : new Date(completed[i].end_date + 'T00:00:00') - new Date(completed[i - 1].end_date + 'T00:00:00')
+    if (isLast || gap > ONE_DAY_MS) {
+      const cohortMax = completed[i - 1].end_date
+      for (let j = clusterStart; j < i; j++) result[completed[j].id] = cohortMax
+      clusterStart = i
+    }
+  }
+  return result
+}
+
+function getSection(t, effectiveEndDate) {
   if (t.status === 'active') return 'active'
   if (t.status === 'open') return 'open'
-  if (t.status === 'completed' && t.end_date) {
-    const today = new Date(); today.setHours(0, 0, 0, 0)
-    const end = new Date(t.end_date + 'T00:00:00')
-    const daysAgo = (today - end) / (1000 * 60 * 60 * 24)
-    if (daysAgo >= 0 && daysAgo <= 7) return 'lastweek'
+  if (t.status === 'completed') {
+    const endDate = effectiveEndDate ?? t.end_date
+    if (endDate) {
+      const today = new Date(); today.setHours(0, 0, 0, 0)
+      const end = new Date(endDate + 'T00:00:00')
+      const daysAgo = (today - end) / (1000 * 60 * 60 * 24)
+      if (daysAgo >= 0 && daysAgo <= 7) return 'lastweek'
+    }
   }
   if (t.status === 'upcoming' && t.start_date) {
     const today = new Date(); today.setHours(0, 0, 0, 0)
@@ -268,10 +295,12 @@ export default function Home() {
     : []
 
   const dataLoaded = tournaments !== undefined
-  const active   = tournaments?.filter(t => getSection(t) === 'active')   || []
-  const open     = tournaments?.filter(t => getSection(t) === 'open')     || []
-  const lastWeek = tournaments?.filter(t => getSection(t) === 'lastweek') || []
-  const upcoming = tournaments?.filter(t => getSection(t) === 'upcoming') || []
+  const cohortEndDates = computeCohortEndDates(tournaments)
+  const sec = t => getSection(t, cohortEndDates[t.id])
+  const active   = tournaments?.filter(t => sec(t) === 'active')   || []
+  const open     = tournaments?.filter(t => sec(t) === 'open')     || []
+  const lastWeek = tournaments?.filter(t => sec(t) === 'lastweek') || []
+  const upcoming = tournaments?.filter(t => sec(t) === 'upcoming') || []
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
