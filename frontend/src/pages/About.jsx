@@ -131,14 +131,11 @@ export default function About() {
                 <div className="about-card-icon">🌐</div>
                 <h4 className="about-card-heading">Data Sources</h4>
                 <p className="about-card-body">
-                  Tournament Data &amp; Draws:{' '}
-                  <a href="https://en.wikipedia.org" target="_blank" rel="noopener noreferrer">Wikipedia</a>
+                  <a href="https://en.wikipedia.org" target="_blank" rel="noopener noreferrer">Wikipedia</a>: Tournament Data &amp; Draws
                   <br />
-                  Match Results:{' '}
-                  <a href="https://www.espn.com" target="_blank" rel="noopener noreferrer">ESPN</a>
+                  <a href="https://www.espn.com" target="_blank" rel="noopener noreferrer">ESPN</a>: Match Results
                   <br />
-                  Weekly Rankings &amp; Player Data:{' '}
-                  <a href="https://www.tennisexplorer.com" target="_blank" rel="noopener noreferrer">Tennis Explorer</a>
+                  <a href="https://www.tennisexplorer.com" target="_blank" rel="noopener noreferrer">Tennis Explorer</a>: Weekly Rankings, Player Data, and H2H
                 </p>
               </div>
               <div className="about-card">
