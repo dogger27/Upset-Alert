@@ -285,7 +285,7 @@ async def hall_of_fame(db: AsyncSession = Depends(get_db)):
             Draw.category,
             User.username,
         )
-        .join(Tournament, Draw.id == TournamentResult.draw_id)
+        .join(Draw, Draw.id == TournamentResult.draw_id)
         .join(User, User.id == TournamentResult.user_id)
         .join(
             pick_count_sq,
