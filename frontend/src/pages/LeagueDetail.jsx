@@ -150,7 +150,7 @@ export default function LeagueDetail() {
           return (
             <>
               <div className="lt-draws-header">
-                <h2 style={{ margin: 0 }}>Draws</h2>
+                <h2>Draws</h2>
                 {categoryGroups.length > 0 && (
                   <div className="lt-status-tabs">
                     {STATUS_TABS.map(s => {
