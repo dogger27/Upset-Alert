@@ -66,7 +66,7 @@ export function GlobalLeagueView() {
       <div className="league-detail-header">
         <div>
           <h1>Global</h1>
-          <p className="muted">All registered players · Classic scoring</p>
+          <p className="muted">{gsData?.members?.length ?? '…'} member{gsData?.members?.length !== 1 ? 's' : ''}</p>
         </div>
       </div>
 
