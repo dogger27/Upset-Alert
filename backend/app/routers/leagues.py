@@ -597,6 +597,83 @@ async def round_scores(
     }
 
 
+@router.post("/{league_id}/share-email")
+async def share_league_by_email(
+    league_id: int,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Invite people by email. For each address:
+    - Existing user not in league → add to league + send "you've been added" email
+    - Existing user already in league → skip
+    - No account → send "create account + invite code" email
+    """
+    from app.services.email import send_league_added_existing, send_league_invite_new_user
+    from app.services.system_log import app_log
+
+    result = await db.execute(
+        select(League)
+        .options(selectinload(League.members))
+        .where(League.id == league_id)
+    )
+    league = result.scalar_one_or_none()
+    if not league:
+        raise HTTPException(404, "League not found")
+
+    caller_member = next((m for m in league.members if m.user_id == current_user.id), None)
+    is_owner = league.owner_id == current_user.id
+    if not caller_member and not is_owner:
+        raise HTTPException(403, "You are not a member of this league")
+    if not is_owner and not league.allow_member_invites:
+        raise HTTPException(403, "Only the league owner can invite members")
+
+    raw = body.get("emails", "")
+    emails = [e.strip().lower() for e in raw.replace(",", "\n").splitlines() if e.strip()]
+    if not emails:
+        raise HTTPException(400, "No email addresses provided")
+
+    member_ids = {m.user_id for m in league.members}
+    results = []
+
+    for email in emails:
+        user_res = await db.execute(select(User).where(User.email == email))
+        found = user_res.scalar_one_or_none()
+
+        if found:
+            if found.id in member_ids:
+                results.append({"email": email, "status": "already_member", "username": found.username})
+                continue
+            db.add(LeagueMember(league_id=league_id, user_id=found.id))
+            await db.flush()
+            member_ids.add(found.id)
+            await send_league_added_existing(
+                to_email=email,
+                username=found.username,
+                added_by_username=current_user.username,
+                league_name=league.name,
+                league_id=league_id,
+            )
+            results.append({"email": email, "status": "added", "username": found.username})
+        else:
+            await send_league_invite_new_user(
+                to_email=email,
+                invited_by_username=current_user.username,
+                league_name=league.name,
+                invite_code=league.invite_code,
+            )
+            results.append({"email": email, "status": "invited"})
+
+    await db.commit()
+    await app_log(
+        "info", "leagues",
+        f"{current_user.username} shared '{league.name}' to {len(emails)} email(s)",
+        {"league_id": league_id, "results": results},
+    )
+    return {"results": results}
+
+
 def _check_access(league: League, user: Optional[User]) -> None:
     if league.is_public:
         return
