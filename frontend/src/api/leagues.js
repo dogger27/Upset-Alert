@@ -16,3 +16,5 @@ export const getLeaderboard = (id, tournamentId) =>
   client.get(`/leagues/${id}/leaderboard`, { params: tournamentId != null ? { tournament_id: tournamentId } : {} }).then(r => r.data)
 export const getRoundScores = (leagueId, tournamentId) =>
   client.get(`/leagues/${leagueId}/round-scores`, { params: { tournament_id: tournamentId } }).then(r => r.data)
+export const shareLeagueByEmail = (leagueId, emails) =>
+  client.post(`/leagues/${leagueId}/share-email`, { emails }).then(r => r.data)

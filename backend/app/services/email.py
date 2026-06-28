@@ -338,3 +338,63 @@ async def send_round_standings(
             "subject": f"{tournament_name} — {round_name} standings",
             "html": html,
         })
+
+
+async def send_league_added_existing(
+    to_email: str,
+    username: str,
+    added_by_username: str,
+    league_name: str,
+    league_id: int,
+) -> None:
+    """Existing user was added to a league by another member."""
+    league_url = f"{BASE_URL}/leagues/{league_id}"
+    await send_async({
+        "from": FROM,
+        "to": [to_email],
+        "subject": f"You've been added to {league_name} on Upset Alert!",
+        "html": f"""{_WRAP_OPEN}{_LOGO_HEADER}{_BODY_OPEN}
+          <h1 style="font-size:22px;margin:0 0 12px">You've been added to a league!</h1>
+          <p style="color:#444;line-height:1.6;margin:0 0 24px">
+            <strong>{added_by_username}</strong> has added you to the league
+            <strong>{league_name}</strong> on Upset Alert.
+          </p>
+          <a href="{league_url}" style="display:inline-block;padding:12px 24px;
+             background:#1b4332;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
+            View League
+          </a>
+        {_BODY_CLOSE}{_WRAP_CLOSE}""",
+    })
+
+
+async def send_league_invite_new_user(
+    to_email: str,
+    invited_by_username: str,
+    league_name: str,
+    invite_code: str,
+) -> None:
+    """No account yet — invite them to create one and join with the code."""
+    register_url = f"{BASE_URL}/register"
+    await send_async({
+        "from": FROM,
+        "to": [to_email],
+        "subject": f"{invited_by_username} invited you to join {league_name} on Upset Alert!",
+        "html": f"""{_WRAP_OPEN}{_LOGO_HEADER}{_BODY_OPEN}
+          <h1 style="font-size:22px;margin:0 0 12px">You've been invited!</h1>
+          <p style="color:#444;line-height:1.6;margin:0 0 8px">
+            <strong>{invited_by_username}</strong> has invited you to join
+            <strong>{league_name}</strong> on Upset Alert — a free fantasy tennis bracket game.
+          </p>
+          <p style="color:#444;line-height:1.6;margin:0 0 20px">
+            Create a free account, then join the league using this invite code:
+          </p>
+          <div style="background:#f4f6f9;border-radius:8px;padding:16px 20px;margin:0 0 24px;text-align:center">
+            <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#666;margin-bottom:6px">Invite Code</div>
+            <div style="font-size:28px;font-weight:700;letter-spacing:0.12em;font-family:monospace">{invite_code}</div>
+          </div>
+          <a href="{register_url}" style="display:inline-block;padding:12px 24px;
+             background:#1b4332;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
+            Create Account
+          </a>
+        {_BODY_CLOSE}{_WRAP_CLOSE}""",
+    })

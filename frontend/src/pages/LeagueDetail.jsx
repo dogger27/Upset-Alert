@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getLeague, getLeagueTournaments, getRoundScores, updateLeague, setMemberAdmin, removeMember, deleteLeague } from '../api/leagues'
+import { getLeague, getLeagueTournaments, getRoundScores, updateLeague, setMemberAdmin, removeMember, deleteLeague, shareLeagueByEmail } from '../api/leagues'
 import { useAuth } from '../store/auth'
 import UserName from '../components/UserName'
 import './LeagueDetail.css'
@@ -344,12 +344,19 @@ function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMember
 
 function InviteModal({ league, onClose }) {
   const [copied, setCopied] = useState(false)
+  const [emailInput, setEmailInput] = useState('')
+  const [sendResults, setSendResults] = useState(null)
 
   const copy = () => {
     navigator.clipboard.writeText(league.invite_code)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
+
+  const sendMutation = useMutation({
+    mutationFn: () => shareLeagueByEmail(league.id, emailInput),
+    onSuccess: (data) => setSendResults(data.results),
+  })
 
   return (
     <div className="invite-modal-overlay" onClick={onClose}>
@@ -371,10 +378,41 @@ function InviteModal({ league, onClose }) {
           {copied ? '✓ Copied!' : 'Copy Invite Code'}
         </button>
 
-        <div className="invite-section-heading" style={{marginTop:'1.25rem'}}>Share via Email</div>
-        <p className="invite-modal-msg" style={{marginBottom:0}}>
-          Coming soon.
-        </p>
+        <div className="invite-section-heading invite-section-heading--email">Share via Email</div>
+        {sendResults ? (
+          <div className="invite-email-results">
+            {sendResults.map((r, i) => (
+              <div key={i} className={`invite-email-result invite-email-result--${r.status}`}>
+                {r.status === 'added' && <>✓ <strong>{r.email}</strong> — added to league as <strong>@{r.username}</strong></>}
+                {r.status === 'invited' && <>✉ <strong>{r.email}</strong> — invite sent</>}
+                {r.status === 'already_member' && <>· <strong>{r.email}</strong> — already a member (@{r.username})</>}
+              </div>
+            ))}
+            <button className="invite-email-again" onClick={() => { setSendResults(null); setEmailInput('') }}>
+              Send more invites
+            </button>
+          </div>
+        ) : (
+          <>
+            <textarea
+              className="invite-email-input"
+              placeholder="Enter email addresses, separated by commas"
+              value={emailInput}
+              onChange={e => setEmailInput(e.target.value)}
+              rows={3}
+            />
+            {sendMutation.isError && (
+              <p className="invite-email-error">Failed to send — please try again.</p>
+            )}
+            <button
+              className="btn-primary invite-copy-btn"
+              onClick={() => sendMutation.mutate()}
+              disabled={sendMutation.isPending || !emailInput.trim()}
+            >
+              {sendMutation.isPending ? 'Sending…' : 'Send Invites'}
+            </button>
+          </>
+        )}
       </div>
     </div>
   )

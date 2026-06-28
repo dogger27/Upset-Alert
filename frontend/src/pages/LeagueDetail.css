@@ -42,6 +42,41 @@
   padding-bottom: 6px;
   margin-bottom: 0.75rem;
 }
+.invite-section-heading--email { margin-top: 1.5rem; }
+
+.invite-email-input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.88rem;
+  font-family: inherit;
+  color: var(--text);
+  resize: vertical;
+  margin-bottom: 0.75rem;
+}
+.invite-email-input:focus { outline: none; border-color: var(--green-600); }
+
+.invite-email-error { font-size: 0.82rem; color: #dc2626; margin: 0 0 0.5rem; }
+
+.invite-email-results { display: flex; flex-direction: column; gap: 8px; margin-bottom: 1rem; }
+.invite-email-result { font-size: 0.86rem; padding: 6px 10px; border-radius: 6px; }
+.invite-email-result--added   { background: #f0fdf4; color: #166534; }
+.invite-email-result--invited { background: #eff6ff; color: #1e40af; }
+.invite-email-result--already_member { background: #f9fafb; color: var(--text-muted); }
+
+.invite-email-again {
+  font-size: 0.82rem;
+  color: var(--green-600);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  margin-top: 4px;
+  align-self: flex-start;
+}
 
 .settings-panel { margin-bottom: 1.5rem; }
 .settings-panel h3 { margin-bottom: 1rem; }
