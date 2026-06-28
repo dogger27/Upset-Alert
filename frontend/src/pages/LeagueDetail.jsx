@@ -61,31 +61,26 @@ export default function LeagueDetail() {
     refetchInterval: 60_000,
   })
 
-  // Group non-upcoming tournaments by category, ordered Open → Active → Completed within each group.
-  // Categories sorted Grand Slam first (tier desc), ATP before WTA within same tier.
+  // Group non-upcoming tournaments by status: Open → Active → Completed.
+  // Within each group sort by tier desc, then start_date desc.
   const STATUS_ORDER = { open: 0, active: 1, completed: 2 }
+  const STATUS_LABELS = { open: 'Open', active: 'Active', completed: 'Completed' }
   const categoryGroups = useMemo(() => {
     const groups = new Map()
     for (const lt of leagueTournaments) {
-      if (lt.tournament.status === 'upcoming') continue
-      const t = lt.tournament
-      const key = `${t.gender}_${tierValue(t.category)}`
-      if (!groups.has(key)) {
-        const prefix = t.gender === 'M' ? 'ATP' : 'WTA'
-        groups.set(key, { key, label: `${prefix} ${tierLabel(t.category)}`, tierVal: tierValue(t.category), gender: t.gender, items: [] })
-      }
-      groups.get(key).items.push(lt)
+      const status = lt.tournament.status
+      if (status === 'upcoming') continue
+      if (!groups.has(status)) groups.set(status, { key: status, label: STATUS_LABELS[status] ?? status, order: STATUS_ORDER[status] ?? 9, items: [] })
+      groups.get(status).items.push(lt)
     }
     for (const g of groups.values()) {
       g.items.sort((a, b) => {
-        const so = (STATUS_ORDER[a.tournament.status] ?? 9) - (STATUS_ORDER[b.tournament.status] ?? 9)
-        if (so !== 0) return so
+        const td = tierValue(b.tournament.category) - tierValue(a.tournament.category)
+        if (td !== 0) return td
         return (b.tournament.start_date || '') > (a.tournament.start_date || '') ? 1 : -1
       })
     }
-    return [...groups.values()].sort((a, b) =>
-      b.tierVal !== a.tierVal ? b.tierVal - a.tierVal : (a.gender === 'M' ? -1 : 1)
-    )
+    return [...groups.values()].sort((a, b) => a.order - b.order)
   }, [leagueTournaments])
 
   if (isLoading) return <div className="page-loading">Loading…</div>
