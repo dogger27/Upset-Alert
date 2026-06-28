@@ -210,7 +210,7 @@ export default function LeagueDetail() {
             <tbody>
               {(gsData?.members ?? league.members.map(m => ({ user_id: m.id, username: m.username, full_name: m.full_name, atp_points: null, wta_points: null }))).map(m => (
                 <tr key={m.user_id}>
-                  <td className="lmt-name">
+                  <td className="lmt-name" title={m.username}>
                     <UserName user={{ id: m.user_id, username: m.username, full_name: m.full_name }} showRealName={league.show_real_name} />
                   </td>
                   <td className="lmt-pts">{m.atp_points ?? '–'}</td>

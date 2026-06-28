@@ -126,7 +126,7 @@ export function GlobalLeagueView() {
             <tbody>
               {(gsData?.members ?? []).map(m => (
                 <tr key={m.user_id}>
-                  <td className="lmt-name">
+                  <td className="lmt-name" title={m.username}>
                     {m.username}
                     {m.is_admin && <span className="lmt-admin-badge">Admin</span>}
                   </td>
