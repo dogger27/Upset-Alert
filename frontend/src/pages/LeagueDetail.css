@@ -426,14 +426,25 @@
   padding: 8px 0 4px;
   border-top: 1px solid var(--border);
 }
+.lt-open-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .lt-open-notice {
-  padding: 4px 0 6px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 12px 16px;
 }
 .lt-open-notice-main {
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--ink-800);
-  margin: 0 0 2px;
+  margin: 0 0 3px;
 }
 .lt-open-notice-lock {
   font-size: 0.78rem;

@@ -310,27 +310,29 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
       ) : t.status === 'open' ? (
         <>
           <div className="lt-competitors-label">Competitors</div>
-          <div className="lt-open-notice">
-            <p className="lt-open-notice-main">Match Predictions are In Progress.</p>
-            {t.closing_time && (
-              <p className="lt-open-notice-lock">Prediction Lock time: {fmtLockTime(t.closing_time)}</p>
-            )}
-          </div>
-          <div className="lt-progress-rows">
-            {entries.map((entry, entryIndex) => (
-              <div key={entry.user_id} className="lt-progress-row lt-progress-row--open">
-                <span className="lt-pos-num">{entryIndex + 1}.</span>
-                {entry.full_name && entry.full_name !== entry.username ? (
-                  <a href={`/draw-history?user=${entry.user_id}`} target="_blank" rel="noopener noreferrer" className="lt-progress-name lt-progress-name--link username-hover" data-tooltip={entry.full_name}>
-                    <span className="lt-progress-name-text">{entry.username}</span>
-                  </a>
-                ) : (
-                  <a href={`/draw-history?user=${entry.user_id}`} target="_blank" rel="noopener noreferrer" className="lt-progress-name lt-progress-name--link">
-                    <span className="lt-progress-name-text">{entry.username}</span>
-                  </a>
-                )}
-              </div>
-            ))}
+          <div className="lt-open-content">
+            <div className="lt-progress-rows">
+              {entries.map((entry, entryIndex) => (
+                <div key={entry.user_id} className="lt-progress-row lt-progress-row--open">
+                  <span className="lt-pos-num">{entryIndex + 1}.</span>
+                  {entry.full_name && entry.full_name !== entry.username ? (
+                    <a href={`/draw-history?user=${entry.user_id}`} target="_blank" rel="noopener noreferrer" className="lt-progress-name lt-progress-name--link username-hover" data-tooltip={entry.full_name}>
+                      <span className="lt-progress-name-text">{entry.username}</span>
+                    </a>
+                  ) : (
+                    <a href={`/draw-history?user=${entry.user_id}`} target="_blank" rel="noopener noreferrer" className="lt-progress-name lt-progress-name--link">
+                      <span className="lt-progress-name-text">{entry.username}</span>
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="lt-open-notice">
+              <p className="lt-open-notice-main">Match Predictions are In Progress.</p>
+              {t.closing_time && (
+                <p className="lt-open-notice-lock">Prediction Lock time: {fmtLockTime(t.closing_time)}</p>
+              )}
+            </div>
           </div>
         </>
       ) : (
