@@ -18,3 +18,5 @@ export const getRoundScores = (leagueId, tournamentId) =>
   client.get(`/leagues/${leagueId}/round-scores`, { params: { tournament_id: tournamentId } }).then(r => r.data)
 export const shareLeagueByEmail = (leagueId, emails) =>
   client.post(`/leagues/${leagueId}/share-email`, { emails }).then(r => r.data)
+export const getGrandSlamTotals = (leagueId) =>
+  client.get(`/leagues/${leagueId}/grand-slam-totals`).then(r => r.data)

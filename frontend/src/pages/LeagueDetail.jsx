@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getLeague, getLeagueTournaments, getRoundScores, updateLeague, setMemberAdmin, removeMember, deleteLeague, shareLeagueByEmail } from '../api/leagues'
+import { getLeague, getLeagueTournaments, getRoundScores, updateLeague, setMemberAdmin, removeMember, deleteLeague, shareLeagueByEmail, getGrandSlamTotals } from '../api/leagues'
 import { getGlobalRoundScores } from '../api/tournaments'
 import { useAuth } from '../store/auth'
 import UserName from '../components/UserName'
@@ -69,6 +69,11 @@ export default function LeagueDetail() {
     queryKey: ['league-tournaments', id],
     queryFn: () => getLeagueTournaments(Number(id)),
     refetchInterval: 60_000,
+  })
+
+  const { data: gsData } = useQuery({
+    queryKey: ['gs-totals', id],
+    queryFn: () => getGrandSlamTotals(Number(id)),
   })
 
   // Group non-upcoming tournaments by display status: Open → Active → Last Week → Previous.
@@ -193,13 +198,27 @@ export default function LeagueDetail() {
         {/* Members sidebar */}
         <div className="card league-members-section">
           <h2>Members</h2>
-          <div className="league-members-list">
-            {league.members.map(m => (
-              <div key={m.id} className="league-member-chip">
-                <UserName user={m} showRealName={league.show_real_name} />
-              </div>
-            ))}
-          </div>
+          <p className="league-members-subtitle">{gsData?.year ?? new Date().getFullYear()} Grand Slam Point Tally</p>
+          <table className="league-members-table">
+            <thead>
+              <tr>
+                <th className="lmt-name" />
+                <th className="lmt-pts">ATP</th>
+                <th className="lmt-pts">WTA</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(gsData?.members ?? league.members.map(m => ({ user_id: m.id, username: m.username, full_name: m.full_name, atp_points: null, wta_points: null }))).map(m => (
+                <tr key={m.user_id}>
+                  <td className="lmt-name">
+                    <UserName user={{ id: m.user_id, username: m.username, full_name: m.full_name }} showRealName={league.show_real_name} />
+                  </td>
+                  <td className="lmt-pts">{m.atp_points ?? '–'}</td>
+                  <td className="lmt-pts">{m.wta_points ?? '–'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 
