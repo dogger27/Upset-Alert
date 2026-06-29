@@ -382,7 +382,7 @@ export default function Home() {
             <Section
               title="Last Week"
               accent="muted"
-              description="Completed in the past 6 days."
+              description="Most recently completed draws."
               items={lastWeek}
               section="lastweek"
               pickStatus={pickStatus}
