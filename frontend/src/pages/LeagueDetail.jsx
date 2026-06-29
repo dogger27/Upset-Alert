@@ -371,7 +371,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                   title={`View ${entry.username}'s bracket`}
                   onClick={e => {
                     e.stopPropagation()
-                    window.open(`/tournaments/${t.id}?user=${entry.user_id}&league=${leagueId}`, '_blank')
+                    window.open(`/tournaments/${t.id}?user=${entry.user_id}${leagueId != null ? `&league=${leagueId}` : ''}`, '_blank')
                   }}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
