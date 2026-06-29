@@ -1,5 +1,10 @@
 const ONE_DAY_MS = 86400000
 
+// Returns today's date as YYYY-MM-DD in Pacific time (handles PST/PDT automatically)
+function todayPacific() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' })
+}
+
 // Cluster draws where consecutive end_dates are ≤1 day apart.
 // Returns { [id]: { cohortMaxDate, cohortHasActive } }
 export function computeCohortInfo(draws) {
@@ -24,15 +29,22 @@ export function computeCohortInfo(draws) {
   return result
 }
 
+// Rule 3: cohort stays in Active until midnight Pacific on cohortMaxDate
+function cohortIsStillActive(info) {
+  if (!info) return false
+  if (info.cohortHasActive) return true
+  // If the cohort's last end_date is today or in the future (Pacific time), keep it active
+  return info.cohortMaxDate >= todayPacific()
+}
+
 // Maps a draw to one of: 'upcoming' | 'open' | 'active' | 'lastweek' | 'previous'
-// All upcoming draws return 'upcoming' regardless of start_date proximity.
 export function getDisplayStatus(t, cohortInfo) {
   if (t.status === 'upcoming') return 'upcoming'
   if (t.status === 'open') return 'open'
   if (t.status === 'active') return 'active'
   if (t.status === 'completed') {
     const info = cohortInfo?.[t.id]
-    if (info?.cohortHasActive) return 'active'
+    if (cohortIsStillActive(info)) return 'active'
     const endDate = info?.cohortMaxDate ?? t.end_date
     if (endDate) {
       const today = new Date(); today.setHours(0, 0, 0, 0)
@@ -50,7 +62,7 @@ export function getHomeSection(t, cohortInfo) {
   if (t.status === 'active') return 'active'
   if (t.status === 'completed') {
     const info = cohortInfo?.[t.id]
-    if (info?.cohortHasActive) return 'active'
+    if (cohortIsStillActive(info)) return 'active'
     const endDate = info?.cohortMaxDate ?? t.end_date
     if (endDate) {
       const today = new Date(); today.setHours(0, 0, 0, 0)
