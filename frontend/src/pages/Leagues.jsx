@@ -140,7 +140,9 @@ export function GlobalLeagueView() {
               {(gsData?.members ?? []).map(m => (
                 <tr key={m.user_id}>
                   <td className="lmt-name">
-                    <a href={`/draw-history?user=${m.user_id}`} target="_blank" rel="noopener noreferrer" className="lmt-name-link username-hover" data-tooltip={`${m.username}: Show Draw History (${drawCountMap[m.user_id] ?? 0} draws competed)`}>{m.username}</a>
+                    <a href={`/draw-history?user=${m.user_id}`} target="_blank" rel="noopener noreferrer" className="lmt-name-link username-hover" data-tooltip={`${m.full_name || m.username}: Show Draw History (${drawCountMap[m.user_id] ?? 0} draws competed)`}>
+                      <span className="lmt-name-text">{m.username}</span>
+                    </a>
                     {m.is_admin && <span className="lmt-admin-badge">Admin</span>}
                   </td>
                   <td className="lmt-pts">{m.atp_points}</td>
