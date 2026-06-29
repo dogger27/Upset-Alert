@@ -3,6 +3,7 @@ import { useParams, useNavigate, Outlet } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { listLeagues } from '../api/leagues'
 import { getGlobalDraws, getGlobalGSTotals, listTournaments } from '../api/tournaments'
+import { getDrawCounts } from '../api/auth'
 import { useAuth } from '../store/auth'
 import { computeCohortInfo, getDisplayStatus, DISPLAY_STATUS_LABELS } from '../utils/drawStatus.js'
 import { RoundProgressChart } from './LeagueDetail'
@@ -40,6 +41,13 @@ export function GlobalLeagueView() {
     queryFn: listTournaments,
     refetchInterval: 60_000,
   })
+
+  const { data: drawCountsRaw = [] } = useQuery({
+    queryKey: ['draw-counts'],
+    queryFn: getDrawCounts,
+    staleTime: 5 * 60_000,
+  })
+  const drawCountMap = useMemo(() => Object.fromEntries(drawCountsRaw.map(r => [r.user_id, r.draw_count])), [drawCountsRaw])
 
   const categoryGroups = useMemo(() => {
     const cohortInfo = computeCohortInfo(allTournaments)
@@ -131,8 +139,8 @@ export function GlobalLeagueView() {
             <tbody>
               {(gsData?.members ?? []).map(m => (
                 <tr key={m.user_id}>
-                  <td className="lmt-name" title={m.username}>
-                    <a href={`/draw-history?user=${m.user_id}`} target="_blank" rel="noopener noreferrer" className="lmt-name-link">{m.username}</a>
+                  <td className="lmt-name">
+                    <a href={`/draw-history?user=${m.user_id}`} target="_blank" rel="noopener noreferrer" className="lmt-name-link username-hover" data-tooltip={`${m.username}: Show Draw History (${drawCountMap[m.user_id] ?? 0} draws competed)`}>{m.username}</a>
                     {m.is_admin && <span className="lmt-admin-badge">Admin</span>}
                   </td>
                   <td className="lmt-pts">{m.atp_points}</td>

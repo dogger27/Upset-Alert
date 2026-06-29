@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy import delete, select, and_
+from sqlalchemy import delete, func, select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import get_current_user
@@ -362,6 +362,18 @@ async def get_draw_history(
             "results": by_tourn[tid],
         })
     return result
+
+
+@router.get("/users/draw-counts")
+async def get_draw_counts(db: AsyncSession = Depends(get_db)):
+    """Return competed draw counts for all users (draws where they fully entered picks)."""
+    from app.models.draw_history import TournamentResult
+    res = await db.execute(
+        select(TournamentResult.user_id, func.count().label("draw_count"))
+        .where(TournamentResult.league_id.is_(None))
+        .group_by(TournamentResult.user_id)
+    )
+    return [{"user_id": r.user_id, "draw_count": r.draw_count} for r in res.all()]
 
 
 @router.get("/users/{user_id}/draw-history")
