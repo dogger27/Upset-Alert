@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getLeague, getLeagueTournaments, getRoundScores, updateLeague, setMemberAdmin, removeMember, deleteLeague, shareLeagueByEmail, getGrandSlamTotals } from '../api/leagues'
-import { getGlobalRoundScores } from '../api/tournaments'
+import { getGlobalRoundScores, getGlobalDraws } from '../api/tournaments'
 import { useAuth } from '../store/auth'
 import UserName from '../components/UserName'
 import { computeCohortInfo, getDisplayStatus, DISPLAY_STATUS_LABELS } from '../utils/drawStatus.js'
@@ -76,12 +76,18 @@ export default function LeagueDetail() {
     queryFn: () => getGrandSlamTotals(Number(id)),
   })
 
+  const { data: globalDraws = [] } = useQuery({
+    queryKey: ['global-draws'],
+    queryFn: getGlobalDraws,
+    refetchInterval: 60_000,
+  })
+
   // Group non-upcoming tournaments by display status: Open → Active → Last Week → Previous.
   // Within each group sort by tier desc, then start_date desc.
   const STATUS_ORDER = { open: 0, active: 1, lastweek: 2, previous: 3 }
   const categoryGroups = useMemo(() => {
-    const tournaments = leagueTournaments.map(lt => lt.tournament)
-    const cohortInfo = computeCohortInfo(tournaments)
+    const allTournaments = globalDraws.map(lt => lt.tournament)
+    const cohortInfo = computeCohortInfo(allTournaments)
     const groups = new Map()
     for (const lt of leagueTournaments) {
       const ds = getDisplayStatus(lt.tournament, cohortInfo)
@@ -98,7 +104,7 @@ export default function LeagueDetail() {
       })
     }
     return [...groups.values()].sort((a, b) => a.order - b.order)
-  }, [leagueTournaments])
+  }, [leagueTournaments, globalDraws])
 
   if (isLoading) return <div className="page-loading">Loading…</div>
   if (!league) return null
