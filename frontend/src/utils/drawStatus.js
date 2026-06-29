@@ -37,7 +37,7 @@ export function getDisplayStatus(t, cohortInfo) {
     if (endDate) {
       const today = new Date(); today.setHours(0, 0, 0, 0)
       const daysAgo = (today - new Date(endDate + 'T00:00:00')) / ONE_DAY_MS
-      if (daysAgo >= 0 && daysAgo <= 7) return 'lastweek'
+      if (daysAgo >= 0 && daysAgo < 7) return 'lastweek'
     }
     return 'previous'
   }
@@ -55,7 +55,7 @@ export function getHomeSection(t, cohortInfo) {
     if (endDate) {
       const today = new Date(); today.setHours(0, 0, 0, 0)
       const daysAgo = (today - new Date(endDate + 'T00:00:00')) / ONE_DAY_MS
-      if (daysAgo >= 0 && daysAgo <= 7) return 'lastweek'
+      if (daysAgo >= 0 && daysAgo < 7) return 'lastweek'
     }
   }
   if (t.status === 'upcoming' && t.start_date) {
