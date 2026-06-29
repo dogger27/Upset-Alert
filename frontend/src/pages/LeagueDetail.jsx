@@ -223,7 +223,7 @@ export default function LeagueDetail() {
               {(gsData?.members ?? league.members.map(m => ({ user_id: m.id, username: m.username, full_name: m.full_name, atp_points: null, wta_points: null }))).map(m => (
                 <tr key={m.user_id}>
                   <td className="lmt-name">
-                    <a href={`/draw-history?user=${m.user_id}`} target="_blank" rel="noopener noreferrer" className="lmt-name-link username-hover" data-tooltip={`${m.full_name || m.username}:\nShow Draw History\n(${drawCountMap[m.user_id] ?? 0} draws competed)`}>
+                    <a href={`/draw-history?user=${m.user_id}`} className="lmt-name-link username-hover" data-tooltip={`${m.full_name || m.username}:\nShow Draw History\n(${drawCountMap[m.user_id] ?? 0} draws competed)`}>
                       <span className="lmt-name-text">{m.username}</span>
                     </a>
                   </td>
@@ -333,7 +333,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
               {entries.map((entry, entryIndex) => (
                 <div key={entry.user_id} className="lt-progress-row lt-progress-row--open">
                   <span className="lt-pos-num">{entryIndex + 1}.</span>
-                  <a href={`/draw-history?user=${entry.user_id}`} target="_blank" rel="noopener noreferrer" className="lt-progress-name lt-progress-name--link username-hover" data-tooltip={`${entry.full_name || entry.username}:\nShow Draw History\n(${drawCountMap[entry.user_id] ?? 0} draws competed)`}>
+                  <a href={`/draw-history?user=${entry.user_id}`} className="lt-progress-name lt-progress-name--link username-hover" data-tooltip={`${entry.full_name || entry.username}:\nShow Draw History\n(${drawCountMap[entry.user_id] ?? 0} draws competed)`}>
                     <span className="lt-progress-name-text">{entry.username}</span>
                   </a>
                 </div>
@@ -368,7 +368,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
             {entries.map((entry, entryIndex) => (
               <div key={entry.user_id} className="lt-progress-row">
                 <span className="lt-pos-num">{entryIndex + 1}.</span>
-                <a href={`/draw-history?user=${entry.user_id}`} target="_blank" rel="noopener noreferrer" className="lt-progress-name lt-progress-name--link username-hover" data-tooltip={`${entry.full_name || entry.username}:\nShow Draw History\n(${drawCountMap[entry.user_id] ?? 0} draws competed)`}>
+                <a href={`/draw-history?user=${entry.user_id}`} className="lt-progress-name lt-progress-name--link username-hover" data-tooltip={`${entry.full_name || entry.username}:\nShow Draw History\n(${drawCountMap[entry.user_id] ?? 0} draws competed)`}>
                   {finalPlayed && entryIndex < 3 && <span className="lt-place-icon">{PLACE_ICONS[entryIndex]}</span>}
                   <span className="lt-progress-name-text">{entry.username}</span>
                 </a>
