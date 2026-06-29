@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getLeague, getLeagueTournaments, getRoundScores, updateLeague, setMemberAdmin, removeMember, deleteLeague, shareLeagueByEmail, getGrandSlamTotals } from '../api/leagues'
 import { getGlobalRoundScores, listTournaments } from '../api/tournaments'
+import { getDrawCounts } from '../api/auth'
 import { useAuth } from '../store/auth'
 import UserName from '../components/UserName'
 import { computeCohortInfo, getDisplayStatus, DISPLAY_STATUS_LABELS } from '../utils/drawStatus.js'
@@ -81,6 +82,13 @@ export default function LeagueDetail() {
     queryFn: listTournaments,
     refetchInterval: 60_000,
   })
+
+  const { data: drawCountsRaw = [] } = useQuery({
+    queryKey: ['draw-counts'],
+    queryFn: getDrawCounts,
+    staleTime: 5 * 60_000,
+  })
+  const drawCountMap = useMemo(() => Object.fromEntries(drawCountsRaw.map(r => [r.user_id, r.draw_count])), [drawCountsRaw])
 
   // Group non-upcoming tournaments by display status: Open → Active → Last Week → Previous.
   // Within each group sort by tier desc, then start_date desc.
@@ -214,8 +222,8 @@ export default function LeagueDetail() {
             <tbody>
               {(gsData?.members ?? league.members.map(m => ({ user_id: m.id, username: m.username, full_name: m.full_name, atp_points: null, wta_points: null }))).map(m => (
                 <tr key={m.user_id}>
-                  <td className="lmt-name" title={m.username}>
-                    <a href={`/draw-history?user=${m.user_id}`} target="_blank" rel="noopener noreferrer" className="lmt-name-link">
+                  <td className="lmt-name">
+                    <a href={`/draw-history?user=${m.user_id}`} target="_blank" rel="noopener noreferrer" className="lmt-name-link username-hover" data-tooltip={`${m.username}: Show Draw History (${drawCountMap[m.user_id] ?? 0} draws competed)`}>
                       <UserName user={{ id: m.user_id, username: m.username, full_name: m.full_name }} showRealName={league.show_real_name} />
                     </a>
                   </td>
@@ -247,6 +255,12 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
   const { user } = useAuth()
   const [toast, setToast] = useState(null)
   const toastKey = useRef(0)
+  const { data: drawCountsRaw = [] } = useQuery({
+    queryKey: ['draw-counts'],
+    queryFn: getDrawCounts,
+    staleTime: 5 * 60_000,
+  })
+  const drawCountMap = useMemo(() => Object.fromEntries(drawCountsRaw.map(r => [r.user_id, r.draw_count])), [drawCountsRaw])
   const { data: rawData } = useQuery({
     queryKey: leagueId != null ? ['round-scores', leagueId, t.id] : ['global-round-scores', t.id],
     queryFn: leagueId != null ? () => getRoundScores(leagueId, t.id) : () => getGlobalRoundScores(t.id),
@@ -319,15 +333,9 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
               {entries.map((entry, entryIndex) => (
                 <div key={entry.user_id} className="lt-progress-row lt-progress-row--open">
                   <span className="lt-pos-num">{entryIndex + 1}.</span>
-                  {entry.full_name && entry.full_name !== entry.username ? (
-                    <a href={`/draw-history?user=${entry.user_id}`} target="_blank" rel="noopener noreferrer" className="lt-progress-name lt-progress-name--link username-hover" data-tooltip={entry.full_name}>
-                      <span className="lt-progress-name-text">{entry.username}</span>
-                    </a>
-                  ) : (
-                    <a href={`/draw-history?user=${entry.user_id}`} target="_blank" rel="noopener noreferrer" className="lt-progress-name lt-progress-name--link">
-                      <span className="lt-progress-name-text">{entry.username}</span>
-                    </a>
-                  )}
+                  <a href={`/draw-history?user=${entry.user_id}`} target="_blank" rel="noopener noreferrer" className="lt-progress-name lt-progress-name--link username-hover" data-tooltip={`${entry.username}: Show Draw History (${drawCountMap[entry.user_id] ?? 0} draws competed)`}>
+                    <span className="lt-progress-name-text">{entry.username}</span>
+                  </a>
                 </div>
               ))}
             </div>
@@ -360,17 +368,10 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
             {entries.map((entry, entryIndex) => (
               <div key={entry.user_id} className="lt-progress-row">
                 <span className="lt-pos-num">{entryIndex + 1}.</span>
-                {entry.full_name && entry.full_name !== entry.username ? (
-                  <a href={`/draw-history?user=${entry.user_id}`} target="_blank" rel="noopener noreferrer" className="lt-progress-name lt-progress-name--link username-hover" data-tooltip={entry.full_name}>
-                    {finalPlayed && entryIndex < 3 && <span className="lt-place-icon">{PLACE_ICONS[entryIndex]}</span>}
-                    <span className="lt-progress-name-text">{entry.username}</span>
-                  </a>
-                ) : (
-                  <a href={`/draw-history?user=${entry.user_id}`} target="_blank" rel="noopener noreferrer" className="lt-progress-name lt-progress-name--link">
-                    {finalPlayed && entryIndex < 3 && <span className="lt-place-icon">{PLACE_ICONS[entryIndex]}</span>}
-                    <span className="lt-progress-name-text">{entry.username}</span>
-                  </a>
-                )}
+                <a href={`/draw-history?user=${entry.user_id}`} target="_blank" rel="noopener noreferrer" className="lt-progress-name lt-progress-name--link username-hover" data-tooltip={`${entry.username}: Show Draw History (${drawCountMap[entry.user_id] ?? 0} draws competed)`}>
+                  {finalPlayed && entryIndex < 3 && <span className="lt-place-icon">{PLACE_ICONS[entryIndex]}</span>}
+                  <span className="lt-progress-name-text">{entry.username}</span>
+                </a>
                 <button
                   className="lt-bracket-btn"
                   title={`View ${entry.username}'s bracket`}
