@@ -161,13 +161,17 @@
 }
 
 .hof-view-link {
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--green-600, #2d6a4f);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  padding: 3px 5px;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
   text-decoration: none;
-  white-space: nowrap;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
-.hof-view-link:hover { text-decoration: underline; }
+.hof-view-link:hover { color: var(--green-600); background: var(--bg-subtle); border-color: var(--green-400); }
 
 @media (max-width: 700px) {
   .hof-two-col {
