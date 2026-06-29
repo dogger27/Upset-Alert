@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useParams, useNavigate, Outlet } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { listLeagues } from '../api/leagues'
-import { getGlobalDraws, getGlobalGSTotals } from '../api/tournaments'
+import { getGlobalDraws, getGlobalGSTotals, listTournaments } from '../api/tournaments'
 import { useAuth } from '../store/auth'
 import { computeCohortInfo, getDisplayStatus, DISPLAY_STATUS_LABELS } from '../utils/drawStatus.js'
 import { RoundProgressChart } from './LeagueDetail'
@@ -35,9 +35,14 @@ export function GlobalLeagueView() {
     queryFn: getGlobalGSTotals,
   })
 
+  const { data: allTournaments = [] } = useQuery({
+    queryKey: ['tournaments'],
+    queryFn: listTournaments,
+    refetchInterval: 60_000,
+  })
+
   const categoryGroups = useMemo(() => {
-    const tournaments = globalDraws.map(lt => lt.tournament)
-    const cohortInfo = computeCohortInfo(tournaments)
+    const cohortInfo = computeCohortInfo(allTournaments)
     const groups = new Map()
     for (const lt of globalDraws) {
       const ds = getDisplayStatus(lt.tournament, cohortInfo)
@@ -53,7 +58,7 @@ export function GlobalLeagueView() {
       })
     }
     return [...groups.values()].sort((a, b) => a.order - b.order)
-  }, [globalDraws])
+  }, [globalDraws, allTournaments])
 
   const countByStatus = Object.fromEntries(STATUS_TABS.map(s => [s, 0]))
   for (const g of categoryGroups) countByStatus[g.key] = g.items.length
