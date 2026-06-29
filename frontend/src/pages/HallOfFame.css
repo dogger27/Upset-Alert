@@ -5,7 +5,7 @@
 }
 
 .hof-container {
-  max-width: 860px;
+  width: max-content;
   margin: 0 auto;
 }
 
@@ -67,9 +67,9 @@
 
 /* ── Two-column gender split ── */
 .hof-two-col {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
   gap: 16px;
+  align-items: flex-start;
 }
 
 .hof-gender-col {}
@@ -94,7 +94,7 @@
 
 /* ── Table ── */
 .hof-table {
-  width: 100%;
+  width: max-content;
   border-collapse: collapse;
   font-size: 0.85rem;
 }
@@ -138,6 +138,7 @@
 
 .hof-tourn {
   color: var(--ink-700);
+  white-space: nowrap;
 }
 
 .hof-year {
