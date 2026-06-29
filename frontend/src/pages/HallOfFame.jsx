@@ -3,6 +3,21 @@ import { Link } from 'react-router-dom'
 import client from '../api/client'
 import './HallOfFame.css'
 
+const BracketIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="17" y1="12" x2="24" y2="12"/>
+    <polyline points="17,6 17,18"/>
+    <line x1="10" y1="6" x2="17" y2="6"/>
+    <line x1="10" y1="18" x2="17" y2="18"/>
+    <polyline points="10,3 10,9"/>
+    <polyline points="10,15 10,21"/>
+    <line x1="3" y1="3" x2="10" y2="3"/>
+    <line x1="3" y1="9" x2="10" y2="9"/>
+    <line x1="3" y1="15" x2="10" y2="15"/>
+    <line x1="3" y1="21" x2="10" y2="21"/>
+  </svg>
+)
+
 function fetchHallOfFame() {
   return client.get('/tournaments/hall-of-fame').then(r => r.data)
 }
@@ -38,8 +53,8 @@ function GenderTable({ entries, label }) {
                   </td>
                   <td className="hof-points">{entry.points}</td>
                   <td className="hof-link-cell">
-                    <Link className="hof-view-link" to={`/tournaments/${entry.tournament_id}`}>
-                      View →
+                    <Link className="hof-view-link" to={`/tournaments/${entry.tournament_id}`} title="View draw">
+                      <BracketIcon />
                     </Link>
                   </td>
                 </tr>
