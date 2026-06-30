@@ -509,7 +509,7 @@
 .lt-progress-rows--race { position: relative; }
 .lt-progress-row {
   display: grid;
-  grid-template-columns: 22px 175px 28px 1fr 52px 80px;
+  grid-template-columns: 22px max-content 28px 1fr 52px 80px;
   align-items: center; gap: 0.65rem;
 }
 .lt-progress-row--abs {
