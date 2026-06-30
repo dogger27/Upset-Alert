@@ -647,7 +647,7 @@ class ESPNMonitor:
 
                 match.winner_id = w_entry.id
                 match.status = "completed"
-                match.completed_at = now
+                match.completed_at = datetime.now(timezone.utc)
                 match.live_scores_json = None  # clear live indicator
                 updated += 1
                 rounds_updated.add(match.round_number)

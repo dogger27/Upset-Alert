@@ -566,7 +566,9 @@ async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get
     pts_table = _points_table(tournament)
 
     completed_matches_result = await db.execute(
-        select(Match).where(
+        select(Match)
+        .options(selectinload(Match.player1), selectinload(Match.player2))
+        .where(
             Match.draw_id == tournament_id,
             Match.status == "completed",
             Match.is_bye == False,
@@ -588,6 +590,8 @@ async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get
     users_result = await db.execute(select(User).where(User.id.in_(sub)))
     users = users_result.scalars().all()
 
+    timeline_ids = {m.id for m in completed_matches}
+    user_predictions: dict = {}
     entries = []
     for user in users:
         preds_result = await db.execute(
@@ -599,6 +603,7 @@ async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get
         )
         preds = preds_result.scalars().all()
         pred_by_match = {p.match_id: p.predicted_winner_id for p in preds}
+        user_predictions[str(user.id)] = {str(k): v for k, v in pred_by_match.items() if k in timeline_ids}
         by_round: defaultdict = defaultdict(float)
         correct_count = 0
         for match in completed_matches:
@@ -621,10 +626,27 @@ async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get
 
     entries.sort(key=lambda x: (-x["total"],) + tuple(-rp for rp in reversed(x["round_points"])))
     rounds_with_matches = sorted({m.round_number for m in completed_matches})
+
+    def _isoZ(dt):
+        if dt is None: return None
+        s = dt.isoformat()
+        return s if (s.endswith('Z') or '+' in s) else s + 'Z'
+
+    def _entry_name(entry): return entry.name if entry else None
+    timeline = sorted(
+        [{"id": m.id, "round_number": m.round_number, "winner_id": m.winner_id,
+          "points": pts_table.get(m.round_number, 0), "completed_at": _isoZ(m.completed_at),
+          "winner_name": _entry_name(m.player1 if m.player1_id == m.winner_id else m.player2),
+          "loser_name": _entry_name(m.player2 if m.player1_id == m.winner_id else m.player1)}
+         for m in completed_matches],
+        key=lambda x: (x["completed_at"] is not None, x["completed_at"] or "", x["id"])
+    )
     return {
         "entries": entries,
         "completed_matches_count": len(completed_matches),
         "rounds_with_matches": rounds_with_matches,
+        "matches_timeline": timeline,
+        "user_predictions": user_predictions,
     }
 
 
@@ -967,7 +989,10 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
             if w_id is not None:
                 # Wikipedia has a result — always trust it (includes tiebreak scores)
                 if match.winner_id != w_id:
-                    match.completed_at = datetime.now(timezone.utc)
+                    # Only stamp completed_at if ESPN hasn't already recorded it;
+                    # ESPN timestamps are more accurate (per-match, within 1 min).
+                    if match.completed_at is None:
+                        match.completed_at = datetime.now(timezone.utc)
                 match.winner_id = w_id
                 match.status = "completed"
                 match.scores_json = mr.scores

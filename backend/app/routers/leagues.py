@@ -622,7 +622,9 @@ async def round_scores(
     pts_table = _points_table(tournament)
 
     completed_matches_result = await db.execute(
-        select(Match).where(
+        select(Match)
+        .options(selectinload(Match.player1), selectinload(Match.player2))
+        .where(
             Match.draw_id == tournament_id,
             Match.status == "completed",
             Match.is_bye == False,
@@ -630,6 +632,8 @@ async def round_scores(
     )
     completed_matches = completed_matches_result.scalars().all()
 
+    timeline_ids = {m.id for m in completed_matches}
+    user_predictions: dict = {}
     entries = []
     for member in league.members:
         preds_result = await db.execute(
@@ -644,6 +648,7 @@ async def round_scores(
             continue
 
         pred_by_match = {p.match_id: p.predicted_winner_id for p in preds}
+        user_predictions[str(member.user_id)] = {str(k): v for k, v in pred_by_match.items() if k in timeline_ids}
         by_round: dict = defaultdict(float)
         correct_count = 0
 
@@ -668,10 +673,27 @@ async def round_scores(
     # Primary: total points desc. Tiebreaker: points in latest rounds first (Final → SF → QF → …)
     entries.sort(key=lambda x: (-x["total"],) + tuple(-rp for rp in reversed(x["round_points"])))
     rounds_with_matches = sorted({m.round_number for m in completed_matches})
+
+    def _isoZ(dt):
+        if dt is None: return None
+        s = dt.isoformat()
+        return s if (s.endswith('Z') or '+' in s) else s + 'Z'
+
+    def _entry_name(entry): return entry.name if entry else None
+    timeline = sorted(
+        [{"id": m.id, "round_number": m.round_number, "winner_id": m.winner_id,
+          "points": pts_table.get(m.round_number, 0), "completed_at": _isoZ(m.completed_at),
+          "winner_name": _entry_name(m.player1 if m.player1_id == m.winner_id else m.player2),
+          "loser_name": _entry_name(m.player2 if m.player1_id == m.winner_id else m.player1)}
+         for m in completed_matches],
+        key=lambda x: (x["completed_at"] is not None, x["completed_at"] or "", x["id"])
+    )
     return {
         "entries": entries,
         "completed_matches_count": len(completed_matches),
         "rounds_with_matches": rounds_with_matches,
+        "matches_timeline": timeline,
+        "user_predictions": user_predictions,
     }
 
 

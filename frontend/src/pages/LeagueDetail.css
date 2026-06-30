@@ -466,11 +466,56 @@
   letter-spacing: 0.04em; color: var(--text-muted);
 }
 
+/* Scrubber */
+.lt-scrubber {
+  display: flex; flex-direction: column; align-items: stretch; gap: 2px;
+  margin-top: 0.65rem;
+}
+.lt-scrubber-range {
+  width: 100%; cursor: pointer;
+  -webkit-appearance: none; appearance: none;
+  height: 4px; border-radius: 2px;
+  background: linear-gradient(to right, var(--green-dark) var(--fill-pct, 100%), var(--border, #e5e7eb) var(--fill-pct, 100%));
+  outline: none; margin: 0; padding: 0;
+}
+.lt-scrubber-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--green-dark);
+  cursor: pointer;
+}
+.lt-scrubber-range::-moz-range-thumb {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--green-dark);
+  cursor: pointer; border: none;
+}
+.lt-scrubber-bottom {
+  display: flex; justify-content: space-between; align-items: baseline;
+}
+.lt-scrubber-label {
+  font-size: 0.72rem; color: var(--text-muted); white-space: nowrap;
+}
+.lt-scrubber-label--active { color: var(--green-dark); font-weight: 600; }
+@keyframes lt-flash-fade {
+  0%   { opacity: 1; }
+  60%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+.lt-scrubber-flash {
+  font-size: 0.72rem; color: var(--text-muted); white-space: nowrap;
+  animation: lt-flash-fade 2.5s ease-out forwards;
+}
+
 .lt-progress-rows { display: flex; flex-direction: column; gap: 0.4rem; }
+.lt-progress-rows--race { position: relative; }
 .lt-progress-row {
   display: grid;
   grid-template-columns: 22px 110px 28px 1fr 52px 80px;
   align-items: center; gap: 0.65rem;
+}
+.lt-progress-row--abs {
+  position: absolute; width: 100%;
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .lt-pos-num {
   font-size: 0.75rem; font-weight: 700;
@@ -521,10 +566,10 @@
   overflow: hidden; border-radius: 3px;
 }
 .lt-bar-winner {
-  box-shadow: inset 0 0 0 3px #000;
+  box-shadow: inset 0 0 0 1.5px #000;
 }
 .lt-bar-label {
-  font-size: 1.3rem; font-weight: 900;
+  font-size: 1.05rem; font-weight: 900;
   white-space: nowrap; user-select: none; line-height: 1;
   text-shadow:
     1px 0 0 #fff, -1px 0 0 #fff, 0 1px 0 #fff, 0 -1px 0 #fff,
@@ -532,7 +577,7 @@
     2px 0 0 #fff, -2px 0 0 #fff, 0 2px 0 #fff, 0 -2px 0 #fff,
     0 0 8px #fff, 0 0 16px rgba(255,255,255,0.9), 0 0 28px rgba(255,255,255,0.7);
 }
-.lt-progress-total { font-size: 0.8rem; color: var(--text-muted); font-weight: 700; text-align: center; white-space: nowrap; }
+.lt-progress-total { font-size: 0.8rem; color: var(--ink, #111); font-weight: 700; text-align: center; white-space: nowrap; }
 .lt-progress-correct { font-size: 0.78rem; color: var(--text-muted); text-align: center; white-space: nowrap; }
 .lt-progress-col-header { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
 .lt-progress-header-row { margin-bottom: 0.2rem; }
