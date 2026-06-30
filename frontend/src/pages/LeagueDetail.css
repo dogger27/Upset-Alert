@@ -141,8 +141,8 @@
 }
 .league-members-table tbody tr + tr td { border-top: 1px solid var(--border); }
 .league-members-table td { padding: 0.35rem 0; }
-.lmt-name { text-align: left; color: var(--text); max-width: 130px; }
-.lmt-name-link { color: inherit; text-decoration: none; display: inline-block; max-width: 100%; }
+.lmt-name { text-align: left; color: var(--text); max-width: 130px; display: flex; align-items: center; gap: 4px; }
+.lmt-name-link { color: inherit; text-decoration: none; min-width: 0; }
 .lmt-name-link:hover { color: var(--green-600); text-decoration: underline; }
 .lmt-name-text { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lmt-admin-badge {
@@ -155,8 +155,7 @@
   border: 1px solid var(--green-dark);
   border-radius: 3px;
   padding: 0 3px;
-  margin-left: 4px;
-  vertical-align: middle;
+  flex-shrink: 0;
   line-height: 1.4;
 }
 .lmt-pts {
@@ -510,7 +509,7 @@
 .lt-progress-rows--race { position: relative; }
 .lt-progress-row {
   display: grid;
-  grid-template-columns: 22px 110px 28px 1fr 52px 80px;
+  grid-template-columns: 22px 175px 28px 1fr 52px 80px;
   align-items: center; gap: 0.65rem;
 }
 .lt-progress-row--abs {
