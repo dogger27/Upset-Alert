@@ -251,10 +251,18 @@ function getRoundLabel(index, numRounds) {
   return `R${index + 1}`
 }
 
+const ROW_SLOT = 41 // px per row slot (bar height 34px + gap 7px)
+
 export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMemberCount, showRealName }) {
   const { user } = useAuth()
   const [toast, setToast] = useState(null)
   const toastKey = useRef(0)
+  // null = always follow the latest match (auto-max); number = user-set position
+  const [scrubPos, setScrubPos] = useState(null)
+  const [flashMatch, setFlashMatch] = useState(null)
+  const flashKey = useRef(0)
+  const flashTimer = useRef(null)
+
   const { data: drawCountsRaw = [] } = useQuery({
     queryKey: ['draw-counts'],
     queryFn: getDrawCounts,
@@ -270,29 +278,71 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
   const entries = rawData?.entries ?? []
   const completedMatchesCount = rawData?.completed_matches_count ?? 0
   const roundsWithMatches = rawData?.rounds_with_matches ?? []
+  const matchesTimeline = rawData?.matches_timeline ?? []
+  const userPredictions = rawData?.user_predictions ?? {}
+
+  const effectiveMax = matchesTimeline.length
+  const effectiveScrubPos = scrubPos ?? effectiveMax
+  const isScrubbing = effectiveScrubPos < effectiveMax
+
+  // Recompute entries/rounds at the current scrub position
+  const displayData = useMemo(() => {
+    if (!isScrubbing || matchesTimeline.length === 0) {
+      return { entries, roundsWithMatches, completedMatchesCount }
+    }
+    const slice = matchesTimeline.slice(0, effectiveScrubPos)
+    const sliceRounds = [...new Set(slice.map(m => m.round_number))].sort((a, b) => a - b)
+    const currentEntries = entries.map(e => {
+      const preds = userPredictions[String(e.user_id)] ?? {}
+      let total = 0
+      const byRound = {}
+      let correct = 0
+      for (const m of slice) {
+        if (String(preds[String(m.id)]) === String(m.winner_id)) {
+          byRound[m.round_number] = (byRound[m.round_number] ?? 0) + m.points
+          total += m.points
+          correct++
+        }
+      }
+      const round_points = Array.from({ length: e.round_points.length }, (_, i) => byRound[i + 1] ?? 0)
+      return { ...e, round_points, total, correct_count: correct }
+    })
+    currentEntries.sort((a, b) => {
+      if (b.total !== a.total) return b.total - a.total
+      for (let i = a.round_points.length - 1; i >= 0; i--) {
+        const diff = (b.round_points[i] ?? 0) - (a.round_points[i] ?? 0)
+        if (diff !== 0) return diff
+      }
+      return 0
+    })
+    return { entries: currentEntries, roundsWithMatches: sliceRounds, completedMatchesCount: slice.length }
+  }, [isScrubbing, effectiveScrubPos, matchesTimeline, entries, roundsWithMatches, completedMatchesCount, userPredictions])
+
+  const dispEntries = displayData.entries
+  const dispRoundsWithMatches = displayData.roundsWithMatches
+  const dispCompletedCount = displayData.completedMatchesCount
 
   const numRounds = entries.length > 0 ? entries[0].round_points.length : (t.num_rounds ?? ROUND_COLORS.length)
+  // Scale and column structure always reflect the full (server) state so bars grow as you scrub right
   const finalPlayed = roundsWithMatches.includes(numRounds)
   const PLACE_ICONS = ['🏆', '🥈', '🥉']
-  // rounds_with_matches is 1-indexed; convert to 0-indexed
+
   const activeRounds = roundsWithMatches.length > 0
     ? roundsWithMatches.map(r => r - 1)
     : Array.from({ length: numRounds }, (_, i) => i).filter(i => entries.some(e => e.round_points[i] > 0))
   const perRoundMax = activeRounds.map(i => {
     const vals = entries.map(e => e.round_points[i] ?? 0)
-    return Math.max(...vals, 1)
+    return Math.max(...vals.map(v => v ?? 0), 1)
   })
 
-  // A round is complete when the next round has started, or it's the last played round and the final was played
   const completedRoundNums = new Set(
     roundsWithMatches.filter((r, i) => i < roundsWithMatches.length - 1 || finalPlayed)
   )
-  // For each active column, the set of user_ids who won that round (null = round not yet complete or no points)
   const roundWinnerSets = activeRounds.map((roundIdx) => {
     if (!completedRoundNums.has(roundIdx + 1)) return null
-    const maxPts = Math.max(...entries.map(e => e.round_points[roundIdx] ?? 0))
+    const maxPts = Math.max(...dispEntries.map(e => e.round_points[roundIdx] ?? 0))
     if (maxPts <= 0) return null
-    return new Set(entries.filter(e => (e.round_points[roundIdx] ?? 0) === maxPts).map(e => e.user_id))
+    return new Set(dispEntries.filter(e => (e.round_points[roundIdx] ?? 0) === maxPts).map(e => e.user_id))
   })
   const userById = Object.fromEntries(entries.map(e => [e.user_id, e.username]))
   const roundWinnerLabels = activeRounds.map((_, col) => {
@@ -304,6 +354,13 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
       ? `Round Winner: ${names[0]} + ${others} other${others > 1 ? 's' : ''}`
       : `Round Winner: ${names[0]}`
   })
+
+  const lastMatch = effectiveScrubPos > 0 ? matchesTimeline[effectiveScrubPos - 1] : null
+  const scrubLabel = effectiveScrubPos === 0
+    ? 'Before first match'
+    : effectiveScrubPos >= effectiveMax
+    ? `All ${effectiveMax} match${effectiveMax !== 1 ? 'es' : ''}`
+    : `${effectiveScrubPos} / ${effectiveMax} matches (through ${lastMatch ? getRoundLabel(lastMatch.round_number - 1, numRounds) : ''})`
 
   return (
     <div className="lt-progress-block">
@@ -364,12 +421,19 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
               <span className="lt-progress-correct lt-progress-col-header"># Correct</span>
             )}
           </div>
-          <div className="lt-progress-rows">
-            {entries.map((entry, entryIndex) => (
-              <div key={entry.user_id} className="lt-progress-row">
-                <span className="lt-pos-num">{entryIndex + 1}.</span>
+          <div
+            className="lt-progress-rows lt-progress-rows--race"
+            style={{ height: `${Math.max(dispEntries.length * ROW_SLOT - 7, 0)}px` }}
+          >
+            {dispEntries.map((entry, rank) => (
+              <div
+                key={entry.user_id}
+                className="lt-progress-row lt-progress-row--abs"
+                style={{ transform: `translateY(${rank * ROW_SLOT}px)` }}
+              >
+                <span className="lt-pos-num">{rank + 1}.</span>
                 <a href={`/draw-history?user=${entry.user_id}`} className="lt-progress-name lt-progress-name--link username-hover" data-tooltip={`${entry.full_name || entry.username}:\nShow Draw History\n(${drawCountMap[entry.user_id] ?? 0} draws competed)`}>
-                  {finalPlayed && entryIndex < 3 && <span className="lt-place-icon">{PLACE_ICONS[entryIndex]}</span>}
+                  {finalPlayed && rank < 3 && <span className="lt-place-icon">{PLACE_ICONS[rank]}</span>}
                   <span className="lt-progress-name-text">{entry.username}</span>
                 </a>
                 <button
@@ -417,12 +481,52 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                 <span className="lt-progress-total">{entry.total} pts</span>
                 {completedMatchesCount > 0 && (
                   <span className="lt-progress-correct">
-                    {entry.correct_count}/{completedMatchesCount}
+                    {entry.correct_count}/{dispCompletedCount}
                   </span>
                 )}
               </div>
             ))}
           </div>
+          {effectiveMax > 0 && (
+            <div className="lt-scrubber">
+              <input
+                type="range"
+                min={0}
+                max={effectiveMax}
+                value={effectiveScrubPos}
+                onChange={e => {
+                  const v = Number(e.target.value)
+                  setScrubPos(v >= effectiveMax ? null : v)
+                  const m = matchesTimeline[Math.min(v, effectiveMax) - 1]
+                  if (m) {
+                    if (flashTimer.current) clearTimeout(flashTimer.current)
+                    flashKey.current += 1
+                    setFlashMatch({ ...m, _key: flashKey.current })
+                    flashTimer.current = setTimeout(() => setFlashMatch(null), 2500)
+                  } else {
+                    setFlashMatch(null)
+                  }
+                }}
+                className="lt-scrubber-range"
+                style={{ '--fill-pct': `${(effectiveScrubPos / effectiveMax) * 100}%` }}
+              />
+              <div className="lt-scrubber-bottom">
+                <span className={`lt-scrubber-label${isScrubbing ? ' lt-scrubber-label--active' : ''}`}>
+                  {scrubLabel}
+                </span>
+                {flashMatch && (
+                  <span key={flashMatch._key} className="lt-scrubber-flash">
+                    {getRoundLabel(flashMatch.round_number - 1, numRounds)}
+                    {': '}
+                    {flashMatch.winner_name ?? '?'} def. {flashMatch.loser_name ?? '?'}
+                    {flashMatch.completed_at && (
+                      <>, {new Date(flashMatch.completed_at).toLocaleString('en-US', { month: 'short', day: '2-digit', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })}</>
+                    )}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>
