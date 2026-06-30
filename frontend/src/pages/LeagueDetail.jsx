@@ -322,6 +322,9 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
   const dispRoundsWithMatches = displayData.roundsWithMatches
   const dispCompletedCount = displayData.completedMatchesCount
 
+  // Fixed name column width based on longest username — shared across all absolute-positioned rows
+  const nameColWidth = Math.max(70, ...entries.map(e => e.username.length * 8.5)) + 8
+
   const numRounds = entries.length > 0 ? entries[0].round_points.length : (t.num_rounds ?? ROUND_COLORS.length)
   // Scale and column structure always reflect the full (server) state so bars grow as you scrub right
   const finalPlayed = roundsWithMatches.includes(numRounds)
@@ -407,7 +410,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
       ) : (
         <>
           <div className="lt-competitors-label">Competitors</div>
-          <div className="lt-progress-row lt-progress-header-row">
+          <div className="lt-progress-row lt-progress-header-row" style={{ '--name-col-width': `${nameColWidth}px` }}>
             <span /><span /><span />
             <div className="lt-bar-track">
               {activeRounds.map((i, col) => (
@@ -423,7 +426,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
           </div>
           <div
             className="lt-progress-rows lt-progress-rows--race"
-            style={{ height: `${Math.max(dispEntries.length * ROW_SLOT - 7, 0)}px` }}
+            style={{ height: `${Math.max(dispEntries.length * ROW_SLOT - 7, 0)}px`, '--name-col-width': `${nameColWidth}px` }}
           >
             {dispEntries.map((entry, rank) => (
               <div
