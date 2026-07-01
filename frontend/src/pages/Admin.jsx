@@ -22,6 +22,12 @@ const GENDER_COLORS = { M: '#edf3ff', F: '#fff0f5' }
 const CATEGORY_GROUPS = { '250': ['ATP 250', 'WTA 250'], '500': ['ATP 500', 'WTA 500'], '1000': ['ATP 1000', 'WTA 1000'], 'Grand Slam': ['Grand Slam'] }
 const STATUS_GROUP_ORDER = ['active', 'open', 'lastweek', 'upcoming', 'previous']
 
+function fmtWeek(t) {
+  if (!t.week || !t.start_date) return ''
+  const year = t.start_date.slice(0, 4)
+  return `${year}-${String(t.week).padStart(2, '0')}`
+}
+
 function fmtDate(dateStr) {
   if (!dateStr) return '—'
   const [y, m, d] = dateStr.split('-').map(Number)
@@ -254,6 +260,7 @@ function TournamentsPanel({ user }) {
             <table className="t-table">
               <thead>
                 <tr>
+                  <th rowSpan={2} style={{ width: 28, padding: 0 }}></th>
                   <th rowSpan={2} style={{ width: 20, padding: 0 }}></th>
                   <th rowSpan={2}>Start Date</th>
                   <th rowSpan={2}>Category</th>
@@ -277,22 +284,33 @@ function TournamentsPanel({ user }) {
                     const inGroup = filtered.filter(t => displayStatus(t) === status)
                     rows.push(
                       <tr key={`group-${status}`} className="status-group-header">
-                        <td colSpan={11}>{DISPLAY_STATUS_LABELS[status]}</td>
+                        <td colSpan={12}>{DISPLAY_STATUS_LABELS[status]}</td>
                       </tr>
                     )
                     if (inGroup.length === 0) {
                       rows.push(
                         <tr key={`empty-${status}`} className="status-group-empty-row">
-                          <td colSpan={11}>No {DISPLAY_STATUS_LABELS[status].toLowerCase()} tournaments at this time</td>
+                          <td colSpan={12}>No {DISPLAY_STATUS_LABELS[status].toLowerCase()} tournaments at this time</td>
                         </tr>
                       )
                     } else {
+                      // Pre-compute week groups for rowSpan
+                      const weekCounts = {}
+                      inGroup.forEach(t => {
+                        const k = t.start_date || ''
+                        weekCounts[k] = (weekCounts[k] || 0) + 1
+                      })
+                      const weekSeen = new Set()
+
                       inGroup.forEach((t, i) => {
                         const ds = displayStatus(t)
                         const isCompleted = ds === 'lastweek' || ds === 'previous'
                         const hasDrawData = !!(isCompleted || t.draw_released_direct_at)
                         const surface = t.surface ? t.surface.replace(/\s*\(.*?\)/g, '') : '—'
                         const isCompeting = ds !== 'upcoming' && entryStatus[t.id] === 'complete'
+                        const weekKey = t.start_date || ''
+                        const isFirstInWeek = !weekSeen.has(weekKey)
+                        if (isFirstInWeek) weekSeen.add(weekKey)
                         rows.push(
                           <tr
                             key={t.id}
@@ -300,6 +318,11 @@ function TournamentsPanel({ user }) {
                             style={{ background: GENDER_COLORS[t.gender] || '#fff', cursor: hasDrawData ? 'pointer' : 'default' }}
                             onClick={hasDrawData ? () => navigate(`/tournaments/${t.id}`) : undefined}
                           >
+                            {isFirstInWeek && (
+                              <td rowSpan={weekCounts[weekKey]} className="week-label-cell">
+                                <span className="week-label-text">{fmtWeek(t)}</span>
+                              </td>
+                            )}
                             <td className="td-star">{isCompeting && <span className="competing-star">★</span>}</td>
                             <td className="muted td-left">{fmtDate(t.start_date)}</td>
                             <td>{t.category ? t.category.replace(/^(ATP|WTA)\s+/, '') : '—'}</td>
@@ -338,7 +361,7 @@ function TournamentsPanel({ user }) {
                         const next = inGroup[i + 1]
                         if (next && (next.start_date || '') !== (t.start_date || '')) {
                           rows.push(
-                            <tr key={`sep-${t.id}`}><td colSpan={11} style={{ padding: 0, border: 'none' }}><div style={{ height: '4px', background: '#333' }} /></td></tr>
+                            <tr key={`sep-${t.id}`}><td colSpan={12} style={{ padding: 0, border: 'none' }}><div style={{ height: '4px', background: '#333' }} /></td></tr>
                           )
                         }
                       })

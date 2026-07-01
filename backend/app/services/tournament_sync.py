@@ -173,6 +173,7 @@ async def _apply_update(
         ("draw_size", discovered.draw_size),
         ("num_rounds", _num_rounds(discovered.draw_size)),
         ("start_date", discovered.start_date),
+        ("week", discovered.start_date.isocalendar()[1] if discovered.start_date else None),
         ("end_date", discovered.end_date),
         ("city", discovered.city),
         ("country", discovered.country),
