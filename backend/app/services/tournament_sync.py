@@ -111,6 +111,19 @@ async def find_existing_match(
     if exact:
         return exact
 
+    # 1b. Gender-specific title ("– Women's singles" / "– Men's singles") may match
+    #     an existing entry stored under the shared "– Singles" title, and vice-versa.
+    import re as _re
+    def _canonical_title(t: str) -> str:
+        return _re.sub(r" – (Women's|Men's) singles$", " – Singles", t, flags=_re.IGNORECASE)
+
+    canonical = _canonical_title(discovered.wiki_page_title)
+    if canonical != discovered.wiki_page_title:
+        res = await db.execute(select(Draw).where(Draw.wiki_page_title == canonical))
+        alt = res.scalar_one_or_none()
+        if alt:
+            return alt
+
     if not discovered.start_date:
         return None
 
