@@ -36,15 +36,18 @@ def _num_rounds(draw_size: int) -> int:
     return max(1, math.ceil(math.log2(draw_size))) if draw_size > 0 else 1
 
 
-def tennis_week(d: date) -> int:
+def tennis_week(d: date, season_year: int) -> int:
     """Return the ATP/WTA tennis season week number for a date.
 
-    Week 1 is defined as the week whose Monday is the first Monday of January
-    in the date's year. Events occurring before that first Monday (e.g. late
-    Dec or early Jan days before the first Monday) are clamped to week 1.
+    Week 1 = the week whose Monday is the first Monday of January in season_year.
+    Early-Jan events before that Monday (e.g. United Cup Jan 02) are clamped to 1.
+    December-start events that belong to the following season (d.year < season_year)
+    return 0 — they straddle the year boundary (e.g. Auckland Open Dec 29).
     """
-    jan1 = date(d.year, 1, 1)
-    days_to_monday = (7 - jan1.weekday()) % 7  # 0 if Jan 1 is Monday
+    if d.year < season_year:
+        return 0
+    jan1 = date(season_year, 1, 1)
+    days_to_monday = (7 - jan1.weekday()) % 7
     first_monday = jan1 + timedelta(days=days_to_monday)
     return max(1, (d - first_monday).days // 7 + 1)
 
@@ -186,7 +189,7 @@ async def _apply_update(
         ("draw_size", discovered.draw_size),
         ("num_rounds", _num_rounds(discovered.draw_size)),
         ("start_date", discovered.start_date),
-        ("week", tennis_week(discovered.start_date) if discovered.start_date else None),
+        ("week", tennis_week(discovered.start_date, existing.year) if discovered.start_date else None),
         ("end_date", discovered.end_date),
         ("city", discovered.city),
         ("country", discovered.country),
@@ -294,6 +297,7 @@ async def sync_season(
                     draw_size=d.draw_size,
                     num_rounds=_num_rounds(d.draw_size),
                     start_date=d.start_date,
+                    week=tennis_week(d.start_date, year) if d.start_date else None,
                     end_date=d.end_date,
                     draw_release_direct=draw_direct,
                     draw_release_qualifiers=draw_qualifiers,
