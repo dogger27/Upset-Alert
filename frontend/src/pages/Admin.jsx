@@ -295,10 +295,12 @@ function TournamentsPanel({ user }) {
                         </tr>
                       )
                     } else {
-                      // Pre-compute week groups for rowSpan
+                      // Pre-compute week groups for rowSpan — key by week number so
+                      // tournaments in the same ATP/WTA week but with different start dates
+                      // (e.g. Brisbane Dec 28 + Auckland Dec 29) share the same cell.
                       const weekCounts = {}
                       inGroup.forEach(t => {
-                        const k = t.start_date || ''
+                        const k = t.week ?? t.start_date ?? ''
                         weekCounts[k] = (weekCounts[k] || 0) + 1
                       })
                       const weekSeen = new Set()
@@ -309,7 +311,7 @@ function TournamentsPanel({ user }) {
                         const hasDrawData = !!(isCompleted || t.draw_released_direct_at)
                         const surface = t.surface ? t.surface.replace(/\s*\(.*?\)/g, '') : '—'
                         const isCompeting = ds !== 'upcoming' && entryStatus[t.id] === 'complete'
-                        const weekKey = t.start_date || ''
+                        const weekKey = t.week ?? t.start_date ?? ''
                         const isFirstInWeek = !weekSeen.has(weekKey)
                         if (isFirstInWeek) weekSeen.add(weekKey)
                         rows.push(
@@ -362,7 +364,7 @@ function TournamentsPanel({ user }) {
                           </tr>
                         )
                         const next = inGroup[i + 1]
-                        if (next && (next.start_date || '') !== (t.start_date || '')) {
+                        if (next && (next.week ?? next.start_date ?? '') !== (t.week ?? t.start_date ?? '')) {
                           rows.push(
                             <tr key={`sep-${t.id}`}><td colSpan={12} style={{ padding: 0, border: 'none' }}><div style={{ height: '4px', background: '#333' }} /></td></tr>
                           )
