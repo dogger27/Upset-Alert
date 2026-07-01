@@ -35,6 +35,17 @@ _BODY_OPEN  = '<div style="padding:28px 24px">'
 _BODY_CLOSE = '</div>'
 
 
+def _tournament_label(tournament_name: str, category: str, gender: str) -> str:
+    """Return 'Wimbledon Men' for GS or 'Canadian Open ATP1000' for tour events."""
+    cat = (category or "").upper()
+    is_gs = "SLAM" in cat or "GRAND" in cat
+    if is_gs:
+        return f"{tournament_name} {'Men' if gender == 'M' else 'Women'}"
+    tour = "ATP" if gender == "M" else "WTA"
+    tier = "1000" if "1000" in cat else "500" if "500" in cat else "250"
+    return f"{tournament_name} {tour}{tier}"
+
+
 def _setup():
     resend.api_key = settings.resend_api_key
 
@@ -265,6 +276,8 @@ async def send_round_complete_notification(
     tournament_id: int,
     round_name: str,
     groups: list[tuple],  # [(group_name, rank, total_participants, points, round_winner), ...]
+    category: str = "",
+    gender: str = "M",
 ) -> None:
     """One email per user showing their standing in each group after a round."""
     tournament_url = f"{BASE_URL}/tournaments/{tournament_id}"
@@ -280,7 +293,7 @@ async def send_round_complete_notification(
     await send_async({
         "from": FROM,
         "to": [email],
-        "subject": f"{tournament_name} {year} — {round_name} complete",
+        "subject": f"{round_name} Complete: {_tournament_label(tournament_name, category, gender)}",
         "html": f"""{_WRAP_OPEN}{_LOGO_HEADER}{_BODY_OPEN}
           <h1 style="font-size:22px;margin:0 0 12px">{round_name} is complete!</h1>
           <p style="color:#444;line-height:1.6;margin:0 0 12px">Here are your standings after {round_name}
