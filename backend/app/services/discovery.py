@@ -154,17 +154,10 @@ _CATEGORY_RE = re.compile(
 # Main tournament wiki link: [[2026 French Open|French Open]]
 _DISPLAY_LINK_RE = re.compile(r"\[\[(\d{4}[^\]|–]+?)\|([^\]–]{2,40}?)\]\]")
 
-# Explicit singles link — matches gender-specific and gender-neutral forms.
-# Built as a non-raw string so \u escapes resolve to actual Unicode characters,
-# ensuring the pattern works regardless of which apostrophe the wikitext uses.
-# After parse_season_schedule normalises the wikitext, both U+0027 and U+2019
-# will have been replaced with plain ASCII ‘, so the pattern just needs to
-# match the plain ASCII ‘.
-_APOS = chr(39)  # plain ASCII apostrophe U+0027, avoids smart-quote substitution
+# Explicit singles link — any [[year-prefixed page title|Singles]] link.
+# Uses the exact page title from the wikilink; no title construction needed.
 _SINGLES_LINK_RE = re.compile(
-    "\\[\\[((\\d{4}[^\\]|]*–\\s*"
-    "(?:(?:Men" + _APOS + "s|Women" + _APOS + "s)\\s+)?"
-    "[Ss]ingles))\\s*\\|\\s*[Ss]ingles\\s*\\]\\]",
+    r"\[\[(\d{4}[^\]|]+?)\s*\|\s*[Ss]ingles\s*\]\]",
     re.IGNORECASE,
 )
 
@@ -307,13 +300,6 @@ def parse_season_schedule(wikitext: str, year: int, gender: str) -> list[Discove
             end_date=sched_end_date,  # rough schedule date; overridden by scraper with real infobox date
             city=city, country=country,
         ))
-
-    def _norm_title(t: str) -> str:
-        t = t.replace("’", "’").replace("’", "’").strip()
-        # Normalize gender-less "– Singles" → "– Men’s/Women's singles"
-        if re.search(r"–\s*Singles$", t, re.IGNORECASE):
-            t = re.sub(r"–\s*Singles$", f"– {gender_suffix}", t, flags=re.IGNORECASE)
-        return t
 
     # Pass 1 — explicit singles links
     # Use the exact title from the wikilink — don't inject gender suffix.
