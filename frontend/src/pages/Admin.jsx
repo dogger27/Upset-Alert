@@ -185,10 +185,10 @@ function TournamentsPanel({ user }) {
     const dateA = a.start_date ? new Date(a.start_date) : new Date(9999, 0, 0)
     const dateB = b.start_date ? new Date(b.start_date) : new Date(9999, 0, 0)
     if (dateA - dateB !== 0) return dateA - dateB
-    const catDiff = (CATEGORY_ORDER[a.category] ?? 9) - (CATEGORY_ORDER[b.category] ?? 9)
-    if (catDiff !== 0) return catDiff
     const genderDiff = (a.gender === 'M' ? 0 : 1) - (b.gender === 'M' ? 0 : 1)
     if (genderDiff !== 0) return genderDiff
+    const catDiff = (CATEGORY_ORDER[a.category] ?? 9) - (CATEGORY_ORDER[b.category] ?? 9)
+    if (catDiff !== 0) return catDiff
     return a.name.localeCompare(b.name)
   })
 
