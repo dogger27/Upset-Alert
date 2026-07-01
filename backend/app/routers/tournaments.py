@@ -872,8 +872,13 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
     draw_substantially_complete = (
         tournament.draw_size > 0 and len(da_players) >= effective_da_size * 0.50
     )
+    # Don't stamp draws for tournaments that start more than 60 days out — Wikipedia
+    # sometimes has complete draws for far-future events and we don't want to notify early.
+    days_until_start = (tournament.start_date - date.today()).days if tournament.start_date else 0
+    too_far_future = tournament.start_date is not None and days_until_start > 60
+
     if parsed.has_direct_draw and draw_substantially_complete:
-        if not tournament.draw_released_direct_at:
+        if not tournament.draw_released_direct_at and not too_far_future:
             tournament.draw_released_direct_at = date.today()
             if tournament.start_date:
                 tournament.da_days_before = (tournament.start_date - date.today()).days
