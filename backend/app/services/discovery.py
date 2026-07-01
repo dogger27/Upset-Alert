@@ -270,9 +270,9 @@ def parse_season_schedule(wikitext: str, year: int, gender: str) -> list[Discove
                     name = cand
         if not name:
             name = re.sub(r"^\d{4}\s+", "", singles_page)
-            # Strip gender suffix — normalize dashes and apostrophes before matching
-            name_norm = name.replace("–", "-").replace("—", "-").replace("’", "'").replace("‘", "'")
-            stripped = re.sub(r"\s*[-–—]\s*(Men's|Women's)\s+singles$", "", name_norm, flags=re.IGNORECASE)
+            # Strip singles suffix — normalize dashes and apostrophes before matching
+            name_norm = name.replace("–", "-").replace("—", "-").replace("’", "’").replace("’", "’")
+            stripped = re.sub(r"\s*[-–—]\s*(?:(?:Men’s|Women’s)\s+)?[Ss]ingles$", "", name_norm, flags=re.IGNORECASE)
             if stripped != name_norm:
                 name = stripped
 
@@ -302,14 +302,18 @@ def parse_season_schedule(wikitext: str, year: int, gender: str) -> list[Discove
         ))
 
     # Pass 1 — explicit singles links
-    # Use the exact title from the wikilink — don't inject gender suffix.
-    # Wikipedia sometimes uses "– Singles" (not "– Men's singles") even for
-    # single-gender events (e.g. "2026 Halle Open – Singles"). Normalising
-    # to "– Men's singles" produces a non-existent page title, causing every
-    # subsequent fetch to fail and leaving wiki_page_id permanently null.
+    # Use the exact title from the wikilink. After adding each title, also seed
+    # `seen` with the constructed Men's/Women's variants so Passes 2–4 don't
+    # create duplicate records for the same tournament.
     for m in _SINGLES_LINK_RE.finditer(wikitext):
+        title = m.group(1).strip()
         ctx = _cell_context(wikitext, m.start())
-        add(m.group(1).strip(), m.start(), ctx)
+        add(title, m.start(), ctx)
+        # Derive the base page name (strip any existing singles suffix) and
+        # block both constructed suffixes that Passes 2–4 might generate.
+        base = re.sub(r"\s*–\s*(?:(?:Men's|Women's)\s+)?[Ss]ingles$", "", title, flags=re.IGNORECASE).strip()
+        seen.add(f"{base} – Men's singles")
+        seen.add(f"{base} – Women's singles")
 
     # Pass 2 — unlinked "Singles –" entries (future tournaments)
     for m in _UNLINKED_SINGLES_RE.finditer(wikitext):
