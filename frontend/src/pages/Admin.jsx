@@ -24,7 +24,7 @@ const STATUS_GROUP_ORDER = ['active', 'open', 'lastweek', 'upcoming', 'previous'
 
 function fmtWeek(t) {
   if (!t.week) return ''
-  return `Wk ${String(t.week).padStart(2, '0')}`
+  return String(t.week).padStart(2, '0')
 }
 
 function fmtDate(dateStr) {
