@@ -60,13 +60,13 @@
   padding: 0; height: 2px; background: #333; border: none !important;
 }
 .t-table tr.clickable-row:hover .td-name { text-decoration: underline; }
-.t-table tr.clickable-row:hover td {
+.t-table tr.clickable-row:hover td:not(.week-label-cell) {
   border-top: 1px solid #aaa;
   border-bottom: 1px solid #aaa;
 }
-.t-table tr.clickable-row:hover td:first-child { border-left: 1px solid #aaa; }
-.t-table tr.clickable-row:hover td:last-child  { border-right: 1px solid #aaa; }
-.t-table tr:has(+ tr.clickable-row:hover) td   { border-bottom: 1px solid #aaa; }
+.t-table tr.clickable-row:hover td.td-star   { border-left: 1px solid #aaa; }
+.t-table tr.clickable-row:hover td:last-child { border-right: 1px solid #aaa; }
+.t-table tr:has(+ tr.clickable-row:hover) td:not(.week-label-cell) { border-bottom: 1px solid #aaa; }
 .t-table tr.status-group-header td {
   padding: 0.5rem 0.4rem 0.25rem;
   font-size: 0.9rem; font-weight: 800; text-transform: uppercase;
