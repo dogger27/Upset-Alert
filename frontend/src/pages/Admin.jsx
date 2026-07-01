@@ -319,7 +319,9 @@ function TournamentsPanel({ user }) {
                           >
                             {isFirstInWeek && (
                               <td rowSpan={weekCounts[weekKey]} className="week-label-cell">
-                                <span className="week-label-text">{fmtWeek(t)}</span>
+                                <span className="week-label-text" style={{
+                                  fontSize: weekCounts[weekKey] === 1 ? '0.72rem' : weekCounts[weekKey] === 2 ? '0.88rem' : '1.05rem'
+                                }}>{fmtWeek(t)}</span>
                               </td>
                             )}
                             <td className="td-star">{isCompeting && <span className="competing-star">★</span>}</td>
