@@ -39,10 +39,7 @@ export default function Rules() {
                 </tbody>
               </table>
               <p className="about-card-body" style={{marginTop:'0.85rem',fontSize:'0.85rem',color:'var(--text-muted)'}}>
-                <strong>Tiebreaker:</strong> If two players finish with equal points, the player
-                with more points in the Final is ranked higher. If still tied, the Semi-Final
-                is used as the next tiebreaker, then the Quarter-Final, and so on back through
-                the earlier rounds.
+                <strong>Tiebreak:</strong> If a league is tied at the time in which the draw is completed, results will be weighted towards competitors who performed better in the later rounds of the draw.
               </p>
             </div>
             <div className="about-card">
