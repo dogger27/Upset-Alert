@@ -151,7 +151,7 @@ async def send_member_joined(
     await send_async({
         "from": FROM,
         "to": [owner_email],
-        "subject": f"{new_username} joined {league_name}",
+        "subject": f'{new_username} joined "{league_name}"',
         "html": f"""{_WRAP_OPEN}{_LOGO_HEADER}{_BODY_OPEN}
           <h1 style="font-size:22px;margin:0 0 12px">New member in {league_name}!</h1>
           <p style="color:#444;line-height:1.6;margin:0 0 24px">
@@ -179,9 +179,11 @@ async def send_new_user_notification(new_email: str, new_username: str) -> None:
 
 
 async def send_match_start_notification(
-    emails: list[str], tournament_name: str, year: int, tournament_id: int
+    emails: list[str], tournament_name: str, year: int, tournament_id: int,
+    category: str = "", gender: str = "M",
 ) -> None:
     tournament_url = f"{BASE_URL}/tournaments/{tournament_id}"
+    label = _tournament_label(tournament_name, category, gender)
     html = f"""{_WRAP_OPEN}{_LOGO_HEADER}{_BODY_OPEN}
           <h1 style="font-size:22px;margin:0 0 12px">The first match is underway!</h1>
           <p style="color:#444;line-height:1.6;margin:0 0 24px">
@@ -200,13 +202,17 @@ async def send_match_start_notification(
         await send_async({
             "from": FROM,
             "to": [email],
-            "subject": f"Play has started — {tournament_name} {year}",
+            "subject": f"Play has started — {label}",
             "html": html,
         })
 
 
-async def send_draw_notification(emails: list[str], tournament_name: str, tournament_id: int) -> None:
+async def send_draw_notification(
+    emails: list[str], tournament_name: str, tournament_id: int,
+    category: str = "", gender: str = "M",
+) -> None:
     tournament_url = f"{BASE_URL}/tournaments/{tournament_id}"
+    label = _tournament_label(tournament_name, category, gender)
     html = f"""{_WRAP_OPEN}{_LOGO_HEADER}{_BODY_OPEN}
           <h1 style="font-size:22px;margin:0 0 12px">The draw is live!</h1>
           <p style="color:#444;line-height:1.6;margin:0 0 24px">
@@ -222,7 +228,7 @@ async def send_draw_notification(emails: list[str], tournament_name: str, tourna
         await send_async({
             "from": FROM,
             "to": [email],
-            "subject": f"Draw released: {tournament_name}",
+            "subject": f"Draw released: {label}",
             "html": html,
         })
 
@@ -371,7 +377,7 @@ async def send_league_added_existing(
     await send_async({
         "from": FROM,
         "to": [to_email],
-        "subject": f"You've been added to {league_name} on Upset Alert!",
+        "subject": f'You\'ve been added to "{league_name}" on Upset Alert!',
         "html": f"""{_WRAP_OPEN}{_LOGO_HEADER}{_BODY_OPEN}
           <h1 style="font-size:22px;margin:0 0 12px">You've been added to a league!</h1>
           <p style="color:#444;line-height:1.6;margin:0 0 24px">
@@ -397,7 +403,7 @@ async def send_league_invite_new_user(
     await send_async({
         "from": FROM,
         "to": [to_email],
-        "subject": f"{invited_by_username} invited you to join {league_name} on Upset Alert!",
+        "subject": f'{invited_by_username} invited you to join "{league_name}" on Upset Alert!',
         "html": f"""{_WRAP_OPEN}{_LOGO_HEADER}{_BODY_OPEN}
           <h1 style="font-size:22px;margin:0 0 12px">You've been invited!</h1>
           <p style="color:#444;line-height:1.6;margin:0 0 8px">

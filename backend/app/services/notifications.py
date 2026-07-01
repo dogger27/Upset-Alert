@@ -221,7 +221,7 @@ async def notify_round_complete(tournament_id: int, round_number: int) -> None:
 # Match-start notification
 # ---------------------------------------------------------------------------
 
-async def notify_match_start(tournament_id: int, name: str, year: int) -> None:
+async def notify_match_start(tournament_id: int, name: str, year: int, category: str = "", gender: str = "M") -> None:
     """Email all users opted-in to 'match_start' for this tournament."""
     from app.services.email import send_match_start_notification
     from app.services.system_log import app_log
@@ -241,7 +241,7 @@ async def notify_match_start(tournament_id: int, name: str, year: int) -> None:
         logger.debug("notify_match_start: no opted-in users for tournament %d", tournament_id)
         return
 
-    await send_match_start_notification(emails, name, year, tournament_id)
+    await send_match_start_notification(emails, name, year, tournament_id, category=category, gender=gender)
     await app_log("info", "notifications",
                   f"Match-start email sent to {len(emails)} user(s) for {year} {name}",
                   {"tournament_id": tournament_id, "recipient_count": len(emails)})
@@ -289,8 +289,7 @@ async def notify_draw_released(
         logger.debug("notify_draw_released: no opted-in users for %s", pref_key)
         return
 
-    display_name = f"{year} {name}"
-    await send_draw_notification(emails, display_name, tournament_id)
+    await send_draw_notification(emails, name, tournament_id, category=category, gender=gender)
     logger.info("Draw notification sent to %d user(s) for %s", len(emails), display_name)
 
 

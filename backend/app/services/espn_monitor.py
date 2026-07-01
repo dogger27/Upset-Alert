@@ -447,6 +447,7 @@ class ESPNMonitor:
             tournament.picks_locked_at = now
             tournament.closing_time = now
             name, year, tid = tournament.name, tournament.year, tournament.id
+            category, gender = tournament.category or "", tournament.gender or "M"
             await db.commit()
 
         # Build timing comparison
@@ -467,7 +468,7 @@ class ESPNMonitor:
 
         await broadcaster.publish(tournament_id)
 
-        asyncio.create_task(notify_match_start(tid, name, year))
+        asyncio.create_task(notify_match_start(tid, name, year, category=category, gender=gender))
         logger.info(
             "Picks locked: %d %s — trigger: %s | predicted=%s actual=%s diff=%s",
             year, name, trigger_name, predicted_str, actual_str, diff_str,
