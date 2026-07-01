@@ -257,23 +257,15 @@ export default function Tournaments() {
                         </tr>
                       )
                     } else {
-                      const firstByDate = {}, lastByDate = {}
-                      inGroup.forEach((t, i) => {
-                        const d = t.start_date || ''
-                        if (firstByDate[d] === undefined) firstByDate[d] = i
-                        lastByDate[d] = i
-                      })
                       inGroup.forEach((t, i) => {
                         const isCompleted = t.status === 'completed'
                         const hasDrawData = !!(isCompleted || t.draw_released_direct_at)
                         const surface = t.surface ? t.surface.replace(/\s*\(.*?\)/g, '') : '—'
                         const isCompeting = t.status !== 'upcoming' && entryStatus[t.id] === 'complete'
-                        const d = t.start_date || ''
-                        const cls = [hasDrawData && 'clickable-row', firstByDate[d] === i && 'week-start', lastByDate[d] === i && 'week-end'].filter(Boolean).join(' ')
                         rows.push(
                           <tr
                             key={t.id}
-                            className={cls || undefined}
+                            className={hasDrawData ? 'clickable-row' : undefined}
                             style={{ background: GENDER_COLORS[t.gender] || '#fff', cursor: hasDrawData ? 'pointer' : 'default' }}
                             onClick={hasDrawData ? () => navigate(`/tournaments/${t.id}`) : undefined}
                           >
@@ -312,6 +304,10 @@ export default function Tournaments() {
                             </td>
                           </tr>
                         )
+                        const next = inGroup[i + 1]
+                        if (next && (next.start_date || '') !== (t.start_date || '')) {
+                          rows.push(<tr key={`sep-${t.id}`} className="week-separator"><td colSpan={11} /></tr>)
+                        }
                       })
                     }
                   })
