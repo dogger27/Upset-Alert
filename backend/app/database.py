@@ -126,20 +126,24 @@ async def _migrate(conn):
         except Exception:
             pass  # Column already exists — safe to ignore
 
-    # Backfill ATP tennis week number for draws.  We also recompute all existing
-    # rows so that any previously ISO-stamped values are corrected.
+    # Backfill ATP tennis week number for draws.  Recompute all rows so any
+    # previously ISO-stamped values are corrected.
+    # Week 0 = December-start event belonging to the following season year.
+    # Week 1 = first Monday of January in the season year (early-Jan events clamped to 1).
     from datetime import date as _date, timedelta as _td
-    def _tennis_week(d: _date) -> int:
-        jan1 = _date(d.year, 1, 1)
+    def _tennis_week(d: _date, season_year: int) -> int:
+        if d.year < season_year:
+            return 0
+        jan1 = _date(season_year, 1, 1)
         first_monday = jan1 + _td(days=(7 - jan1.weekday()) % 7)
         return max(1, (d - first_monday).days // 7 + 1)
 
     result = await conn.execute(_text(
-        "SELECT id, start_date FROM draws WHERE start_date IS NOT NULL"
+        "SELECT id, year, start_date FROM draws WHERE start_date IS NOT NULL"
     ))
     for row in result.fetchall():
-        d = _date.fromisoformat(str(row[1]))
-        week = _tennis_week(d)
+        d = _date.fromisoformat(str(row[2]))
+        week = _tennis_week(d, int(row[1]))
         await conn.execute(_text("UPDATE draws SET week = :w WHERE id = :id"), {"w": week, "id": row[0]})
 
 

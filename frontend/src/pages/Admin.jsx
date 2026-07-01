@@ -23,7 +23,7 @@ const CATEGORY_GROUPS = { '250': ['ATP 250', 'WTA 250'], '500': ['ATP 500', 'WTA
 const STATUS_GROUP_ORDER = ['active', 'open', 'lastweek', 'upcoming', 'previous']
 
 function fmtWeek(t) {
-  if (!t.week) return ''
+  if (t.week == null) return ''
   return String(t.week).padStart(2, '0')
 }
 
