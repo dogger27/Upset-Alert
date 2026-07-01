@@ -366,7 +366,7 @@ function TournamentsPanel({ user }) {
                         const next = inGroup[i + 1]
                         if (next && (next.week ?? next.start_date ?? '') !== (t.week ?? t.start_date ?? '')) {
                           rows.push(
-                            <tr key={`sep-${t.id}`}><td colSpan={12} style={{ padding: 0, border: 'none' }}><div style={{ height: '4px', background: '#333' }} /></td></tr>
+                            <tr key={`sep-${t.id}`}><td colSpan={12} style={{ padding: 0, border: 'none' }}><div style={{ height: '2px', background: '#333' }} /></td></tr>
                           )
                         }
                       })
