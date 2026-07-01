@@ -261,8 +261,9 @@ export default function Tournaments() {
                     const surface = t.surface ? t.surface.replace(/\s*\(.*?\)/g, '') : '—'
                     const isCompeting = t.status !== 'upcoming' && entryStatus[t.id] === 'complete'
                     const next = inGroup[i + 1]
-                    const sep = next && (next.start_date || '') !== (t.start_date || '')
-                      ? [<tr key={`sep-${t.id}`}><td colSpan={11} style={{ padding: '3px 0', background: '#333', border: 'none' }} /></tr>]
+                    const needsSep = !!(next && (next.start_date || '') !== (t.start_date || ''))
+                    const sep = needsSep
+                      ? [<tr key={`sep-${t.id}`}><td colSpan={11} style={{ padding: 0, border: 'none' }}><div style={{ height: '4px', background: '#333' }} /></td></tr>]
                       : []
                     return [
                       <tr
