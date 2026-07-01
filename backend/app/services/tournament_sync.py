@@ -19,7 +19,7 @@ After every sync a deduplication pass runs and logs warnings for any remaining
 
 import logging
 import math
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy import func, select
@@ -34,6 +34,19 @@ logger = logging.getLogger(__name__)
 
 def _num_rounds(draw_size: int) -> int:
     return max(1, math.ceil(math.log2(draw_size))) if draw_size > 0 else 1
+
+
+def tennis_week(d: date) -> int:
+    """Return the ATP/WTA tennis season week number for a date.
+
+    Week 1 is defined as the week whose Monday is the first Monday of January
+    in the date's year. Events occurring before that first Monday (e.g. late
+    Dec or early Jan days before the first Monday) are clamped to week 1.
+    """
+    jan1 = date(d.year, 1, 1)
+    days_to_monday = (7 - jan1.weekday()) % 7  # 0 if Jan 1 is Monday
+    first_monday = jan1 + timedelta(days=days_to_monday)
+    return max(1, (d - first_monday).days // 7 + 1)
 
 
 async def _resolve_variant_id(
@@ -173,7 +186,7 @@ async def _apply_update(
         ("draw_size", discovered.draw_size),
         ("num_rounds", _num_rounds(discovered.draw_size)),
         ("start_date", discovered.start_date),
-        ("week", discovered.start_date.isocalendar()[1] if discovered.start_date else None),
+        ("week", tennis_week(discovered.start_date) if discovered.start_date else None),
         ("end_date", discovered.end_date),
         ("city", discovered.city),
         ("country", discovered.country),
