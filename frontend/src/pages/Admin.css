@@ -20,7 +20,7 @@
   display: block;
   writing-mode: vertical-rl;
   transform: rotate(180deg);
-  font-size: min(1.05rem, 28cqh);
+  font-size: min(1.05rem, 80cqh);
   font-weight: 700;
   color: var(--text-muted);
   letter-spacing: 0.04em;
