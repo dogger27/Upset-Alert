@@ -4,20 +4,27 @@
   width: 42px;
   padding: 0;
   border-right: 1px solid var(--border);
-  text-align: center;
-  vertical-align: middle;
   background: #f9fafb;
+  position: relative;
+  overflow: hidden;
+}
+.week-label-container {
+  position: absolute;
+  inset: 0;
+  container-type: size;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .week-label-text {
   display: block;
   writing-mode: vertical-rl;
   transform: rotate(180deg);
-  font-size: 1.05rem;
+  font-size: min(1.05rem, 28cqh);
   font-weight: 700;
   color: var(--text-muted);
   letter-spacing: 0.04em;
   white-space: nowrap;
-  padding: 6px 0;
 }
 .admin-page h1 { font-size: 1.5rem; margin-bottom: 1rem; }
 

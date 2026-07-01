@@ -14,11 +14,16 @@ function formatBuildTime(iso) {
   } catch { return null }
 }
 
-// Module-level callback — survives React re-renders and HMR component replacement
-let _notifyBuildTime = null
-if (import.meta.hot) {
+// Register listener only once across all HMR cycles using hot.data persistence.
+// hot.data survives module replacement; `initialized` prevents duplicate listeners.
+if (import.meta.hot && !import.meta.hot.data.initialized) {
+  import.meta.hot.data.initialized = true
+  import.meta.hot.data.lastTime = null
+  import.meta.hot.data.notify = null
   import.meta.hot.on('build-time-update', ({ time }) => {
-    if (_notifyBuildTime) _notifyBuildTime(formatBuildTime(time))
+    const formatted = formatBuildTime(time)
+    import.meta.hot.data.lastTime = formatted
+    if (import.meta.hot.data.notify) import.meta.hot.data.notify(formatted)
   })
 }
 
@@ -61,8 +66,12 @@ export default function Navbar() {
   const menuRef = useRef(null)
 
   useEffect(() => {
-    _notifyBuildTime = setBuildTime
-    return () => { _notifyBuildTime = null }
+    if (import.meta.hot) {
+      import.meta.hot.data.notify = setBuildTime
+      // Apply any update that arrived during the HMR unmount/remount gap
+      if (import.meta.hot.data.lastTime) setBuildTime(import.meta.hot.data.lastTime)
+      return () => { import.meta.hot.data.notify = null }
+    }
   }, [setBuildTime])
 
   useEffect(() => {
