@@ -323,47 +323,6 @@ async def send_round_complete_notification(
     })
 
 
-async def send_round_standings(
-    emails: list[str],
-    tournament_name: str,
-    tournament_id: int,
-    round_name: str,
-    standings: list[dict],
-) -> None:
-    tournament_url = f"{BASE_URL}/tournaments/{tournament_id}"
-    rows = "".join(
-        f"<tr><td style='padding:8px 12px'>{i+1}</td>"
-        f"<td style='padding:8px 12px'>{s['username']}</td>"
-        f"<td style='padding:8px 12px;text-align:right'>{s['score']}</td></tr>"
-        for i, s in enumerate(standings[:10])
-    )
-    html = f"""{_WRAP_OPEN}{_LOGO_HEADER}{_BODY_OPEN}
-          <h1 style="font-size:22px;margin:0 0 12px">{round_name} complete</h1>
-          <p style="color:#444;margin:0 0 12px">Here are the current standings for
-            <strong>{tournament_name}</strong>:</p>
-          <table style="width:100%;border-collapse:collapse;font-size:14px;margin:0 0 20px">
-            <thead>
-              <tr style="background:#f3f4f6">
-                <th style="padding:8px 12px;text-align:left">#</th>
-                <th style="padding:8px 12px;text-align:left">Player</th>
-                <th style="padding:8px 12px;text-align:right">Score</th>
-              </tr>
-            </thead>
-            <tbody>{rows}</tbody>
-          </table>
-          <a href="{tournament_url}" style="display:inline-block;padding:12px 24px;
-             background:#1b4332;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
-            View Full Standings
-          </a>
-        {_BODY_CLOSE}{_WRAP_CLOSE}"""
-    for email in emails:
-        await send_async({
-            "from": FROM,
-            "to": [email],
-            "subject": f"{tournament_name} — {round_name} standings",
-            "html": html,
-        })
-
 
 async def send_league_added_existing(
     to_email: str,
