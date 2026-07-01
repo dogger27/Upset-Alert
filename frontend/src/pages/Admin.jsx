@@ -326,7 +326,7 @@ function TournamentsPanel({ user }) {
                             )}
                             <td className="td-star">{isCompeting && <span className="competing-star">★</span>}</td>
                             <td className="muted td-left">{fmtDate(t.start_date)}</td>
-                            <td>{t.category ? t.category.replace(/^(ATP|WTA)\s+/, '') : '—'}</td>
+                            <td>{t.category || '—'}</td>
                             <td className="td-left">
                               {t.draw_release_direct
                                 ? <><span className="muted">{fmtDate(t.draw_release_direct)}</span>{(isCompleted || t.draw_released_direct_at) && <span style={{ marginLeft: '0.4rem', color: '#4CAF50' }}>✓</span>}</>
