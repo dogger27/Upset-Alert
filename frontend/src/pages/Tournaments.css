@@ -56,6 +56,9 @@
   opacity: 1;
 }
 .t-table tr:last-child td { border-bottom: none; }
+.t-table tr.week-start td { border-top: 2px solid #333; }
+.t-table tr.week-end td   { border-bottom: 2px solid #333; }
+.t-table tr.week-end:last-child td { border-bottom: 2px solid #333; }
 .t-table tr.clickable-row:hover .td-name { text-decoration: underline; }
 .t-table tr.clickable-row:hover td {
   border-top: 1px solid #aaa;
