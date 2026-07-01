@@ -262,7 +262,7 @@ export default function Tournaments() {
                     const isCompeting = t.status !== 'upcoming' && entryStatus[t.id] === 'complete'
                     const next = inGroup[i + 1]
                     const sep = next && (next.start_date || '') !== (t.start_date || '')
-                      ? [<tr key={`sep-${t.id}`} style={{ height: '3px', background: '#333' }}><td colSpan={11} style={{ padding: 0, height: '3px', background: '#333', border: 'none', lineHeight: 0, fontSize: 0 }} /></tr>]
+                      ? [<tr key={`sep-${t.id}`}><td colSpan={11} style={{ padding: '3px 0', background: '#333', border: 'none' }} /></tr>]
                       : []
                     return [
                       <tr
