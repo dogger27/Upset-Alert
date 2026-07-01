@@ -287,7 +287,7 @@ function TournamentsPanel({ user }) {
                         </tr>
                       )
                     } else {
-                      inGroup.forEach(t => {
+                      inGroup.forEach((t, i) => {
                         const ds = displayStatus(t)
                         const isCompleted = ds === 'lastweek' || ds === 'previous'
                         const hasDrawData = !!(isCompleted || t.draw_released_direct_at)
@@ -335,6 +335,12 @@ function TournamentsPanel({ user }) {
                             </td>
                           </tr>
                         )
+                        const next = inGroup[i + 1]
+                        if (next && (next.start_date || '') !== (t.start_date || '')) {
+                          rows.push(
+                            <tr key={`sep-${t.id}`}><td colSpan={11} style={{ padding: 0, border: 'none' }}><div style={{ height: '4px', background: '#333' }} /></td></tr>
+                          )
+                        }
                       })
                     }
                   })
