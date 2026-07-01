@@ -1,7 +1,7 @@
 .admin-page { max-width: 1600px; margin: 0 auto; padding: 2rem 1.5rem; }
 
 .week-label-cell {
-  width: 24px;
+  width: 36px;
   padding: 0;
   border-right: 1px solid var(--border);
   text-align: center;
@@ -12,12 +12,12 @@
   display: block;
   writing-mode: vertical-rl;
   transform: rotate(180deg);
-  font-size: 0.62rem;
+  font-size: 0.85rem;
   font-weight: 700;
   color: var(--text-muted);
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   white-space: nowrap;
-  padding: 4px 0;
+  padding: 6px 0;
 }
 .admin-page h1 { font-size: 1.5rem; margin-bottom: 1rem; }
 
