@@ -227,12 +227,28 @@ async def notify_match_start(tournament_id: int, name: str, year: int, category:
     from app.services.system_log import app_log
 
     async with AsyncSessionLocal() as db:
+        total_res = await db.execute(
+            select(func.count()).where(Match.draw_id == tournament_id, Match.is_bye == False)
+        )
+        total_matches = total_res.scalar_one()
+
+        competing_subq = (
+            select(UserPrediction.user_id)
+            .where(
+                UserPrediction.draw_id == tournament_id,
+                UserPrediction.predicted_winner_id.isnot(None),
+            )
+            .group_by(UserPrediction.user_id)
+            .having(func.count() >= total_matches)
+        )
+
         result = await db.execute(
             select(User.email)
             .join(NotificationPreference, NotificationPreference.user_id == User.id)
             .where(
                 NotificationPreference.pref_key == "match_start",
                 User.email_verified == True,
+                User.id.in_(competing_subq),
             )
         )
         emails = [r[0] for r in result.all()]
