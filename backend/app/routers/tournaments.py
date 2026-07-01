@@ -503,7 +503,6 @@ async def global_standings(tournament_id: int, db: AsyncSession = Depends(get_db
 
     # Classic points: round_number → 2^(r-1)
     pts_table = {r: 2 ** (r - 1) for r in range(1, tournament.num_rounds + 1)}
-    final_round = tournament.num_rounds
 
     sub = (
         select(UserPrediction.user_id)
@@ -528,27 +527,22 @@ async def global_standings(tournament_id: int, db: AsyncSession = Depends(get_db
 
         total_pts = 0.0
         correct = 0
-        champ = False
-        finalist = False
+        correct_by_round: dict[int, int] = {}
         for m in completed_matches:
             if m.winner_id is None:
                 continue
             if pred_by_match.get(m.id) == m.winner_id:
                 total_pts += pts_table.get(m.round_number, 0)
                 correct += 1
-                if m.round_number == final_round:
-                    champ = True
-                elif m.round_number == final_round - 1:
-                    finalist = True
+                correct_by_round[m.round_number] = correct_by_round.get(m.round_number, 0) + 1
         scores.append(UserScore(user_id=user.id, total_points=total_pts, correct_count=correct,
-                                champion_correct=champ, finalist_correct=finalist))
+                                correct_by_round=correct_by_round))
 
-    ranked = rank_users(scores)
+    ranked = rank_users(scores, tournament.num_rounds)
     user_map = {u.id: u for u in users}
     return [
         LeaderboardEntry(rank=i + 1, user=user_map[s.user_id], total_points=s.total_points,
-                         correct_count=s.correct_count, champion_correct=s.champion_correct,
-                         finalist_correct=s.finalist_correct)
+                         correct_count=s.correct_count)
         for i, s in enumerate(ranked)
     ]
 

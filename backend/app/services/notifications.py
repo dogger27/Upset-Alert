@@ -129,7 +129,7 @@ async def notify_round_complete(tournament_id: int, round_number: int) -> None:
             uid: score_user(uid, preds_by_user[uid], completed_matches, tournament, None)
             for uid in eligible
         }
-        global_ranked = rank_users(list(global_scores.values()))
+        global_ranked = rank_users(list(global_scores.values()), tournament.num_rounds)
         global_rank_of = {s.user_id: i + 1 for i, s in enumerate(global_ranked)}
 
         max_global_round = max(round_pts_by_user.values(), default=0)
@@ -153,7 +153,7 @@ async def notify_round_complete(tournament_id: int, round_number: int) -> None:
                 uid: score_user(uid, preds_by_user[uid], completed_matches, tournament, None)
                 for uid in participants
             }
-            lg_ranked = rank_users(list(lg_scores.values()))
+            lg_ranked = rank_users(list(lg_scores.values()), tournament.num_rounds)
             lg_round_pts = {uid: round_pts_by_user[uid] for uid in participants}
             max_lg_round = max(lg_round_pts.values(), default=0)
             league_data[lg.id] = {
@@ -317,7 +317,7 @@ async def _persist_tournament_results(
         uid: score_user(uid, preds_by_user[uid], completed_matches, tournament, None)
         for uid in all_participants
     }
-    global_ranked = rank_users(list(global_scores.values()))
+    global_ranked = rank_users(list(global_scores.values()), tournament.num_rounds)
     global_rank_of = {s.user_id: i + 1 for i, s in enumerate(global_ranked)}
     global_total = len(all_participants)
 
@@ -346,7 +346,7 @@ async def _persist_tournament_results(
             uid: score_user(uid, preds_by_user[uid], completed_matches, tournament, None)
             for uid in participants
         }
-        lg_ranked = rank_users(list(lg_scores.values()))
+        lg_ranked = rank_users(list(lg_scores.values()), tournament.num_rounds)
         lg_rank_of = {s.user_id: i + 1 for i, s in enumerate(lg_ranked)}
         for uid in participants:
             s = lg_scores[uid]
@@ -470,7 +470,7 @@ async def notify_tournament_complete(tournament_id: int) -> None:
             uid: score_user(uid, preds_by_user[uid], completed_matches, tournament, None)
             for uid in eligible
         }
-        global_ranked = rank_users(list(global_scores.values()))
+        global_ranked = rank_users(list(global_scores.values()), tournament.num_rounds)
         global_rank_of = {s.user_id: i + 1 for i, s in enumerate(global_ranked)}
 
         league_data: dict[int, dict] = {}
@@ -483,7 +483,7 @@ async def notify_tournament_complete(tournament_id: int) -> None:
                 uid: score_user(uid, preds_by_user[uid], completed_matches, tournament, None)
                 for uid in participants
             }
-            lg_ranked = rank_users(list(lg_scores.values()))
+            lg_ranked = rank_users(list(lg_scores.values()), tournament.num_rounds)
             league_data[lg.id] = {
                 "name": lg.name,
                 "rank_of": {s.user_id: i + 1 for i, s in enumerate(lg_ranked)},

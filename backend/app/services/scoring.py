@@ -9,14 +9,14 @@ Points are awarded per correct pick, scaled by tournament tier and round:
   ATP/WTA 1000   1        1       2    4    8   12   16
   Grand Slam     1        2       4    8   12   16   20
 
-Tiebreaker order:
-  1. Total score
-  2. Most correct picks
-  3. Correct champion pick
-  4. Correct finalist pick
+Tiebreaker order (when total points are equal):
+  1. Most correct picks in the Final
+  2. Most correct picks in the Semifinals
+  3. Most correct picks in the Quarterfinals
+  … and so on back through the earliest round
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 from app.models.league import League
@@ -64,16 +64,14 @@ class UserScore:
     user_id: int
     total_points: float
     correct_count: int
-    champion_correct: bool
-    finalist_correct: bool
+    # correct picks per round_number; used for tiebreaking
+    correct_by_round: dict[int, int] = field(default_factory=dict)
 
-    # Tiebreaker key (lower = better rank)
-    def tiebreak_key(self) -> tuple:
+    def tiebreak_key(self, num_rounds: int) -> tuple:
+        """Lower value = better rank. Compares round-by-round from Final backwards."""
         return (
             -self.total_points,
-            -self.correct_count,
-            0 if self.champion_correct else 1,
-            0 if self.finalist_correct else 1,
+            *(-self.correct_by_round.get(r, 0) for r in range(num_rounds, 0, -1)),
         )
 
 
@@ -91,9 +89,7 @@ def score_user(
 
     total_points = 0.0
     correct_count = 0
-    champion_correct = False
-    finalist_correct = False
-    final_round = tournament.num_rounds
+    correct_by_round: dict[int, int] = {}
 
     for match in completed_matches:
         if match.winner_id is None:
@@ -103,20 +99,16 @@ def score_user(
 
         total_points += pts_table.get(match.round_number, 0)
         correct_count += 1
-        if match.round_number == final_round:
-            champion_correct = True
-        elif match.round_number == final_round - 1:
-            finalist_correct = True
+        correct_by_round[match.round_number] = correct_by_round.get(match.round_number, 0) + 1
 
     return UserScore(
         user_id=user_id,
         total_points=total_points,
         correct_count=correct_count,
-        champion_correct=champion_correct,
-        finalist_correct=finalist_correct,
+        correct_by_round=correct_by_round,
     )
 
 
-def rank_users(scores: list[UserScore]) -> list[UserScore]:
+def rank_users(scores: list[UserScore], num_rounds: int) -> list[UserScore]:
     """Return scores sorted by tiebreaker order."""
-    return sorted(scores, key=lambda s: s.tiebreak_key())
+    return sorted(scores, key=lambda s: s.tiebreak_key(num_rounds))
