@@ -3,16 +3,16 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../store/auth'
 import './Navbar.css'
 
-const buildTime = (() => {
+function formatBuildTime(iso) {
   try {
-    const d = new Date(__BUILD_TIME__)
+    const d = new Date(iso)
     const weekday = d.toLocaleDateString('en-US', { weekday: 'short' })
     const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
       .replace(' AM', 'am').replace(' PM', 'pm')
     return `${weekday} ${date}, ${time}`
   } catch { return null }
-})()
+}
 
 const DRAW_CATS_MEN = [
   { key: 'draw_open:Grand Slam:M', label: 'Grand Slam' },
@@ -31,6 +31,7 @@ export default function Navbar() {
   const { user, logout, updateProfile } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
+  const [buildTime, setBuildTime] = useState(() => formatBuildTime(__BUILD_TIME__))
   const [menuOpen, setMenuOpen] = useState(false)
   const [editing, setEditing] = useState(false)
   const [notifying, setNotifying] = useState(false)
@@ -50,6 +51,12 @@ export default function Navbar() {
   const [notifError, setNotifError] = useState('')
 
   const menuRef = useRef(null)
+
+  useEffect(() => {
+    if (import.meta.hot) {
+      import.meta.hot.on('build-time-update', ({ time }) => setBuildTime(formatBuildTime(time)))
+    }
+  }, [])
 
   useEffect(() => {
     if (!menuOpen) return
