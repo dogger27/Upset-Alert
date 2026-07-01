@@ -50,13 +50,17 @@ def _send(params: resend.Emails.SendParams) -> Optional[Exception]:
 
 
 async def send_async(params: resend.Emails.SendParams) -> None:
+    from app.services.system_log import app_log
     exc = await asyncio.to_thread(_send, params)
+    to = params.get("to", [])
+    subject = params.get("subject", "")
+    recipient = to[0] if len(to) == 1 else to
     if exc is not None:
-        from app.services.system_log import app_log
-        to = params.get("to", [])
-        subject = params.get("subject", "")
-        await app_log("error", "notifications", f"Email send failed: {subject!r} — {exc}",
+        await app_log("error", "notifications", f"Email send failed: {subject!r} → {recipient}",
                       {"to": to, "subject": subject, "error": str(exc)})
+    else:
+        await app_log("info", "notifications", f"Email sent: {subject!r} → {recipient}",
+                      {"to": to, "subject": subject})
 
 
 async def send_verification(email: str, username: str, token: str, code: str) -> None:
