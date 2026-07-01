@@ -428,8 +428,6 @@ async def leaderboard(
                 user=member.user,
                 total_points=0,
                 correct_count=0,
-                champion_correct=False,
-                finalist_correct=False,
             )
             for i, member in enumerate(league.members)
         ]
@@ -473,7 +471,7 @@ async def leaderboard(
         score = score_user(member.user_id, preds, completed_matches, tournament, league)
         scores.append((member.user, score))
 
-    ranked = rank_users([s for _, s in scores])
+    ranked = rank_users([s for _, s in scores], tournament.num_rounds)
     user_map = {u.id: u for u, _ in scores}
 
     entries = [
@@ -482,8 +480,6 @@ async def leaderboard(
             user=user_map[score.user_id],
             total_points=score.total_points,
             correct_count=score.correct_count,
-            champion_correct=score.champion_correct,
-            finalist_correct=score.finalist_correct,
         )
         for rank_idx, score in enumerate(ranked, start=1)
     ]

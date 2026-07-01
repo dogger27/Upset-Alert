@@ -51,8 +51,6 @@ class LeaderboardEntry(BaseModel):
     user: UserOut
     total_points: float
     correct_count: int
-    champion_correct: bool
-    finalist_correct: bool
 
 
 class LeaderboardOut(BaseModel):
