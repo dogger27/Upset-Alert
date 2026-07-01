@@ -207,6 +207,7 @@ async def notify_round_complete(tournament_id: int, round_number: int) -> None:
         try:
             await send_round_complete_notification(
                 email, t_name, t_year, tournament_id, round_name, groups,
+                category=tournament.category or "", gender=tournament.gender or "M",
             )
             logger.info(
                 "Round-complete email sent to user %d (%d group(s)) — %d %s %s",
