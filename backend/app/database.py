@@ -118,12 +118,23 @@ async def _migrate(conn):
         "ALTER TABLE te_players DROP COLUMN elo",
         "ALTER TABLE te_players DROP COLUMN elo_rank",
         "ALTER TABLE draw_entries ADD COLUMN te_slug VARCHAR",
+        "ALTER TABLE tournaments ADD COLUMN week INTEGER",
     ]
     for sql in migrations:
         try:
             await conn.execute(_text(sql))
         except Exception:
             pass  # Column already exists — safe to ignore
+
+    # Backfill ISO week number for all draws that have a start_date but no week
+    from datetime import date as _date
+    result = await conn.execute(_text(
+        "SELECT id, start_date FROM tournaments WHERE week IS NULL AND start_date IS NOT NULL"
+    ))
+    for row in result.fetchall():
+        d = _date.fromisoformat(str(row[1]))
+        week = d.isocalendar()[1]
+        await conn.execute(_text("UPDATE tournaments SET week = :w WHERE id = :id"), {"w": week, "id": row[0]})
 
 
 from sqlalchemy import text as _text

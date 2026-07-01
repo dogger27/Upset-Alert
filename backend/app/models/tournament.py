@@ -101,6 +101,7 @@ class Draw(Base):
     draw_size: Mapped[int] = mapped_column(Integer, nullable=False)
     num_rounds: Mapped[int] = mapped_column(Integer, nullable=False)
     start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    week: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     draw_release_direct: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     draw_release_qualifiers: Mapped[Optional[date]] = mapped_column(Date, nullable=True)

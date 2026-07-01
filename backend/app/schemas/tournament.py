@@ -30,6 +30,7 @@ class TournamentOut(BaseModel):
     draw_size: int
     num_rounds: int
     start_date: Optional[date]
+    week: Optional[int] = None
     end_date: Optional[date]
     draw_release_direct: Optional[date]
     draw_release_qualifiers: Optional[date]

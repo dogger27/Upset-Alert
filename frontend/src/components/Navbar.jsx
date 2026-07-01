@@ -14,6 +14,14 @@ function formatBuildTime(iso) {
   } catch { return null }
 }
 
+// Module-level callback — survives React re-renders and HMR component replacement
+let _notifyBuildTime = null
+if (import.meta.hot) {
+  import.meta.hot.on('build-time-update', ({ time }) => {
+    if (_notifyBuildTime) _notifyBuildTime(formatBuildTime(time))
+  })
+}
+
 const DRAW_CATS_MEN = [
   { key: 'draw_open:Grand Slam:M', label: 'Grand Slam' },
   { key: 'draw_open:ATP 1000',     label: 'ATP 1000' },
@@ -53,10 +61,9 @@ export default function Navbar() {
   const menuRef = useRef(null)
 
   useEffect(() => {
-    if (import.meta.hot) {
-      import.meta.hot.on('build-time-update', ({ time }) => setBuildTime(formatBuildTime(time)))
-    }
-  }, [])
+    _notifyBuildTime = setBuildTime
+    return () => { _notifyBuildTime = null }
+  }, [setBuildTime])
 
   useEffect(() => {
     if (!menuOpen) return
