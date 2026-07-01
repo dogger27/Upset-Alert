@@ -57,7 +57,7 @@
 }
 .t-table tr:last-child td { border-bottom: none; }
 .t-table tr.week-separator td {
-  padding: 0; height: 2px; background: #333; border: none !important;
+  padding: 0; height: 1px; background: #333; border: none !important;
 }
 .t-table tr.clickable-row:hover .td-name { text-decoration: underline; }
 .t-table tr.clickable-row:hover td:not(.week-label-cell) {
