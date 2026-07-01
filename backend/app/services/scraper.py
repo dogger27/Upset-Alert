@@ -163,8 +163,12 @@ def _try_parse_date_range(raw: str, year: int) -> tuple[Optional[date], Optional
         mon1, mon2 = _MONTHS.get(mon1_s.lower()), _MONTHS.get(mon2_s.lower())
         if mon1 and mon2:
             try:
-                start = date(yr, mon1, int(d1))
-                return start, date(yr + 1 if mon2 < mon1 else yr, mon2, int(d2))
+                # yr is treated as the end-date year (Wikipedia places the explicit year
+                # after the last date, e.g. "29 December – 5 January 2026" → end=Jan 2026).
+                # When months cross a year boundary (Dec→Jan), start is in yr-1.
+                cross_year = mon2 < mon1
+                start = date(yr - 1 if cross_year else yr, mon1, int(d1))
+                return start, date(yr, mon2, int(d2))
             except ValueError:
                 pass
 
