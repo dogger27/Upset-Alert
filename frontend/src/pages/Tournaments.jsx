@@ -241,78 +241,74 @@ export default function Tournaments() {
                 </tr>
               </thead>
               <tbody>
-                {(() => {
-                  const rows = []
-                  STATUS_GROUP_ORDER.filter(s => filterStatus.has(s)).forEach(status => {
-                    const inGroup = filtered.filter(t => t.status === status)
-                    rows.push(
-                      <tr key={`group-${status}`} className="status-group-header">
-                        <td colSpan={11}>{STATUS_LABELS[status] ?? status}</td>
+                {STATUS_GROUP_ORDER.filter(s => filterStatus.has(s)).flatMap(status => {
+                  const inGroup = filtered.filter(t => t.status === status)
+                  const header = (
+                    <tr key={`group-${status}`} className="status-group-header">
+                      <td colSpan={11}>{STATUS_LABELS[status] ?? status}</td>
+                    </tr>
+                  )
+                  if (inGroup.length === 0) {
+                    return [header, (
+                      <tr key={`empty-${status}`} className="status-group-empty-row">
+                        <td colSpan={11}>No {STATUS_LABELS[status].toLowerCase()} tournaments at this time</td>
                       </tr>
-                    )
-                    if (inGroup.length === 0) {
-                      rows.push(
-                        <tr key={`empty-${status}`} className="status-group-empty-row">
-                          <td colSpan={11}>No {STATUS_LABELS[status].toLowerCase()} tournaments at this time</td>
-                        </tr>
-                      )
-                    } else {
-                      inGroup.forEach((t, i) => {
-                        const isCompleted = t.status === 'completed'
-                        const hasDrawData = !!(isCompleted || t.draw_released_direct_at)
-                        const surface = t.surface ? t.surface.replace(/\s*\(.*?\)/g, '') : '—'
-                        const isCompeting = t.status !== 'upcoming' && entryStatus[t.id] === 'complete'
-                        rows.push(
-                          <tr
-                            key={t.id}
-                            className={hasDrawData ? 'clickable-row' : undefined}
-                            style={{ background: GENDER_COLORS[t.gender] || '#fff', cursor: hasDrawData ? 'pointer' : 'default' }}
-                            onClick={hasDrawData ? () => navigate(`/tournaments/${t.id}`) : undefined}
-                          >
-                            <td className="td-star">{isCompeting && <span className="competing-star">★</span>}</td>
-                            <td className="muted td-left">{fmtDate(t.start_date)}</td>
-                            <td>{t.category ? t.category.replace(/^(ATP|WTA)\s+/, '') : '—'}</td>
-                            <td className="td-left">
-                              {t.draw_release_direct
-                                ? <><span className="muted">{fmtDate(t.draw_release_direct)}</span>{(isCompleted || t.draw_released_direct_at) && <span style={{ marginLeft: '0.4rem', color: '#4CAF50' }}>✓</span>}</>
-                                : isCompleted ? <span style={{ color: '#4CAF50' }}>✓</span> : '—'}
-                            </td>
-                            <td className="td-left">
-                              {t.draw_release_qualifiers
-                                ? <><span className="muted">{fmtDate(t.draw_release_qualifiers)}</span>{(isCompleted || t.draw_released_qualifiers_at) && <span style={{ marginLeft: '0.4rem', color: '#4CAF50' }}>✓</span>}</>
-                                : isCompleted ? <span style={{ color: '#4CAF50' }}>✓</span> : '—'}
-                            </td>
-                            <td className="td-left td-name" style={{ fontWeight: 700 }}>{t.name}</td>
-                            <td className="muted">{t.city && t.country ? `${t.city}, ${t.country}` : t.city || t.country || '—'}</td>
-                            <td className="muted" title={fmtVenueTime(t.closing_time, t.venue_timezone) ?? undefined}>
-                              {t.closing_time
-                                ? new Date(t.closing_time + 'Z').toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
-                                : '—'}
-                            </td>
-                            <td>{t.draw_size > 0 ? t.draw_size : '—'}</td>
-                            <td>{surface}</td>
-                            <td onClick={e => e.stopPropagation()} style={{ padding: '0 0.5rem' }}>
-                              {t.wiki_page_id && (
-                                <a
-                                  href={`https://en.wikipedia.org/wiki/${t.wiki_page_title.replace(/ /g, '_')}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  title="View on Wikipedia"
-                                  style={{ color: 'var(--text-muted)', lineHeight: 1, display: 'inline-flex' }}
-                                >🌐</a>
-                              )}
-                            </td>
-                          </tr>
-                        )
-                        const next = inGroup[i + 1]
-                        if (next && (next.start_date || '') !== (t.start_date || '')) {
-                          rows.push(<tr key={`sep-${t.id}`} className="week-separator"><td colSpan={11} /></tr>)
-                        }
-                      })
-                    }
-                  })
-                  return rows
-                })()}
+                    )]
+                  }
+                  return [header, ...inGroup.flatMap((t, i) => {
+                    const isCompleted = t.status === 'completed'
+                    const hasDrawData = !!(isCompleted || t.draw_released_direct_at)
+                    const surface = t.surface ? t.surface.replace(/\s*\(.*?\)/g, '') : '—'
+                    const isCompeting = t.status !== 'upcoming' && entryStatus[t.id] === 'complete'
+                    const next = inGroup[i + 1]
+                    const sep = next && (next.start_date || '') !== (t.start_date || '')
+                      ? [<tr key={`sep-${t.id}`} className="week-separator"><td colSpan={11} /></tr>]
+                      : []
+                    return [
+                      <tr
+                        key={t.id}
+                        className={hasDrawData ? 'clickable-row' : undefined}
+                        style={{ background: GENDER_COLORS[t.gender] || '#fff', cursor: hasDrawData ? 'pointer' : 'default' }}
+                        onClick={hasDrawData ? () => navigate(`/tournaments/${t.id}`) : undefined}
+                      >
+                        <td className="td-star">{isCompeting && <span className="competing-star">★</span>}</td>
+                        <td className="muted td-left">{fmtDate(t.start_date)}</td>
+                        <td>{t.category ? t.category.replace(/^(ATP|WTA)\s+/, '') : '—'}</td>
+                        <td className="td-left">
+                          {t.draw_release_direct
+                            ? <><span className="muted">{fmtDate(t.draw_release_direct)}</span>{(isCompleted || t.draw_released_direct_at) && <span style={{ marginLeft: '0.4rem', color: '#4CAF50' }}>✓</span>}</>
+                            : isCompleted ? <span style={{ color: '#4CAF50' }}>✓</span> : '—'}
+                        </td>
+                        <td className="td-left">
+                          {t.draw_release_qualifiers
+                            ? <><span className="muted">{fmtDate(t.draw_release_qualifiers)}</span>{(isCompleted || t.draw_released_qualifiers_at) && <span style={{ marginLeft: '0.4rem', color: '#4CAF50' }}>✓</span>}</>
+                            : isCompleted ? <span style={{ color: '#4CAF50' }}>✓</span> : '—'}
+                        </td>
+                        <td className="td-left td-name" style={{ fontWeight: 700 }}>{t.name}</td>
+                        <td className="muted">{t.city && t.country ? `${t.city}, ${t.country}` : t.city || t.country || '—'}</td>
+                        <td className="muted" title={fmtVenueTime(t.closing_time, t.venue_timezone) ?? undefined}>
+                          {t.closing_time
+                            ? new Date(t.closing_time + 'Z').toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+                            : '—'}
+                        </td>
+                        <td>{t.draw_size > 0 ? t.draw_size : '—'}</td>
+                        <td>{surface}</td>
+                        <td onClick={e => e.stopPropagation()} style={{ padding: '0 0.5rem' }}>
+                          {t.wiki_page_id && (
+                            <a
+                              href={`https://en.wikipedia.org/wiki/${t.wiki_page_title.replace(/ /g, '_')}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="View on Wikipedia"
+                              style={{ color: 'var(--text-muted)', lineHeight: 1, display: 'inline-flex' }}
+                            >🌐</a>
+                          )}
+                        </td>
+                      </tr>,
+                      ...sep,
+                    ]
+                  })]
+                })}
               </tbody>
             </table>
           </div>
