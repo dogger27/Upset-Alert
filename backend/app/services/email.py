@@ -61,6 +61,8 @@ def _send(params: resend.Emails.SendParams) -> Optional[Exception]:
 
 
 async def send_async(params: resend.Emails.SendParams) -> None:
+    if not settings.resend_api_key:
+        return  # Email disabled in this environment (no RESEND_API_KEY set)
     from app.services.system_log import app_log
     exc = await asyncio.to_thread(_send, params)
     to = params.get("to", [])
