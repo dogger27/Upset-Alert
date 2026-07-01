@@ -3,6 +3,17 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../store/auth'
 import './Navbar.css'
 
+const buildTime = (() => {
+  try {
+    const d = new Date(__BUILD_TIME__)
+    const weekday = d.toLocaleDateString('en-US', { weekday: 'short' })
+    const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+      .replace(' AM', 'am').replace(' PM', 'pm')
+    return `${weekday} ${date}, ${time}`
+  } catch { return null }
+})()
+
 const DRAW_CATS_MEN = [
   { key: 'draw_open:Grand Slam:M', label: 'Grand Slam' },
   { key: 'draw_open:ATP 1000',     label: 'ATP 1000' },
@@ -144,7 +155,16 @@ export default function Navbar() {
 
   return (
     <nav className="navbar">
-      <div className="navbar-left" />
+      <div className="navbar-left">
+        {buildTime && (
+          <div className="build-indicator">
+            <div className="build-dot" />
+            <div className="build-tooltip">
+              Last page update:<br />{buildTime}
+            </div>
+          </div>
+        )}
+      </div>
       <Link to="/" className="navbar-brand">
         <div className="navbar-brand-top">
           <span className="navbar-brand-dot" />
