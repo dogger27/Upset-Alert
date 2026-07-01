@@ -30,9 +30,11 @@ export default function TournamentDraw() {
   const [pendingAutoPicks, setPendingAutoPicks] = useState(null)
   const [showClearConfirm, setShowClearConfirm] = useState(false)
   const [clearToast, setClearToast] = useState(null)
+  const [showAutoInitPrompt, setShowAutoInitPrompt] = useState(false)
   const clearToastKeyRef = useRef(0)
   const celebrateTimerRef = useRef(null)
   const clearToastTimerRef = useRef(null)
+  const autoInitShownRef = useRef(false)
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['draw', id],
@@ -71,6 +73,15 @@ export default function TournamentDraw() {
           map[p.match_id] = p.predicted_winner_id
       }
       setPicks(map)
+
+      if (!autoInitShownRef.current && user && data.tournament.status === 'open') {
+        const isLocked = data.tournament.is_locked && !data.tournament.selections_unlocked
+        const hasAnyPick = savedPreds.some(p => p.predicted_winner_id != null)
+        if (!isLocked && !hasAnyPick) {
+          autoInitShownRef.current = true
+          setShowAutoInitPrompt(true)
+        }
+      }
     }
   }, [savedPreds, data])
 
@@ -541,6 +552,35 @@ export default function TournamentDraw() {
                 onClick={() => setPendingAutoPicks(null)}
               >
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAutoInitPrompt && (
+        <div className="auto-populate-overlay" onClick={() => setShowAutoInitPrompt(false)}>
+          <div className="auto-populate-modal" onClick={e => e.stopPropagation()}>
+            <h3 className="auto-populate-modal-title">Initialize your predictions?</h3>
+            <p className="auto-populate-modal-body">
+              Would you like to initialize your predictions by auto-selecting the higher-ranked player for every match? If so, you could then proceed by fine-tuning predictions by hand-picking your desired upsets.
+            </p>
+            <div className="auto-populate-modal-actions">
+              <button
+                className="btn-primary"
+                onClick={() => {
+                  const newPicks = computeAutoPicks()
+                  if (newPicks) applyPicksAndCelebrate(newPicks)
+                  setShowAutoInitPrompt(false)
+                }}
+              >
+                Yes, Auto-Select
+              </button>
+              <button
+                className="btn-secondary"
+                onClick={() => setShowAutoInitPrompt(false)}
+              >
+                No thanks
               </button>
             </div>
           </div>
