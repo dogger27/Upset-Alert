@@ -257,15 +257,23 @@ export default function Tournaments() {
                         </tr>
                       )
                     } else {
-                      inGroup.forEach(t => {
+                      const firstByDate = {}, lastByDate = {}
+                      inGroup.forEach((t, i) => {
+                        const d = t.start_date || ''
+                        if (firstByDate[d] === undefined) firstByDate[d] = i
+                        lastByDate[d] = i
+                      })
+                      inGroup.forEach((t, i) => {
                         const isCompleted = t.status === 'completed'
                         const hasDrawData = !!(isCompleted || t.draw_released_direct_at)
                         const surface = t.surface ? t.surface.replace(/\s*\(.*?\)/g, '') : '—'
                         const isCompeting = t.status !== 'upcoming' && entryStatus[t.id] === 'complete'
+                        const d = t.start_date || ''
+                        const cls = [hasDrawData && 'clickable-row', firstByDate[d] === i && 'week-start', lastByDate[d] === i && 'week-end'].filter(Boolean).join(' ')
                         rows.push(
                           <tr
                             key={t.id}
-                            className={hasDrawData ? 'clickable-row' : undefined}
+                            className={cls || undefined}
                             style={{ background: GENDER_COLORS[t.gender] || '#fff', cursor: hasDrawData ? 'pointer' : 'default' }}
                             onClick={hasDrawData ? () => navigate(`/tournaments/${t.id}`) : undefined}
                           >
