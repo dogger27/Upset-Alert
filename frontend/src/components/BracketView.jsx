@@ -297,9 +297,13 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
   // Red outline: both players known but no pick made (and user can still pick)
   const missingPick = mode === 'picks' && !needsPick && onPick != null && pickedId == null
 
+  // Picked player already eliminated in an earlier round — this match can never be won by them
+  const pickedIsDead = pickedId != null && ((pickedId === p1id && p1DeadPick) || (pickedId === p2id && p2DeadPick))
+
   const correctPick = mode === 'picks' && actualWinnerId != null && pickedId != null && pickedId === actualWinnerId
   const wrongPick   = mode === 'picks' && ((actualWinnerId != null && pickedId != null && pickedId !== actualWinnerId)
-                    || (p1DeadPick && p2DeadPick))
+                    || (p1DeadPick && p2DeadPick)
+                    || pickedIsDead)
 
   return (
     <div
