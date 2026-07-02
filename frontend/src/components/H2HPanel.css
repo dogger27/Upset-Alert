@@ -145,6 +145,63 @@
   line-height: 1.3;
 }
 
+/* ── Form (last 10 results) ── */
+.h2h-form-row {
+  display: flex;
+  gap: 2px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.h2h-form-box {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #fff;
+  cursor: default;
+  flex-shrink: 0;
+}
+.h2h-form-box--win   { background: #2e9e5b; }
+.h2h-form-box--loss  { background: #c0392b; }
+.h2h-form-box--empty { background: #eee; }
+
+.h2h-form-popup {
+  z-index: 99999;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+  padding: 0.55rem 0.7rem;
+  min-width: 170px;
+  pointer-events: none;
+}
+.h2h-form-popup-event {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 0.3rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid #eee;
+  white-space: nowrap;
+}
+.h2h-form-popup-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.h2h-form-popup-row strong {
+  color: var(--text);
+  font-weight: 600;
+  margin-left: 0.6rem;
+}
+
 /* Flag icon before player name */
 .h2h-flag {
   width: 1.1em;
