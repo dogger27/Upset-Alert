@@ -269,7 +269,7 @@ def _form_score(scores_json: Optional[list], is_player1: bool) -> str:
     return ", ".join(parts)
 
 
-async def _get_player_form(te_slug: str, db: AsyncSession, limit: int = 10) -> list[dict]:
+async def get_player_form(te_slug: str, db: AsyncSession, limit: int = 10) -> list[dict]:
     from app.models.rankings import TePlayer
     from app.models.tournament import Draw, DrawEntry, Match
 
@@ -341,11 +341,7 @@ async def get_h2h(slug1: str, slug2: str, db: AsyncSession) -> dict:
         await db.execute(stmt)
         await db.commit()
 
-    return {
-        **data,
-        "form_a": await _get_player_form(slug_a, db),
-        "form_b": await _get_player_form(slug_b, db),
-    }
+    return data
 
 
 async def prefetch_h2h_for_draw(tournament_id: int) -> None:
