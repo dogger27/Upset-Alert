@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
-import { getH2H } from '../api/players'
+import { getH2H, getPlayerForm } from '../api/players'
 import './H2HPanel.css'
 
 function teKeys(tournSurface) {
@@ -161,6 +161,22 @@ export default function H2HPanel({ slug1, slug2, player1, player2, tournSurface,
     staleTime: 15 * 60 * 1000,
   })
 
+  // Form is sourced from our own db (not the TE scrape behind getH2H above), so
+  // fetch it independently — it should render immediately, not wait on get_h2h.
+  const { data: form_p1 } = useQuery({
+    queryKey: ['h2h-form', slug1],
+    queryFn: () => getPlayerForm(slug1),
+    enabled: !!slug1,
+    staleTime: 5 * 60 * 1000,
+  })
+  const { data: form_p2 } = useQuery({
+    queryKey: ['h2h-form', slug2],
+    queryFn: () => getPlayerForm(slug2),
+    enabled: !!slug2,
+    staleTime: 5 * 60 * 1000,
+  })
+  const showForm = (form_p1?.length ?? 0) > 0 || (form_p2?.length ?? 0) > 0
+
   const slug1IsA = data ? slug1 === data.slug_a : true
   const name_p1 = slug1IsA ? data?.name_a : data?.name_b
   const name_p2 = slug1IsA ? data?.name_b : data?.name_a
@@ -173,10 +189,6 @@ export default function H2HPanel({ slug1, slug2, player1, player2, tournSurface,
   const elo_rank_p2 = player2?.elo_rank ?? null
   const age_p1 = calcAge(player1?.date_of_birth)
   const age_p2 = calcAge(player2?.date_of_birth)
-
-  const form_p1 = slug1IsA ? data?.form_a : data?.form_b
-  const form_p2 = slug1IsA ? data?.form_b : data?.form_a
-  const showForm = (form_p1?.length ?? 0) > 0 || (form_p2?.length ?? 0) > 0
 
   const surfKeys = teKeys(tournSurface)
   let surf_p1 = 0, surf_p2 = 0
@@ -220,30 +232,29 @@ export default function H2HPanel({ slug1, slug2, player1, player2, tournSurface,
             {player2?.name ?? fmtName(name_p2)}
           </div>
 
-          {/* Overall row — click to show all matches */}
-          {data && <>
-            <button
-              className={`h2h-label h2h-filter-btn${surfFilter === 'all' ? ' h2h-filter-active' : ''}`}
-              onClick={() => setSurfFilter('all')}
-            >Overall</button>
-            <div className="h2h-col-val h2h-wins"><span className={bestCls(wins_p1, wins_p2)}>{wins_p1}</span></div>
-            <div />
-            <div className="h2h-col-val h2h-wins"><span className={bestCls(wins_p2, wins_p1)}>{wins_p2}</span></div>
-          </>}
+          {/* Overall row — click to show all matches. Rendered immediately;
+              values show a loading placeholder until the (possibly slow, TE-scraped) data arrives. */}
+          <button
+            className={`h2h-label h2h-filter-btn${surfFilter === 'all' ? ' h2h-filter-active' : ''}`}
+            onClick={() => setSurfFilter('all')}
+          >Overall</button>
+          <div className="h2h-col-val h2h-wins"><span className={bestCls(wins_p1, wins_p2)}>{isLoading ? '⋯' : (wins_p1 ?? '—')}</span></div>
+          <div />
+          <div className="h2h-col-val h2h-wins"><span className={bestCls(wins_p2, wins_p1)}>{isLoading ? '⋯' : (wins_p2 ?? '—')}</span></div>
 
           {/* Surface row — click to filter matches by surface */}
-          {data && surfKeys.length > 0 && <>
+          {surfKeys.length > 0 && <>
             <button
               className={`h2h-label h2h-filter-btn${surfFilter === 'surface' ? ' h2h-filter-active' : ''}`}
               onClick={() => setSurfFilter('surface')}
             >{surfLabel}</button>
-            <div className="h2h-col-val h2h-wins"><span className={bestCls(surf_p1, surf_p2)}>{surf_p1}</span></div>
+            <div className="h2h-col-val h2h-wins"><span className={bestCls(surf_p1, surf_p2)}>{isLoading ? '⋯' : surf_p1}</span></div>
             <div />
-            <div className="h2h-col-val h2h-wins"><span className={bestCls(surf_p2, surf_p1)}>{surf_p2}</span></div>
+            <div className="h2h-col-val h2h-wins"><span className={bestCls(surf_p2, surf_p1)}>{isLoading ? '⋯' : surf_p2}</span></div>
           </>}
 
           {/* Divider */}
-          {data && <div className="h2h-divider" />}
+          <div className="h2h-divider" />
 
           {/* Rank row */}
           {showRank && <>
