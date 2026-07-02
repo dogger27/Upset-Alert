@@ -194,6 +194,14 @@
 .sidebar-member--global .sidebar-points      { text-align: center; font-weight: 700; color: var(--text); }
 .sidebar-member--global .sidebar-member-name { text-align: left; }
 
+/* ── Incomplete bracket (picks not finished) ── */
+.sidebar-member--incomplete .sidebar-rank,
+.sidebar-member--incomplete .sidebar-points,
+.sidebar-member--incomplete .sidebar-member-name {
+  color: #aaa;
+  text-decoration: line-through;
+}
+
 /* ── Active (currently viewed) row ── */
 .sidebar-member--selected {
   background: var(--green-dark, #2d5a3d) !important;

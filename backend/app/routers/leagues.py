@@ -455,8 +455,11 @@ async def leaderboard(
     )
     total_matches = total_matches_result.scalar_one()
 
-    # Only include members who have submitted a complete bracket
-    scores = []
+    # Members with at least one pick are included; those with a complete
+    # bracket are ranked normally, partial pickers are appended after (greyed
+    # out on the frontend), and members with zero picks are excluded entirely.
+    complete_scores = []
+    partial_scores = []
     for member in league.members:
         preds_result = await db.execute(
             select(UserPrediction).where(
@@ -466,13 +469,17 @@ async def leaderboard(
             )
         )
         preds = preds_result.scalars().all()
-        if len(preds) < total_matches:
+        if len(preds) == 0:
             continue
         score = score_user(member.user_id, preds, completed_matches, tournament, league)
-        scores.append((member.user, score))
+        if len(preds) < total_matches:
+            partial_scores.append((member.user, score))
+        else:
+            complete_scores.append((member.user, score))
 
-    ranked = rank_users([s for _, s in scores], tournament.num_rounds)
-    user_map = {u.id: u for u, _ in scores}
+    ranked = rank_users([s for _, s in complete_scores], tournament.num_rounds)
+    partial_ranked = rank_users([s for _, s in partial_scores], tournament.num_rounds)
+    user_map = {u.id: u for u, _ in complete_scores + partial_scores}
 
     entries = [
         LeaderboardEntry(
@@ -482,6 +489,15 @@ async def leaderboard(
             correct_count=score.correct_count,
         )
         for rank_idx, score in enumerate(ranked, start=1)
+    ] + [
+        LeaderboardEntry(
+            rank=len(ranked) + rank_idx,
+            user=user_map[score.user_id],
+            total_points=score.total_points,
+            correct_count=score.correct_count,
+            is_complete=False,
+        )
+        for rank_idx, score in enumerate(partial_ranked, start=1)
     ]
 
     def _is_upset(match) -> bool:

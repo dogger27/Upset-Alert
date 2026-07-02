@@ -51,6 +51,7 @@ class LeaderboardEntry(BaseModel):
     user: UserOut
     total_points: float
     correct_count: int
+    is_complete: bool = True
 
 
 class LeaderboardOut(BaseModel):

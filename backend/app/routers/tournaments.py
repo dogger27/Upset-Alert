@@ -504,16 +504,18 @@ async def global_standings(tournament_id: int, db: AsyncSession = Depends(get_db
     # Classic points: round_number → 2^(r-1)
     pts_table = {r: 2 ** (r - 1) for r in range(1, tournament.num_rounds + 1)}
 
+    # Users with at least one pick — those with a complete bracket are ranked
+    # normally; partial pickers are appended after (greyed out on the frontend).
     sub = (
         select(UserPrediction.user_id)
         .where(UserPrediction.draw_id == tournament_id, UserPrediction.predicted_winner_id.isnot(None))
         .group_by(UserPrediction.user_id)
-        .having(func.count() >= total_matches)
     )
     users_result = await db.execute(select(User).where(User.id.in_(sub)))
     users = users_result.scalars().all()
 
-    scores: list[UserScore] = []
+    complete_scores: list[UserScore] = []
+    partial_scores: list[UserScore] = []
     for user in users:
         preds_result = await db.execute(
             select(UserPrediction).where(
@@ -535,15 +537,24 @@ async def global_standings(tournament_id: int, db: AsyncSession = Depends(get_db
                 total_pts += pts_table.get(m.round_number, 0)
                 correct += 1
                 correct_by_round[m.round_number] = correct_by_round.get(m.round_number, 0) + 1
-        scores.append(UserScore(user_id=user.id, total_points=total_pts, correct_count=correct,
-                                correct_by_round=correct_by_round))
+        score = UserScore(user_id=user.id, total_points=total_pts, correct_count=correct,
+                          correct_by_round=correct_by_round)
+        if len(preds) < total_matches:
+            partial_scores.append(score)
+        else:
+            complete_scores.append(score)
 
-    ranked = rank_users(scores, tournament.num_rounds)
+    ranked = rank_users(complete_scores, tournament.num_rounds)
+    partial_ranked = rank_users(partial_scores, tournament.num_rounds)
     user_map = {u.id: u for u in users}
     return [
         LeaderboardEntry(rank=i + 1, user=user_map[s.user_id], total_points=s.total_points,
                          correct_count=s.correct_count)
         for i, s in enumerate(ranked)
+    ] + [
+        LeaderboardEntry(rank=len(ranked) + i + 1, user=user_map[s.user_id], total_points=s.total_points,
+                         correct_count=s.correct_count, is_complete=False)
+        for i, s in enumerate(partial_ranked)
     ]
 
 

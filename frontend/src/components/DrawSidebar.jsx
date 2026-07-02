@@ -162,9 +162,9 @@ export default function DrawSidebar({ tournamentId, tournament, selectedUserId, 
                     return (
                       <li
                         key={m.id}
-                        className={['sidebar-member sidebar-member--standing sidebar-member--global', isActive && 'sidebar-member--selected'].filter(Boolean).join(' ')}
+                        className={['sidebar-member sidebar-member--standing sidebar-member--global', isActive && 'sidebar-member--selected', entry.is_complete === false && 'sidebar-member--incomplete'].filter(Boolean).join(' ')}
                         onClick={() => handleMemberClick(m.id, m.username)}
-                        title={m.display_name}
+                        title={entry.is_complete === false ? `${m.display_name} (picks incomplete)` : m.display_name}
                       >
                         <span className="sidebar-rank">{i + 1}</span>
                         <span className="sidebar-points">{entry.total_points % 1 === 0 ? entry.total_points : entry.total_points.toFixed(1)}</span>
@@ -192,9 +192,9 @@ export default function DrawSidebar({ tournamentId, tournament, selectedUserId, 
                     return (
                       <li
                         key={m.id}
-                        className={['sidebar-member sidebar-member--standing sidebar-member--global', isActive && 'sidebar-member--selected'].filter(Boolean).join(' ')}
+                        className={['sidebar-member sidebar-member--standing sidebar-member--global', isActive && 'sidebar-member--selected', entry.is_complete === false && 'sidebar-member--incomplete'].filter(Boolean).join(' ')}
                         onClick={() => handleMemberClick(m.id, m.username)}
-                        title={m.display_name}
+                        title={entry.is_complete === false ? `${m.display_name} (picks incomplete)` : m.display_name}
                       >
                         <span className="sidebar-rank">{i + 1}</span>
                         <span className="sidebar-points">{entry.total_points % 1 === 0 ? entry.total_points : entry.total_points.toFixed(1)}</span>
