@@ -16,6 +16,7 @@ from typing import Optional
 from sqlalchemy import and_, or_, select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 logger = logging.getLogger(__name__)
 
@@ -238,6 +239,84 @@ async def _scrape_h2h(slug_a: str, slug_b: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Recent form — pulled from our own draw/match data, not scraped from TE.
+# Always computed fresh (not part of the weekly H2HCache blob) since results
+# change every time a tracked tournament completes a match.
+# ---------------------------------------------------------------------------
+
+def _form_round_label(round_number: int, num_rounds: int) -> str:
+    from_end = num_rounds - round_number
+    if from_end == 0:
+        return "F"
+    if from_end == 1:
+        return "SF"
+    if from_end == 2:
+        return "QF"
+    return f"R{round_number}"
+
+
+def _form_score(scores_json: Optional[list], is_player1: bool) -> str:
+    if not scores_json or len(scores_json) < 2:
+        return ""
+    own, opp = (scores_json[0], scores_json[1]) if is_player1 else (scores_json[1], scores_json[0])
+    parts = []
+    for i in range(max(len(own), len(opp))):
+        a = own[i] if i < len(own) else ""
+        b = opp[i] if i < len(opp) else ""
+        if not a and not b:
+            continue
+        parts.append(f"{a}-{b}")
+    return ", ".join(parts)
+
+
+async def _get_player_form(te_slug: str, db: AsyncSession, limit: int = 10) -> list[dict]:
+    from app.models.rankings import TePlayer
+    from app.models.tournament import Draw, DrawEntry, Match
+
+    te_player = (
+        await db.execute(select(TePlayer).where(TePlayer.te_slug == te_slug))
+    ).scalar_one_or_none()
+    if not te_player:
+        return []
+
+    rows_result = await db.execute(
+        select(Match, Draw)
+        .join(Draw, Draw.id == Match.draw_id)
+        .join(
+            DrawEntry,
+            or_(DrawEntry.id == Match.player1_id, DrawEntry.id == Match.player2_id),
+        )
+        .options(selectinload(Match.player1), selectinload(Match.player2))
+        .where(
+            DrawEntry.te_player_id == te_player.id,
+            Match.status == "completed",
+            Match.is_bye == False,
+        )
+        .order_by(Match.completed_at.desc())
+        .limit(limit)
+    )
+
+    form = []
+    for match, draw in rows_result.all():
+        is_player1 = match.player1 is not None and match.player1.te_player_id == te_player.id
+        own = match.player1 if is_player1 else match.player2
+        opponent = match.player2 if is_player1 else match.player1
+        if own is None or opponent is None:
+            continue
+        won = match.winner_id == own.id
+        form.append({
+            "result": "W" if won else "L",
+            "opponent": opponent.name,
+            "score": _form_score(match.scores_json, is_player1),
+            "event": draw.name,
+            "round": _form_round_label(match.round_number, draw.num_rounds),
+            "surface": draw.surface,
+            "date": match.completed_at.date().isoformat() if match.completed_at else None,
+        })
+    return form
+
+
+# ---------------------------------------------------------------------------
 # Public entry point (with cache)
 # ---------------------------------------------------------------------------
 
@@ -249,19 +328,24 @@ async def get_h2h(slug1: str, slug2: str, db: AsyncSession) -> dict:
 
     cached = await db.get(H2HCache, (slug_a, slug_b))
     if cached and cached.fetched_at >= _week_start_utc():
-        return cached.data_json
+        data = cached.data_json
+    else:
+        data = await _scrape_h2h(slug_a, slug_b)
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        stmt = sqlite_insert(H2HCache).values(
+            slug_a=slug_a, slug_b=slug_b, fetched_at=now, data_json=data
+        ).on_conflict_do_update(
+            index_elements=["slug_a", "slug_b"],
+            set_={"fetched_at": now, "data_json": data},
+        )
+        await db.execute(stmt)
+        await db.commit()
 
-    data = await _scrape_h2h(slug_a, slug_b)
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
-    stmt = sqlite_insert(H2HCache).values(
-        slug_a=slug_a, slug_b=slug_b, fetched_at=now, data_json=data
-    ).on_conflict_do_update(
-        index_elements=["slug_a", "slug_b"],
-        set_={"fetched_at": now, "data_json": data},
-    )
-    await db.execute(stmt)
-    await db.commit()
-    return data
+    return {
+        **data,
+        "form_a": await _get_player_form(slug_a, db),
+        "form_b": await _get_player_form(slug_b, db),
+    }
 
 
 async def prefetch_h2h_for_draw(tournament_id: int) -> None:

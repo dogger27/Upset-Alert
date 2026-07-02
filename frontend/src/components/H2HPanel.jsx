@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getH2H } from '../api/players'
 import './H2HPanel.css'
@@ -83,6 +84,53 @@ function flipScore(score) {
   }).join(', ')
 }
 
+function fmtFormDate(iso) {
+  if (!iso) return '—'
+  const d = new Date(iso + 'T00:00:00')
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+function FormBox({ m }) {
+  const ref = useRef(null)
+  const [pos, setPos] = useState(null)
+
+  if (!m) return <span className="h2h-form-box h2h-form-box--empty" />
+
+  return (
+    <>
+      <span
+        ref={ref}
+        className={`h2h-form-box ${m.result === 'W' ? 'h2h-form-box--win' : 'h2h-form-box--loss'}`}
+        onMouseEnter={() => {
+          const r = ref.current?.getBoundingClientRect()
+          if (r) setPos({ x: r.left + r.width / 2, y: r.top })
+        }}
+        onMouseLeave={() => setPos(null)}
+      >
+        {m.result}
+      </span>
+      {pos && createPortal(
+        <div className="h2h-form-popup" style={{ position: 'fixed', left: pos.x, top: pos.y - 8, transform: 'translate(-50%, -100%)' }}>
+          <div className="h2h-form-popup-event">{[m.event, m.round].filter(Boolean).join(' · ')}</div>
+          <div className="h2h-form-popup-row"><span>vs</span><strong>{m.opponent}</strong></div>
+          <div className="h2h-form-popup-row"><span>Score</span><strong>{m.score || '—'}</strong></div>
+          <div className="h2h-form-popup-row"><span>Date</span><strong>{fmtFormDate(m.date)}</strong></div>
+        </div>,
+        document.body
+      )}
+    </>
+  )
+}
+
+function FormRow({ matches }) {
+  const boxes = Array.from({ length: 10 }, (_, i) => matches?.[i] ?? null)
+  return (
+    <div className="h2h-form-row">
+      {boxes.map((m, i) => <FormBox key={i} m={m} />)}
+    </div>
+  )
+}
+
 function EloInfoPopup({ onClose }) {
   return (
     <div className="h2h-elo-popup-backdrop" onClick={onClose}>
@@ -125,6 +173,10 @@ export default function H2HPanel({ slug1, slug2, player1, player2, tournSurface,
   const elo_rank_p2 = player2?.elo_rank ?? null
   const age_p1 = calcAge(player1?.date_of_birth)
   const age_p2 = calcAge(player2?.date_of_birth)
+
+  const form_p1 = slug1IsA ? data?.form_a : data?.form_b
+  const form_p2 = slug1IsA ? data?.form_b : data?.form_a
+  const showForm = (form_p1?.length ?? 0) > 0 || (form_p2?.length ?? 0) > 0
 
   const surfKeys = teKeys(tournSurface)
   let surf_p1 = 0, surf_p2 = 0
@@ -218,6 +270,14 @@ export default function H2HPanel({ slug1, slug2, player1, player2, tournSurface,
             <div className="h2h-col-val h2h-meta-val">{age_p1 ?? '—'}</div>
             <div />
             <div className="h2h-col-val h2h-meta-val">{age_p2 ?? '—'}</div>
+          </>}
+
+          {/* Form row — last 10 results, most recent first */}
+          {showForm && <>
+            <div className="h2h-label">Form</div>
+            <div className="h2h-col-val"><FormRow matches={form_p1} /></div>
+            <div />
+            <div className="h2h-col-val"><FormRow matches={form_p2} /></div>
           </>}
         </div>
 
