@@ -89,7 +89,7 @@ export default function DrawSidebar({ tournamentId, tournament, selectedUserId, 
       return
     }
     const status = tournament?.status
-    if (status !== 'active' && status !== 'completed') {
+    if (!user?.is_admin && status !== 'active' && status !== 'completed') {
       const lockStr = fmtLockTime(tournament?.closing_time)
       toastKey.current += 1
       setToast({

@@ -69,9 +69,15 @@ async def get_predictions(
 async def save_predictions(
     tournament_id: int,
     body: PredictionSet,
+    user_id: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    if user_id is not None and user_id != current_user.id:
+        if not current_user.is_admin:
+            raise HTTPException(403, "Only admins may edit another user's predictions")
+    uid = user_id if user_id is not None else current_user.id
+
     tournament = await db.get(Draw, tournament_id)
     if not tournament:
         raise HTTPException(404, "Tournament not found")
@@ -96,7 +102,7 @@ async def save_predictions(
     for match_id, winner_id in body.picks.items():
         existing = await db.execute(
             select(UserPrediction).where(
-                UserPrediction.user_id == current_user.id,
+                UserPrediction.user_id == uid,
                 UserPrediction.match_id == match_id,
             )
         )
@@ -108,7 +114,7 @@ async def save_predictions(
             pred.predicted_winner_id = winner_id
         else:
             pred = UserPrediction(
-                user_id=current_user.id,
+                user_id=uid,
                 draw_id=tournament_id,
                 match_id=match_id,
                 predicted_winner_id=winner_id,
@@ -119,7 +125,7 @@ async def save_predictions(
 
     result = await db.execute(
         select(UserPrediction).where(
-            UserPrediction.user_id == current_user.id,
+            UserPrediction.user_id == uid,
             UserPrediction.draw_id == tournament_id,
         )
     )

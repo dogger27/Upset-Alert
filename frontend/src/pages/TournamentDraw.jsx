@@ -21,6 +21,7 @@ export default function TournamentDraw() {
 
   // All state declared first
   const [picks, setPicks] = useState({})
+  const [otherPicks, setOtherPicks] = useState({})
   const [viewMode, setViewMode] = useState('live')
   const [viewedUserId, setViewedUserId] = useState(() => { const u = searchParams.get('user'); return u ? Number(u) : null })
   const [viewedUserName, setViewedUserName] = useState(null)
@@ -85,6 +86,19 @@ export default function TournamentDraw() {
     }
   }, [savedPreds, data])
 
+  // Initialise otherPicks (for admin editing another user's picks) from that user's saved predictions
+  useEffect(() => {
+    if (viewingOther && viewedPreds && data) {
+      const validIds = new Set(data.matches.map(m => m.id))
+      const map = {}
+      for (const p of viewedPreds) {
+        if (p.predicted_winner_id != null && validIds.has(p.match_id))
+          map[p.match_id] = p.predicted_winner_id
+      }
+      setOtherPicks(map)
+    }
+  }, [viewingOther, viewedPreds, data])
+
   // Set initial view mode once: always 'picks' for open tournaments, or if user has picks, or if ?user= param present
   useEffect(() => {
     if (initialModeSet.current || savedPreds === undefined || !data) return
@@ -104,6 +118,11 @@ export default function TournamentDraw() {
   const saveMutation = useMutation({
     mutationFn: (latestPicks) => savePredictions(Number(id), latestPicks),
     onSuccess: () => qc.invalidateQueries(['predictions', id]),
+  })
+
+  const saveOtherMutation = useMutation({
+    mutationFn: (latestPicks) => savePredictions(Number(id), latestPicks, viewedUserId),
+    onSuccess: () => qc.invalidateQueries(['predictions', id, viewedUserId]),
   })
 
   const refreshMutation = useMutation({
@@ -288,11 +307,10 @@ export default function TournamentDraw() {
     clearToastTimerRef.current = setTimeout(() => setClearToast(null), 3500)
   }
 
-  const handlePick = (matchId, playerId) => {
-    const newPicks = { ...picks }
+  // Cascade-clear: if switching picks, clear downstream picks for the old player
+  const computeNextPicks = (basePicks, matchId, playerId) => {
+    const newPicks = { ...basePicks }
     const oldPlayerId = newPicks[matchId]
-
-    // Cascade-clear: if switching picks, clear downstream picks for the old player
     if (oldPlayerId != null && oldPlayerId !== playerId && data) {
       const byKey = {}
       for (const m of data.matches) byKey[`${m.round_number}:${m.match_number}`] = m
@@ -306,8 +324,12 @@ export default function TournamentDraw() {
         cur = next
       }
     }
-
     newPicks[matchId] = playerId
+    return newPicks
+  }
+
+  const handlePick = (matchId, playerId) => {
+    const newPicks = computeNextPicks(picks, matchId, playerId)
     setPicks(newPicks)
     if (user && !locked) {
       saveMutation.mutate(newPicks)
@@ -325,6 +347,13 @@ export default function TournamentDraw() {
     }
   }
 
+  // Admin making picks on behalf of another user
+  const handlePickForOther = (matchId, playerId) => {
+    const newPicks = computeNextPicks(otherPicks, matchId, playerId)
+    setOtherPicks(newPicks)
+    saveOtherMutation.mutate(newPicks)
+  }
+
   const everHadPicksRef = useRef(false)
 
   if (isLoading) return <div className="page-loading">Loading draw…</div>
@@ -337,12 +366,15 @@ export default function TournamentDraw() {
   const picksDisabled = !!user && locked && !userHasPicks
   const picksOwner = viewMode === 'picks' ? (viewingOther ? viewedUserName : user?.username) ?? null : null
 
+  // Admins may edit another user's picks while predictions are still unlocked
+  const canEditOther = viewingOther && !!user?.is_admin && !locked
+
   // When viewing another user's picks, build their picks map from fetched predictions
   const viewedPicksMap = viewingOther && viewedPreds
     ? Object.fromEntries(viewedPreds.filter(p => p.predicted_winner_id != null).map(p => [p.match_id, p.predicted_winner_id]))
     : null
 
-  const activePicks = viewingOther ? (viewedPicksMap ?? {}) : picks
+  const activePicks = viewingOther ? (canEditOther ? otherPicks : (viewedPicksMap ?? {})) : picks
   const totalPredictable = matches.filter(m => !m.is_bye).length
 
   // Once picks > 0 this session, keep the badge visible through any transient refetch resets
@@ -633,8 +665,8 @@ export default function TournamentDraw() {
             matches={matches}
             players={players}
             picks={user ? activePicks : {}}
-            onPick={viewingOther ? () => {} : handlePick}
-            locked={!user || locked || viewingOther}
+            onPick={viewingOther ? (canEditOther ? handlePickForOther : () => {}) : handlePick}
+            locked={!user || locked || (viewingOther && !canEditOther)}
             mode={viewMode}
             picksOwner={picksOwner}
           />
