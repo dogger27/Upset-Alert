@@ -174,12 +174,18 @@ class Draw(Base):
 
     @property
     def computed_status(self) -> str:
+        today = date.today()
+
+        # A draw that hasn't started yet can never be "active" or "completed",
+        # no matter what got stamped on it (e.g. stale/garbled scraped results
+        # from a bad start_date). Guard this before anything else below.
+        if self.start_date and today < self.start_date:
+            return "upcoming"
+
         if self.status == "completed":
-            if self.end_date and date.today() <= self.end_date:
+            if self.end_date and today <= self.end_date:
                 return "active"
             return "completed"
-
-        today = date.today()
         now = datetime.now(timezone.utc)
 
         if self.start_date and (today - self.start_date).days > 14:
