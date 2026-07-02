@@ -187,8 +187,8 @@ function PlayerRow({
   return (
     <div
       className={clsx('player-row', {
-        picked: !markWinner && isPicked && !isWinner,
-        winner: isWinner,
+        picked: !markWinner && isPicked,
+        winner: markWinner && isWinner,
         eliminated: isEliminated && showRowBg,
         'wrong-pick': wrongPick,
         'dead-pick': isDeadPick,
