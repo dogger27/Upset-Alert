@@ -123,7 +123,7 @@
 
 /* Best-value highlight pill */
 .h2h-best {
-  background: #c0392b;
+  background: var(--green-dark, #1b4332);
   color: #fff;
   border-radius: 6px;
   padding: 1px 7px;
