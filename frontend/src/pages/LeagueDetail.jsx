@@ -110,7 +110,9 @@ export default function LeagueDetail() {
       const rawDs = getDisplayStatus(lt.tournament, cohortInfo)
       const ds = rawDs === 'lastweek' ? 'previous' : rawDs
       if (ds === 'upcoming') continue
-      if (lt.picker_count <= 1) continue
+      // Global shows solo-picker draws too; real leagues hide them (not
+      // meaningful competition when only one member has picked).
+      if (!isGlobal && lt.picker_count <= 1) continue
       if (!groups.has(ds)) groups.set(ds, { key: ds, label: DISPLAY_STATUS_LABELS[ds], order: STATUS_ORDER[ds] ?? 9, items: [] })
       groups.get(ds).items.push(lt)
     }
@@ -122,7 +124,7 @@ export default function LeagueDetail() {
       })
     }
     return [...groups.values()].sort((a, b) => a.order - b.order)
-  }, [leagueTournaments, allTournaments])
+  }, [leagueTournaments, allTournaments, isGlobal])
 
   if (!isGlobal && leagueLoading) return <div className="page-loading">Loading…</div>
   if (!isGlobal && !league) return null
