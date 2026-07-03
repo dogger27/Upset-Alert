@@ -481,7 +481,7 @@ td.lmt-name { text-align: left; color: var(--text); max-width: 130px; display: f
   width: 100%; cursor: pointer;
   -webkit-appearance: none; appearance: none;
   height: 4px; border-radius: 2px;
-  background: linear-gradient(to right, var(--green-dark) var(--fill-pct, 100%), var(--border, #e5e7eb) var(--fill-pct, 100%));
+  background: linear-gradient(to right, var(--green-500) var(--fill-pct, 100%), var(--border, #e5e7eb) var(--fill-pct, 100%));
   outline: none; margin: 0; padding: 0;
 }
 .lt-scrubber-range::-webkit-slider-thumb {
