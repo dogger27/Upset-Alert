@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getLeague, getLeagueTournaments, getRoundScores, updateLeague, setMemberAdmin, removeMember, deleteLeague, shareLeagueByEmail, getGrandSlamTotals } from '../api/leagues'
-import { getGlobalRoundScores, listTournaments } from '../api/tournaments'
+import { getGlobalRoundScores, getGlobalDraws, getGlobalGSTotals, listTournaments } from '../api/tournaments'
 import { getDrawCounts } from '../api/auth'
 import { useAuth } from '../store/auth'
 import UserName from '../components/UserName'
@@ -53,6 +53,10 @@ function tierLabel(category) {
 
 export default function LeagueDetail() {
   const { id } = useParams()
+  // The "Global" pseudo-league is the index route (/leagues, no :id param) —
+  // same page, same code, just backed by the global (all-users) endpoints
+  // instead of a real league. See feedback_global_league_duplication memory.
+  const isGlobal = id === undefined
   const { user } = useAuth()
   const navigate = useNavigate()
   const qc = useQueryClient()
@@ -63,20 +67,21 @@ export default function LeagueDetail() {
   const [memberSortCol, setMemberSortCol] = useState(null) // null | 'atp' | 'wta' | 'combined'
   const [memberSortDir, setMemberSortDir] = useState('desc')
 
-  const { data: league, isLoading } = useQuery({
+  const { data: league, isLoading: leagueLoading } = useQuery({
     queryKey: ['league', id],
     queryFn: () => getLeague(Number(id)),
+    enabled: !isGlobal,
   })
 
   const { data: leagueTournaments = [] } = useQuery({
-    queryKey: ['league-tournaments', id],
-    queryFn: () => getLeagueTournaments(Number(id)),
+    queryKey: isGlobal ? ['global-draws'] : ['league-tournaments', id],
+    queryFn: () => isGlobal ? getGlobalDraws() : getLeagueTournaments(Number(id)),
     refetchInterval: 60_000,
   })
 
   const { data: gsData } = useQuery({
-    queryKey: ['gs-totals', id],
-    queryFn: () => getGrandSlamTotals(Number(id)),
+    queryKey: isGlobal ? ['global-gs-totals'] : ['gs-totals', id],
+    queryFn: () => isGlobal ? getGlobalGSTotals() : getGrandSlamTotals(Number(id)),
   })
 
   const { data: allTournaments = [] } = useQuery({
@@ -115,17 +120,19 @@ export default function LeagueDetail() {
     return [...groups.values()].sort((a, b) => a.order - b.order)
   }, [leagueTournaments, allTournaments])
 
-  if (isLoading) return <div className="page-loading">Loading…</div>
-  if (!league) return null
+  if (!isGlobal && leagueLoading) return <div className="page-loading">Loading…</div>
+  if (!isGlobal && !league) return null
 
-  const isOwner = user?.id === league.owner.id
-  const canInvite = isOwner || league.allow_member_invites
+  const isOwner = !isGlobal && user?.id === league.owner.id
+  const canInvite = !isGlobal && (isOwner || league.allow_member_invites)
+  const leagueName = isGlobal ? 'Global' : league.name
+  const memberCount = isGlobal ? (gsData?.members?.length ?? 0) : league.member_count
 
   return (
     <div className="league-detail">
       <div className="league-detail-header">
         <div>
-          <h1>{league.name}</h1>
+          <h1>{leagueName}</h1>
         </div>
         <div className="league-header-actions">
           {canInvite && (
@@ -194,9 +201,9 @@ export default function LeagueDetail() {
                         key={t.id}
                         tournament={t}
                         pickerCount={picker_count}
-                        leagueId={Number(id)}
-                        leagueMemberCount={league.member_count}
-                        showRealName={league.show_real_name}
+                        leagueId={isGlobal ? null : Number(id)}
+                        leagueMemberCount={isGlobal ? null : league.member_count}
+                        showRealName={isGlobal ? false : league.show_real_name}
                       />
                     ))}
                   </div>
@@ -208,10 +215,10 @@ export default function LeagueDetail() {
 
         {/* Members sidebar */}
         <div className="card league-members-section">
-          <h2>Members ({league.member_count})</h2>
+          <h2>Members ({memberCount})</h2>
           <p className="league-members-subtitle">{gsData?.year ?? new Date().getFullYear()} Grand Slam Point Tally</p>
           {(() => {
-            const rawMembers = gsData?.members ?? league.members.map(m => ({ user_id: m.id, username: m.username, full_name: m.full_name, atp_points: null, wta_points: null }))
+            const rawMembers = gsData?.members ?? (isGlobal ? [] : league.members.map(m => ({ user_id: m.id, username: m.username, full_name: m.full_name, atp_points: null, wta_points: null })))
             const withCombined = rawMembers.map(m => ({
               ...m,
               combined_points: (m.atp_points != null && m.wta_points != null) ? m.atp_points + m.wta_points : null,
@@ -260,6 +267,7 @@ export default function LeagueDetail() {
                         <a href={`/draw-history?user=${m.user_id}`} className="lmt-name-link username-hover" data-tooltip={`${m.full_name || m.username}:\nShow Draw History\n(${drawCountMap[m.user_id] ?? 0} draws competed)`}>
                           <span className="lmt-name-text">{m.username}</span>
                         </a>
+                        {m.is_admin && <span className="lmt-admin-badge" title="Admin">A</span>}
                       </td>
                       <td className="lmt-pts">{m.atp_points ?? '–'}</td>
                       <td className="lmt-pts">{m.wta_points ?? '–'}</td>
