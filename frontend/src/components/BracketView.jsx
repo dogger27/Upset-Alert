@@ -194,6 +194,10 @@ function PlayerRow({
         'dead-pick': isDeadPick,
         projected: isProjected && !isWinner,
         clickable: !locked && onClick,
+        // Independent of `picked` (which is suppressed in live mode) — the
+        // user's own pick should always render in black text, even in a
+        // live/not-yet-started match where `picked`'s other styling doesn't apply.
+        'pick-choice': isPicked,
       })}
       onClick={!locked && onClick ? onClick : undefined}
       title={player.nationality ? `${player.name} (${player.nationality})` : player.name}
