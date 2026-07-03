@@ -255,6 +255,32 @@ def _form_round_label(round_number: int, num_rounds: int) -> str:
     return f"R{round_number}"
 
 
+def _estimate_round_date(draw, round_number: int) -> Optional[str]:
+    """
+    Best-effort real-world date for a match, used only when completed_at isn't
+    trustworthy (see get_player_form). completed_at can't be used directly for
+    batch-backfilled historical draws — every match in a finished tournament
+    often shares the exact scrape timestamp, not the real play date.
+
+    Spreads round_number 1..num_rounds proportionally across the tournament's
+    own start_date..end_date span (round 1 lands early, the Final lands on
+    end_date), so within a single draw every round gets a distinct, ascending
+    date — a player never appears to play twice on the same calculated day,
+    since they play at most one match per round in a given draw.
+    """
+    if not draw.num_rounds:
+        return draw.end_date.isoformat() if draw.end_date else None
+    if draw.start_date and draw.end_date and draw.end_date >= draw.start_date:
+        total_days = (draw.end_date - draw.start_date).days
+        offset_days = round(total_days * round_number / draw.num_rounds)
+        return (draw.start_date + timedelta(days=offset_days)).isoformat()
+    if draw.end_date:
+        return draw.end_date.isoformat()
+    if draw.start_date:
+        return draw.start_date.isoformat()
+    return None
+
+
 def _form_score(scores_json: Optional[list], is_player1: bool) -> str:
     if not scores_json or len(scores_json) < 2:
         return ""
@@ -310,13 +336,12 @@ async def get_player_form(te_slug: str, db: AsyncSession, limit: int = 10) -> li
             continue
         won = match.winner_id == own.id
         if draw.status != "completed" and match.completed_at:
-            date_val = match.completed_at.date().isoformat()
-        elif draw.end_date:
-            date_val = draw.end_date.isoformat()
-        elif match.completed_at:
+            # Live/in-progress draws get per-match timestamps from ESPN — trust them.
             date_val = match.completed_at.date().isoformat()
         else:
-            date_val = None
+            date_val = _estimate_round_date(draw, match.round_number)
+            if date_val is None and match.completed_at:
+                date_val = match.completed_at.date().isoformat()
         form.append({
             "result": "W" if won else "L",
             "opponent": opponent.name,
