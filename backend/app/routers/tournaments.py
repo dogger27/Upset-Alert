@@ -695,15 +695,22 @@ async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
             if row.date_of_birth:
                 te_dob_map[row.id] = row.date_of_birth
 
-        # ELO rank lives in the most recent rankings snapshot, not on te_players.
+        # ELO rank lives in the rankings snapshot closest to (on or before) this
+        # tournament's own ranking-reference date — NOT always the single latest
+        # snapshot, otherwise viewing an old/historical draw would show each
+        # player's CURRENT Elo rank instead of their rank at the time it was played.
+        elo_ref_date = t.entry_ranking_week or t.start_date
+        max_week_subq = select(func.max(TeRankingsSnapshot.week_date)).where(
+            TeRankingsSnapshot.player_id.in_(te_ids)
+        )
+        if elo_ref_date:
+            max_week_subq = max_week_subq.where(TeRankingsSnapshot.week_date <= elo_ref_date)
         elo_snap_res = await db.execute(
             select(TeRankingsSnapshot.player_id, TeRankingsSnapshot.elo_rank)
             .where(
                 TeRankingsSnapshot.player_id.in_(te_ids),
                 TeRankingsSnapshot.elo_rank.isnot(None),
-                TeRankingsSnapshot.week_date == select(func.max(TeRankingsSnapshot.week_date))
-                    .where(TeRankingsSnapshot.player_id.in_(te_ids))
-                    .scalar_subquery(),
+                TeRankingsSnapshot.week_date == max_week_subq.scalar_subquery(),
             )
         )
         for row in elo_snap_res:

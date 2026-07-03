@@ -10,7 +10,7 @@ Ranking page slugs look like: "sinner-8b8e8", "alcaraz-5ab70"
 import asyncio
 import logging
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy import and_, or_, select
@@ -307,7 +307,26 @@ def _form_score(scores_json: Optional[list], is_player1: bool) -> str:
     return ", ".join(parts)
 
 
-async def get_player_form(te_slug: str, db: AsyncSession, limit: int = 10) -> list[dict]:
+def _match_date_val(match, draw) -> Optional[str]:
+    if draw.status != "completed" and match.completed_at:
+        # Live/in-progress draws get per-match timestamps from ESPN — trust them.
+        return match.completed_at.date().isoformat()
+    date_val = _estimate_round_date(draw, match.round_number)
+    if date_val is None and match.completed_at:
+        return match.completed_at.date().isoformat()
+    return date_val
+
+
+async def get_player_form(
+    te_slug: str, db: AsyncSession, limit: int = 10, before_date: Optional[date] = None
+) -> list[dict]:
+    """
+    A player's last `limit` completed matches. When before_date is given (the
+    estimated date of the match a user is looking at in a historical draw),
+    only matches that happened strictly before it are considered — otherwise
+    the H2H popup for an old draw would show the player's CURRENT form,
+    including results that happened long after that historical match.
+    """
     from app.models.rankings import TePlayer
     from app.models.tournament import Draw, DrawEntry, Match
 
@@ -317,7 +336,7 @@ async def get_player_form(te_slug: str, db: AsyncSession, limit: int = 10) -> li
     if not te_player:
         return []
 
-    rows_result = await db.execute(
+    query = (
         select(Match, Draw)
         .join(Draw, Draw.id == Match.draw_id)
         .join(
@@ -336,24 +355,37 @@ async def get_player_form(te_slug: str, db: AsyncSession, limit: int = 10) -> li
         # so the sequence of matches is always correct, even when the displayed
         # date below has to fall back to the tournament's end date.
         .order_by(Draw.start_date.desc(), Match.round_number.desc())
-        .limit(limit)
     )
+    if before_date is None:
+        query = query.limit(limit)
+    rows_result = await db.execute(query)
+    all_rows = rows_result.all()
+
+    if before_date is not None:
+        # A per-match estimated date is needed to correctly exclude/include
+        # matches within the SAME tournament as the one being viewed (its own
+        # earlier rounds must still count as "form", only later ones must not) —
+        # draw.start_date alone can't distinguish those, since they share it.
+        dated_rows = [
+            (match, draw, _match_date_val(match, draw)) for match, draw in all_rows
+        ]
+        dated_rows = [
+            (match, draw, d) for match, draw, d in dated_rows
+            if d is not None and date.fromisoformat(d) < before_date
+        ]
+        dated_rows.sort(key=lambda r: r[2], reverse=True)
+        rows = [(match, draw) for match, draw, _ in dated_rows[:limit]]
+    else:
+        rows = all_rows
 
     form = []
-    for match, draw in rows_result.all():
+    for match, draw in rows:
         is_player1 = match.player1 is not None and match.player1.te_player_id == te_player.id
         own = match.player1 if is_player1 else match.player2
         opponent = match.player2 if is_player1 else match.player1
         if own is None or opponent is None:
             continue
         won = match.winner_id == own.id
-        if draw.status != "completed" and match.completed_at:
-            # Live/in-progress draws get per-match timestamps from ESPN — trust them.
-            date_val = match.completed_at.date().isoformat()
-        else:
-            date_val = _estimate_round_date(draw, match.round_number)
-            if date_val is None and match.completed_at:
-                date_val = match.completed_at.date().isoformat()
         form.append({
             "result": "W" if won else "L",
             "opponent": opponent.name,
@@ -361,7 +393,7 @@ async def get_player_form(te_slug: str, db: AsyncSession, limit: int = 10) -> li
             "event": draw.name,
             "round": _form_round_label(match.round_number, draw.num_rounds),
             "surface": draw.surface,
-            "date": date_val,
+            "date": _match_date_val(match, draw),
         })
     return form
 

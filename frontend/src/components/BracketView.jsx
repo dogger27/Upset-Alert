@@ -385,7 +385,7 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
       {h2hAvailable && (
         <button
           className="h2h-strip"
-          onClick={() => onH2H(p1, p2)}
+          onClick={() => onH2H(p1, p2, match)}
           title={`Head-to-head: ${p1.name} vs ${p2.name}`}
         >
           <span className="h2h-strip-label">H2H</span>
@@ -427,7 +427,7 @@ function ConnectorLines({ leftMatches, rightMatches, totalH }) {
 // ---------------------------------------------------------------------------
 
 export default function BracketView({ tournament, matches, players, picks, onPick, locked, mode = 'picks', picksOwner = null }) {
-  const [h2hPlayers, setH2HPlayers] = useState(null) // { p1, p2 } player objects
+  const [h2hPlayers, setH2HPlayers] = useState(null) // { p1, p2, match }
 
   const playerById = Object.fromEntries(players.map(p => [p.id, p]))
   const drawRanks = computeDrawRanks(players)
@@ -488,6 +488,8 @@ export default function BracketView({ tournament, matches, players, picks, onPic
         player2={h2hPlayers.p2}
         tournSurface={tournament?.surface}
         tournGender={tournament?.gender}
+        beforeDrawId={tournament?.id}
+        beforeRound={h2hPlayers.match?.round_number}
         onClose={() => setH2HPlayers(null)}
       />
     )}
@@ -529,7 +531,7 @@ export default function BracketView({ tournament, matches, players, picks, onPic
                       locked={locked}
                       mode={mode}
                       lossRound={lossRound}
-                      onH2H={(p1, p2) => setH2HPlayers({ p1, p2 })}
+                      onH2H={(p1, p2, match) => setH2HPlayers({ p1, p2, match })}
                       qualifierNums={qualifierNums}
                       forceTypeSlot={roundHasTypeSlot[rn]}
                       style={{ position: 'absolute', top, left: 6, right: 6 }}
