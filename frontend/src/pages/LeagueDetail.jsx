@@ -125,15 +125,12 @@ export default function LeagueDetail() {
 
   const isOwner = !isGlobal && user?.id === league.owner.id
   const canInvite = !isGlobal && (isOwner || league.allow_member_invites)
-  const leagueName = isGlobal ? 'Global' : league.name
   const memberCount = isGlobal ? (gsData?.members?.length ?? 0) : league.member_count
 
   return (
     <div className="league-detail">
+      {(canInvite || isOwner) && (
       <div className="league-detail-header">
-        <div>
-          <h1>{leagueName}</h1>
-        </div>
         <div className="league-header-actions">
           {canInvite && (
             <button className="btn-secondary" onClick={() => setShowInvite(true)}>
@@ -148,6 +145,7 @@ export default function LeagueDetail() {
           )}
         </div>
       </div>
+      )}
 
       {showInvite && (
         <InviteModal league={league} onClose={() => setShowInvite(false)} />
