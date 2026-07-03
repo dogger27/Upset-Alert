@@ -30,6 +30,20 @@ logger = logging.getLogger(__name__)
 # Round-complete notification
 # ---------------------------------------------------------------------------
 
+def _email_round_label(round_name: str) -> str:
+    """Email-specific round label: R128/R64/R32/R16, Quarter-Finals, Semi-Finals, Final."""
+    mapping = {
+        "Final": "Final",
+        "Semifinals": "Semi-Finals",
+        "Quarterfinals": "Quarter-Finals",
+    }
+    if round_name in mapping:
+        return mapping[round_name]
+    if round_name.startswith("Round of "):
+        return "R" + round_name[len("Round of "):]
+    return round_name
+
+
 async def notify_round_complete(tournament_id: int, round_number: int) -> None:
     """
     For every participant who opted into 'round_standings', send ONE email
@@ -43,7 +57,7 @@ async def notify_round_complete(tournament_id: int, round_number: int) -> None:
         if not tournament:
             return
 
-        round_name = tournament.round_name(round_number)
+        round_name = _email_round_label(tournament.round_name(round_number))
         is_final_round = round_number == tournament.num_rounds
         t_name = tournament.name
         t_year = tournament.year
