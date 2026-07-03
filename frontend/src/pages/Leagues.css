@@ -46,6 +46,7 @@
   font-size: 2.1rem;
   color: var(--text);
   line-height: 1;
+  margin-left: 1.1rem;
 }
 
 /* Native <select> styled as a bordered box, with its own text hidden so only
