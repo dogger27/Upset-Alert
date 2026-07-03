@@ -632,6 +632,23 @@ async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get
     entries.sort(key=lambda x: (-x["total"],) + tuple(-rp for rp in reversed(x["round_points"])))
     rounds_with_matches = sorted({m.round_number for m in completed_matches})
 
+    # A round is "complete" only once every non-bye match in it has finished —
+    # not just because it's the highest round with any match played so far
+    # (that heuristic misfires when there's a rest day before the next round starts).
+    total_by_round_result = await db.execute(
+        select(Match.round_number, func.count())
+        .where(Match.draw_id == tournament_id, Match.is_bye == False)
+        .group_by(Match.round_number)
+    )
+    total_by_round = dict(total_by_round_result.all())
+    completed_by_round: defaultdict = defaultdict(int)
+    for m in completed_matches:
+        completed_by_round[m.round_number] += 1
+    completed_round_nums = sorted(
+        r for r, total in total_by_round.items()
+        if total > 0 and completed_by_round.get(r, 0) >= total
+    )
+
     def _isoZ(dt):
         if dt is None: return None
         s = dt.isoformat()
@@ -650,6 +667,7 @@ async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get
         "entries": entries,
         "completed_matches_count": len(completed_matches),
         "rounds_with_matches": rounds_with_matches,
+        "completed_round_nums": completed_round_nums,
         "matches_timeline": timeline,
         "user_predictions": user_predictions,
     }
