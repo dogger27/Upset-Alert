@@ -433,7 +433,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
         <p className="lt-progress-empty">No picks submitted yet.</p>
       ) : t.status === 'open' ? (
         <>
-          <div className="lt-competitors-label">Competitors</div>
+          <div className="lt-competitors-label">Competitor</div>
           <div className="lt-open-content">
             <div className="lt-progress-rows">
               {entries.map((entry, entryIndex) => (
@@ -455,9 +455,10 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
         </>
       ) : (
         <>
-          <div className="lt-competitors-label">Competitors</div>
           <div className="lt-progress-row lt-progress-header-row" style={{ '--name-col-width': `${nameColWidth}px` }}>
-            <span /><span /><span />
+            <span />
+            <span className="lt-competitors-label lt-competitors-label--inline">Competitor</span>
+            <span />
             <div className="lt-bar-track">
               {activeRounds.map((i, col) => (
                 <div key={i} className="lt-bar-col lt-bar-col--label" style={{ flex: perRoundMax[col] }} title={roundWinnerLabels[col] ?? undefined}>
