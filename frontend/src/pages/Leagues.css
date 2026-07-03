@@ -90,29 +90,6 @@
 .leagues-icon-btn:hover { background: #f5f5f5; }
 .leagues-icon-btn svg { width: 24px; height: 24px; }
 
-/* Share/Settings row — mirrors .league-body-row's flex:1 + 300px column split
-   (in LeagueDetail.css) so its right edge lines up with the Draws card below,
-   not the Members card or the page edge. */
-.league-header-actions-row {
-  display: flex;
-  gap: 1.25rem;
-  margin-bottom: 0.75rem;
-}
-.league-header-actions-spacer-draws {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  justify-content: flex-end;
-}
-.league-header-actions-spacer-members {
-  width: 300px;
-  flex-shrink: 0;
-}
-.league-header-actions {
-  display: flex;
-  gap: 0.5rem;
-}
-
 /* ── Top-right controls (selector + action buttons) ── */
 .leagues-top-right {
   display: flex;
