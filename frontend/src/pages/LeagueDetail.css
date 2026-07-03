@@ -536,6 +536,7 @@
   color: inherit; text-decoration: none;
 }
 .lt-progress-name--link:hover .lt-progress-name-text { text-decoration: underline; color: var(--green-600); }
+.lt-progress-name--me .lt-progress-name-text { font-weight: 800; }
 .lt-place-icon { font-size: 0.95rem; flex-shrink: 0; line-height: 1; }
 .lt-progress-name-text {
   display: block;
