@@ -35,7 +35,7 @@
 
 .leagues-title-group {
   display: flex;
-  align-items: flex-end;
+  align-items: baseline;
   gap: 0.65rem;
   position: relative;
 }
