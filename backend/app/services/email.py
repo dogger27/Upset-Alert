@@ -293,7 +293,6 @@ async def send_round_complete_notification(
         f"<tr>"
         f"<td style='padding:8px 12px'>{name}</td>"
         f"<td style='padding:8px 12px;text-align:center'>#{rank}&nbsp;/&nbsp;{total}</td>"
-        f"<td style='padding:8px 12px;text-align:right'>{int(pts)}&nbsp;pts</td>"
         f"<td style='padding:8px 12px;text-align:center;color:#555'>{winner}</td>"
         f"</tr>"
         for name, rank, total, pts, winner in groups
@@ -311,7 +310,6 @@ async def send_round_complete_notification(
               <tr style="background:#f3f4f6">
                 <th style="padding:8px 12px;text-align:left">League</th>
                 <th style="padding:8px 12px;text-align:center">Rank</th>
-                <th style="padding:8px 12px;text-align:right">Points</th>
                 <th style="padding:8px 12px;text-align:center">{round_name} Winner</th>
               </tr>
             </thead>
