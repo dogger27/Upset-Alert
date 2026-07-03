@@ -292,7 +292,12 @@ async def get_player_form(te_slug: str, db: AsyncSession, limit: int = 10) -> li
             Match.status == "completed",
             Match.is_bye == False,
         )
-        .order_by(Match.completed_at.desc())
+        # completed_at is unreliable for batch-backfilled historical draws (every
+        # match in a finished tournament often shares the exact scrape timestamp,
+        # not the real play date) — order by tournament chronology + round instead
+        # so the sequence of matches is always correct, even when the displayed
+        # date below has to fall back to the tournament's end date.
+        .order_by(Draw.start_date.desc(), Match.round_number.desc())
         .limit(limit)
     )
 
@@ -304,6 +309,14 @@ async def get_player_form(te_slug: str, db: AsyncSession, limit: int = 10) -> li
         if own is None or opponent is None:
             continue
         won = match.winner_id == own.id
+        if draw.status != "completed" and match.completed_at:
+            date_val = match.completed_at.date().isoformat()
+        elif draw.end_date:
+            date_val = draw.end_date.isoformat()
+        elif match.completed_at:
+            date_val = match.completed_at.date().isoformat()
+        else:
+            date_val = None
         form.append({
             "result": "W" if won else "L",
             "opponent": opponent.name,
@@ -311,7 +324,7 @@ async def get_player_form(te_slug: str, db: AsyncSession, limit: int = 10) -> li
             "event": draw.name,
             "round": _form_round_label(match.round_number, draw.num_rounds),
             "surface": draw.surface,
-            "date": match.completed_at.date().isoformat() if match.completed_at else None,
+            "date": date_val,
         })
     return form
 
