@@ -267,6 +267,18 @@
   font-style: normal;
 }
 
+/* User's pick always stays bold and black, even when faded/struck/eliminated */
+.player-row.picked .pname {
+  color: #000;
+}
+
+.player-row.picked.eliminated,
+.player-row.picked.wrong-pick,
+.player-row.picked.dead-pick,
+.player-row.picked.projected {
+  opacity: 1;
+}
+
 /* ── Badge alignment slots (fixed-width ensures name left-edges align) ── */
 .badge-left-slot {
   width: 28px;
