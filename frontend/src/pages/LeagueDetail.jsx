@@ -257,7 +257,7 @@ export default function LeagueDetail() {
                     <th className="lmt-name-th" />
                     <SortHeader col="atp" label="ATP" />
                     <SortHeader col="wta" label="WTA" />
-                    <SortHeader col="combined" label="Combined" />
+                    <SortHeader col="combined" label="Comb." />
                   </tr>
                 </thead>
                 <tbody>
