@@ -365,12 +365,15 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
   const dispRoundsWithMatches = displayData.roundsWithMatches
   const dispCompletedCount = displayData.completedMatchesCount
 
-  // Fixed name column width based on longest username — shared across all absolute-positioned rows
-  const nameColWidth = Math.max(70, ...entries.map(e => e.username.length * 8.5)) + 8
-
   const numRounds = entries.length > 0 ? entries[0].round_points.length : (t.num_rounds ?? ROUND_COLORS.length)
   // Scale and column structure always reflect the full (server) state so bars grow as you scrub right
   const finalPlayed = roundsWithMatches.includes(numRounds)
+
+  // Fixed name column width based on longest username — shared across all absolute-positioned rows.
+  // When the top 3 get a place icon (🏆/🥈/🥉) it shares this same cell, so reserve extra room for
+  // it too — otherwise a draw with only short usernames sizes the column just for the text, and the
+  // icon on top of that pushes the name into ellipsis truncation.
+  const nameColWidth = Math.max(70, ...entries.map(e => e.username.length * 8.5)) + 8 + (finalPlayed ? 24 : 0)
   const PLACE_ICONS = ['🏆', '🥈', '🥉']
 
   const activeRounds = roundsWithMatches.length > 0
