@@ -278,6 +278,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
   const entries = rawData?.entries ?? []
   const completedMatchesCount = rawData?.completed_matches_count ?? 0
   const roundsWithMatches = rawData?.rounds_with_matches ?? []
+  const completedRoundNumsFromServer = rawData?.completed_round_nums ?? null
   const matchesTimeline = rawData?.matches_timeline ?? []
   const userPredictions = rawData?.user_predictions ?? {}
 
@@ -338,8 +339,11 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
     return Math.max(...vals.map(v => v ?? 0), 1)
   })
 
+  // Prefer the server's authoritative "every non-bye match in this round is done"
+  // list; fall back to the old "not the latest round" heuristic if it's missing
+  // (e.g. briefly during a frontend/backend deploy gap).
   const completedRoundNums = new Set(
-    roundsWithMatches.filter((r, i) => i < roundsWithMatches.length - 1 || finalPlayed)
+    completedRoundNumsFromServer ?? roundsWithMatches.filter((r, i) => i < roundsWithMatches.length - 1 || finalPlayed)
   )
   const roundWinnerSets = activeRounds.map((roundIdx) => {
     if (!completedRoundNums.has(roundIdx + 1)) return null
