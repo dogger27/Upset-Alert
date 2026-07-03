@@ -12,6 +12,7 @@ services:
       - LOG_FILE=/logs/backend.log
       - SECRET_KEY=${SECRET_KEY:-change-me-to-a-long-random-string}
       - RESEND_API_KEY=${RESEND_API_KEY}
+      - ENVIRONMENT=production
     dns:
       - 8.8.8.8
       - 1.1.1.1

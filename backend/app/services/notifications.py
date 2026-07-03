@@ -50,11 +50,30 @@ async def notify_round_complete(tournament_id: int, round_number: int) -> None:
     showing their standing after this round in every qualifying group.
     Groups / global with fewer than 2 participants are excluded.
     """
+    from sqlalchemy.exc import IntegrityError
     from app.services.email import send_round_complete_notification
+    from app.services.system_log import app_log
+    from app.models.notification import RoundCompleteNotification
 
     async with AsyncSessionLocal() as db:
         tournament = await db.get(Draw, tournament_id)
         if not tournament:
+            return
+
+        already_sent = await db.scalar(
+            select(RoundCompleteNotification.id).where(
+                RoundCompleteNotification.draw_id == tournament_id,
+                RoundCompleteNotification.round_number == round_number,
+            )
+        )
+        if already_sent:
+            await app_log(
+                "warning", "notifications",
+                f"Round-complete email for round {round_number} of draw {tournament_id} "
+                f"already sent — resend blocked",
+                {"draw_id": tournament_id, "round_number": round_number},
+                dedup_key=f"round-complete-dupe-{tournament_id}-{round_number}",
+            )
             return
 
         round_name = _email_round_label(tournament.round_name(round_number))
@@ -125,6 +144,29 @@ async def notify_round_complete(tournament_id: int, round_number: int) -> None:
             to_notify = round_pref_ids
         if not to_notify:
             return
+
+        # Claim this (draw, round) before doing any more work / sending anything.
+        # The unique constraint catches a concurrent duplicate trigger; the
+        # already_sent check above catches one that arrives later (e.g. next day).
+        db.add(RoundCompleteNotification(
+            draw_id=tournament_id, round_number=round_number, recipient_count=len(to_notify),
+        ))
+        try:
+            await db.commit()
+        except IntegrityError:
+            await db.rollback()
+            await app_log(
+                "warning", "notifications",
+                f"Round-complete email for round {round_number} of draw {tournament_id} "
+                f"already sent — resend blocked (race)",
+                {"draw_id": tournament_id, "round_number": round_number},
+                dedup_key=f"round-complete-dupe-{tournament_id}-{round_number}",
+            )
+            return
+        logger.info(
+            "Round-complete email batch claimed for draw %d round %d (%s) — %d recipient(s)",
+            tournament_id, round_number, round_name, len(to_notify),
+        )
 
         # Points for only the just-completed round (to determine round winner)
         pts_table = _points_table(tournament)

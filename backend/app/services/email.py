@@ -63,6 +63,12 @@ def _send(params: resend.Emails.SendParams) -> Optional[Exception]:
 async def send_async(params: resend.Emails.SendParams) -> None:
     if not settings.resend_api_key:
         return  # Email disabled in this environment (no RESEND_API_KEY set)
+    if settings.environment != "production":
+        # Local/dev processes can inherit a real RESEND_API_KEY from the shell
+        # environment; without this guard they'd send real emails to real users
+        # any time the dev server's scheduler polls a live tournament.
+        logger.info("Skipping email send (ENVIRONMENT=%r, not 'production'): %r", settings.environment, params.get("subject"))
+        return
     from app.services.system_log import app_log
     exc = await asyncio.to_thread(_send, params)
     to = params.get("to", [])
