@@ -151,7 +151,7 @@ function EloInfoPopup({ onClose }) {
   )
 }
 
-export default function H2HPanel({ slug1, slug2, player1, player2, tournSurface, tournGender, onClose }) {
+export default function H2HPanel({ slug1, slug2, player1, player2, tournSurface, tournGender, beforeDrawId, beforeRound, onClose }) {
   const [surfFilter, setSurfFilter] = useState('all') // 'all' | 'surface'
   const [showEloInfo, setShowEloInfo] = useState(false)
 
@@ -163,15 +163,18 @@ export default function H2HPanel({ slug1, slug2, player1, player2, tournSurface,
 
   // Form is sourced from our own db (not the TE scrape behind getH2H above), so
   // fetch it independently — it should render immediately, not wait on get_h2h.
+  // beforeDrawId/beforeRound restrict Form to results before that match's date,
+  // so viewing an old draw shows form leading up to it, not each player's
+  // current form.
   const { data: form_p1 } = useQuery({
-    queryKey: ['h2h-form', slug1],
-    queryFn: () => getPlayerForm(slug1),
+    queryKey: ['h2h-form', slug1, beforeDrawId, beforeRound],
+    queryFn: () => getPlayerForm(slug1, { beforeDrawId, beforeRound }),
     enabled: !!slug1,
     staleTime: 5 * 60 * 1000,
   })
   const { data: form_p2 } = useQuery({
-    queryKey: ['h2h-form', slug2],
-    queryFn: () => getPlayerForm(slug2),
+    queryKey: ['h2h-form', slug2, beforeDrawId, beforeRound],
+    queryFn: () => getPlayerForm(slug2, { beforeDrawId, beforeRound }),
     enabled: !!slug2,
     staleTime: 5 * 60 * 1000,
   })
