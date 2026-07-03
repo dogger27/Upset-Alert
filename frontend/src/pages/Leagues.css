@@ -37,29 +37,56 @@
   line-height: 1;
 }
 
-.leagues-selector-toggle {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 1rem;
-  color: var(--text-muted);
-  padding: 0.2rem 0.3rem;
-  line-height: 1;
+/* Native <select> styled as a bordered box, with its own text hidden so only
+   the custom arrow shows — clicking it opens the OS-native option list
+   immediately (no intermediate custom popover). */
+.leagues-selector-wrap {
+  position: relative;
+  display: inline-flex;
   align-self: center;
 }
-.leagues-selector-toggle:hover { color: var(--text); }
-
-.leagues-selector-popover {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 20;
-  background: white;
-  border: 1px solid var(--border);
+.leagues-selector-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  width: 44px;
+  height: 38px;
+  border: 1.5px solid var(--border);
   border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.14);
-  padding: 0.5rem;
+  background: white;
+  color: transparent;
+  cursor: pointer;
 }
+.leagues-selector-select:hover { background: #f5f5f5; }
+.leagues-selector-select:focus {
+  outline: 2px solid var(--green-dark);
+  outline-offset: 1px;
+}
+.leagues-selector-arrow {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  color: var(--text);
+  pointer-events: none;
+}
+
+.leagues-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  color: var(--text);
+  cursor: pointer;
+  align-self: center;
+}
+.leagues-icon-btn:hover { background: #f5f5f5; }
 
 /* ── Top-right controls (selector + action buttons) ── */
 .leagues-top-right {
@@ -77,34 +104,3 @@
   margin-left: 1rem;
 }
 
-/* ── League selector dropdown ── */
-.league-selector {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.league-selector-label {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-
-.league-selector-select {
-  font-family: inherit;
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: var(--text);
-  border: 1.5px solid var(--border);
-  border-radius: 6px;
-  padding: 0.38rem 0.65rem;
-  background: white;
-  cursor: pointer;
-  min-width: 140px;
-}
-
-.league-selector-select:focus {
-  outline: 2px solid var(--green-dark);
-  outline-offset: 1px;
-}

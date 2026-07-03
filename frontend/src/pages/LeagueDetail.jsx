@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useOutletContext } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getLeague, getLeagueTournaments, getRoundScores, updateLeague, setMemberAdmin, removeMember, deleteLeague, shareLeagueByEmail, getGrandSlamTotals } from '../api/leagues'
 import { getGlobalRoundScores, getGlobalDraws, getGlobalGSTotals, listTournaments } from '../api/tournaments'
@@ -60,8 +60,9 @@ export default function LeagueDetail() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const qc = useQueryClient()
-  const [editing, setEditing] = useState(false)
-  const [showInvite, setShowInvite] = useState(false)
+  // Settings/Invite buttons live in the parent Leagues.jsx top bar now (next to
+  // the league selector arrow); this page just owns the modals they open.
+  const { editing, setEditing, showInvite, setShowInvite } = useOutletContext()
 
   const [statusFilter, setStatusFilter] = useState(null) // null = auto (first non-empty)
   const [memberSortCol, setMemberSortCol] = useState(null) // null | 'atp' | 'wta' | 'combined'
@@ -124,29 +125,10 @@ export default function LeagueDetail() {
   if (!isGlobal && !league) return null
 
   const isOwner = !isGlobal && user?.id === league.owner.id
-  const canInvite = !isGlobal && (isOwner || league.allow_member_invites)
   const memberCount = isGlobal ? (gsData?.members?.length ?? 0) : league.member_count
 
   return (
     <div className="league-detail">
-      {(canInvite || isOwner) && (
-      <div className="league-detail-header">
-        <div className="league-header-actions">
-          {canInvite && (
-            <button className="btn-secondary" onClick={() => setShowInvite(true)}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{verticalAlign:'-2px',marginRight:'5px'}}><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-              Share / Invite
-            </button>
-          )}
-          {isOwner && (
-            <button className="btn-secondary" onClick={() => setEditing(s => !s)}>
-              {editing ? 'Cancel' : 'Settings'}
-            </button>
-          )}
-        </div>
-      </div>
-      )}
-
       {showInvite && (
         <InviteModal league={league} onClose={() => setShowInvite(false)} />
       )}
