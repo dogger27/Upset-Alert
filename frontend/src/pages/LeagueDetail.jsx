@@ -98,14 +98,17 @@ export default function LeagueDetail() {
   })
   const drawCountMap = useMemo(() => Object.fromEntries(drawCountsRaw.map(r => [r.user_id, r.draw_count])), [drawCountsRaw])
 
-  // Group non-upcoming tournaments by display status: Open → Active → Last Week → Previous.
-  // Within each group sort by tier desc, then start_date desc.
-  const STATUS_ORDER = { open: 0, active: 1, lastweek: 2, previous: 3 }
+  // Group non-upcoming tournaments by display status: Open → Active → Previous.
+  // On this page only, "Last Week" is folded into "Previous" (no separate tab) —
+  // Within each group sort by tier desc, then start_date desc, so the merged
+  // Previous bucket still shows Last Week's more recent draws first.
+  const STATUS_ORDER = { open: 0, active: 1, previous: 2 }
   const categoryGroups = useMemo(() => {
     const cohortInfo = computeCohortInfo(allTournaments)
     const groups = new Map()
     for (const lt of leagueTournaments) {
-      const ds = getDisplayStatus(lt.tournament, cohortInfo)
+      const rawDs = getDisplayStatus(lt.tournament, cohortInfo)
+      const ds = rawDs === 'lastweek' ? 'previous' : rawDs
       if (ds === 'upcoming') continue
       if (lt.picker_count <= 1) continue
       if (!groups.has(ds)) groups.set(ds, { key: ds, label: DISPLAY_STATUS_LABELS[ds], order: STATUS_ORDER[ds] ?? 9, items: [] })
@@ -142,7 +145,7 @@ export default function LeagueDetail() {
         {/* Draws */}
         <div className="card league-tournaments-section">
           {(() => {
-            const STATUS_TABS = ['open', 'active', 'lastweek', 'previous']
+            const STATUS_TABS = ['open', 'active', 'previous']
             const countByStatus = Object.fromEntries(STATUS_TABS.map(s => [s, 0]))
             for (const g of categoryGroups) countByStatus[g.key] = g.items.length
             const firstNonEmpty = categoryGroups[0]?.key ?? 'open'
