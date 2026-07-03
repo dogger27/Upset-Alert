@@ -60,6 +60,8 @@ export default function LeagueDetail() {
   const [showInvite, setShowInvite] = useState(false)
 
   const [statusFilter, setStatusFilter] = useState(null) // null = auto (first non-empty)
+  const [memberSortCol, setMemberSortCol] = useState(null) // null | 'atp' | 'wta' | 'combined'
+  const [memberSortDir, setMemberSortDir] = useState('desc')
 
   const { data: league, isLoading } = useQuery({
     queryKey: ['league', id],
@@ -124,9 +126,6 @@ export default function LeagueDetail() {
       <div className="league-detail-header">
         <div>
           <h1>{league.name}</h1>
-          <p className="muted">
-            {league.member_count} member{league.member_count !== 1 ? 's' : ''}
-          </p>
         </div>
         <div className="league-header-actions">
           {canInvite && (
@@ -209,30 +208,68 @@ export default function LeagueDetail() {
 
         {/* Members sidebar */}
         <div className="card league-members-section">
-          <h2>Members</h2>
+          <h2>Members ({league.member_count})</h2>
           <p className="league-members-subtitle">{gsData?.year ?? new Date().getFullYear()} Grand Slam Point Tally</p>
-          <table className="league-members-table">
-            <thead>
-              <tr>
-                <th className="lmt-name" />
-                <th className="lmt-pts">ATP</th>
-                <th className="lmt-pts">WTA</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(gsData?.members ?? league.members.map(m => ({ user_id: m.id, username: m.username, full_name: m.full_name, atp_points: null, wta_points: null }))).map(m => (
-                <tr key={m.user_id}>
-                  <td className="lmt-name">
-                    <a href={`/draw-history?user=${m.user_id}`} className="lmt-name-link username-hover" data-tooltip={`${m.full_name || m.username}:\nShow Draw History\n(${drawCountMap[m.user_id] ?? 0} draws competed)`}>
-                      <span className="lmt-name-text">{m.username}</span>
-                    </a>
-                  </td>
-                  <td className="lmt-pts">{m.atp_points ?? '–'}</td>
-                  <td className="lmt-pts">{m.wta_points ?? '–'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {(() => {
+            const rawMembers = gsData?.members ?? league.members.map(m => ({ user_id: m.id, username: m.username, full_name: m.full_name, atp_points: null, wta_points: null }))
+            const withCombined = rawMembers.map(m => ({
+              ...m,
+              combined_points: (m.atp_points != null && m.wta_points != null) ? m.atp_points + m.wta_points : null,
+            }))
+            const sortKey = { atp: 'atp_points', wta: 'wta_points', combined: 'combined_points' }[memberSortCol]
+            const members = sortKey
+              ? [...withCombined].sort((a, b) => {
+                  const av = a[sortKey] ?? -Infinity
+                  const bv = b[sortKey] ?? -Infinity
+                  return memberSortDir === 'desc' ? bv - av : av - bv
+                })
+              : withCombined
+
+            function handleSort(col) {
+              if (memberSortCol === col) {
+                setMemberSortDir(d => d === 'desc' ? 'asc' : 'desc')
+              } else {
+                setMemberSortCol(col)
+                setMemberSortDir('desc')
+              }
+            }
+
+            function SortHeader({ col, label }) {
+              const active = memberSortCol === col
+              return (
+                <th className="lmt-pts lmt-pts--sortable" onClick={() => handleSort(col)}>
+                  {label}{active && <span className="lmt-sort-arrow">{memberSortDir === 'desc' ? ' ▼' : ' ▲'}</span>}
+                </th>
+              )
+            }
+
+            return (
+              <table className="league-members-table">
+                <thead>
+                  <tr>
+                    <th className="lmt-name-th" />
+                    <SortHeader col="atp" label="ATP" />
+                    <SortHeader col="wta" label="WTA" />
+                    <SortHeader col="combined" label="Combined" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {members.map(m => (
+                    <tr key={m.user_id}>
+                      <td className="lmt-name">
+                        <a href={`/draw-history?user=${m.user_id}`} className="lmt-name-link username-hover" data-tooltip={`${m.full_name || m.username}:\nShow Draw History\n(${drawCountMap[m.user_id] ?? 0} draws competed)`}>
+                          <span className="lmt-name-text">{m.username}</span>
+                        </a>
+                      </td>
+                      <td className="lmt-pts">{m.atp_points ?? '–'}</td>
+                      <td className="lmt-pts">{m.wta_points ?? '–'}</td>
+                      <td className="lmt-pts">{m.combined_points ?? '–'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )
+          })()}
         </div>
       </div>
 
