@@ -224,6 +224,7 @@ td.lmt-name { text-align: left; color: var(--text); max-width: 130px; display: f
 }
 .lt-draws-header h2 {
   position: absolute; left: 0; margin: 0;
+  font-size: 1.3rem;
 }
 
 .lt-status-tabs {
@@ -231,11 +232,11 @@ td.lmt-name { text-align: left; color: var(--text); max-width: 130px; display: f
 }
 
 .lt-status-tab {
-  padding: 0.3rem 0.85rem;
+  padding: 0.45rem 1.15rem;
   border: 1.5px solid var(--green-dark);
   border-radius: 0;
   background: transparent;
-  font-size: 0.8rem; font-weight: 600;
+  font-size: 0.95rem; font-weight: 600;
   color: var(--green-dark);
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
@@ -394,9 +395,9 @@ td.lmt-name { text-align: left; color: var(--text); max-width: 130px; display: f
 /* ── Round progress bar chart ── */
 .lt-progress-block {
   padding: 0.9rem 0.75rem;
-  border: 1.5px solid var(--border);
+  border: 2px solid #aab0b5;
   border-radius: 8px;
-  margin-bottom: 0.75rem;
+  margin-bottom: 1.5rem;
 }
 .lt-progress-block:last-of-type { margin-bottom: 0; }
 
