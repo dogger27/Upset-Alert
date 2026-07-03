@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60 * 24 * 7  # 1 week
     wiki_api_url: str = "https://en.wikipedia.org/w/api.php"
     resend_api_key: str = ""
+    environment: str = "development"
 
     class Config:
         env_file = ".env"
