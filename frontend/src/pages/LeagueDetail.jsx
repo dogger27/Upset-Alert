@@ -182,16 +182,27 @@ export default function LeagueDetail() {
                   <p className="muted">No draws for this status.</p>
                 ) : (
                   <div className="lt-category-group">
-                    {visibleGroup.items.map(({ tournament: t, picker_count }) => (
-                      <RoundProgressChart
-                        key={t.id}
-                        tournament={t}
-                        pickerCount={picker_count}
-                        leagueId={isGlobal ? null : Number(id)}
-                        leagueMemberCount={isGlobal ? null : league.member_count}
-                        showRealName={isGlobal ? false : league.show_real_name}
-                      />
-                    ))}
+                    {(() => {
+                      // Same name with both M and F present (Grand Slams, or any
+                      // other event running men's + women's draws simultaneously)
+                      // → disambiguate with "Men"/"Women" after the name.
+                      const gendersByName = new Map()
+                      for (const { tournament: t } of visibleGroup.items) {
+                        if (!gendersByName.has(t.name)) gendersByName.set(t.name, new Set())
+                        gendersByName.get(t.name).add(t.gender)
+                      }
+                      return visibleGroup.items.map(({ tournament: t, picker_count }) => (
+                        <RoundProgressChart
+                          key={t.id}
+                          tournament={t}
+                          pickerCount={picker_count}
+                          leagueId={isGlobal ? null : Number(id)}
+                          leagueMemberCount={isGlobal ? null : league.member_count}
+                          showRealName={isGlobal ? false : league.show_real_name}
+                          showGenderLabel={gendersByName.get(t.name)?.size > 1}
+                        />
+                      ))
+                    })()}
                   </div>
                 )}
               </>
@@ -284,7 +295,7 @@ function getRoundLabel(index, numRounds) {
 
 const ROW_SLOT = 41 // px per row slot (bar height 34px + gap 7px)
 
-export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMemberCount, showRealName }) {
+export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMemberCount, showRealName, showGenderLabel }) {
   const { user } = useAuth()
   const [toast, setToast] = useState(null)
   const toastKey = useRef(0)
@@ -413,7 +424,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
             </span>
           )}
         </div>
-        <span className="lt-progress-title">{t.name} {t.year}</span>
+        <span className="lt-progress-title">{t.name}{showGenderLabel ? ` ${t.gender === 'M' ? 'Men' : 'Women'}` : ''} {t.year}</span>
         {t.surface && <span className="lt-progress-meta">{t.surface}</span>}
       </div>
 
