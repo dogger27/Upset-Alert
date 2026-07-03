@@ -342,6 +342,13 @@ async def sync_season(
             year,
             [(d[0], d[1], d[2]) for d in dups],
         )
+        from app.services.system_log import app_log
+        await app_log(
+            "warning", "discovery",
+            f"Duplicate tournament records found after sync for {year} — needs manual review",
+            {"year": year, "collisions": [str(d) for d in dups]},
+            dedup_key=f"sync_duplicates_{year}", dedup_hours=24,
+        )
 
     summary = dict(updated=updated, inserted=inserted, skipped=skipped, duplicates_found=len(dups))
     logger.info("Sync complete for %d: %s", year, summary)
@@ -352,11 +359,20 @@ async def _find_duplicates(db: AsyncSession, year: int) -> list:
     """
     Detect real duplicate records.
 
-    Two strategies:
+    Three strategies:
     1. Same name + gender: always a duplicate regardless of tier.
     2. Same gender + category + start_date for unique-per-slot tiers (500/1000/GS):
        these tiers have exactly one tournament per slot, so two records = duplicate.
        ATP/WTA 250 are intentionally excluded because multiple run simultaneously.
+    3. Same gender + category + start_date + city, for ANY tier (including 500/250).
+       Strategy 1 misses duplicates discovered under two different name variants
+       for the same real event (e.g. "BMW Open" vs "Munich" — same tournament,
+       one named after its sponsor, one after its host city); Strategy 2 misses
+       them for 500/250 tiers since multiple such events legitimately run in the
+       same week. But two *same-tier* events in the *same city* on the *same
+       date* cannot both be real — the tour doesn't schedule that — so a city
+       match closes both gaps without flagging legitimate simultaneous events
+       in different cities.
     """
     results = []
 
@@ -391,6 +407,24 @@ async def _find_duplicates(db: AsyncSession, year: int) -> list:
             Draw.start_date.isnot(None),
         )
         .group_by(Draw.gender, Draw.category, Draw.start_date)
+        .having(func.count() > 1)
+    )
+    results.extend(res.all())
+
+    # Strategy 3: same gender + category + start_date + city, any tier.
+    res = await db.execute(
+        select(
+            Draw.category,
+            Draw.gender,
+            Draw.start_date,
+            func.count().label("n"),
+        )
+        .where(
+            Draw.year == year,
+            Draw.start_date.isnot(None),
+            Draw.city.isnot(None),
+        )
+        .group_by(Draw.gender, Draw.category, Draw.start_date, func.lower(Draw.city))
         .having(func.count() > 1)
     )
     results.extend(res.all())
