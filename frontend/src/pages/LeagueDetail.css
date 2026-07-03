@@ -224,7 +224,7 @@ td.lmt-name { text-align: left; color: var(--text); max-width: 130px; display: f
 }
 .lt-draws-header h2 {
   position: absolute; left: 0; margin: 0;
-  font-size: 1.3rem;
+  font-size: 1.75rem;
 }
 
 .lt-status-tabs {
