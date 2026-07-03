@@ -101,7 +101,16 @@
   flex-shrink: 0;
 }
 .leagues-icon-btn:hover { background: #f5f5f5; }
-.leagues-icon-btn svg { width: 24px; height: 24px; }
+.leagues-icon-btn svg { width: 24px; height: 24px; flex-shrink: 0; }
+
+.leagues-icon-btn--labeled {
+  width: auto;
+  padding: 0 12px 0 10px;
+  gap: 6px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
 
 /* ── Top-right controls (selector + action buttons) ── */
 .leagues-top-right {

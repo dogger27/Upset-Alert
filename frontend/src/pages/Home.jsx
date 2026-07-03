@@ -263,8 +263,8 @@ function LeagueStrip({ memberLeagues, globalCount, onCreateLeague, onJoinLeague 
       <div className="dash-league-actions">
         <div className="dash-league-actions-header">Leagues</div>
         <div className="dash-league-actions-btns">
-          <button className="league-sidebar-btn" onClick={onCreateLeague}>Create League</button>
-          <button className="league-sidebar-btn" onClick={onJoinLeague}>Join League</button>
+          <button className="league-sidebar-btn" onClick={onCreateLeague}>Create</button>
+          <button className="league-sidebar-btn" onClick={onJoinLeague}>Join</button>
         </div>
       </div>
       <div className="dash-league-divider" />

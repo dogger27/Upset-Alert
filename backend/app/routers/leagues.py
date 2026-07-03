@@ -155,7 +155,7 @@ async def delete_league(
     league = await db.get(League, league_id)
     if not league:
         raise HTTPException(404, "League not found")
-    if league.owner_id != current_user.id:
+    if league.owner_id != current_user.id and not current_user.is_admin:
         raise HTTPException(403, "Only the league owner can delete this league")
     await db.delete(league)
     await db.commit()
@@ -176,7 +176,7 @@ async def update_league(
     league = result.scalar_one_or_none()
     if not league:
         raise HTTPException(404, "League not found")
-    if league.owner_id != current_user.id:
+    if league.owner_id != current_user.id and not current_user.is_admin:
         raise HTTPException(403, "Only the league owner can update settings")
 
     if body.name is not None:
@@ -282,7 +282,7 @@ async def set_member_admin(
         raise HTTPException(404, "League not found")
 
     caller = next((m for m in league.members if m.user_id == current_user.id), None)
-    if not caller or not caller.is_admin:
+    if not current_user.is_admin and (not caller or not caller.is_admin):
         raise HTTPException(403, "Only admins can change admin status")
 
     if user_id == league.owner_id:
@@ -313,7 +313,7 @@ async def remove_member(
         raise HTTPException(404, "League not found")
 
     caller = next((m for m in league.members if m.user_id == current_user.id), None)
-    if not caller or not caller.is_admin:
+    if not current_user.is_admin and (not caller or not caller.is_admin):
         raise HTTPException(403, "Only admins can remove members")
 
     if user_id == league.owner_id:
