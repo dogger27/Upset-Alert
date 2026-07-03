@@ -147,7 +147,9 @@
 .dash-league-actions .league-sidebar-btn {
   white-space: nowrap;
   flex: 0 0 auto;
-  width: 88px;
+  padding-left: 7.5px;
+  padding-right: 7.5px;
+  width: 83px;
 }
 .dash-league-divider {
   width: 1px;
