@@ -183,7 +183,7 @@ export default function Navbar() {
           <div className="build-indicator">
             <div className="build-dot" />
             <div className="build-tooltip">
-              Last page update:<br />{buildTime}
+              Last Code Update:<br />{buildTime}
             </div>
           </div>
         )}
