@@ -244,7 +244,7 @@ export default function LeagueDetail() {
                   {members.map(m => (
                     <tr key={m.user_id}>
                       <td className="lmt-name">
-                        <a href={`/draw-history?user=${m.user_id}`} className="lmt-name-link username-hover" data-tooltip={`${m.full_name || m.username}:\nShow Draw History\n(${drawCountMap[m.user_id] ?? 0} draws competed)`}>
+                        <a href={`/draw-history?user=${m.user_id}`} className="lmt-name-link username-hover" data-tooltip={`${m.full_name || m.username}:\nDraw History (${drawCountMap[m.user_id] ?? 0})`}>
                           <span className="lmt-name-text">{m.username}</span>
                         </a>
                         {m.is_admin && <span className="lmt-admin-badge" title="Admin">A</span>}
@@ -422,7 +422,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
               {entries.map((entry, entryIndex) => (
                 <div key={entry.user_id} className={`lt-progress-row lt-progress-row--open${entry.user_id === user?.id ? ' lt-progress-row--me' : ''}`}>
                   <span className="lt-pos-num">{entryIndex + 1}.</span>
-                  <a href={`/draw-history?user=${entry.user_id}`} className={`lt-progress-name lt-progress-name--link username-hover${entry.user_id === user?.id ? ' lt-progress-name--me' : ''}`} data-tooltip={`${entry.full_name || entry.username}:\nShow Draw History\n(${drawCountMap[entry.user_id] ?? 0} draws competed)`}>
+                  <a href={`/draw-history?user=${entry.user_id}`} className={`lt-progress-name lt-progress-name--link username-hover${entry.user_id === user?.id ? ' lt-progress-name--me' : ''}`} data-tooltip={`${entry.full_name || entry.username}:\nDraw History (${drawCountMap[entry.user_id] ?? 0})`}>
                     <span className="lt-progress-name-text">{entry.username}</span>
                   </a>
                 </div>
@@ -464,7 +464,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                 style={{ transform: `translateY(${rank * ROW_SLOT}px)` }}
               >
                 <span className="lt-pos-num">{rank + 1}.</span>
-                <a href={`/draw-history?user=${entry.user_id}`} className={`lt-progress-name lt-progress-name--link username-hover${entry.user_id === user?.id ? ' lt-progress-name--me' : ''}`} data-tooltip={`${entry.full_name || entry.username}:\nShow Draw History\n(${drawCountMap[entry.user_id] ?? 0} draws competed)`}>
+                <a href={`/draw-history?user=${entry.user_id}`} className={`lt-progress-name lt-progress-name--link username-hover${entry.user_id === user?.id ? ' lt-progress-name--me' : ''}`} data-tooltip={`${entry.full_name || entry.username}:\nDraw History (${drawCountMap[entry.user_id] ?? 0})`}>
                   {finalPlayed && rank < 3 && <span className="lt-place-icon">{PLACE_ICONS[rank]}</span>}
                   <span className="lt-progress-name-text">{entry.username}</span>
                 </a>
