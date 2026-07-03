@@ -262,23 +262,35 @@ def _estimate_round_date(draw, round_number: int) -> Optional[str]:
     batch-backfilled historical draws — every match in a finished tournament
     often shares the exact scrape timestamp, not the real play date.
 
-    Spreads round_number 1..num_rounds proportionally across the tournament's
-    own start_date..end_date span (round 1 lands early, the Final lands on
-    end_date), so within a single draw every round gets a distinct, ascending
-    date — a player never appears to play twice on the same calculated day,
-    since they play at most one match per round in a given draw.
+    Spreads round_number 1..num_rounds across the tournament's start_date..
+    end_date span (round 1 lands early, the Final lands on end_date), with a
+    strict-monotonic pass so no two rounds ever round to the same day even
+    when the tournament's real date range is short relative to num_rounds —
+    a player plays at most one match per round in a given draw, so this
+    guarantees they never appear to play twice on the same calculated date.
+    When end_date is missing, falls back to ~1 day per round from start_date
+    instead of collapsing every round onto that single day.
     """
-    if not draw.num_rounds:
+    if not draw.num_rounds or not draw.start_date:
         return draw.end_date.isoformat() if draw.end_date else None
-    if draw.start_date and draw.end_date and draw.end_date >= draw.start_date:
+
+    if draw.end_date and draw.end_date >= draw.start_date:
         total_days = (draw.end_date - draw.start_date).days
-        offset_days = round(total_days * round_number / draw.num_rounds)
-        return (draw.start_date + timedelta(days=offset_days)).isoformat()
-    if draw.end_date:
-        return draw.end_date.isoformat()
-    if draw.start_date:
-        return draw.start_date.isoformat()
-    return None
+    else:
+        # No reliable end date — assume roughly one day per round.
+        total_days = draw.num_rounds - 1
+
+    offsets = [round(total_days * r / draw.num_rounds) for r in range(1, draw.num_rounds + 1)]
+    for i in range(1, len(offsets)):
+        if offsets[i] <= offsets[i - 1]:
+            offsets[i] = offsets[i - 1] + 1
+    # Compress back down if the monotonic pass pushed past total_days.
+    overflow = offsets[-1] - total_days
+    if overflow > 0:
+        offsets = [max(o - overflow, i) for i, o in enumerate(offsets)]
+
+    offset_days = offsets[round_number - 1]
+    return (draw.start_date + timedelta(days=offset_days)).isoformat()
 
 
 def _form_score(scores_json: Optional[list], is_player1: bool) -> str:
