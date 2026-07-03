@@ -5,6 +5,22 @@
   max-height: calc(100vh - 130px);
   padding: 1rem 0.75rem 1rem;
   background: var(--bg);
+  scrollbar-width: auto;
+}
+
+.bracket-scroll::-webkit-scrollbar {
+  height: 14px;
+  width: 14px;
+}
+
+.bracket-scroll::-webkit-scrollbar-track {
+  background: var(--bg-alt, #eee);
+}
+
+.bracket-scroll::-webkit-scrollbar-thumb {
+  background: var(--green);
+  border-radius: 7px;
+  border: 3px solid var(--bg-alt, #eee);
 }
 
 
