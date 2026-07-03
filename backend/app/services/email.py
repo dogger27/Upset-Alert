@@ -302,9 +302,8 @@ async def send_round_complete_notification(
         "to": [email],
         "subject": f"{round_name} Complete: {_tournament_label(tournament_name, category, gender)}",
         "html": f"""{_WRAP_OPEN}{_LOGO_HEADER}{_BODY_OPEN}
-          <h1 style="font-size:22px;margin:0 0 12px">{round_name} is complete!</h1>
-          <p style="color:#444;line-height:1.6;margin:0 0 12px">Here are your standings after {round_name}
-            at <strong>{tournament_name} {year}</strong>:</p>
+          <h1 style="font-size:22px;margin:0 0 12px">{_tournament_label(tournament_name, category, gender)} {round_name} is complete!</h1>
+          <p style="color:#444;line-height:1.6;margin:0 0 12px">Here are the current standings for this draw:</p>
           <table style="width:100%;border-collapse:collapse;font-size:14px;margin:0 0 20px">
             <thead>
               <tr style="background:#f3f4f6">
