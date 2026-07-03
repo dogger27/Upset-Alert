@@ -430,8 +430,6 @@ async def global_draws(db: AsyncSession = Depends(get_db)):
 
     out = []
     for draw_id, picker_count in fully_entered.items():
-        if picker_count <= 1:
-            continue
         t = await db.get(Draw, draw_id)
         if t:
             t.status = t.computed_status
