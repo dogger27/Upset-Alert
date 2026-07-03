@@ -55,6 +55,7 @@
 .leagues-selector-wrap {
   position: relative;
   display: inline-flex;
+  align-self: flex-end;
 }
 .leagues-selector-select {
   appearance: none;
@@ -79,7 +80,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 2rem;
+  font-size: 2.6rem;
   line-height: 1;
   color: var(--text);
   pointer-events: none;
