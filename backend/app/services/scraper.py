@@ -514,11 +514,28 @@ def _parse_16team_section(
     players_out: list[PlayerEntry],
     matches_out: list[MatchResult],
     draw_size: int,
-) -> None:
+    include_section_final: bool = True,
+) -> Optional[list[Optional[int]]]:
     """
-    Parse one {{16TeamBracket-Compact-Tennis5/3}} section.
+    Parse one {{16TeamBracket-Compact-Tennis5/3}} (or ...-Byes) section.
 
     bracket positions for this section: section_index*16 + 1 .. section_index*16 + 16
+
+    include_section_final controls whether this section's own local "RD4" is
+    treated as a real match. Some Wikipedia draws (e.g. the "-Byes" template
+    variant used for 56/64-draw Masters events) pair each 16-team section's
+    own RD4 with an *external*, separate {{8TeamBracket}} "Finals" section that
+    already contains the authoritative Quarterfinal/Semifinal/Final results —
+    the section's own RD4 field there is just an editorial re-display of the
+    same real-world QF match, not a second one. Parsing it as a real match
+    creates a duplicate (round_number, match_number) key that collides with
+    the one the external finals bracket produces for the same round, and one
+    silently clobbers the other on upsert.
+    When include_section_final is False, RD4 is skipped entirely (no match
+    emitted) and this section's two Round-3 survivors are returned instead,
+    so the caller can feed them into the external finals bracket's own QF
+    pairing (which expects genuine pairs of Round-3 survivors, not a single
+    already-reduced section champion).
     """
     base_pos = section_index * 16  # 0-based offset
 
@@ -579,8 +596,10 @@ def _parse_16team_section(
         pos = base_pos + local
         rd_occupant[1][local] = pos
 
-    # Process RD1..RD4 — generates matches for all 4 rounds within this section
-    for rd in range(1, 5):
+    # Process RD1..RD4 (or RD1..RD3 when the section's own final round is
+    # actually handled by an external finals bracket — see docstring).
+    max_local_round = 4 if include_section_final else 3
+    for rd in range(1, max_local_round + 1):
         slots_this_rd = 16 // (2 ** (rd - 1))   # 16, 8, 4
         slots_next_rd = slots_this_rd // 2
         for match_idx in range(slots_next_rd):
@@ -637,6 +656,11 @@ def _parse_16team_section(
             ))
 
     # The section's RD4 winner feeds the finals bracket (handled by parse_8team_section).
+    if not include_section_final:
+        # Round-3 survivors, in bracket-position order — the two players who
+        # would have met in this section's own (skipped) RD4.
+        return [rd_occupant[4].get(1), rd_occupant[4].get(2)]
+    return None
 
 
 def _parse_8team_finals(
@@ -785,28 +809,39 @@ def parse_draw(wikitext: str) -> ParsedDraw:
         draw_size = num_sections * 16
         num_rounds = num_sections.bit_length() + 2  # rough estimate
 
-    # Parse each 16TeamBracket section
-    # Each section always has 4 internal rounds (RD1–RD4); with global_round_offset=1
-    # the last internal round is always global round 4, regardless of draw size.
+    # Parse each 16TeamBracket section.
+    # For a 128-draw (8 sections), each section runs all 4 internal rounds and
+    # produces ONE Round-of-16 survivor — 8 sections give the 8 real
+    # quarterfinalists the external finals bracket needs.
+    # For a 64-draw (4 sections) with a *separate* finals bracket, the section's
+    # own "RD4" is just an editorial re-display of a match the finals bracket
+    # already covers authoritatively (see _parse_16team_section docstring) — so
+    # each section only runs 3 internal rounds and contributes its TWO Round-3
+    # survivors (not one already-reduced champion), giving 4×2=8 quarterfinalists.
     SECTION_LAST_ROUND = 4
+    section_final_is_external = num_sections == 4 and bool(sections_8)
     section_winners: list[Optional[int]] = []
     for idx, (_, body) in enumerate(sections_16):
         params = _parse_params(body)
-        _parse_16team_section(
+        round3_survivors = _parse_16team_section(
             params=params,
             section_index=idx,
             global_round_offset=1,
             players_out=players,
             matches_out=matches,
             draw_size=draw_size,
+            include_section_final=not section_final_is_external,
         )
-        section_final_matches = [
-            m for m in matches
-            if m.round_number == SECTION_LAST_ROUND
-            and m.match_number == idx + 1
-        ]
-        winner_pos = section_final_matches[-1].winner_position if section_final_matches else None
-        section_winners.append(winner_pos)
+        if section_final_is_external:
+            section_winners.extend(round3_survivors or [None, None])
+        else:
+            section_final_matches = [
+                m for m in matches
+                if m.round_number == SECTION_LAST_ROUND
+                and m.match_number == idx + 1
+            ]
+            winner_pos = section_final_matches[-1].winner_position if section_final_matches else None
+            section_winners.append(winner_pos)
 
     # Parse the finals bracket
     if sections_8:
