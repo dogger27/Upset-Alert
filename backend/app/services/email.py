@@ -284,7 +284,8 @@ async def send_tournament_complete_notification(
 
 
 def _round_complete_league_block(name: str, rows: list[tuple], is_last: bool) -> str:
-    """One side-by-side league: rotated grey name label + numbered Name/Score table.
+    """One vertically-stacked league: full-width table with the league name as a
+    header spanning above the Name / Score column headers, then the numbered list.
 
     rows: [(rank, competitor_name, score, is_you), ...] in rank order.
     A row with rank is None is an ellipsis (gap) row.
@@ -293,44 +294,38 @@ def _round_complete_league_block(name: str, rows: list[tuple], is_last: bool) ->
         if rank is None:  # ellipsis / gap row
             return (
                 '<tr style="background:#ffffff">'
-                '<td style="padding:2px 12px 2px 10px;color:#9ca3af;text-align:center">…</td>'
-                '<td>&nbsp;</td></tr>'
+                '<td colspan="2" style="padding:2px 12px;color:#9ca3af;text-align:center">…</td>'
+                '</tr>'
             )
         bg = "#cfe8ff" if you else ("#ffffff" if i % 2 == 0 else "#f9fafb")
         weight = "700" if you else "400"
         return (
             f'<tr style="background:{bg}">'
-            f'<td style="padding:6px 12px 6px 10px;white-space:nowrap;'
-            f'font-weight:{weight};color:#111">'
+            f'<td style="padding:7px 12px 7px 14px;font-weight:{weight};color:#111">'
             f'<span style="color:#9ca3af">{rank}.</span>&nbsp;{cname}</td>'
-            f'<td align="center" style="padding:6px 12px;white-space:nowrap;text-align:center;'
+            f'<td align="center" width="90" style="padding:7px 12px;text-align:center;width:90px;'
             f'font-weight:{"700" if you else "400"};color:#111">{score:g}</td>'
             f'</tr>'
         )
     body_rows = "".join(_row(i, *r) for i, r in enumerate(rows))
-    gap = "" if is_last else (
-        '<td width="18" style="width:18px;font-size:0;line-height:0">&nbsp;</td>'
-    )
+    margin = "0" if is_last else "0 0 22px"
     return (
-        # Rotated grey league-name label — stretches to the row (tallest league) height.
-        '<td bgcolor="#6b7280" valign="middle" align="center" width="34" '
-        'style="background:#6b7280;width:34px;border-radius:6px 0 0 6px">'
-        f'<div style="writing-mode:vertical-rl;transform:rotate(180deg);color:#ffffff;'
-        f'font-weight:700;font-size:13px;letter-spacing:0.4px;white-space:nowrap;'
-        f'padding:10px 0">{name}</div>'
-        '</td>'
-        # Competitor table for this league.
-        '<td valign="top" style="padding:0">'
-        '<table cellpadding="0" cellspacing="0" border="0" '
-        'style="border-collapse:collapse;font-size:13px;height:100%">'
+        f'<table width="100%" cellpadding="0" cellspacing="0" border="0" '
+        f'style="width:100%;border-collapse:collapse;font-size:14px;margin:{margin};'
+        f'border:1px solid #e5e7eb">'
+        # League name — header spanning both columns, above the Name/Score headers.
+        f'<tr><td colspan="2" style="padding:11px 12px;text-align:center;font-weight:700;'
+        f'font-size:16px;color:#111;background:#ffffff;'
+        f'border-bottom:1px solid #e5e7eb">{name}</td></tr>'
+        # Column headers.
         '<tr style="background:#f3f4f6">'
-        '<th align="left" style="padding:7px 12px 7px 10px;font-size:12px;'
-        'text-transform:uppercase;letter-spacing:0.5px;color:#6b7280">Name</th>'
-        '<th align="center" style="padding:7px 12px;font-size:12px;text-align:center;'
-        'text-transform:uppercase;letter-spacing:0.5px;color:#6b7280">Score</th>'
+        '<th align="left" style="padding:7px 12px 7px 14px;font-size:12px;'
+        'text-transform:uppercase;letter-spacing:0.5px;color:#6b7280;'
+        'border-bottom:2px solid #e5e7eb">Name</th>'
+        '<th align="center" width="90" style="padding:7px 12px;font-size:12px;text-align:center;'
+        'width:90px;text-transform:uppercase;letter-spacing:0.5px;color:#6b7280;'
+        'border-bottom:2px solid #e5e7eb">Score</th>'
         f'</tr>{body_rows}</table>'
-        '</td>'
-        f'{gap}'
     )
 
 
@@ -344,33 +339,25 @@ async def send_round_complete_notification(
     category: str = "",
     gender: str = "M",
 ) -> None:
-    """One email per user: every group's full competitor list, shown side-by-side."""
+    """One email per user: every group's competitor list, stacked vertically."""
     tournament_url = f"{BASE_URL}/tournaments/{tournament_id}"
     blocks = "".join(
         _round_complete_league_block(lg_name, rows, i == len(leagues) - 1)
         for i, (lg_name, rows) in enumerate(leagues)
     )
-    # Wider, non-clipping wrapper (the shared one caps at 560px and hides overflow),
-    # with a horizontal-scroll container so many leagues degrade gracefully.
-    wrap_open = ('<div style="font-family:sans-serif;max-width:820px;margin:0 auto;'
-                 'border-radius:8px;border:1px solid #e5e7eb">')
     await send_async({
         "from": FROM,
         "to": [email],
         "subject": f"{round_name} Complete: {_tournament_label(tournament_name, category, gender)}",
-        "html": f"""{wrap_open}{_LOGO_HEADER}{_BODY_OPEN}
+        "html": f"""{_WRAP_OPEN}{_LOGO_HEADER}{_BODY_OPEN}
           <h1 style="font-size:22px;margin:0 0 12px">{_tournament_label(tournament_name, category, gender)} {round_name} is complete!</h1>
           <p style="color:#444;line-height:1.6;margin:0 0 20px">Here are the current standings for the leagues you are competing in:</p>
-          <div style="overflow-x:auto;margin:0 0 24px">
-            <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate">
-              <tr valign="top">{blocks}</tr>
-            </table>
-          </div>
+          <div style="margin:0 0 24px">{blocks}</div>
           <a href="{tournament_url}" style="display:inline-block;padding:12px 24px;
              background:#1b4332;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
             View Draw &amp; Standings
           </a>
-        {_BODY_CLOSE}</div>""",
+        {_BODY_CLOSE}{_WRAP_CLOSE}""",
     })
 
 
