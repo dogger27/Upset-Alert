@@ -14,18 +14,6 @@ function formatBuildTime(iso) {
   } catch { return null }
 }
 
-// Register listener only once across all HMR cycles using hot.data persistence.
-// hot.data survives module replacement; `initialized` prevents duplicate listeners.
-if (import.meta.hot && !import.meta.hot.data.initialized) {
-  import.meta.hot.data.initialized = true
-  import.meta.hot.data.lastTime = null
-  import.meta.hot.data.notify = null
-  import.meta.hot.on('build-time-update', ({ time }) => {
-    const formatted = formatBuildTime(time)
-    import.meta.hot.data.lastTime = formatted
-    if (import.meta.hot.data.notify) import.meta.hot.data.notify(formatted)
-  })
-}
 
 const DRAW_CATS_MEN = [
   { key: 'draw_open:Grand Slam:M', label: 'Grand Slam' },
@@ -66,13 +54,17 @@ export default function Navbar() {
   const menuRef = useRef(null)
 
   useEffect(() => {
-    if (import.meta.hot) {
-      import.meta.hot.data.notify = setBuildTime
-      // Apply any update that arrived during the HMR unmount/remount gap
-      if (import.meta.hot.data.lastTime) setBuildTime(import.meta.hot.data.lastTime)
-      return () => { import.meta.hot.data.notify = null }
+    if (!import.meta.hot) return
+    // Restore last received time if component remounted (e.g. Navbar.jsx itself changed)
+    if (import.meta.hot.data.lastTime) setBuildTime(import.meta.hot.data.lastTime)
+    const handler = ({ time }) => {
+      const formatted = formatBuildTime(time)
+      import.meta.hot.data.lastTime = formatted
+      setBuildTime(formatted)
     }
-  }, [setBuildTime])
+    import.meta.hot.on('build-time-update', handler)
+    return () => import.meta.hot.off('build-time-update', handler)
+  }, [])
 
   useEffect(() => {
     if (!menuOpen) return
