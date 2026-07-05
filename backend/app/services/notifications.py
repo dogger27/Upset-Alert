@@ -8,7 +8,6 @@ independent of the caller's transaction.
 
 import asyncio
 import logging
-import random
 from collections import defaultdict
 from typing import Optional
 
@@ -21,7 +20,7 @@ from app.models.notification import NotificationPreference
 from app.models.prediction import UserPrediction
 from app.models.tournament import Match, Draw
 from app.models.user import User
-from app.services.scoring import rank_users, score_user, _points_table
+from app.services.scoring import rank_users, score_user
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +43,12 @@ def _email_round_label(round_name: str) -> str:
     return round_name
 
 
-async def notify_round_complete(tournament_id: int, round_number: int) -> None:
+async def notify_round_complete(
+    tournament_id: int,
+    round_number: int,
+    only_user_ids: Optional[set] = None,
+    force: bool = False,
+) -> None:
     """
     For every participant who opted into 'round_standings', send ONE email
     showing their standing after this round in every qualifying group.
@@ -60,7 +64,7 @@ async def notify_round_complete(tournament_id: int, round_number: int) -> None:
         if not tournament:
             return
 
-        already_sent = await db.scalar(
+        already_sent = None if force else await db.scalar(
             select(RoundCompleteNotification.id).where(
                 RoundCompleteNotification.draw_id == tournament_id,
                 RoundCompleteNotification.round_number == round_number,
@@ -129,7 +133,11 @@ async def notify_round_complete(tournament_id: int, round_number: int) -> None:
         )
         round_pref_ids = {r[0] for r in round_prefs_res.all()}
 
-        if is_final_round:
+        if only_user_ids is not None:
+            # Forced/test send: target these users directly (must still be eligible so
+            # they appear in the standings), ignoring opt-in / verified filters.
+            to_notify = eligible & only_user_ids
+        elif is_final_round:
             # Find who has tournament_end; subtract them — they'll get the completion email
             end_pref_res = await db.execute(
                 select(NotificationPreference.user_id)
@@ -148,37 +156,27 @@ async def notify_round_complete(tournament_id: int, round_number: int) -> None:
         # Claim this (draw, round) before doing any more work / sending anything.
         # The unique constraint catches a concurrent duplicate trigger; the
         # already_sent check above catches one that arrives later (e.g. next day).
-        db.add(RoundCompleteNotification(
-            draw_id=tournament_id, round_number=round_number, recipient_count=len(to_notify),
-        ))
-        try:
-            await db.commit()
-        except IntegrityError:
-            await db.rollback()
-            await app_log(
-                "warning", "notifications",
-                f"Round-complete email for round {round_number} of draw {tournament_id} "
-                f"already sent — resend blocked (race)",
-                {"draw_id": tournament_id, "round_number": round_number},
-                dedup_key=f"round-complete-dupe-{tournament_id}-{round_number}",
-            )
-            return
+        # A forced/test send does not claim, so it can't block the real batch.
+        if not force:
+            db.add(RoundCompleteNotification(
+                draw_id=tournament_id, round_number=round_number, recipient_count=len(to_notify),
+            ))
+            try:
+                await db.commit()
+            except IntegrityError:
+                await db.rollback()
+                await app_log(
+                    "warning", "notifications",
+                    f"Round-complete email for round {round_number} of draw {tournament_id} "
+                    f"already sent — resend blocked (race)",
+                    {"draw_id": tournament_id, "round_number": round_number},
+                    dedup_key=f"round-complete-dupe-{tournament_id}-{round_number}",
+                )
+                return
         logger.info(
             "Round-complete email batch claimed for draw %d round %d (%s) — %d recipient(s)",
             tournament_id, round_number, round_name, len(to_notify),
         )
-
-        # Points for only the just-completed round (to determine round winner)
-        pts_table = _points_table(tournament)
-        round_matches = [m for m in completed_matches if m.round_number == round_number]
-        round_pts_by_user: dict[int, float] = {}
-        for uid in eligible:
-            pred_map = {p.match_id: p.predicted_winner_id for p in preds_by_user[uid]}
-            round_pts_by_user[uid] = sum(
-                pts_table.get(m.round_number, 0)
-                for m in round_matches
-                if m.winner_id and pred_map.get(m.id) == m.winner_id
-            )
 
         # Global scores
         global_scores = {
@@ -186,12 +184,6 @@ async def notify_round_complete(tournament_id: int, round_number: int) -> None:
             for uid in eligible
         }
         global_ranked = rank_users(list(global_scores.values()), tournament.num_rounds)
-        global_rank_of = {s.user_id: i + 1 for i, s in enumerate(global_ranked)}
-
-        max_global_round = max(round_pts_by_user.values(), default=0)
-        global_round_winner_ids = [
-            uid for uid, pts in round_pts_by_user.items() if pts == max_global_round and pts > 0
-        ]
 
         # Per-league scores (≥2 participants only)
         lg_res = await db.execute(
@@ -210,19 +202,15 @@ async def notify_round_complete(tournament_id: int, round_number: int) -> None:
                 for uid in participants
             }
             lg_ranked = rank_users(list(lg_scores.values()), tournament.num_rounds)
-            lg_round_pts = {uid: round_pts_by_user[uid] for uid in participants}
-            max_lg_round = max(lg_round_pts.values(), default=0)
             league_data[lg.id] = {
-                "name":    lg.name,
-                "rank_of": {s.user_id: i + 1 for i, s in enumerate(lg_ranked)},
-                "total":   len(participants),
-                "points":  {s.user_id: s.total_points for s in lg_ranked},
-                "round_winners": [uid for uid, pts in lg_round_pts.items() if pts == max_lg_round and pts > 0],
+                "name":   lg.name,
+                "ranked": lg_ranked,  # rank-ordered UserScore list
+                "member_ids": {s.user_id for s in lg_ranked},
             }
 
         user_league_ids: dict[int, list] = defaultdict(list)
         for lg_id, data in league_data.items():
-            for uid in data["rank_of"]:
+            for uid in data["member_ids"]:
                 user_league_ids[uid].append(lg_id)
 
         users_res = await db.execute(
@@ -230,44 +218,81 @@ async def notify_round_complete(tournament_id: int, round_number: int) -> None:
         )
         user_info = {r[0]: {"email": r[1], "username": r[2]} for r in users_res.all()}
 
-    def _winner_label(winner_ids: list[int]) -> str:
-        if not winner_ids:
-            return "—"
-        uid = random.choice(winner_ids)
-        name = user_info[uid]["username"] if uid in user_info else "—"
-        others = len(winner_ids) - 1
-        if others > 0:
-            return f"{name} + {others} other{'s' if others > 1 else ''}"
-        return name
+    def _row_of(ranked: list, idx: int, me: int) -> tuple:
+        s = ranked[idx]
+        return (idx + 1, user_info.get(s.user_id, {}).get("username", "—"), s.total_points, s.user_id == me)
+
+    def _display_plan(n: int, me_idx: int, target: int) -> list:
+        """Ordered display of exactly `target` rows from an n-item ranked list,
+        anchoring the rank leaders (top) and trailers (bottom) and always keeping
+        the recipient (me_idx). `None` entries are ellipsis/gap rows. Assumes n > target."""
+        def build(h: int, t: int) -> list:
+            shown = sorted(set(range(0, min(h, n))) | set(range(max(0, n - t), n)) | {me_idx})
+            out, prev = [], None
+            for idx in shown:
+                if prev is not None and idx != prev + 1:
+                    out.append(None)  # gap
+                out.append(idx)
+                prev = idx
+            return out
+        best = None
+        for h in range(1, target + 1):
+            for t in range(1, target + 1):
+                plan = build(h, t)
+                if len(plan) != target:
+                    continue
+                content = sum(1 for x in plan if x is not None)
+                # Center the recipient: prefer a balanced top/bottom split, then more
+                # real rows, then a fuller head.
+                score = (-abs(h - t), content, h)
+                if best is None or score > best[0]:
+                    best = (score, plan)
+        if best:
+            return best[1]
+        # Defensive fallback: top rows + recipient, trimmed to `target`.
+        plan = build(target, 0)
+        if me_idx not in [x for x in plan if x is not None]:
+            plan = plan[: target - 1] + [me_idx]
+        return plan[:target]
+
+    def _standings_rows(ranked: list, me: int, limit: Optional[int] = None) -> list[tuple]:
+        """Competitor list for a group as (rank, username, score, is_you).
+        When `limit` truncates, gap rows are (None, '…', None, False)."""
+        if limit is None or len(ranked) <= limit:
+            return [_row_of(ranked, i, me) for i in range(len(ranked))]
+        me_idx = next((i for i, s in enumerate(ranked) if s.user_id == me), 0)
+        rows = []
+        for idx in _display_plan(len(ranked), me_idx, limit):
+            rows.append((None, "…", None, False) if idx is None else _row_of(ranked, idx, me))
+        return rows
 
     for uid in to_notify:
         email = user_info.get(uid, {}).get("email")
         if not email:
             continue
 
-        groups = []
+        leagues = []
+        my_league_ids = sorted(user_league_ids.get(uid, []))
         if len(eligible) >= 2:
-            groups.append(("Global", global_rank_of[uid], len(eligible), global_scores[uid].total_points, _winner_label(global_round_winner_ids)))
-        for lg_id in sorted(user_league_ids.get(uid, [])):
+            # Global truncates to the largest league this user is in, but only once
+            # Global has ≥10 people; otherwise it's shown in full.
+            largest = max((len(league_data[lg_id]["ranked"]) for lg_id in my_league_ids), default=None)
+            g_limit = largest if (len(global_ranked) >= 10 and largest is not None) else None
+            leagues.append(("Global", _standings_rows(global_ranked, uid, g_limit)))
+        for lg_id in my_league_ids:
             data = league_data[lg_id]
-            groups.append((
-                data["name"],
-                data["rank_of"][uid],
-                data["total"],
-                data["points"][uid],
-                _winner_label(data["round_winners"]),
-            ))
+            leagues.append((data["name"], _standings_rows(data["ranked"], uid)))
 
-        if not groups:
+        if not leagues:
             continue
         try:
             await send_round_complete_notification(
-                email, t_name, t_year, tournament_id, round_name, groups,
+                email, t_name, t_year, tournament_id, round_name, leagues,
                 category=tournament.category or "", gender=tournament.gender or "M",
             )
             logger.info(
                 "Round-complete email sent to user %d (%d group(s)) — %d %s %s",
-                uid, len(groups), t_year, t_name, round_name,
+                uid, len(leagues), t_year, t_name, round_name,
             )
         except Exception as exc:
             logger.warning("Failed to send round-complete email to user %d: %s", uid, exc)
