@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 FROM = "Upset Alert <info@upsetalert.ca>"
 BASE_URL = "https://upsetalert.ca"
+API_BASE = "https://upsetalert-api.upsetalert.ca"
 
 _LOGO_HEADER = """<table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#1b4332" style="background:#1b4332">
   <tr>
@@ -338,12 +339,19 @@ async def send_round_complete_notification(
     leagues: list[tuple],  # [(league_name, [(rank, name, score, is_you), ...]), ...]
     category: str = "",
     gender: str = "M",
+    unsubscribe_url: str = "",
 ) -> None:
     """One email per user: every group's competitor list, stacked vertically."""
     tournament_url = f"{BASE_URL}/tournaments/{tournament_id}"
     blocks = "".join(
         _round_complete_league_block(lg_name, rows, i == len(leagues) - 1)
         for i, (lg_name, rows) in enumerate(leagues)
+    )
+    unsubscribe = (
+        f'<p style="margin:28px 0 0;text-align:center;font-size:12px;color:#9ca3af">'
+        f'<a href="{unsubscribe_url}" style="color:#9ca3af;text-decoration:underline">'
+        f'Unsubscribe from round-completion emails</a></p>'
+        if unsubscribe_url else ""
     )
     await send_async({
         "from": FROM,
@@ -357,6 +365,7 @@ async def send_round_complete_notification(
              background:#1b4332;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
             View Draw &amp; Standings
           </a>
+          {unsubscribe}
         {_BODY_CLOSE}{_WRAP_CLOSE}""",
     })
 

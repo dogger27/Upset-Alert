@@ -11,7 +11,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.middleware import RateLimitMiddleware, SecurityHeadersMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from app.database import init_db
 
@@ -105,3 +105,65 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+_UNSUB_PREF_LABELS = {
+    "round_standings": "round-completion emails",
+    "match_start": "match-start emails",
+    "tournament_end": "tournament-completion emails",
+    "draw_released": "draw-release emails",
+}
+
+
+def _unsubscribe_page(message: str, ok: bool = True) -> str:
+    accent = "#1b4332" if ok else "#b91c1c"
+    icon = "✓" if ok else "!"
+    return f"""<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Upset Alert — Unsubscribe</title></head>
+<body style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f3f4f6">
+  <div style="max-width:480px;margin:64px auto;padding:0 20px">
+    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">
+      <div style="background:{accent};padding:28px 24px;text-align:center">
+        <div style="width:56px;height:56px;line-height:56px;margin:0 auto;border-radius:28px;
+             background:rgba(255,255,255,0.15);color:#fff;font-size:28px;font-weight:700">{icon}</div>
+      </div>
+      <div style="padding:28px 24px;text-align:center">
+        <h1 style="font-size:20px;margin:0 0 12px;color:#111">{message}</h1>
+        <p style="color:#6b7280;line-height:1.6;margin:0 0 20px;font-size:14px">
+          You can re-enable this any time from your notification settings on Upset Alert.
+        </p>
+        <a href="https://upsetalert.ca" style="display:inline-block;padding:11px 22px;
+           background:#1b4332;color:#fff;text-decoration:none;border-radius:6px;font-weight:600;font-size:14px">
+          Go to Upset Alert
+        </a>
+      </div>
+    </div>
+  </div>
+</body></html>"""
+
+
+@app.get("/unsubscribe", response_class=HTMLResponse)
+async def unsubscribe(token: str = ""):
+    from sqlalchemy import delete
+    from app.core.security import verify_unsubscribe_token
+    from app.database import AsyncSessionLocal
+    from app.models.notification import NotificationPreference
+
+    result = verify_unsubscribe_token(token)
+    if not result:
+        return HTMLResponse(
+            _unsubscribe_page("This unsubscribe link is invalid or has expired.", ok=False),
+            status_code=400,
+        )
+    user_id, pref_key = result
+    async with AsyncSessionLocal() as db:
+        await db.execute(
+            delete(NotificationPreference).where(
+                NotificationPreference.user_id == user_id,
+                NotificationPreference.pref_key == pref_key,
+            )
+        )
+        await db.commit()
+    label = _UNSUB_PREF_LABELS.get(pref_key, "the selected email type")
+    return HTMLResponse(_unsubscribe_page(f"You have been unsubscribed from {label}."))
