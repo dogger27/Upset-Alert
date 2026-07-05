@@ -422,9 +422,15 @@ function ConnectorLines({ leftCenters, rightCenters, totalH }) {
     const f2Center = leftCenters[ri * 2 + 1]
     const x1 = 0, xMid = COL_GAP / 2, x2 = COL_GAP
 
+    // Vertical "bus" must span both feeders AND the target match, so every
+    // horizontal stub meets it — even when compact mode places the target
+    // outside the feeders' span (feeder clarity is intentionally sacrificed).
+    const pts = [f1Center, f2Center, rCenter].filter(v => v != null)
+    const yMin = Math.min(...pts), yMax = Math.max(...pts)
+
     if (f1Center != null) lines.push(<line key={`f1h-${ri}`} x1={x1} y1={f1Center} x2={xMid} y2={f1Center} />)
     if (f2Center != null) lines.push(<line key={`f2h-${ri}`} x1={x1} y1={f2Center} x2={xMid} y2={f2Center} />)
-    if (f1Center != null && f2Center != null) lines.push(<line key={`v-${ri}`} x1={xMid} y1={f1Center} x2={xMid} y2={f2Center} />)
+    if (yMax > yMin) lines.push(<line key={`v-${ri}`} x1={xMid} y1={yMin} x2={xMid} y2={yMax} />)
     lines.push(<line key={`rh-${ri}`} x1={xMid} y1={rCenter} x2={x2} y2={rCenter} />)
   }
 
