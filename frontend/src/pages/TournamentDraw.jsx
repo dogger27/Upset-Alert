@@ -460,13 +460,14 @@ export default function TournamentDraw() {
         <div className="draw-header-right">
           {hasEarlyRounds && (
             <label
-              className="draw-compress-toggle"
-              title="Stack the rounds before the Round of 16 tightly together for easier scanning"
+              className="draw-compress-toggle draw-compress-toggle--disabled"
+              title="Temporarily disabled"
             >
               <input
                 type="checkbox"
                 checked={compact}
                 onChange={e => setCompact(e.target.checked)}
+                disabled
               />
               <span className="draw-compress-track"><span className="draw-compress-thumb" /></span>
               <span className="draw-compress-text">Compress early rounds</span>

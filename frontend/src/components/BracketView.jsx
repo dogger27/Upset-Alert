@@ -411,9 +411,9 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
 // Connector lines
 // ---------------------------------------------------------------------------
 
-// leftCenters / rightCenters: explicit Y-centre of each match in the two columns
-// (indexed by bracket order). Passing them in lets the connectors follow the
-// actual match positions — needed once "compact" mode top-stacks early rounds.
+// leftCenters / rightCenters: explicit Y-centre of each match in the two
+// columns (indexed by bracket order), so the connectors follow the actual
+// match positions.
 function ConnectorLines({ leftCenters, rightCenters, totalH }) {
   const paths = []
   const x1 = 0, x2 = COL_GAP, cx = COL_GAP / 2
@@ -422,8 +422,6 @@ function ConnectorLines({ leftCenters, rightCenters, totalH }) {
     const feeders = [leftCenters[ri * 2], leftCenters[ri * 2 + 1]]
     // A smooth cubic curve from each feeder's right edge to the target match's
     // left edge — horizontal tangents at both ends so it eases in/out flatly.
-    // Works whether the target is centred between its feeders (normal bracket)
-    // or offset from them (compact mode top-stacks the earlier rounds).
     feeders.forEach((f, k) => {
       if (f == null) return
       paths.push(
@@ -446,6 +444,7 @@ function ConnectorLines({ leftCenters, rightCenters, totalH }) {
 export default function BracketView({ tournament, matches, players, picks, onPick, locked, mode = 'picks', picksOwner = null, compact = false }) {
   const [h2hPlayers, setH2HPlayers] = useState(null) // { p1, p2, match }
   const [hoveredPlayerId, setHoveredPlayerId] = useState(null)
+  const [windowStart, setWindowStart] = useState(0) // index of left-most visible round
 
   const playerById = Object.fromEntries(players.map(p => [p.id, p]))
   const drawRanks = computeDrawRanks(players)
@@ -493,27 +492,25 @@ export default function BracketView({ tournament, matches, players, picks, onPic
     })
   }
 
-  const r1Count = rounds[roundNums[0]]?.length ?? 1
-  const totalH = r1Count * SLOT_BASE
+  // Windowed view: only WINDOW rounds are shown at once, paged via the dots.
+  const WINDOW = 4
+  const maxStart = Math.max(0, roundNums.length - WINDOW)
+  const start = Math.min(windowStart, maxStart)
+  const visibleRounds = roundNums.slice(start, start + WINDOW)
+  const showPager = roundNums.length > WINDOW
 
-  // Compact mode: every round from the Round of 16 outward (any round with 8 or
-  // fewer matches) is drawn as its own tight bracket at the TOP of the canvas —
-  // R16 top-stacked at SLOT_BASE spacing as the base, then QF/SF/Final centred
-  // between their two feeders. This keeps the champion near the top (no more
-  // scrolling forever) while the earlier, larger rounds (>8 matches) are simply
-  // top-stacked tightly. Connector lines follow the actual match positions.
+  // Each window is a self-contained bracket: the left-most visible round is the
+  // tight "compressed" base (SLOT_BASE spacing), and every round to its right is
+  // centred between its two feeders — clean curved feeds, always 4 rounds wide.
+  const baseCount = rounds[visibleRounds[0]]?.length ?? 1
+  const totalH = baseCount * SLOT_BASE
   const centersByRound = {}
-  roundNums.forEach((rn, idx) => {
+  visibleRounds.forEach((rn, p) => {
     const count = rounds[rn].length
-    if (!compact) {
-      const slotH = totalH / count
-      centersByRound[rn] = Array.from({ length: count }, (_, i) => i * slotH + slotH / 2)
-    } else if (count >= 8) {
-      // Early rounds + R16 base: tight top-stack at SLOT_BASE spacing
+    if (p === 0) {
       centersByRound[rn] = Array.from({ length: count }, (_, i) => i * SLOT_BASE + SLOT_BASE / 2)
     } else {
-      // QF onward: centre each match between its two feeders in the prior round
-      const prev = centersByRound[roundNums[idx - 1]] || []
+      const prev = centersByRound[visibleRounds[p - 1]]
       centersByRound[rn] = Array.from({ length: count }, (_, j) => {
         const a = prev[2 * j], b = prev[2 * j + 1]
         if (a != null && b != null) return (a + b) / 2
@@ -538,23 +535,53 @@ export default function BracketView({ tournament, matches, players, picks, onPic
         onClose={() => setH2HPlayers(null)}
       />
     )}
+    {showPager && (
+      <div className="bracket-pager">
+        <button
+          className="bracket-pager-arrow"
+          onClick={() => setWindowStart(start - 1)}
+          disabled={start === 0}
+          aria-label="Earlier rounds"
+        >
+          ‹
+        </button>
+        <div className="bracket-dots">
+          {Array.from({ length: maxStart + 1 }, (_, i) => (
+            <button
+              key={i}
+              className={clsx('bracket-dot', { active: i === start })}
+              onClick={() => setWindowStart(i)}
+              aria-label={`Rounds ${i + 1}–${i + WINDOW}`}
+            />
+          ))}
+        </div>
+        <button
+          className="bracket-pager-arrow"
+          onClick={() => setWindowStart(start + 1)}
+          disabled={start === maxStart}
+          aria-label="Later rounds"
+        >
+          ›
+        </button>
+      </div>
+    )}
     <div className="bracket-scroll">
       <div className="bracket-labels" style={{ paddingLeft: 0 }}>
-        {roundNums.map((rn, i) => {
+        {visibleRounds.map((rn, i) => {
           const colW = roundHasScores[rn] ? COL_W_SCORES : COL_W
           return (
             <div key={rn} style={{ display: 'flex', flexShrink: 0 }}>
               <div className="round-label" style={{ width: colW }}>
                 {rounds[rn][0]?.round_name || `Round ${rn}`}
               </div>
-              {i < roundNums.length - 1 && <div style={{ width: COL_GAP }} />}
+              {i < visibleRounds.length - 1 && <div style={{ width: COL_GAP }} />}
             </div>
           )
         })}
       </div>
 
       <div className="bracket-body" style={{ height: totalH }}>
-        {roundNums.map((rn, colIdx) => {
+        {visibleRounds.map((rn, colIdx) => {
           const colW = roundHasScores[rn] ? COL_W_SCORES : COL_W
           const roundMatches = [...rounds[rn]].sort((a, b) => a.match_number - b.match_number)
           const centers = centersByRound[rn]
@@ -587,11 +614,11 @@ export default function BracketView({ tournament, matches, players, picks, onPic
                 })}
               </div>
 
-              {colIdx < roundNums.length - 1 && (
+              {colIdx < visibleRounds.length - 1 && (
                 <ConnectorLines
                   key={`conn-${rn}`}
                   leftCenters={centersByRound[rn]}
-                  rightCenters={centersByRound[roundNums[colIdx + 1]]}
+                  rightCenters={centersByRound[visibleRounds[colIdx + 1]]}
                   totalH={totalH}
                 />
               )}
