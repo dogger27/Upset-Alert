@@ -14,7 +14,10 @@ function teKeys(tournSurface) {
 
 function surfaceLabel(key) {
   if (!key) return '—'
-  if (key === 'Indoors') return 'Indoor'
+  // Indoor hard courts are treated as "Hard" everywhere on the site; TE reports
+  // these as "Indoor"/"Indoors" and fresh scrapes can reintroduce them after the
+  // one-off cache migration, so normalize at display time too.
+  if (key === 'Indoors' || key === 'Indoor') return 'Hard'
   return key
 }
 
