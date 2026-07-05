@@ -14,7 +14,9 @@ from typing import Optional
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
+from app.core.security import create_unsubscribe_token
 from app.database import AsyncSessionLocal
+from app.services.email import API_BASE
 from app.models.league import League, LeagueMember
 from app.models.notification import NotificationPreference
 from app.models.prediction import UserPrediction
@@ -285,10 +287,15 @@ async def notify_round_complete(
 
         if not leagues:
             continue
+        unsubscribe_url = (
+            f"{API_BASE}/unsubscribe?token="
+            f"{create_unsubscribe_token(uid, 'round_standings')}"
+        )
         try:
             await send_round_complete_notification(
                 email, t_name, t_year, tournament_id, round_name, leagues,
                 category=tournament.category or "", gender=tournament.gender or "M",
+                unsubscribe_url=unsubscribe_url,
             )
             logger.info(
                 "Round-complete email sent to user %d (%d group(s)) — %d %s %s",
