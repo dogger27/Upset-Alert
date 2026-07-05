@@ -411,19 +411,20 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
 // Connector lines
 // ---------------------------------------------------------------------------
 
-function ConnectorLines({ leftMatches, rightMatches, totalH }) {
+// leftCenters / rightCenters: explicit Y-centre of each match in the two columns
+// (indexed by bracket order). Passing them in lets the connectors follow the
+// actual match positions — needed once "compact" mode top-stacks early rounds.
+function ConnectorLines({ leftCenters, rightCenters, totalH }) {
   const lines = []
-  for (let ri = 0; ri < rightMatches.length; ri++) {
-    const rSlot = totalH / rightMatches.length
-    const rCenter = ri * rSlot + rSlot / 2
-    const lSlot = totalH / leftMatches.length
-    const f1Center = (ri * 2) * lSlot + lSlot / 2
-    const f2Center = (ri * 2 + 1) * lSlot + lSlot / 2
+  for (let ri = 0; ri < rightCenters.length; ri++) {
+    const rCenter = rightCenters[ri]
+    const f1Center = leftCenters[ri * 2]
+    const f2Center = leftCenters[ri * 2 + 1]
     const x1 = 0, xMid = COL_GAP / 2, x2 = COL_GAP
 
-    lines.push(<line key={`f1h-${ri}`} x1={x1} y1={f1Center} x2={xMid} y2={f1Center} />)
-    lines.push(<line key={`f2h-${ri}`} x1={x1} y1={f2Center} x2={xMid} y2={f2Center} />)
-    lines.push(<line key={`v-${ri}`} x1={xMid} y1={f1Center} x2={xMid} y2={f2Center} />)
+    if (f1Center != null) lines.push(<line key={`f1h-${ri}`} x1={x1} y1={f1Center} x2={xMid} y2={f1Center} />)
+    if (f2Center != null) lines.push(<line key={`f2h-${ri}`} x1={x1} y1={f2Center} x2={xMid} y2={f2Center} />)
+    if (f1Center != null && f2Center != null) lines.push(<line key={`v-${ri}`} x1={xMid} y1={f1Center} x2={xMid} y2={f2Center} />)
     lines.push(<line key={`rh-${ri}`} x1={xMid} y1={rCenter} x2={x2} y2={rCenter} />)
   }
 
@@ -438,7 +439,7 @@ function ConnectorLines({ leftMatches, rightMatches, totalH }) {
 // Main component
 // ---------------------------------------------------------------------------
 
-export default function BracketView({ tournament, matches, players, picks, onPick, locked, mode = 'picks', picksOwner = null }) {
+export default function BracketView({ tournament, matches, players, picks, onPick, locked, mode = 'picks', picksOwner = null, compact = false }) {
   const [h2hPlayers, setH2HPlayers] = useState(null) // { p1, p2, match }
   const [hoveredPlayerId, setHoveredPlayerId] = useState(null)
 
@@ -491,6 +492,22 @@ export default function BracketView({ tournament, matches, players, picks, onPic
   const r1Count = rounds[roundNums[0]]?.length ?? 1
   const totalH = r1Count * SLOT_BASE
 
+  // Compact mode: rounds before the Round of 16 (i.e. any round with more than 8
+  // matches) are top-stacked tightly at SLOT_BASE spacing, exactly like round 1,
+  // instead of spreading to align with their feeders. R16 onward keep the normal
+  // centred bracket layout. Connector lines still follow the actual positions.
+  const isCompressed = (rn) => compact && rounds[rn].length > 8
+  const centersByRound = {}
+  for (const rn of roundNums) {
+    const count = rounds[rn].length
+    if (isCompressed(rn)) {
+      centersByRound[rn] = Array.from({ length: count }, (_, i) => i * SLOT_BASE + SLOT_BASE / 2)
+    } else {
+      const slotH = totalH / count
+      centersByRound[rn] = Array.from({ length: count }, (_, i) => i * slotH + slotH / 2)
+    }
+  }
+
   return (
     <>
     {h2hPlayers && (
@@ -525,13 +542,13 @@ export default function BracketView({ tournament, matches, players, picks, onPic
         {roundNums.map((rn, colIdx) => {
           const colW = roundHasScores[rn] ? COL_W_SCORES : COL_W
           const roundMatches = [...rounds[rn]].sort((a, b) => a.match_number - b.match_number)
-          const slotH = totalH / roundMatches.length
+          const centers = centersByRound[rn]
 
           return (
             <div key={rn} style={{ display: 'flex', flexShrink: 0 }}>
               <div className="bracket-col" style={{ width: colW, height: totalH }}>
                 {roundMatches.map((m, i) => {
-                  const top = i * slotH + (slotH - MATCH_H) / 2
+                  const top = centers[i] - MATCH_H / 2
                   return (
                     <MatchBox
                       key={m.id}
@@ -555,14 +572,14 @@ export default function BracketView({ tournament, matches, players, picks, onPic
                 })}
               </div>
 
-              {colIdx < roundNums.length - 1 && (() => {
-                const nextRn = roundNums[colIdx + 1]
-                const leftMs = [...rounds[rn]].sort((a, b) => a.match_number - b.match_number)
-                const rightMs = [...rounds[nextRn]].sort((a, b) => a.match_number - b.match_number)
-                return (
-                  <ConnectorLines key={`conn-${rn}`} leftMatches={leftMs} rightMatches={rightMs} totalH={totalH} />
-                )
-              })()}
+              {colIdx < roundNums.length - 1 && (
+                <ConnectorLines
+                  key={`conn-${rn}`}
+                  leftCenters={centersByRound[rn]}
+                  rightCenters={centersByRound[roundNums[colIdx + 1]]}
+                  totalH={totalH}
+                />
+              )}
             </div>
           )
         })}
