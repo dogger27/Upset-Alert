@@ -492,21 +492,32 @@ export default function BracketView({ tournament, matches, players, picks, onPic
   const r1Count = rounds[roundNums[0]]?.length ?? 1
   const totalH = r1Count * SLOT_BASE
 
-  // Compact mode: rounds before the Round of 16 (i.e. any round with more than 8
-  // matches) are top-stacked tightly at SLOT_BASE spacing, exactly like round 1,
-  // instead of spreading to align with their feeders. R16 onward keep the normal
-  // centred bracket layout. Connector lines still follow the actual positions.
-  const isCompressed = (rn) => compact && rounds[rn].length > 8
+  // Compact mode: every round from the Round of 16 outward (any round with 8 or
+  // fewer matches) is drawn as its own tight bracket at the TOP of the canvas —
+  // R16 top-stacked at SLOT_BASE spacing as the base, then QF/SF/Final centred
+  // between their two feeders. This keeps the champion near the top (no more
+  // scrolling forever) while the earlier, larger rounds (>8 matches) are simply
+  // top-stacked tightly. Connector lines follow the actual match positions.
   const centersByRound = {}
-  for (const rn of roundNums) {
+  roundNums.forEach((rn, idx) => {
     const count = rounds[rn].length
-    if (isCompressed(rn)) {
-      centersByRound[rn] = Array.from({ length: count }, (_, i) => i * SLOT_BASE + SLOT_BASE / 2)
-    } else {
+    if (!compact) {
       const slotH = totalH / count
       centersByRound[rn] = Array.from({ length: count }, (_, i) => i * slotH + slotH / 2)
+    } else if (count >= 8) {
+      // Early rounds + R16 base: tight top-stack at SLOT_BASE spacing
+      centersByRound[rn] = Array.from({ length: count }, (_, i) => i * SLOT_BASE + SLOT_BASE / 2)
+    } else {
+      // QF onward: centre each match between its two feeders in the prior round
+      const prev = centersByRound[roundNums[idx - 1]] || []
+      centersByRound[rn] = Array.from({ length: count }, (_, j) => {
+        const a = prev[2 * j], b = prev[2 * j + 1]
+        if (a != null && b != null) return (a + b) / 2
+        if (a != null) return a
+        return j * SLOT_BASE + SLOT_BASE / 2
+      })
     }
-  }
+  })
 
   return (
     <>
