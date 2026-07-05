@@ -140,6 +140,7 @@ function PlayerRow({
   scores, retired, onClick, locked,
   showTypeSlot, showScores, markWinner, showRowBg, showFlag,
   qualifierNum, isServing, boldScores,
+  isHighlighted, onHover,
 }) {
   const player = playerId != null ? playerById[playerId] : null
 
@@ -194,12 +195,15 @@ function PlayerRow({
         'dead-pick': isDeadPick,
         projected: isProjected && !isWinner,
         clickable: !locked && onClick,
+        highlight: isHighlighted,
         // Independent of `picked` (which is suppressed in live mode) — the
         // user's own pick should always render in black text, even in a
         // live/not-yet-started match where `picked`'s other styling doesn't apply.
         'pick-choice': isPicked,
       })}
       onClick={!locked && onClick ? onClick : undefined}
+      onMouseEnter={onHover ? () => onHover(player.id) : undefined}
+      onMouseLeave={onHover ? () => onHover(null) : undefined}
       title={player.nationality ? `${player.name} (${player.nationality})` : player.name}
     >
       <span className="badge-left-slot">{leftBadge}</span>
@@ -228,7 +232,7 @@ function playerNeedsTypeSlot(p) {
   return !!p?.entry_type
 }
 
-function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick, locked, style, mode, lossRound, onH2H, qualifierNums, forceTypeSlot }) {
+function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick, locked, style, mode, lossRound, onH2H, qualifierNums, forceTypeSlot, hoveredPlayerId, onHoverPlayer }) {
   const { p1: p1id, p2: p2id } = resolvedPlayers || { p1: match.player1?.id, p2: match.player2?.id }
   const pickedId = picks[match.id]
   const actualWinnerId = match.winner?.id
@@ -365,6 +369,8 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
           qualifierNum={qualifierNums?.[p1id]}
           isServing={p1Serving}
           boldScores={p1BoldScores}
+          isHighlighted={hoveredPlayerId != null && p1id === hoveredPlayerId}
+          onHover={onHoverPlayer}
         />
         <PlayerRow
           playerId={p2id} playerById={playerById} drawRanks={drawRanks}
@@ -384,6 +390,8 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
           qualifierNum={qualifierNums?.[p2id]}
           isServing={p2Serving}
           boldScores={p2BoldScores}
+          isHighlighted={hoveredPlayerId != null && p2id === hoveredPlayerId}
+          onHover={onHoverPlayer}
         />
       </div>
       {h2hAvailable && (
@@ -432,6 +440,7 @@ function ConnectorLines({ leftMatches, rightMatches, totalH }) {
 
 export default function BracketView({ tournament, matches, players, picks, onPick, locked, mode = 'picks', picksOwner = null }) {
   const [h2hPlayers, setH2HPlayers] = useState(null) // { p1, p2, match }
+  const [hoveredPlayerId, setHoveredPlayerId] = useState(null)
 
   const playerById = Object.fromEntries(players.map(p => [p.id, p]))
   const drawRanks = computeDrawRanks(players)
@@ -538,6 +547,8 @@ export default function BracketView({ tournament, matches, players, picks, onPic
                       onH2H={(p1, p2, match) => setH2HPlayers({ p1, p2, match })}
                       qualifierNums={qualifierNums}
                       forceTypeSlot={roundHasTypeSlot[rn]}
+                      hoveredPlayerId={hoveredPlayerId}
+                      onHoverPlayer={setHoveredPlayerId}
                       style={{ position: 'absolute', top, left: 6, right: 6 }}
                     />
                   )
