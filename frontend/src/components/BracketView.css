@@ -238,6 +238,15 @@
 .player-row.clickable { cursor: pointer; }
 .player-row.clickable:hover { background: #f5f5f5; }
 
+/* Highlight every row for the hovered player across all rounds */
+.player-row.highlight,
+.player-row.highlight.clickable:hover,
+.player-row.picked.highlight,
+.player-row.picked.highlight.clickable:hover {
+  background: rgba(37, 99, 235, 0.14);
+  box-shadow: inset 2px 0 0 #2563eb;
+}
+
 .player-row.picked {
   font-weight: 600;
   background: rgba(21, 128, 61, 0.08);
