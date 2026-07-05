@@ -25,6 +25,56 @@
 }
 
 
+/* ── Round pager (dots) ── */
+.bracket-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 0.5rem;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.bracket-dots {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.bracket-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: none;
+  padding: 0;
+  background: #cbd5e1;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s;
+}
+
+.bracket-dot:hover { background: #94a3b8; }
+
+.bracket-dot.active {
+  background: var(--green-dark, #2d5a3d);
+  transform: scale(1.3);
+}
+
+.bracket-pager-arrow {
+  border: none;
+  background: transparent;
+  font-size: 1.4rem;
+  line-height: 1;
+  color: var(--green-dark, #2d5a3d);
+  cursor: pointer;
+  padding: 0 0.4rem;
+  border-radius: 4px;
+}
+
+.bracket-pager-arrow:hover:not(:disabled) { background: #e8f0eb; }
+.bracket-pager-arrow:disabled { opacity: 0.3; cursor: default; }
+
 /* ── Round labels row ── */
 .bracket-labels {
   display: flex;

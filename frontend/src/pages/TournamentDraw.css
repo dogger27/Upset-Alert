@@ -201,6 +201,15 @@
   color: var(--green-dark, #2d5a3d);
 }
 
+.draw-compress-toggle--disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.draw-compress-toggle--disabled input,
+.draw-compress-toggle--disabled .draw-compress-track {
+  cursor: not-allowed;
+}
+
 .draw-picks-zone {
   flex: 1;
   display: flex;
