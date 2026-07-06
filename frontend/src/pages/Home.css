@@ -125,12 +125,15 @@
 }
 .dash-league-actions {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
   flex-shrink: 0;
-  align-self: flex-start;
 }
 .dash-league-actions-header {
+  /* Rotated 90° CCW (reads bottom-to-top) on the left of the bubble */
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
   font-family: var(--font-display);
   font-weight: 900;
   font-size: 1.55rem;
@@ -138,18 +141,18 @@
   text-transform: uppercase;
   color: var(--ink-700);
   line-height: 1;
-  margin-bottom: 2px;
 }
 .dash-league-actions-btns {
   display: flex;
+  flex-direction: column;
   gap: 8px;
 }
 .dash-league-actions .league-sidebar-btn {
   white-space: nowrap;
   flex: 0 0 auto;
-  padding-left: 7.5px;
-  padding-right: 7.5px;
-  width: 83px;
+  padding-left: 6px;
+  padding-right: 6px;
+  width: 72px;
 }
 .dash-league-divider {
   width: 1px;
