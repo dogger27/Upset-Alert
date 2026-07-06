@@ -441,7 +441,7 @@ function ConnectorLines({ leftCenters, rightCenters, totalH }) {
 // Main component
 // ---------------------------------------------------------------------------
 
-export default function BracketView({ tournament, matches, players, picks, onPick, locked, mode = 'picks', picksOwner = null, compact = false }) {
+export default function BracketView({ tournament, matches, players, picks, onPick, locked, mode = 'picks', picksOwner = null }) {
   const [h2hPlayers, setH2HPlayers] = useState(null) // { p1, p2, match }
   const [hoveredPlayerId, setHoveredPlayerId] = useState(null)
   const [windowStart, setWindowStart] = useState(0) // index of left-most visible round
