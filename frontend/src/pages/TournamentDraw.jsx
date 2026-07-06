@@ -460,22 +460,22 @@ export default function TournamentDraw() {
               </span>
             </div>
           </div>
-          <div className="draw-mode-buttons">
-            <button
-              className={clsx('draw-mode-btn', { active: viewMode === 'picks' })}
-              onClick={() => setViewMode('picks')}
-              disabled={picksDisabled}
-              title={picksDisabled ? 'You have no picks for this tournament' : undefined}
-            >
-              Picks
-            </button>
-            <button
-              className={clsx('draw-mode-btn', { active: viewMode === 'live' })}
-              onClick={() => setViewMode('live')}
-            >
-              Live Draw
-            </button>
-          </div>
+        </div>
+        <div className="draw-mode-buttons">
+          <button
+            className={clsx('draw-mode-btn', { active: viewMode === 'picks' })}
+            onClick={() => setViewMode('picks')}
+            disabled={picksDisabled}
+            title={picksDisabled ? 'You have no picks for this tournament' : undefined}
+          >
+            Picks
+          </button>
+          <button
+            className={clsx('draw-mode-btn', { active: viewMode === 'live' })}
+            onClick={() => setViewMode('live')}
+          >
+            Live Draw
+          </button>
         </div>
         <div className="draw-header-center">
           {showPager && (
