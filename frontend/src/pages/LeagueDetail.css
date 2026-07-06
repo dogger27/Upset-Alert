@@ -676,14 +676,14 @@ td.lmt-name { text-align: left; color: var(--text); max-width: 130px; display: f
     grid-template-columns: 28px 22px var(--name-col-width, 120px) 52px 80px;
   }
 }
-@container (max-width: 560px) {
+@container (max-width: 470px) {
   /* Drop surface; right-justify the draw name */
   .lt-progress-meta { display: none; }
   .lt-progress-title { text-align: right; }
 }
-@container (max-width: 470px) {
+@container (max-width: 420px) {
   .lt-progress-date { display: none; } /* drop dates */
 }
-@container (max-width: 380px) {
+@container (max-width: 320px) {
   .lt-gender-badge { display: none; } /* drop category, leave only the name */
 }
