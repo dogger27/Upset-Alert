@@ -79,10 +79,10 @@ function GenderCol({ label, tour, tournaments, section, pickStatus, onLoginRequi
   const accent = tour === 'ATP' ? 'var(--atp-600)' : 'var(--wta-600)'
   const borderColor = tour === 'ATP' ? 'var(--atp-100)' : 'var(--wta-100)'
 
-  if (!tournaments.length) return <div style={{ width: 400 }} />
+  if (!tournaments.length) return <div style={{ width: 400, maxWidth: '100%' }} />
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 9, width: 400 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 9, width: 400, maxWidth: '100%' }}>
       <div style={{
         display: 'flex', alignItems: 'center', gap: 7,
         fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '0.82rem',
@@ -125,7 +125,7 @@ function Section({ title, description, accent, live, items, section, pickStatus,
         count={items.length}
       />
       {items.length ? (
-        <div style={{ display: 'flex', gap: 22, paddingLeft: 4 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 22, paddingLeft: 4 }}>
           <GenderCol label="ATP" tour="ATP" tournaments={atp} section={section} pickStatus={pickStatus} onLoginRequired={onLoginRequired} />
           <GenderCol label="WTA" tour="WTA" tournaments={wta} section={section} pickStatus={pickStatus} onLoginRequired={onLoginRequired} />
         </div>
@@ -326,7 +326,7 @@ export default function Home() {
       )}
 
       <div style={{ maxWidth: 1280, margin: '0 auto', padding: '26px 28px 56px' }}>
-        <div style={{ width: 'fit-content', margin: '0 auto' }}>
+        <div style={{ width: '100%', maxWidth: 900, margin: '0 auto' }}>
         {user && (
           <LeagueStrip
             memberLeagues={memberLeagues}
@@ -336,7 +336,7 @@ export default function Home() {
           />
         )}
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, width: 'fit-content' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, width: '100%' }}>
           <Section
             title="Open"
             accent="open"
