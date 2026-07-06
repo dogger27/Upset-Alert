@@ -462,8 +462,8 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
       ) : (
         <>
           <div className="lt-progress-row lt-progress-header-row" style={{ '--name-col-width': `${nameColWidth}px` }}>
-            <span />
-            <span />
+            <span className="lt-hcol-bracket" />
+            <span className="lt-hcol-pos" />
             <span className="lt-competitors-label lt-competitors-label--inline">Competitor</span>
             <div className="lt-bar-track">
               {activeRounds.map((i, col) => (
@@ -474,7 +474,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
             </div>
             <span className="lt-progress-total lt-progress-col-header">Score</span>
             {completedMatchesCount > 0 && (
-              <span className="lt-progress-correct lt-progress-col-header"># Correct</span>
+              <span className="lt-progress-correct lt-progress-col-header">Correct</span>
             )}
           </div>
           <div

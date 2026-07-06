@@ -461,6 +461,7 @@ td.lmt-name { text-align: left; color: var(--text); max-width: 130px; display: f
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: var(--text-muted);
+  white-space: nowrap;
   padding: 8px 0 4px;
   border-top: 1px solid var(--border);
 }
@@ -686,4 +687,28 @@ td.lmt-name { text-align: left; color: var(--text); max-width: 130px; display: f
 }
 @container (max-width: 320px) {
   .lt-gender-badge { display: none; } /* drop category, leave only the name */
+}
+
+/* Narrow rows (below 640 the bars are already gone): first cap the competitor
+   column to the header width (names ellipsis), then drop the rank number, then
+   the bracket button. Ordered after the 640 tier so these grids win. */
+@container (max-width: 430px) {
+  .lt-progress-row--abs,
+  .lt-progress-header-row {
+    grid-template-columns: 28px 22px 92px 52px 80px;
+  }
+}
+@container (max-width: 340px) {
+  .lt-pos-num, .lt-hcol-pos { display: none; }
+  .lt-progress-row--abs,
+  .lt-progress-header-row {
+    grid-template-columns: 28px 92px 52px 80px;
+  }
+}
+@container (max-width: 300px) {
+  .lt-bracket-btn, .lt-hcol-bracket { display: none; }
+  .lt-progress-row--abs,
+  .lt-progress-header-row {
+    grid-template-columns: 92px 52px 80px;
+  }
 }
