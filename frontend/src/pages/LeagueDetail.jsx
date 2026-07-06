@@ -158,7 +158,7 @@ export default function LeagueDetail() {
                 className={['lt-members-btn', showMembers && 'lt-members-btn--active'].filter(Boolean).join(' ')}
                 onClick={() => setShowMembers(true)}
               >
-                All Members
+                Members
               </button>
               {categoryGroups.length > 0 && (
                 <div className="lt-status-tabs">
@@ -172,7 +172,7 @@ export default function LeagueDetail() {
                         disabled={empty}
                         onClick={() => { setShowMembers(false); setStatusFilter(s) }}
                       >
-                        {DISPLAY_STATUS_LABELS[s]} ({count})
+                        {s === 'previous' ? 'Prev.' : DISPLAY_STATUS_LABELS[s]} ({count})
                       </button>
                     )
                   })}

@@ -48,7 +48,7 @@ export default function Leagues() {
     <div className="leagues-page">
       <div className="leagues-page-top">
         <div className="leagues-title-group">
-          <h1 className="leagues-page-title">Leagues</h1>
+          <h1 className="leagues-page-title">Leagues:</h1>
           <span className="leagues-current-league">{currentLeagueName}</span>
 
           <div className="leagues-selector-wrap">
@@ -90,10 +90,10 @@ export default function Leagues() {
 
         <div className="leagues-top-right">
           {user && (
-            <>
-              <button className="btn-secondary leagues-action-btn" onClick={() => setModal('join')}>Join League</button>
-              <button className="btn-primary leagues-action-btn" onClick={() => setModal('create')}>Create League</button>
-            </>
+            <div className="leagues-btn-stack">
+              <button className="leagues-stack-btn" onClick={() => setModal('create')}>Create</button>
+              <button className="leagues-stack-btn" onClick={() => setModal('join')}>Join</button>
+            </div>
           )}
         </div>
       </div>
