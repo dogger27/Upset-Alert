@@ -153,7 +153,6 @@ export default function LeagueDetail() {
         const visibleGroup = categoryGroups.find(g => g.key === activeTab)
         return (
           <>
-            <h2 className="lt-draws-title">Draws</h2>
             <div className="lt-controls-row">
               <button
                 className={['lt-members-btn', showMembers && 'lt-members-btn--active'].filter(Boolean).join(' ')}
