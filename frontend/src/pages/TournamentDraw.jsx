@@ -487,7 +487,7 @@ export default function TournamentDraw() {
               >
                 ‹
               </button>
-              <div className="bracket-dots" style={{ padding: DOT_PAD }}>
+              <div className="bracket-dots" style={{ padding: DOT_PAD, gap: DOT_GAP }}>
                 <span
                   className="bracket-dots-highlight"
                   aria-hidden="true"
