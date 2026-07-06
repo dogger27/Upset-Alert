@@ -462,7 +462,7 @@ export default function TournamentDraw() {
     return `R${i + 1}`
   }
   // Pixel geometry for the round dots + the shaded window highlight behind them.
-  const DOT_SIZE = 42, DOT_GAP = 10, DOT_PAD = 6
+  const DOT_SIZE = 38, DOT_GAP = 10, DOT_PAD = 6
   const DOT_STEP = DOT_SIZE + DOT_GAP
 
   // Responsive header stages (approx element widths; tune if titles are long):
