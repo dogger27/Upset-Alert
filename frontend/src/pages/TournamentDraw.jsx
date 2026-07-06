@@ -465,6 +465,18 @@ export default function TournamentDraw() {
   const DOT_SIZE = 42, DOT_GAP = 10, DOT_PAD = 6
   const DOT_STEP = DOT_SIZE + DOT_GAP
 
+  // Responsive header stages (approx element widths; tune if titles are long):
+  //  'full'    — everything shown; switch centred between info and pager.
+  //  'compact' — hide tournament info + right-hand status; keep switch + dots.
+  //  'minimal' — replace the dot pager with two large prev/next arrows.
+  const DOTS_W = roundNumbers.length * DOT_SIZE + (roundNumbers.length - 1) * DOT_GAP + 2 * DOT_PAD + 110
+  const SWITCH_W = 175, INFO_W = 300, RIGHT_W = 220, HPAD = 48, HGAP = 16
+  const needFull = INFO_W + SWITCH_W + DOTS_W + RIGHT_W + 3 * HGAP + HPAD
+  const needCompact = SWITCH_W + DOTS_W + HGAP + HPAD
+  const headerStage = bodyWidth <= 0 || bodyWidth >= needFull ? 'full'
+    : bodyWidth >= needCompact ? 'compact'
+    : 'minimal'
+
   // Once picks > 0 this session, keep the badge visible through any transient refetch resets
   if (pickedCount > 0) everHadPicksRef.current = true
   const showPicksBadge = user && !locked && (saveMutation.isPending || everHadPicksRef.current || pickedCount > 0)
@@ -495,7 +507,8 @@ export default function TournamentDraw() {
 
   return (
     <div className="draw-page">
-      <div className="draw-header">
+      <div className={clsx('draw-header', `draw-header--${headerStage}`)}>
+        {headerStage === 'full' && (
         <div className="draw-header-top">
           <div className="draw-name-block">
             <h1 className="draw-title">
@@ -520,6 +533,7 @@ export default function TournamentDraw() {
             </div>
           </div>
         </div>
+        )}
         <div className="draw-mode-buttons">
           <button
             className={clsx('draw-mode-btn', { active: viewMode === 'picks' })}
@@ -537,7 +551,27 @@ export default function TournamentDraw() {
           </button>
         </div>
         <div className="draw-header-center">
-          {showPager && (
+          {showPager && headerStage === 'minimal' && (
+            <div className="bracket-pager bracket-pager--minimal">
+              <button
+                className="bracket-pager-arrow"
+                onClick={() => setWindowStart(windowPos - 1)}
+                disabled={windowPos === 0}
+                aria-label="Earlier rounds"
+              >
+                ‹
+              </button>
+              <button
+                className="bracket-pager-arrow"
+                onClick={() => setWindowStart(windowPos + 1)}
+                disabled={windowPos === maxWindowStart}
+                aria-label="Later rounds"
+              >
+                ›
+              </button>
+            </div>
+          )}
+          {showPager && headerStage !== 'minimal' && (
             <div className="bracket-pager">
               <button
                 className={clsx('bracket-pager-arrow', { hidden: windowPos === 0 })}
@@ -588,6 +622,7 @@ export default function TournamentDraw() {
             </div>
           )}
         </div>
+        {headerStage === 'full' && (
         <div className="draw-header-right">
           <div className="draw-picks-zone">
             {user && !locked && !viewingOther && viewMode === 'picks' && (
@@ -681,6 +716,7 @@ export default function TournamentDraw() {
           )}
           </div>
         </div>
+        )}
       </div>
 
       {saveMutation.isError && (

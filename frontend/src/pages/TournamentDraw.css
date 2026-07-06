@@ -109,6 +109,19 @@
   border-bottom: 2px solid var(--border);
 }
 
+/* Compact/minimal header: only switch + pager remain — centre them as a group
+   and drop the auto-margin centring on the switch. */
+.draw-header--compact,
+.draw-header--minimal {
+  justify-content: center;
+  gap: 0.75rem;
+}
+.draw-header--compact .draw-mode-buttons,
+.draw-header--minimal .draw-mode-buttons {
+  margin-left: 0;
+  margin-right: 0;
+}
+
 .draw-header-top {
   min-width: 0;
   display: flex;
@@ -193,8 +206,18 @@
   border-radius: 4px;
 }
 
-.bracket-pager-arrow:hover { background: #e8f0eb; }
+.bracket-pager-arrow:hover:not(:disabled) { background: #e8f0eb; }
 .bracket-pager-arrow.hidden { visibility: hidden; }
+.bracket-pager-arrow:disabled { opacity: 0.3; cursor: default; }
+
+/* Minimal header: the pager is just two large prev/next arrows */
+.bracket-pager--minimal {
+  gap: 1.25rem;
+}
+.bracket-pager--minimal .bracket-pager-arrow {
+  font-size: 3.6rem;
+  padding: 0 0.75rem;
+}
 
 .draw-header-right {
   display: flex;
