@@ -444,10 +444,9 @@ function ConnectorLines({ leftCenters, rightCenters, totalH }) {
 // Main component
 // ---------------------------------------------------------------------------
 
-export default function BracketView({ tournament, matches, players, picks, onPick, locked, mode = 'picks', picksOwner = null }) {
+export default function BracketView({ tournament, matches, players, picks, onPick, locked, mode = 'picks', picksOwner = null, windowStart = 0 }) {
   const [h2hPlayers, setH2HPlayers] = useState(null) // { p1, p2, match }
   const [hoveredPlayerId, setHoveredPlayerId] = useState(null)
-  const [windowStart, setWindowStart] = useState(0) // index of left-most visible round
 
   const playerById = Object.fromEntries(players.map(p => [p.id, p]))
   const drawRanks = computeDrawRanks(players)
@@ -495,16 +494,16 @@ export default function BracketView({ tournament, matches, players, picks, onPic
     })
   }
 
-  // Windowed view: only WINDOW rounds are shown at once, paged via the dots.
+  // Windowed view: only WINDOW rounds are shown at once (the parent's pager
+  // controls windowStart). Clamp defensively in case the data shrank.
   const WINDOW = 4
   const maxStart = Math.max(0, roundNums.length - WINDOW)
   const start = Math.min(windowStart, maxStart)
   const visibleRounds = roundNums.slice(start, start + WINDOW)
-  const showPager = roundNums.length > WINDOW
 
   // Each window is a self-contained bracket: the left-most visible round is the
-  // tight "compressed" base (SLOT_BASE spacing), and every round to its right is
-  // centred between its two feeders — clean curved feeds, always 4 rounds wide.
+  // tight base (SLOT_BASE spacing), and every round to its right is centred
+  // between its two feeders — clean straight feeds, always 4 rounds wide.
   const baseCount = rounds[visibleRounds[0]]?.length ?? 1
   const totalH = baseCount * SLOT_BASE
   const centersByRound = {}
@@ -537,36 +536,6 @@ export default function BracketView({ tournament, matches, players, picks, onPic
         beforeRound={h2hPlayers.match?.round_number}
         onClose={() => setH2HPlayers(null)}
       />
-    )}
-    {showPager && (
-      <div className="bracket-pager">
-        <button
-          className="bracket-pager-arrow"
-          onClick={() => setWindowStart(start - 1)}
-          disabled={start === 0}
-          aria-label="Earlier rounds"
-        >
-          ‹
-        </button>
-        <div className="bracket-dots">
-          {Array.from({ length: maxStart + 1 }, (_, i) => (
-            <button
-              key={i}
-              className={clsx('bracket-dot', { active: i === start })}
-              onClick={() => setWindowStart(i)}
-              aria-label={`Rounds ${i + 1}–${i + WINDOW}`}
-            />
-          ))}
-        </div>
-        <button
-          className="bracket-pager-arrow"
-          onClick={() => setWindowStart(start + 1)}
-          disabled={start === maxStart}
-          aria-label="Later rounds"
-        >
-          ›
-        </button>
-      </div>
     )}
     <div className="bracket-scroll">
       <div className="bracket-labels" style={{ paddingLeft: 0 }}>
