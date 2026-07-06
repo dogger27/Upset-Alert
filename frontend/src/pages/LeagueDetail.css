@@ -217,14 +217,41 @@ td.lmt-name { text-align: left; color: var(--text); max-width: 130px; display: f
 .league-tournaments-section { }
 .league-tournaments-section h2 { font-size: 1.1rem; margin-bottom: 0; }
 
-.lt-draws-header {
-  position: relative;
-  display: flex; align-items: center; justify-content: center;
-  margin-bottom: 2.0625rem;
-}
-.lt-draws-header h2 {
-  position: absolute; left: 0; margin: 0;
+/* Title + controls above the draws/members bubble */
+.lt-draws-title {
   font-size: 1.75rem;
+  margin: 0 0 0.75rem;
+}
+.lt-controls-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+.lt-members-btn {
+  padding: 0.45rem 1.15rem;
+  border: 1.5px solid var(--green-dark);
+  border-radius: 7px;
+  background: transparent;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--green-dark);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+.lt-members-btn:hover:not(.lt-members-btn--active) {
+  background: color-mix(in srgb, var(--green-dark) 10%, transparent);
+}
+.lt-members-btn--active {
+  background: var(--green-dark);
+  color: #fff;
+}
+
+.league-members-heading {
+  font-size: 1.1rem;
+  margin: 0 0 0.2rem;
 }
 
 .lt-status-tabs {

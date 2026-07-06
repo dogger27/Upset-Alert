@@ -65,6 +65,7 @@ export default function LeagueDetail() {
   const { editing, setEditing, showInvite, setShowInvite } = useOutletContext()
 
   const [statusFilter, setStatusFilter] = useState(null) // null = auto (first non-empty)
+  const [showMembers, setShowMembers] = useState(false) // "All Members" view instead of draws
   const [memberSortCol, setMemberSortCol] = useState(null) // null | 'atp' | 'wta' | 'combined'
   const [memberSortDir, setMemberSortDir] = useState('desc')
 
@@ -143,140 +144,143 @@ export default function LeagueDetail() {
         <LeagueSettings league={league} onDone={() => { setEditing(false); qc.invalidateQueries(['league', id]) }} />
       )}
 
-      <div className="league-body-row">
-        {/* Draws */}
-        <div className="card league-tournaments-section">
-          {(() => {
-            const STATUS_TABS = ['open', 'active', 'previous']
-            const countByStatus = Object.fromEntries(STATUS_TABS.map(s => [s, 0]))
-            for (const g of categoryGroups) countByStatus[g.key] = g.items.length
-            const firstNonEmpty = categoryGroups[0]?.key ?? 'open'
-            const activeTab = statusFilter ?? firstNonEmpty
-            const visibleGroup = categoryGroups.find(g => g.key === activeTab)
-            return (
-              <>
-                <div className="lt-draws-header">
-                  <h2>Draws</h2>
-                  {categoryGroups.length > 0 && (
-                    <div className="lt-status-tabs">
-                      {STATUS_TABS.map(s => {
-                        const count = countByStatus[s]
-                        const empty = count === 0
-                        return (
-                          <button
-                            key={s}
-                            className={['lt-status-tab', activeTab === s && 'lt-status-tab--active', empty && 'lt-status-tab--empty'].filter(Boolean).join(' ')}
-                            disabled={empty}
-                            onClick={() => setStatusFilter(s)}
-                          >
-                            {DISPLAY_STATUS_LABELS[s]} ({count})
-                          </button>
-                        )
-                      })}
-                    </div>
-                  )}
+      {(() => {
+        const STATUS_TABS = ['open', 'active', 'previous']
+        const countByStatus = Object.fromEntries(STATUS_TABS.map(s => [s, 0]))
+        for (const g of categoryGroups) countByStatus[g.key] = g.items.length
+        const firstNonEmpty = categoryGroups[0]?.key ?? 'open'
+        const activeTab = statusFilter ?? firstNonEmpty
+        const visibleGroup = categoryGroups.find(g => g.key === activeTab)
+        return (
+          <>
+            <h2 className="lt-draws-title">Draws</h2>
+            <div className="lt-controls-row">
+              <button
+                className={['lt-members-btn', showMembers && 'lt-members-btn--active'].filter(Boolean).join(' ')}
+                onClick={() => setShowMembers(true)}
+              >
+                All Members
+              </button>
+              {categoryGroups.length > 0 && (
+                <div className="lt-status-tabs">
+                  {STATUS_TABS.map(s => {
+                    const count = countByStatus[s]
+                    const empty = count === 0
+                    return (
+                      <button
+                        key={s}
+                        className={['lt-status-tab', (!showMembers && activeTab === s) && 'lt-status-tab--active', empty && 'lt-status-tab--empty'].filter(Boolean).join(' ')}
+                        disabled={empty}
+                        onClick={() => { setShowMembers(false); setStatusFilter(s) }}
+                      >
+                        {DISPLAY_STATUS_LABELS[s]} ({count})
+                      </button>
+                    )
+                  })}
                 </div>
-                {categoryGroups.length === 0 ? (
-                  <p className="muted">No picks have been submitted yet. Members can make picks from the Tournaments page.</p>
-                ) : !visibleGroup ? (
-                  <p className="muted">No draws for this status.</p>
-                ) : (
-                  <div className="lt-category-group">
-                    {(() => {
-                      // Same name with both M and F present (Grand Slams, or any
-                      // other event running men's + women's draws simultaneously)
-                      // → disambiguate with "Men"/"Women" after the name.
-                      const gendersByName = new Map()
-                      for (const { tournament: t } of visibleGroup.items) {
-                        if (!gendersByName.has(t.name)) gendersByName.set(t.name, new Set())
-                        gendersByName.get(t.name).add(t.gender)
+              )}
+            </div>
+
+            <div className="card league-tournaments-section">
+              {showMembers ? (
+                <>
+                  <h2 className="league-members-heading">Members ({memberCount})</h2>
+                  <p className="league-members-subtitle">{gsData?.year ?? new Date().getFullYear()} Grand Slam Point Tally</p>
+                  {(() => {
+                    const rawMembers = gsData?.members ?? (isGlobal ? [] : league.members.map(m => ({ user_id: m.id, username: m.username, full_name: m.full_name, atp_points: null, wta_points: null })))
+                    const withCombined = rawMembers.map(m => ({
+                      ...m,
+                      combined_points: (m.atp_points != null && m.wta_points != null) ? m.atp_points + m.wta_points : null,
+                    }))
+                    const sortKey = { atp: 'atp_points', wta: 'wta_points', combined: 'combined_points' }[memberSortCol]
+                    const members = sortKey
+                      ? [...withCombined].sort((a, b) => {
+                          const av = a[sortKey] ?? -Infinity
+                          const bv = b[sortKey] ?? -Infinity
+                          return memberSortDir === 'desc' ? bv - av : av - bv
+                        })
+                      : withCombined
+
+                    function handleSort(col) {
+                      if (memberSortCol === col) {
+                        setMemberSortDir(d => d === 'desc' ? 'asc' : 'desc')
+                      } else {
+                        setMemberSortCol(col)
+                        setMemberSortDir('desc')
                       }
-                      return visibleGroup.items.map(({ tournament: t, picker_count }) => (
-                        <RoundProgressChart
-                          key={t.id}
-                          tournament={t}
-                          pickerCount={picker_count}
-                          leagueId={isGlobal ? null : Number(id)}
-                          leagueMemberCount={isGlobal ? null : league.member_count}
-                          showRealName={isGlobal ? false : league.show_real_name}
-                          showGenderLabel={gendersByName.get(t.name)?.size > 1}
-                        />
-                      ))
-                    })()}
-                  </div>
-                )}
-              </>
-            )
-          })()}
-        </div>
+                    }
 
-        {/* Members sidebar */}
-        <div className="card league-members-section">
-          <h2>Members ({memberCount})</h2>
-          <p className="league-members-subtitle">{gsData?.year ?? new Date().getFullYear()} Grand Slam Point Tally</p>
-          {(() => {
-            const rawMembers = gsData?.members ?? (isGlobal ? [] : league.members.map(m => ({ user_id: m.id, username: m.username, full_name: m.full_name, atp_points: null, wta_points: null })))
-            const withCombined = rawMembers.map(m => ({
-              ...m,
-              combined_points: (m.atp_points != null && m.wta_points != null) ? m.atp_points + m.wta_points : null,
-            }))
-            const sortKey = { atp: 'atp_points', wta: 'wta_points', combined: 'combined_points' }[memberSortCol]
-            const members = sortKey
-              ? [...withCombined].sort((a, b) => {
-                  const av = a[sortKey] ?? -Infinity
-                  const bv = b[sortKey] ?? -Infinity
-                  return memberSortDir === 'desc' ? bv - av : av - bv
-                })
-              : withCombined
+                    function SortHeader({ col, label }) {
+                      const active = memberSortCol === col
+                      return (
+                        <th className="lmt-pts lmt-pts--sortable" onClick={() => handleSort(col)}>
+                          {label}{active && <span className="lmt-sort-arrow">{memberSortDir === 'desc' ? ' ▼' : ' ▲'}</span>}
+                        </th>
+                      )
+                    }
 
-            function handleSort(col) {
-              if (memberSortCol === col) {
-                setMemberSortDir(d => d === 'desc' ? 'asc' : 'desc')
-              } else {
-                setMemberSortCol(col)
-                setMemberSortDir('desc')
-              }
-            }
-
-            function SortHeader({ col, label }) {
-              const active = memberSortCol === col
-              return (
-                <th className="lmt-pts lmt-pts--sortable" onClick={() => handleSort(col)}>
-                  {label}{active && <span className="lmt-sort-arrow">{memberSortDir === 'desc' ? ' ▼' : ' ▲'}</span>}
-                </th>
-              )
-            }
-
-            return (
-              <table className="league-members-table">
-                <thead>
-                  <tr>
-                    <th className="lmt-name-th" />
-                    <SortHeader col="atp" label="ATP" />
-                    <SortHeader col="wta" label="WTA" />
-                    <SortHeader col="combined" label="Comb." />
-                  </tr>
-                </thead>
-                <tbody>
-                  {members.map(m => (
-                    <tr key={m.user_id}>
-                      <td className="lmt-name">
-                        <a href={`/draw-history?user=${m.user_id}`} className="lmt-name-link username-hover" data-tooltip={`${m.full_name || m.username}:\nDraw History (${drawCountMap[m.user_id] ?? 0})`}>
-                          <span className="lmt-name-text">{m.username}</span>
-                        </a>
-                        {m.is_admin && <span className="lmt-admin-badge" title="Admin">A</span>}
-                      </td>
-                      <td className="lmt-pts">{m.atp_points ?? '–'}</td>
-                      <td className="lmt-pts">{m.wta_points ?? '–'}</td>
-                      <td className="lmt-pts">{m.combined_points ?? '–'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )
-          })()}
-        </div>
-      </div>
+                    return (
+                      <table className="league-members-table">
+                        <thead>
+                          <tr>
+                            <th className="lmt-name-th" />
+                            <SortHeader col="atp" label="ATP" />
+                            <SortHeader col="wta" label="WTA" />
+                            <SortHeader col="combined" label="Comb." />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {members.map(m => (
+                            <tr key={m.user_id}>
+                              <td className="lmt-name">
+                                <a href={`/draw-history?user=${m.user_id}`} className="lmt-name-link username-hover" data-tooltip={`${m.full_name || m.username}:\nDraw History (${drawCountMap[m.user_id] ?? 0})`}>
+                                  <span className="lmt-name-text">{m.username}</span>
+                                </a>
+                                {m.is_admin && <span className="lmt-admin-badge" title="Admin">A</span>}
+                              </td>
+                              <td className="lmt-pts">{m.atp_points ?? '–'}</td>
+                              <td className="lmt-pts">{m.wta_points ?? '–'}</td>
+                              <td className="lmt-pts">{m.combined_points ?? '–'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )
+                  })()}
+                </>
+              ) : categoryGroups.length === 0 ? (
+                <p className="muted">No picks have been submitted yet. Members can make picks from the Tournaments page.</p>
+              ) : !visibleGroup ? (
+                <p className="muted">No draws for this status.</p>
+              ) : (
+                <div className="lt-category-group">
+                  {(() => {
+                    // Same name with both M and F present (Grand Slams, or any
+                    // other event running men's + women's draws simultaneously)
+                    // → disambiguate with "Men"/"Women" after the name.
+                    const gendersByName = new Map()
+                    for (const { tournament: t } of visibleGroup.items) {
+                      if (!gendersByName.has(t.name)) gendersByName.set(t.name, new Set())
+                      gendersByName.get(t.name).add(t.gender)
+                    }
+                    return visibleGroup.items.map(({ tournament: t, picker_count }) => (
+                      <RoundProgressChart
+                        key={t.id}
+                        tournament={t}
+                        pickerCount={picker_count}
+                        leagueId={isGlobal ? null : Number(id)}
+                        leagueMemberCount={isGlobal ? null : league.member_count}
+                        showRealName={isGlobal ? false : league.show_real_name}
+                        showGenderLabel={gendersByName.get(t.name)?.size > 1}
+                      />
+                    ))
+                  })()}
+                </div>
+              )}
+            </div>
+          </>
+        )
+      })()}
 
     </div>
   )
