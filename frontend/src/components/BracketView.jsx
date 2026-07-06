@@ -57,7 +57,7 @@ function computeDrawRanks(players) {
 
 const MATCH_H = 58
 const LABEL_H = 30
-const SLOT_BASE = 82
+const SLOT_BASE = 74
 const COL_W = 252
 const COL_W_SCORES = 300
 const COL_GAP = 24
