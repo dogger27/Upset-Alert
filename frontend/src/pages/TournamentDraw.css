@@ -35,7 +35,7 @@
 .draw-mode-buttons {
   display: flex;
   gap: 0.75rem;
-  margin-top: 0.35rem;
+  flex: 0 0 auto;
 }
 
 .bracket-picks-owner-row {
@@ -110,6 +110,7 @@
   display: flex;
   flex-direction: row;
   align-items: center;
+  gap: 1.5rem;
 }
 
 .draw-name-block {
@@ -124,7 +125,64 @@
   display: flex;
   flex-direction: row;
   align-items: center;
+  justify-content: center;
 }
+
+/* ── Round pager (dots) — one dot per round, lives in the header centre ── */
+.bracket-pager {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.bracket-dots {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Shaded rectangle behind the rounds currently on screen */
+.bracket-dots-highlight {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: #d7e3db;
+  border-radius: 999px;
+  transition: left 0.18s ease;
+  z-index: 0;
+}
+
+.bracket-dot {
+  position: relative;
+  z-index: 1;
+  border-radius: 50%;
+  border: none;
+  padding: 0;
+  background: #cbd5e1;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.bracket-dot:hover { background: #94a3b8; }
+
+.bracket-dot.in-window {
+  background: var(--green-dark, #2d5a3d);
+}
+
+.bracket-pager-arrow {
+  border: none;
+  background: transparent;
+  font-size: 1.4rem;
+  line-height: 1;
+  color: var(--green-dark, #2d5a3d);
+  cursor: pointer;
+  padding: 0 0.4rem;
+  border-radius: 4px;
+}
+
+.bracket-pager-arrow:hover { background: #e8f0eb; }
+.bracket-pager-arrow.hidden { visibility: hidden; }
 
 .draw-header-right {
   display: flex;

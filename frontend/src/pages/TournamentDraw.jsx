@@ -23,6 +23,7 @@ export default function TournamentDraw() {
   const [picks, setPicks] = useState({})
   const [otherPicks, setOtherPicks] = useState({})
   const [viewMode, setViewMode] = useState('live')
+  const [windowStart, setWindowStart] = useState(0) // left-most visible round (pager)
   const [viewedUserId, setViewedUserId] = useState(() => { const u = searchParams.get('user'); return u ? Number(u) : null })
   const [viewedUserName, setViewedUserName] = useState(null)
   const initialModeSet = useRef(false)
@@ -377,6 +378,20 @@ export default function TournamentDraw() {
   const activePicks = viewingOther ? (canEditOther ? otherPicks : (viewedPicksMap ?? {})) : picks
   const totalPredictable = matches.filter(m => !m.is_bye).length
 
+  // Round pager: the bracket shows DRAW_WINDOW rounds at a time; the dots below
+  // page the window forward/back. State lives here so the dots can sit in the
+  // header, while BracketView renders the corresponding slice.
+  const DRAW_WINDOW = 4
+  const roundNumbers = [...new Set(matches.map(m => m.round_number))].sort((a, b) => a - b)
+  const maxWindowStart = Math.max(0, roundNumbers.length - DRAW_WINDOW)
+  const windowPos = Math.min(windowStart, maxWindowStart)
+  const showPager = roundNumbers.length > DRAW_WINDOW
+  const roundNameByNum = {}
+  for (const m of matches) if (!(m.round_number in roundNameByNum)) roundNameByNum[m.round_number] = m.round_name
+  // Pixel geometry for the round dots + the shaded window highlight behind them.
+  const DOT_SIZE = 16, DOT_GAP = 12, DOT_PAD = 6
+  const DOT_STEP = DOT_SIZE + DOT_GAP
+
   // Once picks > 0 this session, keep the badge visible through any transient refetch resets
   if (pickedCount > 0) everHadPicksRef.current = true
   const showPicksBadge = user && !locked && (saveMutation.isPending || everHadPicksRef.current || pickedCount > 0)
@@ -431,8 +446,6 @@ export default function TournamentDraw() {
               </span>
             </div>
           </div>
-        </div>
-        <div className="draw-header-center">
           <div className="draw-mode-buttons">
             <button
               className={clsx('draw-mode-btn', { active: viewMode === 'picks' })}
@@ -449,6 +462,49 @@ export default function TournamentDraw() {
               Live Draw
             </button>
           </div>
+        </div>
+        <div className="draw-header-center">
+          {showPager && (
+            <div className="bracket-pager">
+              <button
+                className={clsx('bracket-pager-arrow', { hidden: windowPos === 0 })}
+                onClick={() => setWindowStart(windowPos - 1)}
+                aria-label="Earlier rounds"
+              >
+                ‹
+              </button>
+              <div className="bracket-dots" style={{ padding: DOT_PAD }}>
+                <span
+                  className="bracket-dots-highlight"
+                  aria-hidden="true"
+                  style={{
+                    left: windowPos * DOT_STEP,
+                    width: DRAW_WINDOW * DOT_SIZE + (DRAW_WINDOW - 1) * DOT_GAP + 2 * DOT_PAD,
+                  }}
+                />
+                {roundNumbers.map((rn, i) => {
+                  const inWindow = i >= windowPos && i < windowPos + DRAW_WINDOW
+                  return (
+                    <button
+                      key={rn}
+                      className={clsx('bracket-dot', { 'in-window': inWindow })}
+                      style={{ width: DOT_SIZE, height: DOT_SIZE }}
+                      onClick={() => setWindowStart(Math.min(i, maxWindowStart))}
+                      aria-label={roundNameByNum[rn] || `Round ${rn}`}
+                      title={roundNameByNum[rn] || `Round ${rn}`}
+                    />
+                  )
+                })}
+              </div>
+              <button
+                className={clsx('bracket-pager-arrow', { hidden: windowPos === maxWindowStart })}
+                onClick={() => setWindowStart(windowPos + 1)}
+                aria-label="Later rounds"
+              >
+                ›
+              </button>
+            </div>
+          )}
         </div>
         <div className="draw-header-right">
           <div className="draw-picks-zone">
@@ -669,6 +725,7 @@ export default function TournamentDraw() {
             locked={!user || locked || (viewingOther && !canEditOther)}
             mode={viewMode}
             picksOwner={picksOwner}
+            windowStart={windowPos}
           />
         </div>
       </div>
