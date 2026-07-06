@@ -105,8 +105,8 @@ const SECTION_BG = {
   muted:   'rgba(147,163,156,0.10)',  // neutral gray tint
 }
 
-function Section({ title, description, accent, live, items, section, pickStatus, emptyMessage, onLoginRequired }) {
-  if (!items.length && !emptyMessage) return null
+function Section({ title, description, accent, live, items, section, pickStatus, emptyMessage, onLoginRequired, keepWhenEmpty }) {
+  if (!items.length && !emptyMessage && !keepWhenEmpty) return null
   const atp = items.filter(t => t.gender === 'M')
   const wta = items.filter(t => t.gender === 'F')
   const bg = SECTION_BG[accent] || SECTION_BG.muted
@@ -129,11 +129,11 @@ function Section({ title, description, accent, live, items, section, pickStatus,
           <GenderCol label="ATP" tour="ATP" tournaments={atp} section={section} pickStatus={pickStatus} onLoginRequired={onLoginRequired} />
           <GenderCol label="WTA" tour="WTA" tournaments={wta} section={section} pickStatus={pickStatus} onLoginRequired={onLoginRequired} />
         </div>
-      ) : (
+      ) : emptyMessage ? (
         <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: 'var(--text-muted)', fontStyle: 'italic', margin: 0, paddingLeft: 4 }}>
           {emptyMessage}
         </p>
-      )}
+      ) : null}
     </section>
   )
 }
@@ -341,12 +341,14 @@ export default function Home() {
             title="Open"
             accent="open"
             live
-            description="The draw is out — get your picks locked in now."
+            description={open.length
+              ? 'The draw is out — get your picks locked in now.'
+              : 'There are currently no tournaments available to choose predictions for'}
             items={open}
             section="open"
             pickStatus={pickStatus}
             onLoginRequired={() => setModal('login-required')}
-            emptyMessage={dataLoaded ? 'No open tournaments at this time.' : null}
+            keepWhenEmpty={dataLoaded}
           />
           <Section
             title="Active"
