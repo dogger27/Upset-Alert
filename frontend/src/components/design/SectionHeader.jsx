@@ -7,8 +7,8 @@ export function SectionHeader({ title, description, accent = 'neutral', live = f
   }
   const color = accents[accent] || accents.neutral
   return (
-    <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', ...style }}>
-      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, ...style }}>
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flex: '0 0 auto' }}>
         {live && (
           <span style={{ position: 'relative', display: 'inline-flex', width: 9, height: 9 }}>
             <span style={{
@@ -32,7 +32,7 @@ export function SectionHeader({ title, description, accent = 'neutral', live = f
         )}
       </div>
       {description && (
-        <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0 }}>
+        <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0, flex: '1 1 auto', minWidth: 0 }}>
           {description}
         </p>
       )}
