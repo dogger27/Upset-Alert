@@ -1,8 +1,7 @@
 .navbar {
-  display: grid;
-  grid-template-columns: auto auto 1fr;
+  display: flex;
   align-items: center;
-  column-gap: 2rem;
+  gap: 1rem;
   padding: 0 24px;
   height: 60px;
   background: var(--green-800);
@@ -13,7 +12,7 @@
   box-shadow: var(--shadow-md);
 }
 
-.navbar-left { display: flex; align-items: center; }
+.navbar-left { display: flex; align-items: center; flex: 0 0 auto; }
 
 /* ── Hamburger (shown when the nav links don't fit) ── */
 .navbar-hamburger { position: relative; display: inline-flex; }
@@ -57,12 +56,14 @@
 
 /* ── Wordmark ── */
 .navbar-brand {
-  display: inline-flex;
+  display: flex;
   flex-direction: column;
   align-items: center;
   gap: 3px;
   text-decoration: none;
-  justify-self: center;
+  /* Fill the space between the left and right groups so the wordmark is
+     centred between them (not hugging the left edge). */
+  flex: 1;
 }
 .navbar-brand:hover { text-decoration: none; opacity: 0.9; }
 
@@ -125,6 +126,7 @@
   align-items: center;
   justify-content: flex-end;
   gap: 22px;
+  flex: 0 0 auto;
 }
 
 .navbar-links a,
