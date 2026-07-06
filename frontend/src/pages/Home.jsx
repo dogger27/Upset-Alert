@@ -327,12 +327,6 @@ export default function Home() {
 
       <div style={{ maxWidth: 1280, margin: '0 auto', padding: '26px 28px 56px' }}>
         <div style={{ width: 'fit-content', margin: '0 auto' }}>
-          <div style={{ marginBottom: 16 }}>
-            <h1 style={{
-              fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: '2.75rem',
-              letterSpacing: '0.01em', lineHeight: 1, color: 'var(--ink-900)', textTransform: 'uppercase',
-            }}>Dashboard</h1>
-          </div>
         {user && (
           <LeagueStrip
             memberLeagues={memberLeagues}
