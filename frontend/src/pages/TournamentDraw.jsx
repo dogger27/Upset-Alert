@@ -387,9 +387,23 @@ export default function TournamentDraw() {
   const windowPos = Math.min(windowStart, maxWindowStart)
   const showPager = roundNumbers.length > DRAW_WINDOW
   const roundNameByNum = {}
-  for (const m of matches) if (!(m.round_number in roundNameByNum)) roundNameByNum[m.round_number] = m.round_name
+  const roundCountByNum = {}
+  for (const m of matches) {
+    if (!(m.round_number in roundNameByNum)) roundNameByNum[m.round_number] = m.round_name
+    roundCountByNum[m.round_number] = (roundCountByNum[m.round_number] || 0) + 1
+  }
+  // Short label inside each dot: final stages by name, earlier rounds by order
+  // (e.g. Grand Slam → R1, R2, R3, R16, QF, SF, F).
+  const dotLabel = (rn, i) => {
+    const c = roundCountByNum[rn]
+    if (c === 1) return 'F'
+    if (c === 2) return 'SF'
+    if (c === 4) return 'QF'
+    if (c === 8) return 'R16'
+    return `R${i + 1}`
+  }
   // Pixel geometry for the round dots + the shaded window highlight behind them.
-  const DOT_SIZE = 16, DOT_GAP = 12, DOT_PAD = 6
+  const DOT_SIZE = 42, DOT_GAP = 10, DOT_PAD = 6
   const DOT_STEP = DOT_SIZE + DOT_GAP
 
   // Once picks > 0 this session, keep the badge visible through any transient refetch resets
@@ -492,7 +506,9 @@ export default function TournamentDraw() {
                       onClick={() => setWindowStart(Math.min(i, maxWindowStart))}
                       aria-label={roundNameByNum[rn] || `Round ${rn}`}
                       title={roundNameByNum[rn] || `Round ${rn}`}
-                    />
+                    >
+                      {dotLabel(rn, i)}
+                    </button>
                   )
                 })}
               </div>
