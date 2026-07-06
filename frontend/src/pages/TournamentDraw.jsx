@@ -2,7 +2,7 @@
  * TournamentDraw — shows the bracket for one tournament.
  * Logged-in users can make / update predictions until the lock time.
  */
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, Link, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
@@ -24,6 +24,21 @@ export default function TournamentDraw() {
   const [otherPicks, setOtherPicks] = useState({})
   const [viewMode, setViewMode] = useState('live')
   const [windowStart, setWindowStart] = useState(0) // left-most visible round (pager)
+  const [mainWidth, setMainWidth] = useState(0) // width of the bracket area (drives # rounds shown)
+
+  // Callback ref on .draw-main: keeps mainWidth in sync via ResizeObserver.
+  // (Callback ref rather than useEffect so it attaches once the element mounts
+  // after the loading guard.)
+  const roRef = useRef(null)
+  const mainRef = useCallback(node => {
+    if (roRef.current) { roRef.current.disconnect(); roRef.current = null }
+    if (node) {
+      const measure = () => setMainWidth(node.clientWidth)
+      measure()
+      roRef.current = new ResizeObserver(measure)
+      roRef.current.observe(node)
+    }
+  }, [])
   const [viewedUserId, setViewedUserId] = useState(() => { const u = searchParams.get('user'); return u ? Number(u) : null })
   const [viewedUserName, setViewedUserName] = useState(null)
   const initialModeSet = useRef(false)
@@ -381,8 +396,13 @@ export default function TournamentDraw() {
   // Round pager: the bracket shows DRAW_WINDOW rounds at a time; the dots below
   // page the window forward/back. State lives here so the dots can sit in the
   // header, while BracketView renders the corresponding slice.
-  const DRAW_WINDOW = 4
   const roundNumbers = [...new Set(matches.map(m => m.round_number))].sort((a, b) => a - b)
+  // How many rounds fit in the bracket area: shrink from 4 toward 1 as the
+  // window narrows; below one round the bracket scrolls horizontally instead.
+  // Column widths mirror BracketView (COL_W / COL_W_SCORES + COL_GAP).
+  const perRoundPx = (viewMode === 'live' ? 300 : 252) + 24
+  const fitRounds = mainWidth > 0 ? Math.floor((mainWidth - 24) / perRoundPx) : 4
+  const DRAW_WINDOW = Math.min(4, roundNumbers.length, Math.max(1, fitRounds))
   const maxWindowStart = Math.max(0, roundNumbers.length - DRAW_WINDOW)
   const windowPos = Math.min(windowStart, maxWindowStart)
   const showPager = roundNumbers.length > DRAW_WINDOW
@@ -738,7 +758,7 @@ export default function TournamentDraw() {
           }}
         />
 
-        <div className="draw-main">
+        <div className="draw-main" ref={mainRef}>
           <BracketView
             tournament={tournament}
             matches={matches}
@@ -749,6 +769,7 @@ export default function TournamentDraw() {
             mode={viewMode}
             picksOwner={picksOwner}
             windowStart={windowPos}
+            windowSize={DRAW_WINDOW}
           />
         </div>
       </div>
