@@ -25,10 +25,9 @@ function Toast({ message, onDone }) {
   return <div className="sidebar-toast">{message}</div>
 }
 
-export default function DrawSidebar({ tournamentId, tournament, selectedUserId, defaultLeagueId, onSelectUser }) {
+export default function DrawSidebar({ tournamentId, tournament, selectedUserId, defaultLeagueId, onSelectUser, collapsed = false, onToggleCollapsed }) {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const [collapsed, setCollapsed] = useState(false)
   const [selectedLeagueId, setSelectedLeagueId] = useState(defaultLeagueId ?? 'global')
   const [toast, setToast] = useState(null)
   const toastKey = useRef(0)
@@ -107,7 +106,7 @@ export default function DrawSidebar({ tournamentId, tournament, selectedUserId, 
     <aside className={`draw-sidebar${collapsed ? ' draw-sidebar--collapsed' : ''}`}>
       <button
         className="sidebar-collapse-btn"
-        onClick={() => setCollapsed(c => !c)}
+        onClick={() => onToggleCollapsed?.()}
         title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
       >
         {collapsed ? '›' : '‹'}
