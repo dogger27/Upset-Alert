@@ -159,8 +159,17 @@ td.lmt-name { text-align: left; color: var(--text); max-width: 130px; display: f
   text-align: center;
   font-variant-numeric: tabular-nums;
   color: var(--text-muted);
-  padding-left: 0.5rem;
+  padding-left: 1.75rem;
   white-space: nowrap;
+}
+
+/* "All Members" view: bubble only as wide as the table needs */
+.lt-members-view {
+  width: fit-content;
+  max-width: 100%;
+}
+.lt-members-view .league-members-table {
+  width: auto;
 }
 .league-member-chip {
   display: inline-block; padding: 0.3rem 0.75rem;

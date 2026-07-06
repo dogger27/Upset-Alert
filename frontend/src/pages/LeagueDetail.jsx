@@ -180,7 +180,7 @@ export default function LeagueDetail() {
               )}
             </div>
 
-            <div className="card league-tournaments-section">
+            <div className={`card league-tournaments-section${showMembers ? ' lt-members-view' : ''}`}>
               {showMembers ? (
                 <>
                   <h2 className="league-members-heading">Members ({memberCount})</h2>
