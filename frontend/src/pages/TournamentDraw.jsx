@@ -398,10 +398,16 @@ export default function TournamentDraw() {
   // header, while BracketView renders the corresponding slice.
   const roundNumbers = [...new Set(matches.map(m => m.round_number))].sort((a, b) => a - b)
   // How many rounds fit in the bracket area: shrink from 4 toward 1 as the
-  // window narrows; below one round the bracket scrolls horizontally instead.
-  // Column widths mirror BracketView (COL_W / COL_W_SCORES + COL_GAP).
-  const perRoundPx = (viewMode === 'live' ? 300 : 252) + 24
-  const fitRounds = mainWidth > 0 ? Math.floor((mainWidth - 24) / perRoundPx) : 4
+  // window narrows; a round is only counted when it fits ENTIRELY (no
+  // horizontal scroll). Column width mirrors BracketView: 300 when any round
+  // carries score data (COL_W_SCORES, independent of view mode) else 252, plus
+  // the 24px connector gap. Subtract the scroll area's padding and vertical
+  // scrollbar so we never leave a round half-clipped.
+  const anyScores = matches.some(m => (m.scores?.length > 0) || m.live_scores != null)
+  const COL_GAP_PX = 24
+  const colUnit = (anyScores ? 300 : 252) + COL_GAP_PX
+  const usableW = mainWidth - 24 /* scroll padding */ - 16 /* vertical scrollbar */
+  const fitRounds = mainWidth > 0 ? Math.floor((usableW + COL_GAP_PX) / colUnit) : 4
   const DRAW_WINDOW = Math.min(4, roundNumbers.length, Math.max(1, fitRounds))
   const maxWindowStart = Math.max(0, roundNumbers.length - DRAW_WINDOW)
   const windowPos = Math.min(windowStart, maxWindowStart)
