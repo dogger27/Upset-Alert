@@ -463,8 +463,8 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
         <>
           <div className="lt-progress-row lt-progress-header-row" style={{ '--name-col-width': `${nameColWidth}px` }}>
             <span />
-            <span className="lt-competitors-label lt-competitors-label--inline">Competitor</span>
             <span />
+            <span className="lt-competitors-label lt-competitors-label--inline">Competitor</span>
             <div className="lt-bar-track">
               {activeRounds.map((i, col) => (
                 <div key={i} className="lt-bar-col lt-bar-col--label" style={{ flex: perRoundMax[col] }} title={roundWinnerLabels[col] ?? undefined}>
@@ -487,11 +487,6 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                 className={`lt-progress-row lt-progress-row--abs${entry.user_id === user?.id ? ' lt-progress-row--me' : ''}`}
                 style={{ transform: `translateY(${rank * ROW_SLOT}px)` }}
               >
-                <span className="lt-pos-num">{rank + 1}.</span>
-                <a href={`/draw-history?user=${entry.user_id}`} className={`lt-progress-name lt-progress-name--link username-hover${entry.user_id === user?.id ? ' lt-progress-name--me' : ''}`} data-tooltip={`${entry.full_name || entry.username}:\nDraw History (${drawCountMap[entry.user_id] ?? 0})`}>
-                  {finalPlayed && rank < 3 && <span className="lt-place-icon">{PLACE_ICONS[rank]}</span>}
-                  <span className="lt-progress-name-text">{entry.username}</span>
-                </a>
                 <button
                   className="lt-bracket-btn"
                   title={`View ${entry.username}'s bracket`}
@@ -513,6 +508,11 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                     <line x1="3" y1="21" x2="10" y2="21"/>
                   </svg>
                 </button>
+                <span className="lt-pos-num">{rank + 1}.</span>
+                <a href={`/draw-history?user=${entry.user_id}`} className={`lt-progress-name lt-progress-name--link username-hover${entry.user_id === user?.id ? ' lt-progress-name--me' : ''}`} data-tooltip={`${entry.full_name || entry.username}:\nDraw History (${drawCountMap[entry.user_id] ?? 0})`}>
+                  {finalPlayed && rank < 3 && <span className="lt-place-icon">{PLACE_ICONS[rank]}</span>}
+                  <span className="lt-progress-name-text">{entry.username}</span>
+                </a>
                 <div className="lt-bar-track">
                   {activeRounds.map((i, col) => {
                     const pts = entry.round_points[i]
