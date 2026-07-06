@@ -438,28 +438,22 @@ td.lmt-name { text-align: left; color: var(--text); max-width: 130px; display: f
 }
 .lt-progress-block:last-of-type { margin-bottom: 0; }
 
-/* Too narrow to show the per-round point bars → drop them (and their grid
-   column) entirely, keeping name / score / # correct. */
-@container (max-width: 640px) {
-  .lt-bar-track { display: none; }
-  .lt-progress-row {
-    grid-template-columns: 22px var(--name-col-width, 120px) 28px 52px 80px;
-  }
-}
-
 .lt-progress-header {
   display: flex; align-items: center;
+  gap: 0.75rem;
   margin-bottom: 0.6rem;
-  position: relative; min-height: 1.6rem;
+  min-height: 1.6rem;
 }
-.lt-header-left { display: flex; align-items: center; gap: 0.5rem; }
+.lt-header-left { display: flex; align-items: center; gap: 0.5rem; flex: 0 0 auto; white-space: nowrap; }
 .lt-progress-date { font-size: 0.78rem; color: var(--text-muted); white-space: nowrap; }
 .lt-progress-title {
-  position: absolute; left: 50%; transform: translateX(-50%);
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: center;
   font-weight: 700; font-size: 0.95rem;
-  white-space: nowrap; max-width: 45%; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.lt-progress-meta { font-size: 0.78rem; color: var(--text-muted); margin-left: auto; }
+.lt-progress-meta { font-size: 0.78rem; color: var(--text-muted); flex: 0 0 auto; white-space: nowrap; }
 .lt-progress-empty { font-size: 0.85rem; color: var(--text-muted); margin: 0; }
 .lt-competitors-label {
   font-size: 0.68rem;
@@ -565,6 +559,11 @@ td.lmt-name { text-align: left; color: var(--text); max-width: 130px; display: f
   grid-template-columns: 22px var(--name-col-width, 120px) 28px 1fr 52px 80px;
   align-items: center; gap: 0.65rem;
 }
+/* Completed/active view: bracket button in its own far-left column */
+.lt-progress-row--abs,
+.lt-progress-header-row {
+  grid-template-columns: 28px 22px var(--name-col-width, 120px) 1fr 52px 80px;
+}
 .lt-progress-row--abs {
   position: absolute; width: 100%;
   transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
@@ -666,3 +665,25 @@ td.lmt-name { text-align: left; color: var(--text); max-width: 130px; display: f
 .form-row { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.75rem; }
 .form-row label { font-size: 0.82rem; font-weight: 600; color: var(--text-muted); }
 .form-check label { flex-direction: row; font-weight: normal; color: var(--text); }
+
+/* ── Progress-chart responsive tiers (queried per .lt-progress-block) ──
+   Placed at the end so they win over the base rules at equal specificity. */
+@container (max-width: 640px) {
+  /* Too narrow for the per-round point bars → drop them + their grid column */
+  .lt-bar-track { display: none; }
+  .lt-progress-row--abs,
+  .lt-progress-header-row {
+    grid-template-columns: 28px 22px var(--name-col-width, 120px) 52px 80px;
+  }
+}
+@container (max-width: 560px) {
+  /* Drop surface; right-justify the draw name */
+  .lt-progress-meta { display: none; }
+  .lt-progress-title { text-align: right; }
+}
+@container (max-width: 470px) {
+  .lt-progress-date { display: none; } /* drop dates */
+}
+@container (max-width: 380px) {
+  .lt-gender-badge { display: none; } /* drop category, leave only the name */
+}
