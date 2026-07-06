@@ -36,10 +36,6 @@
   display: flex;
   gap: 0;
   flex: 0 0 auto;
-  /* equal auto margins centre it in the gap between the tournament info
-     (left) and the round pager (right) */
-  margin-left: auto;
-  margin-right: auto;
 }
 
 .bracket-picks-owner-row {
@@ -103,23 +99,19 @@
   display: flex;
   flex-direction: row;
   align-items: center;
+  /* Full stage: space the four sections (info · switch · pager · status) evenly */
+  justify-content: space-between;
   gap: 1rem;
   padding: 0.75rem 1.5rem;
   background: white;
   border-bottom: 2px solid var(--border);
 }
 
-/* Compact/minimal header: only switch + pager remain — centre them as a group
-   and drop the auto-margin centring on the switch. */
+/* Compact/minimal header: only switch + pager remain — centre them as a group */
 .draw-header--compact,
 .draw-header--minimal {
   justify-content: center;
   gap: 0.75rem;
-}
-.draw-header--compact .draw-mode-buttons,
-.draw-header--minimal .draw-mode-buttons {
-  margin-left: 0;
-  margin-right: 0;
 }
 
 .draw-header-top {
