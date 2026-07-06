@@ -23,7 +23,6 @@ export default function TournamentDraw() {
   const [picks, setPicks] = useState({})
   const [otherPicks, setOtherPicks] = useState({})
   const [viewMode, setViewMode] = useState('live')
-  const [compact, setCompact] = useState(false)
   const [viewedUserId, setViewedUserId] = useState(() => { const u = searchParams.get('user'); return u ? Number(u) : null })
   const [viewedUserName, setViewedUserName] = useState(null)
   const initialModeSet = useRef(false)
@@ -378,12 +377,6 @@ export default function TournamentDraw() {
   const activePicks = viewingOther ? (canEditOther ? otherPicks : (viewedPicksMap ?? {})) : picks
   const totalPredictable = matches.filter(m => !m.is_bye).length
 
-  // "Compress early rounds" is only meaningful when there are rounds before the
-  // Round of 16 (any round with more than 8 matches).
-  const roundCounts = {}
-  for (const m of matches) roundCounts[m.round_number] = (roundCounts[m.round_number] || 0) + 1
-  const hasEarlyRounds = Object.values(roundCounts).some(c => c > 8)
-
   // Once picks > 0 this session, keep the badge visible through any transient refetch resets
   if (pickedCount > 0) everHadPicksRef.current = true
   const showPicksBadge = user && !locked && (saveMutation.isPending || everHadPicksRef.current || pickedCount > 0)
@@ -458,22 +451,6 @@ export default function TournamentDraw() {
           </div>
         </div>
         <div className="draw-header-right">
-          {hasEarlyRounds && (
-            <label
-              className="draw-compress-toggle draw-compress-toggle--disabled"
-              title="Temporarily disabled"
-            >
-              <input
-                type="checkbox"
-                checked={compact}
-                onChange={e => setCompact(e.target.checked)}
-                disabled
-              />
-              <span className="draw-compress-track"><span className="draw-compress-thumb" /></span>
-              <span className="draw-compress-text">Compress early rounds</span>
-            </label>
-          )}
-          <div className="draw-header-right-content">
           <div className="draw-picks-zone">
             {user && !locked && !viewingOther && viewMode === 'picks' && (
               <button
@@ -564,7 +541,6 @@ export default function TournamentDraw() {
               </span>
             </div>
           )}
-          </div>
           </div>
         </div>
       </div>
@@ -693,7 +669,6 @@ export default function TournamentDraw() {
             locked={!user || locked || (viewingOther && !canEditOther)}
             mode={viewMode}
             picksOwner={picksOwner}
-            compact={compact}
           />
         </div>
       </div>
