@@ -139,7 +139,7 @@
   position: relative;
   display: flex;
   align-items: center;
-  gap: 12px;
+  /* gap is set inline (DOT_GAP) so it stays in sync with the highlight math */
 }
 
 /* Shaded rectangle behind the rounds currently on screen */
