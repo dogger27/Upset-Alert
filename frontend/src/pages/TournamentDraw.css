@@ -34,7 +34,7 @@
 /* ── View mode toggle ── */
 .draw-mode-buttons {
   display: flex;
-  gap: 0.75rem;
+  gap: 0;
   flex: 0 0 auto;
   /* equal auto margins centre it in the gap between the tournament info
      (left) and the round pager (right) */
@@ -60,7 +60,7 @@
 }
 
 .draw-mode-btn {
-  padding: 0.35rem 1.25rem;
+  padding: 0.35rem 0.7rem;
   font-size: 0.85rem;
   font-weight: 600;
   font-family: inherit;
