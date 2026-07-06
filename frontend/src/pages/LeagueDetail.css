@@ -434,8 +434,18 @@ td.lmt-name { text-align: left; color: var(--text); max-width: 130px; display: f
   border: 2.5px solid #888f95;
   border-radius: 8px;
   margin-bottom: 2.5rem;
+  container-type: inline-size;
 }
 .lt-progress-block:last-of-type { margin-bottom: 0; }
+
+/* Too narrow to show the per-round point bars → drop them (and their grid
+   column) entirely, keeping name / score / # correct. */
+@container (max-width: 640px) {
+  .lt-bar-track { display: none; }
+  .lt-progress-row {
+    grid-template-columns: 22px var(--name-col-width, 120px) 28px 52px 80px;
+  }
+}
 
 .lt-progress-header {
   display: flex; align-items: center;
