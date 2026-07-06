@@ -444,7 +444,7 @@ function ConnectorLines({ leftCenters, rightCenters, totalH }) {
 // Main component
 // ---------------------------------------------------------------------------
 
-export default function BracketView({ tournament, matches, players, picks, onPick, locked, mode = 'picks', picksOwner = null, windowStart = 0 }) {
+export default function BracketView({ tournament, matches, players, picks, onPick, locked, mode = 'picks', picksOwner = null, windowStart = 0, windowSize = 4 }) {
   const [h2hPlayers, setH2HPlayers] = useState(null) // { p1, p2, match }
   const [hoveredPlayerId, setHoveredPlayerId] = useState(null)
 
@@ -494,9 +494,9 @@ export default function BracketView({ tournament, matches, players, picks, onPic
     })
   }
 
-  // Windowed view: only WINDOW rounds are shown at once (the parent's pager
-  // controls windowStart). Clamp defensively in case the data shrank.
-  const WINDOW = 4
+  // Windowed view: only WINDOW rounds are shown at once (the parent controls
+  // windowStart and windowSize). Clamp defensively in case the data shrank.
+  const WINDOW = windowSize
   const maxStart = Math.max(0, roundNums.length - WINDOW)
   const start = Math.min(windowStart, maxStart)
   const visibleRounds = roundNums.slice(start, start + WINDOW)
