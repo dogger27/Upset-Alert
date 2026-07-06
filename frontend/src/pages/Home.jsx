@@ -336,12 +336,6 @@ export default function Home() {
           />
         )}
 
-        <h2 style={{
-          fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: '1.55rem',
-          letterSpacing: '0.01em', textTransform: 'uppercase', color: 'var(--ink-700)',
-          marginBottom: 14,
-        }}>Draws</h2>
-
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, width: 'fit-content' }}>
           <Section
             title="Open"
