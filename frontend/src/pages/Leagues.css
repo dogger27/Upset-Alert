@@ -25,7 +25,7 @@
 .leagues-page-title {
   font-family: var(--font-display);
   font-weight: 900;
-  font-size: 2.75rem;
+  font-size: 2.1rem;
   letter-spacing: 0.01em;
   line-height: 1;
   color: var(--ink-900);
@@ -36,17 +36,18 @@
 .leagues-title-group {
   display: flex;
   align-items: baseline;
-  gap: 0.65rem;
+  gap: 0.4rem;
   position: relative;
 }
 
 .leagues-current-league {
   font-family: var(--font-display);
-  font-weight: var(--fw-bold);
+  font-weight: 400;
   font-size: 2.1rem;
   color: var(--text);
   line-height: 1;
-  margin-left: 1.1rem;
+  text-transform: none;
+  margin-left: 0;
 }
 
 /* Native <select> styled as a bordered box, with its own text hidden so only
@@ -123,12 +124,28 @@
   flex-shrink: 0;
 }
 
-.leagues-action-btn {
-  font-size: 0.85rem;
-  padding: 6px 14px;
-  white-space: nowrap;
+/* Vertical Create/Join stack (matches the dashboard league buttons) */
+.leagues-btn-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
-.leagues-action-btn:first-of-type {
-  margin-left: 1rem;
+.leagues-stack-btn {
+  width: 84px;
+  text-align: center;
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--green-500);
+  color: var(--green-600);
+  background: none;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease-out), color var(--dur) var(--ease-out);
+}
+.leagues-stack-btn:hover {
+  background: var(--green-600);
+  color: #fff;
 }
 
