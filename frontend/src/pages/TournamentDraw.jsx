@@ -503,7 +503,14 @@ export default function TournamentDraw() {
                       key={rn}
                       className={clsx('bracket-dot', { 'in-window': inWindow })}
                       style={{ width: DOT_SIZE, height: DOT_SIZE }}
-                      onClick={() => setWindowStart(Math.min(i, maxWindowStart))}
+                      onClick={() => setWindowStart(
+                        // Reveal the clicked round at the nearest edge (minimal
+                        // shift): left edge if it's left of the window, right
+                        // edge if it's right, otherwise leave the window as-is.
+                        i < windowPos ? i
+                          : i >= windowPos + DRAW_WINDOW ? i - DRAW_WINDOW + 1
+                          : windowPos
+                      )}
                       aria-label={roundNameByNum[rn] || `Round ${rn}`}
                       title={roundNameByNum[rn] || `Round ${rn}`}
                     >
