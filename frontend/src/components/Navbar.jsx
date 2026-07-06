@@ -1,19 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
+import clsx from 'clsx'
 import { useAuth } from '../store/auth'
 import './Navbar.css'
 
-function formatBuildTime(iso) {
-  try {
-    const d = new Date(iso)
-    const weekday = d.toLocaleDateString('en-US', { weekday: 'short' })
-    const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-    const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
-      .replace(' AM', 'am').replace(' PM', 'pm')
-    return `${weekday} ${date}, ${time}`
-  } catch { return null }
-}
-
+// Below this navbar width the primary nav links collapse into a hamburger menu.
+const NAV_BREAKPOINT = 900
 
 const DRAW_CATS_MEN = [
   { key: 'draw_open:Grand Slam:M', label: 'Grand Slam' },
@@ -32,8 +24,9 @@ export default function Navbar() {
   const { user, logout, updateProfile } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const [buildTime, setBuildTime] = useState(() => formatBuildTime(__BUILD_TIME__))
   const [menuOpen, setMenuOpen] = useState(false)
+  const [navCollapsed, setNavCollapsed] = useState(false)
+  const [hamburgerOpen, setHamburgerOpen] = useState(false)
   const [editing, setEditing] = useState(false)
   const [notifying, setNotifying] = useState(false)
   const [username, setUsername] = useState('')
@@ -52,19 +45,31 @@ export default function Navbar() {
   const [notifError, setNotifError] = useState('')
 
   const menuRef = useRef(null)
+  const navRef = useRef(null)
+  const hamburgerRef = useRef(null)
+
+  // Collapse the primary nav links into a hamburger when the bar gets narrow.
+  useEffect(() => {
+    const el = navRef.current
+    if (!el) return
+    const measure = () => setNavCollapsed(el.clientWidth < NAV_BREAKPOINT)
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  // Close the hamburger once there's room to show the links inline again.
+  useEffect(() => { if (!navCollapsed) setHamburgerOpen(false) }, [navCollapsed])
 
   useEffect(() => {
-    if (!import.meta.hot) return
-    // Restore last received time if component remounted (e.g. Navbar.jsx itself changed)
-    if (import.meta.hot.data.lastTime) setBuildTime(import.meta.hot.data.lastTime)
-    const handler = ({ time }) => {
-      const formatted = formatBuildTime(time)
-      import.meta.hot.data.lastTime = formatted
-      setBuildTime(formatted)
+    if (!hamburgerOpen) return
+    const handler = (e) => {
+      if (hamburgerRef.current && !hamburgerRef.current.contains(e.target)) setHamburgerOpen(false)
     }
-    import.meta.hot.on('build-time-update', handler)
-    return () => import.meta.hot.off('build-time-update', handler)
-  }, [])
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [hamburgerOpen])
 
   useEffect(() => {
     if (!menuOpen) return
@@ -168,15 +173,49 @@ export default function Navbar() {
 
   const isActive = (path) => path === '/' ? location.pathname === '/' : location.pathname.startsWith(path)
 
+  const onTournament = /^\/tournaments\/[^/]+/.test(location.pathname)
+  const NAV_ITEMS = [
+    { to: '/', label: 'Dashboard', match: '/' },
+    { to: '/leagues', label: 'Leagues', match: '/leagues' },
+    { to: '/rules', label: 'Rules', match: '/rules' },
+    { to: '/hall-of-fame', label: 'Hall of Fame', match: '/hall-of-fame' },
+    { to: '/about', label: 'About', match: '/about' },
+  ]
+
   return (
-    <nav className="navbar">
+    <nav className="navbar" ref={navRef}>
       <div className="navbar-left">
-        {buildTime && (
-          <div className="build-indicator">
-            <div className="build-dot" />
-            <div className="build-tooltip">
-              Last Code Update:<br />{buildTime}
-            </div>
+        {navCollapsed && (
+          <div className="navbar-hamburger" ref={hamburgerRef}>
+            <button
+              className="hamburger-btn"
+              onClick={() => setHamburgerOpen(o => !o)}
+              aria-label="Menu"
+              aria-expanded={hamburgerOpen}
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <line x1="3" y1="18" x2="21" y2="18" />
+              </svg>
+            </button>
+            {hamburgerOpen && (
+              <div className="hamburger-dropdown">
+                {onTournament && (
+                  <span className="hamburger-item hamburger-item--active">Draw</span>
+                )}
+                {NAV_ITEMS.map(n => (
+                  <Link
+                    key={n.to}
+                    to={n.to}
+                    className={clsx('hamburger-item', { 'hamburger-item--active': isActive(n.match) })}
+                    onClick={() => setHamburgerOpen(false)}
+                  >
+                    {n.label}
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -191,17 +230,19 @@ export default function Navbar() {
         <span className="navbar-brand-slogan">Your Wildest Fantasy Tennis</span>
       </Link>
       <div className="navbar-links">
-        {/^\/tournaments\/[^/]+/.test(location.pathname) && (
-          <span className="navbar-label navbar-active">Draw</span>
+        {!navCollapsed && (
+          <>
+            {onTournament && (
+              <span className="navbar-label navbar-active">Draw</span>
+            )}
+            {NAV_ITEMS.map(n => (
+              <Link key={n.to} to={n.to} className={isActive(n.match) ? 'navbar-active' : ''}>{n.label}</Link>
+            ))}
+          </>
         )}
-        <Link to="/" className={isActive('/') ? 'navbar-active' : ''}>Dashboard</Link>
-        <Link to="/leagues" className={isActive('/leagues') ? 'navbar-active' : ''}>Leagues</Link>
-        <Link to="/rules" className={isActive('/rules') ? 'navbar-active' : ''}>Rules</Link>
-        <Link to="/hall-of-fame" className={isActive('/hall-of-fame') ? 'navbar-active' : ''}>Hall of Fame</Link>
-        <Link to="/about" className={isActive('/about') ? 'navbar-active' : ''}>About</Link>
         {user ? (
           <>
-            {user.is_admin && <Link to="/admin" className="navbar-admin-btn">Admin</Link>}
+            {user.is_admin && <Link to="/admin" className="navbar-admin-btn" title="Admin">A</Link>}
             <div className="navbar-profile" ref={menuRef}>
               <button
                 className="navbar-user"
