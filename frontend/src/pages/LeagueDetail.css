@@ -133,7 +133,7 @@
   border-bottom: 1px solid var(--border);
 }
 .league-members-table tbody tr + tr td { border-top: 1px solid var(--border); }
-.league-members-table td { padding: 0.35rem 0; }
+.league-members-table td { padding-top: 0.35rem; padding-bottom: 0.35rem; }
 .lmt-name-th { border-bottom: 1px solid var(--border); }
 .lmt-pts--sortable { cursor: pointer; user-select: none; }
 .lmt-pts--sortable:hover { color: var(--text); }
