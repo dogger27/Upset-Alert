@@ -25,20 +25,28 @@ export default function TournamentDraw() {
   const [viewMode, setViewMode] = useState('live')
   const [windowStart, setWindowStart] = useState(0) // left-most visible round (pager)
   const [mainWidth, setMainWidth] = useState(0) // width of the bracket area (drives # rounds shown)
+  const [bodyWidth, setBodyWidth] = useState(0) // width of the whole draw body (stable, drives sidebar auto-hide)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [sidebarManual, setSidebarManual] = useState(false) // user overrode auto-hide?
+  const expandedSidebarW = useRef(290) // cached expanded sidebar width (updated while expanded)
 
-  // Callback ref on .draw-main: keeps mainWidth in sync via ResizeObserver.
-  // (Callback ref rather than useEffect so it attaches once the element mounts
-  // after the loading guard.)
-  const roRef = useRef(null)
-  const mainRef = useCallback(node => {
-    if (roRef.current) { roRef.current.disconnect(); roRef.current = null }
-    if (node) {
-      const measure = () => setMainWidth(node.clientWidth)
-      measure()
-      roRef.current = new ResizeObserver(measure)
-      roRef.current.observe(node)
+  // Callback refs + ResizeObservers on .draw-main / .draw-body. (Callback refs
+  // rather than useEffect so they attach once the elements mount after the
+  // loading guard.)
+  const makeWidthRef = (setter) => {
+    let ro = null
+    return node => {
+      if (ro) { ro.disconnect(); ro = null }
+      if (node) {
+        const measure = () => setter(node.clientWidth)
+        measure()
+        ro = new ResizeObserver(measure)
+        ro.observe(node)
+      }
     }
-  }, [])
+  }
+  const mainRef = useCallback(makeWidthRef(setMainWidth), [])
+  const bodyRef = useCallback(makeWidthRef(setBodyWidth), [])
   const [viewedUserId, setViewedUserId] = useState(() => { const u = searchParams.get('user'); return u ? Number(u) : null })
   const [viewedUserName, setViewedUserName] = useState(null)
   const initialModeSet = useRef(false)
@@ -130,6 +138,31 @@ export default function TournamentDraw() {
       setViewMode('live')
     }
   }, [_isLockedNow, _userHasPicks, viewMode, viewingOther, user])
+
+  // ── Sidebar auto-hide ──────────────────────────────────────────────────
+  // Cache the expanded sidebar width while it's showing (so we can reason
+  // about it once it's collapsed). Declared before the auto effect so the
+  // cache updates first when the body resizes.
+  useEffect(() => {
+    if (!sidebarCollapsed && bodyWidth > 0 && mainWidth > 0) {
+      const sw = bodyWidth - mainWidth
+      if (sw > 60) expandedSidebarW.current = sw
+    }
+  }, [sidebarCollapsed, bodyWidth, mainWidth])
+
+  // Auto-hide the leagues sidebar so 4 rounds stay visible; re-show it when
+  // there's room again. Disabled once the user manually toggles it.
+  useEffect(() => {
+    if (sidebarManual || bodyWidth <= 0 || !data) return
+    const anyScores = data.matches.some(m => (m.scores?.length > 0) || m.live_scores != null)
+    const colUnit = (anyScores ? 300 : 252) + 24
+    const needed4Main = 4 * colUnit + 16 // draw-main width needed to fit 4 full rounds
+    const projMainIfExpanded = bodyWidth - expandedSidebarW.current
+    setSidebarCollapsed(projMainIfExpanded < needed4Main)
+  }, [sidebarManual, bodyWidth, data])
+
+  // Resume auto behaviour when navigating to a different tournament
+  useEffect(() => { setSidebarManual(false) }, [id])
 
   const saveMutation = useMutation({
     mutationFn: (latestPicks) => savePredictions(Number(id), latestPicks),
@@ -751,12 +784,14 @@ export default function TournamentDraw() {
         <div key={clearToast.key} className="clear-toast">{clearToast.msg}</div>
       )}
 
-      <div className="draw-body">
+      <div className="draw-body" ref={bodyRef}>
         <DrawSidebar
           tournamentId={Number(id)}
           tournament={tournament}
           selectedUserId={viewedUserId}
           defaultLeagueId={searchParams.get('league') ? Number(searchParams.get('league')) : undefined}
+          collapsed={sidebarCollapsed}
+          onToggleCollapsed={() => { setSidebarManual(true); setSidebarCollapsed(c => !c) }}
           onSelectUser={(uid, uname) => {
             setViewedUserId(uid)
             setViewedUserName(uname ?? null)
