@@ -503,6 +503,8 @@ async def notify_tournament_complete(tournament_id: int) -> None:
 
         t_name = tournament.name
         t_year = tournament.year
+        t_category = tournament.category or ""
+        t_gender = tournament.gender or "M"
 
         # All completed matches (needed for scoring)
         m_res = await db.execute(
@@ -626,7 +628,10 @@ async def notify_tournament_complete(tournament_id: int) -> None:
         if not groups:
             continue
         try:
-            await send_tournament_complete_notification(email, t_name, t_year, tournament_id, groups)
+            await send_tournament_complete_notification(
+                email, t_name, t_year, tournament_id, groups,
+                category=t_category, gender=t_gender,
+            )
             logger.info(
                 "Tournament-complete email sent to user %d (%d group(s)) for %d %s",
                 uid, len(groups), t_year, t_name,
