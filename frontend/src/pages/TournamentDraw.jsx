@@ -859,6 +859,8 @@ export default function TournamentDraw() {
               matches={matches}
               players={players}
               picks={user ? activePicks : {}}
+              onPick={viewingOther ? (canEditOther ? handlePickForOther : () => {}) : handlePick}
+              locked={!user || locked || (viewingOther && !canEditOther)}
               windowStart={windowPos}
               windowSize={DRAW_WINDOW}
             />
