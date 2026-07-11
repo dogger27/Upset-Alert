@@ -7,18 +7,22 @@
 .leagues-page-top {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 1.25rem;
   margin-bottom: 1.5rem;
 }
 
-/* flex:1 here + fixed 300px on .leagues-top-right mirrors the .league-body-row
-   Draws(flex:1)/Members(300px) split (in LeagueDetail.css), so these icons
-   land right-aligned exactly above the Draws card's right edge. */
-.leagues-actions-draws-align {
-  flex: 1;
-  min-width: 0;
+/* Title on top, Invite/Settings icons in a row directly beneath it — their
+   left edges line up with the "LEAGUES:" title (align-items: flex-start). */
+.leagues-title-col {
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.6rem;
+  min-width: 0;
+}
+.leagues-actions-under {
+  display: flex;
   gap: 0.5rem;
 }
 
