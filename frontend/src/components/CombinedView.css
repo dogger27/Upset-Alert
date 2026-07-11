@@ -111,24 +111,10 @@
 .cv-conn { display: block; overflow: visible; }
 .cv-gap { flex-shrink: 0; }
 
-/* Bell (upset) + H2H chip, grouped and centred as a unit on the connector "T" */
-.cv-t-icons {
+/* H2H chip centred on the connector "T" — position is independent of the bell. */
+.cv-h2h {
   position: absolute;
   transform: translate(-50%, -50%);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  z-index: 2;
-}
-
-.cv-bell {
-  font-size: 1.9rem;   /* ≈ BOX_H (32px), matching the match-box height */
-  line-height: 1;
-  user-select: none;
-  cursor: default;
-}
-
-.cv-h2h {
   border: 1px solid var(--green-500, #4a9d6a);
   background: #fff;
   color: var(--green-600, #2f7a4d);
@@ -139,5 +125,17 @@
   padding: 2px 3px;
   line-height: 1;
   cursor: pointer;
+  z-index: 2;
 }
 .cv-h2h:hover { background: var(--green-600, #2f7a4d); color: #fff; }
+
+/* Upset bell — free to overlap the boxes to its left; sits above them. */
+.cv-bell {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: 1.9rem;   /* ≈ BOX_H (32px), matching the match-box height */
+  line-height: 1;
+  user-select: none;
+  cursor: default;
+  z-index: 3;
+}
