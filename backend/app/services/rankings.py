@@ -23,6 +23,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
+# Tennis Explorer stores nationality as an English country name; draw entries
+# use IOC 3-letter codes. Only needed for players Wikipedia lists as "neutral"
+# (currently Russia/Belarus) whose draw-entry nationality comes through blank.
+# Extend as needed if other neutrals appear.
+COUNTRY_TO_IOC = {
+    "russia": "RUS",
+    "belarus": "BLR",
+}
+
 # ---------------------------------------------------------------------------
 # Tennis Explorer URLs
 # ---------------------------------------------------------------------------
@@ -499,6 +508,20 @@ async def assign_rankings(
         if player.te_player_id and not player.te_slug:
             player.te_slug = id_to_slug.get(player.te_player_id)
         player.ranking = rank_by_te_id.get(player.te_player_id) if player.te_player_id else None
+
+    # Wikipedia lists Russian/Belarusian players as "neutral" → blank nationality.
+    # Fill it from the linked TE player's country so their flag still shows.
+    need_nat = [p for p in players if not p.nationality and p.te_player_id]
+    if need_nat:
+        nat_res = await db.execute(
+            select(TePlayer.id, TePlayer.nationality)
+            .where(TePlayer.id.in_([p.te_player_id for p in need_nat]))
+        )
+        nat_by_id = dict(nat_res.all())
+        for p in need_nat:
+            ioc = COUNTRY_TO_IOC.get((nat_by_id.get(p.te_player_id) or "").strip().lower())
+            if ioc:
+                p.nationality = ioc
 
 
 # ---------------------------------------------------------------------------
