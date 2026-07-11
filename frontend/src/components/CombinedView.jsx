@@ -203,6 +203,21 @@ export default function CombinedView({ tournament, matches, players, picks, wind
   })
   const totalH = Math.ceil(colCount(visible[0]) / 2) * PAIR_SLOT
 
+  // Centres for the column just PAST the visible window (if one exists) — used
+  // only to draw the trailing feed bars (connectors + H2H + bell) off the
+  // right-most visible column. Its box column itself is never rendered.
+  const afterC = visible[visible.length - 1] + 1
+  let afterCenters = null
+  if (afterC <= N) {
+    const count = colCount(afterC)
+    const prev = centers[visible[visible.length - 1]]
+    afterCenters = Array.from({ length: count }, (_, i) => {
+      const a = prev[2 * i], b = prev[2 * i + 1]
+      if (a != null && b != null) return (a + b) / 2
+      return a ?? (i * SLOT + SLOT / 2)
+    })
+  }
+
   // ---- box builders -------------------------------------------------------
   function entrantBox(c, i) {
     const match = R[0][Math.floor(i / 2)]
@@ -292,14 +307,21 @@ export default function CombinedView({ tournament, matches, players, picks, wind
                   })}
                 </div>
 
-                {colIdx < visible.length - 1 && (() => {
-                  const nextC = visible[colIdx + 1]
+                {(() => {
+                  // Interior gap: feeds the next VISIBLE column. Trailing stub: the
+                  // right-most visible column still gets its feed bars (connectors,
+                  // H2H, bell) pointing at the next column's slot, even though that
+                  // column's boxes aren't rendered (out of the window).
+                  const isLastVisible = colIdx === visible.length - 1
+                  const nextC = isLastVisible ? afterC : visible[colIdx + 1]
+                  const nextCenters = isLastVisible ? afterCenters : centers[nextC]
+                  if (!nextCenters) return null
                   return (
                     <div className="cv-gap" style={{ width: COL_GAP, height: totalH, position: 'relative' }}>
-                      <Connectors leftCenters={cc} rightCenters={centers[nextC]} totalH={totalH} />
+                      <Connectors leftCenters={cc} rightCenters={nextCenters} totalH={totalH} />
                       {/* H2H chip on the connector "T" feeding each next-column winner —
                           position is fixed regardless of whether the bell also renders. */}
-                      {nextC >= 1 && centers[nextC].map((y, ri) => {
+                      {nextC >= 1 && nextCenters.map((y, ri) => {
                         const m = R[nextC - 1][ri]
                         const a = m.player1?.id != null ? playerById[m.player1.id] : null
                         const b = m.player2?.id != null ? playerById[m.player2.id] : null
@@ -320,7 +342,7 @@ export default function CombinedView({ tournament, matches, players, picks, wind
                           lower-ranked entrant), regardless of the actual result. Sits just
                           to the left of the H2H chip's fixed spot; free to overlap the match
                           boxes to its left if it needs the room. */}
-                      {nextC >= 1 && centers[nextC].map((y, ri) => {
+                      {nextC >= 1 && nextCenters.map((y, ri) => {
                         const m = R[nextC - 1][ri]
                         const aId = m.player1?.id ?? null, bId = m.player2?.id ?? null
                         const pickId = picks?.[m.id] ?? null
