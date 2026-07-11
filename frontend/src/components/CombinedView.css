@@ -1,0 +1,109 @@
+/* ── Combined bracket view (single player per box) ── */
+.cv-scroll {
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+  padding: 0.4rem 0.75rem 1rem;
+  background: var(--bg);
+}
+
+.cv-labels {
+  display: flex;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg);
+  padding-bottom: 4px;
+}
+.cv-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #fff;
+  background: var(--green);
+  text-align: center;
+  padding: 0.35rem 0.5rem;
+  border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.cv-body { display: flex; align-items: flex-start; position: relative; }
+.cv-col { position: relative; flex-shrink: 0; }
+
+/* A slot is a zero-height anchor at the box's centre Y; the box, its score
+   (below) and the real-winner note (above) hang off it. */
+.cv-slot { position: absolute; left: 4px; right: 4px; height: 0; }
+
+.cv-box {
+  position: absolute;
+  left: 0; right: 0;
+  top: -16px;                 /* BOX_H/2 → box centred on the slot */
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 7px;
+  border: 1px solid #cfd6da;
+  border-radius: 5px;
+  background: #eceff1;
+  font-size: 0.8rem;
+  overflow: hidden;
+}
+.cv-box--correct { background: #e7f6ea; border-color: #a5d6b0; }
+.cv-box--wrong   { background: #fdeaea; border-color: #e8b4b4; }
+.cv-box--bye     { background: #f4f5f6; border-style: dashed; }
+
+.cv-flag { width: 18px; height: 13px; border-radius: 2px; flex-shrink: 0; }
+.cv-flag--empty { background: transparent; }
+
+.cv-name {
+  font-weight: 600;
+  color: #1a1a1a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.cv-name--muted { color: var(--text-muted); font-weight: 500; font-style: italic; }
+
+.cv-score {
+  position: absolute;
+  left: 2px;
+  top: 17px;                  /* just below the box */
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.cv-real-winner {
+  position: absolute;
+  left: 2px;
+  bottom: 17px;               /* just above the box */
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #b02a2a;
+  white-space: nowrap;
+}
+
+.cv-conn { display: block; overflow: visible; }
+.cv-gap { flex-shrink: 0; }
+
+/* H2H chip centred on the connector "T" */
+.cv-h2h {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--green-500, #4a9d6a);
+  background: #fff;
+  color: var(--green-600, #2f7a4d);
+  font-size: 0.52rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  border-radius: 4px;
+  padding: 2px 3px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 2;
+}
+.cv-h2h:hover { background: var(--green-600, #2f7a4d); color: #fff; }
