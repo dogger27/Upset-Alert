@@ -155,7 +155,7 @@ function Connectors({ leftCenters, rightCenters, totalH }) {
   )
 }
 
-export default function CombinedView({ tournament, matches, players, picks, windowStart = 0, windowSize = 4 }) {
+export default function CombinedView({ tournament, matches, players, picks, onPick, locked = true, windowStart = 0, windowSize = 4 }) {
   const [h2h, setH2H] = useState(null)
 
   const playerById = Object.fromEntries(players.map(p => [p.id, p]))
@@ -227,6 +227,31 @@ export default function CombinedView({ tournament, matches, players, picks, wind
     return { key: `e${i}`, player, isBye, kind: 'entrant' }
   }
 
+  // Resolve the WINNER a given round-c match slot should display: the user's
+  // pick if one exists, else the actual result. Byes have no pick — the lone
+  // entrant always "wins".
+  function resolvedWinnerId(c, i) {
+    const match = R[c - 1][i]
+    if (match.is_bye) return match.player1?.id ?? null
+    return picks?.[match.id] ?? match.winner?.id ?? null
+  }
+
+  // The two candidates a user can pick between for round-c match i: for the
+  // first winner column (c===1) these are the literal round-1 entrants; for
+  // later columns they're whichever player is CURRENTLY resolved (pick, or
+  // real result if no pick) to have won each of the two round-(c-1) feeders.
+  function candidatesFor(c, i) {
+    if (c === 1) {
+      const match = R[0][i]
+      return [match.player1?.id ?? null, match.player2?.id ?? null]
+    }
+    const feederCount = R[c - 2].length
+    const ai = 2 * i, bi = 2 * i + 1
+    const a = ai < feederCount ? resolvedWinnerId(c - 1, ai) : null
+    const b = bi < feederCount ? resolvedWinnerId(c - 1, bi) : null
+    return [a, b]
+  }
+
   function winnerBox(c, i) {
     const match = R[c - 1][i]
     const realId = match.winner?.id ?? null
@@ -238,11 +263,18 @@ export default function CombinedView({ tournament, matches, players, picks, wind
     const realPlayer = realId != null ? playerById[realId] : null
     const winnerIsP1 = realId != null && realId === match.player1?.id
     const score = match.is_bye ? null : scoreNodes(match.scores, winnerIsP1)
+
+    // Clicking toggles the pick between the match's two resolved candidates —
+    // each box shows a single player, so there's no separate row to click.
+    const [candA, candB] = match.is_bye ? [null, null] : candidatesFor(c, i)
+    const clickable = !locked && !!onPick && !match.is_bye && candA != null && candB != null
+    const onClick = clickable ? () => onPick(match.id, displayId === candA ? candB : candA) : undefined
+
     return {
       key: `w${match.id}`, player, correct, wrong, score,
       realName: wrong && realPlayer ? abbrevName(realPlayer.name) : null,
       realFullName: wrong && realPlayer ? realPlayer.name : null,
-      match, abbrev: true, kind: 'winner',
+      match, abbrev: true, kind: 'winner', clickable, onClick,
     }
   }
 
@@ -287,7 +319,10 @@ export default function CombinedView({ tournament, matches, players, picks, wind
                     return (
                       <div key={box.key} className="cv-slot" style={{ top: cc[i] }}>
                         {box.realName && <div className="cv-real-winner" title={box.realFullName || undefined}>{box.realName}</div>}
-                        <div className={`cv-box${box.isBye ? ' cv-box--bye' : ''}${box.correct ? ' cv-box--correct' : ''}${box.wrong ? ' cv-box--wrong' : ''}`}>
+                        <div
+                          className={`cv-box${box.isBye ? ' cv-box--bye' : ''}${box.correct ? ' cv-box--correct' : ''}${box.wrong ? ' cv-box--wrong' : ''}${box.clickable ? ' cv-box--clickable' : ''}`}
+                          onClick={box.onClick}
+                        >
                           {box.isBye ? (
                             <span className="cv-name cv-name--muted">BYE</span>
                           ) : (
