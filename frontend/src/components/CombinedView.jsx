@@ -102,7 +102,7 @@ const SLOT = 58          // fallback slot (missing feeders only)
 const PAIR_SLOT = 108    // vertical slot per MATCH (pair) in the base column
 const PAIR_OFF = 24      // half the centre-to-centre gap of a match's two opponents
 const COL_W = 210
-const COL_GAP = 44       // wide enough to seat the H2H chip on the connector "T"
+const COL_GAP = 58       // wide enough to seat the upset bell + H2H chip on the connector "T"
 
 function Flag({ nat }) {
   const iso2 = nationalityIso2(nat)
@@ -288,22 +288,36 @@ export default function CombinedView({ tournament, matches, players, picks, wind
                   return (
                     <div className="cv-gap" style={{ width: COL_GAP, height: totalH, position: 'relative' }}>
                       <Connectors leftCenters={cc} rightCenters={centers[nextC]} totalH={totalH} />
-                      {/* H2H chip on the connector "T" feeding each next-column winner */}
+                      {/* Upset bell + H2H chip grouped on the connector "T" feeding each
+                          next-column winner — bell sits just to the left of the H2H box. */}
                       {nextC >= 1 && centers[nextC].map((y, ri) => {
                         const m = R[nextC - 1][ri]
                         const a = m.player1?.id != null ? playerById[m.player1.id] : null
                         const b = m.player2?.id != null ? playerById[m.player2.id] : null
-                        if (!a?.te_slug || !b?.te_slug) return null
+                        const h2hOk = !!a?.te_slug && !!b?.te_slug
+
+                        // Upset: the actual winner was the lower-ranked (higher-numbered) entrant.
+                        const aId = m.player1?.id ?? null, bId = m.player2?.id ?? null
+                        const winId = m.winner?.id ?? null
+                        const rankA = aId != null ? drawRanks[aId] : null
+                        const rankB = bId != null ? drawRanks[bId] : null
+                        const expectedId = rankA != null && rankB != null ? (rankA <= rankB ? aId : bId) : null
+                        const isUpset = winId != null && expectedId != null && winId !== expectedId
+
+                        if (!h2hOk && !isUpset) return null
                         return (
-                          <button
-                            key={`h${m.id}`}
-                            className="cv-h2h"
-                            style={{ top: y, left: COL_GAP / 2 }}
-                            title={`Head-to-head: ${a.name} vs ${b.name}`}
-                            onClick={() => setH2H({ p1: a, p2: b, round: m.round_number })}
-                          >
-                            H2H
-                          </button>
+                          <div key={`t${m.id}`} className="cv-t-icons" style={{ top: y, left: COL_GAP / 2 }}>
+                            {isUpset && <span className="cv-bell" title="Upset!">🔔</span>}
+                            {h2hOk && (
+                              <button
+                                className="cv-h2h"
+                                title={`Head-to-head: ${a.name} vs ${b.name}`}
+                                onClick={() => setH2H({ p1: a, p2: b, round: m.round_number })}
+                              >
+                                H2H
+                              </button>
+                            )}
+                          </div>
                         )
                       })}
                     </div>

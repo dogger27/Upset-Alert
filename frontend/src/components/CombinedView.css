@@ -55,13 +55,10 @@
 .cv-box--wrong   { background: #fdeaea; border-color: #e8b4b4; }
 .cv-box--bye     { background: #f4f5f6; border-style: dashed; }
 
-/* Fixed-width zone for the seed badge so the flag + name align across every
-   box regardless of the seed's digit count. */
+/* Seed badge at the box's left edge, natural width, tight to the flag. */
 .cv-badges {
-  width: 30px;
   display: inline-flex;
   align-items: center;
-  justify-content: flex-end;   /* seed sits at the right, close to the flag */
   flex-shrink: 0;
 }
 /* Entry-type badge (Q/WC/LL/SE) sits at the far right of the box */
@@ -114,10 +111,24 @@
 .cv-conn { display: block; overflow: visible; }
 .cv-gap { flex-shrink: 0; }
 
-/* H2H chip centred on the connector "T" */
-.cv-h2h {
+/* Bell (upset) + H2H chip, grouped and centred as a unit on the connector "T" */
+.cv-t-icons {
   position: absolute;
   transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  z-index: 2;
+}
+
+.cv-bell {
+  font-size: 1.9rem;   /* ≈ BOX_H (32px), matching the match-box height */
+  line-height: 1;
+  user-select: none;
+  cursor: default;
+}
+
+.cv-h2h {
   border: 1px solid var(--green-500, #4a9d6a);
   background: #fff;
   color: var(--green-600, #2f7a4d);
@@ -128,6 +139,5 @@
   padding: 2px 3px;
   line-height: 1;
   cursor: pointer;
-  z-index: 2;
 }
 .cv-h2h:hover { background: var(--green-600, #2f7a4d); color: #fff; }
