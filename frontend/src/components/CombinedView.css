@@ -83,7 +83,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-variant-caps: small-caps;
+  text-transform: uppercase;
 }
 .cv-name--muted { color: var(--text-muted); font-weight: 500; font-style: italic; }
 
@@ -107,7 +107,7 @@
   font-weight: 600;
   color: #b02a2a;
   white-space: nowrap;
-  font-variant-caps: small-caps;
+  text-transform: uppercase;
 }
 
 .cv-conn { display: block; overflow: visible; }
