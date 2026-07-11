@@ -218,6 +218,7 @@ export default function CombinedView({ tournament, matches, players, picks, wind
     return {
       key: `w${match.id}`, player, correct, wrong, score,
       realName: wrong && realPlayer ? abbrevName(realPlayer.name) : null,
+      realFullName: wrong && realPlayer ? realPlayer.name : null,
       match, abbrev: true, kind: 'winner',
     }
   }
@@ -262,7 +263,7 @@ export default function CombinedView({ tournament, matches, players, picks, wind
                     const p = box.player
                     return (
                       <div key={box.key} className="cv-slot" style={{ top: cc[i] }}>
-                        {box.realName && <div className="cv-real-winner">{box.realName}</div>}
+                        {box.realName && <div className="cv-real-winner" title={box.realFullName || undefined}>{box.realName}</div>}
                         <div className={`cv-box${box.isBye ? ' cv-box--bye' : ''}${box.correct ? ' cv-box--correct' : ''}${box.wrong ? ' cv-box--wrong' : ''}`}>
                           {box.isBye ? (
                             <span className="cv-name cv-name--muted">BYE</span>
@@ -270,7 +271,9 @@ export default function CombinedView({ tournament, matches, players, picks, wind
                             <>
                               <span className="cv-badges"><Badges player={p} drawRanks={drawRanks} /></span>
                               <Flag nat={p?.nationality} />
-                              <span className="cv-name">{p ? (box.abbrev ? abbrevName(p.name) : p.name) : 'TBD'}</span>
+                              <span className="cv-name" title={p?.nationality ? `${p.name} (${p.nationality})` : (p?.name || undefined)}>
+                                {p ? (box.abbrev ? abbrevName(p.name) : p.name) : 'TBD'}
+                              </span>
                             </>
                           )}
                         </div>
