@@ -71,13 +71,14 @@
 .cv-score {
   position: absolute;
   left: 2px;
-  top: 17px;                  /* just below the box */
-  font-size: 0.72rem;
+  top: 18px;                  /* just below the box */
+  font-size: 0.92rem;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--text-muted);
   white-space: nowrap;
 }
-.cv-score sup { font-size: 0.8em; }
+.cv-score sup { font-size: 0.72em; }
 .cv-real-winner {
   position: absolute;
   left: 2px;
