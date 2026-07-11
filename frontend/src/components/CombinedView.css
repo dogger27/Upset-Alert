@@ -98,6 +98,11 @@
   white-space: nowrap;
 }
 .cv-score sup { font-size: 0.72em; }
+.cv-ret {
+  font-style: italic;
+  font-weight: 500;
+  color: #b02a2a;
+}
 .cv-real-winner {
   position: absolute;
   left: 2px;

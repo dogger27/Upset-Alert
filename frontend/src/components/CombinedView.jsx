@@ -72,14 +72,17 @@ function parseSet(cell) {
 }
 
 // Render the score oriented winner-first as "7-6³, 3-6, 7-5, 6-0": sets joined
-// by ", "; tiebreak shown only for the set's LOSER, as a superscript.
+// by ", "; tiebreak shown only for the set's LOSER, as a superscript. If either
+// side's score cells carry a trailing "r" (retirement), append " (ret.)".
 function scoreNodes(scores, winnerIsP1) {
   if (!scores || scores.length < 2) return null
   const a = winnerIsP1 ? scores[0] : scores[1]
   const b = winnerIsP1 ? scores[1] : scores[0]
   const n = Math.max(a?.length ?? 0, b?.length ?? 0)
   const sets = []
+  let retired = false
   for (let i = 0; i < n; i++) {
+    if (/r$/i.test(a?.[i] ?? '') || /r$/i.test(b?.[i] ?? '')) retired = true
     const A = parseSet(a?.[i]), B = parseSet(b?.[i])
     if (A.g === '' && B.g === '') continue
     const gA = Number(A.g), gB = Number(B.g)
@@ -94,7 +97,12 @@ function scoreNodes(scores, winnerIsP1) {
     }
   }
   if (sets.length === 0) return null
-  return sets.map((s, i) => <span key={i}>{i > 0 ? ', ' : ''}{s}</span>)
+  return (
+    <>
+      {sets.map((s, i) => <span key={i}>{i > 0 ? ', ' : ''}{s}</span>)}
+      {retired && <span className="cv-ret"> (ret.)</span>}
+    </>
+  )
 }
 
 const BOX_H = 32
