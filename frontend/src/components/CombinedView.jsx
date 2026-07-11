@@ -103,7 +103,7 @@ const PAIR_SLOT = 108    // vertical slot per MATCH (pair) in the base column
 const PAIR_OFF = 24      // half the centre-to-centre gap of a match's two opponents
 const COL_W = 210
 const COL_GAP = 44       // wide enough to seat the H2H chip on the connector "T"
-const BELL_OFFSET = 26   // distance (px) the bell sits left of the H2H chip's centre
+const BELL_OFFSET = 46   // distance (px) the bell sits left of the H2H chip's centre
 
 function Flag({ nat }) {
   const iso2 = nationalityIso2(nat)
