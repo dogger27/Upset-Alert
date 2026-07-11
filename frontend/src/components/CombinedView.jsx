@@ -65,21 +65,36 @@ function abbrevName(full) {
   return `${parts[0][0]}. ${parts.slice(1).join(' ')}`
 }
 
-// Combine per-player set arrays into a "6-2 6-3" string, oriented so the
-// winner's games come first.
-function formatScore(scores, winnerIsP1) {
-  if (!scores || scores.length < 2) return ''
+// One set cell → { g: games, tb: tiebreak points | null }
+function parseSet(cell) {
+  const m = cell != null ? String(cell).replace(/r$/i, '').match(/^(\d+)(?:\((\d+)\))?/) : null
+  return m ? { g: m[1], tb: m[2] ?? null } : { g: '', tb: null }
+}
+
+// Render the score oriented winner-first as "7-6³, 3-6, 7-5, 6-0": sets joined
+// by ", "; tiebreak shown only for the set's LOSER, as a superscript.
+function scoreNodes(scores, winnerIsP1) {
+  if (!scores || scores.length < 2) return null
   const a = winnerIsP1 ? scores[0] : scores[1]
   const b = winnerIsP1 ? scores[1] : scores[0]
   const n = Math.max(a?.length ?? 0, b?.length ?? 0)
   const sets = []
   for (let i = 0; i < n; i++) {
-    const x = (a?.[i] ?? '').replace(/r$/i, '')
-    const y = (b?.[i] ?? '').replace(/r$/i, '')
-    if (x === '' && y === '') continue
-    sets.push(`${x}-${y}`)
+    const A = parseSet(a?.[i]), B = parseSet(b?.[i])
+    if (A.g === '' && B.g === '') continue
+    const gA = Number(A.g), gB = Number(B.g)
+    // The tiebreak loser is the side with fewer games; show only their points.
+    const loserIsA = A.tb != null && (B.tb == null || gA < gB)
+    if (A.tb != null && loserIsA) {
+      sets.push(<>{A.g}<sup>{A.tb}</sup>-{B.g}</>)
+    } else if (B.tb != null && !loserIsA) {
+      sets.push(<>{A.g}-{B.g}<sup>{B.tb}</sup></>)
+    } else {
+      sets.push(<>{A.g}-{B.g}</>)
+    }
   }
-  return sets.join(' ')
+  if (sets.length === 0) return null
+  return sets.map((s, i) => <span key={i}>{i > 0 ? ', ' : ''}{s}</span>)
 }
 
 const BOX_H = 32
@@ -188,7 +203,7 @@ export default function CombinedView({ tournament, matches, players, picks, wind
     const wrong = pickId != null && realId != null && pickId !== realId
     const realPlayer = realId != null ? playerById[realId] : null
     const winnerIsP1 = realId != null && realId === match.player1?.id
-    const score = match.is_bye ? '' : formatScore(match.scores, winnerIsP1)
+    const score = match.is_bye ? null : scoreNodes(match.scores, winnerIsP1)
     return {
       key: `w${match.id}`, player, correct, wrong, score,
       realName: wrong && realPlayer ? abbrevName(realPlayer.name) : null,
