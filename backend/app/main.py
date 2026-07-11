@@ -46,15 +46,27 @@ import app.models.rankings  # noqa: F401
 import app.models.h2h  # noqa: F401
 import app.models.system_log  # noqa: F401
 from app.services.scheduler import start_scheduler, stop_scheduler
+from app.core.config import settings
 from app.routers import admin, auth, contact, discovery, h2h, leagues, predictions, tournaments
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
-    start_scheduler()
+    # Only production runs the background scrapers (Wikipedia / Tennis Explorer /
+    # ELO / ESPN / Wikimedia EventStreams). Local dev (environment=development)
+    # leaves them off so it doesn't duplicate load / trip rate limits.
+    scrapers_on = settings.environment == "production"
+    if scrapers_on:
+        start_scheduler()
+    else:
+        logging.getLogger("app").info(
+            "Scrapers/scheduler DISABLED (environment=%s). Set ENVIRONMENT=production to enable.",
+            settings.environment,
+        )
     yield
-    stop_scheduler()
+    if scrapers_on:
+        stop_scheduler()
 
 
 app = FastAPI(title="Tennis Fantasy League", version="0.1.0", lifespan=lifespan)
