@@ -61,6 +61,7 @@
   width: 30px;
   display: inline-flex;
   align-items: center;
+  justify-content: flex-end;   /* seed sits at the right, close to the flag */
   flex-shrink: 0;
 }
 /* Entry-type badge (Q/WC/LL/SE) sits at the far right of the box */
@@ -73,7 +74,7 @@
   width: 18px; height: 13px;
   border-radius: 2px;
   flex-shrink: 0;
-  margin: 0 6px 0 2px;        /* flag sits directly to the left of the name */
+  margin: 0 6px 0 4px;        /* small gap to the seed on the left, name on the right */
 }
 .cv-flag--empty { background: transparent; }
 
