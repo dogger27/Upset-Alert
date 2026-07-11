@@ -103,8 +103,8 @@
 .cv-real-winner {
   position: absolute;
   left: 2px;
-  bottom: 18px;               /* ~2px above the box top */
-  line-height: 1;             /* no extra line-box padding under the text */
+  bottom: 12px;               /* only a few px above the box top */
+  line-height: 1;
   font-size: 0.72rem;
   font-weight: 600;
   color: #b02a2a;
