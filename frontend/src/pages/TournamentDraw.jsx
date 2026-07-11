@@ -10,6 +10,7 @@ import { getDraw, refreshDraw, toggleUnlockSelections } from '../api/tournaments
 import { getPredictions, savePredictions } from '../api/predictions'
 import { useAuth } from '../store/auth'
 import BracketView from '../components/BracketView'
+import CombinedView from '../components/CombinedView'
 import DrawSidebar from '../components/DrawSidebar'
 import './TournamentDraw.css'
 
@@ -437,14 +438,6 @@ export default function TournamentDraw() {
   // the 24px connector gap. Subtract the scroll area's padding and vertical
   // scrollbar so we never leave a round half-clipped.
   const anyScores = matches.some(m => (m.scores?.length > 0) || m.live_scores != null)
-  const COL_GAP_PX = 24
-  const colUnit = (anyScores ? 300 : 252) + COL_GAP_PX
-  const usableW = mainWidth - 24 /* scroll padding */ - 16 /* vertical scrollbar */
-  const fitRounds = mainWidth > 0 ? Math.floor((usableW + COL_GAP_PX) / colUnit) : 4
-  const DRAW_WINDOW = Math.min(4, roundNumbers.length, Math.max(1, fitRounds))
-  const maxWindowStart = Math.max(0, roundNumbers.length - DRAW_WINDOW)
-  const windowPos = Math.min(windowStart, maxWindowStart)
-  const showPager = roundNumbers.length > DRAW_WINDOW
   const roundNameByNum = {}
   const roundCountByNum = {}
   for (const m of matches) {
@@ -461,6 +454,24 @@ export default function TournamentDraw() {
     if (c === 8) return 'R16'
     return `R${i + 1}`
   }
+  // Pager columns: one per round for Picks/Live; Combined adds a Champion column.
+  const roundCols = roundNumbers.map((rn, i) => ({ label: dotLabel(rn, i), title: roundNameByNum[rn] || `Round ${rn}` }))
+  const pagerColumns = viewMode === 'combined'
+    ? [...roundCols, { label: '🏆', title: 'Champion' }]
+    : roundCols
+  const columnCount = pagerColumns.length
+
+  // How many columns fit in the bracket area: shrink from 4 toward 1 as it
+  // narrows; a column is only counted when it fits ENTIRELY (no h-scroll).
+  const COL_GAP_PX = 24
+  const colUnit = (anyScores ? 300 : 252) + COL_GAP_PX
+  const usableW = mainWidth - 24 /* scroll padding */ - 16 /* vertical scrollbar */
+  const fitCols = mainWidth > 0 ? Math.floor((usableW + COL_GAP_PX) / colUnit) : 4
+  const DRAW_WINDOW = Math.min(4, columnCount, Math.max(1, fitCols))
+  const maxWindowStart = Math.max(0, columnCount - DRAW_WINDOW)
+  const windowPos = Math.min(windowStart, maxWindowStart)
+  const showPager = columnCount > DRAW_WINDOW
+
   // Pixel geometry for the round dots + the shaded window highlight behind them.
   const DOT_SIZE = 38, DOT_GAP = 10, DOT_PAD = 6
   const DOT_STEP = DOT_SIZE + DOT_GAP
@@ -469,8 +480,8 @@ export default function TournamentDraw() {
   //  'full'    — everything shown; switch centred between info and pager.
   //  'compact' — hide tournament info + right-hand status; keep switch + dots.
   //  'minimal' — replace the dot pager with two large prev/next arrows.
-  const DOTS_W = roundNumbers.length * DOT_SIZE + (roundNumbers.length - 1) * DOT_GAP + 2 * DOT_PAD + 110
-  const SWITCH_W = 175, INFO_W = 300, RIGHT_W = 220, HPAD = 48, HGAP = 16
+  const DOTS_W = columnCount * DOT_SIZE + (columnCount - 1) * DOT_GAP + 2 * DOT_PAD + 110
+  const SWITCH_W = 255, INFO_W = 300, RIGHT_W = 220, HPAD = 48, HGAP = 16
   const needFull = INFO_W + SWITCH_W + DOTS_W + RIGHT_W + 3 * HGAP + HPAD
   const needCompact = SWITCH_W + DOTS_W + HGAP + HPAD
   const headerStage = bodyWidth <= 0 || bodyWidth >= needFull ? 'full'
@@ -549,6 +560,12 @@ export default function TournamentDraw() {
           >
             Live Draw
           </button>
+          <button
+            className={clsx('draw-mode-btn', { active: viewMode === 'combined' })}
+            onClick={() => setViewMode('combined')}
+          >
+            Combined
+          </button>
         </div>
         <div className="draw-header-center">
           {showPager && headerStage === 'minimal' && (
@@ -589,25 +606,25 @@ export default function TournamentDraw() {
                     width: DRAW_WINDOW * DOT_SIZE + (DRAW_WINDOW - 1) * DOT_GAP + 2 * DOT_PAD,
                   }}
                 />
-                {roundNumbers.map((rn, i) => {
+                {pagerColumns.map((col, i) => {
                   const inWindow = i >= windowPos && i < windowPos + DRAW_WINDOW
                   return (
                     <button
-                      key={rn}
+                      key={i}
                       className={clsx('bracket-dot', { 'in-window': inWindow })}
                       style={{ width: DOT_SIZE, height: DOT_SIZE }}
                       onClick={() => setWindowStart(
-                        // Reveal the clicked round at the nearest edge (minimal
+                        // Reveal the clicked column at the nearest edge (minimal
                         // shift): left edge if it's left of the window, right
                         // edge if it's right, otherwise leave the window as-is.
                         i < windowPos ? i
                           : i >= windowPos + DRAW_WINDOW ? i - DRAW_WINDOW + 1
                           : windowPos
                       )}
-                      aria-label={roundNameByNum[rn] || `Round ${rn}`}
-                      title={roundNameByNum[rn] || `Round ${rn}`}
+                      aria-label={col.title}
+                      title={col.title}
                     >
-                      {dotLabel(rn, i)}
+                      {col.label}
                     </button>
                   )
                 })}
@@ -836,18 +853,29 @@ export default function TournamentDraw() {
         />
 
         <div className="draw-main" ref={mainRef}>
-          <BracketView
-            tournament={tournament}
-            matches={matches}
-            players={players}
-            picks={user ? activePicks : {}}
-            onPick={viewingOther ? (canEditOther ? handlePickForOther : () => {}) : handlePick}
-            locked={!user || locked || (viewingOther && !canEditOther)}
-            mode={viewMode}
-            picksOwner={picksOwner}
-            windowStart={windowPos}
-            windowSize={DRAW_WINDOW}
-          />
+          {viewMode === 'combined' ? (
+            <CombinedView
+              tournament={tournament}
+              matches={matches}
+              players={players}
+              picks={user ? activePicks : {}}
+              windowStart={windowPos}
+              windowSize={DRAW_WINDOW}
+            />
+          ) : (
+            <BracketView
+              tournament={tournament}
+              matches={matches}
+              players={players}
+              picks={user ? activePicks : {}}
+              onPick={viewingOther ? (canEditOther ? handlePickForOther : () => {}) : handlePick}
+              locked={!user || locked || (viewingOther && !canEditOther)}
+              mode={viewMode}
+              picksOwner={picksOwner}
+              windowStart={windowPos}
+              windowSize={DRAW_WINDOW}
+            />
+          )}
         </div>
       </div>
     </div>
