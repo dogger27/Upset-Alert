@@ -110,20 +110,19 @@ function Flag({ nat }) {
   return <span className={`fi fi-${iso2.toLowerCase()} cv-flag`} title={nat} />
 }
 
-function Badges({ player, drawRanks }) {
+function SeedBadge({ player, drawRanks }) {
   if (!player) return null
   const rank = player.seed != null ? player.seed : drawRanks?.[player.id]
+  if (rank == null) return null
   return (
-    <>
-      {rank != null && (
-        <span className={`pos-badge ${player.seed != null ? 'seeded' : 'unseeded'}`}
-          title={player.ranking != null ? `Rank: ${player.ranking}` : undefined}>{rank}</span>
-      )}
-      {player.entry_type && (
-        <span className={`pos-badge entry entry-${player.entry_type.toLowerCase()}`}>{player.entry_type}</span>
-      )}
-    </>
+    <span className={`pos-badge ${player.seed != null ? 'seeded' : 'unseeded'}`}
+      title={player.ranking != null ? `Rank: ${player.ranking}` : undefined}>{rank}</span>
   )
+}
+
+function EntryBadge({ player }) {
+  if (!player?.entry_type) return null
+  return <span className={`pos-badge entry entry-${player.entry_type.toLowerCase()} cv-entry`}>{player.entry_type}</span>
 }
 
 // Straight-elbow connectors between two columns of box centres.
@@ -269,11 +268,12 @@ export default function CombinedView({ tournament, matches, players, picks, wind
                             <span className="cv-name cv-name--muted">BYE</span>
                           ) : (
                             <>
-                              <span className="cv-badges"><Badges player={p} drawRanks={drawRanks} /></span>
+                              <span className="cv-badges"><SeedBadge player={p} drawRanks={drawRanks} /></span>
                               <Flag nat={p?.nationality} />
                               <span className="cv-name" title={p?.nationality ? `${p.name} (${p.nationality})` : (p?.name || undefined)}>
                                 {p ? (box.abbrev ? abbrevName(p.name) : p.name) : 'TBD'}
                               </span>
+                              <EntryBadge player={p} />
                             </>
                           )}
                         </div>

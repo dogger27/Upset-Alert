@@ -55,14 +55,18 @@
 .cv-box--wrong   { background: #fdeaea; border-color: #e8b4b4; }
 .cv-box--bye     { background: #f4f5f6; border-style: dashed; }
 
-/* Fixed-width zone for the seed/entry badges so the flag + name align across
-   every box regardless of how many badges precede them. */
+/* Fixed-width zone for the seed badge so the flag + name align across every
+   box regardless of the seed's digit count. */
 .cv-badges {
-  width: 52px;
+  width: 30px;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
   flex-shrink: 0;
+}
+/* Entry-type badge (Q/WC/LL/SE) sits at the far right of the box */
+.cv-entry {
+  flex-shrink: 0;
+  margin-left: 6px;
 }
 
 .cv-flag {
