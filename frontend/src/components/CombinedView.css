@@ -53,6 +53,8 @@
 }
 .cv-box--correct { background: #e7f6ea; border-color: #a5d6b0; }
 .cv-box--wrong   { background: #fdeaea; border-color: #e8b4b4; }
+.cv-box--clickable { cursor: pointer; }
+.cv-box--clickable:hover { filter: brightness(0.96); border-color: #9aa4ab; }
 .cv-box--bye     { background: #f4f5f6; border-style: dashed; }
 
 /* Seed badge at the box's left edge, natural width, tight to the flag. */
