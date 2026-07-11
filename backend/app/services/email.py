@@ -248,9 +248,12 @@ async def send_tournament_complete_notification(
     year: int,
     tournament_id: int,
     groups: list[tuple],  # [(group_name, rank, total_participants, points), ...]
+    category: str = "",
+    gender: str = "M",
 ) -> None:
     """One email per user covering their standing in every group they participated in."""
     tournament_url = f"{BASE_URL}/tournaments/{tournament_id}"
+    label = _tournament_label(tournament_name, category, gender)
     rows = "".join(
         f"<tr>"
         f"<td style='padding:8px 12px'>{name}</td>"
@@ -262,9 +265,9 @@ async def send_tournament_complete_notification(
     await send_async({
         "from": FROM,
         "to": [email],
-        "subject": f"{tournament_name} {year} — your final standings",
+        "subject": f"{label} {year} - Final Standings",
         "html": f"""{_WRAP_OPEN}{_LOGO_HEADER}{_BODY_OPEN}
-          <h1 style="font-size:22px;margin:0 0 12px">{tournament_name} {year} is complete!</h1>
+          <h1 style="font-size:22px;margin:0 0 12px">{label} {year} is complete!</h1>
           <p style="color:#444;line-height:1.6;margin:0 0 12px">Here are your final standings across all groups:</p>
           <table style="width:100%;border-collapse:collapse;font-size:14px;margin:0 0 20px">
             <thead>
