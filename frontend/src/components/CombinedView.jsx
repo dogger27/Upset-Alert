@@ -98,9 +98,9 @@ function scoreNodes(scores, winnerIsP1) {
 }
 
 const BOX_H = 32
-const SLOT = 58          // vertical slot per box in a winner base column
-const PAIR_SLOT = 100    // vertical slot per MATCH in the entrants (col 0) base
-const PAIR_OFF = 20      // half the centre-to-centre gap of a match's two opponents
+const SLOT = 58          // fallback slot (missing feeders only)
+const PAIR_SLOT = 108    // vertical slot per MATCH (pair) in the base column
+const PAIR_OFF = 24      // half the centre-to-centre gap of a match's two opponents
 const COL_W = 210
 const COL_GAP = 44       // wide enough to seat the H2H chip on the connector "T"
 
@@ -169,22 +169,20 @@ export default function CombinedView({ tournament, matches, players, picks, wind
 
   const colCount = (c) => (c === 0 ? 2 * R[0].length : R[c - 1].length)
 
-  // Feeder-centred vertical layout for the visible columns (left-most = base).
-  // If the base is the entrants column (col 0), pair the two opponents of each
-  // match tightly (small within-pair gap, larger gap between matches).
-  const baseIsEntrants = visible[0] === 0
+  // Feeder-centred vertical layout for the visible columns. The left-most (base)
+  // column pairs each match's two opponents tightly (small within-pair gap,
+  // larger gap between matches); columns to its right centre on their feeders.
   const centers = {}
   visible.forEach((c, p) => {
     const count = colCount(c)
     if (p === 0) {
-      if (c === 0) {
-        centers[c] = []
-        for (let mi = 0; mi < R[0].length; mi++) {
-          const mc = mi * PAIR_SLOT + PAIR_SLOT / 2
-          centers[c].push(mc - PAIR_OFF, mc + PAIR_OFF)
-        }
-      } else {
-        centers[c] = Array.from({ length: count }, (_, i) => i * SLOT + SLOT / 2)
+      centers[c] = []
+      const nPairs = Math.ceil(count / 2)
+      for (let pi = 0; pi < nPairs; pi++) {
+        const mc = pi * PAIR_SLOT + PAIR_SLOT / 2
+        const hasSecond = 2 * pi + 1 < count
+        centers[c].push(hasSecond ? mc - PAIR_OFF : mc)
+        if (hasSecond) centers[c].push(mc + PAIR_OFF)
       }
     } else {
       const prev = centers[visible[p - 1]]
@@ -195,7 +193,7 @@ export default function CombinedView({ tournament, matches, players, picks, wind
       })
     }
   })
-  const totalH = baseIsEntrants ? R[0].length * PAIR_SLOT : colCount(visible[0]) * SLOT
+  const totalH = Math.ceil(colCount(visible[0]) / 2) * PAIR_SLOT
 
   // ---- box builders -------------------------------------------------------
   function entrantBox(c, i) {
@@ -270,8 +268,8 @@ export default function CombinedView({ tournament, matches, players, picks, wind
                             <span className="cv-name cv-name--muted">BYE</span>
                           ) : (
                             <>
+                              <span className="cv-badges"><Badges player={p} drawRanks={drawRanks} /></span>
                               <Flag nat={p?.nationality} />
-                              <Badges player={p} drawRanks={drawRanks} />
                               <span className="cv-name">{p ? (box.abbrev ? abbrevName(p.name) : p.name) : 'TBD'}</span>
                             </>
                           )}

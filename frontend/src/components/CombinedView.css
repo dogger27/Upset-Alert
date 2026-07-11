@@ -43,8 +43,8 @@
   height: 32px;
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 0 7px;
+  gap: 0;
+  padding: 0 8px;
   border: 1px solid #cfd6da;
   border-radius: 5px;
   background: #eceff1;
@@ -55,16 +55,32 @@
 .cv-box--wrong   { background: #fdeaea; border-color: #e8b4b4; }
 .cv-box--bye     { background: #f4f5f6; border-style: dashed; }
 
-.cv-flag { width: 18px; height: 13px; border-radius: 2px; flex-shrink: 0; }
+/* Fixed-width zone for the seed/entry badges so the flag + name align across
+   every box regardless of how many badges precede them. */
+.cv-badges {
+  width: 52px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.cv-flag {
+  width: 18px; height: 13px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  margin: 0 6px 0 2px;        /* flag sits directly to the left of the name */
+}
 .cv-flag--empty { background: transparent; }
 
 .cv-name {
+  flex: 1 1 auto;
+  min-width: 0;
   font-weight: 600;
   color: #1a1a1a;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  min-width: 0;
 }
 .cv-name--muted { color: var(--text-muted); font-weight: 500; font-style: italic; }
 
