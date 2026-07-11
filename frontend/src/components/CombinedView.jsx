@@ -308,17 +308,19 @@ export default function CombinedView({ tournament, matches, players, picks, wind
                           </button>
                         )
                       })}
-                      {/* Upset bell — sits just to the left of the H2H chip's fixed spot.
-                          Free to overlap the match boxes to its left if it needs the room. */}
+                      {/* Upset bell — shown when the USER PREDICTED an upset (picked the
+                          lower-ranked entrant), regardless of the actual result. Sits just
+                          to the left of the H2H chip's fixed spot; free to overlap the match
+                          boxes to its left if it needs the room. */}
                       {nextC >= 1 && centers[nextC].map((y, ri) => {
                         const m = R[nextC - 1][ri]
                         const aId = m.player1?.id ?? null, bId = m.player2?.id ?? null
-                        const winId = m.winner?.id ?? null
+                        const pickId = picks?.[m.id] ?? null
                         const rankA = aId != null ? drawRanks[aId] : null
                         const rankB = bId != null ? drawRanks[bId] : null
                         const expectedId = rankA != null && rankB != null ? (rankA <= rankB ? aId : bId) : null
-                        const isUpset = winId != null && expectedId != null && winId !== expectedId
-                        if (!isUpset) return null
+                        const isUpsetPick = pickId != null && expectedId != null && pickId !== expectedId
+                        if (!isUpsetPick) return null
                         return (
                           <span
                             key={`bell${m.id}`}
