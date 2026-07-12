@@ -94,10 +94,11 @@
 .cv-flag {
   width: 18px; height: 13px;
   border-radius: 2px;
+  border: 1px solid #5f666c;
   flex-shrink: 0;
   margin: 0 6px 0 4px;        /* small gap to the seed on the left, name on the right */
 }
-.cv-flag--empty { background: transparent; }
+.cv-flag--empty { background: transparent; border-color: transparent; }
 
 .cv-name {
   flex: 1 1 auto;
