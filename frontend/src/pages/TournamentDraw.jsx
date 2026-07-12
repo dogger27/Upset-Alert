@@ -538,10 +538,19 @@ export default function TournamentDraw() {
     if (c === 8) return 'R16'
     return `R${i + 1}`
   }
+  // Round label by DRAW SIZE at that round (players = 2×matches): R128/R64/R32/
+  // R16, then QF/SF/F. Used on the edge round-nav buttons.
+  const navLabel = (rn) => {
+    const c = roundCountByNum[rn]
+    if (c === 1) return 'F'
+    if (c === 2) return 'SF'
+    if (c === 4) return 'QF'
+    return `R${c * 2}`
+  }
   // Pager columns: one per round for Picks/Live; Combined adds a Champion column.
-  const roundCols = roundNumbers.map((rn, i) => ({ label: dotLabel(rn, i), title: roundNameByNum[rn] || `Round ${rn}` }))
+  const roundCols = roundNumbers.map((rn, i) => ({ label: dotLabel(rn, i), title: roundNameByNum[rn] || `Round ${rn}`, nav: navLabel(rn) }))
   const pagerColumns = viewMode === 'combined'
-    ? [...roundCols, { label: '🏆', title: 'Champion' }]
+    ? [...roundCols, { label: '🏆', title: 'Champion', nav: 'CHAMP' }]
     : roundCols
   const columnCount = pagerColumns.length
 
@@ -551,7 +560,7 @@ export default function TournamentDraw() {
   const colUnit = (anyScores ? 300 : 252) + COL_GAP_PX
   // Left gutter reserved INSIDE the draw for the left round-nav button when the
   // sidebar is expanded (collapsed → the button lives in the page-edge gutter).
-  const NAV_INSET = 52
+  const NAV_INSET = 34
   const computeWindow = (inset) => {
     const usableW = mainWidth - 24 /* scroll padding */ - 16 /* vertical scrollbar */ - inset
     const fitCols = mainWidth > 0 ? Math.floor((usableW + COL_GAP_PX) / colUnit) : 4
@@ -997,22 +1006,18 @@ export default function TournamentDraw() {
             title={`Show ${pagerColumns[windowPos - 1].title}`}
             aria-label={`Show ${pagerColumns[windowPos - 1].title}`}
           >
-            <span className="round-nav-arrow" aria-hidden="true">‹</span>
-            <span className="round-nav-label">{pagerColumns[windowPos - 1].title}</span>
-            <span className="round-nav-arrow" aria-hidden="true">‹</span>
+            <span className="round-nav-label">{pagerColumns[windowPos - 1].nav}</span>
           </button>
         )}
         {showPager && windowPos < maxWindowStart && rightNavX != null && (
           <button
             className="round-nav round-nav--right"
-            style={{ left: Math.min(rightNavX + 6, bodyWidth - 47) }}
+            style={{ left: Math.min(rightNavX + 6, bodyWidth - 30) }}
             onClick={() => setWindowStart(windowPos + 1)}
             title={`Show ${pagerColumns[windowPos + DRAW_WINDOW].title}`}
             aria-label={`Show ${pagerColumns[windowPos + DRAW_WINDOW].title}`}
           >
-            <span className="round-nav-arrow" aria-hidden="true">›</span>
-            <span className="round-nav-label">{pagerColumns[windowPos + DRAW_WINDOW].title}</span>
-            <span className="round-nav-arrow" aria-hidden="true">›</span>
+            <span className="round-nav-label">{pagerColumns[windowPos + DRAW_WINDOW].nav}</span>
           </button>
         )}
       </div>
