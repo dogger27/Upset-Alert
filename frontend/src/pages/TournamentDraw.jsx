@@ -34,6 +34,11 @@ export default function TournamentDraw() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [sidebarManual, setSidebarManual] = useState(false) // user overrode auto-hide?
   const expandedSidebarW = useRef(290) // cached expanded sidebar width (updated while expanded)
+  // Natural (uncollapsed) height of .draw-header, kept in sync via ResizeObserver.
+  // Used to cancel the header's own flow height (negative margin) while
+  // .draw-body reserves the same amount as permanent padding — so collapsing
+  // the header never changes .draw-body's size/position and nothing jumps.
+  const [headerH, setHeaderH] = useState(0)
 
   // Callback refs + ResizeObservers on .draw-main / .draw-body. (Callback refs
   // rather than useEffect so they attach once the elements mount after the
@@ -52,6 +57,20 @@ export default function TournamentDraw() {
   }
   const mainRef = useCallback(makeWidthRef(setMainWidth), [])
   const bodyWidthRef = useCallback(makeWidthRef(setBodyWidth), [])
+  // Same pattern, but measuring offsetHeight (unaffected by the header's own
+  // opacity/transform collapse — only its content/stage changes this).
+  const headerRef = useCallback((() => {
+    let ro = null
+    return node => {
+      if (ro) { ro.disconnect(); ro = null }
+      if (node) {
+        const measure = () => setHeaderH(node.offsetHeight)
+        measure()
+        ro = new ResizeObserver(measure)
+        ro.observe(node)
+      }
+    }
+  })(), [])
   // Also capture the .draw-body node so we can measure the drawn bracket's
   // right edge (for positioning the right-hand round-nav button).
   const bodyNodeRef = useRef(null)
@@ -622,7 +641,11 @@ export default function TournamentDraw() {
 
   return (
     <div className="draw-page">
-      <div className={clsx('draw-header', `draw-header--${headerStage}`, { 'draw-header--collapsed': headerHidden })}>
+      <div
+        ref={headerRef}
+        className={clsx('draw-header', `draw-header--${headerStage}`, { 'draw-header--collapsed': headerHidden })}
+        style={headerH ? { marginBottom: `-${headerH}px` } : undefined}
+      >
         {headerStage === 'full' && (
         <div className="draw-header-top">
           <div className="draw-name-block">
@@ -945,7 +968,7 @@ export default function TournamentDraw() {
         <div key={clearToast.key} className="clear-toast">{clearToast.msg}</div>
       )}
 
-      <div className="draw-body" ref={bodyRef}>
+      <div className="draw-body" ref={bodyRef} style={headerH ? { paddingTop: headerH } : undefined}>
         <DrawSidebar
           tournamentId={Number(id)}
           tournament={tournament}
@@ -1006,6 +1029,7 @@ export default function TournamentDraw() {
             title={`Show ${pagerColumns[windowPos - 1].title}`}
             aria-label={`Show ${pagerColumns[windowPos - 1].title}`}
           >
+            <span className="round-nav-sizer" aria-hidden="true">CHAMP</span>
             <span className="round-nav-label">{pagerColumns[windowPos - 1].nav}</span>
           </button>
         )}
@@ -1017,6 +1041,7 @@ export default function TournamentDraw() {
             title={`Show ${pagerColumns[windowPos + DRAW_WINDOW].title}`}
             aria-label={`Show ${pagerColumns[windowPos + DRAW_WINDOW].title}`}
           >
+            <span className="round-nav-sizer" aria-hidden="true">CHAMP</span>
             <span className="round-nav-label">{pagerColumns[windowPos + DRAW_WINDOW].nav}</span>
           </button>
         )}
