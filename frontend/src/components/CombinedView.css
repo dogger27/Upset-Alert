@@ -145,11 +145,11 @@
   border: 1px solid var(--green-500, #4a9d6a);
   background: #fff;
   color: var(--green-600, #2f7a4d);
-  font-size: 0.52rem;
+  font-size: 0.62rem;
   font-weight: 700;
   letter-spacing: 0.03em;
   border-radius: 4px;
-  padding: 2px 3px;
+  padding: 3px 5px;
   line-height: 1;
   cursor: pointer;
   z-index: 2;
@@ -160,7 +160,7 @@
 .cv-bell {
   position: absolute;
   transform: translate(-50%, -50%);
-  font-size: 1.9rem;   /* ≈ BOX_H (32px), matching the match-box height */
+  font-size: 1.5rem;
   line-height: 1;
   user-select: none;
   cursor: default;
