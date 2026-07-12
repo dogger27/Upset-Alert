@@ -104,7 +104,7 @@
      !important: flag-icons' own .fi{width:1.333333em} rule has the same
      specificity as .cv-flag and can win the cascade depending on bundle
      order, silently shrinking the width back down (looks square). */
-  width: 24px !important; height: 18px !important;
+  width: 23px !important; height: 18px !important;
   border-radius: 2px;
   border: 1px solid #000;     /* 1px is the practical CSS minimum for a crisp
                                   border; shrinking the box further (as tried

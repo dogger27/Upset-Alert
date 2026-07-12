@@ -340,7 +340,21 @@
 }
 
 .pos-badge.seeded  { background: #fff3cd; color: #7d5a00; border: 1px solid #a8841f; }
-.pos-badge.unseeded { background: #e9ecef; color: #888; font-weight: 500; border: 1px solid #6b7278; }
+.pos-badge.unseeded {
+  /* Fixed footprint (matches the base class's auto-computed 26x17) so a
+     larger, darker font doesn't grow the badge — same trick as .cv-h2h. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 17px;
+  padding: 0;
+  background: #e9ecef;
+  color: #4a4f54;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border: 1px solid #6b7278;
+}
 .pos-badge.nr       { background: #f8f9fa; color: #adb5bd; font-style: italic; cursor: default; }
 .pos-badge.ghost   { background: #f0f0f0; color: #aaa; font-style: italic; }
 
@@ -410,7 +424,7 @@
      fills the box completely: no letterboxing, no cropping. Do not "round"
      this to 3:2 or any other ratio — it will reintroduce a gap. */
   flex-shrink: 0;
-  width: 24px !important;
+  width: 23px !important;
   height: 18px !important;
   margin-left: auto;
   margin-right: 2px;
