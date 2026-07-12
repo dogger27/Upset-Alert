@@ -7,11 +7,6 @@
   padding: 0.4rem 0.75rem 1rem;
   background: var(--bg);
   scrollbar-width: auto;
-  /* Same as .cv-scroll: the collapsing .bracket-labels row lives inside this
-     scroller, and scroll anchoring's automatic scrollTop compensation for its
-     height change reads as a phantom user scroll to the header auto-hide
-     detector, causing an endless hide/reveal loop. */
-  overflow-anchor: none;
 }
 
 .bracket-scroll::-webkit-scrollbar {
