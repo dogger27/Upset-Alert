@@ -56,7 +56,7 @@
   overflow: hidden;
 }
 .cv-box--correct { background: #e7f6ea; border-color: #a5d6b0; }
-.cv-box--wrong   { background: #fdeaea; border-color: #e8b4b4; border-top-color: transparent; }
+.cv-box--wrong   { background: #fdeaea; border-color: #e8b4b4; }
 .cv-box--clickable { cursor: pointer; }
 .cv-box--clickable:hover { filter: brightness(0.96); border-color: #9aa4ab; }
 .cv-box--bye     { background: #f4f5f6; border-style: dashed; }
@@ -130,7 +130,12 @@
 .cv-real-winner {
   position: absolute;
   left: 3px;
-  bottom: 10px;                /* centred on the box's top border */
+  bottom: 8px;                 /* centred on the box's top border */
+  background: #fdeaea;         /* matches .cv-box--wrong fill — masks only the
+                                   border segment directly under the text,
+                                   not the whole top edge (painted above the
+                                   box, see JSX order) */
+  padding: 0 3px;
   line-height: 1;
   font-size: 0.72rem;
   font-weight: 600;
