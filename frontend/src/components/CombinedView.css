@@ -30,7 +30,11 @@
 }
 
 .cv-body { display: flex; align-items: flex-start; position: relative; }
-.cv-col { position: relative; flex-shrink: 0; }
+/* z-index:1 keeps this column's own boxes (and their match-outline) painted
+   above its own cv-gap connector line, so the line disappears behind the box
+   edge on the left the same way it already does behind the NEXT column's box
+   on the right (that one wins by DOM order across the outer flex row). */
+.cv-col { position: relative; flex-shrink: 0; z-index: 1; }
 
 /* A slot is a zero-height anchor at the box's centre Y; the box, its score
    (below) and the real-winner note (above) hang off it. */
@@ -136,7 +140,7 @@
 }
 
 .cv-conn { display: block; overflow: visible; }
-.cv-gap { flex-shrink: 0; }
+.cv-gap { flex-shrink: 0; z-index: 0; }
 
 /* H2H chip centred on the connector "T" — position is independent of the bell. */
 .cv-h2h {
