@@ -402,15 +402,15 @@
 .player-row.eliminated .score-cell { opacity: 0.7; }
 
 .player-flag {
+  /* 24x18 = exact 4:3, matching flag-icons' native rectangular aspect ratio,
+     so background-size:contain (the library default) fills the box with no
+     letterboxing AND no cropping. Height also matches the seed badge. */
   flex-shrink: 0;
-  width: 24px !important;      /* matches the seed badge's rendered height */
-  height: 17px !important;
+  width: 24px !important;
+  height: 18px !important;
   margin-left: auto;
   margin-right: 2px;
   border-radius: 1px;
   border: 1px solid #000;
   opacity: 0.9;
 }
-/* Override flag-icons' background-size:contain, which letterboxes inside our
-   18x13 box since it isn't exactly the source images' aspect ratio. */
-.player-flag.fi { background-size: cover; }
