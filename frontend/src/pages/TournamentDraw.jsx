@@ -858,7 +858,9 @@ export default function TournamentDraw() {
           onSelectUser={(uid, uname) => {
             setViewedUserId(uid)
             setViewedUserName(uname ?? null)
-            if (uid != null) setViewMode('picks')
+            // Previously switched to the (now-disabled) Picks view here.
+            // Combined view already reads the selected user's picks via
+            // activePicks/viewingOther, so no view-mode change is needed.
           }}
         />
 
