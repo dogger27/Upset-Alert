@@ -568,10 +568,13 @@ export default function TournamentDraw() {
     const maxStart = Math.max(0, columnCount - dw)
     return { dw, maxStart, pos: Math.min(windowStart, maxStart) }
   }
-  // Pass 1 (no inset) decides whether the left button will show; pass 2 reserves
-  // its gutter so the bracket shifts right rather than sitting under it.
+  // Pass 1 (no inset) decides whether the left button COULD show (paging
+  // possible at all); pass 2 reserves its gutter. Reserved whenever paging is
+  // possible — not just while the button is visible (pos > 0) — so pressing
+  // the right button doesn't shift the whole bracket sideways by the gutter
+  // width the moment the left button first appears.
   const w0 = computeWindow(0)
-  const leftNavInDraw = !sidebarCollapsed && columnCount > w0.dw && w0.pos > 0
+  const leftNavInDraw = !sidebarCollapsed && columnCount > w0.dw
   const drawInsetLeft = leftNavInDraw ? NAV_INSET : 0
   const { dw: DRAW_WINDOW, maxStart: maxWindowStart, pos: windowPos } = computeWindow(drawInsetLeft)
   const showPager = columnCount > DRAW_WINDOW
