@@ -58,6 +58,43 @@ function computeDrawRanks(players) {
   return ranks
 }
 
+// Resolve each match's two feeder player ids the same way winnerBox displays
+// them: R1 comes straight from the draw; R2+ cascades the PICKED winner of
+// each feeder (falling back to the real winner once known). Raw match.player1/
+// player2 for R2+ only get populated once the actual bracket result is in, so
+// reading them directly (as BracketView's live mode does) hides H2H/upset-bell
+// for Open draws where only picks are available.
+function resolveCombinedPlayers(matches, picks) {
+  const byKey = {}
+  for (const m of matches) byKey[`${m.round_number}:${m.match_number}`] = m
+  const resolved = {}
+
+  function getAdvancer(m) {
+    if (!m) return null
+    if (m.is_bye) return m.player1?.id ?? null
+    return picks?.[m.id] ?? m.winner?.id ?? null
+  }
+
+  function resolve(m) {
+    if (resolved[m.id]) return resolved[m.id]
+    let p1id = m.round_number === 1 ? (m.player1?.id ?? null) : null
+    let p2id = m.round_number === 1 ? (m.player2?.id ?? null) : null
+    if (m.round_number > 1) {
+      const f1 = byKey[`${m.round_number - 1}:${m.match_number * 2 - 1}`]
+      const f2 = byKey[`${m.round_number - 1}:${m.match_number * 2}`]
+      if (f1) resolve(f1)
+      if (f2) resolve(f2)
+      p1id = f1 ? getAdvancer(f1) : null
+      p2id = f2 ? getAdvancer(f2) : null
+    }
+    resolved[m.id] = { p1: p1id, p2: p2id }
+    return resolved[m.id]
+  }
+
+  for (const m of matches) resolve(m)
+  return resolved
+}
+
 function abbrevName(full) {
   if (!full) return ''
   const parts = full.trim().split(/\s+/)
@@ -186,6 +223,8 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
   const R = roundNums.map(rn => [...byRound[rn]].sort((a, b) => a.match_number - b.match_number))
   const N = R.length
   if (N === 0) return null
+
+  const resolved = resolveCombinedPlayers(matches, picks)
 
   const totalCols = N + 1
   const size = Math.min(windowSize, totalCols)
@@ -361,8 +400,9 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                           position is fixed regardless of whether the bell also renders. */}
                       {nextC >= 1 && nextCenters.map((y, ri) => {
                         const m = R[nextC - 1][ri]
-                        const a = m.player1?.id != null ? playerById[m.player1.id] : null
-                        const b = m.player2?.id != null ? playerById[m.player2.id] : null
+                        const { p1: aId, p2: bId } = resolved[m.id] || {}
+                        const a = aId != null ? playerById[aId] : null
+                        const b = bId != null ? playerById[bId] : null
                         if (!a?.te_slug || !b?.te_slug) return null
                         return (
                           <button
@@ -382,7 +422,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                           boxes to its left if it needs the room. */}
                       {nextC >= 1 && nextCenters.map((y, ri) => {
                         const m = R[nextC - 1][ri]
-                        const aId = m.player1?.id ?? null, bId = m.player2?.id ?? null
+                        const { p1: aId, p2: bId } = resolved[m.id] || {}
                         const pickId = picks?.[m.id] ?? null
                         const rankA = aId != null ? drawRanks[aId] : null
                         const rankB = bId != null ? drawRanks[bId] : null
