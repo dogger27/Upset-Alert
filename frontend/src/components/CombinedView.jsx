@@ -148,6 +148,7 @@ const PAIR_SLOT = 130    // vertical slot per MATCH (pair) in the base column
 const PAIR_OFF = 24      // half the centre-to-centre gap of a match's two opponents
 const COL_W = 260
 const COL_GAP = 44       // wide enough to seat the H2H chip on the connector "T"
+const H2H_X = 10         // H2H chip's x within the gap — sits over the match box's right border
 const BELL_OFFSET = 34   // distance (px) the bell sits left of the H2H chip's centre
 
 function Flag({ nat }) {
@@ -433,7 +434,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                           <button
                             key={`h${m.id}`}
                             className="cv-h2h"
-                            style={{ top: y, left: COL_GAP / 2 }}
+                            style={{ top: y, left: H2H_X }}
                             title={`Head-to-head: ${a.name} vs ${b.name}`}
                             onClick={() => setH2H({ p1: a, p2: b, round: m.round_number })}
                           >
@@ -458,7 +459,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                           <span
                             key={`bell${m.id}`}
                             className="cv-bell"
-                            style={{ top: y, left: COL_GAP / 2 - BELL_OFFSET }}
+                            style={{ top: y, left: H2H_X - BELL_OFFSET }}
                             title="Upset!"
                           >
                             🔔
