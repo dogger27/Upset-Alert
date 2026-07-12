@@ -203,15 +203,20 @@ export default function TournamentDraw() {
   useEffect(() => { headerHiddenRef.current = headerHidden }, [headerHidden])
   useEffect(() => {
     // Bobble guard: collapsing the header/labels reclaims real layout space
-    // (required — see feedback_reclaim_vs_jump_header), which can nudge
-    // scrollTop and fire a reflow scroll event read as the OPPOSITE
-    // direction — flipping the state straight back, forever. Two defences:
-    //   1. Deadband: require THRESH px of sustained travel in one direction
+    // (required — see feedback_reclaim_vs_jump_header), which can move
+    // scrollTop WITHOUT user input and fire scroll events this detector would
+    // read as a user scroll — flipping the state straight back, forever.
+    // Three defences:
+    //   1. overflow-anchor:none on .cv-scroll/.bracket-scroll (their CSS):
+    //      the labels row collapsing inside the scroller otherwise makes
+    //      scroll anchoring silently shift scrollTop to compensate — the
+    //      main driver of the infinite hide/reveal loop.
+    //   2. Deadband: require THRESH px of sustained travel in one direction
     //      before toggling, so tiny jitters never flip it.
-    //   2. Settle window: ignore scroll events until the collapse/expand
+    //   3. Settle window: ignore scroll events until the collapse/expand
     //      transition actually finishes (via transitionend on max-height —
-    //      not a guessed duration, which can leave a gap the reflow's own
-    //      scroll event slips through if it lands even slightly late).
+    //      not a guessed duration), absorbing scrollTop CLAMPING when the
+    //      viewport grows near the bottom of the scroll range.
     const THRESH = 40
     const SETTLE_FALLBACK_MS = 600 // safety net if transitionend never fires
     const GRACE_MS = 200 // absorb any trailing reflow/scroll-anchoring drift after transitionend
@@ -249,7 +254,12 @@ export default function TournamentDraw() {
       const dy = y - lastY
       lastY = y
       if (transitioning) return                    // reflow during animation: ignore
-      if (y <= 24) { apply(false); return }        // near the top: always show
+      // Near the top: show — but only on an actual upward move. On a short
+      // draw, hiding the header grows the viewport enough that the browser
+      // CLAMPS scrollTop under this threshold (clamping still fires with
+      // overflow-anchor:none); revealing unconditionally here would re-toggle
+      // against the user's downward scroll and oscillate.
+      if (y <= 24) { if (dy < 0) apply(false); return }
       if ((dy > 0) !== (accum > 0)) accum = 0      // direction flipped: reset travel
       accum += dy
       if (accum > THRESH) apply(true)              // sustained down: hide
