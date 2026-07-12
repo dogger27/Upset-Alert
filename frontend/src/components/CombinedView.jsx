@@ -15,7 +15,7 @@
  * Windowed like BracketView: only `windowSize` columns render, starting at
  * `windowStart` (the parent's dot pager controls both).
  */
-import { Fragment, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import H2HPanel from './H2HPanel'
 import './CombinedView.css'
@@ -245,6 +245,23 @@ function Connectors({ leftCenters, rightCenters, totalH }) {
 export default function CombinedView({ tournament, matches, players, picks, onPick, locked = true, windowStart = 0, windowSize = 4, labelsHidden = false, insetLeft = 0 }) {
   const [h2h, setH2H] = useState(null)
 
+  // The round-labels row is a zero-flow-height sticky overlay (cancelled via
+  // negative margin-bottom below) so hiding/showing it never changes
+  // .cv-scroll's scrollHeight — that would otherwise desync from the fixed
+  // scrollTop and make the bracket content jump. cv-body reserves the same
+  // height as permanent padding so the labels never overlap boxes.
+  const labelsRef = useRef(null)
+  const [labelsH, setLabelsH] = useState(0)
+  useEffect(() => {
+    const el = labelsRef.current
+    if (!el) return
+    const measure = () => setLabelsH(el.offsetHeight)
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
   const playerById = Object.fromEntries(players.map(p => [p.id, p]))
   const drawRanks = computeDrawRanks(players)
 
@@ -395,7 +412,11 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
         />
       )}
       <div className="cv-scroll" style={insetLeft ? { paddingLeft: `calc(0.75rem + ${insetLeft}px)` } : undefined}>
-        <div className={`cv-labels${labelsHidden ? ' cv-labels--collapsed' : ''}`}>
+        <div
+          ref={labelsRef}
+          className={`cv-labels${labelsHidden ? ' cv-labels--collapsed' : ''}`}
+          style={labelsH ? { marginBottom: `-${labelsH}px` } : undefined}
+        >
           {visible.map((c, i) => {
             const label = c === 0
               ? (R[0][0]?.round_name || 'Round 1')
@@ -409,7 +430,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
           })}
         </div>
 
-        <div className="cv-body" style={{ height: totalH }}>
+        <div className="cv-body" style={{ height: totalH, paddingTop: labelsH || undefined }}>
           {visible.map((c, colIdx) => {
             const count = colCount(c)
             const cc = centers[c]
