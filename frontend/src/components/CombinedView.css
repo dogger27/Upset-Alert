@@ -92,12 +92,16 @@
 }
 
 .cv-flag {
-  width: 18px; height: 13px;
+  width: 24px; height: 17px;   /* matches the seed badge's rendered height */
   border-radius: 2px;
-  border: 1px solid #5f666c;
+  border: 1px solid #000;
   flex-shrink: 0;
   margin: 0 6px 0 4px;        /* small gap to the seed on the left, name on the right */
 }
+/* Override flag-icons' background-size:contain (which letterboxes inside our
+   18x13 box since it isn't exactly the source images' aspect ratio) so the
+   flag fills the box edge-to-edge instead of leaving a white margin. */
+.cv-flag.fi { background-size: cover; }
 .cv-flag--empty { background: transparent; border-color: transparent; }
 
 .cv-name {
