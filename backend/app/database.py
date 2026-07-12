@@ -122,6 +122,20 @@ async def _migrate(conn):
         "ALTER TABLE draws ADD COLUMN week INTEGER",
         "ALTER TABLE draws ADD COLUMN draw_release_detected_at DATETIME",
         "ALTER TABLE draws ADD COLUMN draw_release_notified_at DATETIME",
+        # Backfill draw_release_detected_at for draws released BEFORE this column
+        # existed, so the new centralized notify job (scheduler.py) can pick them
+        # up — fixes tournaments (e.g. Swedish Open) whose "draw released" email
+        # was missed by the old ad-hoc per-call-site checks. Scoped tightly to
+        # currently-relevant draws only (not completed, not already finished, not
+        # a stale future-dated row) so this can't retroactively spam users with
+        # "draw released" emails for tournaments from months ago.
+        (
+            "UPDATE draws SET draw_release_detected_at = datetime('now', '-30 minutes') "
+            "WHERE draw_released_direct_at IS NOT NULL "
+            "AND draw_release_detected_at IS NULL "
+            "AND status != 'completed' "
+            "AND (end_date IS NULL OR end_date >= date('now', '-1 day'))"
+        ),
     ]
     for sql in migrations:
         try:
