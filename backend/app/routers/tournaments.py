@@ -918,6 +918,11 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
     if parsed.has_direct_draw and draw_substantially_complete:
         if not tournament.draw_released_direct_at and not too_far_future:
             tournament.draw_released_direct_at = date.today()
+            # First time we've observed a substantially-complete draw — start the
+            # stability clock. The "draw released" email only fires once this has
+            # held for a cooldown (_notify_pending_draw_releases in scheduler.py),
+            # so a same-day revert (below) never results in an email having gone out.
+            tournament.draw_release_detected_at = datetime.now(timezone.utc)
             if tournament.start_date:
                 tournament.da_days_before = (tournament.start_date - date.today()).days
             logger.info("Tournament %s: Direct acceptance draw released on %s (%d players, %s days before start)",
@@ -927,6 +932,7 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
             and tournament.status not in ("active", "completed"):
         # Draw was stamped prematurely (e.g. only seeds visible) — revert until complete
         tournament.draw_released_direct_at = None
+        tournament.draw_release_detected_at = None
         logger.info("Tournament %s: Clearing premature draw release (%d/%d players present)",
                    tournament.wiki_page_title, len(da_players), tournament.draw_size)
 

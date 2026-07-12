@@ -107,6 +107,14 @@ class Draw(Base):
     draw_release_qualifiers: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     draw_released_direct_at: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     draw_released_qualifiers_at: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    # Full timestamp of when draw_released_direct_at was FIRST stamped (cleared if the
+    # stamp is later reverted as premature). Used to require the release to stay stable
+    # for a cooldown before emailing — a scrape-to-scrape flicker never fires an email.
+    draw_release_detected_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Set once the "draw released" email has actually been sent for this draw. Centralizes
+    # idempotency across every code path that can trigger a scrape (scheduler, season-page
+    # edits, EventStreams, manual admin refresh) so the email fires exactly once.
+    draw_release_notified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     da_days_before: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     qual_days_before: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     city: Mapped[Optional[str]] = mapped_column(String, nullable=True)

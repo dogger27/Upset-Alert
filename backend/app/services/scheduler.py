@@ -105,7 +105,6 @@ async def _refresh_active_tournaments(force_refresh: bool = False) -> None:
             t_name = t.name
             t_wiki = t.wiki_page_title
             try:
-                prev_draw_released = t.draw_released_direct_at
                 prev_status = t.status
 
                 await _do_scrape(t, db, force_refresh=force_refresh)
@@ -118,14 +117,13 @@ async def _refresh_active_tournaments(force_refresh: bool = False) -> None:
                 await prefetch_h2h_for_draw(t_id)
                 await prefetch_dob_for_draw(t_id)
 
-                # Fire notifications as background tasks so they don't block the scrape loop
-                from app.services.notifications import notify_draw_released, notify_tournament_complete
-                just_released = prev_draw_released is None and t.draw_released_direct_at is not None
+                # "Draw released" email dispatch is centralized in
+                # _notify_pending_draw_releases (runs on its own interval) so every
+                # scrape path — this one, season-page edits, EventStreams, manual
+                # admin refresh — is covered uniformly. Only tournament-complete is
+                # fired directly here (it has its own completion_notified_at guard).
+                from app.services.notifications import notify_tournament_complete
                 just_completed = prev_status != "completed" and t.status == "completed"
-                if just_released:
-                    asyncio.create_task(notify_draw_released(
-                        t_id, t.category or "", t.gender, t.year, t_name,
-                    ))
                 if just_completed:
                     asyncio.create_task(notify_tournament_complete(t_id))
             except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout) as exc:
@@ -236,18 +234,14 @@ async def _on_season_page_edit(season_title: str) -> None:
                         continue
                     try:
                         await asyncio.sleep(2)  # throttle Wikipedia requests
-                        prev_released = t.draw_released_direct_at
                         await _do_scrape(t, db, force_refresh=True)
                         await db.commit()
                         logger.info(
                             "Season-edit scrape: %s %s (draw now: %s)",
                             t.year, t.name, t.draw_released_direct_at,
                         )
-                        if prev_released is None and t.draw_released_direct_at is not None:
-                            from app.services.notifications import notify_draw_released
-                            asyncio.create_task(notify_draw_released(
-                                t.id, t.category or "", t.gender, t.year, t.name,
-                            ))
+                        # "Draw released" email dispatch is centralized in
+                        # _notify_pending_draw_releases — see comment there.
                     except Exception as exc:
                         logger.warning(
                             "Season-edit scrape failed for %s: %s", t.wiki_page_title, exc,
@@ -297,6 +291,57 @@ async def _refresh_weekly_rankings() -> None:
 async def _refresh_elo() -> None:
     from app.services.rankings import refresh_elo_ratings
     await refresh_elo_ratings()
+
+
+# How long a substantially-complete draw must stay stable (not reverted by a
+# later scrape) before the "draw released" email fires. Wikipedia editors often
+# place seeded players into their bracket slots as soon as the entry list is
+# announced, well before Round-1 pairings are final — that state can briefly
+# cross the "substantially complete" threshold and then get corrected within
+# minutes. Waiting this long out lets any such flicker settle before emailing.
+DRAW_RELEASE_NOTIFY_COOLDOWN = timedelta(minutes=20)
+
+
+async def _notify_pending_draw_releases() -> None:
+    """
+    Centralized, idempotent "draw released" email dispatch.
+
+    Every code path that can set draw_released_direct_at (this scheduler's
+    daily refresh, season-page-edit re-scrapes, the real-time EventStreams
+    listener, and the manual admin "refresh draw" endpoint) funnels through
+    _do_scrape, which stamps draw_release_detected_at the first time a draw is
+    observed substantially complete. Rather than each of those call sites
+    separately trying to detect "was this just released" (which is how a
+    tournament like Swedish Open could be released via EventStreams and never
+    get an email, since only two of the four paths had that check), this job
+    periodically scans for draws that have been stable for the cooldown and
+    haven't been notified yet — covering all paths uniformly, and only firing
+    once the release has proven stable (fixing the Athens Open early-fire case).
+    """
+    cutoff = datetime.now(timezone.utc) - DRAW_RELEASE_NOTIFY_COOLDOWN
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(Draw).where(
+                Draw.draw_released_direct_at.isnot(None),
+                Draw.draw_release_notified_at.is_(None),
+                Draw.draw_release_detected_at.isnot(None),
+                Draw.draw_release_detected_at <= cutoff,
+            )
+        )
+        tournaments = result.scalars().all()
+        if not tournaments:
+            return
+
+        to_notify = [(t.id, t.category or "", t.gender, t.year, t.name) for t in tournaments]
+        now = datetime.now(timezone.utc)
+        for t in tournaments:
+            t.draw_release_notified_at = now
+        await db.commit()
+
+    from app.services.notifications import notify_draw_released
+    for t_id, category, gender, year, name in to_notify:
+        asyncio.create_task(notify_draw_released(t_id, category, gender, year, name))
+    logger.info("Draw-release notification: dispatched for %d tournament(s)", len(to_notify))
 
 
 async def _sync_subscriptions() -> None:
@@ -367,6 +412,15 @@ def start_scheduler() -> None:
         id="sync_subscriptions",
         misfire_grace_time=120,
     )
+    # Centralized "draw released" email dispatch — see _notify_pending_draw_releases
+    # docstring. 10 min cadence comfortably resolves the 20 min stability cooldown.
+    scheduler.add_job(
+        _notify_pending_draw_releases,
+        "interval",
+        minutes=10,
+        id="notify_draw_releases",
+        misfire_grace_time=300,
+    )
     scheduler.add_job(
         _refresh_weekly_rankings,
         "cron",
@@ -393,6 +447,7 @@ def start_scheduler() -> None:
     logger.info("EventStreams listener started for real-time draw updates")
     logger.info("Subscription sync scheduled (every 5 min)")
     logger.info("Weekly rankings refresh scheduled (Sunday 6pm PDT)")
+    logger.info("Draw-release notification check scheduled (every 10 min)")
     asyncio.create_task(eventstream.start())
     asyncio.create_task(espn_monitor.start())
     # Subscribe immediately on startup so EventStreams catches edits from the
@@ -401,6 +456,8 @@ def start_scheduler() -> None:
     # Force-refresh on startup to catch any results that arrived while the
     # server was down.
     asyncio.create_task(_refresh_active_tournaments(force_refresh=True))
+    # Catch any draw releases that went stable while the server was down.
+    asyncio.create_task(_notify_pending_draw_releases())
     # Backfill DOB for any te_players missing it (no-op if all already set).
     from app.services.rankings import backfill_all_dob, refresh_elo_ratings
     asyncio.create_task(backfill_all_dob())

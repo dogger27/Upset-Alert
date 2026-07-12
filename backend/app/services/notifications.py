@@ -371,8 +371,16 @@ async def notify_draw_released(
     year: int,
     name: str,
 ) -> None:
-    """Email all users opted-in to this tournament's category/gender."""
+    """
+    Email all users opted-in to this tournament's category/gender.
+
+    Callers are expected to have already established (and persisted) that this
+    is the ONE time this notification should fire for this draw — see
+    draw_release_notified_at / _notify_pending_draw_releases in scheduler.py.
+    This function itself does not check or set that flag.
+    """
     from app.services.email import send_draw_notification
+    from app.services.system_log import app_log
 
     pref_key = _draw_pref_key(category, gender)
     if not pref_key:
@@ -394,7 +402,10 @@ async def notify_draw_released(
         return
 
     await send_draw_notification(emails, name, tournament_id, category=category, gender=gender)
-    logger.info("Draw notification sent to %d user(s) for %s", len(emails), display_name)
+    await app_log("info", "notifications",
+                  f"Draw-released email sent to {len(emails)} user(s) for {year} {name}",
+                  {"tournament_id": tournament_id, "recipient_count": len(emails),
+                   "category": category, "gender": gender})
 
 
 # ---------------------------------------------------------------------------
