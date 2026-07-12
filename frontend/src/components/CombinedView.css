@@ -151,14 +151,19 @@
 .cv-h2h {
   position: absolute;
   transform: translate(-50%, -50%) rotate(-90deg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;                 /* fixed footprint so a larger font doesn't grow the box */
+  height: 22px;
   border: 1px solid var(--green-500, #4a9d6a);
   background: #fff;
   color: var(--green-600, #2f7a4d);
-  font-size: 0.62rem;
+  font-size: 0.78rem;
   font-weight: 700;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
   border-radius: 4px;
-  padding: 3px 5px;
+  padding: 0;
   line-height: 1;
   cursor: pointer;
   z-index: 2;
