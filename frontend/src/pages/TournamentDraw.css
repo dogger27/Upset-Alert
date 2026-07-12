@@ -105,6 +105,24 @@
   padding: 0.35rem 1.5rem;
   background: white;
   border-bottom: 2px solid var(--border);
+  /* Collapsible on scroll (see .draw-header--collapsed). max-height is well
+     above any real header height so it never clips when shown. */
+  overflow: hidden;
+  max-height: 240px;
+  transition: max-height 0.28s ease, padding-top 0.28s ease,
+              padding-bottom 0.28s ease, opacity 0.2s ease,
+              border-bottom-color 0.2s ease;
+}
+
+/* Auto-hidden while scrolling down; revealed on scroll up. Collapses to zero
+   height so the bracket below reclaims the space. */
+.draw-header--collapsed {
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  opacity: 0;
+  border-bottom-color: transparent;
+  pointer-events: none;
 }
 
 /* Compact/minimal header: only switch + pager remain — centre them as a group */
