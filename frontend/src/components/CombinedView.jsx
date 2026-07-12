@@ -15,7 +15,7 @@
  * Windowed like BracketView: only `windowSize` columns render, starting at
  * `windowStart` (the parent's dot pager controls both).
  */
-import { useRef, useState } from 'react'
+import { Fragment, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import H2HPanel from './H2HPanel'
 import './CombinedView.css'
@@ -184,7 +184,7 @@ const PAIR_SLOT = 130    // vertical slot per MATCH (pair) in the base column
 const PAIR_OFF = 24      // half the centre-to-centre gap of a match's two opponents
 const COL_W = 260
 const COL_GAP = 44       // wide enough to seat the H2H chip on the connector "T"
-const H2H_X = 2          // H2H chip's x within the gap — sits over the match box's right border
+const H2H_X = 8          // H2H chip's x within the gap — centred on the match box's right border
 const BELL_OFFSET = 34   // distance (px) the bell sits left of the H2H chip's centre
 
 function Flag({ nat }) {
@@ -462,49 +462,54 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                   return (
                     <div className="cv-gap" style={{ width: COL_GAP, height: totalH, position: 'relative' }}>
                       <Connectors leftCenters={cc} rightCenters={nextCenters} totalH={totalH} />
-                      {/* H2H chip on the connector "T" feeding each next-column winner —
-                          position is fixed regardless of whether the bell also renders. */}
-                      {nextC >= 1 && nextCenters.map((y, ri) => {
-                        const m = R[nextC - 1][ri]
-                        const { p1: aId, p2: bId } = resolved[m.id] || {}
-                        const a = aId != null ? playerById[aId] : null
-                        const b = bId != null ? playerById[bId] : null
-                        if (!a?.te_slug || !b?.te_slug) return null
-                        return (
-                          <button
-                            key={`h${m.id}`}
-                            className="cv-h2h"
-                            style={{ top: y, left: H2H_X }}
-                            title={`Head-to-head: ${a.name} vs ${b.name}`}
-                            onClick={() => setH2H({ p1: a, p2: b, round: m.round_number })}
-                          >
-                            H2H
-                          </button>
-                        )
-                      })}
-                      {/* Upset bell — shown when the USER PREDICTED an upset (picked the
-                          lower-ranked entrant), regardless of the actual result. Sits just
-                          to the left of the H2H chip's fixed spot; free to overlap the match
-                          boxes to its left if it needs the room. */}
-                      {nextC >= 1 && nextCenters.map((y, ri) => {
-                        const m = R[nextC - 1][ri]
-                        const { p1: aId, p2: bId } = resolved[m.id] || {}
-                        const pickId = picks?.[m.id] ?? null
-                        const rankA = aId != null ? drawRanks[aId] : null
-                        const rankB = bId != null ? drawRanks[bId] : null
-                        const expectedId = rankA != null && rankB != null ? (rankA <= rankB ? aId : bId) : null
-                        const isUpsetPick = pickId != null && expectedId != null && pickId !== expectedId
-                        if (!isUpsetPick) return null
-                        return (
-                          <UpsetBell key={`bell${m.id}`} style={{ top: y, left: H2H_X - BELL_OFFSET }} />
-                        )
-                      })}
                     </div>
                   )
                 })()}
               </div>
             )
           })}
+
+          {/* H2H chips + upset bells, rendered as ONE overlay that's the last
+              child of cv-body — painted after (on top of) every column, so
+              they're never subject to a column's own stacking level (which is
+              what keeps each connector line tucked behind its box edges). */}
+          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+            {visible.map((c, colIdx) => {
+              const isLastVisible = colIdx === visible.length - 1
+              const nextC = isLastVisible ? afterC : visible[colIdx + 1]
+              const nextCenters = isLastVisible ? afterCenters : centers[nextC]
+              if (!nextCenters || nextC < 1) return null
+              const gapX = colIdx * (COL_W + COL_GAP) + COL_W
+              return nextCenters.map((y, ri) => {
+                const m = R[nextC - 1][ri]
+                const { p1: aId, p2: bId } = resolved[m.id] || {}
+                const a = aId != null ? playerById[aId] : null
+                const b = bId != null ? playerById[bId] : null
+                const pickId = picks?.[m.id] ?? null
+                const rankA = aId != null ? drawRanks[aId] : null
+                const rankB = bId != null ? drawRanks[bId] : null
+                const expectedId = rankA != null && rankB != null ? (rankA <= rankB ? aId : bId) : null
+                const isUpsetPick = pickId != null && expectedId != null && pickId !== expectedId
+                return (
+                  <Fragment key={m.id}>
+                    {a?.te_slug && b?.te_slug && (
+                      <button
+                        className="cv-h2h"
+                        style={{ top: y, left: gapX + H2H_X, pointerEvents: 'auto' }}
+                        title={`Head-to-head: ${a.name} vs ${b.name}`}
+                        onClick={() => setH2H({ p1: a, p2: b, round: m.round_number })}
+                      >
+                        H2H
+                      </button>
+                    )}
+                    {isUpsetPick && (
+                      <UpsetBell style={{ top: y, left: gapX + H2H_X - BELL_OFFSET, pointerEvents: 'auto' }} />
+                    )}
+                  </Fragment>
+                )
+              })
+            })}
+          </div>
         </div>
       </div>
     </>
