@@ -329,7 +329,9 @@
   display: inline-block;
   font-size: 0.62rem;
   font-weight: 700;
-  min-width: 16px;
+  min-width: 24px;            /* covers up to 3 digits so 2- and 3-digit ranks
+                                  render the same badge width — keeps whatever
+                                  follows (e.g. a flag) at a consistent X */
   text-align: center;
   padding: 1px 3px;
   border-radius: 3px;
@@ -408,12 +410,14 @@
      fills the box completely: no letterboxing, no cropping. Do not "round"
      this to 3:2 or any other ratio — it will reintroduce a gap. */
   flex-shrink: 0;
-  width: 22px !important;
-  height: 16px !important;
+  width: 24px !important;
+  height: 18px !important;
   margin-left: auto;
   margin-right: 2px;
   border-radius: 1px;
-  border: 1px solid #000;
+  border: 1px solid #000;     /* 1px is the practical CSS minimum for a crisp
+                                  border; a smaller box makes this SAME 1px
+                                  look thicker relative to the flag, not thinner */
   align-self: center;
   line-height: 0;             /* neutralize .fi's line-height:1em so its phantom
                                   :before content can't nudge baseline alignment */

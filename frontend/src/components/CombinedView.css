@@ -79,7 +79,10 @@
   box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.15);
 }
 
-/* Seed badge at the box's left edge, natural width, tight to the flag. */
+/* Seed badge at the box's left edge, natural width, tight to the flag.
+   Its child .pos-badge has a fixed min-width (see BracketView.css) so
+   2-digit ("57") and 3-digit ("102") ranks render the SAME badge width —
+   otherwise the flag that follows would land at a different X per row. */
 .cv-badges {
   display: inline-flex;
   align-items: center;
@@ -101,9 +104,12 @@
      !important: flag-icons' own .fi{width:1.333333em} rule has the same
      specificity as .cv-flag and can win the cascade depending on bundle
      order, silently shrinking the width back down (looks square). */
-  width: 22px !important; height: 16px !important;
+  width: 24px !important; height: 18px !important;
   border-radius: 2px;
-  border: 1px solid #000;
+  border: 1px solid #000;     /* 1px is the practical CSS minimum for a crisp
+                                  border; shrinking the box further (as tried
+                                  previously) makes this SAME 1px look thicker
+                                  relative to the smaller flag, not thinner */
   flex-shrink: 0;
   align-self: center;
   line-height: 0;             /* neutralize .fi's line-height:1em so its phantom
