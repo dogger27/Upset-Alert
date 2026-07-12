@@ -144,13 +144,15 @@ function parseSet(cell) {
   return m ? { g: m[1], tb: m[2] ?? null } : { g: '', tb: null }
 }
 
-// Render the score oriented winner-first as "7-6³, 3-6, 7-5, 6-0": sets joined
-// by ", "; tiebreak shown only for the set's LOSER, as a superscript. If either
-// side's score cells carry a trailing "r" (retirement), append " (ret.)".
-function scoreNodes(scores, winnerIsP1) {
+// Render the score oriented TOP-player-first (i.e. player1 / the box shown
+// on top of the pairing) as "7-6³, 3-6, 7-5, 6-0", regardless of who won:
+// sets joined by ", "; tiebreak shown only for the set's LOSER, as a
+// superscript. If either side's score cells carry a trailing "r"
+// (retirement), append " (ret.)".
+function scoreNodes(scores) {
   if (!scores || scores.length < 2) return null
-  const a = winnerIsP1 ? scores[0] : scores[1]
-  const b = winnerIsP1 ? scores[1] : scores[0]
+  const a = scores[0]
+  const b = scores[1]
   const n = Math.max(a?.length ?? 0, b?.length ?? 0)
   const sets = []
   let retired = false
@@ -191,6 +193,17 @@ function Flag({ nat }) {
   const iso2 = nationalityIso2(nat)
   if (!iso2) return <span className="cv-flag cv-flag--empty" />
   return <span className={`fi fi-${iso2.toLowerCase()} cv-flag`} title={nat} />
+}
+
+// Mirrors BracketView's TennisBall icon for visual consistency between views.
+function TennisBall() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 11 11" style={{ display: 'block', flexShrink: 0 }}>
+      <circle cx="5.5" cy="5.5" r="5.5" fill="#b5e04a" />
+      <path d="M1.5 5.5 Q5.5 2 9.5 5.5" stroke="white" strokeWidth="1.3" fill="none" />
+      <path d="M1.5 5.5 Q5.5 9 9.5 5.5" stroke="white" strokeWidth="1.3" fill="none" />
+    </svg>
+  )
 }
 
 function SeedBadge({ player, drawRanks }) {
@@ -326,13 +339,25 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
     return () => onPick(nextMatch.id, playerId)
   }
 
+  // Is the player in column c, row i currently serving? Their live match is
+  // the one they feed into next — R[c][floor(i/2)] — and their slot in it is
+  // p1 (even i, top) or p2 (odd i, bottom), same convention used everywhere
+  // else (entrantBox, centers pairing). live_scores[2] is 1 or 2 for p1/p2.
+  function isServing(c, i) {
+    if (c >= N) return false
+    const nextMatch = R[c][Math.floor(i / 2)]
+    if (!nextMatch?.live_scores) return false
+    const wantSlot = i % 2 === 0 ? 1 : 2
+    return nextMatch.live_scores[2] === wantSlot
+  }
+
   function entrantBox(c, i) {
     const match = R[0][Math.floor(i / 2)]
     const pid = i % 2 === 0 ? match.player1?.id : match.player2?.id
     const player = pid != null ? playerById[pid] : null
     const isBye = match.is_bye && i % 2 === 1 && pid == null
     const onClick = isBye ? null : nextMatchOnClick(0, i, pid)
-    return { key: `e${i}`, player, isBye, kind: 'entrant', clickable: !!onClick, onClick }
+    return { key: `e${i}`, player, isBye, serving: !isBye && isServing(0, i), kind: 'entrant', clickable: !!onClick, onClick }
   }
 
   function winnerBox(c, i) {
@@ -344,13 +369,12 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
     const correct = pickId != null && realId != null && pickId === realId
     const wrong = pickId != null && realId != null && pickId !== realId
     const realPlayer = realId != null ? playerById[realId] : null
-    const winnerIsP1 = realId != null && realId === match.player1?.id
-    const score = match.is_bye ? null : scoreNodes(match.scores, winnerIsP1)
+    const score = match.is_bye ? null : scoreNodes(match.scores)
 
     const onClick = nextMatchOnClick(c, i, displayId)
 
     return {
-      key: `w${match.id}`, player, correct, wrong, score,
+      key: `w${match.id}`, player, correct, wrong, score, serving: isServing(c, i),
       realName: wrong && realPlayer ? abbrevName(realPlayer.name) : null,
       realFullName: wrong && realPlayer ? realPlayer.name : null,
       match, abbrev: true, kind: 'winner', clickable: !!onClick, onClick,
@@ -458,6 +482,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                               <span className={`cv-name${isUnnamedQ(p) ? ' cv-name--muted' : ''}`} title={p?.nationality ? `${p.name} (${p.nationality})` : (p?.name || undefined)}>
                                 {slotName(p, box.abbrev)}
                               </span>
+                              {box.serving && <span className="cv-serving" title="Serving"><TennisBall /></span>}
                               <EntryBadge player={p} />
                             </>
                           )}
