@@ -120,6 +120,8 @@ async def _migrate(conn):
         "ALTER TABLE te_players DROP COLUMN elo_rank",
         "ALTER TABLE draw_entries ADD COLUMN te_slug VARCHAR",
         "ALTER TABLE draws ADD COLUMN week INTEGER",
+        "ALTER TABLE draws ADD COLUMN draw_release_detected_at DATETIME",
+        "ALTER TABLE draws ADD COLUMN draw_release_notified_at DATETIME",
     ]
     for sql in migrations:
         try:
