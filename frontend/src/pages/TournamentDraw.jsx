@@ -564,9 +564,10 @@ export default function TournamentDraw() {
   const computeWindow = (inset) => {
     const usableW = mainWidth - 24 /* scroll padding */ - 16 /* vertical scrollbar */ - inset
     const fitCols = mainWidth > 0 ? Math.floor((usableW + COL_GAP_PX) / colUnit) : 4
-    const dw = Math.min(4, columnCount, Math.max(1, fitCols))
+    const fit = Math.max(1, fitCols) // how many the WIDTH allows, pre-clamp
+    const dw = Math.min(4, columnCount, fit)
     const maxStart = Math.max(0, columnCount - dw)
-    return { dw, maxStart, pos: Math.min(windowStart, maxStart) }
+    return { dw, maxStart, pos: Math.min(windowStart, maxStart), fit }
   }
   // Pass 1 (no inset) decides whether the left button COULD show (paging
   // possible at all); pass 2 reserves its gutter. Reserved whenever paging is
@@ -576,8 +577,13 @@ export default function TournamentDraw() {
   const w0 = computeWindow(0)
   const leftNavInDraw = !sidebarCollapsed && columnCount > w0.dw
   const drawInsetLeft = leftNavInDraw ? NAV_INSET : 0
-  const { dw: DRAW_WINDOW, maxStart: maxWindowStart, pos: windowPos } = computeWindow(drawInsetLeft)
+  const { dw: DRAW_WINDOW, maxStart: maxWindowStart, pos: windowPos, fit: windowFit } = computeWindow(drawInsetLeft)
   const showPager = columnCount > DRAW_WINDOW
+  // Viewport so narrow that only 1–2 rounds fit → keep the sub-header hidden
+  // at all times (vertical space is at a premium; the edge round-nav buttons
+  // still provide paging). Width-based (windowFit), not DRAW_WINDOW, so a
+  // small draw on a wide screen doesn't hide it.
+  const headerForcedHidden = windowFit <= 2
 
   // Pixel geometry for the round dots + the shaded window highlight behind them.
   const DOT_SIZE = 38, DOT_GAP = 10, DOT_PAD = 6
@@ -625,7 +631,7 @@ export default function TournamentDraw() {
 
   return (
     <div className="draw-page">
-      <div className={clsx('draw-header', `draw-header--${headerStage}`, { 'draw-header--collapsed': headerHidden })}>
+      <div className={clsx('draw-header', `draw-header--${headerStage}`, { 'draw-header--collapsed': headerHidden || headerForcedHidden })}>
         {headerStage === 'full' && (
         <div className="draw-header-top">
           <div className="draw-name-block">
