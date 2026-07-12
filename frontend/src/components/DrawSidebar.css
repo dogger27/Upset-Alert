@@ -13,9 +13,12 @@
 }
 
 .draw-sidebar--collapsed {
-  width: 36px;
-  min-width: 36px;
-  overflow: hidden;
+  /* Just enough room for the expand button — no visible strip. */
+  width: 44px;
+  min-width: 44px;
+  overflow: visible;
+  background: transparent;
+  border-right: none;
 }
 
 /* ── Collapse button ── */
@@ -42,6 +45,20 @@
 .sidebar-collapse-btn:hover {
   background: var(--border);
   border-color: var(--text-muted);
+  color: var(--text);
+}
+
+/* Collapsed state: a larger edge button with the chevron filling it, a dark
+   border to make it obvious, and a 50%-transparent background. */
+.draw-sidebar--collapsed .sidebar-collapse-btn {
+  top: 0.6rem;
+  right: 4px;
+  width: 34px;
+  height: 54px;
+  font-size: 2.4rem;
+  padding: 0;
+  border: 2px solid var(--text);
+  background: rgba(255, 255, 255, 0.5);
   color: var(--text);
 }
 

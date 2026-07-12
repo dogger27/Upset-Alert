@@ -33,6 +33,16 @@
   z-index: 10;
   background: var(--bg);
   padding-bottom: 4px;
+  /* Auto-hides with the header on scroll down (see .bracket-labels--collapsed). */
+  overflow: hidden;
+  max-height: 80px;
+  transition: max-height 0.28s ease, padding-bottom 0.28s ease, opacity 0.2s ease;
+}
+.bracket-labels--collapsed {
+  max-height: 0;
+  padding-bottom: 0;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .round-label {

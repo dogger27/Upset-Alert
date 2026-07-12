@@ -176,17 +176,41 @@ export default function TournamentDraw() {
   // .cv-scroll / .bracket-scroll element (created by a child component), so we
   // listen in the capture phase on document — timing-independent, no child ref.
   const [headerHidden, setHeaderHidden] = useState(false)
+  const headerHiddenRef = useRef(false)
+  useEffect(() => { headerHiddenRef.current = headerHidden }, [headerHidden])
   useEffect(() => {
+    // Bobble guard: collapsing the header grows the scroll viewport, which can
+    // nudge scrollTop and fire a reflow scroll event read as the OPPOSITE
+    // direction — flipping the state straight back. Two defences:
+    //   1. Deadband: require THRESH px of sustained travel in one direction
+    //      before toggling, so tiny jitters never flip it.
+    //   2. Settle window: ignore scroll events for the length of the collapse
+    //      animation after each toggle, so its own reflow can't re-trigger.
+    const THRESH = 40
+    const SETTLE_MS = 340
     let lastY = 0
+    let accum = 0
+    let ignoreUntil = 0
+    const apply = (hide) => {
+      accum = 0
+      if (headerHiddenRef.current === hide) return
+      headerHiddenRef.current = hide
+      ignoreUntil = performance.now() + SETTLE_MS
+      setHeaderHidden(hide)
+    }
     const onScroll = (e) => {
       const el = e.target
       if (!(el instanceof HTMLElement) || !el.matches?.('.cv-scroll, .bracket-scroll')) return
+      const now = performance.now()
       const y = el.scrollTop
       const dy = y - lastY
-      if (y <= 24) setHeaderHidden(false)        // near the top: always show
-      else if (dy > 4) setHeaderHidden(true)     // scrolling down: hide
-      else if (dy < -4) setHeaderHidden(false)   // scrolling up: reveal
       lastY = y
+      if (now < ignoreUntil) return               // reflow during animation: ignore
+      if (y <= 24) { apply(false); return }        // near the top: always show
+      if ((dy > 0) !== (accum > 0)) accum = 0      // direction flipped: reset travel
+      accum += dy
+      if (accum > THRESH) apply(true)              // sustained down: hide
+      else if (accum < -THRESH) apply(false)       // sustained up: reveal
     }
     document.addEventListener('scroll', onScroll, { capture: true, passive: true })
     return () => document.removeEventListener('scroll', onScroll, { capture: true })
@@ -898,6 +922,7 @@ export default function TournamentDraw() {
               locked={!user || locked || (viewingOther && !canEditOther)}
               windowStart={windowPos}
               windowSize={DRAW_WINDOW}
+              labelsHidden={headerHidden}
             />
           ) : (
             <BracketView
@@ -911,6 +936,7 @@ export default function TournamentDraw() {
               picksOwner={picksOwner}
               windowStart={windowPos}
               windowSize={DRAW_WINDOW}
+              labelsHidden={headerHidden}
             />
           )}
         </div>
