@@ -276,8 +276,18 @@ def _gender_label(gender: str) -> str:
     return "Men's" if gender == "M" else "Women's"
 
 
+def _is_qualifying(comp: dict) -> bool:
+    """True if this competition is a qualifying-draw match (not the main draw).
+    ESPN files qualifying under the same 'Singles' grouping, tagged only by the
+    round name, e.g. round.displayName='Qualifying 1st Round'."""
+    rname = comp.get("round", {}).get("displayName", "") or ""
+    return "qualif" in rname.lower()
+
+
 def _singles_comps(event: dict, gender: str, status: str) -> list:
-    """Return competitions with the given status from the correct gender grouping."""
+    """Return MAIN-DRAW singles competitions with the given status for this gender.
+    Qualifying matches are excluded — they share the 'Singles' grouping but must
+    never trigger a picks-lock or be recorded as a main-draw result."""
     label = _gender_label(gender)
     comps = []
     for group in event.get("groupings", []):
@@ -285,6 +295,8 @@ def _singles_comps(event: dict, gender: str, status: str) -> list:
         if "Singles" not in gname or label not in gname:
             continue
         for comp in group.get("competitions", []):
+            if _is_qualifying(comp):
+                continue
             if comp.get("status", {}).get("type", {}).get("name", "") == status:
                 comps.append(comp)
     return comps
@@ -469,13 +481,23 @@ class ESPNMonitor:
                     "ESPN: no event match for '%s' (%s)",
                     tournament.name, tournament.gender,
                 )
-                if tid in lock_ids:
+                # Only a system-log warning once play SHOULD be underway. Before
+                # the start date, ESPN routinely hasn't published the event yet
+                # (it appears around first play) — that's normal, not a failure,
+                # and picks lock at closing_time regardless. Warning earlier just
+                # spams the log every poll for every upcoming tournament.
+                started = (
+                    tournament.start_date is not None
+                    and tournament.start_date <= date.today()
+                )
+                if tid in lock_ids and started:
                     from app.services.system_log import app_log
                     await app_log("warning", "espn",
-                                  f"No ESPN event found for '{tournament.name}' — picks may not auto-lock",
+                                  f"No ESPN event matched for '{tournament.name}' after start — "
+                                  f"auto-lock precision unavailable (picks still lock at scheduled closing_time)",
                                   {"tournament_id": tournament.id, "tournament_name": tournament.name,
                                    "gender": tournament.gender},
-                                  dedup_key=f"espn_no_match_{tournament.id}")
+                                  dedup_key=f"espn_no_match_{tournament.id}", dedup_hours=6)
                 continue
 
             if not entries:
