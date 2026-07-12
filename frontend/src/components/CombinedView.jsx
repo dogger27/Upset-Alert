@@ -400,7 +400,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
           onClose={() => setH2H(null)}
         />
       )}
-      <div className="cv-scroll" style={insetLeft ? { paddingLeft: `calc(0.75rem + ${insetLeft}px)` } : undefined}>
+      <div className={`cv-scroll${compact ? ' cv-scroll--compact' : ''}`} style={insetLeft ? { paddingLeft: `calc(0.75rem + ${insetLeft}px)` } : undefined}>
         {/* zoom (not transform:scale) so the shrink is a real LAYOUT scale —
             scrollWidth shrinks with it, which is what lets 2 rounds fit a
             narrow phone without horizontal scrolling. */}
