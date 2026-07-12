@@ -424,12 +424,19 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                     const bottomPad = colIdx === 0 ? 12 : 28
                     const top = Math.min(yTop, yBot) - BOX_H / 2 - topPad
                     const height = Math.abs(yBot - yTop) + BOX_H + topPad + bottomPad
+                    const isLive = m.live_scores != null
                     return (
-                      <div
-                        key={`mo${m.id}`}
-                        className={`cv-match-outline${isMissingPick ? ' cv-match-outline--missing' : ''}`}
-                        style={{ top, height }}
-                      />
+                      <Fragment key={`mo${m.id}`}>
+                        <div
+                          className={`cv-match-outline${isMissingPick ? ' cv-match-outline--missing' : ''}`}
+                          style={{ top, height }}
+                        />
+                        {isLive && (
+                          <span className="in-progress-badge" style={{ position: 'absolute', top, left: '50%', transform: 'translate(-50%, -50%)' }}>
+                            In Progress
+                          </span>
+                        )}
+                      </Fragment>
                     )
                   })}
 
