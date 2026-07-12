@@ -136,6 +136,16 @@ async def _migrate(conn):
             "AND status != 'completed' "
             "AND (end_date IS NULL OR end_date >= date('now', '-1 day'))"
         ),
+        # 2026 WTA Tour season page has a malformed literal wikilink for Iași Open
+        # ("[[2026 Iași Open –Singles|Singles]]" — missing space + "Women's"), so
+        # our season-page parser faithfully captured a title that doesn't resolve
+        # (verified: real article is "2026 Iași Open – Women's singles", pageid
+        # 83670759). Correct it and stamp the real page_id directly.
+        (
+            "UPDATE draws SET wiki_page_title = '2026 Iași Open – Women''s singles', "
+            "wiki_page_id = 83670759 "
+            "WHERE wiki_page_title = '2026 Iași Open –Singles'"
+        ),
     ]
     for sql in migrations:
         try:

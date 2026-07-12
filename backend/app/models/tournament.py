@@ -186,8 +186,16 @@ class Draw(Base):
 
         # A draw that hasn't started yet can never be "active" or "completed",
         # no matter what got stamped on it (e.g. stale/garbled scraped results
-        # from a bad start_date). Guard this before anything else below.
+        # from a bad start_date). Guard this before anything else below — but
+        # it CAN be "open" once the draw has actually been released (a draw is
+        # normally released days before the tournament starts; that's the
+        # entire point of the "Open" bucket). Without this, any tournament
+        # whose start_date is still in the future would be stuck showing
+        # "upcoming"/"draw not yet released" even after the real draw is out,
+        # right up until the exact calendar day it starts.
         if self.start_date and today < self.start_date:
+            if self.draw_released_direct_at and (self.start_date - today).days <= 30:
+                return "open"
             return "upcoming"
 
         if self.status == "completed":
