@@ -1006,6 +1006,7 @@ export default function TournamentDraw() {
             title={`Show ${pagerColumns[windowPos - 1].title}`}
             aria-label={`Show ${pagerColumns[windowPos - 1].title}`}
           >
+            <span className="round-nav-label round-nav-label--sizer" aria-hidden="true">CHAMP</span>
             <span className="round-nav-label">{pagerColumns[windowPos - 1].nav}</span>
           </button>
         )}
@@ -1017,6 +1018,7 @@ export default function TournamentDraw() {
             title={`Show ${pagerColumns[windowPos + DRAW_WINDOW].title}`}
             aria-label={`Show ${pagerColumns[windowPos + DRAW_WINDOW].title}`}
           >
+            <span className="round-nav-label round-nav-label--sizer" aria-hidden="true">CHAMP</span>
             <span className="round-nav-label">{pagerColumns[windowPos + DRAW_WINDOW].nav}</span>
           </button>
         )}
