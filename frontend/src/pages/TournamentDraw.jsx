@@ -202,33 +202,53 @@ export default function TournamentDraw() {
   const headerHiddenRef = useRef(false)
   useEffect(() => { headerHiddenRef.current = headerHidden }, [headerHidden])
   useEffect(() => {
-    // Bobble guard: collapsing the header grows the scroll viewport, which can
-    // nudge scrollTop and fire a reflow scroll event read as the OPPOSITE
-    // direction — flipping the state straight back. Two defences:
+    // Bobble guard: collapsing the header/labels reclaims real layout space
+    // (required — see feedback_reclaim_vs_jump_header), which can nudge
+    // scrollTop and fire a reflow scroll event read as the OPPOSITE
+    // direction — flipping the state straight back, forever. Two defences:
     //   1. Deadband: require THRESH px of sustained travel in one direction
     //      before toggling, so tiny jitters never flip it.
-    //   2. Settle window: ignore scroll events for the length of the collapse
-    //      animation after each toggle, so its own reflow can't re-trigger.
+    //   2. Settle window: ignore scroll events until the collapse/expand
+    //      transition actually finishes (via transitionend on max-height —
+    //      not a guessed duration, which can leave a gap the reflow's own
+    //      scroll event slips through if it lands even slightly late).
     const THRESH = 40
-    const SETTLE_MS = 340
+    const SETTLE_FALLBACK_MS = 600 // safety net if transitionend never fires
+    const GRACE_MS = 200 // absorb any trailing reflow/scroll-anchoring drift after transitionend
     let lastY = 0
     let accum = 0
-    let ignoreUntil = 0
+    let transitioning = false
+    let fallbackTimer = null
+    let graceTimer = null
+    const clearSettle = () => {
+      transitioning = false
+      if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null }
+      if (graceTimer) { clearTimeout(graceTimer); graceTimer = null }
+    }
     const apply = (hide) => {
       accum = 0
       if (headerHiddenRef.current === hide) return
       headerHiddenRef.current = hide
-      ignoreUntil = performance.now() + SETTLE_MS
+      transitioning = true
+      if (fallbackTimer) clearTimeout(fallbackTimer)
+      if (graceTimer) clearTimeout(graceTimer)
+      fallbackTimer = setTimeout(clearSettle, SETTLE_FALLBACK_MS)
       setHeaderHidden(hide)
+    }
+    const onTransitionEnd = (e) => {
+      if (e.propertyName !== 'max-height') return
+      const el = e.target
+      if (!(el instanceof HTMLElement) || !el.matches('.draw-header, .cv-labels')) return
+      if (graceTimer) clearTimeout(graceTimer)
+      graceTimer = setTimeout(clearSettle, GRACE_MS)
     }
     const onScroll = (e) => {
       const el = e.target
       if (!(el instanceof HTMLElement) || !el.matches?.('.cv-scroll, .bracket-scroll')) return
-      const now = performance.now()
       const y = el.scrollTop
       const dy = y - lastY
       lastY = y
-      if (now < ignoreUntil) return               // reflow during animation: ignore
+      if (transitioning) return                    // reflow during animation: ignore
       if (y <= 24) { apply(false); return }        // near the top: always show
       if ((dy > 0) !== (accum > 0)) accum = 0      // direction flipped: reset travel
       accum += dy
@@ -236,7 +256,12 @@ export default function TournamentDraw() {
       else if (accum < -THRESH) apply(false)       // sustained up: reveal
     }
     document.addEventListener('scroll', onScroll, { capture: true, passive: true })
-    return () => document.removeEventListener('scroll', onScroll, { capture: true })
+    document.addEventListener('transitionend', onTransitionEnd, { capture: true })
+    return () => {
+      document.removeEventListener('scroll', onScroll, { capture: true })
+      document.removeEventListener('transitionend', onTransitionEnd, { capture: true })
+      clearSettle()
+    }
   }, [])
   // Never leave the header hidden when the view or tournament changes
   useEffect(() => { setHeaderHidden(false) }, [viewMode, id])
