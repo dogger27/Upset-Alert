@@ -23,7 +23,11 @@ export default function TournamentDraw() {
   // All state declared first
   const [picks, setPicks] = useState({})
   const [otherPicks, setOtherPicks] = useState({})
-  const [viewMode, setViewMode] = useState('live')
+  // Picks/Live Draw views are disabled — Combined is the only view shown.
+  // The switcher UI and the auto-switch effects that used to flip this are
+  // disabled below, but left in place (not deleted) in case these views are
+  // re-enabled later.
+  const [viewMode, setViewMode] = useState('combined')
   const [windowStart, setWindowStart] = useState(0) // left-most visible round (pager)
   const [mainWidth, setMainWidth] = useState(0) // width of the bracket area (drives # rounds shown)
   const [bodyWidth, setBodyWidth] = useState(0) // width of the whole draw body (stable, drives sidebar auto-hide)
@@ -125,20 +129,22 @@ export default function TournamentDraw() {
   }, [viewingOther, viewedPreds, data])
 
   // Set initial view mode once: always 'picks' for open tournaments, or if user has picks, or if ?user= param present
-  useEffect(() => {
-    if (initialModeSet.current || savedPreds === undefined || !data) return
-    initialModeSet.current = true
-    if (searchParams.get('user') || data.tournament.status === 'open' || savedPreds.some(p => p.predicted_winner_id != null)) setViewMode('picks')
-  }, [savedPreds, data])
+  // DISABLED — Combined is the only view shown; kept for when Picks/Live Draw are re-enabled.
+  // useEffect(() => {
+  //   if (initialModeSet.current || savedPreds === undefined || !data) return
+  //   initialModeSet.current = true
+  //   if (searchParams.get('user') || data.tournament.status === 'open' || savedPreds.some(p => p.predicted_winner_id != null)) setViewMode('picks')
+  // }, [savedPreds, data])
 
   // Auto-switch to 'live' when the draw locks mid-session and the user has no picks of their own
+  // DISABLED — Combined is the only view shown; kept for when Picks/Live Draw are re-enabled.
   const _isLockedNow = !!(data?.tournament?.is_locked && !data?.tournament?.selections_unlocked)
   const _userHasPicks = savedPreds ? savedPreds.some(p => p.predicted_winner_id != null) : false
-  useEffect(() => {
-    if (user && _isLockedNow && !_userHasPicks && viewMode === 'picks' && !viewingOther) {
-      setViewMode('live')
-    }
-  }, [_isLockedNow, _userHasPicks, viewMode, viewingOther, user])
+  // useEffect(() => {
+  //   if (user && _isLockedNow && !_userHasPicks && viewMode === 'picks' && !viewingOther) {
+  //     setViewMode('live')
+  //   }
+  // }, [_isLockedNow, _userHasPicks, viewMode, viewingOther, user])
 
   // ── Sidebar auto-hide ──────────────────────────────────────────────────
   // Cache the expanded sidebar width while it's showing (so we can reason
@@ -545,6 +551,9 @@ export default function TournamentDraw() {
           </div>
         </div>
         )}
+        {/* Picks/Live Draw/Combined switcher — DISABLED, Combined is the only
+            view shown. Buttons removed but kept here (commented) for when
+            these views are re-enabled.
         <div className="draw-mode-buttons">
           <button
             className={clsx('draw-mode-btn', { active: viewMode === 'picks' })}
@@ -567,6 +576,7 @@ export default function TournamentDraw() {
             Combined
           </button>
         </div>
+        */}
         <div className="draw-header-center">
           {showPager && headerStage === 'minimal' && (
             <div className="bracket-pager bracket-pager--minimal">
