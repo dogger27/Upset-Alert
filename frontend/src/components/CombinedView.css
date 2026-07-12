@@ -141,7 +141,7 @@
 /* H2H chip centred on the connector "T" — position is independent of the bell. */
 .cv-h2h {
   position: absolute;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%) rotate(-90deg);
   border: 1px solid var(--green-500, #4a9d6a);
   background: #fff;
   color: var(--green-600, #2f7a4d);
