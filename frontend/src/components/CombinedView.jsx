@@ -184,7 +184,10 @@ const BOX_H = 32
 const SLOT = 58          // fallback slot (missing feeders only)
 const PAIR_SLOT = 130    // vertical slot per MATCH (pair) in the base column
 const PAIR_OFF = 24      // half the centre-to-centre gap of a match's two opponents
-const COL_W = 260
+// 214 = the previous 260 minus ~25% of the ~184px the player NAME used to get
+// (badges/flag/padding are fixed-width, so the name column absorbs the whole
+// cut — leaving it 75% of its old allotment, per design request).
+const COL_W = 214
 const COL_GAP = 64       // wide enough to seat the H2H chip on the connector "T"
 const H2H_X = 8          // H2H chip's x within the gap — centred on the match box's right border
 const BELL_OFFSET = 34   // distance (px) the bell sits left of the H2H chip's centre
@@ -242,7 +245,10 @@ function Connectors({ leftCenters, rightCenters, totalH }) {
   )
 }
 
-export default function CombinedView({ tournament, matches, players, picks, onPick, locked = true, windowStart = 0, windowSize = 4, labelsHidden = false, insetLeft = 0 }) {
+// compact: phone-width mode — country flags are dropped to buy name space.
+// zoom:    scales the whole rendered draw (layout included, via CSS zoom) so
+//          the parent can shrink it until the target number of rounds fits.
+export default function CombinedView({ tournament, matches, players, picks, onPick, locked = true, windowStart = 0, windowSize = 4, labelsHidden = false, insetLeft = 0, compact = false, zoom = 1 }) {
   const [h2h, setH2H] = useState(null)
 
   const playerById = Object.fromEntries(players.map(p => [p.id, p]))
@@ -395,6 +401,10 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
         />
       )}
       <div className="cv-scroll" style={insetLeft ? { paddingLeft: `calc(0.75rem + ${insetLeft}px)` } : undefined}>
+        {/* zoom (not transform:scale) so the shrink is a real LAYOUT scale —
+            scrollWidth shrinks with it, which is what lets 2 rounds fit a
+            narrow phone without horizontal scrolling. */}
+        <div style={zoom !== 1 ? { zoom } : undefined}>
         <div className={`cv-labels${labelsHidden ? ' cv-labels--collapsed' : ''}`}>
           {visible.map((c, i) => {
             const label = c === 0
@@ -478,7 +488,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                           ) : (
                             <>
                               <span className="cv-badges"><SeedBadge player={p} drawRanks={drawRanks} /></span>
-                              <Flag nat={p?.nationality} />
+                              {!compact && <Flag nat={p?.nationality} />}
                               <span className={`cv-name${isUnnamedQ(p) ? ' cv-name--muted' : ''}`} title={p?.nationality ? `${p.name} (${p.nationality})` : (p?.name || undefined)}>
                                 {slotName(p, box.abbrev)}
                               </span>
@@ -550,6 +560,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
               })
             })}
           </div>
+        </div>
         </div>
       </div>
     </>

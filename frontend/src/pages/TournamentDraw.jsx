@@ -165,8 +165,7 @@ export default function TournamentDraw() {
   // there's room again. Disabled once the user manually toggles it.
   useEffect(() => {
     if (sidebarManual || bodyWidth <= 0 || !data) return
-    const anyScores = data.matches.some(m => (m.scores?.length > 0) || m.live_scores != null)
-    const colUnit = (anyScores ? 300 : 252) + 24
+    const colUnit = 214 + 64 // mirrors CombinedView COL_W + COL_GAP (see fit calc below)
     const needed4Main = 4 * colUnit + 16 // draw-main width needed to fit 4 full rounds
     const projMainIfExpanded = bodyWidth - expandedSidebarW.current
     setSidebarCollapsed(projMainIfExpanded < needed4Main)
@@ -515,13 +514,6 @@ export default function TournamentDraw() {
   // page the window forward/back. State lives here so the dots can sit in the
   // header, while BracketView renders the corresponding slice.
   const roundNumbers = [...new Set(matches.map(m => m.round_number))].sort((a, b) => a - b)
-  // How many rounds fit in the bracket area: shrink from 4 toward 1 as the
-  // window narrows; a round is only counted when it fits ENTIRELY (no
-  // horizontal scroll). Column width mirrors BracketView: 300 when any round
-  // carries score data (COL_W_SCORES, independent of view mode) else 252, plus
-  // the 24px connector gap. Subtract the scroll area's padding and vertical
-  // scrollbar so we never leave a round half-clipped.
-  const anyScores = matches.some(m => (m.scores?.length > 0) || m.live_scores != null)
   const roundNameByNum = {}
   const roundCountByNum = {}
   for (const m of matches) {
@@ -556,8 +548,11 @@ export default function TournamentDraw() {
 
   // How many columns fit in the bracket area: shrink from 4 toward 1 as it
   // narrows; a column is only counted when it fits ENTIRELY (no h-scroll).
-  const COL_GAP_PX = 24
-  const colUnit = (anyScores ? 300 : 252) + COL_GAP_PX
+  // 278 mirrors CombinedView's COL_W(214) + COL_GAP(64) — the only view shown.
+  // (If Picks/Live are ever re-enabled, restore a per-view unit: BracketView
+  // is (anyScores ? 300 : 252) + 24.)
+  const COL_GAP_PX = 24 // credited back for the last column's missing trailing gap
+  const colUnit = 214 + 64
   // Left gutter reserved INSIDE the draw for the left round-nav button when the
   // sidebar is expanded (collapsed → the button lives in the page-edge gutter).
   const NAV_INSET = 34
@@ -577,7 +572,26 @@ export default function TournamentDraw() {
   const w0 = computeWindow(0)
   const leftNavInDraw = !sidebarCollapsed && columnCount > w0.dw
   const drawInsetLeft = leftNavInDraw ? NAV_INSET : 0
-  const { dw: DRAW_WINDOW, maxStart: maxWindowStart, pos: windowPos, fit: windowFit } = computeWindow(drawInsetLeft)
+  let { dw: DRAW_WINDOW, maxStart: maxWindowStart, pos: windowPos, fit: windowFit } = computeWindow(drawInsetLeft)
+
+  // COMPACT draw mode: when fewer than 2 full-size rounds would fit even with
+  // the whole body width available, go all-in on showing TWO rounds anyway:
+  // the collapsed sidebar strip overlays the draw instead of taking flex space
+  // (its reveal button and the left round-nav button float over the boxes),
+  // country flags are dropped, and the draw is zoomed down until exactly two
+  // rounds fit without horizontal scrolling. Decided from bodyWidth (stable —
+  // unaffected by the overlay/zoom outputs) so the mode can't feedback-loop
+  // with its own layout changes.
+  const fullAvail = bodyWidth - 24 /* scroll padding */ - 16 /* vertical scrollbar */
+  const compactDraw = viewMode === 'combined' && bodyWidth > 0 && sidebarCollapsed
+    && fullAvail < 2 * colUnit
+  const drawZoom = compactDraw ? Math.max(0.5, fullAvail / (2 * colUnit)) : 1
+  if (compactDraw) {
+    DRAW_WINDOW = Math.min(2, columnCount)
+    maxWindowStart = Math.max(0, columnCount - DRAW_WINDOW)
+    windowPos = Math.min(windowStart, maxWindowStart)
+    windowFit = 2
+  }
   const showPager = columnCount > DRAW_WINDOW
   // Viewport so narrow that only 1–2 rounds fit → keep the sub-header hidden
   // at all times (vertical space is at a premium; the edge round-nav buttons
@@ -961,6 +975,7 @@ export default function TournamentDraw() {
           selectedUserId={viewedUserId}
           defaultLeagueId={searchParams.get('league') ? Number(searchParams.get('league')) : undefined}
           collapsed={sidebarCollapsed}
+          overlay={compactDraw}
           onToggleCollapsed={() => { setSidebarManual(true); setSidebarCollapsed(c => !c) }}
           onSelectUser={(uid, uname) => {
             setViewedUserId(uid)
@@ -984,6 +999,8 @@ export default function TournamentDraw() {
               windowSize={DRAW_WINDOW}
               labelsHidden={headerHidden}
               insetLeft={drawInsetLeft}
+              compact={compactDraw}
+              zoom={drawZoom}
             />
           ) : (
             <BracketView

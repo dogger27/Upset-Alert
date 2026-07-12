@@ -21,6 +21,26 @@
   border-right: none;
 }
 
+/* Compact (phone) draw mode: float over the draw instead of occupying flex
+   space, so the bracket can start at the page's left edge. Collapsed, the
+   strip is click-through (only the reveal button stays interactive) so draw
+   boxes underneath remain tappable; expanded, it acts as a temporary drawer
+   above the draw. */
+.draw-sidebar--overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 30;
+}
+.draw-sidebar--overlay.draw-sidebar--collapsed { pointer-events: none; }
+.draw-sidebar--overlay.draw-sidebar--collapsed .sidebar-collapse-btn { pointer-events: auto; }
+.draw-sidebar--overlay:not(.draw-sidebar--collapsed) {
+  background: #fafafa;
+  border-right: 1px solid var(--border);
+  box-shadow: 2px 0 12px rgba(0, 0, 0, 0.18);
+}
+
 /* ── Collapse button ── */
 .sidebar-collapse-btn {
   position: absolute;
