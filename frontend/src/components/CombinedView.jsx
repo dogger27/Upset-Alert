@@ -183,7 +183,7 @@ const SLOT = 58          // fallback slot (missing feeders only)
 const PAIR_SLOT = 130    // vertical slot per MATCH (pair) in the base column
 const PAIR_OFF = 24      // half the centre-to-centre gap of a match's two opponents
 const COL_W = 260
-const COL_GAP = 44       // wide enough to seat the H2H chip on the connector "T"
+const COL_GAP = 64       // wide enough to seat the H2H chip on the connector "T"
 const H2H_X = 8          // H2H chip's x within the gap — centred on the match box's right border
 const BELL_OFFSET = 34   // distance (px) the bell sits left of the H2H chip's centre
 
