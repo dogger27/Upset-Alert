@@ -96,8 +96,11 @@
      SVG's canvas is EXACTLY 4:3, confirmed from the library source. 24x18 is
      an exact 4:3 match, so background-size:contain (the library default)
      fills the box completely: no letterboxing, no cropping. Do not "round"
-     this to 3:2 or any other ratio — it will reintroduce a gap. */
-  width: 24px; height: 18px;
+     this to 3:2 or any other ratio — it will reintroduce a gap.
+     !important: flag-icons' own .fi{width:1.333333em} rule has the same
+     specificity as .cv-flag and can win the cascade depending on bundle
+     order, silently shrinking the width back down (looks square). */
+  width: 24px !important; height: 18px !important;
   border-radius: 2px;
   border: 1px solid #000;
   flex-shrink: 0;
