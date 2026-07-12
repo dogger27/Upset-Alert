@@ -34,10 +34,10 @@ export default function TournamentDraw() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [sidebarManual, setSidebarManual] = useState(false) // user overrode auto-hide?
   const expandedSidebarW = useRef(290) // cached expanded sidebar width (updated while expanded)
-  // Natural (uncollapsed) height of .draw-header, kept in sync via ResizeObserver.
-  // Used to cancel the header's own flow height (negative margin) while
-  // .draw-body reserves the same amount as permanent padding — so collapsing
-  // the header never changes .draw-body's size/position and nothing jumps.
+  // Natural (uncollapsed) height of .draw-header, kept in sync via
+  // ResizeObserver. Drives max-height as an inline style so the collapse
+  // transition animates from the header's real height rather than a guessed
+  // oversized constant (see .draw-header / .draw-header--collapsed in CSS).
   const [headerH, setHeaderH] = useState(0)
 
   // Callback refs + ResizeObservers on .draw-main / .draw-body. (Callback refs
@@ -644,7 +644,7 @@ export default function TournamentDraw() {
       <div
         ref={headerRef}
         className={clsx('draw-header', `draw-header--${headerStage}`, { 'draw-header--collapsed': headerHidden })}
-        style={headerH ? { marginBottom: `-${headerH}px` } : undefined}
+        style={!headerHidden && headerH ? { maxHeight: `${headerH}px` } : undefined}
       >
         {headerStage === 'full' && (
         <div className="draw-header-top">
@@ -968,7 +968,7 @@ export default function TournamentDraw() {
         <div key={clearToast.key} className="clear-toast">{clearToast.msg}</div>
       )}
 
-      <div className="draw-body" ref={bodyRef} style={headerH ? { paddingTop: headerH } : undefined}>
+      <div className="draw-body" ref={bodyRef}>
         <DrawSidebar
           tournamentId={Number(id)}
           tournament={tournament}

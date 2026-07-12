@@ -150,22 +150,23 @@
   padding: 0.35rem 1.5rem;
   background: white;
   border-bottom: 2px solid var(--border);
-  position: relative; /* paint above .draw-body's reserved padding (see below) */
-  z-index: 5;
-  /* Auto-hidden while scrolling down; revealed on scroll up (see
-     .draw-header--collapsed). Height itself never changes — only
-     opacity/transform — because its flow contribution is cancelled by an
-     inline negative margin-bottom (set from its own measured height in
-     TournamentDraw.jsx), matched by permanent padding-top on .draw-body.
-     That keeps .draw-body's size/position constant across the hide/show
-     toggle, so nothing below it ever jumps; hiding the header simply
-     uncovers the (reserved, otherwise-blank) space beneath it. */
-  transition: opacity 0.2s ease, transform 0.28s ease, border-bottom-color 0.2s ease;
+  /* Collapsible on scroll (see .draw-header--collapsed) so .draw-body reclaims
+     the space. max-height is set inline from the header's own measured
+     offsetHeight (TournamentDraw.jsx) rather than a guessed oversized
+     constant — animating from an accurate starting value keeps the shrink
+     spread evenly across the whole transition instead of sitting invisible
+     for most of it and then snapping in the last few frames. */
+  overflow: hidden;
+  transition: max-height 0.28s ease, padding-top 0.28s ease,
+              padding-bottom 0.28s ease, opacity 0.2s ease,
+              border-bottom-color 0.2s ease;
 }
 
 .draw-header--collapsed {
+  max-height: 0 !important;
+  padding-top: 0;
+  padding-bottom: 0;
   opacity: 0;
-  transform: translateY(-100%);
   border-bottom-color: transparent;
   pointer-events: none;
 }
