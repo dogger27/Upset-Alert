@@ -352,6 +352,17 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
           {visible.map((c, colIdx) => {
             const count = colCount(c)
             const cc = centers[c]
+
+            // Interior gap: feeds the next VISIBLE column. Trailing stub: the
+            // right-most visible column still gets its feed bars (connectors,
+            // H2H, bell) pointing at the next column's slot, even though that
+            // column's boxes aren't rendered (out of the window). Computed here
+            // (rather than inside the gap IIFE below) so the missing-pick outline,
+            // which is drawn inside cv-col, can also key off the match it feeds.
+            const isLastVisible = colIdx === visible.length - 1
+            const nextC = isLastVisible ? afterC : visible[colIdx + 1]
+            const nextCenters = isLastVisible ? afterCenters : centers[nextC]
+
             return (
               <div key={c} style={{ display: 'flex', flexShrink: 0 }}>
                 <div className="cv-col" style={{ width: COL_W, height: totalH }}>
@@ -382,16 +393,29 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                       </div>
                     )
                   })}
+
+                  {/* Red outline around a match's two feeder boxes once both
+                      opponents are known but the user hasn't picked a winner yet
+                      (mirrors BracketView's "missing-pick" outline in Picks mode). */}
+                  {!locked && nextC >= 1 && nextC - 1 < R.length && R[nextC - 1].map((m, ri) => {
+                    const { p1: aId, p2: bId } = resolved[m.id] || {}
+                    if (aId == null || bId == null) return null
+                    if (picks?.[m.id] != null) return null
+                    const yTop = cc[2 * ri], yBot = cc[2 * ri + 1]
+                    if (yTop == null || yBot == null) return null
+                    const top = Math.min(yTop, yBot) - BOX_H / 2 - 4
+                    const height = Math.abs(yBot - yTop) + BOX_H + 8
+                    return (
+                      <div
+                        key={`mp${m.id}`}
+                        className="cv-missing-pick"
+                        style={{ top, height }}
+                      />
+                    )
+                  })}
                 </div>
 
                 {(() => {
-                  // Interior gap: feeds the next VISIBLE column. Trailing stub: the
-                  // right-most visible column still gets its feed bars (connectors,
-                  // H2H, bell) pointing at the next column's slot, even though that
-                  // column's boxes aren't rendered (out of the window).
-                  const isLastVisible = colIdx === visible.length - 1
-                  const nextC = isLastVisible ? afterC : visible[colIdx + 1]
-                  const nextCenters = isLastVisible ? afterCenters : centers[nextC]
                   if (!nextCenters) return null
                   return (
                     <div className="cv-gap" style={{ width: COL_GAP, height: totalH, position: 'relative' }}>

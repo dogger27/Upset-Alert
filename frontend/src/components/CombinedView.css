@@ -57,6 +57,18 @@
 .cv-box--clickable:hover { filter: brightness(0.96); border-color: #9aa4ab; }
 .cv-box--bye     { background: #f4f5f6; border-style: dashed; }
 
+/* Red outline wrapping a match's two feeder boxes when both opponents are
+   known but the user hasn't picked a winner yet (Open draws). */
+.cv-missing-pick {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border: 2px solid #dc2626;
+  border-radius: 8px;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.15);
+  pointer-events: none;
+}
+
 /* Seed badge at the box's left edge, natural width, tight to the flag. */
 .cv-badges {
   display: inline-flex;
