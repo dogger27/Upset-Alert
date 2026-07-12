@@ -99,6 +99,9 @@
   align-self: center;
   flex-shrink: 0;
 }
+/* Compact mode drops the flag, whose margins used to separate the seed badge
+   from the name — restore that breathing room directly on the badge. */
+.cv-scroll--compact .cv-badges { margin-right: 6px; }
 /* Entry-type badge (Q/WC/LL/SE) sits at the far right of the box */
 .cv-entry {
   flex-shrink: 0;
