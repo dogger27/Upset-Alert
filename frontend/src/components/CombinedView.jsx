@@ -366,6 +366,27 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
             return (
               <div key={c} style={{ display: 'flex', flexShrink: 0 }}>
                 <div className="cv-col" style={{ width: COL_W, height: totalH }}>
+                  {/* Light grey box grouping every match's two feeder boxes together;
+                      switches to red once both opponents are known but the user
+                      hasn't picked a winner yet (mirrors BracketView's "missing-pick"
+                      outline in Picks mode). Rendered first so it sits behind the
+                      player boxes. */}
+                  {nextC >= 1 && nextC - 1 < R.length && R[nextC - 1].map((m, ri) => {
+                    const yTop = cc[2 * ri], yBot = cc[2 * ri + 1]
+                    if (yTop == null || yBot == null) return null
+                    const { p1: aId, p2: bId } = resolved[m.id] || {}
+                    const isMissingPick = !locked && aId != null && bId != null && picks?.[m.id] == null
+                    const top = Math.min(yTop, yBot) - BOX_H / 2 - 10
+                    const height = Math.abs(yBot - yTop) + BOX_H + 20
+                    return (
+                      <div
+                        key={`mo${m.id}`}
+                        className={`cv-match-outline${isMissingPick ? ' cv-match-outline--missing' : ''}`}
+                        style={{ top, height }}
+                      />
+                    )
+                  })}
+
                   {Array.from({ length: count }, (_, i) => {
                     const box = c === 0 ? entrantBox(c, i) : winnerBox(c, i)
                     const p = box.player
@@ -391,26 +412,6 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                         </div>
                         {colIdx > 0 && box.score && <div className="cv-score">{box.score}</div>}
                       </div>
-                    )
-                  })}
-
-                  {/* Light grey box grouping every match's two feeder boxes together;
-                      switches to red once both opponents are known but the user
-                      hasn't picked a winner yet (mirrors BracketView's "missing-pick"
-                      outline in Picks mode). */}
-                  {nextC >= 1 && nextC - 1 < R.length && R[nextC - 1].map((m, ri) => {
-                    const yTop = cc[2 * ri], yBot = cc[2 * ri + 1]
-                    if (yTop == null || yBot == null) return null
-                    const { p1: aId, p2: bId } = resolved[m.id] || {}
-                    const isMissingPick = !locked && aId != null && bId != null && picks?.[m.id] == null
-                    const top = Math.min(yTop, yBot) - BOX_H / 2 - 4
-                    const height = Math.abs(yBot - yTop) + BOX_H + 8
-                    return (
-                      <div
-                        key={`mo${m.id}`}
-                        className={`cv-match-outline${isMissingPick ? ' cv-match-outline--missing' : ''}`}
-                        style={{ top, height }}
-                      />
                     )
                   })}
                 </div>
