@@ -642,10 +642,10 @@ export default function TournamentDraw() {
   return (
     <div className="draw-page">
       <div
-        ref={headerRef}
         className={clsx('draw-header', `draw-header--${headerStage}`, { 'draw-header--collapsed': headerHidden })}
         style={!headerHidden && headerH ? { maxHeight: `${headerH}px` } : undefined}
       >
+      <div ref={headerRef} className="draw-header-inner">
         {headerStage === 'full' && (
         <div className="draw-header-top">
           <div className="draw-name-block">
@@ -865,6 +865,7 @@ export default function TournamentDraw() {
           </div>
         </div>
         )}
+      </div>
       </div>
 
       {saveMutation.isError && (

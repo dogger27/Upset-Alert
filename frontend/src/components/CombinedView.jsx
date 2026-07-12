@@ -412,21 +412,26 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
       )}
       <div className="cv-scroll" style={insetLeft ? { paddingLeft: `calc(0.75rem + ${insetLeft}px)` } : undefined}>
         <div
-          ref={labelsRef}
           className={`cv-labels${labelsHidden ? ' cv-labels--collapsed' : ''}`}
           style={!labelsHidden && labelsH ? { maxHeight: `${labelsH}px` } : undefined}
         >
-          {visible.map((c, i) => {
-            const label = c === 0
-              ? (R[0][0]?.round_name || 'Round 1')
-              : c < N ? (R[c][0]?.round_name || `Round ${c + 1}`) : 'Champion'
-            return (
-              <div key={c} style={{ display: 'flex', flexShrink: 0 }}>
-                <div className="cv-label" style={{ width: COL_W }}>{label}</div>
-                {i < visible.length - 1 && <div style={{ width: COL_GAP }} />}
-              </div>
-            )
-          })}
+          {/* Measured for its natural height via labelsRef — this inner wrapper
+              never collapses, so the ResizeObserver in the effect above never
+              sees a 0 height and can't overwrite labelsH when the outer
+              .cv-labels is hidden (which would strand it at 0 on reveal). */}
+          <div ref={labelsRef} style={{ display: 'flex' }}>
+            {visible.map((c, i) => {
+              const label = c === 0
+                ? (R[0][0]?.round_name || 'Round 1')
+                : c < N ? (R[c][0]?.round_name || `Round ${c + 1}`) : 'Champion'
+              return (
+                <div key={c} style={{ display: 'flex', flexShrink: 0 }}>
+                  <div className="cv-label" style={{ width: COL_W }}>{label}</div>
+                  {i < visible.length - 1 && <div style={{ width: COL_GAP }} />}
+                </div>
+              )
+            })}
+          </div>
         </div>
 
         <div className="cv-body" style={{ height: totalH }}>
