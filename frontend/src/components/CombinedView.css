@@ -5,14 +5,6 @@
   min-height: 0;
   padding: 0.4rem 0.75rem 1rem;
   background: var(--bg);
-  /* The collapsing .cv-labels row is in-flow content at the top of this
-     scroller. With default scroll anchoring, its height change makes the
-     browser silently adjust scrollTop to keep lower content stable — an
-     adjustment the header auto-hide's scroll-direction detector reads as a
-     REAL user scroll in the opposite direction, re-toggling the header and
-     looping forever (page bobbing up/down, labels occluding/revealing on
-     repeat). Anchoring off = only user input moves scrollTop. */
-  overflow-anchor: none;
 }
 
 .cv-labels {
@@ -22,17 +14,13 @@
   z-index: 10;
   background: var(--bg);
   padding-bottom: 4px;
-  /* Auto-hides with the header on scroll down (see .cv-labels--collapsed) so
-     the bracket reclaims the space. max-height is set inline from this row's
-     own measured offsetHeight (CombinedView.jsx) rather than a guessed
-     oversized constant — animating from an accurate starting value keeps the
-     collapse spread evenly across the transition instead of sitting
-     invisible for most of it and then snapping in the last few frames. */
+  /* Auto-hides with the header on scroll down (see .cv-labels--collapsed). */
   overflow: hidden;
+  max-height: 80px;
   transition: max-height 0.28s ease, padding-bottom 0.28s ease, opacity 0.2s ease;
 }
 .cv-labels--collapsed {
-  max-height: 0 !important;
+  max-height: 0;
   padding-bottom: 0;
   opacity: 0;
   pointer-events: none;

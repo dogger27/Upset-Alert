@@ -34,11 +34,6 @@ export default function TournamentDraw() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [sidebarManual, setSidebarManual] = useState(false) // user overrode auto-hide?
   const expandedSidebarW = useRef(290) // cached expanded sidebar width (updated while expanded)
-  // Natural (uncollapsed) height of .draw-header, kept in sync via
-  // ResizeObserver. Drives max-height as an inline style so the collapse
-  // transition animates from the header's real height rather than a guessed
-  // oversized constant (see .draw-header / .draw-header--collapsed in CSS).
-  const [headerH, setHeaderH] = useState(0)
 
   // Callback refs + ResizeObservers on .draw-main / .draw-body. (Callback refs
   // rather than useEffect so they attach once the elements mount after the
@@ -57,20 +52,6 @@ export default function TournamentDraw() {
   }
   const mainRef = useCallback(makeWidthRef(setMainWidth), [])
   const bodyWidthRef = useCallback(makeWidthRef(setBodyWidth), [])
-  // Same pattern, but measuring offsetHeight (unaffected by the header's own
-  // opacity/transform collapse — only its content/stage changes this).
-  const headerRef = useCallback((() => {
-    let ro = null
-    return node => {
-      if (ro) { ro.disconnect(); ro = null }
-      if (node) {
-        const measure = () => setHeaderH(node.offsetHeight)
-        measure()
-        ro = new ResizeObserver(measure)
-        ro.observe(node)
-      }
-    }
-  })(), [])
   // Also capture the .draw-body node so we can measure the drawn bracket's
   // right edge (for positioning the right-hand round-nav button).
   const bodyNodeRef = useRef(null)
@@ -202,76 +183,41 @@ export default function TournamentDraw() {
   const headerHiddenRef = useRef(false)
   useEffect(() => { headerHiddenRef.current = headerHidden }, [headerHidden])
   useEffect(() => {
-    // Bobble guard: collapsing the header/labels reclaims real layout space
-    // (required — see feedback_reclaim_vs_jump_header), which can move
-    // scrollTop WITHOUT user input and fire scroll events this detector would
-    // read as a user scroll — flipping the state straight back, forever.
-    // Three defences:
-    //   1. overflow-anchor:none on .cv-scroll/.bracket-scroll (their CSS):
-    //      the labels row collapsing inside the scroller otherwise makes
-    //      scroll anchoring silently shift scrollTop to compensate — the
-    //      main driver of the infinite hide/reveal loop.
-    //   2. Deadband: require THRESH px of sustained travel in one direction
+    // Bobble guard: collapsing the header grows the scroll viewport, which can
+    // nudge scrollTop and fire a reflow scroll event read as the OPPOSITE
+    // direction — flipping the state straight back. Two defences:
+    //   1. Deadband: require THRESH px of sustained travel in one direction
     //      before toggling, so tiny jitters never flip it.
-    //   3. Settle window: ignore scroll events until the collapse/expand
-    //      transition actually finishes (via transitionend on max-height —
-    //      not a guessed duration), absorbing scrollTop CLAMPING when the
-    //      viewport grows near the bottom of the scroll range.
+    //   2. Settle window: ignore scroll events for the length of the collapse
+    //      animation after each toggle, so its own reflow can't re-trigger.
     const THRESH = 40
-    const SETTLE_FALLBACK_MS = 600 // safety net if transitionend never fires
-    const GRACE_MS = 200 // absorb any trailing reflow/scroll-anchoring drift after transitionend
+    const SETTLE_MS = 340
     let lastY = 0
     let accum = 0
-    let transitioning = false
-    let fallbackTimer = null
-    let graceTimer = null
-    const clearSettle = () => {
-      transitioning = false
-      if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null }
-      if (graceTimer) { clearTimeout(graceTimer); graceTimer = null }
-    }
+    let ignoreUntil = 0
     const apply = (hide) => {
       accum = 0
       if (headerHiddenRef.current === hide) return
       headerHiddenRef.current = hide
-      transitioning = true
-      if (fallbackTimer) clearTimeout(fallbackTimer)
-      if (graceTimer) clearTimeout(graceTimer)
-      fallbackTimer = setTimeout(clearSettle, SETTLE_FALLBACK_MS)
+      ignoreUntil = performance.now() + SETTLE_MS
       setHeaderHidden(hide)
-    }
-    const onTransitionEnd = (e) => {
-      if (e.propertyName !== 'max-height') return
-      const el = e.target
-      if (!(el instanceof HTMLElement) || !el.matches('.draw-header, .cv-labels')) return
-      if (graceTimer) clearTimeout(graceTimer)
-      graceTimer = setTimeout(clearSettle, GRACE_MS)
     }
     const onScroll = (e) => {
       const el = e.target
       if (!(el instanceof HTMLElement) || !el.matches?.('.cv-scroll, .bracket-scroll')) return
+      const now = performance.now()
       const y = el.scrollTop
       const dy = y - lastY
       lastY = y
-      if (transitioning) return                    // reflow during animation: ignore
-      // Near the top: show — but only on an actual upward move. On a short
-      // draw, hiding the header grows the viewport enough that the browser
-      // CLAMPS scrollTop under this threshold (clamping still fires with
-      // overflow-anchor:none); revealing unconditionally here would re-toggle
-      // against the user's downward scroll and oscillate.
-      if (y <= 24) { if (dy < 0) apply(false); return }
+      if (now < ignoreUntil) return               // reflow during animation: ignore
+      if (y <= 24) { apply(false); return }        // near the top: always show
       if ((dy > 0) !== (accum > 0)) accum = 0      // direction flipped: reset travel
       accum += dy
       if (accum > THRESH) apply(true)              // sustained down: hide
       else if (accum < -THRESH) apply(false)       // sustained up: reveal
     }
     document.addEventListener('scroll', onScroll, { capture: true, passive: true })
-    document.addEventListener('transitionend', onTransitionEnd, { capture: true })
-    return () => {
-      document.removeEventListener('scroll', onScroll, { capture: true })
-      document.removeEventListener('transitionend', onTransitionEnd, { capture: true })
-      clearSettle()
-    }
+    return () => document.removeEventListener('scroll', onScroll, { capture: true })
   }, [])
   // Never leave the header hidden when the view or tournament changes
   useEffect(() => { setHeaderHidden(false) }, [viewMode, id])
@@ -676,11 +622,7 @@ export default function TournamentDraw() {
 
   return (
     <div className="draw-page">
-      <div
-        className={clsx('draw-header', `draw-header--${headerStage}`, { 'draw-header--collapsed': headerHidden })}
-        style={!headerHidden && headerH ? { maxHeight: `${headerH}px` } : undefined}
-      >
-      <div ref={headerRef} className="draw-header-inner">
+      <div className={clsx('draw-header', `draw-header--${headerStage}`, { 'draw-header--collapsed': headerHidden })}>
         {headerStage === 'full' && (
         <div className="draw-header-top">
           <div className="draw-name-block">
@@ -901,7 +843,6 @@ export default function TournamentDraw() {
         </div>
         )}
       </div>
-      </div>
 
       {saveMutation.isError && (
         <div className="error" style={{ padding: '0 1.5rem' }}>
@@ -1065,7 +1006,6 @@ export default function TournamentDraw() {
             title={`Show ${pagerColumns[windowPos - 1].title}`}
             aria-label={`Show ${pagerColumns[windowPos - 1].title}`}
           >
-            <span className="round-nav-sizer" aria-hidden="true">CHAMP</span>
             <span className="round-nav-label">{pagerColumns[windowPos - 1].nav}</span>
           </button>
         )}
@@ -1077,7 +1017,6 @@ export default function TournamentDraw() {
             title={`Show ${pagerColumns[windowPos + DRAW_WINDOW].title}`}
             aria-label={`Show ${pagerColumns[windowPos + DRAW_WINDOW].title}`}
           >
-            <span className="round-nav-sizer" aria-hidden="true">CHAMP</span>
             <span className="round-nav-label">{pagerColumns[windowPos + DRAW_WINDOW].nav}</span>
           </button>
         )}

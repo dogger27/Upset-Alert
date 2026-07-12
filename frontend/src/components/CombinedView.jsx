@@ -15,7 +15,7 @@
  * Windowed like BracketView: only `windowSize` columns render, starting at
  * `windowStart` (the parent's dot pager controls both).
  */
-import { Fragment, useEffect, useRef, useState } from 'react'
+import { Fragment, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import H2HPanel from './H2HPanel'
 import './CombinedView.css'
@@ -245,22 +245,6 @@ function Connectors({ leftCenters, rightCenters, totalH }) {
 export default function CombinedView({ tournament, matches, players, picks, onPick, locked = true, windowStart = 0, windowSize = 4, labelsHidden = false, insetLeft = 0 }) {
   const [h2h, setH2H] = useState(null)
 
-  // Natural (uncollapsed) height of the sticky round-labels row, kept in sync
-  // via ResizeObserver. Drives max-height as an inline style so the collapse
-  // transition animates from its real height rather than a guessed oversized
-  // constant (see .cv-labels / .cv-labels--collapsed in CombinedView.css).
-  const labelsRef = useRef(null)
-  const [labelsH, setLabelsH] = useState(0)
-  useEffect(() => {
-    const el = labelsRef.current
-    if (!el) return
-    const measure = () => setLabelsH(el.offsetHeight)
-    measure()
-    const ro = new ResizeObserver(measure)
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [])
-
   const playerById = Object.fromEntries(players.map(p => [p.id, p]))
   const drawRanks = computeDrawRanks(players)
 
@@ -411,27 +395,18 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
         />
       )}
       <div className="cv-scroll" style={insetLeft ? { paddingLeft: `calc(0.75rem + ${insetLeft}px)` } : undefined}>
-        <div
-          className={`cv-labels${labelsHidden ? ' cv-labels--collapsed' : ''}`}
-          style={!labelsHidden && labelsH ? { maxHeight: `${labelsH}px` } : undefined}
-        >
-          {/* Measured for its natural height via labelsRef — this inner wrapper
-              never collapses, so the ResizeObserver in the effect above never
-              sees a 0 height and can't overwrite labelsH when the outer
-              .cv-labels is hidden (which would strand it at 0 on reveal). */}
-          <div ref={labelsRef} style={{ display: 'flex' }}>
-            {visible.map((c, i) => {
-              const label = c === 0
-                ? (R[0][0]?.round_name || 'Round 1')
-                : c < N ? (R[c][0]?.round_name || `Round ${c + 1}`) : 'Champion'
-              return (
-                <div key={c} style={{ display: 'flex', flexShrink: 0 }}>
-                  <div className="cv-label" style={{ width: COL_W }}>{label}</div>
-                  {i < visible.length - 1 && <div style={{ width: COL_GAP }} />}
-                </div>
-              )
-            })}
-          </div>
+        <div className={`cv-labels${labelsHidden ? ' cv-labels--collapsed' : ''}`}>
+          {visible.map((c, i) => {
+            const label = c === 0
+              ? (R[0][0]?.round_name || 'Round 1')
+              : c < N ? (R[c][0]?.round_name || `Round ${c + 1}`) : 'Champion'
+            return (
+              <div key={c} style={{ display: 'flex', flexShrink: 0 }}>
+                <div className="cv-label" style={{ width: COL_W }}>{label}</div>
+                {i < visible.length - 1 && <div style={{ width: COL_GAP }} />}
+              </div>
+            )
+          })}
         </div>
 
         <div className="cv-body" style={{ height: totalH }}>
@@ -537,11 +512,8 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
           {/* H2H chips + upset bells, rendered as ONE overlay that's the last
               child of cv-body — painted after (on top of) every column, so
               they're never subject to a column's own stacking level (which is
-              what keeps each connector line tucked behind its box edges).
-              Offset by labelsH to match cv-body's paddingTop (the boxes live in
-              the content box; this absolute overlay would otherwise sit against
-              the padding edge, floating the chips/bells up by the label height). */}
-          <div style={{ position: 'absolute', top: labelsH || 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none' }}>
+              what keeps each connector line tucked behind its box edges). */}
+          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
             {visible.map((c, colIdx) => {
               const isLastVisible = colIdx === visible.length - 1
               const nextC = isLastVisible ? afterC : visible[colIdx + 1]
