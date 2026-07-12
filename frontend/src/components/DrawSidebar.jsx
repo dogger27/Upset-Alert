@@ -25,7 +25,9 @@ function Toast({ message, onDone }) {
   return <div className="sidebar-toast">{message}</div>
 }
 
-export default function DrawSidebar({ tournamentId, tournament, selectedUserId, defaultLeagueId, onSelectUser, collapsed = false, onToggleCollapsed }) {
+// overlay: compact (phone) draw mode — the sidebar floats over the draw
+// instead of taking flex-row space, so the bracket can use the full width.
+export default function DrawSidebar({ tournamentId, tournament, selectedUserId, defaultLeagueId, onSelectUser, collapsed = false, onToggleCollapsed, overlay = false }) {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [selectedLeagueId, setSelectedLeagueId] = useState(defaultLeagueId ?? 'global')
@@ -103,7 +105,7 @@ export default function DrawSidebar({ tournamentId, tournament, selectedUserId, 
   }
 
   return (
-    <aside className={`draw-sidebar${collapsed ? ' draw-sidebar--collapsed' : ''}`}>
+    <aside className={`draw-sidebar${collapsed ? ' draw-sidebar--collapsed' : ''}${overlay ? ' draw-sidebar--overlay' : ''}`}>
       <button
         className="sidebar-collapse-btn"
         onClick={() => onToggleCollapsed?.()}
