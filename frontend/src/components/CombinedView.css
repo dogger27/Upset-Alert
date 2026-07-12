@@ -45,9 +45,9 @@
   align-items: center;
   gap: 0;
   padding: 0 8px 0 3px;
-  border: 1px solid #cfd6da;
+  border: 1px solid #aab3ba;
   border-radius: 5px;
-  background: #eceff1;
+  background: #dde2e5;
   font-size: 0.8rem;
   overflow: hidden;
 }
