@@ -344,6 +344,79 @@ async def _notify_pending_draw_releases() -> None:
     logger.info("Draw-release notification: dispatched for %d tournament(s)", len(to_notify))
 
 
+# Re-alert cadence for the two draw-health checks below — long enough to not
+# spam on every run, short enough that a genuinely stuck tournament doesn't
+# go unnoticed for days (as Iași Open's title did before anyone looked).
+DRAW_HEALTH_REALERT_HOURS = 6.0
+
+
+async def _check_draw_health() -> None:
+    """
+    Periodic sanity sweep for two classes of silent failure that were each hit
+    in production and neither raises an exception on its own, so nothing else
+    would ever flag them:
+
+    1. "Released but not shown as open" (Athens Open) — draw_released_direct_at
+       is set, the tournament genuinely hasn't started, and it's within the
+       window where computed_status is supposed to report "open" — but it
+       doesn't. This directly re-derives the "should be open" condition from
+       raw fields (NOT by calling computed_status) so the check stays useful
+       even if a future change reintroduces the same kind of ordering bug in
+       computed_status itself — a check that just re-asked the buggy property
+       what it thinks would never catch its own bug.
+
+    2. "Wiki page never resolves" (Iași Open) — wiki_page_id has never been
+       set (every scrape attempt has failed to even locate the page) for a
+       tournament whose draw was expected days ago or that starts imminently.
+       Each individual attempt already logs+dedups hourly via
+       _refresh_active_tournaments' exception handler; this escalates once
+       it's clearly not a transient blip but a wrong/dead title that needs a
+       human to fix (as with Iași Open's malformed season-page wikilink).
+    """
+    from app.services.system_log import app_log
+
+    today = date.today()
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(Draw).where(Draw.status.notin_(["completed"]))
+        )
+        tournaments = result.scalars().all()
+
+    for t in tournaments:
+        # --- Check 1: released but not open -------------------------------
+        should_be_open = (
+            t.draw_released_direct_at is not None
+            and t.start_date is not None
+            and today < t.start_date
+            and (t.start_date - today).days <= 30
+            and t.status not in ("active", "completed")
+        )
+        if should_be_open and t.computed_status not in ("open", "active", "completed"):
+            await app_log(
+                "error", "scheduler",
+                f"Draw released but not showing as open: {t.year} {t.name} ({t.gender}) — "
+                f"computed_status={t.computed_status!r}, expected 'open'",
+                {"tournament_id": t.id, "tournament_name": t.name, "gender": t.gender,
+                 "draw_released_direct_at": str(t.draw_released_direct_at),
+                 "start_date": str(t.start_date), "computed_status": t.computed_status},
+                dedup_key=f"released_not_open_{t.id}", dedup_hours=DRAW_HEALTH_REALERT_HOURS,
+            )
+
+        # --- Check 2: wiki page never resolves -----------------------------
+        release_overdue = t.draw_release_direct is not None and (today - t.draw_release_direct).days >= 1
+        starting_soon = t.start_date is not None and (t.start_date - today).days <= 5
+        if t.wiki_page_id is None and (release_overdue or starting_soon):
+            await app_log(
+                "error", "scheduler",
+                f"Wiki page never resolved for {t.year} {t.name} ({t.gender}) — "
+                f"likely a wrong/dead wiki_page_title: {t.wiki_page_title!r}",
+                {"tournament_id": t.id, "tournament_name": t.name, "gender": t.gender,
+                 "wiki_page_title": t.wiki_page_title, "draw_release_direct": str(t.draw_release_direct),
+                 "start_date": str(t.start_date)},
+                dedup_key=f"wiki_never_resolved_{t.id}", dedup_hours=DRAW_HEALTH_REALERT_HOURS,
+            )
+
+
 async def _sync_subscriptions() -> None:
     """Sync EventStreams subscriptions with active/pending tournaments + season pages."""
     async with AsyncSessionLocal() as db:
@@ -421,6 +494,15 @@ def start_scheduler() -> None:
         id="notify_draw_releases",
         misfire_grace_time=300,
     )
+    # Sanity sweep for silent failures (released-but-not-open, wiki title
+    # never resolving) — see _check_draw_health docstring.
+    scheduler.add_job(
+        _check_draw_health,
+        "interval",
+        minutes=60,
+        id="check_draw_health",
+        misfire_grace_time=600,
+    )
     scheduler.add_job(
         _refresh_weekly_rankings,
         "cron",
@@ -448,6 +530,7 @@ def start_scheduler() -> None:
     logger.info("Subscription sync scheduled (every 5 min)")
     logger.info("Weekly rankings refresh scheduled (Sunday 6pm PDT)")
     logger.info("Draw-release notification check scheduled (every 10 min)")
+    logger.info("Draw health check scheduled (every 60 min)")
     asyncio.create_task(eventstream.start())
     asyncio.create_task(espn_monitor.start())
     # Subscribe immediately on startup so EventStreams catches edits from the
@@ -458,6 +541,8 @@ def start_scheduler() -> None:
     asyncio.create_task(_refresh_active_tournaments(force_refresh=True))
     # Catch any draw releases that went stable while the server was down.
     asyncio.create_task(_notify_pending_draw_releases())
+    # Catch any tournaments that were already stuck before this restart.
+    asyncio.create_task(_check_draw_health())
     # Backfill DOB for any te_players missing it (no-op if all already set).
     from app.services.rankings import backfill_all_dob, refresh_elo_ratings
     asyncio.create_task(backfill_all_dob())
