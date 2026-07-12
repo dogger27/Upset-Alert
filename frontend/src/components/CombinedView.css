@@ -126,7 +126,7 @@
 .cv-real-winner {
   position: absolute;
   left: 2px;
-  bottom: 15px;               /* only a few px above the box top */
+  bottom: 20px;               /* a few px above the box top */
   line-height: 1;
   font-size: 0.72rem;
   font-weight: 600;
