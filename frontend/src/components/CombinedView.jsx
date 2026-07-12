@@ -15,9 +15,45 @@
  * Windowed like BracketView: only `windowSize` columns render, starting at
  * `windowStart` (the parent's dot pager controls both).
  */
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import H2HPanel from './H2HPanel'
 import './CombinedView.css'
+
+// Upset bell with the same hover tooltip as BracketView's (portal-rendered,
+// "Upset Alert!" pill) — pulled into its own component so each bell instance
+// tracks its own hover state and bounding-rect-derived tooltip position.
+function UpsetBell({ style }) {
+  const ref = useRef(null)
+  const [tipPos, setTipPos] = useState(null)
+  return (
+    <>
+      <span
+        ref={ref}
+        className="cv-bell"
+        style={style}
+        onMouseEnter={() => {
+          const r = ref.current?.getBoundingClientRect()
+          if (r) setTipPos({ x: r.left + r.width / 2, y: r.top })
+        }}
+        onMouseLeave={() => setTipPos(null)}
+      >
+        🔔
+      </span>
+      {tipPos && createPortal(
+        <span className="upset-tooltip" style={{ position: 'fixed', left: tipPos.x, top: tipPos.y - 8, transform: 'translate(-50%, -100%)' }}>
+          <span className="upset-tooltip-dot" />
+          <span className="upset-tooltip-text">
+            <span className="upset-tooltip-upset">Upset </span>
+            <span className="upset-tooltip-alert">Alert</span>
+            <span className="upset-tooltip-exclaim">!</span>
+          </span>
+        </span>,
+        document.body
+      )}
+    </>
+  )
+}
 
 // IOC 3-letter → ISO 2-letter for flag classes (mirror of BracketView)
 const IOC_TO_ISO2 = {
@@ -456,14 +492,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                         const isUpsetPick = pickId != null && expectedId != null && pickId !== expectedId
                         if (!isUpsetPick) return null
                         return (
-                          <span
-                            key={`bell${m.id}`}
-                            className="cv-bell"
-                            style={{ top: y, left: H2H_X - BELL_OFFSET }}
-                            title="Upset!"
-                          >
-                            🔔
-                          </span>
+                          <UpsetBell key={`bell${m.id}`} style={{ top: y, left: H2H_X - BELL_OFFSET }} />
                         )
                       })}
                     </div>
