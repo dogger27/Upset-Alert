@@ -56,6 +56,7 @@
 .cv-box--clickable { cursor: pointer; }
 .cv-box--clickable:hover { filter: brightness(0.96); border-color: #9aa4ab; }
 .cv-box--bye     { background: #f4f5f6; border-style: dashed; }
+.cv-box--tbd     { border-color: #f59e0b; box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2); }
 
 /* Red outline wrapping a match's two feeder boxes when both opponents are
    known but the user hasn't picked a winner yet (Open draws). */

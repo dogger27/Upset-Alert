@@ -373,7 +373,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                       <div key={box.key} className="cv-slot" style={{ top: cc[i] }}>
                         {box.realName && <div className="cv-real-winner" title={box.realFullName || undefined}>{box.realName}</div>}
                         <div
-                          className={`cv-box${box.isBye ? ' cv-box--bye' : ''}${box.correct ? ' cv-box--correct' : ''}${box.wrong ? ' cv-box--wrong' : ''}${box.clickable ? ' cv-box--clickable' : ''}`}
+                          className={`cv-box${box.isBye ? ' cv-box--bye' : ''}${!box.isBye && !p ? ' cv-box--tbd' : ''}${box.correct ? ' cv-box--correct' : ''}${box.wrong ? ' cv-box--wrong' : ''}${box.clickable ? ' cv-box--clickable' : ''}`}
                           onClick={box.onClick}
                         >
                           {box.isBye ? (
