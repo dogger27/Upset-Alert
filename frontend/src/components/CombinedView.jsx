@@ -184,7 +184,7 @@ const PAIR_SLOT = 130    // vertical slot per MATCH (pair) in the base column
 const PAIR_OFF = 24      // half the centre-to-centre gap of a match's two opponents
 const COL_W = 260
 const COL_GAP = 44       // wide enough to seat the H2H chip on the connector "T"
-const H2H_X = 10         // H2H chip's x within the gap — sits over the match box's right border
+const H2H_X = 2          // H2H chip's x within the gap — sits over the match box's right border
 const BELL_OFFSET = 34   // distance (px) the bell sits left of the H2H chip's centre
 
 function Flag({ nat }) {
@@ -224,7 +224,7 @@ function Connectors({ leftCenters, rightCenters, totalH }) {
   }
   return (
     <svg className="cv-conn" width={COL_GAP} height={totalH} style={{ flexShrink: 0 }}>
-      <g stroke="#c8e6c9" strokeWidth="1.5" fill="none">{lines}</g>
+      <g stroke="#7fbf8f" strokeWidth="1.5" fill="none">{lines}</g>
     </svg>
   )
 }
