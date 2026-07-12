@@ -570,22 +570,35 @@ export default function TournamentDraw() {
   // the right button doesn't shift the whole bracket sideways by the gutter
   // width the moment the left button first appears.
   const w0 = computeWindow(0)
-  const leftNavInDraw = !sidebarCollapsed && columnCount > w0.dw
+
+  // COMPACT draw mode: when fewer than 2 full-size rounds would fit in NORMAL
+  // mode, go all-in on showing TWO rounds anyway: the collapsed sidebar strip
+  // overlays the draw instead of taking flex space (its reveal button and the
+  // left round-nav button float over the boxes), country flags are dropped,
+  // and the draw is zoomed down until two rounds fit without horizontal
+  // scrolling. Decided from bodyWidth ONLY (stable — unaffected by the
+  // overlay/zoom outputs) so the mode can't feedback-loop with its own layout
+  // changes. Threshold = what normal mode needs for 2 rounds: 2 column units
+  // + the collapsed sidebar strip (44) + scroll padding (24) + scrollbar (16)
+  // − the last column's trailing-gap credit (COL_GAP_PX).
+  const COMPACT_BREAK = 2 * colUnit + 44 + 24 + 16 - COL_GAP_PX
+  const compactDraw = viewMode === 'combined' && bodyWidth > 0 && sidebarCollapsed
+    && bodyWidth < COMPACT_BREAK
+  // Zoomed content is inset by the nav gutter (see drawInsetLeft below), so
+  // the space the two rounds must fit into loses that gutter too. The
+  // trailing feeder-line stub may end up under the right nav button — fine.
+  const drawZoom = compactDraw
+    ? Math.max(0.5, (bodyWidth - 24 - 16 - NAV_INSET) / (2 * colUnit))
+    : 1
+
+  // Left gutter: reserved whenever paging is possible in normal mode (so the
+  // bracket doesn't shift sideways when the left button first appears), and
+  // ALWAYS in compact mode — there the button floats over the draw, and the
+  // gutter keeps the leftmost boxes clear of it (they'd otherwise start at
+  // the scroll padding, right underneath the button).
+  const leftNavInDraw = compactDraw || (!sidebarCollapsed && columnCount > w0.dw)
   const drawInsetLeft = leftNavInDraw ? NAV_INSET : 0
   let { dw: DRAW_WINDOW, maxStart: maxWindowStart, pos: windowPos, fit: windowFit } = computeWindow(drawInsetLeft)
-
-  // COMPACT draw mode: when fewer than 2 full-size rounds would fit even with
-  // the whole body width available, go all-in on showing TWO rounds anyway:
-  // the collapsed sidebar strip overlays the draw instead of taking flex space
-  // (its reveal button and the left round-nav button float over the boxes),
-  // country flags are dropped, and the draw is zoomed down until exactly two
-  // rounds fit without horizontal scrolling. Decided from bodyWidth (stable —
-  // unaffected by the overlay/zoom outputs) so the mode can't feedback-loop
-  // with its own layout changes.
-  const fullAvail = bodyWidth - 24 /* scroll padding */ - 16 /* vertical scrollbar */
-  const compactDraw = viewMode === 'combined' && bodyWidth > 0 && sidebarCollapsed
-    && fullAvail < 2 * colUnit
-  const drawZoom = compactDraw ? Math.max(0.5, fullAvail / (2 * colUnit)) : 1
   if (compactDraw) {
     DRAW_WINDOW = Math.min(2, columnCount)
     maxWindowStart = Math.max(0, columnCount - DRAW_WINDOW)
