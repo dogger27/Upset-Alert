@@ -130,6 +130,8 @@
 }
 .cv-name--muted { color: var(--text-muted); font-weight: 500; font-style: italic; }
 
+.cv-serving { flex-shrink: 0; margin-left: 4px; }
+
 .cv-score {
   position: absolute;
   left: 2px;
