@@ -92,12 +92,10 @@
 }
 
 .cv-flag {
-  /* 24x18 = exact 4:3, matching flag-icons' native rectangular aspect ratio
-     (see .fi's 1.333333em width for a 1em height) — so background-size:contain
-     (the library default) fills the box completely with no letterboxing AND
-     no cropping, since the box and image aspect ratios are identical. Height
-     also matches the seed badge's rendered height. */
-  width: 24px; height: 18px;
+  /* Clearly rectangular (3:2), like an actual flag, not square. Height
+     matches the seed badge's rendered height; background-size:contain (the
+     library default) fills with no cropping. */
+  width: 27px; height: 18px;
   border-radius: 2px;
   border: 1px solid #000;
   flex-shrink: 0;

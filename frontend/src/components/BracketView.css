@@ -402,11 +402,11 @@
 .player-row.eliminated .score-cell { opacity: 0.7; }
 
 .player-flag {
-  /* 24x18 = exact 4:3, matching flag-icons' native rectangular aspect ratio,
-     so background-size:contain (the library default) fills the box with no
-     letterboxing AND no cropping. Height also matches the seed badge. */
+  /* Clearly rectangular (3:2), like an actual flag, not square. Height
+     matches the seed badge's rendered height; background-size:contain (the
+     library default) fills with no cropping. */
   flex-shrink: 0;
-  width: 24px !important;
+  width: 27px !important;
   height: 18px !important;
   margin-left: auto;
   margin-right: 2px;
