@@ -141,21 +141,19 @@
 }
 
 .draw-header {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  /* Full stage: space the four sections (info · switch · pager · status) evenly */
-  justify-content: space-between;
-  gap: 1rem;
   padding: 0.35rem 1.5rem;
   background: white;
   border-bottom: 2px solid var(--border);
   /* Collapsible on scroll (see .draw-header--collapsed) so .draw-body reclaims
-     the space. max-height is set inline from the header's own measured
+     the space. max-height is set inline from .draw-header-inner's measured
      offsetHeight (TournamentDraw.jsx) rather than a guessed oversized
      constant — animating from an accurate starting value keeps the shrink
      spread evenly across the whole transition instead of sitting invisible
-     for most of it and then snapping in the last few frames. */
+     for most of it and then snapping in the last few frames. Measuring the
+     INNER wrapper (which never itself collapses) rather than .draw-header
+     matters: if the observer watched .draw-header directly, it would see
+     its own collapse-to-0 and overwrite the stored height with 0, stranding
+     the reveal at whatever tiny value happened to be mid-transition. */
   overflow: hidden;
   transition: max-height 0.28s ease, padding-top 0.28s ease,
               padding-bottom 0.28s ease, opacity 0.2s ease,
@@ -171,9 +169,20 @@
   pointer-events: none;
 }
 
+.draw-header-inner {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  /* Full stage: space the four sections (info · switch · pager · status) evenly */
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  min-width: 0;
+}
+
 /* Compact/minimal header: only switch + pager remain — centre them as a group */
-.draw-header--compact,
-.draw-header--minimal {
+.draw-header--compact .draw-header-inner,
+.draw-header--minimal .draw-header-inner {
   justify-content: center;
   gap: 0.75rem;
 }
