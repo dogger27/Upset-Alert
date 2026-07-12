@@ -343,10 +343,10 @@
 .pos-badge.ghost   { background: #f0f0f0; color: #aaa; font-style: italic; }
 
 .pos-badge.entry { }
-.pos-badge.entry-wc { background: #cfe2ff; color: #084298; }
-.pos-badge.entry-q  { background: #d1e7dd; color: #0a3622; }
-.pos-badge.entry-ll { background: #f8d7da; color: #58151c; }
-.pos-badge.entry-pr { background: #e2d9f3; color: #432874; }
+.pos-badge.entry-wc { background: #cfe2ff; color: #084298; border: 1px solid #7aa3e0; }
+.pos-badge.entry-q  { background: #d1e7dd; color: #0a3622; border: 1px solid #6fb890; }
+.pos-badge.entry-ll { background: #f8d7da; color: #58151c; border: 1px solid #e28a92; }
+.pos-badge.entry-pr { background: #e2d9f3; color: #432874; border: 1px solid #a68fd9; }
 
 /* ── Player name ── */
 .pname {
