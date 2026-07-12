@@ -408,11 +408,14 @@
      fills the box completely: no letterboxing, no cropping. Do not "round"
      this to 3:2 or any other ratio — it will reintroduce a gap. */
   flex-shrink: 0;
-  width: 24px !important;
-  height: 18px !important;
+  width: 22px !important;
+  height: 16px !important;
   margin-left: auto;
   margin-right: 2px;
   border-radius: 1px;
   border: 1px solid #000;
+  align-self: center;
+  line-height: 0;             /* neutralize .fi's line-height:1em so its phantom
+                                  :before content can't nudge baseline alignment */
   opacity: 0.9;
 }
