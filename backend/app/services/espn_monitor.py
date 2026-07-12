@@ -57,6 +57,13 @@ _LOCK_BEFORE_DAYS = 1   # start watching for picks-lock N days before start_date
 _LOCK_AFTER_DAYS  = 3   # stop watching N days after start_date
 _RESULT_AFTER_DAYS = 16  # keep syncing results up to N days after start_date
 
+# Minimum player-set Jaccard for a name/city-independent event match. Our field
+# and the ESPN event's singles field must be largely the SAME set of players.
+# Observed: the real event scores ~0.6; a concurrent Grand Slam that merely
+# contains most of a small draw's players scores <0.1 (huge non-overlap), so a
+# 0.25 floor separates them with a wide margin.
+_PLAYER_MATCH_MIN_JACCARD = 0.25
+
 
 # ---------------------------------------------------------------------------
 # Name normalisation & token-set matching
@@ -152,22 +159,93 @@ def _venue_city(event: dict) -> str:
     return disp.split(",")[0].strip()
 
 
-def _event_matches(tournament, event: dict) -> bool:
+def _build_name_index(names: list) -> tuple[list, dict]:
+    """Like _build_draw_index but over plain name strings (for the ESPN side)."""
+    pairs: list = []
+    tok_index: dict = {}
+    for nm in names:
+        if not nm:
+            continue
+        ts = _tokenize(nm)
+        pairs.append((ts, nm))
+        for tok in ts:
+            tok_index.setdefault(tok, []).append(nm)
+    return pairs, tok_index
+
+
+def _event_singles_players(event: dict, gender: str) -> list:
+    """Unique full names of every singles player in the event for this gender."""
+    label = _gender_label(gender)
+    names: list = []
+    seen: set = set()
+    for group in event.get("groupings", []):
+        gname = group.get("grouping", {}).get("displayName", "")
+        if "Singles" not in gname or label not in gname:
+            continue
+        for comp in group.get("competitions", []):
+            for c in comp.get("competitors", []):
+                nm = c.get("athlete", {}).get("fullName", "")
+                if nm and nm != "TBD" and nm not in seen:
+                    seen.add(nm)
+                    names.append(nm)
+    return names
+
+
+def _player_jaccard(entries: list, event: dict, gender: str) -> float:
     """
-    True if this ESPN event is our tournament. Tries name-token overlap first,
-    then falls back to matching our city against the event's venue city — ESPN
-    frequently uses the sponsor name (e.g. 'Nordea Open' for the Swedish Open in
-    Båstad), which shares no tokens with the Wikipedia name but plays in the same
-    venue city.
+    Symmetric player-set overlap between our draw and the ESPN event's singles
+    field: |A ∩ B| / |A ∪ B|. Name- and city-independent. A concurrent Grand
+    Slam scores near-zero (our small draw is a tiny slice of its huge field),
+    while the real event scores high because the two rosters are the same set.
     """
-    if _names_match(tournament.name, event.get("name", "")):
-        return True
+    our_named = [e for e in entries if e.name]
+    espn_names = _event_singles_players(event, gender)
+    if not our_named or not espn_names:
+        return 0.0
+    pairs, tok_index = _build_name_index(espn_names)
+    inter = sum(1 for e in our_named if _find_entry(e.name, pairs, tok_index))
+    union = len(our_named) + len(espn_names) - inter
+    return inter / union if union else 0.0
+
+
+def _match_event(tournament, events: list, entries: list) -> Optional[dict]:
+    """
+    Find the ESPN event for this tournament, most-specific signal first:
+      1. Name-token overlap  — cheap; handles the common case.
+      2. Player-set Jaccard  — robust to sponsor renames & bad/missing metadata
+                               (e.g. ESPN's 'Nordea Open' == our 'Swedish Open');
+                               matches on who's actually in the draw.
+      3. Venue city          — final cheap tiebreak against the event venue.
+    Returns the matched event dict, or None.
+    """
+    # 1. Name
+    for e in events:
+        if _names_match(tournament.name, e.get("name", "")):
+            return e
+
+    # 2. Player-set Jaccard (only worth computing if we have a draw to compare)
+    if entries:
+        best, best_score = None, 0.0
+        for e in events:
+            score = _player_jaccard(entries, e, tournament.gender)
+            if score > best_score:
+                best, best_score = e, score
+        if best is not None and best_score >= _PLAYER_MATCH_MIN_JACCARD:
+            logger.info(
+                "ESPN: matched '%s' → '%s' by player overlap (Jaccard=%.2f)",
+                tournament.name, best.get("name"), best_score,
+            )
+            return best
+
+    # 3. Venue city
     city = getattr(tournament, "city", None)
     if city:
-        vcity = _venue_city(event)
-        if vcity and _norm(city) == _norm(vcity):
-            return True
-    return False
+        for e in events:
+            vcity = _venue_city(e)
+            if vcity and _norm(city) == _norm(vcity):
+                return e
+
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -378,10 +456,14 @@ class ESPNMonitor:
             tournament = by_id[tid]
             events = espn_events[tournament.gender]
 
-            espn_event = next(
-                (e for e in events if _event_matches(tournament, e)),
-                None,
-            )
+            # Load draw entries once — needed for player-overlap matching AND both jobs
+            async with AsyncSessionLocal() as db:
+                de_res = await db.execute(
+                    select(DrawEntry).where(DrawEntry.draw_id == tid)
+                )
+                entries = de_res.scalars().all()
+
+            espn_event = _match_event(tournament, events, entries)
             if espn_event is None:
                 logger.debug(
                     "ESPN: no event match for '%s' (%s)",
@@ -395,13 +477,6 @@ class ESPNMonitor:
                                    "gender": tournament.gender},
                                   dedup_key=f"espn_no_match_{tournament.id}")
                 continue
-
-            # Load draw entries once — used by both jobs
-            async with AsyncSessionLocal() as db:
-                de_res = await db.execute(
-                    select(DrawEntry).where(DrawEntry.draw_id == tid)
-                )
-                entries = de_res.scalars().all()
 
             if not entries:
                 continue
