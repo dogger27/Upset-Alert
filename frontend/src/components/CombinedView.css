@@ -83,6 +83,7 @@
 .cv-badges {
   display: inline-flex;
   align-items: center;
+  align-self: center;
   flex-shrink: 0;
 }
 /* Entry-type badge (Q/WC/LL/SE) sits at the far right of the box */
@@ -100,10 +101,13 @@
      !important: flag-icons' own .fi{width:1.333333em} rule has the same
      specificity as .cv-flag and can win the cascade depending on bundle
      order, silently shrinking the width back down (looks square). */
-  width: 24px !important; height: 18px !important;
+  width: 22px !important; height: 16px !important;
   border-radius: 2px;
   border: 1px solid #000;
   flex-shrink: 0;
+  align-self: center;
+  line-height: 0;             /* neutralize .fi's line-height:1em so its phantom
+                                  :before content can't nudge baseline alignment */
   margin: 0 6px 0 4px;        /* small gap to the seed on the left, name on the right */
 }
 .cv-flag--empty { background: transparent; border-color: transparent; }
