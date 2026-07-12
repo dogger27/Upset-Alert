@@ -38,25 +38,21 @@
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  height: 33.333%;
-  width: 44px;
   z-index: 25;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.75rem;
-  padding: 0.5rem 0;
+  padding: 0.6rem 0.15rem;   /* hug the vertical label — sized to fit "CHAMP" */
   border: none;
   border-radius: 8px;
   cursor: pointer;
-  background: var(--green);
+  background: rgba(45, 106, 79, 0.5);   /* var(--green) at 50% opacity */
   color: #fff;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
   transition: background 0.15s ease;
 }
-.round-nav:hover { background: var(--green-700); }
-.round-nav:active { background: var(--green-800); }
+.round-nav:hover { background: rgba(45, 106, 79, 0.72); }
+.round-nav:active { background: rgba(36, 88, 67, 0.82); }
 /* Both buttons' `left` is set inline: the left one hugs the page edge when the
    sidebar is collapsed, or the draw-window edge when it's expanded; the right
    one sits just past the last drawn round. */
@@ -72,12 +68,6 @@
 }
 /* Left button reads bottom-to-top so both sides read outward-up. */
 .round-nav--left .round-nav-label { transform: rotate(180deg); }
-
-.round-nav-arrow {
-  font-size: 1.8rem;
-  font-weight: 700;
-  line-height: 1;
-}
 
 /* ── View mode toggle ── */
 .draw-mode-buttons {
