@@ -270,8 +270,9 @@ export default function TournamentDraw() {
     setPicks(newPicks)
     if (user) saveMutation.mutate(newPicks)
     if (data) {
-      const total = data.matches.filter(m => !m.is_bye).length
-      const filled = Object.values(newPicks).filter(v => v != null).length
+      const nonByeIds = new Set(data.matches.filter(m => !m.is_bye).map(m => m.id))
+      const total = nonByeIds.size
+      const filled = Object.entries(newPicks).filter(([k, v]) => v != null && nonByeIds.has(Number(k))).length
       if (total > 0 && filled >= total) {
         if (celebrateTimerRef.current) clearTimeout(celebrateTimerRef.current)
         setCelebrating(true)
@@ -468,8 +469,9 @@ export default function TournamentDraw() {
 
     // Celebrate when every non-bye match has a pick
     if (data && !locked) {
-      const total = data.matches.filter(m => !m.is_bye).length
-      const filled = Object.values(newPicks).filter(v => v != null).length
+      const nonByeIds = new Set(data.matches.filter(m => !m.is_bye).map(m => m.id))
+      const total = nonByeIds.size
+      const filled = Object.entries(newPicks).filter(([k, v]) => v != null && nonByeIds.has(Number(k))).length
       if (total > 0 && filled >= total) {
         if (celebrateTimerRef.current) clearTimeout(celebrateTimerRef.current)
         setCelebrating(true)
@@ -492,7 +494,8 @@ export default function TournamentDraw() {
 
   const { tournament, matches, draw_entries: players } = data
   const locked = tournament.is_locked && !tournament.selections_unlocked
-  const pickedCount = Object.values(picks).filter(v => v != null).length
+  const nonByeMatchIds = new Set(matches.filter(m => !m.is_bye).map(m => m.id))
+  const pickedCount = Object.entries(picks).filter(([k, v]) => v != null && nonByeMatchIds.has(Number(k))).length
   const userHasPicks = savedPreds ? savedPreds.some(p => p.predicted_winner_id != null) : pickedCount > 0
   const picksDisabled = !!user && locked && !userHasPicks
   const picksOwner = viewMode === 'picks' ? (viewingOther ? viewedUserName : user?.username) ?? null : null
