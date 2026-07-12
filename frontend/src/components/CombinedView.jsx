@@ -219,37 +219,26 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
   }
 
   // ---- box builders -------------------------------------------------------
+  // Clicking a box picks ITS player as the predicted winner of the match they
+  // feed into next (one column to the right) — e.g. clicking a player shown
+  // in the "Round of 16" column (having won R32, about to play R16) predicts
+  // them to win THAT match and advance into the Quarterfinals column. Column
+  // c's box i always feeds match R[c][floor(i/2)]. The Champion column (c===N)
+  // has no further match, so it's never clickable.
+  function nextMatchOnClick(c, i, playerId) {
+    if (locked || !onPick || playerId == null || c >= N) return null
+    const nextMatch = R[c][Math.floor(i / 2)]
+    if (!nextMatch) return null
+    return () => onPick(nextMatch.id, playerId)
+  }
+
   function entrantBox(c, i) {
     const match = R[0][Math.floor(i / 2)]
     const pid = i % 2 === 0 ? match.player1?.id : match.player2?.id
     const player = pid != null ? playerById[pid] : null
     const isBye = match.is_bye && i % 2 === 1 && pid == null
-    return { key: `e${i}`, player, isBye, kind: 'entrant' }
-  }
-
-  // Resolve the WINNER a given round-c match slot should display: the user's
-  // pick if one exists, else the actual result. Byes have no pick — the lone
-  // entrant always "wins".
-  function resolvedWinnerId(c, i) {
-    const match = R[c - 1][i]
-    if (match.is_bye) return match.player1?.id ?? null
-    return picks?.[match.id] ?? match.winner?.id ?? null
-  }
-
-  // The two candidates a user can pick between for round-c match i: for the
-  // first winner column (c===1) these are the literal round-1 entrants; for
-  // later columns they're whichever player is CURRENTLY resolved (pick, or
-  // real result if no pick) to have won each of the two round-(c-1) feeders.
-  function candidatesFor(c, i) {
-    if (c === 1) {
-      const match = R[0][i]
-      return [match.player1?.id ?? null, match.player2?.id ?? null]
-    }
-    const feederCount = R[c - 2].length
-    const ai = 2 * i, bi = 2 * i + 1
-    const a = ai < feederCount ? resolvedWinnerId(c - 1, ai) : null
-    const b = bi < feederCount ? resolvedWinnerId(c - 1, bi) : null
-    return [a, b]
+    const onClick = isBye ? null : nextMatchOnClick(0, i, pid)
+    return { key: `e${i}`, player, isBye, kind: 'entrant', clickable: !!onClick, onClick }
   }
 
   function winnerBox(c, i) {
@@ -264,17 +253,13 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
     const winnerIsP1 = realId != null && realId === match.player1?.id
     const score = match.is_bye ? null : scoreNodes(match.scores, winnerIsP1)
 
-    // Clicking toggles the pick between the match's two resolved candidates —
-    // each box shows a single player, so there's no separate row to click.
-    const [candA, candB] = match.is_bye ? [null, null] : candidatesFor(c, i)
-    const clickable = !locked && !!onPick && !match.is_bye && candA != null && candB != null
-    const onClick = clickable ? () => onPick(match.id, displayId === candA ? candB : candA) : undefined
+    const onClick = nextMatchOnClick(c, i, displayId)
 
     return {
       key: `w${match.id}`, player, correct, wrong, score,
       realName: wrong && realPlayer ? abbrevName(realPlayer.name) : null,
       realFullName: wrong && realPlayer ? realPlayer.name : null,
-      match, abbrev: true, kind: 'winner', clickable, onClick,
+      match, abbrev: true, kind: 'winner', clickable: !!onClick, onClick,
     }
   }
 
