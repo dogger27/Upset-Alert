@@ -155,7 +155,7 @@
   align-items: center;
   justify-content: center;
   width: 34px;                 /* fixed footprint so a larger font doesn't grow the box */
-  height: 22px;
+  height: 18px;                /* visual on-screen WIDTH, since the chip is rotated -90deg */
   border: 1px solid var(--green-500, #4a9d6a);
   background: #fff;
   color: var(--green-600, #2f7a4d);
