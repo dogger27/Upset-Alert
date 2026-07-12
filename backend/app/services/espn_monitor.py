@@ -146,6 +146,30 @@ def _names_match(our_name: str, espn_name: str) -> bool:
     return len(overlap) >= max(1, round(len(our_toks) * 0.6))
 
 
+def _venue_city(event: dict) -> str:
+    """City portion of an ESPN event's venue, e.g. 'Båstad' from 'Båstad, Sweden'."""
+    disp = event.get("venue", {}).get("displayName", "")
+    return disp.split(",")[0].strip()
+
+
+def _event_matches(tournament, event: dict) -> bool:
+    """
+    True if this ESPN event is our tournament. Tries name-token overlap first,
+    then falls back to matching our city against the event's venue city — ESPN
+    frequently uses the sponsor name (e.g. 'Nordea Open' for the Swedish Open in
+    Båstad), which shares no tokens with the Wikipedia name but plays in the same
+    venue city.
+    """
+    if _names_match(tournament.name, event.get("name", "")):
+        return True
+    city = getattr(tournament, "city", None)
+    if city:
+        vcity = _venue_city(event)
+        if vcity and _norm(city) == _norm(vcity):
+            return True
+    return False
+
+
 # ---------------------------------------------------------------------------
 # ESPN API helpers
 # ---------------------------------------------------------------------------
@@ -355,7 +379,7 @@ class ESPNMonitor:
             events = espn_events[tournament.gender]
 
             espn_event = next(
-                (e for e in events if _names_match(tournament.name, e.get("name", ""))),
+                (e for e in events if _event_matches(tournament, e)),
                 None,
             )
             if espn_event is None:
