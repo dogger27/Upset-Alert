@@ -642,7 +642,7 @@ export default function TournamentDraw() {
         {headerStage === 'full' && (
         <div className="draw-header-right">
           <div className="draw-picks-zone">
-            {user && !locked && !viewingOther && viewMode === 'picks' && (
+            {user && !locked && !viewingOther && (viewMode === 'picks' || viewMode === 'combined') && (
               <button
                 className="btn-auto-populate"
                 onClick={autoPopulatePicks}
