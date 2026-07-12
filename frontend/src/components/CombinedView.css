@@ -64,9 +64,9 @@
   position: absolute;
   left: -8px;
   right: -8px;
-  border: 2px solid #c2c8cc;
+  border: 2px solid #cdd2d5;
   border-radius: 10px;
-  background: #e1e5e7;
+  background: #e8eaec;
   pointer-events: none;
   z-index: 0;
 }
