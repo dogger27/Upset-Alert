@@ -144,7 +144,7 @@ function scoreNodes(scores, winnerIsP1) {
 
 const BOX_H = 32
 const SLOT = 58          // fallback slot (missing feeders only)
-const PAIR_SLOT = 108    // vertical slot per MATCH (pair) in the base column
+const PAIR_SLOT = 130    // vertical slot per MATCH (pair) in the base column
 const PAIR_OFF = 24      // half the centre-to-centre gap of a match's two opponents
 const COL_W = 260
 const COL_GAP = 44       // wide enough to seat the H2H chip on the connector "T"
