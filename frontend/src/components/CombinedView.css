@@ -5,6 +5,14 @@
   min-height: 0;
   padding: 0.4rem 0.75rem 1rem;
   background: var(--bg);
+  /* The collapsing .cv-labels row is in-flow content at the top of this
+     scroller. With default scroll anchoring, its height change makes the
+     browser silently adjust scrollTop to keep lower content stable — an
+     adjustment the header auto-hide's scroll-direction detector reads as a
+     REAL user scroll in the opposite direction, re-toggling the header and
+     looping forever (page bobbing up/down, labels occluding/revealing on
+     repeat). Anchoring off = only user input moves scrollTop. */
+  overflow-anchor: none;
 }
 
 .cv-labels {
