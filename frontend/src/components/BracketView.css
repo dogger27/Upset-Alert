@@ -403,11 +403,14 @@
 
 .player-flag {
   flex-shrink: 0;
-  width: 18px !important;
-  height: 13px !important;
+  width: 24px !important;      /* matches the seed badge's rendered height */
+  height: 17px !important;
   margin-left: auto;
   margin-right: 2px;
   border-radius: 1px;
-  border: 1px solid #5f666c;
+  border: 1px solid #000;
   opacity: 0.9;
 }
+/* Override flag-icons' background-size:contain, which letterboxes inside our
+   18x13 box since it isn't exactly the source images' aspect ratio. */
+.player-flag.fi { background-size: cover; }
