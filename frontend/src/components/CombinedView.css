@@ -129,7 +129,7 @@
 }
 .cv-real-winner {
   position: absolute;
-  left: 3px;
+  left: 5px;
   bottom: 8px;                 /* centred on the box's top border */
   background: #fdeaea;         /* matches .cv-box--wrong fill — masks only the
                                    border segment directly under the text,
