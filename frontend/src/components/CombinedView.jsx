@@ -245,11 +245,10 @@ function Connectors({ leftCenters, rightCenters, totalH }) {
 export default function CombinedView({ tournament, matches, players, picks, onPick, locked = true, windowStart = 0, windowSize = 4, labelsHidden = false, insetLeft = 0 }) {
   const [h2h, setH2H] = useState(null)
 
-  // The round-labels row is a zero-flow-height sticky overlay (cancelled via
-  // negative margin-bottom below) so hiding/showing it never changes
-  // .cv-scroll's scrollHeight — that would otherwise desync from the fixed
-  // scrollTop and make the bracket content jump. cv-body reserves the same
-  // height as permanent padding so the labels never overlap boxes.
+  // Natural (uncollapsed) height of the sticky round-labels row, kept in sync
+  // via ResizeObserver. Drives max-height as an inline style so the collapse
+  // transition animates from its real height rather than a guessed oversized
+  // constant (see .cv-labels / .cv-labels--collapsed in CombinedView.css).
   const labelsRef = useRef(null)
   const [labelsH, setLabelsH] = useState(0)
   useEffect(() => {
@@ -415,7 +414,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
         <div
           ref={labelsRef}
           className={`cv-labels${labelsHidden ? ' cv-labels--collapsed' : ''}`}
-          style={labelsH ? { marginBottom: `-${labelsH}px` } : undefined}
+          style={!labelsHidden && labelsH ? { maxHeight: `${labelsH}px` } : undefined}
         >
           {visible.map((c, i) => {
             const label = c === 0
@@ -430,7 +429,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
           })}
         </div>
 
-        <div className="cv-body" style={{ height: totalH, paddingTop: labelsH || undefined }}>
+        <div className="cv-body" style={{ height: totalH }}>
           {visible.map((c, colIdx) => {
             const count = colCount(c)
             const cc = centers[c]
@@ -533,8 +532,11 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
           {/* H2H chips + upset bells, rendered as ONE overlay that's the last
               child of cv-body — painted after (on top of) every column, so
               they're never subject to a column's own stacking level (which is
-              what keeps each connector line tucked behind its box edges). */}
-          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+              what keeps each connector line tucked behind its box edges).
+              Offset by labelsH to match cv-body's paddingTop (the boxes live in
+              the content box; this absolute overlay would otherwise sit against
+              the padding edge, floating the chips/bells up by the label height). */}
+          <div style={{ position: 'absolute', top: labelsH || 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none' }}>
             {visible.map((c, colIdx) => {
               const isLastVisible = colIdx === visible.length - 1
               const nextC = isLastVisible ? afterC : visible[colIdx + 1]

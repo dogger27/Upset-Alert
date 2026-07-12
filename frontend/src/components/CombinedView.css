@@ -14,19 +14,19 @@
   z-index: 10;
   background: var(--bg);
   padding-bottom: 4px;
-  /* Auto-hides with the header on scroll down (see .cv-labels--collapsed).
-     Height itself never changes — only opacity/transform — because its flow
-     contribution is cancelled by an inline negative margin-bottom (set from
-     its own measured height in CombinedView.jsx) matched by permanent
-     padding-top on .cv-body. That keeps .cv-scroll's scrollHeight constant
-     across the hide/show toggle, so the bracket content never jumps; hiding
-     the sticky label bar simply uncovers the bracket content already
-     positioned beneath it. */
-  transition: opacity 0.2s ease, transform 0.28s ease;
+  /* Auto-hides with the header on scroll down (see .cv-labels--collapsed) so
+     the bracket reclaims the space. max-height is set inline from this row's
+     own measured offsetHeight (CombinedView.jsx) rather than a guessed
+     oversized constant — animating from an accurate starting value keeps the
+     collapse spread evenly across the transition instead of sitting
+     invisible for most of it and then snapping in the last few frames. */
+  overflow: hidden;
+  transition: max-height 0.28s ease, padding-bottom 0.28s ease, opacity 0.2s ease;
 }
 .cv-labels--collapsed {
+  max-height: 0 !important;
+  padding-bottom: 0;
   opacity: 0;
-  transform: translateY(-100%);
   pointer-events: none;
 }
 .cv-label {
