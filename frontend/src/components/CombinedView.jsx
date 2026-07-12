@@ -416,10 +416,12 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                     // Top pad clears the "real winner" note (now centred on the
                     // TOP box's own top border, so it barely pokes above it);
                     // bottom pad clears the score line below the BOTTOM box.
-                    // Column 0 (entrants) never shows either — no winner note,
-                    // no score — so it gets a small symmetric pad instead.
+                    // Scores only render when colIdx > 0 (see the box.score
+                    // line below) — i.e. whichever column is currently the
+                    // LEFTMOST visible pane never shows one, regardless of its
+                    // absolute round — so the outline must key off colIdx, not c.
                     const topPad = 12
-                    const bottomPad = c === 0 ? 12 : 28
+                    const bottomPad = colIdx === 0 ? 12 : 28
                     const top = Math.min(yTop, yBot) - BOX_H / 2 - topPad
                     const height = Math.abs(yBot - yTop) + BOX_H + topPad + bottomPad
                     return (
