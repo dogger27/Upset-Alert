@@ -161,6 +161,24 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
   const playerById = Object.fromEntries(players.map(p => [p.id, p]))
   const drawRanks = computeDrawRanks(players)
 
+  // Number unplaced Q slots by bracket position: Qualifier 1, Qualifier 2, …
+  // (mirror of BracketView so the Combined view labels them identically)
+  const qualifierNums = {}
+  players
+    .filter(p => p.entry_type === 'Q' && !p.name)
+    .sort((a, b) => a.bracket_position - b.bracket_position)
+    .forEach((p, i) => { qualifierNums[p.id] = i + 1 })
+
+  const isUnnamedQ = (p) => p?.entry_type === 'Q' && !p.name
+  const slotName = (p, abbrev) => {
+    if (!p) return 'TBD'
+    if (isUnnamedQ(p)) {
+      const n = qualifierNums[p.id]
+      return `Qualifier${n != null ? ` ${n}` : ''}`
+    }
+    return abbrev ? abbrevName(p.name) : p.name
+  }
+
   // Rounds (arrays of matches, sorted by match_number)
   const byRound = {}
   for (const m of matches) (byRound[m.round_number] ||= []).push(m)
@@ -314,8 +332,8 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                             <>
                               <span className="cv-badges"><SeedBadge player={p} drawRanks={drawRanks} /></span>
                               <Flag nat={p?.nationality} />
-                              <span className="cv-name" title={p?.nationality ? `${p.name} (${p.nationality})` : (p?.name || undefined)}>
-                                {p ? (box.abbrev ? abbrevName(p.name) : p.name) : 'TBD'}
+                              <span className={`cv-name${isUnnamedQ(p) ? ' cv-name--muted' : ''}`} title={p?.nationality ? `${p.name} (${p.nationality})` : (p?.name || undefined)}>
+                                {slotName(p, box.abbrev)}
                               </span>
                               <EntryBadge player={p} />
                             </>
