@@ -171,6 +171,29 @@ export default function TournamentDraw() {
   // Resume auto behaviour when navigating to a different tournament
   useEffect(() => { setSidebarManual(false) }, [id])
 
+  // Auto-hide the round-selection header on scroll-down, reveal on scroll-up
+  // (common site behaviour). The bracket's vertical scroll lives on the inner
+  // .cv-scroll / .bracket-scroll element (created by a child component), so we
+  // listen in the capture phase on document — timing-independent, no child ref.
+  const [headerHidden, setHeaderHidden] = useState(false)
+  useEffect(() => {
+    let lastY = 0
+    const onScroll = (e) => {
+      const el = e.target
+      if (!(el instanceof HTMLElement) || !el.matches?.('.cv-scroll, .bracket-scroll')) return
+      const y = el.scrollTop
+      const dy = y - lastY
+      if (y <= 24) setHeaderHidden(false)        // near the top: always show
+      else if (dy > 4) setHeaderHidden(true)     // scrolling down: hide
+      else if (dy < -4) setHeaderHidden(false)   // scrolling up: reveal
+      lastY = y
+    }
+    document.addEventListener('scroll', onScroll, { capture: true, passive: true })
+    return () => document.removeEventListener('scroll', onScroll, { capture: true })
+  }, [])
+  // Never leave the header hidden when the view or tournament changes
+  useEffect(() => { setHeaderHidden(false) }, [viewMode, id])
+
   const saveMutation = useMutation({
     mutationFn: (latestPicks) => savePredictions(Number(id), latestPicks),
     onSuccess: () => qc.invalidateQueries(['predictions', id]),
@@ -524,7 +547,7 @@ export default function TournamentDraw() {
 
   return (
     <div className="draw-page">
-      <div className={clsx('draw-header', `draw-header--${headerStage}`)}>
+      <div className={clsx('draw-header', `draw-header--${headerStage}`, { 'draw-header--collapsed': headerHidden })}>
         {headerStage === 'full' && (
         <div className="draw-header-top">
           <div className="draw-name-block">
