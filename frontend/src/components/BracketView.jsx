@@ -444,7 +444,7 @@ function ConnectorLines({ leftCenters, rightCenters, totalH }) {
 // Main component
 // ---------------------------------------------------------------------------
 
-export default function BracketView({ tournament, matches, players, picks, onPick, locked, mode = 'picks', picksOwner = null, windowStart = 0, windowSize = 4, labelsHidden = false }) {
+export default function BracketView({ tournament, matches, players, picks, onPick, locked, mode = 'picks', picksOwner = null, windowStart = 0, windowSize = 4, labelsHidden = false, insetLeft = 0 }) {
   const [h2hPlayers, setH2HPlayers] = useState(null) // { p1, p2, match }
   const [hoveredPlayerId, setHoveredPlayerId] = useState(null)
 
@@ -537,7 +537,7 @@ export default function BracketView({ tournament, matches, players, picks, onPic
         onClose={() => setH2HPlayers(null)}
       />
     )}
-    <div className="bracket-scroll">
+    <div className="bracket-scroll" style={insetLeft ? { paddingLeft: insetLeft } : undefined}>
       <div className={clsx('bracket-labels', { 'bracket-labels--collapsed': labelsHidden })} style={{ paddingLeft: 0 }}>
         {visibleRounds.map((rn, i) => {
           const colW = roundHasScores[rn] ? COL_W_SCORES : COL_W
