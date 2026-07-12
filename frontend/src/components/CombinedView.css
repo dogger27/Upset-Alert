@@ -92,10 +92,12 @@
 }
 
 .cv-flag {
-  /* Clearly rectangular (3:2), like an actual flag, not square. Height
-     matches the seed badge's rendered height; background-size:contain (the
-     library default) fills with no cropping. */
-  width: 27px; height: 18px;
+  /* flag-icons' rectangular set is served from a "flags/4x3/" folder — every
+     SVG's canvas is EXACTLY 4:3, confirmed from the library source. 24x18 is
+     an exact 4:3 match, so background-size:contain (the library default)
+     fills the box completely: no letterboxing, no cropping. Do not "round"
+     this to 3:2 or any other ratio — it will reintroduce a gap. */
+  width: 24px; height: 18px;
   border-radius: 2px;
   border: 1px solid #000;
   flex-shrink: 0;
