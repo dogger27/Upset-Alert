@@ -413,8 +413,12 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                     if (yTop == null || yBot == null) return null
                     const { p1: aId, p2: bId } = resolved[m.id] || {}
                     const isMissingPick = !locked && aId != null && bId != null && picks?.[m.id] == null
-                    const top = Math.min(yTop, yBot) - BOX_H / 2 - 10
-                    const height = Math.abs(yBot - yTop) + BOX_H + 20
+                    // Top pad clears the "real winner" note that can hang above the
+                    // TOP box (wrong pick); bottom pad clears the score line below
+                    // the BOTTOM box — both are rendered unconditionally so a
+                    // match's outline never clips them when present.
+                    const top = Math.min(yTop, yBot) - BOX_H / 2 - 20
+                    const height = Math.abs(yBot - yTop) + BOX_H + 48
                     return (
                       <div
                         key={`mo${m.id}`}
