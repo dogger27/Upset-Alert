@@ -434,7 +434,6 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                     const p = box.player
                     return (
                       <div key={box.key} className="cv-slot" style={{ top: cc[i] }}>
-                        {box.realName && <div className="cv-real-winner" title={box.realFullName || undefined}>{box.realName}</div>}
                         <div
                           className={`cv-box${box.isBye ? ' cv-box--bye' : ''}${!box.isBye && !p ? ' cv-box--tbd' : ''}${box.correct ? ' cv-box--correct' : ''}${box.wrong ? ' cv-box--wrong' : ''}${box.clickable ? ' cv-box--clickable' : ''}`}
                           onClick={box.onClick}
@@ -452,6 +451,10 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                             </>
                           )}
                         </div>
+                        {/* Rendered AFTER cv-box so it paints on top; the box's own
+                            top border is removed for wrong picks (see .cv-box--wrong)
+                            so it never shows through underneath this label. */}
+                        {box.realName && <div className="cv-real-winner" title={box.realFullName || undefined}>{box.realName}</div>}
                         {colIdx > 0 && box.score && <div className="cv-score">{box.score}</div>}
                       </div>
                     )
