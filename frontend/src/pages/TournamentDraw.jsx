@@ -2,7 +2,7 @@
  * TournamentDraw — shows the bracket for one tournament.
  * Logged-in users can make / update predictions until the lock time.
  */
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
 import { useParams, Link, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
@@ -51,7 +51,11 @@ export default function TournamentDraw() {
     }
   }
   const mainRef = useCallback(makeWidthRef(setMainWidth), [])
-  const bodyRef = useCallback(makeWidthRef(setBodyWidth), [])
+  const bodyWidthRef = useCallback(makeWidthRef(setBodyWidth), [])
+  // Also capture the .draw-body node so we can measure the drawn bracket's
+  // right edge (for positioning the right-hand round-nav button).
+  const bodyNodeRef = useRef(null)
+  const bodyRef = useCallback((node) => { bodyNodeRef.current = node; bodyWidthRef(node) }, [bodyWidthRef])
   const [viewedUserId, setViewedUserId] = useState(() => { const u = searchParams.get('user'); return u ? Number(u) : null })
   const [viewedUserName, setViewedUserName] = useState(null)
   const initialModeSet = useRef(false)
@@ -217,6 +221,30 @@ export default function TournamentDraw() {
   }, [])
   // Never leave the header hidden when the view or tournament changes
   useEffect(() => { setHeaderHidden(false) }, [viewMode, id])
+
+  // Measure the right edge of the last visible round's boxes (relative to
+  // .draw-body) so the right-hand round-nav button can sit just past the drawn
+  // content rather than flush against the page edge. Re-runs whenever the
+  // window, view, size, or sidebar changes; a ResizeObserver catches the rest.
+  const [rightNavX, setRightNavX] = useState(null)
+  useLayoutEffect(() => {
+    const body = bodyNodeRef.current
+    if (!body) return
+    const measure = () => {
+      // Anchor to the trailing connector gap's right edge when present (so the
+      // button clears the green feed lines + H2H chip), else the last column.
+      const gaps = body.querySelectorAll('.cv-gap')
+      const cols = body.querySelectorAll('.cv-col, .bracket-col')
+      const anchor = gaps[gaps.length - 1] || cols[cols.length - 1]
+      if (!anchor) { setRightNavX(null); return }
+      const bx = body.getBoundingClientRect().left
+      setRightNavX(anchor.getBoundingClientRect().right - bx)
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(body)
+    return () => ro.disconnect()
+  }, [windowStart, data, mainWidth, bodyWidth, sidebarCollapsed, viewMode, headerHidden])
 
   const saveMutation = useMutation({
     mutationFn: (latestPicks) => savePredictions(Number(id), latestPicks),
@@ -518,11 +546,22 @@ export default function TournamentDraw() {
   // narrows; a column is only counted when it fits ENTIRELY (no h-scroll).
   const COL_GAP_PX = 24
   const colUnit = (anyScores ? 300 : 252) + COL_GAP_PX
-  const usableW = mainWidth - 24 /* scroll padding */ - 16 /* vertical scrollbar */
-  const fitCols = mainWidth > 0 ? Math.floor((usableW + COL_GAP_PX) / colUnit) : 4
-  const DRAW_WINDOW = Math.min(4, columnCount, Math.max(1, fitCols))
-  const maxWindowStart = Math.max(0, columnCount - DRAW_WINDOW)
-  const windowPos = Math.min(windowStart, maxWindowStart)
+  // Left gutter reserved INSIDE the draw for the left round-nav button when the
+  // sidebar is expanded (collapsed → the button lives in the page-edge gutter).
+  const NAV_INSET = 52
+  const computeWindow = (inset) => {
+    const usableW = mainWidth - 24 /* scroll padding */ - 16 /* vertical scrollbar */ - inset
+    const fitCols = mainWidth > 0 ? Math.floor((usableW + COL_GAP_PX) / colUnit) : 4
+    const dw = Math.min(4, columnCount, Math.max(1, fitCols))
+    const maxStart = Math.max(0, columnCount - dw)
+    return { dw, maxStart, pos: Math.min(windowStart, maxStart) }
+  }
+  // Pass 1 (no inset) decides whether the left button will show; pass 2 reserves
+  // its gutter so the bracket shifts right rather than sitting under it.
+  const w0 = computeWindow(0)
+  const leftNavInDraw = !sidebarCollapsed && columnCount > w0.dw && w0.pos > 0
+  const drawInsetLeft = leftNavInDraw ? NAV_INSET : 0
+  const { dw: DRAW_WINDOW, maxStart: maxWindowStart, pos: windowPos } = computeWindow(drawInsetLeft)
   const showPager = columnCount > DRAW_WINDOW
 
   // Pixel geometry for the round dots + the shaded window highlight behind them.
@@ -923,6 +962,7 @@ export default function TournamentDraw() {
               windowStart={windowPos}
               windowSize={DRAW_WINDOW}
               labelsHidden={headerHidden}
+              insetLeft={drawInsetLeft}
             />
           ) : (
             <BracketView
@@ -937,9 +977,41 @@ export default function TournamentDraw() {
               windowStart={windowPos}
               windowSize={DRAW_WINDOW}
               labelsHidden={headerHidden}
+              insetLeft={drawInsetLeft}
             />
           )}
+
         </div>
+
+        {/* Big edge buttons to page the round just off-screen. The left button
+            hugs the page edge; the right sits just past the last drawn round
+            (rightNavX = last visible column's right edge, measured below). */}
+        {showPager && windowPos > 0 && (
+          <button
+            className="round-nav round-nav--left"
+            style={{ left: sidebarCollapsed ? 3 : Math.max(3, bodyWidth - mainWidth + 3) }}
+            onClick={() => setWindowStart(windowPos - 1)}
+            title={`Show ${pagerColumns[windowPos - 1].title}`}
+            aria-label={`Show ${pagerColumns[windowPos - 1].title}`}
+          >
+            <span className="round-nav-arrow" aria-hidden="true">‹</span>
+            <span className="round-nav-label">{pagerColumns[windowPos - 1].title}</span>
+            <span className="round-nav-arrow" aria-hidden="true">‹</span>
+          </button>
+        )}
+        {showPager && windowPos < maxWindowStart && rightNavX != null && (
+          <button
+            className="round-nav round-nav--right"
+            style={{ left: Math.min(rightNavX + 6, bodyWidth - 47) }}
+            onClick={() => setWindowStart(windowPos + 1)}
+            title={`Show ${pagerColumns[windowPos + DRAW_WINDOW].title}`}
+            aria-label={`Show ${pagerColumns[windowPos + DRAW_WINDOW].title}`}
+          >
+            <span className="round-nav-arrow" aria-hidden="true">›</span>
+            <span className="round-nav-label">{pagerColumns[windowPos + DRAW_WINDOW].title}</span>
+            <span className="round-nav-arrow" aria-hidden="true">›</span>
+          </button>
+        )}
       </div>
     </div>
   )

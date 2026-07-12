@@ -242,7 +242,7 @@ function Connectors({ leftCenters, rightCenters, totalH }) {
   )
 }
 
-export default function CombinedView({ tournament, matches, players, picks, onPick, locked = true, windowStart = 0, windowSize = 4, labelsHidden = false }) {
+export default function CombinedView({ tournament, matches, players, picks, onPick, locked = true, windowStart = 0, windowSize = 4, labelsHidden = false, insetLeft = 0 }) {
   const [h2h, setH2H] = useState(null)
 
   const playerById = Object.fromEntries(players.map(p => [p.id, p]))
@@ -394,7 +394,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
           onClose={() => setH2H(null)}
         />
       )}
-      <div className="cv-scroll">
+      <div className="cv-scroll" style={insetLeft ? { paddingLeft: `calc(0.75rem + ${insetLeft}px)` } : undefined}>
         <div className={`cv-labels${labelsHidden ? ' cv-labels--collapsed' : ''}`}>
           {visible.map((c, i) => {
             const label = c === 0
