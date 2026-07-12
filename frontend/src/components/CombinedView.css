@@ -34,7 +34,7 @@
 
 /* A slot is a zero-height anchor at the box's centre Y; the box, its score
    (below) and the real-winner note (above) hang off it. */
-.cv-slot { position: absolute; left: 4px; right: 4px; height: 0; }
+.cv-slot { position: absolute; left: 4px; right: 4px; height: 0; z-index: 1; }
 
 .cv-box {
   position: absolute;
@@ -62,11 +62,13 @@
    red once both opponents are known but the user hasn't picked a winner yet. */
 .cv-match-outline {
   position: absolute;
-  left: 0;
-  right: 0;
+  left: -8px;
+  right: -8px;
   border: 2px solid #d5d9dc;
-  border-radius: 8px;
+  border-radius: 10px;
+  background: #eef1f2;
   pointer-events: none;
+  z-index: 0;
 }
 .cv-match-outline--missing {
   border-color: #dc2626;
