@@ -190,10 +190,10 @@ const PAIR_OFF = 24      // half the centre-to-centre gap of a match's two oppon
 const COL_W = 214
 // Compact (phone) mode drops the flag AND shrinks further still — the name
 // allotment there should be smaller yet, not just re-inherit the 75% cut.
-// Narrower still (was 168) now that compact mode shows last-name-only
-// (see lastNameOf below) instead of "F. Last" — the box no longer needs to
-// budget for the full abbreviated form in the common case.
-const COMPACT_COL_W = 140
+// Narrower than COL_W (was 168, briefly 140) now that compact mode shows
+// last-name-only (see lastNameOf below) instead of "F. Last" — widened by
+// ~2 characters (140 -> 158) after it came out a bit too tight.
+const COMPACT_COL_W = 158
 const COL_GAP = 64       // wide enough to seat the H2H chip on the connector "T"
 const H2H_X = 8          // H2H chip's x within the gap — centred on the match box's right border
 const BELL_OFFSET = 34   // distance (px) the bell sits left of the H2H chip's centre

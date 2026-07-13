@@ -52,6 +52,15 @@ export default function TournamentDraw() {
   }
   const mainRef = useCallback(makeWidthRef(setMainWidth), [])
   const bodyWidthRef = useCallback(makeWidthRef(setBodyWidth), [])
+  // Round-nav buttons' own rendered width, for the compact-mode zoom-fit
+  // calc below (so the draw content's zoom targets the button's ACTUAL size
+  // rather than a guessed constant). Left and right buttons share the same
+  // CSS sizing, so either one updates this — two independent observers
+  // (not one shared closure) so whichever button happens to be mounted
+  // (paging can hide either one) keeps it current.
+  const [navBtnW, setNavBtnW] = useState(26) // seed with a reasonable guess pre-measurement
+  const navBtnLeftRef = useCallback(makeWidthRef(setNavBtnW), [])
+  const navBtnRightRef = useCallback(makeWidthRef(setNavBtnW), [])
   // Also capture the .draw-body node so we can measure the drawn bracket's
   // right edge (for positioning the right-hand round-nav button).
   const bodyNodeRef = useRef(null)
@@ -587,20 +596,27 @@ export default function TournamentDraw() {
   const COMPACT_BREAK = 2 * colUnit + 44 + 24 + 16 - COL_GAP_PX
   const compactDraw = viewMode === 'combined' && bodyWidth > 0 && sidebarCollapsed
     && bodyWidth < COMPACT_BREAK
-  // Zoomed content is inset by the left nav gutter (see drawInsetLeft below)
-  // AND a matching right-hand gutter, so the space the two rounds must fit
-  // into loses both. The right gutter matters because the last visible
-  // round's trailing connector stub (feeding the next, not-yet-shown round)
-  // carries a real, clickable H2H chip, not just decorative lines — without
-  // reserving room for it, it can land on top of the right round-nav button
-  // (which sits "just past" the drawn columns, not past that trailing stub).
-  // Uses COMPACT_COL_UNIT (mirrors CombinedView's narrower COMPACT_COL_W,
-  // 140+64), NOT colUnit (214+64) — compact mode renders narrower columns
-  // than normal mode, so sizing the zoom target off the wrong (wider) unit
-  // would shrink the draw more than the actually-rendered content needs.
-  const COMPACT_COL_UNIT = 140 + 64
+  // Zoomed content is inset by the left nav gutter (drawInsetLeft below, +4 —
+  // mirrors CombinedView's actual paddingLeft). The right boundary targets
+  // the right round-nav button's OWN measured position (navBtnW, pinned at
+  // RIGHT_BTN_MARGIN from the body's right edge in compact mode — see the
+  // button's style below) minus a small requested clearance, rather than a
+  // symmetric guessed gutter — the last visible round's trailing connector
+  // stub carries a real, clickable H2H chip, and the goal is that chip
+  // sitting almost flush against the button, not just clear of it.
+  // COMPACT_COL_W/COMPACT_GAP mirror CombinedView's COMPACT_COL_W/COL_GAP —
+  // NOT colUnit/COL_GAP_PX (214+24), which describe normal mode's wider
+  // columns and would shrink the draw more than the actually-rendered
+  // (narrower) compact content needs.
+  const COMPACT_COL_W = 158
+  const COMPACT_GAP = 64
+  const RIGHT_BTN_MARGIN = 3 // the right button's own distance from the body's right edge
+  const H2H_GAP = 3          // requested clearance between the trailing H2H chip and the button
+  const drawLeftPad = NAV_INSET + 4
+  const naturalWCompact = 2 * COMPACT_COL_W + 2 * COMPACT_GAP
+  const rightBoundary = bodyWidth - RIGHT_BTN_MARGIN - navBtnW - H2H_GAP
   const drawZoom = compactDraw
-    ? Math.max(0.5, (bodyWidth - 24 - 16 - NAV_INSET - NAV_INSET) / (2 * COMPACT_COL_UNIT))
+    ? Math.max(0.5, (rightBoundary - drawLeftPad) / naturalWCompact)
     : 1
 
   // Left gutter: reserved whenever paging is possible in normal mode (so the
@@ -1047,10 +1063,14 @@ export default function TournamentDraw() {
         </div>
 
         {/* Big edge buttons to page the round just off-screen. The left button
-            hugs the page edge; the right sits just past the last drawn round
-            (rightNavX = last visible column's right edge, measured below). */}
+            hugs the page edge; the right one, in compact mode, is pinned to
+            the far right edge instead (drawZoom is computed to bring the
+            content right up to it — see the comment there) — in normal mode
+            it still sits just past the last drawn round (rightNavX = last
+            visible column's right edge, measured below). */}
         {showPager && windowPos > 0 && (
           <button
+            ref={navBtnLeftRef}
             className="round-nav round-nav--left"
             style={{ left: sidebarCollapsed ? 3 : Math.max(3, bodyWidth - mainWidth + 3) }}
             onClick={() => setWindowStart(windowPos - 1)}
@@ -1061,10 +1081,11 @@ export default function TournamentDraw() {
             <span className="round-nav-label">{pagerColumns[windowPos - 1].nav}</span>
           </button>
         )}
-        {showPager && windowPos < maxWindowStart && rightNavX != null && (
+        {showPager && windowPos < maxWindowStart && (compactDraw || rightNavX != null) && (
           <button
+            ref={navBtnRightRef}
             className="round-nav round-nav--right"
-            style={{ left: Math.min(rightNavX + 6, bodyWidth - 30) }}
+            style={compactDraw ? { right: 3, left: 'auto' } : { left: Math.min(rightNavX + 6, bodyWidth - 30) }}
             onClick={() => setWindowStart(windowPos + 1)}
             title={`Show ${pagerColumns[windowPos + DRAW_WINDOW].title}`}
             aria-label={`Show ${pagerColumns[windowPos + DRAW_WINDOW].title}`}
