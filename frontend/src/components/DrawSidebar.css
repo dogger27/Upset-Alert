@@ -69,36 +69,26 @@
 }
 
 /* Collapsed state: a larger edge button with the chevron filling it, a dark
-   border to make it obvious, and a 50%-transparent background. */
+   border to make it obvious, and a 50%-transparent background. Matches the
+   round-nav pager button's exact footprint — same width/height (via the
+   same invisible "CHAMP" sizer trick, rendered in JSX; no hardcoded numbers
+   to keep in sync) and the same left offset (3px, mirroring
+   .round-nav--left's inline style) — in both regular and compact/overlay
+   draw modes, so the two floating buttons always read as one consistent
+   column. Colour/border stay this button's own (not round-nav's green). */
 .draw-sidebar--collapsed .sidebar-collapse-btn {
   top: 0.6rem;
-  right: 4px;
-  width: 34px;
-  height: 54px;
-  font-size: 2.4rem;
-  padding: 0;
-  border: 2px solid var(--text);
-  background: rgba(255, 255, 255, 0.5);
-  color: var(--text);
-}
-
-/* Compact (phone) draw mode: match the round-nav pager button's footprint
-   exactly — same width/height (via the same invisible "CHAMP" sizer trick,
-   rendered in JSX; no hardcoded numbers to keep in sync) and the same left
-   offset (3px, mirroring .round-nav--left's inline style) — so the two
-   floating buttons read as one consistent column and the draw's reserved
-   left gutter only needs to clear a single width. Colour/border stay this
-   button's own (not round-nav's green); only size and horizontal position
-   change. Vertical position (top, not centred) is unchanged. */
-.draw-sidebar--overlay.draw-sidebar--collapsed .sidebar-collapse-btn {
+  left: 3px;
+  right: auto;
   display: grid;
   place-items: center;
   padding: 0.6rem 0.15rem;
   width: auto;
   height: auto;
   font-size: 1.4rem;
-  left: 3px;
-  right: auto;
+  border: 2px solid var(--text);
+  background: rgba(255, 255, 255, 0.5);
+  color: var(--text);
 }
 .sidebar-collapse-glyph { grid-area: 1 / 1; }
 
