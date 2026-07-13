@@ -171,6 +171,11 @@
   font-weight: 500;
   color: #b02a2a;
 }
+.cv-live-tag {
+  font-style: italic;
+  font-weight: 600;
+  color: var(--green-600, #2f7a4d);
+}
 .cv-real-winner {
   position: absolute;
   left: 7px;

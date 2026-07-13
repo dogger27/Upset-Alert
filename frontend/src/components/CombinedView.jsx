@@ -180,6 +180,38 @@ function scoreNodes(scores) {
   )
 }
 
+// Same set formatting as scoreNodes, but sourced from live_scores_json
+// ([p1SetGames, p2SetGames, serving, p1SetWins]) instead of the persisted
+// match.scores — the live feed's LAST entry is the current, still-in-play
+// set (its p1SetWins value is null, since ESPN has no winner for it yet),
+// which match.scores never carries at all (it only ever holds completed
+// sets). That in-progress set is rendered as a plain game score (no
+// tiebreak superscript — point-level score isn't tracked here, only game
+// counts) with an "(In Progress)" tag.
+function liveScoreNodes(live) {
+  if (!live) return null
+  const [aArr, bArr, , setWinsA] = live
+  const n = Math.max(aArr?.length ?? 0, bArr?.length ?? 0)
+  const sets = []
+  for (let i = 0; i < n; i++) {
+    const A = parseSet(aArr?.[i]), B = parseSet(bArr?.[i])
+    if (A.g === '' && B.g === '') continue
+    if (setWinsA?.[i] == null) { sets.push(<>{A.g}-{B.g}</>); continue }
+    const gA = Number(A.g), gB = Number(B.g)
+    const loserIsA = A.tb != null && (B.tb == null || gA < gB)
+    if (A.tb != null && loserIsA) sets.push(<>{A.g}<sup>{A.tb}</sup>-{B.g}</>)
+    else if (B.tb != null && !loserIsA) sets.push(<>{A.g}-{B.g}<sup>{B.tb}</sup></>)
+    else sets.push(<>{A.g}-{B.g}</>)
+  }
+  if (sets.length === 0) return null
+  return (
+    <>
+      {sets.map((s, i) => <span key={i}>{i > 0 ? ', ' : ''}{s}</span>)}
+      <span className="cv-live-tag"> (In Progress)</span>
+    </>
+  )
+}
+
 const BOX_H = 32
 const SLOT = 58          // fallback slot (missing feeders only)
 const PAIR_SLOT = 130    // vertical slot per MATCH (pair) in the base column
@@ -424,7 +456,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
     const correct = pickId != null && realId != null && pickId === realId
     const wrong = pickId != null && realId != null && pickId !== realId
     const realPlayer = realId != null ? playerById[realId] : null
-    const score = match.is_bye ? null : scoreNodes(match.scores)
+    const score = match.is_bye ? null : (match.live_scores ? liveScoreNodes(match.live_scores) : scoreNodes(match.scores))
 
     const onClick = nextMatchOnClick(c, i, displayId)
 
