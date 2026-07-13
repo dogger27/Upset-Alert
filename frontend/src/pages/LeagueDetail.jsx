@@ -386,6 +386,14 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
     const vals = entries.map(e => e.round_points[i] ?? 0)
     return Math.max(...vals.map(v => v ?? 0), 1)
   })
+  // Columns are sized proportionally to points scored (flex-grow), which
+  // squashes a round where nobody scored down to a sliver next to a round
+  // with real points. Give those all-zero columns a fixed minimum width
+  // instead, just enough to fit the round label and the "0".
+  const colFlex = activeRounds.map((i, col) => {
+    const hasPoints = entries.some(e => (e.round_points[i] ?? 0) > 0)
+    return hasPoints ? perRoundMax[col] : '0 0 42px'
+  })
 
   // Prefer the server's authoritative "every non-bye match in this round is done"
   // list; fall back to the old "not the latest round" heuristic if it's missing
@@ -467,7 +475,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
             <span className="lt-competitors-label lt-competitors-label--inline">Competitor</span>
             <div className="lt-bar-track">
               {activeRounds.map((i, col) => (
-                <div key={i} className="lt-bar-col lt-bar-col--label" style={{ flex: perRoundMax[col] }} title={roundWinnerLabels[col] ?? undefined}>
+                <div key={i} className="lt-bar-col lt-bar-col--label" style={{ flex: colFlex[col] }} title={roundWinnerLabels[col] ?? undefined}>
                   {getRoundLabel(i, numRounds)}
                 </div>
               ))}
@@ -519,7 +527,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                     const fillPct = (pts / perRoundMax[col]) * 100
                     const isWinner = roundWinnerSets[col]?.has(entry.user_id) ?? false
                     return (
-                      <div key={i} className="lt-bar-col" style={{ flex: perRoundMax[col] }} title={roundWinnerLabels[col] ?? undefined}>
+                      <div key={i} className="lt-bar-col" style={{ flex: colFlex[col] }} title={roundWinnerLabels[col] ?? undefined}>
                         {pts > 0 ? (
                           <div
                             className={`lt-bar-segment${isWinner ? ' lt-bar-winner' : ''}`}
