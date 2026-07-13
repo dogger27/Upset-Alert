@@ -319,6 +319,13 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
     }
   })
   const totalH = Math.ceil(colCount(visible[0]) / 2) * PAIR_SLOT
+  // Natural (unscaled) footprint of the labels+body block, for the
+  // scale-to-fit wrapper below. LABELS_H is an estimate of .cv-labels'
+  // rendered height (padding + line height) — a few px of slop here just
+  // means a few px of extra/short scroll space, not a visual bug.
+  const naturalW = visible.length * colW + (visible.length - 1) * COL_GAP
+  const LABELS_H = 34
+  const naturalH = totalH + LABELS_H
 
   // Centres for the column just PAST the visible window (if one exists) — used
   // only to draw the trailing feed bars (connectors + H2H + bell) off the
@@ -405,10 +412,21 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
         />
       )}
       <div className={`cv-scroll${compact ? ' cv-scroll--compact' : ''}`} style={insetLeft ? { paddingLeft: `calc(0.75rem + ${insetLeft}px)` } : undefined}>
-        {/* zoom (not transform:scale) so the shrink is a real LAYOUT scale —
-            scrollWidth shrinks with it, which is what lets 2 rounds fit a
-            narrow phone without horizontal scrolling. */}
-        <div style={zoom !== 1 ? { zoom } : undefined}>
+        {/* Scale-to-fit: outer claims the SMALLER (zoomed) footprint so
+            .cv-scroll's scrollWidth shrinks with it (needed for 2 rounds to
+            fit a narrow phone without horizontal scrolling); inner renders at
+            natural size and transform:scale()s down to exactly fill it.
+            transform, not the CSS `zoom` property — WebKit doesn't reliably
+            cascade `zoom` into descendants that establish their own
+            positioning/formatting context (position:absolute, overflow,
+            flex, ...), which are exactly the properties nearly every element
+            in this bracket uses; transform:scale has been identically
+            supported everywhere for well over a decade. */}
+        {/* No overflow:hidden here — LABELS_H is an estimate, and clipping
+            actual bracket rows because it under-shoots would be far worse
+            than the few px of extra scroll slack from not clipping. */}
+        <div style={zoom !== 1 ? { width: naturalW * zoom, height: naturalH * zoom } : undefined}>
+        <div style={zoom !== 1 ? { width: naturalW, height: naturalH, transform: `scale(${zoom})`, transformOrigin: 'top left' } : undefined}>
         <div className={`cv-labels${labelsHidden ? ' cv-labels--collapsed' : ''}`}>
           {visible.map((c, i) => {
             const label = c === 0
@@ -564,6 +582,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
               })
             })}
           </div>
+        </div>
         </div>
         </div>
       </div>
