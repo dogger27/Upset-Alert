@@ -102,6 +102,16 @@
 /* Compact mode drops the flag, whose margins used to separate the seed badge
    from the name — restore that breathing room directly on the badge. */
 .cv-scroll--compact .cv-badges { margin-right: 6px; }
+/* Compact (phone) mode zooms the draw to fit ~2 rounds width-wise, but a few
+   px of deliberate overflow (the connector line's decorative tail past the
+   H2H chip, .cv-match-outline's -8px overhang) is intentionally left
+   uncropped (see feedback_css_zoom_webkit_bug / reference_draw_windowed_
+   layout) rather than clipped — which otherwise leaves just enough
+   scrollable slack for an accidental horizontal swipe to nudge the whole
+   draw left/right. touch-action:pan-y restricts touch panning to vertical
+   only, WITHOUT clipping anything (unlike overflow-x:hidden, which was
+   tried for this and reintroduced the connector-line clipping bug). */
+.cv-scroll--compact { touch-action: pan-y; }
 /* Entry-type badge (Q/WC/LL/SE) sits at the far right of the box */
 .cv-entry {
   flex-shrink: 0;
