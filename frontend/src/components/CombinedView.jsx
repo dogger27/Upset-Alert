@@ -407,7 +407,11 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
     const pid = i % 2 === 0 ? match.player1?.id : match.player2?.id
     const player = pid != null ? playerById[pid] : null
     const isBye = match.is_bye && i % 2 === 1 && pid == null
-    const onClick = isBye ? null : nextMatchOnClick(0, i, pid)
+    // A bye match has no real outcome to predict — neither the bye
+    // placeholder slot (isBye, handled above) NOR the opponent's own slot
+    // should be clickable, so a click can never save a redundant "pick"
+    // for a match that was always going to auto-advance regardless.
+    const onClick = match.is_bye ? null : nextMatchOnClick(0, i, pid)
     return { key: `e${i}`, player, isBye, serving: !isBye && isServing(0, i), abbrev: true, kind: 'entrant', clickable: !!onClick, onClick }
   }
 
