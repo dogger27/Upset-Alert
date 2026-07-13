@@ -555,7 +555,10 @@ export default function TournamentDraw() {
   const colUnit = 214 + 64
   // Left gutter reserved INSIDE the draw for the left round-nav button when the
   // sidebar is expanded (collapsed → the button lives in the page-edge gutter).
-  const NAV_INSET = 34
+  // Tuned tight to the button's own footprint (left:3px + its CHAMP-sized
+  // width) plus a few px of breathing room — not a generous guess — so the
+  // draw content sits close to the button rather than leaving a wide gap.
+  const NAV_INSET = 28
   const computeWindow = (inset) => {
     const usableW = mainWidth - 24 /* scroll padding */ - 16 /* vertical scrollbar */ - inset
     const fitCols = mainWidth > 0 ? Math.floor((usableW + COL_GAP_PX) / colUnit) : 4
@@ -592,10 +595,10 @@ export default function TournamentDraw() {
   // reserving room for it, it can land on top of the right round-nav button
   // (which sits "just past" the drawn columns, not past that trailing stub).
   // Uses COMPACT_COL_UNIT (mirrors CombinedView's narrower COMPACT_COL_W,
-  // 168+64), NOT colUnit (214+64) — compact mode renders narrower columns
+  // 140+64), NOT colUnit (214+64) — compact mode renders narrower columns
   // than normal mode, so sizing the zoom target off the wrong (wider) unit
   // would shrink the draw more than the actually-rendered content needs.
-  const COMPACT_COL_UNIT = 168 + 64
+  const COMPACT_COL_UNIT = 140 + 64
   const drawZoom = compactDraw
     ? Math.max(0.5, (bodyWidth - 24 - 16 - NAV_INSET - NAV_INSET) / (2 * COMPACT_COL_UNIT))
     : 1
