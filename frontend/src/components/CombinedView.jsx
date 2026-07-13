@@ -188,6 +188,9 @@ const PAIR_OFF = 24      // half the centre-to-centre gap of a match's two oppon
 // (badges/flag/padding are fixed-width, so the name column absorbs the whole
 // cut — leaving it 75% of its old allotment, per design request).
 const COL_W = 214
+// Compact (phone) mode drops the flag AND shrinks further still — the name
+// allotment there should be smaller yet, not just re-inherit the 75% cut.
+const COMPACT_COL_W = 168
 const COL_GAP = 64       // wide enough to seat the H2H chip on the connector "T"
 const H2H_X = 8          // H2H chip's x within the gap — centred on the match box's right border
 const BELL_OFFSET = 34   // distance (px) the bell sits left of the H2H chip's centre
@@ -250,6 +253,7 @@ function Connectors({ leftCenters, rightCenters, totalH }) {
 //          the parent can shrink it until the target number of rounds fits.
 export default function CombinedView({ tournament, matches, players, picks, onPick, locked = true, windowStart = 0, windowSize = 4, labelsHidden = false, insetLeft = 0, compact = false, zoom = 1 }) {
   const [h2h, setH2H] = useState(null)
+  const colW = compact ? COMPACT_COL_W : COL_W
 
   const playerById = Object.fromEntries(players.map(p => [p.id, p]))
   const drawRanks = computeDrawRanks(players)
@@ -363,7 +367,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
     const player = pid != null ? playerById[pid] : null
     const isBye = match.is_bye && i % 2 === 1 && pid == null
     const onClick = isBye ? null : nextMatchOnClick(0, i, pid)
-    return { key: `e${i}`, player, isBye, serving: !isBye && isServing(0, i), kind: 'entrant', clickable: !!onClick, onClick }
+    return { key: `e${i}`, player, isBye, serving: !isBye && isServing(0, i), abbrev: true, kind: 'entrant', clickable: !!onClick, onClick }
   }
 
   function winnerBox(c, i) {
@@ -387,7 +391,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
     }
   }
 
-  const colX = (idx) => idx * (COL_W + COL_GAP)
+  const colX = (idx) => idx * (colW + COL_GAP)
 
   return (
     <>
@@ -412,7 +416,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
               : c < N ? (R[c][0]?.round_name || `Round ${c + 1}`) : 'Champion'
             return (
               <div key={c} style={{ display: 'flex', flexShrink: 0 }}>
-                <div className="cv-label" style={{ width: COL_W }}>{label}</div>
+                <div className="cv-label" style={{ width: colW }}>{label}</div>
                 {i < visible.length - 1 && <div style={{ width: COL_GAP }} />}
               </div>
             )
@@ -436,7 +440,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
 
             return (
               <div key={c} style={{ display: 'flex', flexShrink: 0 }}>
-                <div className="cv-col" style={{ width: COL_W, height: totalH }}>
+                <div className="cv-col" style={{ width: colW, height: totalH }}>
                   {/* Light grey box grouping every match's two feeder boxes together;
                       switches to red once both opponents are known but the user
                       hasn't picked a winner yet (mirrors BracketView's "missing-pick"
@@ -529,7 +533,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
               const nextC = isLastVisible ? afterC : visible[colIdx + 1]
               const nextCenters = isLastVisible ? afterCenters : centers[nextC]
               if (!nextCenters || nextC < 1) return null
-              const gapX = colIdx * (COL_W + COL_GAP) + COL_W
+              const gapX = colIdx * (colW + COL_GAP) + colW
               return nextCenters.map((y, ri) => {
                 const m = R[nextC - 1][ri]
                 const { p1: aId, p2: bId } = resolved[m.id] || {}
