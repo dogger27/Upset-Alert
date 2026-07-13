@@ -460,19 +460,17 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
             flex, ...), which are exactly the properties nearly every element
             in this bracket uses; transform:scale has been identically
             supported everywhere for well over a decade. */}
-        {/* overflow-x (only) hidden here: naturalW's accounting is exact (real
-            geometry constants, not an estimate) and deliberately excludes the
-            decorative tail of the trailing connector line past the H2H chip
-            — clipping it here is what actually crops it off, instead of just
-            leaving it un-budgeted-for while still painted (and scrollable
-            into view). overflowY explicit 'visible' (not left to default) —
-            setting overflow-x to anything but visible silently upgrades an
-            unset overflow-y to 'auto' per spec, which would turn this into
-            its OWN scrollable box instead of letting content flow up into
-            .cv-scroll's scroll area. Vertical must stay open: LABELS_H IS an
-            estimate, and clipping/scrolling-away actual bracket rows because
-            it under-shoots would be far worse than a few px of slack. */}
-        <div style={zoom !== 1 ? { width: naturalW * zoom, height: naturalH * zoom, overflowX: 'hidden', overflowY: 'visible' } : undefined}>
+        {/* No overflow clipping here (tried overflow-x:hidden — reverted: it
+            also clipped the FIRST column's .cv-match-outline, which extends
+            -8px past its own column on the left, an intentional overhang not
+            a bug; and clipping the trailing connector line mid-stroke made
+            it visibly fade to white rather than cleanly disappear, which
+            reads as broken, not "cropped"). naturalW still excludes the
+            decorative tail past the H2H chip so drawZoom sizes tighter, but
+            the actual pixels are simply allowed to overflow past the
+            declared box uncropped — same tradeoff as the LABELS_H estimate
+            below: a few px of harmless overflow beats a clipping artifact. */}
+        <div style={zoom !== 1 ? { width: naturalW * zoom, height: naturalH * zoom } : undefined}>
         <div style={zoom !== 1 ? { width: naturalW, height: naturalH, transform: `scale(${zoom})`, transformOrigin: 'top left' } : undefined}>
         <div className={`cv-labels${labelsHidden ? ' cv-labels--collapsed' : ''}`}>
           {visible.map((c, i) => {
