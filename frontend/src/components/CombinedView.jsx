@@ -190,7 +190,10 @@ const PAIR_OFF = 24      // half the centre-to-centre gap of a match's two oppon
 const COL_W = 214
 // Compact (phone) mode drops the flag AND shrinks further still — the name
 // allotment there should be smaller yet, not just re-inherit the 75% cut.
-const COMPACT_COL_W = 168
+// Narrower still (was 168) now that compact mode shows last-name-only
+// (see lastNameOf below) instead of "F. Last" — the box no longer needs to
+// budget for the full abbreviated form in the common case.
+const COMPACT_COL_W = 140
 const COL_GAP = 64       // wide enough to seat the H2H chip on the connector "T"
 const H2H_X = 8          // H2H chip's x within the gap — centred on the match box's right border
 const BELL_OFFSET = 34   // distance (px) the bell sits left of the H2H chip's centre
@@ -266,12 +269,34 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
     .sort((a, b) => a.bracket_position - b.bracket_position)
     .forEach((p, i) => { qualifierNums[p.id] = i + 1 })
 
+  // Compact (phone) mode: last name only, EXCEPT for players who share a last
+  // name with someone else in this draw — those keep the "F. Last" format so
+  // they stay distinguishable. lastNameOf mirrors abbrevName's "everything
+  // after the first token" so two-word surnames (e.g. "Carreño Busta") stay
+  // together, matching how the app already defines "last name" elsewhere.
+  const lastNameOf = (full) => {
+    const parts = full.trim().split(/\s+/)
+    return parts.length > 1 ? parts.slice(1).join(' ') : parts[0]
+  }
+  const lastNameCounts = {}
+  if (compact) {
+    for (const pl of players) {
+      if (!pl.name) continue
+      const last = lastNameOf(pl.name)
+      lastNameCounts[last] = (lastNameCounts[last] || 0) + 1
+    }
+  }
+
   const isUnnamedQ = (p) => p?.entry_type === 'Q' && !p.name
   const slotName = (p, abbrev) => {
     if (!p) return 'TBD'
     if (isUnnamedQ(p)) {
       const n = qualifierNums[p.id]
       return `Qualifier${n != null ? ` ${n}` : ''}`
+    }
+    if (compact) {
+      const last = lastNameOf(p.name)
+      return lastNameCounts[last] > 1 ? abbrevName(p.name) : last
     }
     return abbrev ? abbrevName(p.name) : p.name
   }
@@ -415,7 +440,11 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
           onClose={() => setH2H(null)}
         />
       )}
-      <div className={`cv-scroll${compact ? ' cv-scroll--compact' : ''}`} style={insetLeft ? { paddingLeft: `calc(0.75rem + ${insetLeft}px)` } : undefined}>
+      {/* insetLeft's caller (NAV_INSET) is already tuned tight to the nav
+          button's own footprint — stacking the full 0.75rem base padding on
+          top of it left a visibly wide gap; a few px is enough breathing
+          room between the button and the first box. */}
+      <div className={`cv-scroll${compact ? ' cv-scroll--compact' : ''}`} style={insetLeft ? { paddingLeft: `${insetLeft + 4}px` } : undefined}>
         {/* Scale-to-fit: outer claims the SMALLER (zoomed) footprint so
             .cv-scroll's scrollWidth shrinks with it (needed for 2 rounds to
             fit a narrow phone without horizontal scrolling); inner renders at
