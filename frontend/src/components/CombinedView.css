@@ -165,6 +165,19 @@
   position: absolute;
   left: 7px;
   bottom: 10px;                /* centred on the box's top border */
+  height: 11px;                /* clamps the rendered box (see overflow below) —
+                                   without this, "line-height: 1" is a MULTIPLIER
+                                   of the font's own metrics, which iOS
+                                   Chrome/Safari (WebKit) computes taller than
+                                   desktop Chrome (Blink) for the same
+                                   font-size; the extra height pushed this
+                                   note's background down into the box,
+                                   covering the seed badge's top border
+                                   (iPhone-only bug). A fixed height removes
+                                   the font-metric dependency entirely. */
+  overflow: hidden;
+  display: flex;
+  align-items: center;
   background: #fdeaea;         /* matches .cv-box--wrong fill — masks only the
                                    border segment directly under the text,
                                    not the whole top edge (painted above the
