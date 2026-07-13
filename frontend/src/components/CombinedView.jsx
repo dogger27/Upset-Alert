@@ -347,12 +347,17 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
   // Natural (unscaled) footprint of the labels+body block, for the
   // scale-to-fit wrapper below. LABELS_H is an estimate of .cv-labels'
   // rendered height (padding + line height) — a few px of slop here just
-  // means a few px of extra/short scroll space, not a visual bug. The extra
-  // +COL_GAP accounts for the trailing connector/H2H stub the last visible
-  // column always renders (feeding the next, not-yet-shown round) — real,
-  // clickable content, not decoration, so it must count toward the footprint
-  // rather than silently overflowing it.
-  const naturalW = visible.length * colW + visible.length * COL_GAP
+  // means a few px of extra/short scroll space, not a visual bug.
+  // TRAILING_W accounts for the H2H chip in the last visible column's
+  // trailing stub (feeding the next, not-yet-shown round) — real, clickable
+  // content, so it counts toward the footprint. The REST of that stub's
+  // connector line (reaching to where the next column's box would start) is
+  // decorative only, so it deliberately does NOT get a full COL_GAP credit
+  // here — in compact mode that lets the zoom-fit target (TournamentDraw.jsx)
+  // sit tighter, with the unneeded tail of the line simply overflowing off
+  // the viewport edge instead of reserving dead space for it.
+  const TRAILING_W = H2H_X + 9 // chip's right edge: its centre (H2H_X into the gap) + half its rotated visual width (height:18 -> 9)
+  const naturalW = visible.length * colW + (visible.length - 1) * COL_GAP + TRAILING_W
   const LABELS_H = 34
   const naturalH = totalH + LABELS_H
 
@@ -455,10 +460,19 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
             flex, ...), which are exactly the properties nearly every element
             in this bracket uses; transform:scale has been identically
             supported everywhere for well over a decade. */}
-        {/* No overflow:hidden here — LABELS_H is an estimate, and clipping
-            actual bracket rows because it under-shoots would be far worse
-            than the few px of extra scroll slack from not clipping. */}
-        <div style={zoom !== 1 ? { width: naturalW * zoom, height: naturalH * zoom } : undefined}>
+        {/* overflow-x (only) hidden here: naturalW's accounting is exact (real
+            geometry constants, not an estimate) and deliberately excludes the
+            decorative tail of the trailing connector line past the H2H chip
+            — clipping it here is what actually crops it off, instead of just
+            leaving it un-budgeted-for while still painted (and scrollable
+            into view). overflowY explicit 'visible' (not left to default) —
+            setting overflow-x to anything but visible silently upgrades an
+            unset overflow-y to 'auto' per spec, which would turn this into
+            its OWN scrollable box instead of letting content flow up into
+            .cv-scroll's scroll area. Vertical must stay open: LABELS_H IS an
+            estimate, and clipping/scrolling-away actual bracket rows because
+            it under-shoots would be far worse than a few px of slack. */}
+        <div style={zoom !== 1 ? { width: naturalW * zoom, height: naturalH * zoom, overflowX: 'hidden', overflowY: 'visible' } : undefined}>
         <div style={zoom !== 1 ? { width: naturalW, height: naturalH, transform: `scale(${zoom})`, transformOrigin: 'top left' } : undefined}>
         <div className={`cv-labels${labelsHidden ? ' cv-labels--collapsed' : ''}`}>
           {visible.map((c, i) => {

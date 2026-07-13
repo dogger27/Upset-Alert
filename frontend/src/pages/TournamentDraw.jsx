@@ -613,7 +613,14 @@ export default function TournamentDraw() {
   const RIGHT_BTN_MARGIN = 3 // the right button's own distance from the body's right edge
   const H2H_GAP = 3          // requested clearance between the trailing H2H chip and the button
   const drawLeftPad = NAV_INSET + 4
-  const naturalWCompact = 2 * COMPACT_COL_W + 2 * COMPACT_GAP
+  // TRAILING_W mirrors CombinedView's own TRAILING_W (H2H_X + half the H2H
+  // chip's rotated visual width): credit the trailing stub only for the H2H
+  // chip itself, not a full COMPACT_GAP — the rest of that connector line is
+  // decorative and is meant to overflow off the viewport edge once zoomed
+  // in, not reserve dead space that would otherwise separate the H2H chip
+  // from the right button.
+  const TRAILING_W = 8 + 9
+  const naturalWCompact = 2 * COMPACT_COL_W + 1 * COMPACT_GAP + TRAILING_W
   const rightBoundary = bodyWidth - RIGHT_BTN_MARGIN - navBtnW - H2H_GAP
   const drawZoom = compactDraw
     ? Math.max(0.5, (rightBoundary - drawLeftPad) / naturalWCompact)
