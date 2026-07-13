@@ -322,8 +322,12 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
   // Natural (unscaled) footprint of the labels+body block, for the
   // scale-to-fit wrapper below. LABELS_H is an estimate of .cv-labels'
   // rendered height (padding + line height) — a few px of slop here just
-  // means a few px of extra/short scroll space, not a visual bug.
-  const naturalW = visible.length * colW + (visible.length - 1) * COL_GAP
+  // means a few px of extra/short scroll space, not a visual bug. The extra
+  // +COL_GAP accounts for the trailing connector/H2H stub the last visible
+  // column always renders (feeding the next, not-yet-shown round) — real,
+  // clickable content, not decoration, so it must count toward the footprint
+  // rather than silently overflowing it.
+  const naturalW = visible.length * colW + visible.length * COL_GAP
   const LABELS_H = 34
   const naturalH = totalH + LABELS_H
 
