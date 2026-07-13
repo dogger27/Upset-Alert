@@ -111,10 +111,10 @@ export default function DrawSidebar({ tournamentId, tournament, selectedUserId, 
         onClick={() => onToggleCollapsed?.()}
         title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
       >
-        {/* Compact mode only: invisible sizer forcing this button to the same
-            width/height as the round-nav pager button (same trick, same
+        {/* Invisible sizer forcing this button to the same width/height as
+            the round-nav pager button, in every draw mode (same trick, same
             text — see .round-nav-label--sizer in TournamentDraw.css). */}
-        {collapsed && overlay && (
+        {collapsed && (
           <span className="round-nav-label round-nav-label--sizer" aria-hidden="true">CHAMP</span>
         )}
         <span className="sidebar-collapse-glyph">{collapsed ? '›' : '‹'}</span>
