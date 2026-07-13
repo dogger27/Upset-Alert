@@ -40,6 +40,24 @@ def _canonical_pair(slug1: str, slug2: str) -> tuple[str, str]:
 # HTML parser
 # ---------------------------------------------------------------------------
 
+# TE labels qualifying rounds two ways depending on the event: some tournaments
+# get plain "Q1"/"Q2"/"Q3", others get "Q-R{size}" (round-of-N within the
+# qualifying bracket, mirroring main-draw naming). Collapse the latter to the
+# former. Grand Slam quali is 3 rounds (128->64->32, producing 16 qualifiers);
+# every other tour-level event is the standard 2-round quali (32->16).
+_GRAND_SLAMS = {"australian open", "french open", "roland garros", "wimbledon", "us open"}
+_QUAL_ROUND_MAP_GS = {"Q-R128": "Q1", "Q-R64": "Q2", "Q-R32": "Q3"}
+_QUAL_ROUND_MAP_STD = {"Q-R64": "Q1", "Q-R32": "Q1", "Q-R16": "Q2", "Q-R8": "Q1"}
+
+
+def _normalize_qual_round(round_str: Optional[str], tournament: Optional[str]) -> Optional[str]:
+    if not round_str or not round_str.startswith("Q-R"):
+        return round_str
+    is_gs = bool(tournament) and tournament.strip().lower() in _GRAND_SLAMS
+    mapping = _QUAL_ROUND_MAP_GS if is_gs else _QUAL_ROUND_MAP_STD
+    return mapping.get(round_str, round_str)
+
+
 def _parse_score_cell(raw: str) -> str:
     """Convert HTML score cell content like '6<sup>5</sup>' → '6(5)'."""
     raw = raw.strip()
@@ -108,6 +126,7 @@ def _parse_h2h_html(html: str, slug_a: str, slug_b: str) -> dict:
         round_str = round_m.group(1).strip() if round_m else None
         if not round_str or round_str in ("&nbsp;", "\xa0"):
             round_str = None
+        round_str = _normalize_qual_round(round_str, tournament)
 
         # Player name from td.t-name without rowspan attribute
         def extract_player(row: str) -> tuple[str, bool]:
