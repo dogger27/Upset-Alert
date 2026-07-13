@@ -584,16 +584,20 @@ export default function TournamentDraw() {
   const COMPACT_BREAK = 2 * colUnit + 44 + 24 + 16 - COL_GAP_PX
   const compactDraw = viewMode === 'combined' && bodyWidth > 0 && sidebarCollapsed
     && bodyWidth < COMPACT_BREAK
-  // Zoomed content is inset by the nav gutter (see drawInsetLeft below), so
-  // the space the two rounds must fit into loses that gutter too. The
-  // trailing feeder-line stub may end up under the right nav button — fine.
+  // Zoomed content is inset by the left nav gutter (see drawInsetLeft below)
+  // AND a matching right-hand gutter, so the space the two rounds must fit
+  // into loses both. The right gutter matters because the last visible
+  // round's trailing connector stub (feeding the next, not-yet-shown round)
+  // carries a real, clickable H2H chip, not just decorative lines — without
+  // reserving room for it, it can land on top of the right round-nav button
+  // (which sits "just past" the drawn columns, not past that trailing stub).
   // Uses COMPACT_COL_UNIT (mirrors CombinedView's narrower COMPACT_COL_W,
   // 168+64), NOT colUnit (214+64) — compact mode renders narrower columns
   // than normal mode, so sizing the zoom target off the wrong (wider) unit
   // would shrink the draw more than the actually-rendered content needs.
   const COMPACT_COL_UNIT = 168 + 64
   const drawZoom = compactDraw
-    ? Math.max(0.5, (bodyWidth - 24 - 16 - NAV_INSET) / (2 * COMPACT_COL_UNIT))
+    ? Math.max(0.5, (bodyWidth - 24 - 16 - NAV_INSET - NAV_INSET) / (2 * COMPACT_COL_UNIT))
     : 1
 
   // Left gutter: reserved whenever paging is possible in normal mode (so the
