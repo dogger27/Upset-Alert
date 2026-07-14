@@ -218,7 +218,7 @@ export default function H2HPanel({ slug1, slug2, player1, player2, tournSurface,
   const showElo = elo_rank_p1 != null || elo_rank_p2 != null
   const showAge = age_p1 != null || age_p2 != null
 
-  return (
+  return createPortal(
     <div className="h2h-backdrop" onClick={onClose}>
       {showEloInfo && <EloInfoPopup onClose={() => setShowEloInfo(false)} />}
       <div className="h2h-panel" onClick={e => e.stopPropagation()}>
@@ -342,6 +342,7 @@ export default function H2HPanel({ slug1, slug2, player1, player2, tournSurface,
           )
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
