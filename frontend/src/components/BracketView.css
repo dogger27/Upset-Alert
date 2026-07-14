@@ -181,6 +181,9 @@
   top: 0;
   left: 50%;
   transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: #eff6ff;
   border: 1px solid #2563eb;
   color: #1d4ed8;
@@ -191,7 +194,7 @@
   padding: 1px 7px;
   border-radius: 10px;
   white-space: nowrap;
-  line-height: 1.5;
+  line-height: 1;
   z-index: 3;
   pointer-events: none;
 }
