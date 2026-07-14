@@ -216,10 +216,9 @@ const BOX_H = 32
 const SLOT = 58          // fallback slot (missing feeders only)
 const PAIR_SLOT = 130    // vertical slot per MATCH (pair) in the base column
 const PAIR_OFF = 24      // half the centre-to-centre gap of a match's two opponents
-// 214 = the previous 260 minus ~25% of the ~184px the player NAME used to get
-// (badges/flag/padding are fixed-width, so the name column absorbs the whole
-// cut — leaving it 75% of its old allotment, per design request).
-const COL_W = 214
+// Reverted the previous 214 (a 25% cut off the ~184px name allotment) back to
+// 260 — the narrower width was truncating too many player names.
+const COL_W = 260
 // Compact (phone) mode drops the flag AND shrinks further still — the name
 // allotment there should be smaller yet, not just re-inherit the 75% cut.
 // Narrower than COL_W (was 168, briefly 140) now that compact mode shows

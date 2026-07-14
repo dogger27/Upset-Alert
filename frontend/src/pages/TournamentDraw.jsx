@@ -174,7 +174,7 @@ export default function TournamentDraw() {
   // there's room again. Disabled once the user manually toggles it.
   useEffect(() => {
     if (sidebarManual || bodyWidth <= 0 || !data) return
-    const colUnit = 214 + 64 // mirrors CombinedView COL_W + COL_GAP (see fit calc below)
+    const colUnit = 260 + 64 // mirrors CombinedView COL_W + COL_GAP (see fit calc below)
     const needed4Main = 4 * colUnit + 16 // draw-main width needed to fit 4 full rounds
     const projMainIfExpanded = bodyWidth - expandedSidebarW.current
     setSidebarCollapsed(projMainIfExpanded < needed4Main)
@@ -557,11 +557,11 @@ export default function TournamentDraw() {
 
   // How many columns fit in the bracket area: shrink from 4 toward 1 as it
   // narrows; a column is only counted when it fits ENTIRELY (no h-scroll).
-  // 278 mirrors CombinedView's COL_W(214) + COL_GAP(64) — the only view shown.
+  // 324 mirrors CombinedView's COL_W(260) + COL_GAP(64) — the only view shown.
   // (If Picks/Live are ever re-enabled, restore a per-view unit: BracketView
   // is (anyScores ? 300 : 252) + 24.)
   const COL_GAP_PX = 24 // credited back for the last column's missing trailing gap
-  const colUnit = 214 + 64
+  const colUnit = 260 + 64
   // Left gutter reserved INSIDE the draw for the left round-nav button when the
   // sidebar is expanded (collapsed → the button lives in the page-edge gutter).
   // Tuned tight to the button's own footprint (left:3px + its CHAMP-sized
@@ -605,7 +605,7 @@ export default function TournamentDraw() {
   // stub carries a real, clickable H2H chip, and the goal is that chip
   // sitting almost flush against the button, not just clear of it.
   // COMPACT_COL_W/COMPACT_GAP mirror CombinedView's COMPACT_COL_W/COL_GAP —
-  // NOT colUnit/COL_GAP_PX (214+24), which describe normal mode's wider
+  // NOT colUnit/COL_GAP_PX (260+24), which describe normal mode's wider
   // columns and would shrink the draw more than the actually-rendered
   // (narrower) compact content needs.
   const COMPACT_COL_W = 158
