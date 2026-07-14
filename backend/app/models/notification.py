@@ -35,3 +35,39 @@ class RoundCompleteNotification(Base):
     sent_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
+
+
+class MatchStartNotification(Base):
+    """
+    Idempotency + audit record: one row per draw once the "Play has started"
+    email has been sent. draw_id is the primary key (not autoincrement) so the
+    claiming INSERT relies on the primary-key uniqueness itself — two racing
+    callers (e.g. a process restart racing an in-flight fire-and-forget send)
+    can't both succeed.
+    """
+
+    __tablename__ = "match_start_notifications"
+
+    draw_id: Mapped[int] = mapped_column(Integer, ForeignKey("draws.id", ondelete="CASCADE"), primary_key=True)
+    recipient_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    sent_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+
+class DrawReleaseNotification(Base):
+    """
+    Idempotency + audit record: one row per draw once the "Draw released"
+    email has been sent. See MatchStartNotification for why draw_id is the
+    primary key. This is the hard guard behind scheduler.py's coarse
+    draw_release_notified_at column check — that column decides WHEN to fire
+    (after the stability cooldown), this table decides IF it's already fired.
+    """
+
+    __tablename__ = "draw_release_notifications"
+
+    draw_id: Mapped[int] = mapped_column(Integer, ForeignKey("draws.id", ondelete="CASCADE"), primary_key=True)
+    recipient_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    sent_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )

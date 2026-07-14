@@ -310,9 +310,19 @@ async def notify_round_complete(
 # ---------------------------------------------------------------------------
 
 async def notify_match_start(tournament_id: int, name: str, year: int, category: str = "", gender: str = "M") -> None:
-    """Email all users opted-in to 'match_start' for this tournament."""
+    """
+    Email all users opted-in to 'match_start' for this tournament.
+
+    Idempotent: claims (draw_id) in match_start_notifications before sending.
+    The picks_locked_at guard in espn_monitor.py already prevents this from
+    being triggered twice in the normal case, but that check-then-set has no
+    protection across a process restart racing an in-flight fire-and-forget
+    call — this table's primary-key uniqueness is the hard backstop.
+    """
+    from sqlalchemy.exc import IntegrityError
     from app.services.email import send_match_start_notification
     from app.services.system_log import app_log
+    from app.models.notification import MatchStartNotification
 
     async with AsyncSessionLocal() as db:
         total_res = await db.execute(
@@ -338,8 +348,22 @@ async def notify_match_start(tournament_id: int, name: str, year: int, category:
                 User.email_verified == True,
                 User.id.in_(competing_subq),
             )
+            .distinct()
         )
         emails = [r[0] for r in result.all()]
+
+        db.add(MatchStartNotification(draw_id=tournament_id, recipient_count=len(emails)))
+        try:
+            await db.commit()
+        except IntegrityError:
+            await db.rollback()
+            await app_log(
+                "warning", "notifications",
+                f"Match-start email for draw {tournament_id} already sent — resend blocked",
+                {"tournament_id": tournament_id},
+                dedup_key=f"match-start-dupe-{tournament_id}",
+            )
+            return
 
     if not emails:
         logger.debug("notify_match_start: no opted-in users for tournament %d", tournament_id)
@@ -374,13 +398,18 @@ async def notify_draw_released(
     """
     Email all users opted-in to this tournament's category/gender.
 
-    Callers are expected to have already established (and persisted) that this
-    is the ONE time this notification should fire for this draw — see
-    draw_release_notified_at / _notify_pending_draw_releases in scheduler.py.
-    This function itself does not check or set that flag.
+    Callers (scheduler.py's _notify_pending_draw_releases) decide WHEN this
+    should fire, via draw_release_notified_at + the stability cooldown — but
+    that's a plain SELECT-then-UPDATE with no protection against two
+    overlapping executions (a misfire re-run, or a migration resetting the
+    detection timestamp, as happened 2026-07-12). This function claims
+    (draw_id) in draw_release_notifications before sending as the hard,
+    unique-constrained backstop.
     """
+    from sqlalchemy.exc import IntegrityError
     from app.services.email import send_draw_notification
     from app.services.system_log import app_log
+    from app.models.notification import DrawReleaseNotification
 
     pref_key = _draw_pref_key(category, gender)
     if not pref_key:
@@ -394,8 +423,22 @@ async def notify_draw_released(
                 NotificationPreference.pref_key == pref_key,
                 User.email_verified == True,
             )
+            .distinct()
         )
         emails = [r[0] for r in result.all()]
+
+        db.add(DrawReleaseNotification(draw_id=tournament_id, recipient_count=len(emails)))
+        try:
+            await db.commit()
+        except IntegrityError:
+            await db.rollback()
+            await app_log(
+                "warning", "notifications",
+                f"Draw-released email for draw {tournament_id} already sent — resend blocked",
+                {"tournament_id": tournament_id},
+                dedup_key=f"draw-release-dupe-{tournament_id}",
+            )
+            return
 
     if not emails:
         logger.debug("notify_draw_released: no opted-in users for %s", pref_key)
