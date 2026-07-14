@@ -71,3 +71,23 @@ class DrawReleaseNotification(Base):
     sent_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
+
+
+class TournamentCompleteNotification(Base):
+    """
+    Idempotency + audit record: one row per draw once "final standings" emails
+    (and the draw-history results persistence that rides along with them) have
+    been sent. Same role as DrawReleaseNotification, backstopping the coarse
+    Draw.completion_notified_at column check against overlapping/racing
+    callers (notify_tournament_complete can be triggered by the same
+    process-restart race as match-start — see _refresh_active_tournaments's
+    force_refresh=True call at startup).
+    """
+
+    __tablename__ = "tournament_complete_notifications"
+
+    draw_id: Mapped[int] = mapped_column(Integer, ForeignKey("draws.id", ondelete="CASCADE"), primary_key=True)
+    recipient_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    sent_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )

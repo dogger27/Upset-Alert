@@ -152,17 +152,39 @@ _DEFAULT_NOTIF_PREFS = [
 ]
 
 
-async def _mark_verified(user: User, db: AsyncSession) -> None:
-    """Set email_verified and clear the code, then send welcome email."""
+async def _mark_verified(user: User, db: AsyncSession) -> bool:
+    """
+    Atomically claim first-time verification, add default notif prefs, and
+    send welcome/admin emails. Returns False (no-op) if another concurrent
+    call already claimed it.
+
+    The claim is a single UPDATE...WHERE email_verified=False rather than a
+    check-then-set on the loaded object, because /verify-email is a GET link
+    with the token in the query string — exactly the shape email clients'
+    security scanners and link-preview crawlers fetch automatically (see
+    [[reference_round_complete_dedup]] for the same failure mode on the
+    unsubscribe link). Two near-simultaneous fetches of that link (a scanner
+    plus the user's own click, or a double form-submit on the code path)
+    could otherwise both read email_verified=False before either commits,
+    sending duplicate welcome/admin emails.
+    """
+    from sqlalchemy import update as sa_update
     from app.models.notification import NotificationPreference
-    user.email_verified = True
-    user.verification_code = None
-    user.verification_code_expires = None
+
+    result = await db.execute(
+        sa_update(User)
+        .where(User.id == user.id, User.email_verified == False)
+        .values(email_verified=True, verification_code=None, verification_code_expires=None)
+    )
+    if result.rowcount == 0:
+        await db.rollback()
+        return False
     for key in _DEFAULT_NOTIF_PREFS:
         db.add(NotificationPreference(user_id=user.id, pref_key=key))
     await db.commit()
     await email_service.send_welcome(user.email, user.username)
     await email_service.send_new_user_notification(user.email, user.username)
+    return True
 
 
 @router.get("/verify-email", status_code=status.HTTP_204_NO_CONTENT)
@@ -174,8 +196,7 @@ async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=400, detail="Invalid or expired verification link")
-    if not user.email_verified:
-        await _mark_verified(user, db)
+    await _mark_verified(user, db)
 
 
 @router.post("/verify-email-code", status_code=status.HTTP_204_NO_CONTENT)
