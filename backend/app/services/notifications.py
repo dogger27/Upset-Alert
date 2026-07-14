@@ -538,10 +538,21 @@ async def _persist_tournament_results(
 async def notify_tournament_complete(tournament_id: int) -> None:
     """
     For every participant who opted into 'tournament_end', send ONE email
-    showing their final standing in every group (global + all leagues).
-    Idempotent: sets completion_notified_at on first call; subsequent calls no-op.
+    showing their final standing in every group (global + all leagues), and
+    persist final standings to draw history for every participant.
+
+    Idempotent: claims (draw_id) in tournament_complete_notifications before
+    doing any work — the unique-constrained primary key is the hard guard.
+    Draw.completion_notified_at is kept as a cheap early-exit column, but a
+    plain check-then-set-then-commit column alone isn't safe against two
+    overlapping callers (this function can be triggered by the same
+    process-restart race documented on MatchStartNotification), so it's no
+    longer the sole guard.
     """
+    from sqlalchemy.exc import IntegrityError
     from app.services.email import send_tournament_complete_notification
+    from app.services.system_log import app_log
+    from app.models.notification import TournamentCompleteNotification
     from datetime import datetime, timezone as tz
 
     async with AsyncSessionLocal() as db:
@@ -549,11 +560,21 @@ async def notify_tournament_complete(tournament_id: int) -> None:
         if not tournament:
             return
 
-        # Idempotency guard — whichever trigger fires first wins
         if tournament.completion_notified_at is not None:
-            return
+            return  # cheap early exit — the claim insert below is the real guard
         tournament.completion_notified_at = datetime.now(tz.utc)
-        await db.commit()
+        db.add(TournamentCompleteNotification(draw_id=tournament_id))
+        try:
+            await db.commit()
+        except IntegrityError:
+            await db.rollback()
+            await app_log(
+                "warning", "notifications",
+                f"Tournament-complete email for draw {tournament_id} already sent — resend blocked",
+                {"tournament_id": tournament_id},
+                dedup_key=f"tournament-complete-dupe-{tournament_id}",
+            )
+            return
 
         t_name = tournament.name
         t_year = tournament.year
