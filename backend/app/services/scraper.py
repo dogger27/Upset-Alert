@@ -890,16 +890,20 @@ def singles_title_variants(title: str, gender: str = "") -> list[str]:
     refers to. Wikipedia uses '– Singles' for single-tour events but
     '– Men's/Women's singles' for combined events (and for events sharing
     their article with a Challenger/125 edition), and which one an editor
-    will pick is not reliably predictable. Returns the original title first,
-    then the alternatives — gender-matched variant before the opposite one
-    when *gender* ('M'/'F') is given.
+    will pick is not reliably predictable. Returns the original title first.
+
+    When *gender* ('M'/'F') is given, the opposite gender's variant is
+    EXCLUDED: for a combined event the opposite variant is a different,
+    real page (e.g. Hamburg's ATP and WTA draws), and probing or watching
+    it cross-pollinates one tournament with the other's data.
     """
     base = strip_singles_suffix(title)
-    ordered = ["Singles", "Men's singles", "Women's singles"]
     if gender == "M":
-        ordered = ["Men's singles", "Singles", "Women's singles"]
+        ordered = ["Men's singles", "Singles"]
     elif gender == "F":
-        ordered = ["Women's singles", "Singles", "Men's singles"]
+        ordered = ["Women's singles", "Singles"]
+    else:
+        ordered = ["Singles", "Men's singles", "Women's singles"]
     variants = [title] + [
         v for s in ordered if (v := f"{base} – {s}") != title
     ]
