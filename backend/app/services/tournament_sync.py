@@ -111,18 +111,23 @@ async def find_existing_match(
     if exact:
         return exact
 
-    # 1b. Gender-specific title ("– Women's singles" / "– Men's singles") may match
-    #     an existing entry stored under the shared "– Singles" title, and vice-versa.
-    import re as _re
-    def _canonical_title(t: str) -> str:
-        return _re.sub(r" – (Women's|Men's) singles$", " – Singles", t, flags=_re.IGNORECASE)
-
-    canonical = _canonical_title(discovered.wiki_page_title)
-    if canonical != discovered.wiki_page_title:
-        res = await db.execute(select(Draw).where(Draw.wiki_page_title == canonical))
-        alt = res.scalar_one_or_none()
-        if alt:
-            return alt
+    # 1b. The stored title may use a different suffix variant than the
+    #     discovered one ("– Women's singles" vs "– Singles", either way
+    #     round). Match on any variant — gender-filtered, because the
+    #     "– Singles" variant of a combined event's title is shared by both
+    #     tours' records.
+    from app.services.scraper import singles_title_variants
+    variants = singles_title_variants(discovered.wiki_page_title, discovered.gender)
+    res = await db.execute(
+        select(Draw).where(
+            Draw.wiki_page_title.in_(variants),
+            Draw.gender == discovered.gender,
+            Draw.year == year,
+        )
+    )
+    alt = res.scalars().first()
+    if alt:
+        return alt
 
     if not discovered.start_date:
         return None
@@ -267,6 +272,10 @@ async def sync_season(
         existing = await find_existing_match(db, d, year)
 
         if existing:
+            # A guessed title must never replace the title of a record whose
+            # page is already resolved — the resolved title is ground truth.
+            if d.title_is_guess and existing.wiki_page_id is not None:
+                d.wiki_page_title = existing.wiki_page_title
             old_title = existing.wiki_page_title
             changed = await _apply_update(existing, d, db)
             if changed:

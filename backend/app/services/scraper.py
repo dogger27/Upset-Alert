@@ -870,9 +870,40 @@ def parse_draw(wikitext: str) -> ParsedDraw:
 
 
 _SINGLES_SUFFIX_RE = re.compile(
-    r"\s*[–\-]\s*(?:(?:Men[‘’]?s?|Women[‘’]?s?)\s+)?Singles?$",
+    r"\s*[–\-—]\s*(?:(?:Men['‘’]s|Women['‘’]s|Gentlemen['‘’]s|Ladies['‘’]?)\s+)?Singles?$",
     re.IGNORECASE,
 )
+
+
+def strip_singles_suffix(title: str) -> str:
+    """
+    Strip a trailing singles suffix ('– Singles', '– Men's singles',
+    '– Women's singles') from a draw-page title, returning the base
+    tournament page title. Returns the title unchanged if no suffix found.
+    """
+    return _SINGLES_SUFFIX_RE.sub("", title).strip()
+
+
+def singles_title_variants(title: str, gender: str = "") -> list[str]:
+    """
+    All plausible Wikipedia titles for the singles draw page that *title*
+    refers to. Wikipedia uses '– Singles' for single-tour events but
+    '– Men's/Women's singles' for combined events (and for events sharing
+    their article with a Challenger/125 edition), and which one an editor
+    will pick is not reliably predictable. Returns the original title first,
+    then the alternatives — gender-matched variant before the opposite one
+    when *gender* ('M'/'F') is given.
+    """
+    base = strip_singles_suffix(title)
+    ordered = ["Singles", "Men's singles", "Women's singles"]
+    if gender == "M":
+        ordered = ["Men's singles", "Singles", "Women's singles"]
+    elif gender == "F":
+        ordered = ["Women's singles", "Singles", "Men's singles"]
+    variants = [title] + [
+        v for s in ordered if (v := f"{base} – {s}") != title
+    ]
+    return variants
 
 
 def _general_page_title(singles_title: str) -> Optional[str]:
@@ -881,7 +912,7 @@ def _general_page_title(singles_title: str) -> Optional[str]:
     e.g. '2026 French Open – Men's singles' → '2026 French Open'
     Returns None if no suffix was found (title is already the general page).
     """
-    stripped = _SINGLES_SUFFIX_RE.sub("", singles_title).strip()
+    stripped = strip_singles_suffix(singles_title)
     return stripped if stripped != singles_title else None
 
 
@@ -902,12 +933,19 @@ async def scrape_tournament(
     try:
         wikitext, resolved_id = await fetch_wikitext(wiki_page_title, page_id=page_id, force_refresh=force_refresh)
     except ValueError:
-        # Gendered title (e.g. "– Women's singles") may not exist; try gender-neutral "– Singles"
-        alt_title = re.sub(r"\s*–\s*(Men's|Women's)\s+singles$", " – Singles", wiki_page_title, flags=re.IGNORECASE)
-        if alt_title == wiki_page_title:
+        # The stored title may use the wrong suffix variant (Wikipedia titles
+        # single-tour draw pages '– Singles' but combined events '– Men's/
+        # Women's singles'). Try every other plausible variant before giving up.
+        wikitext = None
+        for alt_title in singles_title_variants(wiki_page_title, gender)[1:]:
+            try:
+                wikitext, resolved_id = await fetch_wikitext(alt_title, force_refresh=force_refresh)
+                effective_title = alt_title
+                break
+            except ValueError:
+                continue
+        if wikitext is None:
             raise
-        wikitext, resolved_id = await fetch_wikitext(alt_title, force_refresh=force_refresh)
-        effective_title = alt_title
 
     # If a specific page_id was provided but the fetched page has no bracket templates,
     # the stored page_id may point to the wrong Wikipedia article (e.g. the general

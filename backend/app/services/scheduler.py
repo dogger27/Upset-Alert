@@ -174,12 +174,25 @@ async def _on_season_page_edit(season_title: str) -> None:
     try:
         wikitext, _ = await fetch_wikitext(season_title, force_refresh=True)
         discovered = parse_season_schedule(wikitext, year, gender)
-        disc_by_name = {d.name: d for d in discovered if d.wiki_page_title}
 
         today = date.today()
         to_scrape: list[int] = []  # tournament IDs to scrape
 
         async with AsyncSessionLocal() as db:
+            # Guessed titles need the same combined-event suffix adjustment
+            # that discover_tournaments applies, or this handler would flap
+            # titles back to the raw gendered guess on every season edit.
+            # The other tour's base pages come from the DB here.
+            from app.services.discovery import adjust_guessed_titles, title_bases
+            other = await db.execute(
+                select(Draw.wiki_page_title).where(
+                    Draw.year == year,
+                    Draw.gender == ("F" if gender == "M" else "M"),
+                )
+            )
+            adjust_guessed_titles(discovered, title_bases(other.scalars().all()))
+            disc_by_name = {d.name: d for d in discovered if d.wiki_page_title}
+
             result = await db.execute(
                 select(Draw).where(
                     Draw.year == year,
@@ -192,7 +205,12 @@ async def _on_season_page_edit(season_title: str) -> None:
             title_updated = 0
             for t in tournaments:
                 d = disc_by_name.get(t.name)
-                if d and d.wiki_page_title != t.wiki_page_title:
+                # A guessed title may only correct an unresolved record;
+                # explicit season-page links correct unconditionally.
+                if (
+                    d and d.wiki_page_title != t.wiki_page_title
+                    and (not d.title_is_guess or t.wiki_page_id is None)
+                ):
                     logger.info(
                         "Season page edit: correcting %s title %r → %r",
                         t.name, t.wiki_page_title, d.wiki_page_title,
@@ -435,8 +453,19 @@ async def _sync_subscriptions() -> None:
         )
         tournaments = result.scalars().all()
 
-    # Tournament draw pages: use page_id when known, title-only when page doesn't exist yet
-    wanted: dict[str, int | None] = {t.wiki_page_title: t.wiki_page_id for t in tournaments}
+    # Tournament draw pages: use page_id when known. For unresolved pages,
+    # subscribe every plausible title variant ('– Singles' vs gendered) —
+    # editors' choice of suffix isn't reliably predictable, and watching all
+    # variants means page creation is caught instantly whichever they pick.
+    from app.services.scraper import singles_title_variants
+    wanted: dict[str, int | None] = {}
+    for t in tournaments:
+        if t.wiki_page_id is None:
+            for v in singles_title_variants(t.wiki_page_title, t.gender):
+                wanted.setdefault(v, None)
+    for t in tournaments:
+        if t.wiki_page_id is not None:
+            wanted[t.wiki_page_title] = t.wiki_page_id
 
     # Season pages: always subscribed by title (we don't store their page IDs)
     for title in _season_pages():
