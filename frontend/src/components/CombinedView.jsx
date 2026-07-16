@@ -290,6 +290,9 @@ function Connectors({ leftCenters, rightCenters, totalH }) {
 //          the parent can shrink it until the target number of rounds fits.
 export default function CombinedView({ tournament, matches, players, picks, onPick, locked = true, windowStart = 0, windowSize = 4, labelsHidden = false, insetLeft = 0, compact = false, zoom = 1 }) {
   const [h2h, setH2H] = useState(null)
+  // Hovering any box of a player highlights ALL that player's boxes across
+  // the bracket (ported from BracketView's hoveredPlayerId behaviour).
+  const [hoveredPlayerId, setHoveredPlayerId] = useState(null)
   const colW = compact ? COMPACT_COL_W : COL_W
 
   const playerById = Object.fromEntries(players.map(p => [p.id, p]))
@@ -603,8 +606,10 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                     return (
                       <div key={box.key} className="cv-slot" style={{ top: cc[i] }}>
                         <div
-                          className={`cv-box${box.isBye ? ' cv-box--bye' : ''}${!box.isBye && !p ? ' cv-box--tbd' : ''}${box.correct ? ' cv-box--correct' : ''}${box.wrong ? ' cv-box--wrong' : ''}${box.clickable ? ' cv-box--clickable' : ''}`}
+                          className={`cv-box${box.isBye ? ' cv-box--bye' : ''}${!box.isBye && !p ? ' cv-box--tbd' : ''}${box.correct ? ' cv-box--correct' : ''}${box.wrong ? ' cv-box--wrong' : ''}${box.clickable ? ' cv-box--clickable' : ''}${p != null && p.id === hoveredPlayerId ? ' cv-box--highlight' : ''}`}
                           onClick={box.onClick}
+                          onMouseEnter={p != null ? () => setHoveredPlayerId(p.id) : undefined}
+                          onMouseLeave={p != null ? () => setHoveredPlayerId(null) : undefined}
                         >
                           {box.isBye ? (
                             <span className="cv-name cv-name--muted">BYE</span>
