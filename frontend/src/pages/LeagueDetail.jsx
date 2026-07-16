@@ -678,7 +678,6 @@ function LeagueSettings({ league, onDone, currentUserId }) {
   const qc = useQueryClient()
   const navigate = useNavigate()
   const [name, setName] = useState(league.name)
-  const [mode, setMode] = useState(league.scoring_mode)
   const [showRealName, setShowRealName] = useState(league.show_real_name)
   const [allowMemberInvites, setAllowMemberInvites] = useState(league.allow_member_invites)
   const [error, setError] = useState('')
@@ -713,15 +712,6 @@ function LeagueSettings({ league, onDone, currentUserId }) {
         <label>Name</label>
         <input value={name} onChange={e => setName(e.target.value)} />
       </div>
-      <div className="form-row">
-        <label>Scoring mode</label>
-        <select value={mode} onChange={e => setMode(e.target.value)}>
-          <option value="classic">Classic Bracket</option>
-          <option value="atp_wta">ATP/WTA Points Mirror</option>
-          <option value="upset_bonus">Classic + Upset Bonus</option>
-          <option value="custom">Custom</option>
-        </select>
-      </div>
       <div className="form-row form-check">
         <label>
           <input type="checkbox" checked={showRealName} onChange={e => setShowRealName(e.target.checked)} />
@@ -737,7 +727,7 @@ function LeagueSettings({ league, onDone, currentUserId }) {
       {error && <p className="error">{error}</p>}
       <button
         className="btn-primary"
-        onClick={() => mutation.mutate({ name, scoring_mode: mode, show_real_name: showRealName, allow_member_invites: allowMemberInvites })}
+        onClick={() => mutation.mutate({ name, show_real_name: showRealName, allow_member_invites: allowMemberInvites })}
         disabled={mutation.isPending}
       >
         Save
