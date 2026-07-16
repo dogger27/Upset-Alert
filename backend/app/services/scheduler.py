@@ -367,7 +367,8 @@ async def _check_draw_health() -> None:
 
     2. "Wiki page never resolves" (Iași Open) — wiki_page_id has never been
        set (every scrape attempt has failed to even locate the page) for a
-       tournament whose draw was expected days ago or that starts imminently.
+       tournament whose expected draw-release date has passed (or, when no
+       release date is known, that starts within a day).
        Each individual attempt already logs+dedups hourly via
        _refresh_active_tournaments' exception handler; this escalates once
        it's clearly not a transient blip but a wrong/dead title that needs a
@@ -403,9 +404,16 @@ async def _check_draw_health() -> None:
             )
 
         # --- Check 2: wiki page never resolves -----------------------------
-        release_overdue = t.draw_release_direct is not None and (today - t.draw_release_direct).days >= 1
-        starting_soon = t.start_date is not None and (t.start_date - today).days <= 5
-        if t.wiki_page_id is None and (release_overdue or starting_soon):
+        # Only escalate once the draw is actually overdue. Draw pages are
+        # normally created on Wikipedia around the release date, so an
+        # unresolved page before then is expected, not an error.
+        if t.draw_release_direct is not None:
+            release_overdue = (today - t.draw_release_direct).days >= 1
+        else:
+            # No expected release date known — draws are essentially always
+            # out by the day before start, so treat that as the deadline.
+            release_overdue = t.start_date is not None and (t.start_date - today).days <= 1
+        if t.wiki_page_id is None and release_overdue:
             await app_log(
                 "error", "scheduler",
                 f"Wiki page never resolved for {t.year} {t.name} ({t.gender}) — "
