@@ -191,6 +191,7 @@ function scoreNodes(scores) {
 function liveScoreNodes(live) {
   if (!live) return null
   const [aArr, bArr, , setWinsA] = live
+  const suspended = live[4] === 'suspended'
   const n = Math.max(aArr?.length ?? 0, bArr?.length ?? 0)
   const sets = []
   for (let i = 0; i < n; i++) {
@@ -207,7 +208,9 @@ function liveScoreNodes(live) {
   return (
     <>
       {sets.map((s, i) => <span key={i}>{i > 0 ? ', ' : ''}{s}</span>)}
-      <span className="cv-live-tag"> (In Progress)</span>
+      {suspended
+        ? <span className="cv-live-tag cv-live-tag--suspended"> (Suspended)</span>
+        : <span className="cv-live-tag"> (In Progress)</span>}
     </>
   )
 }
@@ -560,7 +563,8 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                     const bottomPad = colIdx === 0 ? 12 : 28
                     const top = Math.min(yTop, yBot) - BOX_H / 2 - topPad
                     const height = Math.abs(yBot - yTop) + BOX_H + topPad + bottomPad
-                    const isLive = m.live_scores != null
+                    const isSuspended = m.live_scores?.[4] === 'suspended'
+                    const isLive = m.live_scores != null && m.winner == null
                     return (
                       <Fragment key={`mo${m.id}`}>
                         <div
@@ -568,8 +572,8 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                           style={{ top, height }}
                         />
                         {isLive && (
-                          <span className="in-progress-badge" style={{ position: 'absolute', top, left: '50%', transform: 'translate(-50%, -50%)' }}>
-                            In Progress
+                          <span className={`in-progress-badge${isSuspended ? ' in-progress-badge--suspended' : ''}`} style={{ position: 'absolute', top, left: '50%', transform: 'translate(-50%, -50%)' }}>
+                            {isSuspended ? 'Suspended' : 'In Progress'}
                           </span>
                         )}
                       </Fragment>

@@ -199,6 +199,12 @@
   pointer-events: none;
 }
 
+.in-progress-badge--suspended {
+  background: #fffbeb;
+  border-color: #d97706;
+  color: #b45309;
+}
+
 .match-box.bye {
   opacity: 0.5;
 }

@@ -284,10 +284,19 @@ def _is_qualifying(comp: dict) -> bool:
     return "qualif" in rname.lower()
 
 
-def _singles_comps(event: dict, gender: str, status: str) -> list:
-    """Return MAIN-DRAW singles competitions with the given status for this gender.
-    Qualifying matches are excluded — they share the 'Singles' grouping but must
-    never trigger a picks-lock or be recorded as a main-draw result."""
+# Statuses that mean "match is over with a winner". ESPN uses STATUS_RETIRED
+# for mid-match retirements (winner flag still set on the standing player) and
+# STATUS_WALKOVER for walkovers — a plain STATUS_FINAL filter silently drops
+# those results (seen live: Carballés Baena retirement at 2026 Båstad).
+_FINAL_STATUSES = ("STATUS_FINAL", "STATUS_RETIRED", "STATUS_WALKOVER")
+
+
+def _singles_comps(event: dict, gender: str, status) -> list:
+    """Return MAIN-DRAW singles competitions with the given status (a string or
+    a tuple of strings) for this gender. Qualifying matches are excluded — they
+    share the 'Singles' grouping but must never trigger a picks-lock or be
+    recorded as a main-draw result."""
+    statuses = (status,) if isinstance(status, str) else tuple(status)
     label = _gender_label(gender)
     comps = []
     for group in event.get("groupings", []):
@@ -297,9 +306,20 @@ def _singles_comps(event: dict, gender: str, status: str) -> list:
         for comp in group.get("competitions", []):
             if _is_qualifying(comp):
                 continue
-            if comp.get("status", {}).get("type", {}).get("name", "") == status:
+            if comp.get("status", {}).get("type", {}).get("name", "") in statuses:
                 comps.append(comp)
     return comps
+
+
+def _comp_has_linescores(comp: dict) -> bool:
+    """True if any competitor carries linescore values — on a STATUS_SCHEDULED
+    competition this is ESPN's representation of a SUSPENDED match (the match
+    reverts to 'scheduled' for resumption but keeps its partial scores)."""
+    return any(
+        ls.get("value") is not None
+        for c in comp.get("competitors", [])
+        for ls in c.get("linescores", [])
+    )
 
 
 def _comp_live_players(comp: dict) -> list:
@@ -627,9 +647,20 @@ class ESPNMonitor:
         """
         live_comps = _singles_comps(espn_event, tournament.gender, "STATUS_IN_PROGRESS")
 
-        # Map (entry_id_a, entry_id_b) → (scores_a, scores_b) for in-progress matches
+        # Suspended matches: ESPN reverts them to STATUS_SCHEDULED (for the
+        # resumption) but keeps the partial linescores. Track them alongside
+        # live matches so the draw can show "7-6, 4-6 (Suspended)" instead of
+        # silently dropping the score.
+        suspended_comps = [
+            c for c in _singles_comps(espn_event, tournament.gender, "STATUS_SCHEDULED")
+            if _comp_has_linescores(c)
+        ]
+
+        # Map (entry_id_a, entry_id_b) → (scores_a, scores_b, serving, set_wins, suspended)
         in_progress: dict[tuple, tuple] = {}
-        for comp in live_comps:
+        for comp, is_suspended in (
+            [(c, False) for c in live_comps] + [(c, True) for c in suspended_comps]
+        ):
             result = _comp_live_scores(comp)
             if not result:
                 continue
@@ -638,10 +669,12 @@ class ESPNMonitor:
             entry_b = _find_entry(name_b, pairs, tok_index)
             if not entry_a or not entry_b or entry_a.id == entry_b.id:
                 continue
+            if is_suspended:
+                serving = None  # nobody is serving a suspended match
             serving_b = (3 - serving) if serving else None
             set_wins_b = [(not w if w is not None else None) for w in set_wins_a]
-            in_progress[(entry_a.id, entry_b.id)] = (sc_a, sc_b, serving, set_wins_a)
-            in_progress[(entry_b.id, entry_a.id)] = (sc_b, sc_a, serving_b, set_wins_b)
+            in_progress[(entry_a.id, entry_b.id)] = (sc_a, sc_b, serving, set_wins_a, is_suspended)
+            in_progress[(entry_b.id, entry_a.id)] = (sc_b, sc_a, serving_b, set_wins_b, is_suspended)
 
         async with AsyncSessionLocal() as db:
             m_res = await db.execute(
@@ -660,6 +693,7 @@ class ESPNMonitor:
                 key = (m.player1_id, m.player2_id)
                 live = in_progress.get(key)
                 if live:
+                    suspended = live[4]
                     raw_serving = live[2]  # from ESPN possession; may be None
 
                     # Total completed games determines serve parity from match start.
@@ -668,7 +702,9 @@ class ESPNMonitor:
                         return int(s.split("(")[0])
                     total_games = sum(_gc(s) for s in live[0] + live[1])
 
-                    if raw_serving is not None:
+                    if suspended:
+                        serving = None  # never infer a server for a suspended match
+                    elif raw_serving is not None:
                         # ESPN tells us who is serving; back-calculate who served first.
                         if m.served_first is None:
                             m.served_first = raw_serving if total_games % 2 == 0 else (3 - raw_serving)
@@ -679,12 +715,32 @@ class ESPNMonitor:
                     else:
                         serving = None  # not enough data yet
 
-                    new_val = [live[0], live[1], serving, live[3]]  # [p1_scores, p2_scores, serving, set_wins_p1]
+                    # [p1_scores, p2_scores, serving, set_wins_p1, ("suspended"|None)]
+                    new_val = [live[0], live[1], serving, live[3]]
+                    if suspended:
+                        new_val.append("suspended")
                     if m.live_scores_json != new_val:
                         m.live_scores_json = new_val
                         changed += 1
                 elif m.live_scores_json is not None:
-                    # Match was live but no longer in ESPN's in-progress list
+                    # Match was live but no longer in ESPN's in-progress/suspended list
+                    m.live_scores_json = None
+                    changed += 1
+
+            # Defensive sweep: a winner written by the Wikipedia scrape path can
+            # race ahead of ESPN's completion event, leaving live_scores_json
+            # orphaned on a completed match (renders a stale "In Progress" badge).
+            stale_res = await db.execute(
+                select(Match).where(
+                    Match.draw_id == tournament.id,
+                    Match.winner_id.isnot(None),
+                    Match.live_scores_json.isnot(None),
+                )
+            )
+            for m in stale_res.scalars().all():
+                # JSON columns store cleared values as JSON null (not SQL NULL),
+                # which still matches isnot(None) — skip the already-cleared ones.
+                if m.live_scores_json is not None:
                     m.live_scores_json = None
                     changed += 1
 
@@ -714,7 +770,7 @@ class ESPNMonitor:
         when it rewrites scores_json on its next scrape. No special handling needed —
         the Wikipedia scraper always overwrites scores_json unconditionally.
         """
-        final_comps = _singles_comps(espn_event, tournament.gender, "STATUS_FINAL")
+        final_comps = _singles_comps(espn_event, tournament.gender, _FINAL_STATUSES)
         if not final_comps:
             return 0
 
