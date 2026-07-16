@@ -45,6 +45,10 @@ class DiscoveredTournament:
     end_date: Optional[date]
     city: Optional[str] = None
     country: Optional[str] = None
+    # True when wiki_page_title was constructed by us (Passes 2–4) rather than
+    # read from an explicit season-page wikilink (Pass 1). Guessed titles must
+    # never overwrite the title of a tournament whose page is already resolved.
+    title_is_guess: bool = False
 
     @property
     def sort_key(self):
@@ -256,7 +260,7 @@ def parse_season_schedule(wikitext: str, year: int, gender: str) -> list[Discove
     date_index = _build_date_index(wikitext, year)
     gender_suffix = "Men's singles" if gender == "M" else "Women's singles"
 
-    def add(singles_page: str, pos: int, ctx: str, display_name: str = "") -> None:
+    def add(singles_page: str, pos: int, ctx: str, display_name: str = "", is_guess: bool = False) -> None:
         if singles_page in seen:
             return
         seen.add(singles_page)
@@ -278,11 +282,17 @@ def parse_season_schedule(wikitext: str, year: int, gender: str) -> list[Discove
 
         draw_m = _DRAW_RE.search(ctx)
         draw_size = int(draw_m.group(1)) if draw_m else 128
+        cat_m = _CATEGORY_RE.search(ctx)
+
+        # Constructed-title passes match any [[link]] followed by "Singles",
+        # which also hits player wikilinks in ranking/stats tables. A real
+        # schedule row always carries a category ("ATP 250") or a draw-size
+        # marker ("32S/24Q/16D") in its cell — require one for guesses.
+        if is_guess and not draw_m and not cat_m:
+            return
 
         if _should_exclude(name, draw_size):
             return
-
-        cat_m = _CATEGORY_RE.search(ctx)
         category = _norm_category(cat_m.group(1)) if cat_m else (
             "ATP 250" if gender == "M" else "WTA 250"
         )
@@ -299,6 +309,7 @@ def parse_season_schedule(wikitext: str, year: int, gender: str) -> list[Discove
             start_date=start_date,
             end_date=sched_end_date,  # rough schedule date; overridden by scraper with real infobox date
             city=city, country=country,
+            title_is_guess=is_guess,
         ))
 
     # Pass 1 — explicit singles links
@@ -323,7 +334,7 @@ def parse_season_schedule(wikitext: str, year: int, gender: str) -> list[Discove
         if singles_page in seen:
             continue
         ctx = wikitext[m.start(): m.start() + 700]
-        add(singles_page, m.start(), ctx, display_name=display)
+        add(singles_page, m.start(), ctx, display_name=display, is_guess=True)
 
     # Pass 3 — simplified format without year: [[Swedish Open]] ... Singles
     for m in _SIMPLE_TOURNAMENT_RE.finditer(wikitext):
@@ -336,7 +347,7 @@ def parse_season_schedule(wikitext: str, year: int, gender: str) -> list[Discove
         if singles_page in seen:
             continue
         ctx = wikitext[m.start(): m.start() + 700]
-        add(singles_page, m.start(), ctx, display_name=tournament_name)
+        add(singles_page, m.start(), ctx, display_name=tournament_name, is_guess=True)
 
     # Pass 4 — no-year piped format: [[Swiss Open (tennis)|Swiss Open]] at cell start
     for m in _NOYR_PIPED_RE.finditer(wikitext):
@@ -354,9 +365,47 @@ def parse_season_schedule(wikitext: str, year: int, gender: str) -> list[Discove
         if singles_page in seen:
             continue
         ctx = wikitext[m.start(): m.start() + 700]
-        add(singles_page, m.start(), ctx, display_name=display)
+        add(singles_page, m.start(), ctx, display_name=display, is_guess=True)
 
     return sorted(results, key=lambda t: t.sort_key)
+
+
+# ---------------------------------------------------------------------------
+# Guessed-title suffix adjustment
+# ---------------------------------------------------------------------------
+
+def adjust_guessed_titles(
+    discovered: list[DiscoveredTournament],
+    other_gender_bases: set[str],
+) -> None:
+    """
+    Fix the suffix of constructed (guessed) titles in place.
+
+    Wikipedia's convention, verified against every resolved draw in our DB
+    (68/71 predicted correctly): combined events — where both tours share one
+    base article — use '– Men's singles'/'– Women's singles'; single-tour
+    events use plain '– Singles'. Passes 2–4 always construct the gendered
+    form, so rewrite to '– Singles' when the other tour has no event with the
+    same base page. The rare exceptions (an article shared with a Challenger/
+    WTA 125 edition we don't track, e.g. Swedish Open) are covered by the
+    variant-aware scraper fallback and EventStream subscriptions.
+
+    Explicit Pass-1 titles are never touched.
+    """
+    from app.services.scraper import strip_singles_suffix
+
+    for d in discovered:
+        if not d.title_is_guess:
+            continue
+        base = strip_singles_suffix(d.wiki_page_title)
+        if base not in other_gender_bases:
+            d.wiki_page_title = f"{base} – Singles"
+
+
+def title_bases(titles) -> set[str]:
+    """Base page titles (singles suffix stripped) for a collection of titles."""
+    from app.services.scraper import strip_singles_suffix
+    return {strip_singles_suffix(t) for t in titles}
 
 
 # ---------------------------------------------------------------------------
@@ -368,4 +417,6 @@ async def discover_tournaments(year: int) -> list[DiscoveredTournament]:
     wta_wt, _ = await fetch_wikitext(f"{year} WTA Tour")
     atp = parse_season_schedule(atp_wt, year, "M")
     wta = parse_season_schedule(wta_wt, year, "F")
+    adjust_guessed_titles(atp, title_bases(t.wiki_page_title for t in wta))
+    adjust_guessed_titles(wta, title_bases(t.wiki_page_title for t in atp))
     return sorted(atp + wta, key=lambda t: t.sort_key)

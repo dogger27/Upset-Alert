@@ -228,12 +228,22 @@ class EventStreamListener:
         from sqlalchemy import select
 
         try:
+            from app.services.scraper import singles_title_variants
             async with AsyncSessionLocal() as db:
                 result = await db.execute(
-                    select(Draw).where(Draw.wiki_page_title == title)
+                    select(Draw).where(
+                        Draw.wiki_page_title.in_(singles_title_variants(title))
+                    )
                 )
-                tournament = result.scalar_one_or_none()
-                if tournament:
+                rows = result.scalars().all()
+                # Exact-title matches always scrape. Variant matches only apply
+                # to unresolved records — we subscribe all title variants for
+                # those, and the stored title may be the wrong variant. A
+                # resolved record's title is ground truth; an edit on a
+                # different variant of it belongs to some other page.
+                for tournament in rows:
+                    if tournament.wiki_page_title != title and tournament.wiki_page_id is not None:
+                        continue
                     logger.info("Scraping draw for %s %s", tournament.year, tournament.name)
                     await _do_scrape(tournament, db, force_refresh=True)
                     await db.commit()
