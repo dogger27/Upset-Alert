@@ -818,25 +818,36 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
     if parsed.wiki_page_id and parsed.wiki_page_id != tournament.wiki_page_id:
         # Either first-time resolution (was None) or a correction from the scraper's
         # wrong-page retry (stored ID pointed to e.g. the general event page).
-        # Guard against UNIQUE violation if another record already claims this page_id.
         clash = await db.execute(
             select(Draw.id).where(
                 Draw.wiki_page_id == parsed.wiki_page_id,
                 Draw.id != tournament.id,
             )
         )
-        if clash.scalar_one_or_none() is None:
-            if tournament.wiki_page_id is not None:
-                logger.warning(
-                    "Correcting wiki_page_id for %s: %s → %s (wrong page was stored)",
-                    tournament.wiki_page_title, tournament.wiki_page_id, parsed.wiki_page_id,
-                )
-            tournament.wiki_page_id = parsed.wiki_page_id
-        else:
-            logger.debug(
-                "wiki_page_id %s already claimed by another record; skipping for %s",
-                parsed.wiki_page_id, tournament.wiki_page_title,
+        clash_id = clash.scalar_one_or_none()
+        if clash_id is not None:
+            # The fetched page IS another record's page (page_ids are unique) —
+            # applying its draw data here would pollute this tournament with
+            # another event's players/matches (this happened: Hamburg (F)
+            # ingested the men's May draw via a title-variant probe). Abort.
+            from app.services.system_log import app_log
+            await app_log(
+                "warning", "scraper",
+                f"Scrape for {tournament.year} {tournament.name} ({tournament.gender}) "
+                f"resolved to page_id {parsed.wiki_page_id}, which belongs to "
+                f"tournament {clash_id} — not applying foreign page data",
+                {"tournament_id": tournament.id, "tournament_name": tournament.name,
+                 "wiki_title": tournament.wiki_page_title,
+                 "resolved_page_id": parsed.wiki_page_id, "owner_tournament_id": clash_id},
+                dedup_key=f"foreign_page_{tournament.id}", dedup_hours=6.0,
             )
+            return
+        if tournament.wiki_page_id is not None:
+            logger.warning(
+                "Correcting wiki_page_id for %s: %s → %s (wrong page was stored)",
+                tournament.wiki_page_title, tournament.wiki_page_id, parsed.wiki_page_id,
+            )
+        tournament.wiki_page_id = parsed.wiki_page_id
     if parsed.resolved_title:
         # Guard against UNIQUE violation if another record already claims this resolved title.
         # This can happen when the discovery service uses a slightly different title variant
