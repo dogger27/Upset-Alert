@@ -345,6 +345,18 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
 
   const resolved = resolveCombinedPlayers(matches, picks)
 
+  // Round each player was actually eliminated in (real results only) — a pick
+  // of that player as the winner of that round or any later one is a dead
+  // pick, shown wrong immediately rather than waiting for the picked match
+  // itself to be played (mirrors BracketView's lossRound handling).
+  const lossRound = {}
+  for (const m of matches) {
+    const wid = m.winner?.id
+    if (wid == null || m.is_bye) continue
+    const loserId = m.player1?.id === wid ? m.player2?.id : m.player1?.id
+    if (loserId != null) lossRound[loserId] = m.round_number
+  }
+
   const totalCols = N + 1
   const size = Math.min(windowSize, totalCols)
   const maxStart = Math.max(0, totalCols - size)
@@ -456,7 +468,12 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
     const displayId = pickId ?? realId
     const player = displayId != null ? playerById[displayId] : null
     const correct = pickId != null && realId != null && pickId === realId
-    const wrong = pickId != null && realId != null && pickId !== realId
+    // Wrong when the real winner disagrees — or when the picked player has
+    // already been eliminated in this round or earlier (dead pick), even
+    // though this match itself hasn't been played yet.
+    const deadPick = pickId != null && lossRound[pickId] != null
+      && lossRound[pickId] <= match.round_number
+    const wrong = pickId != null && ((realId != null && pickId !== realId) || deadPick)
     const realPlayer = realId != null ? playerById[realId] : null
     const score = match.is_bye ? null : (match.live_scores ? liveScoreNodes(match.live_scores) : scoreNodes(match.scores))
 
