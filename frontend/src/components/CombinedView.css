@@ -176,6 +176,9 @@
   font-weight: 600;
   color: var(--green-600, #2f7a4d);
 }
+.cv-live-tag--suspended {
+  color: #b45309;
+}
 .cv-real-winner {
   position: absolute;
   left: 7px;

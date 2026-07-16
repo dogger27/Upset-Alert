@@ -249,6 +249,7 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
   const p2DeadPick = mode === 'picks' && p2id != null && lossRound[p2id] != null && lossRound[p2id] < match.round_number
 
   const isLive = match.live_scores != null
+  const isSuspended = match.live_scores?.[4] === 'suspended'
   // Live scores take priority; final scores shown only in live mode
   const scores = isLive ? match.live_scores : match.scores
   const p1Scores = scores?.[0] ?? null
@@ -325,7 +326,11 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
       })}
       style={style}
     >
-      {isLive && <span className="in-progress-badge">In Progress</span>}
+      {isLive && !match.winner && (
+        <span className={`in-progress-badge${isSuspended ? ' in-progress-badge--suspended' : ''}`}>
+          {isSuspended ? 'Suspended' : 'In Progress'}
+        </span>
+      )}
       {isUpsetPick && (
         <span
           ref={bellRef}
