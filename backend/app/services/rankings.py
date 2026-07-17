@@ -322,6 +322,37 @@ async def _scrape_te(gender: str, week_date: Optional[date] = None, log_errors: 
 # DB-backed ranking management
 # ---------------------------------------------------------------------------
 
+async def _stamp_slug(db: AsyncSession, tp, slug: str) -> bool:
+    """
+    Assign a discovered TE slug to a player — unless another row already owns it.
+    A slug identifies one human on TE, so two rows sharing it are duplicate rows
+    for the same player, which breaks slug-keyed lookups (/h2h/form raised
+    MultipleResultsFound on exactly this). Refuse the stamp and surface it in
+    system_logs so the duplicate pair can be merged instead.
+    Returns True if the slug was assigned.
+    """
+    from app.models.rankings import TePlayer
+    from app.services.system_log import app_log
+
+    owner = (
+        await db.execute(
+            select(TePlayer).where(TePlayer.te_slug == slug, TePlayer.id != tp.id)
+        )
+    ).scalars().first()
+    if owner is None:
+        tp.te_slug = slug
+        return True
+    await app_log(
+        "warning", "rankings",
+        f"TE slug {slug} already owned by te_player id={owner.id} ({owner.name_raw}) — "
+        f"not stamping on id={tp.id} ({tp.name_raw}); duplicate rows need merging",
+        {"slug": slug, "owner_id": owner.id, "owner_name": owner.name_raw,
+         "player_id": tp.id, "player_name": tp.name_raw},
+        dedup_key=f"dup_slug_{slug}", dedup_hours=24,
+    )
+    return False
+
+
 async def ensure_te_week(gender: str, week_date: date, db: AsyncSession, log_errors: bool = True) -> bool:
     """
     Ensure te_rankings_snapshots has data for (gender, week_date).
@@ -361,6 +392,11 @@ async def ensure_te_week(gender: str, week_date: date, db: AsyncSession, log_err
     existing_by_ts: dict[frozenset, TePlayer] = {
         frozenset(p.name_norm.split()): p for p in all_existing
     }
+    # Slug index catches TE spelling changes that defeat both name indexes
+    # ("Maria Tatiana" → "Maria Tatjana"): same human, same slug, new name.
+    existing_by_slug: dict[str, TePlayer] = {
+        p.te_slug: p for p in all_existing if p.te_slug
+    }
 
     for name_raw, rank, slug, points in raw_rows:
         tp = existing_by_raw.get(name_raw)
@@ -373,23 +409,46 @@ async def ensure_te_week(gender: str, week_date: date, db: AsyncSession, log_err
                 tp.name_raw = name_raw
                 tp.name_norm = _norm(name_raw)
                 if slug and tp.te_slug is None:
-                    tp.te_slug = slug
+                    await _stamp_slug(db, tp, slug)
+            elif slug and slug in existing_by_slug:
+                # TE renamed this player: the slug already belongs to an existing
+                # row under a different spelling. Rename that row in place —
+                # creating a new row would leave two players sharing one slug.
+                from app.services.system_log import app_log
+                tp = existing_by_slug[slug]
+                old_name = tp.name_raw
+                tp.name_raw = name_raw
+                tp.name_norm = _norm(name_raw)
+                await app_log(
+                    "warning", "rankings",
+                    f"TE player renamed: {old_name!r} → {name_raw!r} (slug {slug})",
+                    {"te_player_id": tp.id, "old_name": old_name,
+                     "new_name": name_raw, "te_slug": slug},
+                )
             else:
                 tp = TePlayer(gender=gender, name_raw=name_raw, name_norm=_norm(name_raw), te_slug=slug)
                 db.add(tp)
                 await db.flush()
             existing_by_raw[name_raw] = tp
             existing_by_ts[frozenset(_norm(name_raw).split())] = tp
+            if tp.te_slug:
+                existing_by_slug[tp.te_slug] = tp
         elif slug and tp.te_slug != slug:
             # Slug changed — TE now shows a different (typically younger) player under
-            # this name. Update to the new slug and clear profile data for re-fetch.
-            logger.info("te_player id=%d %r: slug updated %s → %s (younger player)", tp.id, name_raw, tp.te_slug, slug)
-            tp.te_slug = slug
-            tp.name_display = None
-            tp.first_name = None
-            tp.last_name = None
-            tp.date_of_birth = None
-            tp.nationality = None
+            # this name. Update to the new slug and clear profile data for re-fetch —
+            # unless another row already owns the new slug (that would create a
+            # duplicate-slug pair; _stamp_slug refuses and logs it instead).
+            old_slug = tp.te_slug
+            if await _stamp_slug(db, tp, slug):
+                logger.info("te_player id=%d %r: slug updated %s → %s (younger player)", tp.id, name_raw, old_slug, slug)
+                tp.name_display = None
+                tp.first_name = None
+                tp.last_name = None
+                tp.date_of_birth = None
+                tp.nationality = None
+                existing_by_slug[slug] = tp
+                if old_slug and existing_by_slug.get(old_slug) is tp:
+                    existing_by_slug.pop(old_slug)
         elif slug and tp.te_slug is None:
             tp.te_slug = slug
 
@@ -482,6 +541,27 @@ async def assign_rankings(
                     {"player_name": player.name, "gender": gender, "te_slug": slug},
                     dedup_key=f"match_fail_{player.name.lower()}", dedup_hours=24,
                 )
+                if slug:
+                    owner = (
+                        await db.execute(select(TePlayer).where(TePlayer.te_slug == slug))
+                    ).scalars().first()
+                    if owner is not None:
+                        # The probed slug belongs to a player we already track under a
+                        # different spelling — link to that row instead of creating a
+                        # second te_players row with the same slug.
+                        player.te_player_id = owner.id
+                        player.te_slug = slug
+                        player.ranking = rank_by_te_id.get(owner.id)
+                        await app_log(
+                            "info", "rankings",
+                            f"Probed slug {slug} belongs to existing te_player id={owner.id} "
+                            f"({owner.name_raw}) — linked {player.name!r} to it",
+                            {"player_name": player.name, "slug": slug, "owner_id": owner.id},
+                            dedup_key=f"slug_relink_{slug}", dedup_hours=24,
+                        )
+                        te_index.setdefault(frozenset(_norm(player.name).split()), []).append(owner.id)
+                        id_to_slug[owner.id] = slug
+                        continue
                 new_tp = TePlayer(
                     gender=gender,
                     name_raw=player.name,
@@ -865,7 +945,7 @@ async def prefetch_dob_for_draw(tournament_id: int) -> None:
             search_name = tp.name_display or tp.name_raw
             slug, name_display, dob, first_name, last_name, nationality = await _find_te_player(search_name, tp.gender)
             if slug:
-                tp.te_slug = slug
+                await _stamp_slug(db, tp, slug)
             if name_display:
                 tp.name_display = name_display
             if dob and tp.date_of_birth is None:
@@ -948,7 +1028,7 @@ async def backfill_all_dob() -> dict:
                         search_name = tp.name_raw
                         slug, nd, dob2, fn, ln, nat2 = await _find_te_player(search_name, tp.gender)
                         if slug:
-                            tp.te_slug = slug
+                            await _stamp_slug(db, tp, slug)
                         if nd:
                             tp.name_display = nd
                             changed = True
@@ -989,8 +1069,7 @@ async def backfill_all_dob() -> dict:
                 search_name = tp.name_display or tp.name_raw
                 slug, name_display, dob, first_name, last_name, nationality = await _find_te_player(search_name, tp.gender)
                 changed = False
-                if slug:
-                    tp.te_slug = slug
+                if slug and await _stamp_slug(db, tp, slug):
                     slug_found += 1
                     changed = True
                 if name_display and tp.name_display is None:
