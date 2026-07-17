@@ -956,6 +956,20 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
 
     # If final match has a winner, tournament is completed regardless of current date
     if parsed.has_final_winner:
+        if tournament.status != "completed" and tournament.start_date \
+                and (tournament.start_date - date.today()).days > 30:
+            # A finished bracket for an event supposedly >30 days away means the
+            # stored dates point at the wrong edition (Dec/Jan season openers were
+            # once stamped a year forward) — surface the contradiction.
+            from app.services.system_log import app_log
+            await app_log(
+                "warning", "scraper",
+                f"{tournament.name} {tournament.year} completed but start_date "
+                f"{tournament.start_date} is >30 days in the future — dates likely wrong",
+                {"draw_id": tournament.id, "start_date": str(tournament.start_date),
+                 "wiki_page_title": tournament.wiki_page_title},
+                dedup_key=f"future_completed_{tournament.id}", dedup_hours=168,
+            )
         tournament.status = "completed"
         logger.info("Tournament %s marked as completed (final match has winner)", tournament.wiki_page_title)
 

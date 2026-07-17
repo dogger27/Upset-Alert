@@ -199,25 +199,35 @@ async def _apply_update(
 ) -> bool:
     """Update *existing* from *discovered*. Returns True if any field changed."""
     changed = False
-    for attr, val in [
+    # Season-page dates are rough week labels (a rowspan cell can cover several
+    # events — the "Dec 29 / Jan 5" opener week spans United Cup + Brisbane +
+    # Auckland). The scraper refines dates from the tournament infobox and
+    # freezes them once active/completed (see tournaments.py), so discovery
+    # must not clobber refined dates on frozen draws.
+    dates_frozen = existing.status in ("active", "completed")
+    fields = [
         ("wiki_page_title", discovered.wiki_page_title),
         ("name", discovered.name),
         ("surface", discovered.surface),
         ("category", discovered.category),
         ("draw_size", discovered.draw_size),
         ("num_rounds", _num_rounds(discovered.draw_size)),
-        ("start_date", discovered.start_date),
-        ("week", tennis_week(discovered.start_date, existing.year) if discovered.start_date else None),
-        ("end_date", discovered.end_date),
         ("city", discovered.city),
         ("country", discovered.country),
-    ]:
+    ]
+    if not dates_frozen:
+        fields += [
+            ("start_date", discovered.start_date),
+            ("week", tennis_week(discovered.start_date, existing.year) if discovered.start_date else None),
+            ("end_date", discovered.end_date),
+        ]
+    for attr, val in fields:
         if val is not None and getattr(existing, attr) != val:
             setattr(existing, attr, val)
             changed = True
 
     # Recalculate estimated draw release dates using category-specific history
-    if discovered.start_date and discovered.category:
+    if not dates_frozen and discovered.start_date and discovered.category:
         direct, qual = await calculate_draw_release_dates(
             discovered.start_date, discovered.category, discovered.gender, db=db
         )
@@ -229,15 +239,16 @@ async def _apply_update(
             changed = True
 
     # Recompute ranking weeks whenever category or start_date may have changed
-    erw = compute_entry_ranking_week(existing.start_date, existing.category)
-    if erw != existing.entry_ranking_week:
-        existing.entry_ranking_week = erw
-        changed = True
+    if not dates_frozen:
+        erw = compute_entry_ranking_week(existing.start_date, existing.category)
+        if erw != existing.entry_ranking_week:
+            existing.entry_ranking_week = erw
+            changed = True
 
-    srw = compute_seed_ranking_week(existing.start_date, existing.category)
-    if srw != existing.seed_ranking_week:
-        existing.seed_ranking_week = srw
-        changed = True
+        srw = compute_seed_ranking_week(existing.start_date, existing.category)
+        if srw != existing.seed_ranking_week:
+            existing.seed_ranking_week = srw
+            changed = True
 
     # Assign variant_id if missing or if draw_size/category just changed
     if existing.variant_id is None:

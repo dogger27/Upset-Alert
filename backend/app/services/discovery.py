@@ -106,8 +106,15 @@ def _parse_date_pair(text: str, year: int) -> tuple[Optional[date], Optional[dat
         mon = _MONTHS.get(m[:3].lower())
         try:
             ed = date(year, mon, int(d)) if mon else None
-            if sd and ed and ed < sd:               # year wrap (Dec → Jan)
-                ed = date(year + 1, mon, int(d))
+            if sd and ed and ed < sd:
+                # Dec → Jan wrap: the season-opening week. A season page's year
+                # covers Jan–Nov, so a December date in its calendar belongs to
+                # late December of the PREVIOUS year (e.g. the "Dec 29 / Jan 5"
+                # week cell on the 2026 WTA page = Dec 29 2025 – Jan 5 2026).
+                # The start moves back a year; the end already lies in `year`.
+                # Single-month December events (Next Gen Finals) never wrap and
+                # stay in the season year.
+                sd = date(year - 1, sd.month, sd.day)
         except ValueError:
             pass
     return sd, ed
