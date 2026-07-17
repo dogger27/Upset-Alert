@@ -349,11 +349,15 @@ async def get_player_form(
     from app.models.rankings import TePlayer
     from app.models.tournament import Draw, DrawEntry, Match
 
-    te_player = (
+    # A slug can map to more than one te_players row (TE spelling variants create
+    # duplicate rows for the same human, e.g. "Maria Tatiana"/"Maria Tatjana") —
+    # treat all matching ids as one player rather than erroring on the duplicate.
+    te_rows = (
         await db.execute(select(TePlayer).where(TePlayer.te_slug == te_slug))
-    ).scalar_one_or_none()
-    if not te_player:
+    ).scalars().all()
+    if not te_rows:
         return []
+    te_ids = {tp.id for tp in te_rows}
 
     query = (
         select(Match, Draw)
@@ -364,7 +368,7 @@ async def get_player_form(
         )
         .options(selectinload(Match.player1), selectinload(Match.player2))
         .where(
-            DrawEntry.te_player_id == te_player.id,
+            DrawEntry.te_player_id.in_(te_ids),
             Match.status == "completed",
             Match.is_bye == False,
         )
@@ -399,7 +403,7 @@ async def get_player_form(
 
     form = []
     for match, draw in rows:
-        is_player1 = match.player1 is not None and match.player1.te_player_id == te_player.id
+        is_player1 = match.player1 is not None and match.player1.te_player_id in te_ids
         own = match.player1 if is_player1 else match.player2
         opponent = match.player2 if is_player1 else match.player1
         if own is None or opponent is None:
