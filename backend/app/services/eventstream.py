@@ -1,12 +1,16 @@
 """
 Real-time Wikimedia EventStreams listener for tournament draw updates.
 
-Two-tier subscription:
+Two-tier subscription bookkeeping, but a single match path in practice:
 - ID subscriptions  (page_id → title): for pages that already exist on Wikipedia.
-  Matched against event["pageid"] — immune to page renames.
+  Would be matched against event["pageid"], but Wikimedia's recentchange stream
+  doesn't actually include a page-id field on edit/new events — so this never
+  fires. Kept as a page_id lookup for other purposes (rename detection).
 - Title subscriptions (title): for pages not yet created (wiki_page_id is NULL).
-  Matched against event["title"] as a fallback; promoted to ID subscription the
-  moment the page is created and we learn its page_id.
+  Matched against event["title"]; promoted to the ID map once the page is
+  created and we learn its page_id, but `_handle_event` still matches on title
+  via `self.subscriptions` (the union of both maps) since that's the only field
+  the stream reliably provides.
 """
 
 import asyncio
@@ -187,6 +191,12 @@ class EventStreamListener:
         logger.debug("enwiki %s pageid=%s title=%r", action, page_id, title)
 
         # ── Match by page ID (reliable, immune to renames) ──────────────────
+        # NOTE: Wikimedia's mediawiki.recentchange stream does not actually carry
+        # a page-id field on edit/new events (verified against the live schema —
+        # only "id" (the RC row id), "revision": {old,new}, "title" are present).
+        # This branch is dead in practice; kept in case that ever changes. Title
+        # is therefore the only match path that fires, so it must cover EVERY
+        # subscribed title below — not just the not-yet-resolved ones.
         if page_id and page_id in self._id_subs:
             matched_title = self._id_subs[page_id]
 
@@ -201,9 +211,10 @@ class EventStreamListener:
             asyncio.create_task(self._scrape_tournament(matched_title))
             return
 
-        # ── Match by title (pages not yet created / season pages we subscribed
-        #    by title because we don't cache their page IDs) ──────────────────
-        if title and title in self._title_subs:
+        # ── Match by title — covers ALL subscribed titles, both not-yet-created
+        #    pages (_title_subs) and pages whose page_id is already known
+        #    (_id_subs), since the ID branch above never actually matches.
+        if title and title in self.subscriptions:
             if _SEASON_PAGE_RE.match(title):
                 logger.info("Season page edited: %s — refreshing tournament titles", title)
                 if self._on_season_page_edit:
