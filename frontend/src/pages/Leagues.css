@@ -177,9 +177,9 @@
 /* Mobile: the true-center 3-column grid only works when the three columns'
    combined natural width fits the row — on a phone it doesn't. Rather than
    fight for a single shared line with everything at full size, shrink
-   "LEAGUES" + the league name enough that they comfortably share row 1
-   (with the dropdown), and let Create/Join (still stacked vertically) wrap
-   to their own row below, shrunk down from their desktop-sized padding. */
+   "LEAGUES" + the league name enough that they and Create/Join (still
+   stacked vertically into a narrow column, shrunk from desktop-sized
+   padding) all fit together on one row. */
 @media (max-width: 640px) {
   .leagues-page-top {
     display: flex;
@@ -203,8 +203,14 @@
     max-width: 38vw;
   }
 
+  /* Stays on row 1 (with "LEAGUES"/name/dropdown) instead of wrapping to its
+     own row — margin-left:auto pushes it to the far right of that same
+     row. Create/Join are stacked vertically into a narrow column, so this
+     comfortably fits alongside the rest even at phone widths; flex-wrap on
+     the parent is still there as a fallback if it ever doesn't. */
   .leagues-top-right {
-    flex: 1 1 100%;
+    flex: 0 0 auto;
+    margin-left: auto;
     justify-content: flex-end;
   }
   /* Vertical stack (base .leagues-btn-stack direction) — just tighten the
