@@ -457,61 +457,56 @@
   white-space: nowrap;
 }
 
-@keyframes default-picks-banner-in {
-  from { opacity: 0; transform: translateY(-6px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-.default-picks-banner {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-3, 12px);
-  margin: 0 1.5rem var(--space-4, 16px);
-  padding: var(--space-4, 16px) var(--space-5, 20px);
-  background: var(--green-50, #ecfaf3);
-  border: 1px solid var(--green-200, #a7e0c4);
-  border-left: 4px solid var(--green-600, #2d6a4f);
-  border-radius: var(--radius, 10px);
-  box-shadow: var(--shadow-sm, 0 1px 3px rgba(15,27,22,0.10));
-  animation: default-picks-banner-in 0.25s ease-out;
-}
-
-.default-picks-banner-icon {
-  flex: 0 0 auto;
+/* Blocking, centred modal (not a dismissible banner) — deliberately has no
+   backdrop-click-to-close and no [x]: the user must read it and click the
+   button, so a first-time default-picks notice can't be missed the way an
+   inline banner could. */
+.default-picks-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  z-index: 1000;
+  animation: fade-in 0.15s ease;
+}
+
+.default-picks-modal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  background: #fff;
+  border-radius: var(--radius-md, 12px);
+  padding: 2rem 2.25rem;
+  max-width: 400px;
+  width: calc(100% - 2rem);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.18);
+  animation: modal-drop 0.18s ease;
+}
+
+.default-picks-modal-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   background: var(--green-600, #2d6a4f);
   color: #fff;
-  font-size: 0.8rem;
+  font-size: 1.5rem;
   font-weight: 700;
   line-height: 1;
+  margin-bottom: 1rem;
 }
 
-.default-picks-banner-text {
-  flex: 1;
-  margin: 0;
-  padding-top: 2px;
-  font-size: 0.92rem;
-  line-height: 1.5;
+.default-picks-modal-text {
+  margin: 0 0 1.5rem;
+  font-size: 1rem;
+  line-height: 1.55;
   color: var(--green-800, #1b4332);
 }
-
-.default-picks-banner-close {
-  flex: 0 0 auto;
-  background: none;
-  border: none;
-  font-size: 1.25rem;
-  line-height: 1;
-  color: var(--green-600, #2d6a4f);
-  cursor: pointer;
-  padding: 0 0.15rem;
-}
-.default-picks-banner-close:hover { color: var(--green-800, #1b4332); }
 
 .lock-badge {
   font-size: 0.82rem;
