@@ -321,7 +321,6 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
   })
 
   const entries = rawData?.entries ?? []
-  const completedMatchesCount = rawData?.completed_matches_count ?? 0
   const roundsWithMatches = rawData?.rounds_with_matches ?? []
   const completedRoundNumsFromServer = rawData?.completed_round_nums ?? null
   const matchesTimeline = rawData?.matches_timeline ?? []
@@ -334,7 +333,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
   // Recompute entries/rounds at the current scrub position
   const displayData = useMemo(() => {
     if (!isScrubbing || matchesTimeline.length === 0) {
-      return { entries, roundsWithMatches, completedMatchesCount }
+      return { entries, roundsWithMatches }
     }
     const slice = matchesTimeline.slice(0, effectiveScrubPos)
     const sliceRounds = [...new Set(slice.map(m => m.round_number))].sort((a, b) => a - b)
@@ -342,16 +341,14 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
       const preds = userPredictions[String(e.user_id)] ?? {}
       let total = 0
       const byRound = {}
-      let correct = 0
       for (const m of slice) {
         if (String(preds[String(m.id)]) === String(m.winner_id)) {
           byRound[m.round_number] = (byRound[m.round_number] ?? 0) + m.points
           total += m.points
-          correct++
         }
       }
       const round_points = Array.from({ length: e.round_points.length }, (_, i) => byRound[i + 1] ?? 0)
-      return { ...e, round_points, total, correct_count: correct }
+      return { ...e, round_points, total }
     })
     currentEntries.sort((a, b) => {
       if (b.total !== a.total) return b.total - a.total
@@ -361,12 +358,11 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
       }
       return 0
     })
-    return { entries: currentEntries, roundsWithMatches: sliceRounds, completedMatchesCount: slice.length }
-  }, [isScrubbing, effectiveScrubPos, matchesTimeline, entries, roundsWithMatches, completedMatchesCount, userPredictions])
+    return { entries: currentEntries, roundsWithMatches: sliceRounds }
+  }, [isScrubbing, effectiveScrubPos, matchesTimeline, entries, roundsWithMatches, userPredictions])
 
   const dispEntries = displayData.entries
   const dispRoundsWithMatches = displayData.roundsWithMatches
-  const dispCompletedCount = displayData.completedMatchesCount
 
   const numRounds = entries.length > 0 ? entries[0].round_points.length : (t.num_rounds ?? ROUND_COLORS.length)
   // Scale and column structure always reflect the full (server) state so bars grow as you scrub right
@@ -481,9 +477,6 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
               ))}
             </div>
             <span className="lt-progress-total lt-progress-col-header">Score</span>
-            {completedMatchesCount > 0 && (
-              <span className="lt-progress-correct lt-progress-col-header">Correct</span>
-            )}
           </div>
           <div
             className="lt-progress-rows lt-progress-rows--race"
@@ -543,11 +536,6 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                   })}
                 </div>
                 <span className="lt-progress-total">{entry.total} pts</span>
-                {completedMatchesCount > 0 && (
-                  <span className="lt-progress-correct">
-                    {entry.correct_count}/{dispCompletedCount}
-                  </span>
-                )}
               </div>
             ))}
           </div>
