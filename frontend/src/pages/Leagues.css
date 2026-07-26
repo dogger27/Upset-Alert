@@ -16,19 +16,21 @@
   margin-bottom: 1.5rem;
 }
 
-/* Title on top, Invite/Settings icons in a row directly beneath it — their
-   left edges line up with the "LEAGUES" title (align-items: flex-start). */
 .leagues-title-col {
   display: flex;
-  flex-direction: column;
   align-items: flex-start;
-  gap: 0.6rem;
   min-width: 0;
   justify-self: start;
 }
+/* Its own row below leagues-page-top (see Leagues.jsx) rather than nested
+   under .leagues-title-col — nesting it there made that column as wide as
+   these buttons and pushed the league name far to the right of "LEAGUES"
+   on narrow screens, since the flex/grid gap is measured from the
+   column's edge, not the text's own edge. */
 .leagues-actions-under {
   display: flex;
   gap: 0.5rem;
+  margin-bottom: 1.5rem;
 }
 
 .leagues-page-title {
@@ -180,13 +182,9 @@
    as they can be (1.6rem) while still fitting alongside the dropdown and
    the narrow, vertically-stacked Create/Join column without wrapping. */
 @media (max-width: 640px) {
-  /* align-items:flex-start (not center): for an owned/admin league,
-     .leagues-title-col also holds the Invite/Settings icon row beneath
-     "LEAGUES", making that column two lines tall. Centering everything
-     against that taller column shoved the league name down to align with
-     the icon row instead of "LEAGUES" — looked like the row had wrapped.
-     Top-aligning keeps "LEAGUES"/name/dropdown/Create-Join on one visual
-     line regardless of what hangs below the title column. */
+  /* align-items:flex-start rather than center: keeps "LEAGUES"/name/
+     dropdown/Create-Join anchored to the row's top edge, matching
+     baselines, regardless of any height difference between items. */
   .leagues-page-top {
     display: flex;
     flex-wrap: wrap;
@@ -195,7 +193,6 @@
   }
   .leagues-title-col {
     flex: 0 0 auto;
-    gap: 0.3rem;
   }
   .leagues-page-title { font-size: 1.6rem; }
   .leagues-name-center {
