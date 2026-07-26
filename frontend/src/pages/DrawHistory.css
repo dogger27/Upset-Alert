@@ -105,6 +105,29 @@
   white-space: nowrap;
 }
 
+.dh-th-sortable {
+  cursor: pointer;
+  user-select: none;
+}
+.dh-th-sortable:hover { color: var(--green-600); }
+.dh-th-sortable:focus-visible { outline: 2px solid var(--green-600); outline-offset: -2px; }
+
+.dh-th-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.dh-sort-icon {
+  font-size: 0.6rem;
+  line-height: 1;
+  color: var(--green-600);
+}
+.dh-sort-icon--idle {
+  color: #bbb;
+  opacity: 0.8;
+}
+
 .dh-row:not(:last-child) .dh-cell {
   border-bottom: 1px solid #f0f0f0;
 }
