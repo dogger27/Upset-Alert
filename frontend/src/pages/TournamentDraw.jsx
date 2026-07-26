@@ -1002,19 +1002,20 @@ export default function TournamentDraw() {
       )}
 
       {showDefaultPicksBanner && (
-        <div className="default-picks-banner">
-          <span className="default-picks-banner-icon">✓</span>
-          <p className="default-picks-banner-text">
-            Your default predictions have been made, using the higher ranked player for the win.
-            Please select your <strong>UPSETS</strong> now!
-          </p>
-          <button
-            className="default-picks-banner-close"
-            onClick={() => setShowDefaultPicksBanner(false)}
-            aria-label="Dismiss"
-          >
-            ×
-          </button>
+        <div className="default-picks-modal-overlay">
+          <div className="default-picks-modal">
+            <span className="default-picks-modal-icon">✓</span>
+            <p className="default-picks-modal-text">
+              Your default predictions have been made, using the higher ranked player for the win.
+              Please select your <strong>UPSETS</strong> now!
+            </p>
+            <button
+              className="btn-primary"
+              onClick={() => setShowDefaultPicksBanner(false)}
+            >
+              Got it
+            </button>
+          </div>
         </div>
       )}
 
