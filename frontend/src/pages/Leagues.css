@@ -178,9 +178,9 @@
 
 /* Mobile: the true-center 3-column grid only works when the three columns'
    combined natural width fits the row — on a phone it doesn't. Switch to a
-   single flex row instead, with "LEAGUES" + the league name sized as large
-   as they can be (1.6rem) while still fitting alongside the dropdown and
-   the narrow, vertically-stacked Create/Join column without wrapping. */
+   single flex row instead: "LEAGUES" + the league name sized down (1.3rem)
+   from their earlier, too-large 1.6rem so the name has more of its pixel
+   budget left for actual characters before it needs to ellipsis-truncate. */
 @media (max-width: 640px) {
   /* align-items:flex-start rather than center: keeps "LEAGUES"/name/
      dropdown/Create-Join anchored to the row's top edge, matching
@@ -194,7 +194,7 @@
   .leagues-title-col {
     flex: 0 0 auto;
   }
-  .leagues-page-title { font-size: 1.6rem; }
+  .leagues-page-title { font-size: 1.3rem; }
   .leagues-name-center {
     flex: 0 1 auto;
     justify-content: flex-start;
@@ -204,26 +204,28 @@
   /* This cap matters more than it looks like it should: flex-wrap decides
      which line an item goes on using each item's PRE-shrink hypothetical
      size, not its post-shrink size — so a long league name sitting at a
-     generous max-width (e.g. 34vw) can by itself make Create/Join's
-     hypothetical size not fit on row 1, wrapping them to their own row,
-     even though the name COULD have shrunk further to make room. A short
-     name like "Global" never hit that cap so this never showed up until a
-     longer name did. Kept tight so the name's own reserved space, plus
-     "LEAGUES" + dropdown + Create/Join, reliably fits regardless of how
-     long the actual league name is. */
+     generous max-width can by itself make Create/Join's hypothetical size
+     not fit on row 1, wrapping them to their own row, even though the name
+     COULD have shrunk further to make room. A short name like "Global"
+     never hit that cap so this never showed up until a longer name did.
+     Sized to leave enough room for "LEAGUES" + dropdown + Create/Join
+     (which now sits right after the dropdown, not pushed to the far right
+     — see .leagues-top-right below) regardless of how long the actual
+     league name is; smaller title/name font above means this can be a
+     bit more generous than before without re-breaking that. */
   .leagues-current-league {
-    font-size: 1.6rem;
-    max-width: 20vw;
+    font-size: 1.3rem;
+    max-width: 28vw;
   }
 
-  /* Stays on row 1 (with "LEAGUES"/name/dropdown) instead of wrapping to its
-     own row — margin-left:auto pushes it to the far right of that same
-     row. Create/Join are stacked vertically into a narrow column, so this
-     comfortably fits alongside the rest even at phone widths; flex-wrap on
-     the parent is still there as a fallback if it ever doesn't. */
+  /* Sits immediately after the dropdown in normal flow (no margin-left:auto)
+     so there's no dead gap between them — just the row's own 0.4rem gap.
+     Stays on row 1 instead of wrapping to its own row; Create/Join are
+     stacked vertically into a narrow column, so this comfortably fits
+     alongside the rest even at phone widths; flex-wrap on the parent is
+     still there as a fallback if it ever doesn't. */
   .leagues-top-right {
     flex: 0 0 auto;
-    margin-left: auto;
     justify-content: flex-end;
   }
   /* Vertical stack (base .leagues-btn-stack direction) — just tighten the
