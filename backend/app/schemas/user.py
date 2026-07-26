@@ -46,6 +46,7 @@ class UserAdminOut(BaseModel):
     display_name: str
     email_verified: bool
     is_admin: bool
+    is_bot: bool = False
     created_at: Optional[str] = None
 
     model_config = {"from_attributes": True}

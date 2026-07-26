@@ -498,6 +498,25 @@ async def _sync_subscriptions() -> None:
     )
 
 
+async def _sync_highest_rank_bot() -> None:
+    """Keep the "Highest_Rank" baseline user's picks current for every draw
+    that hasn't locked yet. Idempotent full-bracket recompute — see
+    highest_rank_bot.py docstring for why a one-shot-before-lock simulation
+    (rather than re-simulating after each round) is the correct baseline."""
+    from app.services import highest_rank_bot
+    from app.services.system_log import app_log
+
+    try:
+        async with AsyncSessionLocal() as db:
+            synced = await highest_rank_bot.sync_open_draws(db)
+        if synced:
+            logger.info("Highest_Rank bot: synced picks for %d draw(s)", synced)
+    except Exception as exc:
+        logger.error("Highest_Rank bot sync failed: %s", exc)
+        await app_log("error", "highest_rank_bot", f"Sync job failed: {exc}",
+                      {"error": str(exc)}, dedup_key="highest_rank_bot_fail", dedup_hours=6)
+
+
 def start_scheduler() -> None:
     scheduler.add_job(
         _auto_discover_tournaments,
@@ -541,6 +560,15 @@ def start_scheduler() -> None:
         id="check_draw_health",
         misfire_grace_time=600,
     )
+    # Keep the "Highest_Rank" baseline user's picks current as entries/rankings
+    # firm up. 10 min cadence matches the draw-release notify job.
+    scheduler.add_job(
+        _sync_highest_rank_bot,
+        "interval",
+        minutes=10,
+        id="sync_highest_rank_bot",
+        misfire_grace_time=300,
+    )
     scheduler.add_job(
         _refresh_weekly_rankings,
         "cron",
@@ -569,6 +597,7 @@ def start_scheduler() -> None:
     logger.info("Weekly rankings refresh scheduled (Sunday 6pm PDT)")
     logger.info("Draw-release notification check scheduled (every 10 min)")
     logger.info("Draw health check scheduled (every 60 min)")
+    logger.info("Highest_Rank bot sync scheduled (every 10 min)")
     asyncio.create_task(eventstream.start())
     asyncio.create_task(espn_monitor.start())
     # Subscribe immediately on startup so EventStreams catches edits from the
@@ -581,6 +610,8 @@ def start_scheduler() -> None:
     asyncio.create_task(_notify_pending_draw_releases())
     # Catch any tournaments that were already stuck before this restart.
     asyncio.create_task(_check_draw_health())
+    # Catch any draws whose entries/rankings firmed up while the server was down.
+    asyncio.create_task(_sync_highest_rank_bot())
     # Backfill DOB for any te_players missing it (no-op if all already set).
     from app.services.rankings import backfill_all_dob, refresh_elo_ratings
     asyncio.create_task(backfill_all_dob())
