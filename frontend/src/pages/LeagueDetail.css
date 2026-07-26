@@ -225,6 +225,14 @@ td.lmt-name { text-align: left; color: var(--text); max-width: 130px; display: f
 .league-tournaments-section { }
 .league-tournaments-section h2 { font-size: 1.1rem; margin-bottom: 0; }
 
+/* Open/Active merged tab: each status renders in its own card, stacked with
+   a visible gap so the two lists read as separated boxes. */
+.lt-status-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
 /* Mobile: the card's default 1.5rem side padding (from the shared .card
    rule) eats a lot of a phone's width before the competitor rows even
    start laying out. Trim it (and the per-tournament block's own side
