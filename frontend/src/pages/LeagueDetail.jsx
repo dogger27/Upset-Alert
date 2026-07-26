@@ -449,6 +449,12 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
         <>
           <div className="lt-competitors-label">Competitor</div>
           <div className="lt-open-content">
+            <div className="lt-open-notice">
+              <p className="lt-open-notice-main">Match Predictions are In Progress.</p>
+              {t.closing_time && (
+                <p className="lt-open-notice-lock">Prediction Lock time: <strong>{fmtLockTime(t.closing_time)}</strong></p>
+              )}
+            </div>
             <div className="lt-progress-rows">
               {entries.map((entry, entryIndex) => (
                 <div key={entry.user_id} className={`lt-progress-row lt-progress-row--open${entry.user_id === user?.id ? ' lt-progress-row--me' : ''}`}>
@@ -458,12 +464,6 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                   </a>
                 </div>
               ))}
-            </div>
-            <div className="lt-open-notice">
-              <p className="lt-open-notice-main">Match Predictions are In Progress.</p>
-              {t.closing_time && (
-                <p className="lt-open-notice-lock">Prediction Lock time: <strong>{fmtLockTime(t.closing_time)}</strong></p>
-              )}
             </div>
           </div>
         </>
