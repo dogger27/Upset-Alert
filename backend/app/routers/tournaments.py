@@ -676,6 +676,13 @@ async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
     t = await db.get(Draw, tournament_id)
     if not t:
         raise HTTPException(404, "Tournament not found")
+    # The raw `status` column only ever holds upcoming/active/completed — "open"
+    # is purely computed (see Draw.computed_status). list_tournaments() and
+    # global_draws() already apply this override before serializing; this
+    # single-draw endpoint never did, so the frontend's `tournament.status`
+    # was always the stale raw value here, silently breaking every
+    # status === 'open' check on the draw page (auto-init banner, DA/Qual badges).
+    t.status = t.computed_status
 
     players_result = await db.execute(
         select(DrawEntry).where(DrawEntry.draw_id == tournament_id).order_by(DrawEntry.bracket_position)
