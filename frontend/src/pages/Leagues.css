@@ -74,6 +74,16 @@
   color: transparent;
   cursor: pointer;
 }
+/* <option> inherits `color` from the <select> by default. macOS's native
+   popup ignores that inherited transparent and shows normal text, but
+   Windows' native option list applies it literally — every row goes
+   invisible except whichever one the OS highlights (its own contrasting
+   highlight color masks the bug there). Set an explicit, non-inherited
+   color so the list is legible on both. */
+.leagues-selector-select option {
+  color: var(--text);
+  background: white;
+}
 .leagues-selector-select:hover { background: #f5f5f5; }
 .leagues-selector-select:focus {
   outline: 2px solid var(--green-dark);
