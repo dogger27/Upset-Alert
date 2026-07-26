@@ -1,7 +1,12 @@
 .leagues-page {
+  /* Exposed as a var because LeagueDetail.css's full-bleed mobile card
+     cancels this exact padding out with negative margins — hardcoding it
+     in two files meant changing it here silently overflowed the page
+     sideways there. */
+  --leagues-page-pad: 28px;
   max-width: 1280px;
   margin: 0 auto;
-  padding: 26px 28px 56px;
+  padding: 26px var(--leagues-page-pad) 56px;
 }
 
 /* Three-column grid (not flex) so the centre column sits at the true
@@ -16,10 +21,13 @@
   margin-bottom: 1.5rem;
 }
 
+/* No min-width:0 here (nor on .leagues-top-right): these two side columns
+   should always hold their full content, so the CENTRE column is the one
+   that gives way when space is tight — it's the only one with a graceful
+   fallback (ellipsis on the league name). */
 .leagues-title-col {
   display: flex;
-  align-items: flex-start;
-  min-width: 0;
+  align-items: center;
   justify-self: start;
 }
 /* Its own row below leagues-page-top (see Leagues.jsx) rather than nested
@@ -33,14 +41,22 @@
   margin-bottom: 1.5rem;
 }
 
+/* Fluid type: the vw term makes "LEAGUES" and the league name shrink
+   together as the viewport narrows, which is what buys the room for all
+   three columns (title / name+dropdown / Create+Join) to stay on one line
+   down to small phones — instead of a fixed size that only fits at one
+   width. clamp()'s max pins the desktop size; its min stops it going
+   illegibly small. This is the closest CSS gets to "shrink text to fit";
+   past the min, the league name falls back to ellipsis truncation. */
 .leagues-page-title {
   font-family: var(--font-display);
   font-weight: 900;
-  font-size: 2.1rem;
+  font-size: clamp(1rem, 5.2vw, 2.1rem);
   letter-spacing: 0.01em;
   line-height: 1;
   color: var(--ink-900);
   text-transform: uppercase;
+  white-space: nowrap;
   margin: 0;
 }
 
@@ -58,7 +74,7 @@
 .leagues-current-league {
   font-family: var(--font-display);
   font-weight: 900;
-  font-size: 2.7rem;
+  font-size: clamp(1rem, 5.2vw, 2.7rem);
   color: var(--clay-600);
   line-height: 1;
   text-transform: none;
@@ -148,7 +164,6 @@
   justify-content: flex-end;
   gap: 0.6rem;
   justify-self: end;
-  min-width: 0;
 }
 
 /* Vertical Create/Join stack (matches the dashboard league buttons) */
@@ -176,61 +191,31 @@
   color: #fff;
 }
 
-/* Mobile: the true-center 3-column grid only works when the three columns'
-   combined natural width fits the row — on a phone it doesn't. Switch to a
-   single flex row instead: "LEAGUES" + the league name sized down (1.3rem)
-   from their earlier, too-large 1.6rem so the name has more of its pixel
-   budget left for actual characters before it needs to ellipsis-truncate. */
+/* Mobile: KEEP the 3-column grid rather than switching to a flex row.
+   Grid tracks can't wrap, so Create/Join can never get bumped onto their
+   own line the way flex-wrap repeatedly did — the tracks just narrow, and
+   the fluid clamp() type above absorbs it. It also preserves the
+   left / centre / right justification (title flush left, name+dropdown
+   truly centred, Create/Join flush right) at every screen width, which the
+   flex version couldn't do. Only spacing is tightened here. */
 @media (max-width: 640px) {
-  /* align-items:flex-start rather than center: keeps "LEAGUES"/name/
-     dropdown/Create-Join anchored to the row's top edge, matching
-     baselines, regardless of any height difference between items. */
-  .leagues-page-top {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-start;
-    gap: 0.25rem 0.4rem;
-  }
-  .leagues-title-col {
-    flex: 0 0 auto;
-  }
-  .leagues-page-title { font-size: 1.3rem; }
-  .leagues-name-center {
-    flex: 0 1 auto;
-    justify-content: flex-start;
-    gap: 0.25rem;
-    min-width: 0;
-  }
-  /* This cap matters more than it looks like it should: flex-wrap decides
-     which line an item goes on using each item's PRE-shrink hypothetical
-     size, not its post-shrink size — so a long league name sitting at a
-     generous max-width can by itself make Create/Join's hypothetical size
-     not fit on row 1, wrapping them to their own row, even though the name
-     COULD have shrunk further to make room. A short name like "Global"
-     never hit that cap so this never showed up until a longer name did.
-     Sized to leave enough room for "LEAGUES" + dropdown + Create/Join
-     (which now sits right after the dropdown, not pushed to the far right
-     — see .leagues-top-right below) regardless of how long the actual
-     league name is; smaller title/name font above means this can be a
-     bit more generous than before without re-breaking that. */
-  .leagues-current-league {
-    font-size: 1.3rem;
-    max-width: 28vw;
-  }
+  .leagues-page { --leagues-page-pad: 14px; }
 
-  /* Sits immediately after the dropdown in normal flow (no margin-left:auto)
-     so there's no dead gap between them — just the row's own 0.4rem gap.
-     Stays on row 1 instead of wrapping to its own row; Create/Join are
-     stacked vertically into a narrow column, so this comfortably fits
-     alongside the rest even at phone widths; flex-wrap on the parent is
-     still there as a fallback if it ever doesn't. */
-  .leagues-top-right {
-    flex: 0 0 auto;
-    justify-content: flex-end;
+  .leagues-page-top {
+    gap: 0.4rem;
+    margin-bottom: 1rem;
   }
-  /* Vertical stack (base .leagues-btn-stack direction) — just tighten the
-     gap. The real fix here is dropping the fixed width below: a 58px box
-     around "Join" (4 letters) was mostly empty side margin, not padding. */
+  .leagues-name-center { gap: 0.25rem; }
+  /* Caps how much of the row the centre column may claim before the league
+     name starts ellipsis-truncating — without it, a long name would squeeze
+     the two side columns (which hold their content) until the row overflows
+     the page sideways. */
+  .leagues-current-league { max-width: 32vw; }
+
+  .leagues-actions-under { margin-bottom: 1rem; }
+
+  /* width:auto, not the desktop fixed 84px: that box was mostly empty
+     margin around "Join" (4 letters) at phone sizes. */
   .leagues-btn-stack { gap: 4px; }
   .leagues-stack-btn {
     width: auto;
