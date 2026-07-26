@@ -3,7 +3,6 @@ import { useParams, useNavigate, useOutletContext } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getLeague, getLeagueTournaments, getRoundScores, updateLeague, setMemberAdmin, removeMember, deleteLeague, shareLeagueByEmail, getGrandSlamTotals } from '../api/leagues'
 import { getGlobalRoundScores, getGlobalDraws, getGlobalGSTotals, listTournaments } from '../api/tournaments'
-import { getDrawCounts } from '../api/auth'
 import { useAuth } from '../store/auth'
 import UserName from '../components/UserName'
 import { computeCohortInfo, getDisplayStatus, DISPLAY_STATUS_LABELS } from '../utils/drawStatus.js'
@@ -91,13 +90,6 @@ export default function LeagueDetail() {
     queryFn: listTournaments,
     refetchInterval: 60_000,
   })
-
-  const { data: drawCountsRaw = [] } = useQuery({
-    queryKey: ['draw-counts'],
-    queryFn: getDrawCounts,
-    staleTime: 5 * 60_000,
-  })
-  const drawCountMap = useMemo(() => Object.fromEntries(drawCountsRaw.map(r => [r.user_id, r.draw_count])), [drawCountsRaw])
 
   // Group non-upcoming tournaments by display status: Open → Active → Previous.
   // On this page only, "Last Week" is folded into "Previous" (no separate tab) —
@@ -238,9 +230,9 @@ export default function LeagueDetail() {
                                     <circle cx="12" cy="7" r="4" />
                                   </svg>
                                 </a>
-                                <a href={`/draw-history?user=${m.user_id}`} className="lmt-name-link username-hover" data-tooltip={`${m.full_name || m.username}:\nDraw History (${drawCountMap[m.user_id] ?? 0})`}>
+                                <span className="lmt-name-link">
                                   <span className="lmt-name-text">{m.username}</span>
-                                </a>
+                                </span>
                                 {m.is_admin && <span className="lmt-admin-badge" title="Admin">A</span>}
                               </td>
                               <td className="lmt-pts">{m.atp_points ?? '–'}</td>
@@ -314,12 +306,6 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
   const flashKey = useRef(0)
   const flashTimer = useRef(null)
 
-  const { data: drawCountsRaw = [] } = useQuery({
-    queryKey: ['draw-counts'],
-    queryFn: getDrawCounts,
-    staleTime: 5 * 60_000,
-  })
-  const drawCountMap = useMemo(() => Object.fromEntries(drawCountsRaw.map(r => [r.user_id, r.draw_count])), [drawCountsRaw])
   const { data: rawData } = useQuery({
     queryKey: leagueId != null ? ['round-scores', leagueId, t.id] : ['global-round-scores', t.id],
     queryFn: leagueId != null ? () => getRoundScores(leagueId, t.id) : () => getGlobalRoundScores(t.id),
@@ -467,9 +453,9 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                       <circle cx="12" cy="7" r="4" />
                     </svg>
                   </a>
-                  <a href={`/draw-history?user=${entry.user_id}`} className={`lt-progress-name lt-progress-name--link username-hover${entry.user_id === user?.id ? ' lt-progress-name--me' : ''}`} data-tooltip={`${entry.full_name || entry.username}:\nDraw History (${drawCountMap[entry.user_id] ?? 0})`}>
+                  <span className={`lt-progress-name${entry.user_id === user?.id ? ' lt-progress-name--me' : ''}`}>
                     <span className="lt-progress-name-text">{entry.username}</span>
-                  </a>
+                  </span>
                 </div>
               ))}
             </div>
@@ -529,10 +515,10 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                     <circle cx="12" cy="7" r="4" />
                   </svg>
                 </a>
-                <a href={`/draw-history?user=${entry.user_id}`} className={`lt-progress-name lt-progress-name--link username-hover${entry.user_id === user?.id ? ' lt-progress-name--me' : ''}`} data-tooltip={`${entry.full_name || entry.username}:\nDraw History (${drawCountMap[entry.user_id] ?? 0})`}>
+                <span className={`lt-progress-name${entry.user_id === user?.id ? ' lt-progress-name--me' : ''}`}>
                   {finalPlayed && rank < 3 && <span className="lt-place-icon">{PLACE_ICONS[rank]}</span>}
                   <span className="lt-progress-name-text">{entry.username}</span>
-                </a>
+                </span>
                 <div className="lt-bar-track">
                   {activeRounds.map((i, col) => {
                     const pts = entry.round_points[i]
