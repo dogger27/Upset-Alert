@@ -482,19 +482,27 @@ def _strip_seed_templates(v: str) -> str:
 
 
 def _parse_seed(raw: str) -> tuple[Optional[int], Optional[str]]:
-    """Returns (seed_int, entry_type). Handles compound values like '20/WC'."""
+    """Returns (seed_int, entry_type). Handles compound values like '20/WC'
+    (a seeded wildcard) and reserve-slot compounds like 'Q/LL' (last spot
+    unresolved between a qualifier and a lucky loser — no seed number at
+    all). 'Q' wins when present since that's the placeholder label the
+    frontend renders ("Qualifier N"); other combinations fall back to
+    whichever part is a known entry type.
+    """
     v = _strip_seed_templates(raw.strip())
     if not v:
         return None, None
-    # Handle compound "seed/entry_type" like "20/WC"
     if '/' in v:
-        parts = v.split('/', 1)
+        parts = [p.strip() for p in v.split('/')]
         try:
-            seed = int(parts[0].strip())
-            et = parts[1].strip()
+            seed = int(parts[0])
+            et = parts[1] if len(parts) > 1 else None
             return seed, et if et in ENTRY_TYPES else None
         except ValueError:
-            pass
+            # Compound of non-numeric entry types (e.g. "Q/LL") — no seed.
+            if 'Q' in parts:
+                return None, 'Q'
+            return None, next((p for p in parts if p in ENTRY_TYPES), None)
     if v in ENTRY_TYPES:
         return None, v
     try:
