@@ -147,6 +147,9 @@ async def update_me(
 _DEFAULT_NOTIF_PREFS = [
     "draw_open:Grand Slam:M",
     "draw_open:Grand Slam:F",
+    "draw_open:ATP 1000",
+    "draw_open:WTA 1000",
+    "round_standings",
     "tournament_end",
     "league_member_joined",
 ]
