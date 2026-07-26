@@ -475,20 +475,17 @@ td.lmt-name { text-align: left; color: var(--text); max-width: 130px; display: f
   align-items: center;
 }
 .lt-open-content {
-  position: relative;
   display: flex;
-  align-items: center;
-  min-height: 64px;
+  flex-direction: column;
+  gap: 0.6rem;
 }
 .lt-open-notice {
-  position: absolute;
-  inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   text-align: center;
-  pointer-events: none;
+  padding: 10px 0 12px;
+  border-bottom: 1px solid var(--border);
 }
 .lt-open-notice-main {
   font-size: 0.85rem;
