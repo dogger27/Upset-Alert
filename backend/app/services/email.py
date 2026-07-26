@@ -333,13 +333,20 @@ def _round_complete_league_block(name: str, rows: list[tuple], is_last: bool) ->
     )
 
 
-def _match_result_row(winner_last: str, loser_last: str, score: str, is_last: bool) -> str:
-    border = "" if is_last else "border-bottom:1px solid #e5e7eb;"
+def _match_result_row(i: int, winner_last: str, loser_last: str, score: str, is_correct: bool) -> str:
+    # Alternating row background (matches _round_complete_league_block) instead
+    # of bolding the winner name — easier to scan a long list of results.
+    bg = "#ffffff" if i % 2 == 0 else "#f9fafb"
+    # Mirrors the app's pick-result convention (BracketView.jsx): ✓ #15803d / ✗ #dc2626.
+    mark_color = "#15803d" if is_correct else "#dc2626"
+    mark_char = "&#10003;" if is_correct else "&#10007;"
     return (
-        f'<tr>'
-        f'<td style="padding:8px 12px;{border}font-size:14px;color:#111">'
-        f'<strong>{winner_last}</strong> def. {loser_last}</td>'
-        f'<td align="right" style="padding:8px 12px;{border}font-size:14px;color:#444;'
+        f'<tr style="background:{bg}">'
+        f'<td width="24" style="padding:8px 4px 8px 12px;font-size:14px;'
+        f'font-weight:700;color:{mark_color};width:24px">{mark_char}</td>'
+        f'<td style="padding:8px 12px 8px 4px;font-size:14px;color:#111">'
+        f'{winner_last} def. {loser_last}</td>'
+        f'<td align="right" style="padding:8px 12px;font-size:14px;color:#444;'
         f'white-space:nowrap;text-align:right">{score}</td>'
         f'</tr>'
     )
@@ -349,12 +356,13 @@ def _round_results_widget(round_name: str, results: list[tuple]) -> str:
     """Always-visible match-results panel. Gmail (web and mobile app) strips
     <style> tags and doesn't support the CSS-only ":checked" accordion trick,
     so this is plain static markup rather than a collapsible widget.
-    results: [(winner_last, loser_last, score), ...] in bracket order."""
+    results: [(winner_last, loser_last, score, is_correct), ...] in bracket order,
+    where is_correct reflects this recipient's own pick for that match."""
     if not results:
         return ""
     rows = "".join(
-        _match_result_row(w, l, s, i == len(results) - 1)
-        for i, (w, l, s) in enumerate(results)
+        _match_result_row(i, w, l, s, c)
+        for i, (w, l, s, c) in enumerate(results)
     )
     return f"""<div style="margin:24px 0 0">
           <div style="padding:11px 14px;background:#f3f4f6;border:1px solid #e5e7eb;
@@ -380,7 +388,7 @@ async def send_round_complete_notification(
     category: str = "",
     gender: str = "M",
     unsubscribe_url: str = "",
-    match_results: Optional[list[tuple]] = None,  # [(winner_last, loser_last, score), ...]
+    match_results: Optional[list[tuple]] = None,  # [(winner_last, loser_last, score, is_correct), ...]
 ) -> None:
     """One email per user: every group's competitor list, stacked vertically."""
     tournament_url = f"{BASE_URL}/tournaments/{tournament_id}"
@@ -389,8 +397,9 @@ async def send_round_complete_notification(
         for i, (lg_name, rows) in enumerate(leagues)
     )
     results_widget = _round_results_widget(round_name, match_results or [])
+    # Standalone footer, outside the card entirely — not part of any widget/box.
     unsubscribe = (
-        f'<p style="margin:28px 0 0;text-align:center;font-size:12px;color:#9ca3af">'
+        f'<p style="max-width:560px;margin:16px auto 0;text-align:center;font-size:12px;color:#9ca3af">'
         f'<a href="{unsubscribe_url}" style="color:#9ca3af;text-decoration:underline">'
         f'Unsubscribe from round-completion emails</a></p>'
         if unsubscribe_url else ""
@@ -400,16 +409,16 @@ async def send_round_complete_notification(
         "to": [email],
         "subject": f"{round_name} Complete: {_tournament_label(tournament_name, category, gender)}",
         "html": f"""{_WRAP_OPEN}{_LOGO_HEADER}{_BODY_OPEN}
-          <h1 style="font-size:22px;margin:0 0 12px">{_tournament_label(tournament_name, category, gender)} {round_name} is complete!</h1>
-          <p style="color:#444;line-height:1.6;margin:0 0 20px">Here are the current standings for the leagues you are competing in:</p>
-          <div style="margin:0 0 24px">{blocks}</div>
-          <a href="{tournament_url}" style="display:inline-block;padding:12px 24px;
+          <h1 style="font-size:22px;margin:0 0 16px">{_tournament_label(tournament_name, category, gender)} {round_name} is complete!</h1>
+          <a href="{tournament_url}" style="display:inline-block;padding:12px 24px;margin:0 0 20px;
              background:#1b4332;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
             View Draw &amp; Standings
           </a>
-          {unsubscribe}
+          <p style="color:#444;line-height:1.6;margin:0 0 20px">Here are the current standings for the leagues you are competing in:</p>
+          <div style="margin:0 0 24px">{blocks}</div>
           {results_widget}
-        {_BODY_CLOSE}{_WRAP_CLOSE}""",
+        {_BODY_CLOSE}{_WRAP_CLOSE}
+        {unsubscribe}""",
     })
 
 
