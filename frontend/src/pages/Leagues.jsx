@@ -48,23 +48,7 @@ export default function Leagues() {
     <div className="leagues-page">
       <div className="leagues-page-top">
         <div className="leagues-title-col">
-        <h1 className="leagues-page-title">Leagues</h1>
-
-        {(canInvite || canManageSettings) && (
-        <div className="leagues-actions-under">
-          {canInvite && (
-            <button className="leagues-icon-btn leagues-icon-btn--labeled" title="Share / Invite" aria-label="Share / Invite" onClick={() => setShowInvite(true)}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-              <span>Invite</span>
-            </button>
-          )}
-          {canManageSettings && (
-            <button className="leagues-icon-btn" title="Settings" aria-label="Settings" onClick={() => setEditing(s => !s)}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-            </button>
-          )}
-        </div>
-        )}
+          <h1 className="leagues-page-title">Leagues</h1>
         </div>
 
         <div className="leagues-name-center">
@@ -97,6 +81,26 @@ export default function Leagues() {
           )}
         </div>
       </div>
+
+      {/* Its own row below leagues-page-top entirely (not nested under the
+          title) — previously lived inside .leagues-title-col, which made
+          that column as wide as these buttons and pushed the league name
+          far to the right of "LEAGUES" on narrow screens. */}
+      {(canInvite || canManageSettings) && (
+        <div className="leagues-actions-under">
+          {canInvite && (
+            <button className="leagues-icon-btn leagues-icon-btn--labeled" title="Share / Invite" aria-label="Share / Invite" onClick={() => setShowInvite(true)}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+              <span>Invite</span>
+            </button>
+          )}
+          {canManageSettings && (
+            <button className="leagues-icon-btn" title="Settings" aria-label="Settings" onClick={() => setEditing(s => !s)}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            </button>
+          )}
+        </div>
+      )}
 
       <Outlet context={{ editing, setEditing, showInvite, setShowInvite }} />
       {modal === 'create' && <CreateLeagueModal onClose={() => setModal(null)} />}
