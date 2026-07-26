@@ -512,7 +512,7 @@ td.lmt-name { text-align: left; color: var(--text); max-width: 130px; display: f
    of source order — the open-row layout only ever has 2 real columns
    (position, name), so the name shouldn't be capped at --name-col-width. */
 .lt-progress-row.lt-progress-row--open {
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto auto 1fr;
 }
 
 .lt-bar-col--label {
@@ -569,10 +569,10 @@ td.lmt-name { text-align: left; color: var(--text); max-width: 130px; display: f
   grid-template-columns: 22px var(--name-col-width, 120px) 28px 1fr 52px;
   align-items: center; gap: 0.4rem;
 }
-/* Completed/active view: bracket button in its own far-left column */
+/* Completed/active view: bracket button, then draw-history button, in their own far-left columns */
 .lt-progress-row--abs,
 .lt-progress-header-row {
-  grid-template-columns: 28px 22px var(--name-col-width, 120px) 1fr 52px;
+  grid-template-columns: 28px 22px 22px var(--name-col-width, 120px) 1fr 52px;
 }
 .lt-progress-row--abs {
   position: absolute; width: 100%;
@@ -594,6 +594,15 @@ td.lmt-name { text-align: left; color: var(--text); max-width: 130px; display: f
   transition: opacity 0.15s, color 0.15s;
 }
 .lt-bracket-btn:hover { opacity: 1; color: var(--green-dark); }
+.lt-history-btn {
+  background: none; border: 1.5px solid currentColor; border-radius: 4px;
+  cursor: pointer; padding: 3px 4px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-muted); opacity: 0.55;
+  transition: opacity 0.15s, color 0.15s;
+  text-decoration: none; flex-shrink: 0;
+}
+.lt-history-btn:hover { opacity: 1; color: var(--green-dark); }
 .lt-progress-name {
   font-size: 0.85rem; font-weight: 600;
   min-width: 0; display: flex; align-items: center; gap: 4px;
@@ -682,7 +691,7 @@ td.lmt-name { text-align: left; color: var(--text); max-width: 130px; display: f
   .lt-bar-track { display: none; }
   .lt-progress-row--abs,
   .lt-progress-header-row {
-    grid-template-columns: 28px 22px var(--name-col-width, 120px) 52px;
+    grid-template-columns: 28px 22px 22px var(--name-col-width, 120px) 52px;
   }
 }
 @container (max-width: 470px) {
@@ -698,20 +707,20 @@ td.lmt-name { text-align: left; color: var(--text); max-width: 130px; display: f
 }
 
 /* Narrow rows (below 640 the bars are already gone): drop the rank number,
-   then the bracket button, to free up room. The name column keeps using
-   --name-col-width (sized in JS to the longest username) at every tier
-   instead of a hardcoded px value, so names don't get truncated just
-   because the viewport is narrow. Ordered after the 640 tier so these
+   then the bracket + draw-history buttons, to free up room. The name column
+   keeps using --name-col-width (sized in JS to the longest username) at
+   every tier instead of a hardcoded px value, so names don't get truncated
+   just because the viewport is narrow. Ordered after the 640 tier so these
    grids win. */
 @container (max-width: 340px) {
   .lt-pos-num, .lt-hcol-pos { display: none; }
   .lt-progress-row--abs,
   .lt-progress-header-row {
-    grid-template-columns: 28px var(--name-col-width, 92px) 52px;
+    grid-template-columns: 28px 22px var(--name-col-width, 92px) 52px;
   }
 }
 @container (max-width: 300px) {
-  .lt-bracket-btn, .lt-hcol-bracket { display: none; }
+  .lt-bracket-btn, .lt-hcol-bracket, .lt-history-btn, .lt-hcol-history { display: none; }
   .lt-progress-row--abs,
   .lt-progress-header-row {
     grid-template-columns: var(--name-col-width, 92px) 52px;
