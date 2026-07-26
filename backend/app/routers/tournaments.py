@@ -1102,12 +1102,18 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
     total_matches = len(parsed.matches)
     completed = sum(1 for m in parsed.matches if m.winner_position is not None)
 
-    # Snap start_date to today on first detected match activity.
+    # Byes resolve the instant the draw is released — no match is actually
+    # played — so they must NOT count as "activity" or the tournament would
+    # show active/started before a single real match has begun (any draw with
+    # first-round byes for top seeds hits this immediately on release).
+    real_completed = sum(1 for m in parsed.matches if m.winner_position is not None and not m.is_bye)
+
+    # Snap start_date to today on first detected REAL match activity.
     # Qualifying rounds begin before the Wikipedia-reported main-draw start date,
     # so use the real play date rather than Wikipedia's potentially lagging value.
     # Guard: only snap after the main draw is released — otherwise qualifying activity
     # would prematurely move the start_date forward by a week or more.
-    has_activity = completed > 0 or any(m.scores for m in parsed.matches)
+    has_activity = real_completed > 0 or any(m.scores for m in parsed.matches if not m.is_bye)
     if (has_activity and tournament.start_date and today < tournament.start_date
             and tournament.draw_released_direct_at is not None):
         tournament.start_date = today
@@ -1115,7 +1121,7 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
     started = tournament.start_date is None or tournament.start_date <= today
     if completed == total_matches and completed > 0:
         tournament.status = "completed"
-    elif completed > 0 and started:
+    elif real_completed > 0 and started:
         tournament.status = "active"
     else:
         tournament.status = "upcoming"
