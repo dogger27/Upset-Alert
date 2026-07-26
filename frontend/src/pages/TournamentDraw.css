@@ -397,7 +397,7 @@
 .btn-admin-refresh:disabled { opacity: 0.6; cursor: default; }
 
 .btn-auto-populate,
-.btn-clear-selections {
+.btn-reset-selections {
   font-size: 0.82rem;
   font-weight: 600;
   font-family: inherit;
@@ -419,12 +419,12 @@
   border-color: #86efac;
 }
 
-.btn-clear-selections {
+.btn-reset-selections {
   color: #991b1b;
   background: #fff1f2;
   border: 1px solid #fecaca;
 }
-.btn-clear-selections:hover {
+.btn-reset-selections:hover {
   background: #fee2e2;
   border-color: #fca5a5;
 }
@@ -450,7 +450,7 @@
   100% { opacity: 0; transform: translateX(-50%) translateY(6px); }
 }
 
-.clear-toast {
+.reset-toast {
   position: fixed;
   bottom: 2rem;
   left: 50%;

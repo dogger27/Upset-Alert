@@ -71,12 +71,12 @@ export default function TournamentDraw() {
   const [celebrating, setCelebrating] = useState(false)
   const [showUnlockConfirm, setShowUnlockConfirm] = useState(false)
   const [pendingAutoPicks, setPendingAutoPicks] = useState(null)
-  const [showClearConfirm, setShowClearConfirm] = useState(false)
-  const [clearToast, setClearToast] = useState(null)
+  const [showResetConfirm, setShowResetConfirm] = useState(false)
+  const [resetToast, setResetToast] = useState(null)
   const [showDefaultPicksBanner, setShowDefaultPicksBanner] = useState(false)
-  const clearToastKeyRef = useRef(0)
+  const resetToastKeyRef = useRef(0)
   const celebrateTimerRef = useRef(null)
-  const clearToastTimerRef = useRef(null)
+  const resetToastTimerRef = useRef(null)
   const autoInitShownRef = useRef(false)
 
   const { data, isLoading, error } = useQuery({
@@ -446,21 +446,15 @@ export default function TournamentDraw() {
     return { total, upsets }
   }
 
-  const handleClearSelections = () => {
-    const { total } = countPicksAndUpsets()
-    const cleared = Object.fromEntries(Object.keys(picks).map(k => [k, null]))
-    setPicks(cleared)
-    if (user) saveMutation.mutate(cleared)
-    // Un-latch the auto-init gate so the "Initialise picks" effect re-offers
-    // default picks + the banner once the cleared (empty) predictions come
-    // back from the refetch this mutation triggers — matches user expectation
-    // that clearing picks puts the draw back in its pristine, freshly-entered state.
-    autoInitShownRef.current = false
-    setShowClearConfirm(false)
-    clearToastKeyRef.current += 1
-    setClearToast({ key: clearToastKeyRef.current, msg: `${total} selection${total !== 1 ? 's' : ''} cleared` })
-    if (clearToastTimerRef.current) clearTimeout(clearToastTimerRef.current)
-    clearToastTimerRef.current = setTimeout(() => setClearToast(null), 3500)
+  const handleResetSelections = () => {
+    const newPicks = computeAutoPicks() ?? {}
+    const filled = Object.values(newPicks).filter(v => v != null).length
+    applyPicksAndCelebrate(newPicks)
+    setShowResetConfirm(false)
+    resetToastKeyRef.current += 1
+    setResetToast({ key: resetToastKeyRef.current, msg: `${filled} selection${filled !== 1 ? 's' : ''} reset to higher-ranked picks` })
+    if (resetToastTimerRef.current) clearTimeout(resetToastTimerRef.current)
+    resetToastTimerRef.current = setTimeout(() => setResetToast(null), 3500)
   }
 
   // Cascade-clear: if switching picks, clear downstream picks for the old player
@@ -864,10 +858,10 @@ export default function TournamentDraw() {
             )}
             {user && !locked && !viewingOther && pickedCount > 0 && (
               <button
-                className="btn-clear-selections"
-                onClick={() => setShowClearConfirm(true)}
+                className="btn-reset-selections"
+                onClick={() => setShowResetConfirm(true)}
               >
-                Clear Selections
+                Reset Selections
               </button>
             )}
           </div>
@@ -992,22 +986,22 @@ export default function TournamentDraw() {
         </div>
       )}
 
-      {showClearConfirm && (() => {
+      {showResetConfirm && (() => {
         const { total, upsets } = countPicksAndUpsets()
         return (
-          <div className="auto-populate-overlay" onClick={() => setShowClearConfirm(false)}>
+          <div className="auto-populate-overlay" onClick={() => setShowResetConfirm(false)}>
             <div className="auto-populate-modal" onClick={e => e.stopPropagation()}>
-              <h3 className="auto-populate-modal-title">Clear all selections?</h3>
+              <h3 className="auto-populate-modal-title">Reset all selections?</h3>
               <p className="auto-populate-modal-body">
-                This will clear {total} match selection{total !== 1 ? 's' : ''}
-                {upsets > 0 ? `, including ${upsets} upset${upsets !== 1 ? 's' : ''}` : ''}.
+                This will reset {total} match selection{total !== 1 ? 's' : ''} so the higher-ranked player wins every match
+                {upsets > 0 ? `, overwriting ${upsets} upset pick${upsets !== 1 ? 's' : ''}` : ''}.
               </p>
               <div className="auto-populate-modal-actions">
-                <button className="btn-secondary" onClick={() => setShowClearConfirm(false)}>
+                <button className="btn-secondary" onClick={() => setShowResetConfirm(false)}>
                   Cancel
                 </button>
-                <button className="btn-danger" onClick={handleClearSelections}>
-                  Clear selections
+                <button className="btn-danger" onClick={handleResetSelections}>
+                  Reset selections
                 </button>
               </div>
             </div>
@@ -1015,8 +1009,8 @@ export default function TournamentDraw() {
         )
       })()}
 
-      {clearToast && (
-        <div key={clearToast.key} className="clear-toast">{clearToast.msg}</div>
+      {resetToast && (
+        <div key={resetToast.key} className="reset-toast">{resetToast.msg}</div>
       )}
 
       {showDefaultPicksBanner && (
