@@ -276,11 +276,11 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   /* Members / Open-Active / Prev tabs: shrink enough that all three fit on
      one row instead of "Members" wrapping onto its own line above the
      other two. flex-wrap stays on as a fallback for anything narrower still. */
-  .lt-controls-row { gap: 0.3rem; }
+  .lt-controls-row { gap: 0.2rem; }
   .lt-members-btn,
   .lt-status-tab {
-    padding: 0.25rem 0.3rem;
-    font-size: 0.66rem;
+    padding: 0.2rem 0.22rem;
+    font-size: 0.58rem;
   }
 }
 
