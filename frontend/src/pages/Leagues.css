@@ -180,10 +180,17 @@
    as they can be (1.6rem) while still fitting alongside the dropdown and
    the narrow, vertically-stacked Create/Join column without wrapping. */
 @media (max-width: 640px) {
+  /* align-items:flex-start (not center): for an owned/admin league,
+     .leagues-title-col also holds the Invite/Settings icon row beneath
+     "LEAGUES", making that column two lines tall. Centering everything
+     against that taller column shoved the league name down to align with
+     the icon row instead of "LEAGUES" — looked like the row had wrapped.
+     Top-aligning keeps "LEAGUES"/name/dropdown/Create-Join on one visual
+     line regardless of what hangs below the title column. */
   .leagues-page-top {
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
+    align-items: flex-start;
     gap: 0.25rem 0.4rem;
   }
   .leagues-title-col {
