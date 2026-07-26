@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react'
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useParams, useNavigate, useOutletContext } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getLeague, getLeagueTournaments, getRoundScores, updateLeague, setMemberAdmin, removeMember, deleteLeague, shareLeagueByEmail, getGrandSlamTotals } from '../api/leagues'
@@ -67,6 +67,21 @@ export default function LeagueDetail() {
   const [showMembers, setShowMembers] = useState(false) // "All Members" view instead of draws
   const [memberSortCol, setMemberSortCol] = useState(null) // null | 'atp' | 'wta' | 'combined'
   const [memberSortDir, setMemberSortDir] = useState('desc')
+
+  // Previous-tab lazy loading: only 5 draws render up front, more append as
+  // the user scrolls near the bottom. Callback ref (not useEffect) so the
+  // observer attaches the instant the sentinel div mounts, regardless of
+  // whether previousVisibleCount itself changed.
+  const [previousVisibleCount, setPreviousVisibleCount] = useState(5)
+  const previousObserverRef = useRef(null)
+  const previousLoadMoreRef = useCallback((node) => {
+    previousObserverRef.current?.disconnect()
+    if (!node) return
+    previousObserverRef.current = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) setPreviousVisibleCount(c => c + 5)
+    }, { rootMargin: '300px' })
+    previousObserverRef.current.observe(node)
+  }, [])
 
   const { data: league, isLoading: leagueLoading } = useQuery({
     queryKey: ['league', id],
@@ -174,7 +189,7 @@ export default function LeagueDetail() {
                         key={t.key}
                         className={['lt-status-tab', (!showMembers && activeTab === t.key) && 'lt-status-tab--active', empty && 'lt-status-tab--empty'].filter(Boolean).join(' ')}
                         disabled={empty}
-                        onClick={() => { setShowMembers(false); setStatusFilter(t.key) }}
+                        onClick={() => { setShowMembers(false); setStatusFilter(t.key); if (t.key === 'previous') setPreviousVisibleCount(5) }}
                       >
                         {t.label}{t.key === 'previous' ? ` (${count})` : ''}
                       </button>
@@ -266,33 +281,44 @@ export default function LeagueDetail() {
               </div>
             ) : (
               <div className="lt-status-sections">
-                {visibleGroups.map(g => (
-                  <div key={g.key} className="card league-tournaments-section">
-                    <div className="lt-category-group">
-                      {(() => {
-                        // Same name with both M and F present (Grand Slams, or any
-                        // other event running men's + women's draws simultaneously)
-                        // → disambiguate with "Men"/"Women" after the name.
-                        const gendersByName = new Map()
-                        for (const { tournament: t } of g.items) {
-                          if (!gendersByName.has(t.name)) gendersByName.set(t.name, new Set())
-                          gendersByName.get(t.name).add(t.gender)
-                        }
-                        return g.items.map(({ tournament: t, picker_count }) => (
-                          <RoundProgressChart
-                            key={t.id}
-                            tournament={t}
-                            pickerCount={picker_count}
-                            leagueId={isGlobal ? null : Number(id)}
-                            leagueMemberCount={isGlobal ? null : league.member_count}
-                            showRealName={isGlobal ? false : league.show_real_name}
-                            showGenderLabel={gendersByName.get(t.name)?.size > 1}
-                          />
-                        ))
-                      })()}
+                {visibleGroups.map(g => {
+                  // "Previous" lazy-loads 5 at a time; Open/Active always render in full.
+                  const isPrevious = g.key === 'previous'
+                  const visibleItems = isPrevious ? g.items.slice(0, previousVisibleCount) : g.items
+                  const hasMore = isPrevious && previousVisibleCount < g.items.length
+                  return (
+                    <div key={g.key} className="card league-tournaments-section">
+                      <div className="lt-category-group">
+                        {(() => {
+                          // Same name with both M and F present (Grand Slams, or any
+                          // other event running men's + women's draws simultaneously)
+                          // → disambiguate with "Men"/"Women" after the name.
+                          const gendersByName = new Map()
+                          for (const { tournament: t } of visibleItems) {
+                            if (!gendersByName.has(t.name)) gendersByName.set(t.name, new Set())
+                            gendersByName.get(t.name).add(t.gender)
+                          }
+                          return visibleItems.map(({ tournament: t, picker_count }) => (
+                            <RoundProgressChart
+                              key={t.id}
+                              tournament={t}
+                              pickerCount={picker_count}
+                              leagueId={isGlobal ? null : Number(id)}
+                              leagueMemberCount={isGlobal ? null : league.member_count}
+                              showRealName={isGlobal ? false : league.show_real_name}
+                              showGenderLabel={gendersByName.get(t.name)?.size > 1}
+                            />
+                          ))
+                        })()}
+                      </div>
+                      {hasMore && (
+                        <div ref={previousLoadMoreRef} className="lt-load-more-sentinel">
+                          Loading more…
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </>
