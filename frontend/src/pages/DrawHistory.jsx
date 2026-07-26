@@ -13,7 +13,7 @@ function fetchUserHistory(userId) {
 
 function categoryShort(cat) {
   if (!cat) return ''
-  if (cat.includes('Slam') || cat.includes('slam')) return 'Grand Slam'
+  if (cat.includes('Slam') || cat.includes('slam')) return 'GS'
   if (cat.includes('1000')) return '1000'
   if (cat.includes('500')) return '500'
   return '250'
