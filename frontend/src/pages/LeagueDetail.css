@@ -226,6 +226,16 @@ td.lmt-name { text-align: left; color: var(--text); max-width: 130px; display: f
 .league-tournaments-section { }
 .league-tournaments-section h2 { font-size: 1.1rem; margin-bottom: 0; }
 
+/* Mobile: the card's default 1.5rem side padding (from the shared .card
+   rule) eats a lot of a phone's width before the competitor rows even
+   start laying out. Trim it (and the per-tournament block's own side
+   padding) so those rows have more room — mainly helps the name column,
+   which otherwise truncates usernames on narrow screens. */
+@media (max-width: 640px) {
+  .card.league-tournaments-section { padding: 1rem 0.6rem; }
+  .lt-progress-block { padding: 0.9rem 0.4rem; }
+}
+
 /* Title + controls above the draws/members bubble */
 .lt-draws-title {
   font-size: 1.75rem;
@@ -556,13 +566,13 @@ td.lmt-name { text-align: left; color: var(--text); max-width: 130px; display: f
 .lt-progress-rows--race { position: relative; }
 .lt-progress-row {
   display: grid;
-  grid-template-columns: 22px var(--name-col-width, 120px) 28px 1fr 52px 80px;
-  align-items: center; gap: 0.65rem;
+  grid-template-columns: 22px var(--name-col-width, 120px) 28px 1fr 52px;
+  align-items: center; gap: 0.4rem;
 }
 /* Completed/active view: bracket button in its own far-left column */
 .lt-progress-row--abs,
 .lt-progress-header-row {
-  grid-template-columns: 28px 22px var(--name-col-width, 120px) 1fr 52px 80px;
+  grid-template-columns: 28px 22px var(--name-col-width, 120px) 1fr 52px;
 }
 .lt-progress-row--abs {
   position: absolute; width: 100%;
@@ -634,7 +644,6 @@ td.lmt-name { text-align: left; color: var(--text); max-width: 130px; display: f
     0 0 8px #fff, 0 0 16px rgba(255,255,255,0.9), 0 0 28px rgba(255,255,255,0.7);
 }
 .lt-progress-total { font-size: 0.8rem; color: var(--ink, #111); font-weight: 700; text-align: center; white-space: nowrap; }
-.lt-progress-correct { font-size: 0.78rem; color: var(--text-muted); text-align: center; white-space: nowrap; }
 .lt-progress-col-header { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
 .lt-progress-header-row { margin-bottom: 0.2rem; }
 .lt-progress-header-row .lt-bar-track { height: 24px; background: none; }
@@ -673,7 +682,7 @@ td.lmt-name { text-align: left; color: var(--text); max-width: 130px; display: f
   .lt-bar-track { display: none; }
   .lt-progress-row--abs,
   .lt-progress-header-row {
-    grid-template-columns: 28px 22px var(--name-col-width, 120px) 52px 80px;
+    grid-template-columns: 28px 22px var(--name-col-width, 120px) 52px;
   }
 }
 @container (max-width: 470px) {
@@ -688,26 +697,23 @@ td.lmt-name { text-align: left; color: var(--text); max-width: 130px; display: f
   .lt-gender-badge { display: none; } /* drop category, leave only the name */
 }
 
-/* Narrow rows (below 640 the bars are already gone): first cap the competitor
-   column to the header width (names ellipsis), then drop the rank number, then
-   the bracket button. Ordered after the 640 tier so these grids win. */
-@container (max-width: 430px) {
-  .lt-progress-row--abs,
-  .lt-progress-header-row {
-    grid-template-columns: 28px 22px 92px 52px 80px;
-  }
-}
+/* Narrow rows (below 640 the bars are already gone): drop the rank number,
+   then the bracket button, to free up room. The name column keeps using
+   --name-col-width (sized in JS to the longest username) at every tier
+   instead of a hardcoded px value, so names don't get truncated just
+   because the viewport is narrow. Ordered after the 640 tier so these
+   grids win. */
 @container (max-width: 340px) {
   .lt-pos-num, .lt-hcol-pos { display: none; }
   .lt-progress-row--abs,
   .lt-progress-header-row {
-    grid-template-columns: 28px 92px 52px 80px;
+    grid-template-columns: 28px var(--name-col-width, 92px) 52px;
   }
 }
 @container (max-width: 300px) {
   .lt-bracket-btn, .lt-hcol-bracket { display: none; }
   .lt-progress-row--abs,
   .lt-progress-header-row {
-    grid-template-columns: 92px 52px 80px;
+    grid-template-columns: var(--name-col-width, 92px) 52px;
   }
 }
