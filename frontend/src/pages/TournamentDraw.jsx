@@ -658,6 +658,24 @@ export default function TournamentDraw() {
     windowFit = 2
   }
   const showPager = columnCount > DRAW_WINDOW
+
+  // Off-screen unpicked matches: a match with no prediction can be paged out
+  // of view, with nothing on screen hinting it's still there. Flag whichever
+  // edge round-nav button leads toward it so it isn't missed.
+  let missingPickLeft = false
+  let missingPickRight = false
+  if (user && !viewingOther) {
+    const roundIndexOf = {}
+    roundNumbers.forEach((rn, i) => { roundIndexOf[rn] = i })
+    for (const m of matches) {
+      if (m.is_bye || activePicks[m.id] != null) continue
+      const colIdx = roundIndexOf[m.round_number]
+      if (colIdx == null) continue
+      if (colIdx < windowPos) missingPickLeft = true
+      else if (colIdx >= windowPos + DRAW_WINDOW) missingPickRight = true
+    }
+  }
+
   // Viewport so narrow that only 1–2 rounds fit → keep the sub-header hidden
   // at all times (vertical space is at a premium; the edge round-nav buttons
   // still provide paging). Width-based (windowFit), not DRAW_WINDOW, so a
@@ -1082,10 +1100,12 @@ export default function TournamentDraw() {
         {showPager && windowPos > 0 && (
           <button
             ref={navBtnLeftRef}
-            className="round-nav round-nav--left"
+            className={clsx('round-nav round-nav--left', { 'round-nav--missing-pick': missingPickLeft })}
             style={{ left: sidebarCollapsed ? 3 : Math.max(3, bodyWidth - mainWidth + 3) }}
             onClick={() => setWindowStart(windowPos - 1)}
-            title={`Show ${pagerColumns[windowPos - 1].title}`}
+            title={missingPickLeft
+              ? `Show ${pagerColumns[windowPos - 1].title} — missing pick(s)`
+              : `Show ${pagerColumns[windowPos - 1].title}`}
             aria-label={`Show ${pagerColumns[windowPos - 1].title}`}
           >
             <span className="round-nav-label round-nav-label--sizer" aria-hidden="true">CHAMP</span>
@@ -1095,10 +1115,12 @@ export default function TournamentDraw() {
         {showPager && windowPos < maxWindowStart && (compactDraw || rightNavX != null) && (
           <button
             ref={navBtnRightRef}
-            className="round-nav round-nav--right"
+            className={clsx('round-nav round-nav--right', { 'round-nav--missing-pick': missingPickRight })}
             style={compactDraw ? { right: 3, left: 'auto' } : { left: Math.min(rightNavX + 6, bodyWidth - 30) }}
             onClick={() => setWindowStart(windowPos + 1)}
-            title={`Show ${pagerColumns[windowPos + DRAW_WINDOW].title}`}
+            title={missingPickRight
+              ? `Show ${pagerColumns[windowPos + DRAW_WINDOW].title} — missing pick(s)`
+              : `Show ${pagerColumns[windowPos + DRAW_WINDOW].title}`}
             aria-label={`Show ${pagerColumns[windowPos + DRAW_WINDOW].title}`}
           >
             <span className="round-nav-label round-nav-label--sizer" aria-hidden="true">CHAMP</span>

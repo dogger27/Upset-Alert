@@ -59,6 +59,16 @@
    sidebar is collapsed, or the draw-window edge when it's expanded; the right
    one sits just past the last drawn round. */
 
+/* An unpicked match lives off-screen in this direction — ring the button red
+   so it isn't missed just because it's outside the current round window. */
+.round-nav--missing-pick {
+  animation: round-nav-missing-pulse 1.8s ease-in-out infinite;
+}
+@keyframes round-nav-missing-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px #dc2626, 0 2px 10px rgba(0, 0, 0, 0.2); }
+  50%      { box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.45), 0 2px 10px rgba(0, 0, 0, 0.2); }
+}
+
 .round-nav-label {
   grid-area: 1 / 1;
   writing-mode: vertical-rl;
