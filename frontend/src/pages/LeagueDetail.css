@@ -765,13 +765,16 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   .league-members-table { font-size: 0.78rem; }
   .league-members-table thead th { font-size: 0.66rem; }
 
-  /* Break the card out of .leagues-page's 28px side padding so it spans the
-     full screen width on mobile instead of floating in a narrow column with
-     grey gutters on both sides. */
+  /* Break the card out of .leagues-page's side padding so it spans the full
+     screen width on mobile instead of floating in a narrow column with grey
+     gutters on both sides. Reads the padding from the --leagues-page-pad var
+     that .leagues-page defines, rather than repeating the px value — these
+     have to cancel exactly, and hardcoding it here meant changing the
+     padding there overflowed the page sideways. */
   .card.league-tournaments-section {
-    margin-left: -28px;
-    margin-right: -28px;
-    width: calc(100% + 56px);
+    margin-left: calc(-1 * var(--leagues-page-pad, 28px));
+    margin-right: calc(-1 * var(--leagues-page-pad, 28px));
+    width: calc(100% + 2 * var(--leagues-page-pad, 28px));
     border-radius: 0;
     border-left: none;
     border-right: none;
