@@ -296,27 +296,28 @@ async def put_notification_prefs(
     await db.commit()
 
 
-@router.get("/me/draw-history")
-async def get_draw_history(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
+async def _global_draw_history(db: AsyncSession, user_id: int) -> list[dict]:
+    """
+    Draw History is scoped to the Global league only — a user's private
+    leagues can come and go, but Global is the one constant every competitor
+    is always in, so it's the only ranking that stays meaningful as a
+    standalone per-tournament history entry.
+    """
     from app.models.draw_history import TournamentResult
     from app.models.tournament import Draw, Match
     from app.models.prediction import UserPrediction
-    from app.models.league import League
-    from sqlalchemy import func, case as sa_case
+    from sqlalchemy import func
 
     res = await db.execute(
-        select(TournamentResult, League.name.label("current_league_name"))
-        .outerjoin(League, League.id == TournamentResult.league_id)
-        .where(TournamentResult.user_id == current_user.id)
-        .order_by(TournamentResult.draw_id.desc(), TournamentResult.league_id.nullsfirst())
+        select(TournamentResult)
+        .where(
+            TournamentResult.user_id == user_id,
+            TournamentResult.league_id.is_(None),
+        )
+        .order_by(TournamentResult.draw_id.desc())
     )
-    rows = res.all()
-
-    # Group by tournament
-    tourn_ids = list(dict.fromkeys(row.TournamentResult.draw_id for row in rows))
+    global_results = {r.draw_id: r for r in res.scalars().all()}
+    tourn_ids = list(global_results.keys())
     if not tourn_ids:
         return []
 
@@ -333,7 +334,7 @@ async def get_draw_history(
         select(UserPrediction.draw_id, func.count().label("total"))
         .where(
             UserPrediction.draw_id.in_(tourn_ids),
-            UserPrediction.user_id == current_user.id,
+            UserPrediction.user_id == user_id,
             UserPrediction.predicted_winner_id.isnot(None),
         )
         .group_by(UserPrediction.draw_id)
@@ -345,35 +346,21 @@ async def get_draw_history(
         tid for tid in tourn_ids
         if user_preds.get(tid, 0) >= total_matches.get(tid, 1)
     }
+    if not competed_ids:
+        return []
 
-    t_res = await db.execute(
-        select(Draw).where(Draw.id.in_(competed_ids))
-    )
+    t_res = await db.execute(select(Draw).where(Draw.id.in_(competed_ids)))
     tournaments = {t.id: t for t in t_res.scalars().all()}
 
-    by_tourn: dict[int, list] = {}
-    for row in rows:
-        r = row.TournamentResult
-        if r.draw_id not in competed_ids:
-            continue
-        live_name = row.current_league_name if r.league_id is not None else "Global"
-        by_tourn.setdefault(r.draw_id, []).append({
-            "league_id": r.league_id,
-            "league_name": live_name,
-            "rank": r.rank,
-            "total_participants": r.total_participants,
-            "points": r.points,
-            "correct_count": r.correct_count,
-        })
-
-    result = []
+    entries = []
     for tid in tourn_ids:
         if tid not in competed_ids:
             continue
         t = tournaments.get(tid)
         if not t:
             continue
-        result.append({
+        r = global_results[tid]
+        entries.append({
             "tournament_id": tid,
             "name": t.name,
             "year": t.year,
@@ -383,9 +370,20 @@ async def get_draw_history(
             "start_date": t.start_date,
             "end_date": t.end_date,
             "total_matches": total_matches.get(tid, 0),
-            "results": by_tourn[tid],
+            "rank": r.rank,
+            "total_participants": r.total_participants,
+            "points": r.points,
+            "correct_count": r.correct_count,
         })
-    return result
+    return entries
+
+
+@router.get("/me/draw-history")
+async def get_draw_history(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return await _global_draw_history(db, current_user.id)
 
 
 @router.get("/users/draw-counts")
@@ -406,89 +404,12 @@ async def get_user_draw_history(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    from app.models.draw_history import TournamentResult
-    from app.models.tournament import Draw, Match
-    from app.models.prediction import UserPrediction
-    from app.models.league import League
-    from sqlalchemy import func
-
     user_res = await db.execute(select(User).where(User.id == user_id))
     target = user_res.scalar_one_or_none()
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
 
-    res = await db.execute(
-        select(TournamentResult, League.name.label("current_league_name"))
-        .outerjoin(League, League.id == TournamentResult.league_id)
-        .where(TournamentResult.user_id == user_id)
-        .order_by(TournamentResult.draw_id.desc(), TournamentResult.league_id.nullsfirst())
-    )
-    rows = res.all()
-
-    tourn_ids = list(dict.fromkeys(row.TournamentResult.draw_id for row in rows))
-    if not tourn_ids:
-        return {"username": target.username, "entries": []}
-
-    match_counts_res = await db.execute(
-        select(Match.draw_id, func.count().label("total"))
-        .where(Match.draw_id.in_(tourn_ids), Match.is_bye == False)
-        .group_by(Match.draw_id)
-    )
-    total_matches = {row.draw_id: row.total for row in match_counts_res}
-
-    pred_counts_res = await db.execute(
-        select(UserPrediction.draw_id, func.count().label("total"))
-        .where(
-            UserPrediction.draw_id.in_(tourn_ids),
-            UserPrediction.user_id == user_id,
-            UserPrediction.predicted_winner_id.isnot(None),
-        )
-        .group_by(UserPrediction.draw_id)
-    )
-    user_preds = {row.draw_id: row.total for row in pred_counts_res}
-
-    competed_ids = {
-        tid for tid in tourn_ids
-        if user_preds.get(tid, 0) >= total_matches.get(tid, 1)
-    }
-
-    t_res = await db.execute(select(Draw).where(Draw.id.in_(competed_ids)))
-    tournaments = {t.id: t for t in t_res.scalars().all()}
-
-    by_tourn: dict[int, list] = {}
-    for row in rows:
-        r = row.TournamentResult
-        if r.draw_id not in competed_ids:
-            continue
-        live_name = row.current_league_name if r.league_id is not None else "Global"
-        by_tourn.setdefault(r.draw_id, []).append({
-            "league_id": r.league_id,
-            "league_name": live_name,
-            "rank": r.rank,
-            "total_participants": r.total_participants,
-            "points": r.points,
-            "correct_count": r.correct_count,
-        })
-
-    entries = []
-    for tid in tourn_ids:
-        if tid not in competed_ids:
-            continue
-        t = tournaments.get(tid)
-        if not t:
-            continue
-        entries.append({
-            "tournament_id": tid,
-            "name": t.name,
-            "year": t.year,
-            "gender": t.gender,
-            "surface": t.surface,
-            "category": t.category,
-            "start_date": t.start_date,
-            "end_date": t.end_date,
-            "total_matches": total_matches.get(tid, 0),
-            "results": by_tourn[tid],
-        })
+    entries = await _global_draw_history(db, user_id)
     return {"username": target.username, "entries": entries}
 
 
