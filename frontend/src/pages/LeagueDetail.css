@@ -777,13 +777,17 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
     border-right: none;
   }
 
-  /* Members / Open-Active / Prev tabs: shrink enough that all three fit on
-     one row instead of "Members" wrapping onto its own line above the
-     other two. flex-wrap stays on as a fallback for anything narrower still. */
-  .lt-controls-row { gap: 0.2rem; }
+  /* Members / Open-Active / Prev tabs: once the cascade-order bug above was
+     fixed, these were sized very conservatively (0.58rem) just to prove
+     they'd fit on one row at all — that left visible slack on the row, so
+     sized back up while staying well clear of wrapping (tight padding
+     keeps this from re-triggering the original overflow, unlike the
+     desktop rule's 1.15rem side padding). flex-wrap stays on as a fallback
+     for anything narrower still. */
+  .lt-controls-row { gap: 0.3rem; }
   .lt-members-btn,
   .lt-status-tab {
-    padding: 0.2rem 0.22rem;
-    font-size: 0.58rem;
+    padding: 0.32rem 0.4rem;
+    font-size: 0.85rem;
   }
 }
