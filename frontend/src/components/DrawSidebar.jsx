@@ -194,6 +194,18 @@ export default function DrawSidebar({ tournamentId, tournament, selectedUserId, 
                         <span className="sidebar-rank">{i + 1}</span>
                         <span className="sidebar-points">{entry.total_points % 1 === 0 ? entry.total_points : entry.total_points.toFixed(1)}</span>
                         <span className="sidebar-member-name">@{m.username}</span>
+                        <button
+                          type="button"
+                          className="sidebar-user-history-btn"
+                          title={`${m.username}'s Draw History`}
+                          aria-label={`${m.username}'s Draw History`}
+                          onClick={e => { e.stopPropagation(); navigate(`/draw-history?user=${m.id}`) }}
+                        >
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                            <circle cx="12" cy="7" r="4" />
+                          </svg>
+                        </button>
                       </li>
                     )
                   })}
@@ -224,6 +236,18 @@ export default function DrawSidebar({ tournamentId, tournament, selectedUserId, 
                         <span className="sidebar-rank">{i + 1}</span>
                         <span className="sidebar-points">{entry.total_points % 1 === 0 ? entry.total_points : entry.total_points.toFixed(1)}</span>
                         <span className="sidebar-member-name">@{m.username}</span>
+                        <button
+                          type="button"
+                          className="sidebar-user-history-btn"
+                          title={`${m.username}'s Draw History`}
+                          aria-label={`${m.username}'s Draw History`}
+                          onClick={e => { e.stopPropagation(); navigate(`/draw-history?user=${m.id}`) }}
+                        >
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                            <circle cx="12" cy="7" r="4" />
+                          </svg>
+                        </button>
                       </li>
                     )
                   })}
