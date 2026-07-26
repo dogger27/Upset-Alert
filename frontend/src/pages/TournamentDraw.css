@@ -396,7 +396,6 @@
 }
 .btn-admin-refresh:disabled { opacity: 0.6; cursor: default; }
 
-.btn-auto-populate,
 .btn-reset-selections {
   font-size: 0.82rem;
   font-weight: 600;
@@ -407,19 +406,6 @@
   width: 100%;
   text-align: center;
   transition: background 0.15s, border-color 0.15s;
-}
-
-.btn-auto-populate {
-  color: #166534;
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
-}
-.btn-auto-populate:hover {
-  background: #dcfce7;
-  border-color: #86efac;
-}
-
-.btn-reset-selections {
   color: #991b1b;
   background: #fff1f2;
   border: 1px solid #fecaca;

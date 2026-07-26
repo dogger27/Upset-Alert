@@ -70,7 +70,6 @@ export default function TournamentDraw() {
   const initialModeSet = useRef(false)
   const [celebrating, setCelebrating] = useState(false)
   const [showUnlockConfirm, setShowUnlockConfirm] = useState(false)
-  const [pendingAutoPicks, setPendingAutoPicks] = useState(null)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
   const [resetToast, setResetToast] = useState(null)
   const [showDefaultPicksBanner, setShowDefaultPicksBanner] = useState(false)
@@ -360,25 +359,6 @@ export default function TournamentDraw() {
     }
 
     return newPicks
-  }
-
-  const autoPopulatePicks = () => {
-    if (!data) return
-    const isLocked = data.tournament.is_locked && !data.tournament.selections_unlocked
-    if (isLocked) return
-
-    const newPicks = computeAutoPicks()
-    if (!newPicks) return
-
-    const hasConflict = Object.entries(newPicks).some(
-      ([matchId, winnerId]) => picks[Number(matchId)] != null && picks[Number(matchId)] !== winnerId
-    )
-
-    if (hasConflict) {
-      setPendingAutoPicks(newPicks)
-    } else {
-      applyPicksAndCelebrate(newPicks)
-    }
   }
 
   const countPicksAndUpsets = () => {
@@ -847,15 +827,6 @@ export default function TournamentDraw() {
         {headerStage === 'full' && (
         <div className="draw-header-right">
           <div className="draw-picks-zone">
-            {user && !locked && !viewingOther && (viewMode === 'picks' || viewMode === 'combined') && (
-              <button
-                className="btn-auto-populate"
-                onClick={autoPopulatePicks}
-                title="Fill all picks using seeds and world rankings"
-              >
-                Auto-Populate Picks
-              </button>
-            )}
             {user && !locked && !viewingOther && pickedCount > 0 && (
               <button
                 className="btn-reset-selections"
@@ -913,7 +884,7 @@ export default function TournamentDraw() {
           {showPicksBadge && (
             <span className={`saved-badge${pickedCount < totalPredictable ? ' saved-badge--incomplete' : ''}`}>
               {pickedCount < totalPredictable
-                ? `⚠ ${pickedCount}/${totalPredictable} picks saved — Populate to COMPETE`
+                ? `⚠ ${pickedCount}/${totalPredictable} picks saved — complete all picks to COMPETE`
                 : `✓ ${pickedCount}/${totalPredictable} picks saved`}
             </span>
           )}
@@ -948,43 +919,6 @@ export default function TournamentDraw() {
       )}
 
       {celebrating && <CelebrationOverlay />}
-
-      {pendingAutoPicks && (
-        <div className="auto-populate-overlay" onClick={() => setPendingAutoPicks(null)}>
-          <div className="auto-populate-modal" onClick={e => e.stopPropagation()}>
-            <h3 className="auto-populate-modal-title">Replace existing picks?</h3>
-            <p className="auto-populate-modal-body">
-              You already have picks that differ from the auto-populated selections.
-              Replace them with seed-based picks?
-            </p>
-            <div className="auto-populate-modal-actions">
-              <button
-                className="btn-primary"
-                onClick={() => { applyPicksAndCelebrate(pendingAutoPicks); setPendingAutoPicks(null) }}
-              >
-                Replace my picks
-              </button>
-              <button
-                className="btn-secondary"
-                onClick={() => {
-                  const merged = { ...pendingAutoPicks }
-                  Object.entries(picks).forEach(([mid, wid]) => { if (wid != null) merged[Number(mid)] = wid })
-                  applyPicksAndCelebrate(merged)
-                  setPendingAutoPicks(null)
-                }}
-              >
-                Keep my picks
-              </button>
-              <button
-                className="btn-secondary"
-                onClick={() => setPendingAutoPicks(null)}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {showResetConfirm && (() => {
         const { total, upsets } = countPicksAndUpsets()
