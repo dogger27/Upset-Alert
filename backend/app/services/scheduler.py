@@ -317,7 +317,7 @@ async def _refresh_elo() -> None:
 # announced, well before Round-1 pairings are final — that state can briefly
 # cross the "substantially complete" threshold and then get corrected within
 # minutes. Waiting this long out lets any such flicker settle before emailing.
-DRAW_RELEASE_NOTIFY_COOLDOWN = timedelta(minutes=20)
+DRAW_RELEASE_NOTIFY_COOLDOWN = timedelta(minutes=10)
 
 
 async def _notify_pending_draw_releases() -> None:
@@ -523,7 +523,8 @@ def start_scheduler() -> None:
         misfire_grace_time=120,
     )
     # Centralized "draw released" email dispatch — see _notify_pending_draw_releases
-    # docstring. 10 min cadence comfortably resolves the 20 min stability cooldown.
+    # docstring. 10 min cadence matches the 10 min stability cooldown, so worst
+    # case a stable release waits one extra tick (up to ~10 min) before emailing.
     scheduler.add_job(
         _notify_pending_draw_releases,
         "interval",
