@@ -23,10 +23,10 @@ export default function TournamentDraw() {
   // All state declared first
   const [picks, setPicks] = useState({})
   const [otherPicks, setOtherPicks] = useState({})
-  // Picks/Live Draw views are disabled — Combined is the only view shown.
-  // The switcher UI and the auto-switch effects that used to flip this are
-  // disabled below, but left in place (not deleted) in case these views are
-  // re-enabled later.
+  // 'combined' (labelled "Picks" in the switcher) is the default; 'live'
+  // shows BracketView with actual results only, no predictions. The old
+  // dedicated picks-only BracketView mode ('picks') and the auto-switch
+  // effects that used to flip into/out of it are left disabled below.
   const [viewMode, setViewMode] = useState('combined')
   const [windowStart, setWindowStart] = useState(0) // left-most visible round (pager)
   const [mainWidth, setMainWidth] = useState(0) // width of the bracket area (drives # rounds shown)
@@ -73,7 +73,7 @@ export default function TournamentDraw() {
   const [pendingAutoPicks, setPendingAutoPicks] = useState(null)
   const [showClearConfirm, setShowClearConfirm] = useState(false)
   const [clearToast, setClearToast] = useState(null)
-  const [showAutoInitPrompt, setShowAutoInitPrompt] = useState(false)
+  const [showDefaultPicksBanner, setShowDefaultPicksBanner] = useState(false)
   const clearToastKeyRef = useRef(0)
   const celebrateTimerRef = useRef(null)
   const clearToastTimerRef = useRef(null)
@@ -122,7 +122,11 @@ export default function TournamentDraw() {
         const hasAnyPick = savedPreds.some(p => p.predicted_winner_id != null)
         if (!isLocked && !hasAnyPick) {
           autoInitShownRef.current = true
-          setShowAutoInitPrompt(true)
+          const newPicks = computeAutoPicks()
+          if (newPicks) {
+            applyPicksAndCelebrate(newPicks)
+            setShowDefaultPicksBanner(true)
+          }
         }
       }
     }
@@ -720,13 +724,17 @@ export default function TournamentDraw() {
           </div>
         </div>
         )}
-        {/* Picks/Live Draw/Combined switcher — DISABLED, Combined is the only
-            view shown. Buttons removed but kept here (commented) for when
-            these views are re-enabled.
+        {/* Picks/Live Draw switcher. "Picks" renders CombinedView (picks +
+            live result merged); "Live Draw" renders BracketView in 'live'
+            mode (actual results only, no predictions). Default is 'combined'
+            (Picks). The old dedicated picks-only BracketView mode still
+            exists and is reachable via viewMode === 'picks' elsewhere in
+            this file, but this switcher only offers the two user-facing
+            choices. */}
         <div className="draw-mode-buttons">
           <button
-            className={clsx('draw-mode-btn', { active: viewMode === 'picks' })}
-            onClick={() => setViewMode('picks')}
+            className={clsx('draw-mode-btn', { active: viewMode === 'combined' })}
+            onClick={() => setViewMode('combined')}
             disabled={picksDisabled}
             title={picksDisabled ? 'You have no picks for this tournament' : undefined}
           >
@@ -738,14 +746,7 @@ export default function TournamentDraw() {
           >
             Live Draw
           </button>
-          <button
-            className={clsx('draw-mode-btn', { active: viewMode === 'combined' })}
-            onClick={() => setViewMode('combined')}
-          >
-            Combined
-          </button>
         </div>
-        */}
         <div className="draw-header-center">
           {showPager && headerStage === 'minimal' && (
             <div className="bracket-pager bracket-pager--minimal">
@@ -960,35 +961,6 @@ export default function TournamentDraw() {
         </div>
       )}
 
-      {showAutoInitPrompt && (
-        <div className="auto-populate-overlay" onClick={() => setShowAutoInitPrompt(false)}>
-          <div className="auto-populate-modal" onClick={e => e.stopPropagation()}>
-            <h3 className="auto-populate-modal-title">Initialize your predictions?</h3>
-            <p className="auto-populate-modal-body">
-              Would you like to initialize your predictions by auto-selecting the higher-ranked player for every match? If so, you could then proceed by fine-tuning predictions by hand-picking your desired upsets.
-            </p>
-            <div className="auto-populate-modal-actions">
-              <button
-                className="btn-primary"
-                onClick={() => {
-                  const newPicks = computeAutoPicks()
-                  if (newPicks) applyPicksAndCelebrate(newPicks)
-                  setShowAutoInitPrompt(false)
-                }}
-              >
-                Yes, Auto-Select
-              </button>
-              <button
-                className="btn-secondary"
-                onClick={() => setShowAutoInitPrompt(false)}
-              >
-                No thanks
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {showClearConfirm && (() => {
         const { total, upsets } = countPicksAndUpsets()
         return (
@@ -1014,6 +986,23 @@ export default function TournamentDraw() {
 
       {clearToast && (
         <div key={clearToast.key} className="clear-toast">{clearToast.msg}</div>
+      )}
+
+      {showDefaultPicksBanner && (
+        <div className="default-picks-banner">
+          <span className="default-picks-banner-icon">✓</span>
+          <p className="default-picks-banner-text">
+            Your default predictions have been made, using the higher ranked player for the win.
+            Please select your <strong>UPSETS</strong> now!
+          </p>
+          <button
+            className="default-picks-banner-close"
+            onClick={() => setShowDefaultPicksBanner(false)}
+            aria-label="Dismiss"
+          >
+            ×
+          </button>
+        </div>
       )}
 
       <div className="draw-body" ref={bodyRef}>
