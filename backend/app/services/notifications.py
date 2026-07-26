@@ -45,6 +45,36 @@ def _email_round_label(round_name: str) -> str:
     return round_name
 
 
+def _last_name(full: str) -> str:
+    """Everything after the first token — mirrors the app-wide 'last name'
+    convention (CombinedView.jsx's lastNameOf) so multi-word surnames like
+    'Carreño Busta' stay together."""
+    parts = full.strip().split()
+    return " ".join(parts[1:]) if len(parts) > 1 else parts[0]
+
+
+def _strip_tiebreak(val: str) -> str:
+    idx = val.find("(")
+    return val[:idx] if idx != -1 else val
+
+
+def _match_score_str(match: Match) -> str:
+    """Set-by-set score with tiebreak points stripped, e.g. '6-4, 3-6, 7-6'
+    (never '7-6(12)') — kept compact for the round-complete email widget."""
+    if not match.scores_json or len(match.scores_json) < 2:
+        return ""
+    p1_sets, p2_sets = match.scores_json[0], match.scores_json[1]
+    own, opp = (p1_sets, p2_sets) if match.winner_id == match.player1_id else (p2_sets, p1_sets)
+    parts = []
+    for i in range(max(len(own), len(opp))):
+        a = _strip_tiebreak(own[i]) if i < len(own) else ""
+        b = _strip_tiebreak(opp[i]) if i < len(opp) else ""
+        if not a and not b:
+            continue
+        parts.append(f"{a}-{b}")
+    return ", ".join(parts)
+
+
 async def notify_round_complete(
     tournament_id: int,
     round_number: int,
@@ -92,6 +122,19 @@ async def notify_round_complete(
             .where(Match.draw_id == tournament_id, Match.status == "completed")
         )
         completed_matches = m_res.scalars().all()
+
+        # This round's results, in bracket order, for the email's expandable widget.
+        round_matches = sorted(
+            (m for m in completed_matches if m.round_number == round_number and not m.is_bye and m.winner_id),
+            key=lambda m: m.match_number,
+        )
+        match_results = []
+        for m in round_matches:
+            winner_entry = m.winner
+            loser_entry = m.player2 if m.winner_id == m.player1_id else m.player1
+            if not winner_entry or not loser_entry:
+                continue
+            match_results.append((_last_name(winner_entry.name), _last_name(loser_entry.name), _match_score_str(m)))
 
         # Total non-bye matches in the draw
         total_res = await db.execute(
@@ -295,7 +338,7 @@ async def notify_round_complete(
             await send_round_complete_notification(
                 email, t_name, t_year, tournament_id, round_name, leagues,
                 category=tournament.category or "", gender=tournament.gender or "M",
-                unsubscribe_url=unsubscribe_url,
+                unsubscribe_url=unsubscribe_url, match_results=match_results,
             )
             logger.info(
                 "Round-complete email sent to user %d (%d group(s)) — %d %s %s",
