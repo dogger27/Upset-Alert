@@ -201,9 +201,19 @@
     gap: 0.25rem;
     min-width: 0;
   }
+  /* This cap matters more than it looks like it should: flex-wrap decides
+     which line an item goes on using each item's PRE-shrink hypothetical
+     size, not its post-shrink size — so a long league name sitting at a
+     generous max-width (e.g. 34vw) can by itself make Create/Join's
+     hypothetical size not fit on row 1, wrapping them to their own row,
+     even though the name COULD have shrunk further to make room. A short
+     name like "Global" never hit that cap so this never showed up until a
+     longer name did. Kept tight so the name's own reserved space, plus
+     "LEAGUES" + dropdown + Create/Join, reliably fits regardless of how
+     long the actual league name is. */
   .leagues-current-league {
     font-size: 1.6rem;
-    max-width: 34vw;
+    max-width: 20vw;
   }
 
   /* Stays on row 1 (with "LEAGUES"/name/dropdown) instead of wrapping to its
