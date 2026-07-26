@@ -35,12 +35,15 @@ function fmtDateRange(start, end) {
   if (!start) return null
   const s = new Date(start + 'T00:00:00')
   const fmt = (d, opts) => d.toLocaleDateString('en-US', opts)
-  if (!end) return fmt(s, { month: 'short', day: 'numeric' })
+  if (!end) return fmt(s, { month: 'short', day: 'numeric', year: 'numeric' })
   const e = new Date(end + 'T00:00:00')
-  if (s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear()) {
-    return `${fmt(s, { month: 'short', day: 'numeric' })} – ${e.getDate()}`
+  if (s.getFullYear() !== e.getFullYear()) {
+    return `${fmt(s, { month: 'short', day: 'numeric', year: 'numeric' })} – ${fmt(e, { month: 'short', day: 'numeric', year: 'numeric' })}`
   }
-  return `${fmt(s, { month: 'short', day: 'numeric' })} – ${fmt(e, { month: 'short', day: 'numeric' })}`
+  if (s.getMonth() === e.getMonth()) {
+    return `${fmt(s, { month: 'short', day: 'numeric' })} – ${e.getDate()}, ${e.getFullYear()}`
+  }
+  return `${fmt(s, { month: 'short', day: 'numeric' })} – ${fmt(e, { month: 'short', day: 'numeric' })}, ${e.getFullYear()}`
 }
 
 const COLUMNS = [
@@ -145,8 +148,8 @@ export default function DrawHistory() {
     staleTime: 5 * 60 * 1000,
   })
 
-  const [sortKey, setSortKey] = useState('date')
-  const [sortDir, setSortDir] = useState('desc')
+  const [sortKey, setSortKey] = useState('correct')
+  const [sortDir, setSortDir] = useState(DEFAULT_DIR.correct)
 
   function handleSort(key) {
     if (key === sortKey) {
@@ -160,20 +163,10 @@ export default function DrawHistory() {
   const username = data?.username ?? null
   const entries = data?.entries ?? (Array.isArray(data) ? data : [])
 
-  const byYear = useMemo(() => {
-    const grouped = {}
-    for (const entry of entries) {
-      const yr = entry.year ?? (entry.start_date ? entry.start_date.slice(0, 4) : '?')
-      if (!grouped[yr]) grouped[yr] = []
-      grouped[yr].push(entry)
-    }
-    for (const yr of Object.keys(grouped)) {
-      grouped[yr].sort((a, b) => compareEntries(a, b, sortKey, sortDir))
-    }
-    return grouped
+  const sortedEntries = useMemo(() => {
+    return [...entries].sort((a, b) => compareEntries(a, b, sortKey, sortDir))
   }, [entries, sortKey, sortDir])
 
-  const years = Object.keys(byYear).sort((a, b) => b - a)
   const pageTitle = 'Draw History'
 
   if (isLoading) return <div className="dh-page"><div className="dh-container"><p className="dh-state">Loading…</p></div></div>
@@ -208,37 +201,32 @@ export default function DrawHistory() {
           <p className="dh-subtitle">Global league</p>
         </div>
 
-        {years.map(yr => (
-          <div key={yr} className="dh-year-section">
-            <div className="dh-year-label">{yr}</div>
-            <div className="dh-table-wrap">
-              <table className="dh-table">
-                <thead>
-                  <tr>
-                    {COLUMNS.map(col => (
-                      <th
-                        key={col.key}
-                        className="dh-th-sortable"
-                        aria-sort={sortKey === col.key ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
-                        tabIndex={0}
-                        onClick={() => handleSort(col.key)}
-                        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSort(col.key) } }}
-                      >
-                        <span className="dh-th-inner">
-                          {col.label}
-                          <SortIndicator active={sortKey === col.key} dir={sortDir} />
-                        </span>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {byYear[yr].map(e => <TournamentRow key={e.tournament_id} entry={e} userId={userId} />)}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ))}
+        <div className="dh-table-wrap">
+          <table className="dh-table">
+            <thead>
+              <tr>
+                {COLUMNS.map(col => (
+                  <th
+                    key={col.key}
+                    className="dh-th-sortable"
+                    aria-sort={sortKey === col.key ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+                    tabIndex={0}
+                    onClick={() => handleSort(col.key)}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSort(col.key) } }}
+                  >
+                    <span className="dh-th-inner">
+                      {col.label}
+                      <SortIndicator active={sortKey === col.key} dir={sortDir} />
+                    </span>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {sortedEntries.map(e => <TournamentRow key={e.tournament_id} entry={e} userId={userId} />)}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   )
