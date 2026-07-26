@@ -333,6 +333,50 @@ def _round_complete_league_block(name: str, rows: list[tuple], is_last: bool) ->
     )
 
 
+def _match_result_row(winner_last: str, loser_last: str, score: str, is_last: bool) -> str:
+    border = "" if is_last else "border-bottom:1px solid #e5e7eb;"
+    return (
+        f'<tr>'
+        f'<td style="padding:8px 12px;{border}font-size:14px;color:#111">'
+        f'<strong>{winner_last}</strong> def. {loser_last}</td>'
+        f'<td align="right" style="padding:8px 12px;{border}font-size:14px;color:#444;'
+        f'white-space:nowrap;text-align:right">{score}</td>'
+        f'</tr>'
+    )
+
+
+def _round_results_widget(round_name: str, results: list[tuple]) -> str:
+    """CSS-only (checkbox hack) collapsible panel — no JS, so it works in email.
+    results: [(winner_last, loser_last, score), ...] in bracket order."""
+    if not results:
+        return ""
+    rows = "".join(
+        _match_result_row(w, l, s, i == len(results) - 1)
+        for i, (w, l, s) in enumerate(results)
+    )
+    return f"""<div style="margin:0 0 24px">
+          <input type="checkbox" id="rc-toggle" style="display:none">
+          <label for="rc-toggle" style="cursor:pointer;display:flex;align-items:center;
+                 justify-content:space-between;padding:11px 14px;background:#f3f4f6;
+                 border:1px solid #e5e7eb;border-radius:6px;font-weight:600;font-size:14px;color:#111">
+            <span>Show {round_name} Results</span>
+            <span class="rc-arrow" style="display:inline-block;transition:transform .2s;
+                  font-size:12px;color:#6b7280">&#9660;</span>
+          </label>
+          <div class="rc-body" style="display:none">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                   style="width:100%;border-collapse:collapse;border:1px solid #e5e7eb;border-top:none;
+                          border-radius:0 0 6px 6px">
+              <tbody>{rows}</tbody>
+            </table>
+          </div>
+        </div>
+        <style>
+          #rc-toggle:checked ~ .rc-body {{ display:block !important; }}
+          #rc-toggle:checked ~ label .rc-arrow {{ transform:rotate(180deg); }}
+        </style>"""
+
+
 async def send_round_complete_notification(
     email: str,
     tournament_name: str,
@@ -343,6 +387,7 @@ async def send_round_complete_notification(
     category: str = "",
     gender: str = "M",
     unsubscribe_url: str = "",
+    match_results: Optional[list[tuple]] = None,  # [(winner_last, loser_last, score), ...]
 ) -> None:
     """One email per user: every group's competitor list, stacked vertically."""
     tournament_url = f"{BASE_URL}/tournaments/{tournament_id}"
@@ -350,6 +395,7 @@ async def send_round_complete_notification(
         _round_complete_league_block(lg_name, rows, i == len(leagues) - 1)
         for i, (lg_name, rows) in enumerate(leagues)
     )
+    results_widget = _round_results_widget(round_name, match_results or [])
     unsubscribe = (
         f'<p style="margin:28px 0 0;text-align:center;font-size:12px;color:#9ca3af">'
         f'<a href="{unsubscribe_url}" style="color:#9ca3af;text-decoration:underline">'
@@ -363,6 +409,7 @@ async def send_round_complete_notification(
         "html": f"""{_WRAP_OPEN}{_LOGO_HEADER}{_BODY_OPEN}
           <h1 style="font-size:22px;margin:0 0 12px">{_tournament_label(tournament_name, category, gender)} {round_name} is complete!</h1>
           <p style="color:#444;line-height:1.6;margin:0 0 20px">Here are the current standings for the leagues you are competing in:</p>
+          {results_widget}
           <div style="margin:0 0 24px">{blocks}</div>
           <a href="{tournament_url}" style="display:inline-block;padding:12px 24px;
              background:#1b4332;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
