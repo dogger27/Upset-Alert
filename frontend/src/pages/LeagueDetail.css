@@ -245,6 +245,15 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   gap: 1.25rem;
 }
 
+/* Previous tab: sentinel row that triggers loading the next 5 draws once it
+   scrolls into view. */
+.lt-load-more-sentinel {
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  padding: 0.9rem 0 0.2rem;
+}
+
 /* Mobile: the card's default 1.5rem side padding (from the shared .card
    rule) eats a lot of a phone's width before the competitor rows even
    start laying out. Trim it (and the per-tournament block's own side
