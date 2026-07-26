@@ -139,8 +139,7 @@
 .lmt-pts--sortable:hover { color: var(--text); }
 .lmt-sort-arrow { font-size: 0.6rem; }
 td.lmt-name { text-align: left; color: var(--text); max-width: 130px; display: flex; align-items: center; gap: 4px; }
-.lmt-name-link { color: inherit; text-decoration: none; min-width: 0; }
-.lmt-name-link:hover { color: var(--green-600); text-decoration: underline; }
+.lmt-name-link { color: inherit; min-width: 0; }
 .lmt-name-text { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lmt-admin-badge {
   display: inline-block;
@@ -607,10 +606,6 @@ td.lmt-name { text-align: left; color: var(--text); max-width: 130px; display: f
   font-size: 0.85rem; font-weight: 600;
   min-width: 0; display: flex; align-items: center; gap: 4px;
 }
-.lt-progress-name--link {
-  color: inherit; text-decoration: none;
-}
-.lt-progress-name--link:hover .lt-progress-name-text { text-decoration: underline; color: var(--green-600); }
 .lt-progress-name--me .lt-progress-name-text { font-weight: 800; }
 .lt-place-icon { font-size: 0.95rem; flex-shrink: 0; line-height: 1; }
 .lt-progress-name-text {
