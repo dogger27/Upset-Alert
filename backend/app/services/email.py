@@ -409,13 +409,13 @@ async def send_round_complete_notification(
         "to": [email],
         "subject": f"{round_name} Complete: {_tournament_label(tournament_name, category, gender)}",
         "html": f"""{_WRAP_OPEN}{_LOGO_HEADER}{_BODY_OPEN}
-          <h1 style="font-size:22px;margin:0 0 12px">{_tournament_label(tournament_name, category, gender)} {round_name} is complete!</h1>
-          <p style="color:#444;line-height:1.6;margin:0 0 20px">Here are the current standings for the leagues you are competing in:</p>
-          <div style="margin:0 0 24px">{blocks}</div>
-          <a href="{tournament_url}" style="display:inline-block;padding:12px 24px;
+          <h1 style="font-size:22px;margin:0 0 16px">{_tournament_label(tournament_name, category, gender)} {round_name} is complete!</h1>
+          <a href="{tournament_url}" style="display:inline-block;padding:12px 24px;margin:0 0 20px;
              background:#1b4332;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
             View Draw &amp; Standings
           </a>
+          <p style="color:#444;line-height:1.6;margin:0 0 20px">Here are the current standings for the leagues you are competing in:</p>
+          <div style="margin:0 0 24px">{blocks}</div>
           {results_widget}
         {_BODY_CLOSE}{_WRAP_CLOSE}
         {unsubscribe}""",
