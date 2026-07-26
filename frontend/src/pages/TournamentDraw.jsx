@@ -178,11 +178,14 @@ export default function TournamentDraw() {
   // there's room again. Disabled once the user manually toggles it.
   useEffect(() => {
     if (sidebarManual || bodyWidth <= 0 || !data) return
-    const colUnit = 260 + 64 // mirrors CombinedView COL_W + COL_GAP (see fit calc below)
+    // Combined: mirrors CombinedView's COL_W(260) + COL_GAP(64). Live: mirrors
+    // BracketView's COL_W_SCORES(300)/COL_W(252) + COL_GAP(24) — see fit calc below.
+    const anyScores = data.matches.some(m => (m.scores?.length > 0) || m.live_scores != null)
+    const colUnit = viewMode === 'combined' ? 260 + 64 : (anyScores ? 300 : 252) + 24
     const needed4Main = 4 * colUnit + 16 // draw-main width needed to fit 4 full rounds
     const projMainIfExpanded = bodyWidth - expandedSidebarW.current
     setSidebarCollapsed(projMainIfExpanded < needed4Main)
-  }, [sidebarManual, bodyWidth, data])
+  }, [sidebarManual, bodyWidth, data, viewMode])
 
   // Resume auto behaviour when navigating to a different tournament
   useEffect(() => { setSidebarManual(false) }, [id])
@@ -561,11 +564,12 @@ export default function TournamentDraw() {
 
   // How many columns fit in the bracket area: shrink from 4 toward 1 as it
   // narrows; a column is only counted when it fits ENTIRELY (no h-scroll).
-  // 324 mirrors CombinedView's COL_W(260) + COL_GAP(64) — the only view shown.
-  // (If Picks/Live are ever re-enabled, restore a per-view unit: BracketView
-  // is (anyScores ? 300 : 252) + 24.)
+  // Combined: 324, mirroring CombinedView's COL_W(260) + COL_GAP(64). Live:
+  // mirrors BracketView's COL_W_SCORES(300)/COL_W(252) + its own COL_GAP(24),
+  // depending on whether any match in the draw already carries score data.
   const COL_GAP_PX = 24 // credited back for the last column's missing trailing gap
-  const colUnit = 260 + 64
+  const anyScores = matches.some(m => (m.scores?.length > 0) || m.live_scores != null)
+  const colUnit = viewMode === 'combined' ? 260 + 64 : (anyScores ? 300 : 252) + 24
   // Left gutter reserved INSIDE the draw for the left round-nav button when the
   // sidebar is expanded (collapsed → the button lives in the page-edge gutter).
   // Tuned tight to the button's own footprint (left:3px + its CHAMP-sized
@@ -727,10 +731,10 @@ export default function TournamentDraw() {
         {/* Picks/Live Draw switcher. "Picks" renders CombinedView (picks +
             live result merged); "Live Draw" renders BracketView in 'live'
             mode (actual results only, no predictions). Default is 'combined'
-            (Picks). The old dedicated picks-only BracketView mode still
-            exists and is reachable via viewMode === 'picks' elsewhere in
-            this file, but this switcher only offers the two user-facing
-            choices. */}
+            (Picks). BracketView's dedicated picks-only mode ('picks') is
+            still supported by the code (see picksOwner/lossRound logic
+            elsewhere in this file and in BracketView) but unreachable from
+            this switcher, which only offers the two user-facing choices. */}
         <div className="draw-mode-buttons">
           <button
             className={clsx('draw-mode-btn', { active: viewMode === 'combined' })}
@@ -1017,9 +1021,10 @@ export default function TournamentDraw() {
           onSelectUser={(uid, uname) => {
             setViewedUserId(uid)
             setViewedUserName(uname ?? null)
-            // Previously switched to the (now-disabled) Picks view here.
-            // Combined view already reads the selected user's picks via
-            // activePicks/viewingOther, so no view-mode change is needed.
+            // Live Draw shows no picks at all, so jump back to Picks (Combined)
+            // when a user is selected — otherwise the selection would appear
+            // to do nothing.
+            if (uid != null) setViewMode('combined')
           }}
         />
 

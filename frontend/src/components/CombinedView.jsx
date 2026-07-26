@@ -108,7 +108,14 @@ function resolveCombinedPlayers(matches, picks) {
   function getAdvancer(m) {
     if (!m) return null
     if (m.is_bye) return m.player1?.id ?? null
-    return picks?.[m.id] ?? m.winner?.id ?? null
+    // A pick only counts if the picked player is one of this match's resolved
+    // feeders. Orphaned picks (e.g. a downstream pick of a player displaced by
+    // a later upstream re-pick, or legacy phantom picks) must not cascade a
+    // player into rounds their own bracket path never reaches.
+    const r = resolved[m.id]
+    const pick = picks?.[m.id]
+    const pickValid = pick != null && r != null && (pick === r.p1 || pick === r.p2)
+    return (pickValid ? pick : null) ?? m.winner?.id ?? null
   }
 
   function resolve(m) {
