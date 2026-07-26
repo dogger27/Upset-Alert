@@ -22,6 +22,11 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Synthetic accounts (e.g. "Highest_Rank") that auto-generate predictions.
+    # Never created via /auth/register, so it never picks up notification
+    # preferences — the existing opt-in joins in notifications.py already
+    # exclude it without needing an explicit filter.
+    is_bot: Mapped[bool] = mapped_column(Boolean, default=False)
     email_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     verification_code: Mapped[Optional[str]] = mapped_column(String(6), nullable=True)
     verification_code_expires: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

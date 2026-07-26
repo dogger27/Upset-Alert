@@ -146,6 +146,7 @@ async def _migrate(conn):
             "wiki_page_id = 83670759 "
             "WHERE wiki_page_title = '2026 Iași Open –Singles'"
         ),
+        "ALTER TABLE users ADD COLUMN is_bot BOOLEAN DEFAULT 0",
     ]
     for sql in migrations:
         try:
