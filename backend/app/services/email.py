@@ -346,7 +346,9 @@ def _match_result_row(winner_last: str, loser_last: str, score: str, is_last: bo
 
 
 def _round_results_widget(round_name: str, results: list[tuple]) -> str:
-    """CSS-only (checkbox hack) collapsible panel — no JS, so it works in email.
+    """Always-visible match-results panel. Gmail (web and mobile app) strips
+    <style> tags and doesn't support the CSS-only ":checked" accordion trick,
+    so this is plain static markup rather than a collapsible widget.
     results: [(winner_last, loser_last, score), ...] in bracket order."""
     if not results:
         return ""
@@ -354,27 +356,18 @@ def _round_results_widget(round_name: str, results: list[tuple]) -> str:
         _match_result_row(w, l, s, i == len(results) - 1)
         for i, (w, l, s) in enumerate(results)
     )
-    return f"""<div style="margin:0 0 24px">
-          <input type="checkbox" id="rc-toggle" style="display:none">
-          <label for="rc-toggle" style="cursor:pointer;display:flex;align-items:center;
-                 justify-content:space-between;padding:11px 14px;background:#f3f4f6;
-                 border:1px solid #e5e7eb;border-radius:6px;font-weight:600;font-size:14px;color:#111">
-            <span>Show {round_name} Results</span>
-            <span class="rc-arrow" style="display:inline-block;transition:transform .2s;
-                  font-size:12px;color:#6b7280">&#9660;</span>
-          </label>
-          <div class="rc-body" style="display:none">
-            <table width="100%" cellpadding="0" cellspacing="0" border="0"
-                   style="width:100%;border-collapse:collapse;border:1px solid #e5e7eb;border-top:none;
-                          border-radius:0 0 6px 6px">
-              <tbody>{rows}</tbody>
-            </table>
+    return f"""<div style="margin:24px 0 0">
+          <div style="padding:11px 14px;background:#f3f4f6;border:1px solid #e5e7eb;
+                border-top-left-radius:6px;border-top-right-radius:6px;
+                font-weight:600;font-size:14px;color:#111">
+            {round_name} Results
           </div>
-        </div>
-        <style>
-          #rc-toggle:checked ~ .rc-body {{ display:block !important; }}
-          #rc-toggle:checked ~ label .rc-arrow {{ transform:rotate(180deg); }}
-        </style>"""
+          <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                 style="width:100%;border-collapse:collapse;border:1px solid #e5e7eb;border-top:none;
+                        border-bottom-left-radius:6px;border-bottom-right-radius:6px">
+            <tbody>{rows}</tbody>
+          </table>
+        </div>"""
 
 
 async def send_round_complete_notification(
@@ -409,13 +402,13 @@ async def send_round_complete_notification(
         "html": f"""{_WRAP_OPEN}{_LOGO_HEADER}{_BODY_OPEN}
           <h1 style="font-size:22px;margin:0 0 12px">{_tournament_label(tournament_name, category, gender)} {round_name} is complete!</h1>
           <p style="color:#444;line-height:1.6;margin:0 0 20px">Here are the current standings for the leagues you are competing in:</p>
-          {results_widget}
           <div style="margin:0 0 24px">{blocks}</div>
           <a href="{tournament_url}" style="display:inline-block;padding:12px 24px;
              background:#1b4332;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
             View Draw &amp; Standings
           </a>
           {unsubscribe}
+          {results_widget}
         {_BODY_CLOSE}{_WRAP_CLOSE}""",
     })
 
