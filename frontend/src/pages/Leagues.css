@@ -178,9 +178,8 @@
    combined natural width fits the row — on a phone it doesn't. Rather than
    fight for a single shared line with everything at full size, shrink
    "LEAGUES" + the league name enough that they comfortably share row 1
-   (with the dropdown), and let Create/Join wrap to their own row —
-   side-by-side instead of stacked, and shrunk a lot from their
-   desktop-sized padding/width. */
+   (with the dropdown), and let Create/Join (still stacked vertically) wrap
+   to their own row below, shrunk down from their desktop-sized padding. */
 @media (max-width: 640px) {
   .leagues-page-top {
     display: flex;
@@ -208,10 +207,13 @@
     flex: 1 1 100%;
     justify-content: flex-end;
   }
-  .leagues-btn-stack { flex-direction: row; gap: 6px; }
+  /* Vertical stack (base .leagues-btn-stack direction) — just tighten the
+     gap. The real fix here is dropping the fixed width below: a 58px box
+     around "Join" (4 letters) was mostly empty side margin, not padding. */
+  .leagues-btn-stack { gap: 4px; }
   .leagues-stack-btn {
-    width: 58px;
-    padding: 3px 4px;
+    width: auto;
+    padding: 3px 10px;
     font-size: 0.7rem;
   }
 }
