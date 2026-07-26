@@ -138,7 +138,12 @@
 .lmt-pts--sortable { cursor: pointer; user-select: none; }
 .lmt-pts--sortable:hover { color: var(--text); }
 .lmt-sort-arrow { font-size: 0.6rem; }
-td.lmt-name { text-align: left; color: var(--text); max-width: 130px; display: flex; align-items: center; gap: 4px; }
+/* No max-width here: let the name size to its natural content — the table
+   and its .lt-members-view card are both width:fit-content, so there's no
+   reason to cap and ellipsis-truncate names when the card can simply grow.
+   min-width:0 + the ellipsis rule on .lmt-name-text remain as a fallback for
+   when .lt-members-view's own max-width:100% (mobile) forces a squeeze. */
+td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex; align-items: center; gap: 4px; }
 .lmt-name-link { color: inherit; min-width: 0; }
 .lmt-name-text { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lmt-admin-badge {
@@ -162,10 +167,13 @@ td.lmt-name { text-align: left; color: var(--text); max-width: 130px; display: f
   white-space: nowrap;
 }
 
-/* "All Members" view: bubble only as wide as the table needs */
+/* "All Members" view: bubble only as wide as the table needs. On a screen
+   too narrow for a long name + all three point columns, scroll horizontally
+   inside the card rather than clipping the name or breaking the page. */
 .lt-members-view {
   width: fit-content;
   max-width: 100%;
+  overflow-x: auto;
 }
 .lt-members-view .league-members-table {
   width: auto;
@@ -241,6 +249,13 @@ td.lmt-name { text-align: left; color: var(--text); max-width: 130px; display: f
 @media (max-width: 640px) {
   .card.league-tournaments-section { padding: 1rem 0.6rem; }
   .lt-progress-block { padding: 0.9rem 0.4rem; }
+  /* Members table: the 1.75rem left padding on each points column (×3) was
+     costing ~84px that could go to the name instead — cut it down, and
+     tighten the header/row font sizes a touch, all in service of the same
+     "more room for the name" goal as the padding trims above. */
+  .lmt-pts { padding-left: 0.85rem; }
+  .league-members-table { font-size: 0.78rem; }
+  .league-members-table thead th { font-size: 0.66rem; }
 }
 
 /* Title + controls above the draws/members bubble */
