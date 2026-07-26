@@ -254,45 +254,6 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   padding: 0.9rem 0 0.2rem;
 }
 
-/* Mobile: the card's default 1.5rem side padding (from the shared .card
-   rule) eats a lot of a phone's width before the competitor rows even
-   start laying out. Trim it (and the per-tournament block's own side
-   padding) so those rows have more room — mainly helps the name column,
-   which otherwise truncates usernames on narrow screens. */
-@media (max-width: 640px) {
-  .card.league-tournaments-section { padding: 1rem 0.6rem; }
-  .lt-progress-block { padding: 0.9rem 0.4rem; }
-  /* Members table: the 1.75rem left padding on each points column (×3) was
-     costing ~84px that could go to the name instead — cut it down, and
-     tighten the header/row font sizes a touch, all in service of the same
-     "more room for the name" goal as the padding trims above. */
-  .lmt-pts { padding-left: 0.85rem; }
-  .league-members-table { font-size: 0.78rem; }
-  .league-members-table thead th { font-size: 0.66rem; }
-
-  /* Break the card out of .leagues-page's 28px side padding so it spans the
-     full screen width on mobile instead of floating in a narrow column with
-     grey gutters on both sides. */
-  .card.league-tournaments-section {
-    margin-left: -28px;
-    margin-right: -28px;
-    width: calc(100% + 56px);
-    border-radius: 0;
-    border-left: none;
-    border-right: none;
-  }
-
-  /* Members / Open-Active / Prev tabs: shrink enough that all three fit on
-     one row instead of "Members" wrapping onto its own line above the
-     other two. flex-wrap stays on as a fallback for anything narrower still. */
-  .lt-controls-row { gap: 0.2rem; }
-  .lt-members-btn,
-  .lt-status-tab {
-    padding: 0.2rem 0.22rem;
-    font-size: 0.58rem;
-  }
-}
-
 /* Title + controls above the draws/members bubble */
 .lt-draws-title {
   font-size: 1.75rem;
@@ -778,5 +739,51 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   .lt-progress-row--abs,
   .lt-progress-header-row {
     grid-template-columns: var(--name-col-width, 92px) 52px;
+  }
+}
+
+/* Mobile: moved to the end of the file, same reason as the @container tiers
+   above — .lt-members-btn/.lt-status-tab's base rules (font-size:0.95rem
+   etc.) are defined LATER in this file than they used to be here, so at
+   equal specificity the base rule was winning the cascade on every screen
+   size, silently no-opping this whole block regardless of viewport width.
+   Putting it last guarantees it always wins, independent of where any
+   target selector's base rule happens to sit. */
+@media (max-width: 640px) {
+  /* The card's default 1.5rem side padding (from the shared .card rule)
+     eats a lot of a phone's width before the competitor rows even start
+     laying out. Trim it (and the per-tournament block's own side padding)
+     so those rows have more room — mainly helps the name column, which
+     otherwise truncates usernames on narrow screens. */
+  .card.league-tournaments-section { padding: 1rem 0.6rem; }
+  .lt-progress-block { padding: 0.9rem 0.4rem; }
+  /* Members table: the 1.75rem left padding on each points column (×3) was
+     costing ~84px that could go to the name instead — cut it down, and
+     tighten the header/row font sizes a touch, all in service of the same
+     "more room for the name" goal as the padding trims above. */
+  .lmt-pts { padding-left: 0.85rem; }
+  .league-members-table { font-size: 0.78rem; }
+  .league-members-table thead th { font-size: 0.66rem; }
+
+  /* Break the card out of .leagues-page's 28px side padding so it spans the
+     full screen width on mobile instead of floating in a narrow column with
+     grey gutters on both sides. */
+  .card.league-tournaments-section {
+    margin-left: -28px;
+    margin-right: -28px;
+    width: calc(100% + 56px);
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
+
+  /* Members / Open-Active / Prev tabs: shrink enough that all three fit on
+     one row instead of "Members" wrapping onto its own line above the
+     other two. flex-wrap stays on as a fallback for anything narrower still. */
+  .lt-controls-row { gap: 0.2rem; }
+  .lt-members-btn,
+  .lt-status-tab {
+    padding: 0.2rem 0.22rem;
+    font-size: 0.58rem;
   }
 }
