@@ -175,35 +175,40 @@
 }
 
 /* Mobile: the true-center 3-column grid only works when the three columns'
-   combined natural width fits the row — on a phone it doesn't, and the
-   centered league name (large + bold) visually collided with "LEAGUES".
-   Give the name its own full-width row below the title/Create-Join row
-   instead of fighting for space in the same line. Also shrink the
-   Create/Join pills a lot — their padding/width was sized for desktop's
-   spare room, not a narrow screen. */
+   combined natural width fits the row — on a phone it doesn't. Rather than
+   fight for a single shared line with everything at full size, shrink
+   "LEAGUES" + the league name enough that they comfortably share row 1
+   (with the dropdown), and let Create/Join wrap to their own row —
+   side-by-side instead of stacked, and shrunk a lot from their
+   desktop-sized padding/width. */
 @media (max-width: 640px) {
   .leagues-page-top {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    justify-content: space-between;
-    gap: 0.4rem 0.6rem;
+    gap: 0.3rem 0.5rem;
   }
-  .leagues-title-col,
-  .leagues-top-right {
+  .leagues-title-col {
     flex: 0 0 auto;
+    gap: 0.3rem;
   }
+  .leagues-page-title { font-size: 1.3rem; }
   .leagues-name-center {
-    order: 3;
-    flex: 1 1 100%;
-    justify-content: center;
+    flex: 0 1 auto;
+    justify-content: flex-start;
+    gap: 0.3rem;
+    min-width: 0;
   }
   .leagues-current-league {
-    font-size: 2rem;
-    max-width: 70vw;
+    font-size: 1.3rem;
+    max-width: 38vw;
   }
 
-  .leagues-btn-stack { gap: 4px; }
+  .leagues-top-right {
+    flex: 1 1 100%;
+    justify-content: flex-end;
+  }
+  .leagues-btn-stack { flex-direction: row; gap: 6px; }
   .leagues-stack-btn {
     width: 58px;
     padding: 3px 4px;
