@@ -232,6 +232,12 @@ export default function LeagueDetail() {
                           {members.map(m => (
                             <tr key={m.user_id}>
                               <td className="lmt-name">
+                                <a href={`/draw-history?user=${m.user_id}`} className="lt-history-btn" title={`${m.username}'s Draw History`} aria-label={`${m.username}'s Draw History`}>
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                                    <circle cx="12" cy="7" r="4" />
+                                  </svg>
+                                </a>
                                 <a href={`/draw-history?user=${m.user_id}`} className="lmt-name-link username-hover" data-tooltip={`${m.full_name || m.username}:\nDraw History (${drawCountMap[m.user_id] ?? 0})`}>
                                   <span className="lmt-name-text">{m.username}</span>
                                 </a>
@@ -455,6 +461,12 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
               {entries.map((entry, entryIndex) => (
                 <div key={entry.user_id} className={`lt-progress-row lt-progress-row--open${entry.user_id === user?.id ? ' lt-progress-row--me' : ''}`}>
                   <span className="lt-pos-num">{entryIndex + 1}.</span>
+                  <a href={`/draw-history?user=${entry.user_id}`} className="lt-history-btn" title={`${entry.username}'s Draw History`} aria-label={`${entry.username}'s Draw History`}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                      <circle cx="12" cy="7" r="4" />
+                    </svg>
+                  </a>
                   <a href={`/draw-history?user=${entry.user_id}`} className={`lt-progress-name lt-progress-name--link username-hover${entry.user_id === user?.id ? ' lt-progress-name--me' : ''}`} data-tooltip={`${entry.full_name || entry.username}:\nDraw History (${drawCountMap[entry.user_id] ?? 0})`}>
                     <span className="lt-progress-name-text">{entry.username}</span>
                   </a>
@@ -468,6 +480,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
           <div className="lt-progress-row lt-progress-header-row" style={{ '--name-col-width': `${nameColWidth}px` }}>
             <span className="lt-hcol-bracket" />
             <span className="lt-hcol-pos" />
+            <span className="lt-hcol-history" />
             <span className="lt-competitors-label lt-competitors-label--inline">Competitor</span>
             <div className="lt-bar-track">
               {activeRounds.map((i, col) => (
@@ -510,6 +523,12 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                   </svg>
                 </button>
                 <span className="lt-pos-num">{rank + 1}.</span>
+                <a href={`/draw-history?user=${entry.user_id}`} className="lt-history-btn" title={`${entry.username}'s Draw History`} aria-label={`${entry.username}'s Draw History`} onClick={e => e.stopPropagation()}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                    <circle cx="12" cy="7" r="4" />
+                  </svg>
+                </a>
                 <a href={`/draw-history?user=${entry.user_id}`} className={`lt-progress-name lt-progress-name--link username-hover${entry.user_id === user?.id ? ' lt-progress-name--me' : ''}`} data-tooltip={`${entry.full_name || entry.username}:\nDraw History (${drawCountMap[entry.user_id] ?? 0})`}>
                   {finalPlayed && rank < 3 && <span className="lt-place-icon">{PLACE_ICONS[rank]}</span>}
                   <span className="lt-progress-name-text">{entry.username}</span>
