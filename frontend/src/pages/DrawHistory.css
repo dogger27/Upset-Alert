@@ -60,21 +60,6 @@
 .dh-state a { color: var(--green-600); text-decoration: underline; }
 .dh-state--error { color: #dc2626; }
 
-/* ── Year sections ── */
-.dh-year-section {
-  margin-bottom: 32px;
-}
-
-.dh-year-label {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 1.4rem;
-  color: var(--text-muted);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  margin-bottom: 12px;
-}
-
 /* Horizontal-scroll fallback for anything narrower than the table's natural
    width — keeps the table itself intact rather than squeezing columns, while
    guaranteeing the page never overflows sideways. */
