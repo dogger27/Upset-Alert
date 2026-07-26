@@ -175,32 +175,31 @@
 }
 
 /* Mobile: the true-center 3-column grid only works when the three columns'
-   combined natural width fits the row — on a phone it doesn't. Rather than
-   fight for a single shared line with everything at full size, shrink
-   "LEAGUES" + the league name enough that they and Create/Join (still
-   stacked vertically into a narrow column, shrunk from desktop-sized
-   padding) all fit together on one row. */
+   combined natural width fits the row — on a phone it doesn't. Switch to a
+   single flex row instead, with "LEAGUES" + the league name sized as large
+   as they can be (1.6rem) while still fitting alongside the dropdown and
+   the narrow, vertically-stacked Create/Join column without wrapping. */
 @media (max-width: 640px) {
   .leagues-page-top {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.3rem 0.5rem;
+    gap: 0.25rem 0.4rem;
   }
   .leagues-title-col {
     flex: 0 0 auto;
     gap: 0.3rem;
   }
-  .leagues-page-title { font-size: 1.3rem; }
+  .leagues-page-title { font-size: 1.6rem; }
   .leagues-name-center {
     flex: 0 1 auto;
     justify-content: flex-start;
-    gap: 0.3rem;
+    gap: 0.25rem;
     min-width: 0;
   }
   .leagues-current-league {
-    font-size: 1.3rem;
-    max-width: 38vw;
+    font-size: 1.6rem;
+    max-width: 34vw;
   }
 
   /* Stays on row 1 (with "LEAGUES"/name/dropdown) instead of wrapping to its
