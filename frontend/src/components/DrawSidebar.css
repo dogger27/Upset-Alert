@@ -303,7 +303,7 @@
 .sidebar-member--global .sidebar-points      { text-align: center; font-weight: 700; color: var(--text); }
 .sidebar-member--global .sidebar-member-name { text-align: left; }
 
-/* ── Incomplete bracket (picks not finished) ── */
+/* ── Not participating: picks incomplete, or complete but zero upset picks ── */
 .sidebar-member--incomplete .sidebar-rank,
 .sidebar-member--incomplete .sidebar-points,
 .sidebar-member--incomplete .sidebar-member-name {

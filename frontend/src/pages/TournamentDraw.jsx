@@ -953,7 +953,7 @@ export default function TournamentDraw() {
             <span className="default-picks-modal-icon">✓</span>
             <p className="default-picks-modal-text">
               Your default predictions have been made, using the higher ranked player for the win.
-              Please select your <strong>UPSETS</strong> now!
+              You <strong>MUST</strong> select at least one <strong>UPSET</strong> to compete in this draw!
             </p>
             <button
               className="btn-primary"

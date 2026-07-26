@@ -18,6 +18,7 @@ from app.schemas.user import UserPublicOut
 from app.services.rankings import assign_rankings
 from app.services.scraper import scrape_tournament, snap_to_monday
 from app.services.scoring import UserScore, rank_users
+from app.services.upsets import has_upset_pick
 
 router = APIRouter(prefix="/tournaments", tags=["tournaments"])
 
@@ -499,6 +500,19 @@ async def global_standings(tournament_id: int, db: AsyncSession = Depends(get_db
     )
     completed_matches = completed_result.scalars().all()
 
+    # All matches (not just completed) + draw entries — needed to determine
+    # whether a user's picks include at least one upset (a user must pick at
+    # least one to count as "participating"), which requires resolving every
+    # round's entrants, not just ones already decided.
+    all_matches_result = await db.execute(
+        select(Match).where(Match.draw_id == tournament_id)
+    )
+    all_matches = all_matches_result.scalars().all()
+    all_entries_result = await db.execute(
+        select(DrawEntry).where(DrawEntry.draw_id == tournament_id)
+    )
+    all_entries = all_entries_result.scalars().all()
+
     # Classic points: round_number → 2^(r-1)
     pts_table = {r: 2 ** (r - 1) for r in range(1, tournament.num_rounds + 1)}
 
@@ -514,6 +528,7 @@ async def global_standings(tournament_id: int, db: AsyncSession = Depends(get_db
 
     complete_scores: list[UserScore] = []
     partial_scores: list[UserScore] = []
+    has_upset_map: dict[int, bool] = {}
     for user in users:
         preds_result = await db.execute(
             select(UserPrediction).where(
@@ -524,6 +539,7 @@ async def global_standings(tournament_id: int, db: AsyncSession = Depends(get_db
         )
         preds = preds_result.scalars().all()
         pred_by_match = {p.match_id: p.predicted_winner_id for p in preds}
+        has_upset_map[user.id] = has_upset_pick(preds, all_matches, all_entries)
 
         total_pts = 0.0
         correct = 0
@@ -547,11 +563,11 @@ async def global_standings(tournament_id: int, db: AsyncSession = Depends(get_db
     user_map = {u.id: u for u in users}
     return [
         LeaderboardEntry(rank=i + 1, user=user_map[s.user_id], total_points=s.total_points,
-                         correct_count=s.correct_count)
+                         correct_count=s.correct_count, has_upset_pick=has_upset_map[s.user_id])
         for i, s in enumerate(ranked)
     ] + [
         LeaderboardEntry(rank=len(ranked) + i + 1, user=user_map[s.user_id], total_points=s.total_points,
-                         correct_count=s.correct_count, is_complete=False)
+                         correct_count=s.correct_count, is_complete=False, has_upset_pick=has_upset_map[s.user_id])
         for i, s in enumerate(partial_ranked)
     ]
 

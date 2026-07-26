@@ -52,6 +52,7 @@ class LeaderboardEntry(BaseModel):
     total_points: float
     correct_count: int
     is_complete: bool = True
+    has_upset_pick: bool = True
 
 
 class LeaderboardOut(BaseModel):

@@ -9,7 +9,7 @@ from app.core.auth import get_current_user, get_optional_user
 from app.database import get_db
 from app.models.league import League, LeagueMember
 from app.models.prediction import UserPrediction
-from app.models.tournament import Match, Draw
+from app.models.tournament import DrawEntry, Match, Draw
 from app.models.user import User
 from app.schemas.league import (
     LeaderboardEntry,
@@ -22,6 +22,7 @@ from app.schemas.league import (
 )
 from app.schemas.tournament import TournamentOut
 from app.services.scoring import rank_users, score_user
+from app.services.upsets import has_upset_pick
 
 router = APIRouter(prefix="/leagues", tags=["leagues"])
 
@@ -455,11 +456,25 @@ async def leaderboard(
     )
     total_matches = total_matches_result.scalar_one()
 
+    # All matches (not just completed) + draw entries — needed to determine
+    # whether a member's picks include at least one upset (a member must pick
+    # at least one to count as "participating"), which requires resolving
+    # every round's entrants, not just ones already decided.
+    all_matches_result = await db.execute(
+        select(Match).where(Match.draw_id == tournament_id)
+    )
+    all_matches = all_matches_result.scalars().all()
+    all_entries_result = await db.execute(
+        select(DrawEntry).where(DrawEntry.draw_id == tournament_id)
+    )
+    all_entries = all_entries_result.scalars().all()
+
     # Members with at least one pick are included; those with a complete
     # bracket are ranked normally, partial pickers are appended after (greyed
     # out on the frontend), and members with zero picks are excluded entirely.
     complete_scores = []
     partial_scores = []
+    has_upset_map: dict[int, bool] = {}
     for member in league.members:
         preds_result = await db.execute(
             select(UserPrediction).where(
@@ -472,6 +487,7 @@ async def leaderboard(
         if len(preds) == 0:
             continue
         score = score_user(member.user_id, preds, completed_matches, tournament, league)
+        has_upset_map[member.user_id] = has_upset_pick(preds, all_matches, all_entries)
         if len(preds) < total_matches:
             partial_scores.append((member.user, score))
         else:
@@ -487,6 +503,7 @@ async def leaderboard(
             user=user_map[score.user_id],
             total_points=score.total_points,
             correct_count=score.correct_count,
+            has_upset_pick=has_upset_map[score.user_id],
         )
         for rank_idx, score in enumerate(ranked, start=1)
     ] + [
@@ -496,6 +513,7 @@ async def leaderboard(
             total_points=score.total_points,
             correct_count=score.correct_count,
             is_complete=False,
+            has_upset_pick=has_upset_map[score.user_id],
         )
         for rank_idx, score in enumerate(partial_ranked, start=1)
     ]
