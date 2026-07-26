@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
 import client from '../api/client'
@@ -16,6 +17,11 @@ function categoryShort(cat) {
   if (cat.includes('1000')) return '1000'
   if (cat.includes('500')) return '500'
   return '250'
+}
+
+function categoryLabel(entry) {
+  const isATP = entry.gender === 'M'
+  return entry.category ? `${isATP ? 'ATP' : 'WTA'} ${categoryShort(entry.category)}` : (isATP ? 'ATP' : 'WTA')
 }
 
 function rankBadge(rank) {
@@ -37,6 +43,48 @@ function fmtDateRange(start, end) {
   return `${fmt(s, { month: 'short', day: 'numeric' })} – ${fmt(e, { month: 'short', day: 'numeric' })}`
 }
 
+const COLUMNS = [
+  { key: 'tournament', label: 'Tournament' },
+  { key: 'category', label: 'Category' },
+  { key: 'date', label: 'Date' },
+  { key: 'points', label: 'Points' },
+  { key: 'correct', label: 'Correct' },
+  { key: 'rank', label: 'Rank (Global)' },
+]
+
+const DEFAULT_DIR = { tournament: 'asc', category: 'asc', date: 'desc', points: 'desc', correct: 'desc', rank: 'asc' }
+
+function sortValue(entry, key) {
+  switch (key) {
+    case 'tournament': return entry.name ?? null
+    case 'category': return categoryLabel(entry)
+    case 'date': return entry.start_date ?? null
+    case 'points': return entry.points ?? null
+    case 'correct': return entry.total_matches > 0 ? entry.correct_count / entry.total_matches : null
+    case 'rank': return entry.rank ?? null
+    default: return null
+  }
+}
+
+function compareEntries(a, b, key, dir) {
+  const va = sortValue(a, key)
+  const vb = sortValue(b, key)
+  const aNull = va === null || va === undefined || va === ''
+  const bNull = vb === null || vb === undefined || vb === ''
+  if (aNull && bNull) return 0
+  if (aNull) return 1
+  if (bNull) return -1
+  const cmp = typeof va === 'number' && typeof vb === 'number'
+    ? va - vb
+    : String(va).localeCompare(String(vb))
+  return dir === 'asc' ? cmp : -cmp
+}
+
+function SortIndicator({ active, dir }) {
+  if (!active) return <span className="dh-sort-icon dh-sort-icon--idle">⇅</span>
+  return <span className="dh-sort-icon">{dir === 'asc' ? '▲' : '▼'}</span>
+}
+
 const BracketIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <line x1="17" y1="12" x2="24" y2="12"/>
@@ -54,7 +102,7 @@ const BracketIcon = () => (
 
 function TournamentRow({ entry, userId }) {
   const isATP = entry.gender === 'M'
-  const catLabel = entry.category ? `${isATP ? 'ATP' : 'WTA'} ${categoryShort(entry.category)}` : (isATP ? 'ATP' : 'WTA')
+  const catLabel = categoryLabel(entry)
   const dateRange = fmtDateRange(entry.start_date, entry.end_date)
   const pct = entry.total_matches > 0
     ? ` (${(entry.correct_count / entry.total_matches * 100).toFixed(0)}%)`
@@ -67,12 +115,14 @@ function TournamentRow({ entry, userId }) {
 
   return (
     <tr className="dh-row">
-      <td className="dh-cell dh-cell-tournament">
+      <td className="dh-cell dh-cell-tournament" data-label="Tournament">
         <Link to={drawUrl} className="dh-tourn-link" title="View draw">
           <BracketIcon />
-          <span className={`dh-category ${isATP ? 'dh-category--atp' : 'dh-category--wta'}`}>{catLabel}</span>
           <span className="dh-tourn-name">{entry.name}</span>
         </Link>
+      </td>
+      <td className="dh-cell dh-cell-category" data-label="Category">
+        <span className={`dh-category ${isATP ? 'dh-category--atp' : 'dh-category--wta'}`}>{catLabel}</span>
       </td>
       <td className="dh-cell" data-label="Date">{dateRange}</td>
       <td className="dh-cell" data-label="Points"><strong>{entry.points}</strong></td>
@@ -95,25 +145,33 @@ export default function DrawHistory() {
     staleTime: 5 * 60 * 1000,
   })
 
+  const [sortKey, setSortKey] = useState('date')
+  const [sortDir, setSortDir] = useState('desc')
+
+  function handleSort(key) {
+    if (key === sortKey) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortKey(key)
+      setSortDir(DEFAULT_DIR[key] ?? 'asc')
+    }
+  }
+
   const username = data?.username ?? null
   const entries = data?.entries ?? (Array.isArray(data) ? data : [])
 
-  const byYear = {}
-  if (entries.length > 0) {
+  const byYear = useMemo(() => {
+    const grouped = {}
     for (const entry of entries) {
       const yr = entry.year ?? (entry.start_date ? entry.start_date.slice(0, 4) : '?')
-      if (!byYear[yr]) byYear[yr] = []
-      byYear[yr].push(entry)
+      if (!grouped[yr]) grouped[yr] = []
+      grouped[yr].push(entry)
     }
-    // Sort within each year: most recent first
-    for (const yr of Object.keys(byYear)) {
-      byYear[yr].sort((a, b) => {
-        if (!a.start_date) return 1
-        if (!b.start_date) return -1
-        return b.start_date.localeCompare(a.start_date)
-      })
+    for (const yr of Object.keys(grouped)) {
+      grouped[yr].sort((a, b) => compareEntries(a, b, sortKey, sortDir))
     }
-  }
+    return grouped
+  }, [entries, sortKey, sortDir])
 
   const years = Object.keys(byYear).sort((a, b) => b - a)
   const pageTitle = 'Draw History'
@@ -157,11 +215,21 @@ export default function DrawHistory() {
               <table className="dh-table">
                 <thead>
                   <tr>
-                    <th>Tournament</th>
-                    <th>Date</th>
-                    <th>Points</th>
-                    <th>Correct</th>
-                    <th>Rank (Global)</th>
+                    {COLUMNS.map(col => (
+                      <th
+                        key={col.key}
+                        className="dh-th-sortable"
+                        aria-sort={sortKey === col.key ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+                        tabIndex={0}
+                        onClick={() => handleSort(col.key)}
+                        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSort(col.key) } }}
+                      >
+                        <span className="dh-th-inner">
+                          {col.label}
+                          <SortIndicator active={sortKey === col.key} dir={sortDir} />
+                        </span>
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
