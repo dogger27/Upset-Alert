@@ -189,6 +189,10 @@ export default function TournamentDraw() {
 
   // Resume auto behaviour when navigating to a different tournament
   useEffect(() => { setSidebarManual(false) }, [id])
+  // React Router reuses this component across /tournaments/:id navigations
+  // (no remount), so the ref latch below must be reset per-tournament or a
+  // draw visited earlier in the session poisons every draw visited after it.
+  useEffect(() => { autoInitShownRef.current = false }, [id])
 
   // Auto-hide the round-selection header on scroll-down, reveal on scroll-up
   // (common site behaviour). The bracket's vertical scroll lives on the inner
@@ -447,6 +451,11 @@ export default function TournamentDraw() {
     const cleared = Object.fromEntries(Object.keys(picks).map(k => [k, null]))
     setPicks(cleared)
     if (user) saveMutation.mutate(cleared)
+    // Un-latch the auto-init gate so the "Initialise picks" effect re-offers
+    // default picks + the banner once the cleared (empty) predictions come
+    // back from the refetch this mutation triggers — matches user expectation
+    // that clearing picks puts the draw back in its pristine, freshly-entered state.
+    autoInitShownRef.current = false
     setShowClearConfirm(false)
     clearToastKeyRef.current += 1
     setClearToast({ key: clearToastKeyRef.current, msg: `${total} selection${total !== 1 ? 's' : ''} cleared` })
