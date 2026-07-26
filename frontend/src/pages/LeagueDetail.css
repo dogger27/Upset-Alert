@@ -279,7 +279,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   .lt-controls-row { gap: 0.3rem; }
   .lt-members-btn,
   .lt-status-tab {
-    padding: 0.25rem 0.4rem;
+    padding: 0.25rem 0.3rem;
     font-size: 0.66rem;
   }
 }
