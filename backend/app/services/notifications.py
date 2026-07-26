@@ -123,18 +123,22 @@ async def notify_round_complete(
         )
         completed_matches = m_res.scalars().all()
 
-        # This round's results, in bracket order, for the email's expandable widget.
+        # This round's results, in bracket order, for the email's results widget.
+        # Per-user correctness (vs. this recipient's own pick) is layered on below,
+        # once we know each recipient's predictions.
         round_matches = sorted(
             (m for m in completed_matches if m.round_number == round_number and not m.is_bye and m.winner_id),
             key=lambda m: m.match_number,
         )
-        match_results = []
+        round_match_info = []  # (match_id, winner_id, winner_last, loser_last, score)
         for m in round_matches:
             winner_entry = m.winner
             loser_entry = m.player2 if m.winner_id == m.player1_id else m.player1
             if not winner_entry or not loser_entry:
                 continue
-            match_results.append((_last_name(winner_entry.name), _last_name(loser_entry.name), _match_score_str(m)))
+            round_match_info.append((
+                m.id, m.winner_id, _last_name(winner_entry.name), _last_name(loser_entry.name), _match_score_str(m),
+            ))
 
         # Total non-bye matches in the draw
         total_res = await db.execute(
@@ -315,6 +319,15 @@ async def notify_round_complete(
         email = user_info.get(uid, {}).get("email")
         if not email:
             continue
+
+        # This recipient's own pick correctness per match, for the results widget's
+        # green check / red X — the winner list is shared, but "did I get it right"
+        # is per-user.
+        user_preds_by_match = {p.match_id: p.predicted_winner_id for p in preds_by_user.get(uid, [])}
+        match_results = [
+            (w_last, l_last, score, user_preds_by_match.get(mid) == winner_id)
+            for mid, winner_id, w_last, l_last, score in round_match_info
+        ]
 
         leagues = []
         my_league_ids = sorted(user_league_ids.get(uid, []))
