@@ -477,7 +477,6 @@ td.lmt-name { text-align: left; color: var(--text); max-width: 130px; display: f
 .lt-open-content {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
 }
 .lt-open-notice {
   display: flex;
@@ -485,7 +484,6 @@ td.lmt-name { text-align: left; color: var(--text); max-width: 130px; display: f
   align-items: center;
   text-align: center;
   padding: 10px 0 12px;
-  border-bottom: 1px solid var(--border);
 }
 .lt-open-notice-main {
   font-size: 0.85rem;
@@ -499,7 +497,11 @@ td.lmt-name { text-align: left; color: var(--text); max-width: 130px; display: f
   margin: 0;
 }
 .lt-open-notice-lock strong { color: #dc2626; }
-.lt-progress-row--open {
+/* Extra specificity (.lt-progress-row + this modifier) so this always
+   overrides the base .lt-progress-row's 6-column template below, regardless
+   of source order — the open-row layout only ever has 2 real columns
+   (position, name), so the name shouldn't be capped at --name-col-width. */
+.lt-progress-row.lt-progress-row--open {
   grid-template-columns: auto 1fr;
 }
 
