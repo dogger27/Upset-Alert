@@ -167,12 +167,16 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   white-space: nowrap;
 }
 
-/* "All Members" view: bubble only as wide as the table needs. On a screen
-   too narrow for a long name + all three point columns, scroll horizontally
-   inside the card rather than clipping the name or breaking the page. */
+/* "All Members" view: bubble only as wide as the table needs, centered in
+   the page (desktop) — on mobile the @media rule below overrides this with
+   a full-bleed edge-to-edge width instead. On a screen too narrow for a
+   long name + all three point columns, scroll horizontally inside the card
+   rather than clipping the name or breaking the page. */
 .lt-members-view {
   width: fit-content;
   max-width: 100%;
+  margin-left: auto;
+  margin-right: auto;
   overflow-x: auto;
 }
 .lt-members-view .league-members-table {
@@ -256,6 +260,28 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   .lmt-pts { padding-left: 0.85rem; }
   .league-members-table { font-size: 0.78rem; }
   .league-members-table thead th { font-size: 0.66rem; }
+
+  /* Break the card out of .leagues-page's 28px side padding so it spans the
+     full screen width on mobile instead of floating in a narrow column with
+     grey gutters on both sides. */
+  .card.league-tournaments-section {
+    margin-left: -28px;
+    margin-right: -28px;
+    width: calc(100% + 56px);
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
+
+  /* Members / Open-Active / Prev tabs: shrink enough that all three fit on
+     one row instead of "Members" wrapping onto its own line above the
+     other two. */
+  .lt-controls-row { gap: 0.4rem; }
+  .lt-members-btn,
+  .lt-status-tab {
+    padding: 0.32rem 0.5rem;
+    font-size: 0.76rem;
+  }
 }
 
 /* Title + controls above the draws/members bubble */
@@ -266,6 +292,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 .lt-controls-row {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 1rem;
   margin-bottom: 1rem;
   flex-wrap: wrap;

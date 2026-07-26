@@ -174,3 +174,40 @@
   color: #fff;
 }
 
+/* Mobile: the true-center 3-column grid only works when the three columns'
+   combined natural width fits the row — on a phone it doesn't, and the
+   centered league name (large + bold) visually collided with "LEAGUES".
+   Give the name its own full-width row below the title/Create-Join row
+   instead of fighting for space in the same line. Also shrink the
+   Create/Join pills a lot — their padding/width was sized for desktop's
+   spare room, not a narrow screen. */
+@media (max-width: 640px) {
+  .leagues-page-top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem 0.6rem;
+  }
+  .leagues-title-col,
+  .leagues-top-right {
+    flex: 0 0 auto;
+  }
+  .leagues-name-center {
+    order: 3;
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+  .leagues-current-league {
+    font-size: 2rem;
+    max-width: 70vw;
+  }
+
+  .leagues-btn-stack { gap: 4px; }
+  .leagues-stack-btn {
+    width: 58px;
+    padding: 3px 4px;
+    font-size: 0.7rem;
+  }
+}
+
