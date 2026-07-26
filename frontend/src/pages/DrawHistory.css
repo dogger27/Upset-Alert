@@ -9,10 +9,6 @@
   margin: 0 auto;
 }
 
-.dh-content-wrap {
-  width: max-content;
-}
-
 .dh-header {
   margin-bottom: 28px;
 }
@@ -23,6 +19,7 @@
   justify-content: space-between;
   gap: 16px;
   width: 100%;
+  flex-wrap: wrap;
 }
 
 .dh-username-label {
@@ -45,6 +42,15 @@
   text-transform: uppercase;
 }
 
+.dh-subtitle {
+  margin: 6px 0 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
 /* ── States ── */
 .dh-state {
   color: var(--text-muted);
@@ -56,7 +62,7 @@
 
 /* ── Year sections ── */
 .dh-year-section {
-  margin-bottom: 36px;
+  margin-bottom: 32px;
 }
 
 .dh-year-label {
@@ -69,181 +75,131 @@
   margin-bottom: 12px;
 }
 
-/* ── Two-column layout ── */
-.dh-year-columns {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  align-items: start;
-  width: max-content;
-}
-
-.dh-column {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.dh-column-label {
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  padding: 2px 0 6px;
-  border-bottom: 2px solid;
-  margin-bottom: 2px;
-}
-.dh-column-label--atp { color: #1d4ed8; border-color: #1d4ed8; }
-.dh-column-label--wta { color: #be185d; border-color: #be185d; }
-
-.dh-column-empty {
-  color: var(--text-muted);
-  font-size: 0.85rem;
-  padding: 8px 0;
-}
-
-/* ── Card — shared CSS grid so stats row and results rows share column widths ── */
-.dh-card {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
+/* Horizontal-scroll fallback for anything narrower than the table's natural
+   width — keeps the table itself intact rather than squeezing columns, while
+   guaranteeing the page never overflows sideways. */
+.dh-table-wrap {
+  width: 100%;
+  overflow-x: auto;
   background: #fff;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-xs);
-  overflow: hidden;
 }
 
-/* Full-width rows */
-.dh-card-title {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: nowrap;
-  padding: 12px 16px 6px;
+.dh-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.dh-table thead th {
+  text-align: left;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #888;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-strong);
   background: rgba(45,106,79,0.04);
-}
-
-.dh-title-left {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-  min-width: 0;
-}
-
-.dh-date-right {
-  flex-shrink: 0;
-  margin-left: 12px;
-  font-size: 0.75rem;
-  color: var(--text-muted);
   white-space: nowrap;
 }
 
+.dh-row:not(:last-child) .dh-cell {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.dh-cell {
+  padding: 10px 16px;
+  font-size: 0.85rem;
+  color: var(--ink-800);
+  white-space: nowrap;
+}
+
+.dh-cell-tournament { white-space: normal; }
+
+.dh-tourn-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: inherit;
+  text-decoration: none;
+}
+.dh-tourn-link:hover .dh-tourn-name { color: var(--green-600); text-decoration: underline; }
+.dh-tourn-link svg { color: var(--text-muted); flex-shrink: 0; }
+
 .dh-tourn-name {
   font-weight: 700;
-  font-size: 0.92rem;
+  font-size: 0.88rem;
   color: var(--ink-900);
 }
 
-.dh-divider {
-  grid-column: 1 / -1;
-  border-top: 1px solid var(--border-strong);
-}
-
-/* Stats row — full-width flex, independent of the GROUP/RANK grid columns */
-.dh-stats-row {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  padding: 6px 16px 8px;
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  background: rgba(45,106,79,0.04);
-}
-
-.dh-bottom-points  { white-space: nowrap; margin-right: 24px; }
-.dh-bottom-correct { white-space: nowrap; }
-
-.dh-bracket-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-muted);
-  padding: 3px 5px;
-  border-radius: 4px;
-  border: 1px solid var(--border-strong);
-  text-decoration: none;
-  transition: color 0.15s, background 0.15s, border-color 0.15s;
-}
-.dh-bracket-link:hover { color: var(--green-600); background: var(--bg-subtle); border-color: var(--green-400); }
-
 /* Category badge */
 .dh-category {
-  font-size: 0.68rem;
+  font-size: 0.65rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   border-radius: 4px;
   padding: 2px 6px;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 .dh-category--atp { background: #dbeafe; color: #1d4ed8; }
 .dh-category--wta { background: #fce7f3; color: #be185d; }
 
-/* ── Results rows (grid cells, same columns as stats row above) ── */
-
-/* Column headers */
-.dh-col-label {
-  font-size: 0.65rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #888;
-  border-bottom: 1px solid var(--border-strong);
-}
-.dh-col-label--icon  { padding: 5px 0 5px 16px; width: 32px; }
-.dh-col-label--group { padding: 5px 32px 5px 8px; }
-.dh-col-label--rank  { padding: 5px 16px 5px 0; }
-
-/* Result row cells */
-.dh-row-icon {
-  padding: 7px 0 7px 16px;
-  border-bottom: 1px solid #f0f0f0;
-  align-self: center;
-}
-.dh-group-name {
-  font-weight: 600;
-  font-size: 0.83rem;
-  color: var(--ink-800);
-  padding: 7px 32px 7px 8px;
-  border-bottom: 1px solid #f0f0f0;
-  align-self: center;
-}
-.dh-rank-cell {
-  white-space: nowrap;
-  padding: 7px 16px 7px 0;
-  border-bottom: 1px solid #f0f0f0;
-  align-self: center;
-}
-
-.dh-row-icon.dh-row-last,
-.dh-group-name.dh-row-last,
-.dh-rank-cell.dh-row-last { border-bottom: none; }
-
-.dh-row--global { background: rgba(45,106,79,0.04); }
-
 .dh-rank {
   font-weight: 400;
-  font-size: 0.83rem;
-  color: var(--ink-800);
+  white-space: nowrap;
 }
 .dh-rank--gold   { color: #b8860b; font-weight: 600; }
 .dh-rank--silver { color: #666; }
 .dh-rank--bronze { color: #a0522d; }
 
+/* ── Mobile: collapse the table into stacked cards ──
+   Standard responsive-table pattern — hide the header row, turn each <tr>
+   into a bordered block, and label each cell via its data-label attribute
+   instead of a shared column header. Avoids maintaining a second template. */
 @media (max-width: 640px) {
-  .dh-year-columns {
-    grid-template-columns: 1fr;
+  .dh-page { padding: 24px 14px 56px; }
+  .dh-table-wrap { border: none; box-shadow: none; background: none; overflow-x: visible; }
+  .dh-table, .dh-table tbody, .dh-table tr, .dh-table td { display: block; width: 100%; }
+  .dh-table thead { display: none; }
+
+  .dh-row {
+    background: #fff;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-xs);
+    margin-bottom: 10px;
+    overflow: hidden;
   }
+  .dh-row:not(:last-child) .dh-cell { border-bottom: none; }
+
+  .dh-cell {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 14px;
+    border-bottom: 1px solid #f0f0f0;
+    white-space: normal;
+  }
+  .dh-cell:last-child { border-bottom: none; }
+
+  .dh-cell::before {
+    content: attr(data-label);
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #888;
+    flex-shrink: 0;
+  }
+
+  .dh-cell-tournament {
+    background: rgba(45,106,79,0.04);
+    padding: 10px 14px;
+  }
+  .dh-cell-tournament::before { content: none; }
 }
