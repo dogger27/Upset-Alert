@@ -107,12 +107,23 @@ function resolveMatchPlayers(matches, picks, mode) {
 // Sub-components
 // ---------------------------------------------------------------------------
 
+// Serving indicator. The two seams are point-symmetric circular arcs: one from
+// the ball's top point to its left point, one from its bottom to its right,
+// each bowing AWAY from the corner between its endpoints (centres of curvature
+// at the box's top-left / bottom-right corners, hence r == the corner-to-
+// endpoint distance of 12.04). That is real tennis-ball seam geometry — the
+// previous pair of shallow horizontal curves read as an eye, not a ball.
+// The dark green rim is stroked LAST so it trims both seams flush at the edge
+// and separates the ball from the pale box behind it.
 function TennisBall() {
   return (
-    <svg width="11" height="11" viewBox="0 0 11 11" style={{ display: 'block', flexShrink: 0 }}>
-      <circle cx="5.5" cy="5.5" r="5.5" fill="#b5e04a"/>
-      <path d="M1.5 5.5 Q5.5 2 9.5 5.5" stroke="white" strokeWidth="1.3" fill="none"/>
-      <path d="M1.5 5.5 Q5.5 9 9.5 5.5" stroke="white" strokeWidth="1.3" fill="none"/>
+    <svg width="11" height="11" viewBox="0 0 24 24" style={{ display: 'block', flexShrink: 0 }}>
+      <circle cx="12" cy="12" r="11" fill="#b5e04a"/>
+      <g fill="none" stroke="#fff" strokeWidth="2.2">
+        <path d="M12 1A12.04 12.04 0 0 1 1 12"/>
+        <path d="M12 23A12.04 12.04 0 0 1 23 12"/>
+      </g>
+      <circle cx="12" cy="12" r="11" fill="none" stroke="#1b4332" strokeWidth="2"/>
     </svg>
   )
 }
