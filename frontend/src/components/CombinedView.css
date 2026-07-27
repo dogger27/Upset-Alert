@@ -195,14 +195,30 @@
   transform: translate(-50%, -50%);
   z-index: 2;
   line-height: 1;
-  font-size: 0.78rem;
+  /* Fills the 24px gap (2 * LIVE_SPREAD + the pair's natural 16px): with
+     line-height 1 the line box IS the gap, and digits only ink ~0.72em of it,
+     so the numerals clear each player box by ~3px without any margin. */
+  font-size: 1.5rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: #1d4ed8;
   white-space: nowrap;
   pointer-events: none;
 }
-.cv-live-score sup { font-size: 0.72em; }
+/* Step down as completed sets accumulate — the gap's height is fixed but the
+   score's WIDTH is not, and a five-set line at 1.5rem would run past the
+   column. After the base rule so equal specificity resolves in source order. */
+.cv-live-score--s2 { font-size: 1.15rem; }
+.cv-live-score--s3 { font-size: 0.95rem; }
+.cv-live-score--s4 { font-size: 0.8rem; }
+/* Tiebreak superscript, offset without growing the line box (which is already
+   the full height of the gap). */
+.cv-live-score sup {
+  font-size: 0.6em;
+  vertical-align: baseline;
+  position: relative;
+  top: -0.42em;
+}
 .cv-live-score--suspended { color: #b45309; }
 .cv-real-winner {
   position: absolute;
