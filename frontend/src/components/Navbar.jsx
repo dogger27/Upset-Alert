@@ -340,7 +340,7 @@ export default function Navbar() {
 
                           <div className="notif-section">
                             <p className="notif-section-title">Round Completion Email</p>
-                            <p className="notif-section-desc">After each completed round — covers all groups you're in</p>
+                            <p className="notif-section-desc">1 email per round, summarizing all draws</p>
                             <label className="notif-check-row">
                               <input
                                 type="checkbox"
