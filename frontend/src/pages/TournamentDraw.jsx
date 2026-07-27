@@ -52,6 +52,8 @@ export default function TournamentDraw() {
   }
   const mainRef = useCallback(makeWidthRef(setMainWidth), [])
   const bodyWidthRef = useCallback(makeWidthRef(setBodyWidth), [])
+  // In-flight touch gesture for swipe-to-page (see the handlers further down).
+  const swipeRef = useRef(null)
   // Round-nav buttons' own rendered width, for the compact-mode zoom-fit
   // calc below (so the draw content's zoom targets the button's ACTUAL size
   // rather than a guessed constant). Left and right buttons share the same
@@ -633,6 +635,50 @@ export default function TournamentDraw() {
   }
   const showPager = columnCount > DRAW_WINDOW
 
+  // ── Swipe-to-page (touch only) ──────────────────────────────────────────
+  // Touch events only fire on touch devices, so this is inherently mobile-only
+  // — no viewport check needed. The window is always sized so the visible
+  // rounds fit without horizontal scrolling (see computeWindow), so a sideways
+  // drag normally has no native scroll to compete with; onDrawTouchStart bows
+  // out for the cases where it would.
+  const SWIPE_MIN_PX = 45      // ignore taps and small drags (e.g. picking a player)
+  const SWIPE_H_RATIO = 1.5    // must be clearly horizontal, not a vertical scroll
+  const pageBy = (delta) => {
+    if (delta === 0) return
+    setWindowStart(Math.min(Math.max(windowPos + delta, 0), maxWindowStart))
+  }
+  const onDrawTouchStart = (e) => {
+    if (!showPager || e.touches.length !== 1) { swipeRef.current = null; return }
+    // Don't hijack the drag if the inner scroller can genuinely pan sideways
+    // (Live Draw's .bracket-scroll is overflow-x:auto) — the browser should
+    // scroll it instead. Compact mode pins touch-action:pan-y, which disables
+    // native horizontal panning outright, so swiping is always safe there —
+    // and it deliberately leaves a few px of decorative overhang uncropped
+    // (see CombinedView.css), hence the tolerance rather than a > 0 test.
+    const sc = e.currentTarget.querySelector('.cv-scroll, .bracket-scroll')
+    if (sc && getComputedStyle(sc).touchAction !== 'pan-y'
+           && sc.scrollWidth - sc.clientWidth > 32) {
+      swipeRef.current = null
+      return
+    }
+    const t = e.touches[0]
+    swipeRef.current = { x: t.clientX, y: t.clientY, fired: false }
+  }
+  const onDrawTouchMove = (e) => {
+    const s = swipeRef.current
+    // `fired` caps it at one round per gesture — without it a long drag would
+    // keep re-triggering on every touchmove and skip several rounds at once.
+    if (!s || s.fired || e.touches.length !== 1) return
+    const t = e.touches[0]
+    const dx = t.clientX - s.x
+    const dy = t.clientY - s.y
+    if (Math.abs(dx) < SWIPE_MIN_PX || Math.abs(dx) < Math.abs(dy) * SWIPE_H_RATIO) return
+    s.fired = true
+    // Content follows the finger: dragging left pulls later rounds into view.
+    pageBy(dx < 0 ? 1 : -1)
+  }
+  const onDrawTouchEnd = () => { swipeRef.current = null }
+
   // Off-screen unpicked matches: a match with no prediction can be paged out
   // of view, with nothing on screen hinting it's still there. Flag whichever
   // edge round-nav button leads toward it so it isn't missed.
@@ -655,6 +701,27 @@ export default function TournamentDraw() {
   // still provide paging). Width-based (windowFit), not DRAW_WINDOW, so a
   // small draw on a wide screen doesn't hide it.
   const headerForcedHidden = windowFit <= 2
+
+  // Page-position dots: one per place the round window can sit, so the count
+  // is exactly how many swipes' worth of rounds exist and the filled dot is
+  // where you are. Shared by two hosts: the minimal header pager, and — when
+  // headerForcedHidden collapses that whole header away (the phone case) — the
+  // standalone strip above .draw-body, so the indicator survives there too.
+  const pageDots = (
+    <div className="bracket-page-dots" role="tablist" aria-label="Round pages">
+      {Array.from({ length: maxWindowStart + 1 }, (_, i) => (
+        <button
+          key={i}
+          role="tab"
+          className={clsx('bracket-page-dot', { active: i === windowPos })}
+          onClick={() => setWindowStart(i)}
+          aria-selected={i === windowPos}
+          aria-label={`Show ${pagerColumns[i].title}`}
+          title={pagerColumns[i].title}
+        />
+      ))}
+    </div>
+  )
 
   // Pixel geometry for the round dots + the shaded window highlight behind them.
   const DOT_SIZE = 38, DOT_GAP = 10, DOT_PAD = 6
@@ -763,6 +830,7 @@ export default function TournamentDraw() {
               >
                 ‹
               </button>
+              {pageDots}
               <button
                 className="bracket-pager-arrow"
                 onClick={() => setWindowStart(windowPos + 1)}
@@ -965,6 +1033,14 @@ export default function TournamentDraw() {
         </div>
       )}
 
+      {/* Phone case: headerForcedHidden collapses the whole draw-header (pager
+          included) to reclaim vertical space, so the page indicator gets its
+          own slim always-visible strip here instead. No arrows — the big edge
+          round-nav buttons already float over the draw, and you can swipe. */}
+      {showPager && headerForcedHidden && (
+        <div className="draw-page-dots-bar">{pageDots}</div>
+      )}
+
       <div className="draw-body" ref={bodyRef}>
         <DrawSidebar
           tournamentId={Number(id)}
@@ -984,7 +1060,14 @@ export default function TournamentDraw() {
           }}
         />
 
-        <div className="draw-main" ref={mainRef}>
+        <div
+          className="draw-main"
+          ref={mainRef}
+          onTouchStart={onDrawTouchStart}
+          onTouchMove={onDrawTouchMove}
+          onTouchEnd={onDrawTouchEnd}
+          onTouchCancel={onDrawTouchEnd}
+        >
           {viewMode === 'combined' ? (
             <CombinedView
               tournament={tournament}
