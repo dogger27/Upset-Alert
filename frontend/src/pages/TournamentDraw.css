@@ -485,6 +485,7 @@
      stay visible instead of being the first things cut. */
   display: flex;
   align-items: baseline;
+  justify-content: center;
   min-width: 0;
 }
 
@@ -534,7 +535,9 @@
 .draw-meta-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  /* Centred between the two sibling-nav arrows, like the title above it.
+     (Was space-between, from when this row carried a second, right-hand item.) */
+  justify-content: center;
   gap: 1rem;
   font-size: 0.85rem;
   color: var(--text-muted);
