@@ -220,13 +220,27 @@
   align-items: center;
 }
 
+/* Grid rather than a flex column so the hidden .draw-name-sizer can share one
+   cell with the real title + meta rows: the cell takes the WIDEST of them, so
+   the right-hand arrow button holds still while you page through draws. */
 .draw-name-block {
   flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: auto;
+  align-content: center;
   padding: 0 0.85rem;
 }
+
+/* Contributes width only — height 0 keeps the block exactly as tall as the two
+   real lines no matter how many draws are in the rotation. */
+.draw-name-sizer {
+  grid-row: 1;
+  grid-column: 1;
+  height: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.draw-name-sizer-row { white-space: nowrap; }
 
 /* Prev/next draw of the same status, flanking the name block. align-self
    stretch takes the height from that block (title + meta line, whatever they
