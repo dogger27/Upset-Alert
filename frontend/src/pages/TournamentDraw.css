@@ -229,6 +229,12 @@
   grid-template-columns: auto;
   align-content: center;
   padding: 0 0.85rem;
+  /* Cap on the sizer below. Without it the Completed rotation (75 draws) sized
+     itself to "U.S. Men's Clay Court Championships ATP 250" — 42 characters
+     against a 21-character median — so every ordinary draw sat in a block
+     twice as wide as its own name, with the arrow stranded out to the right.
+     Names past the cap ellipsis, with the full name on hover. */
+  max-width: 24rem;
 }
 
 /* Contributes width only — height 0 keeps the block exactly as tall as the two
@@ -475,6 +481,18 @@
   font-size: 1.5rem;
   font-weight: 700;
   margin: 0;
+  /* Flex so the NAME alone truncates — the level pill and wiki globe after it
+     stay visible instead of being the first things cut. */
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.draw-title-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .draw-wiki-link {
@@ -522,7 +540,13 @@
   color: var(--text-muted);
 }
 
-.draw-meta-left { font-variant-numeric: lining-nums; }
+.draw-meta-left {
+  font-variant-numeric: lining-nums;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .draw-meta-sep { opacity: 0.4; }
 
 .draw-header-actions {

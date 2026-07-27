@@ -888,7 +888,7 @@ function TournamentDraw() {
           </button>
           <div className="draw-name-block">
             <h1 className="draw-title">
-              {tournament.name}
+              <span className="draw-title-name" title={tournament.name}>{tournament.name}</span>
               {catShort && <span className="draw-title-level">{tourLabel}</span>}
               {tournament.wiki_page_id && (
                 <a
@@ -916,7 +916,7 @@ function TournamentDraw() {
               {siblingDraws.map(d => (
                 <div key={d.id} className="draw-name-sizer-row">
                   <div className="draw-title">
-                    {d.name}
+                    <span className="draw-title-name">{d.name}</span>
                     {drawLevelLabel(d) && <span className="draw-title-level">{drawLevelLabel(d)}</span>}
                     <span className="draw-wiki-link">🌐</span>
                   </div>
