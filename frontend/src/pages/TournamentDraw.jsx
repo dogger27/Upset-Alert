@@ -784,6 +784,7 @@ export default function TournamentDraw() {
   // Once picks > 0 this session, keep the badge visible through any transient refetch resets
   if (pickedCount > 0) everHadPicksRef.current = true
   const showPicksBadge = user && !locked && (saveMutation.isPending || everHadPicksRef.current || pickedCount > 0)
+  const canReset = user && !locked && !viewingOther && pickedCount > 0
 
   // Header helpers
   const catShort = tournament.category ? tournament.category.replace(/^(ATP|WTA)\s+/, '') : ''
@@ -941,16 +942,6 @@ export default function TournamentDraw() {
         </div>
         {headerStage === 'full' && (
         <div className="draw-header-right">
-          <div className="draw-picks-zone">
-            {user && !locked && !viewingOther && pickedCount > 0 && (
-              <button
-                className="btn-reset-selections"
-                onClick={() => setShowResetConfirm(true)}
-              >
-                Reset Selections
-              </button>
-            )}
-          </div>
           <div className="draw-header-actions">
           {tournament.selections_unlocked ? (
             <span
@@ -996,31 +987,29 @@ export default function TournamentDraw() {
               )
             })()
           )}
-          {showPicksBadge && (
-            <span className={`saved-badge${pickedCount < totalPredictable ? ' saved-badge--incomplete' : ''}`}>
-              {pickedCount < totalPredictable
-                ? `⚠ ${pickedCount}/${totalPredictable} picks saved — complete all picks to COMPETE`
-                : `✓ ${pickedCount}/${totalPredictable} picks saved`}
-            </span>
+          {/* Saved-picks pill sits directly on top of Reset Selections, both
+              stretched to one shared width (see .draw-picks-stack). */}
+          {(showPicksBadge || canReset) && (
+            <div className="draw-picks-stack">
+              {showPicksBadge && (
+                <span className={`saved-badge${pickedCount < totalPredictable ? ' saved-badge--incomplete' : ''}`}>
+                  {pickedCount < totalPredictable
+                    ? `⚠ ${pickedCount}/${totalPredictable} picks saved — complete all picks to COMPETE`
+                    : `✓ ${pickedCount}/${totalPredictable} picks saved`}
+                </span>
+              )}
+              {canReset && (
+                <button
+                  className="btn-reset-selections"
+                  onClick={() => setShowResetConfirm(true)}
+                >
+                  Reset Selections
+                </button>
+              )}
+            </div>
           )}
           {!user && (
             <Link to="/login" className="btn-primary">Log in to make picks</Link>
-          )}
-          {tournament.status === 'open' && (
-            <div className="draw-status-level">
-              <span className="draw-meta-right">
-                {tournament.draw_released_direct_at
-                  ? <span className="draw-confirmed">✓ DA</span>
-                  : tournament.draw_release_direct
-                    ? <span className="draw-pending-label">DA: {new Date(tournament.draw_release_direct + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                    : null}
-                {tournament.draw_released_qualifiers_at
-                  ? <span className="draw-confirmed">✓ Qual</span>
-                  : tournament.draw_release_qualifiers
-                    ? <span className="draw-pending-label">Qual: {new Date(tournament.draw_release_qualifiers + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                    : null}
-              </span>
-            </div>
           )}
           </div>
         </div>
