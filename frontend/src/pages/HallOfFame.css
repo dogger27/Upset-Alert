@@ -6,6 +6,7 @@
 
 .hof-container {
   width: max-content;
+  max-width: 100%;
   margin: 0 auto;
 }
 
@@ -66,8 +67,11 @@
 }
 
 /* ── Two-column gender split ── */
+/* wrap = if both tables can't fit the viewport, WTA drops below ATP instead of
+   pushing the page into a horizontal scroll */
 .hof-two-col {
   display: flex;
+  flex-wrap: wrap;
   gap: 16px;
   align-items: flex-start;
 }
@@ -82,6 +86,9 @@
   color: var(--text-muted);
   margin-bottom: 8px;
 }
+
+.hof-gender-label--atp { color: var(--atp-600); }
+.hof-gender-label--wta { color: var(--wta-600); }
 
 /* ── Card ── */
 .hof-card {
@@ -101,7 +108,7 @@
 
 .hof-table th {
   text-align: left;
-  padding: 9px 16px;
+  padding: 9px 13px;
   font-size: 0.68rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -115,7 +122,7 @@
 .hof-th--num  { text-align: right; }
 
 .hof-table td {
-  padding: 10px 16px;
+  padding: 10px 13px;
   border-bottom: 1px solid #f0f0f0;
   vertical-align: middle;
 }
@@ -125,6 +132,13 @@
 .hof-row--top1 td { background: rgba(212,175,55,0.07); }
 .hof-row--top2 td { background: rgba(160,160,160,0.07); }
 .hof-row--top3 td { background: rgba(160,82,45,0.07); }
+
+/* The caller's own rows — declared after the medal tints so they win the cascade */
+.hof-row--me td { background: #e9f1fb; }
+.hof-row--me .hof-username { font-weight: 800; color: var(--ink-900); }
+
+/* Caller's best result appended below the top 5 — 2px beats the collapsed 1px divider */
+.hof-row--extra td { border-top: 2px solid var(--border-strong); }
 
 .hof-rank {
   font-size: 1.05rem;
@@ -146,10 +160,23 @@
   font-size: 0.82rem;
 }
 
+.hof-correct {
+  text-align: right;
+  color: var(--ink-700);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.hof-correct-pct {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
 .hof-points {
   font-weight: 700;
   color: var(--ink-800);
   text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .hof-muted {
@@ -174,10 +201,43 @@
 }
 .hof-view-link:hover { color: var(--green-600); background: var(--bg-subtle); border-color: var(--green-400); }
 
-@media (max-width: 700px) {
-  .hof-two-col {
-    grid-template-columns: 1fr;
-  }
+/* ── Mobile: ATP table stacked above WTA, both full width ── */
+@media (max-width: 900px) {
+  .hof-page { padding: 24px 10px 56px; }
+
+  .hof-container { width: 100%; }
 
   .hof-title { font-size: 2rem; }
+  .hof-subtitle { font-size: 0.82rem; }
+
+  .hof-header { margin-bottom: 24px; }
+  .hof-sections { gap: 28px; }
+
+  .hof-two-col {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+
+  .hof-gender-col { width: 100%; min-width: 0; }
+
+  .hof-card { width: 100%; overflow-x: auto; }
+
+  .hof-table { width: 100%; font-size: 0.75rem; }
+
+  .hof-table th { padding: 7px 5px; font-size: 0.6rem; letter-spacing: 0.03em; }
+  .hof-table td { padding: 8px 5px; }
+
+  .hof-th--rank { width: 30px; }
+  .hof-rank { font-size: 0.9rem; }
+
+  /* let long names reflow rather than force the table wider than the screen */
+  .hof-username { overflow-wrap: anywhere; }
+  .hof-tourn { white-space: normal; overflow-wrap: anywhere; }
+  .hof-year { font-size: 0.7rem; white-space: nowrap; }
+
+  /* "60/96" on one line, "(62.5%)" beneath it */
+  .hof-correct-pct { display: block; font-size: 0.68rem; }
+
+  .hof-view-link { padding: 2px 3px; }
 }
