@@ -26,23 +26,26 @@
   z-index: 1;
 }
 
-/* Applied whenever swipe-paging is available (showPager). .draw-main is
-   itself overflow-x:auto, so the few px of deliberate, uncropped overhang
-   inside the draw (connector-line tails, .cv-match-outline's -8px) give it
-   just enough scrollable slack for a swipe to visibly nudge the whole draw
-   sideways and rubber-band back — the same problem .cv-scroll--compact
-   already solves with pan-y, but that only covers the inner compact
-   scroller, not this one or Live Draw's .bracket-scroll.
-   touch-action here restricts panning to the vertical axis WITHOUT
-   clipping anything (overflow-x:hidden was tried for this historically and
+/* Applied whenever swipe-paging is available (showPager). .draw-main inside
+   is overflow-x:auto, so the few px of deliberate, uncropped overhang in the
+   draw (connector-line tails, .cv-match-outline's -8px) give it just enough
+   scrollable slack for a swipe to visibly nudge the whole draw sideways and
+   rubber-band back — the same problem .cv-scroll--compact already solves with
+   pan-y, but that only covers the inner compact scroller, not .draw-main or
+   Live Draw's .bracket-scroll.
+   Set on .draw-body rather than .draw-main so it also covers the floating
+   round-nav edge buttons, which are absolutely positioned here and sit
+   OUTSIDE .draw-main — an edge-started swipe would otherwise escape it.
+   touch-action restricts panning to the vertical axis WITHOUT clipping
+   anything (overflow-x:hidden was tried for this historically and
    reintroduced a connector-line clipping bug — see
-   feedback_css_zoom_webkit_bug). Because touch-action is resolved by
+   feedback_css_zoom_webkit_bug). Because touch-action resolves by
    intersecting an element's chain up to its scrolling ancestor, setting it
-   on .draw-main also covers the scrollers nested inside it.
+   here covers every scroller nested inside.
    'pinch-zoom' is kept so users can still zoom the bracket.
    overscroll-behavior-x stops any residual horizontal scroll from chaining
    out to the page and rubber-banding it. */
-.draw-main--swipe {
+.draw-body--swipe {
   touch-action: pan-y pinch-zoom;
   overscroll-behavior-x: contain;
 }
