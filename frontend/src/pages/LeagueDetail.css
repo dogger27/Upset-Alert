@@ -121,23 +121,23 @@
 .league-members-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.84rem;
+  font-size: 1rem;
 }
 .league-members-table thead th {
-  font-size: 0.72rem;
+  font-size: 0.82rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text-muted);
-  padding-bottom: 0.4rem;
+  padding-bottom: 0.45rem;
   border-bottom: 1px solid var(--border);
 }
 .league-members-table tbody tr + tr td { border-top: 1px solid var(--border); }
-.league-members-table td { padding-top: 0.35rem; padding-bottom: 0.35rem; }
+.league-members-table td { padding-top: 0.45rem; padding-bottom: 0.45rem; }
 .lmt-name-th { border-bottom: 1px solid var(--border); }
 .lmt-pts--sortable { cursor: pointer; user-select: none; }
 .lmt-pts--sortable:hover { color: var(--text); }
-.lmt-sort-arrow { font-size: 0.6rem; }
+.lmt-sort-arrow { font-size: 0.68rem; }
 /* No max-width here: let the name size to its natural content — the table
    and its .lt-members-view card are both width:fit-content, so there's no
    reason to cap and ellipsis-truncate names when the card can simply grow.
@@ -148,7 +148,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 .lmt-name-text { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lmt-admin-badge {
   display: inline-block;
-  font-size: 0.62rem;
+  font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -758,12 +758,14 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   .card.league-tournaments-section { padding: 1rem 0.6rem; }
   .lt-progress-block { padding: 0.9rem 0.4rem; }
   /* Members table: the 1.75rem left padding on each points column (×3) was
-     costing ~84px that could go to the name instead — cut it down, and
-     tighten the header/row font sizes a touch, all in service of the same
-     "more room for the name" goal as the padding trims above. */
+     costing ~84px that could go to the name instead — cut it down. The row
+     text stays close to the desktop size (readability beats fitting more
+     columns on a phone); the reclaimed padding is what pays for it, and
+     .lt-members-view's overflow-x:auto is the backstop for names long
+     enough to still overflow. */
   .lmt-pts { padding-left: 0.85rem; }
-  .league-members-table { font-size: 0.78rem; }
-  .league-members-table thead th { font-size: 0.66rem; }
+  .league-members-table { font-size: 0.95rem; }
+  .league-members-table thead th { font-size: 0.75rem; }
 
   /* Break the card out of .leagues-page's side padding so it spans the full
      screen width on mobile instead of floating in a narrow column with grey
@@ -793,4 +795,12 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
     padding: 0.32rem 0.4rem;
     font-size: 0.85rem;
   }
+}
+
+/* Small phones (iPhone SE / mini class, ~360-375px): the members table now
+   sets bigger row text, so buy the width back from the points columns'
+   padding rather than shrinking the text again. Must come after the 640
+   tier — same specificity, so source order decides. */
+@media (max-width: 400px) {
+  .lmt-pts { padding-left: 0.55rem; }
 }
