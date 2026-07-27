@@ -169,6 +169,10 @@ async def _migrate(conn):
             "WHERE pref_key LIKE 'draw_open:%'"
         ),
         "DELETE FROM notification_preferences WHERE pref_key LIKE 'draw_open:%'",
+        # IANA zone id for rendering deadlines in outgoing email. Populated
+        # silently from the browser on next load, so it stays NULL for users who
+        # never return — every read falls back to UTC.
+        "ALTER TABLE users ADD COLUMN timezone VARCHAR",
     ]
     for sql in migrations:
         try:

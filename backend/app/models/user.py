@@ -30,6 +30,13 @@ class User(Base):
     email_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     verification_code: Mapped[Optional[str]] = mapped_column(String(6), nullable=True)
     verification_code_expires: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # IANA zone id ("America/Vancouver"), captured silently from the browser on
+    # load — never asked for. Used only to render deadlines in outgoing email,
+    # where the reader's browser isn't present to do it; the site itself reads
+    # the zone directly and ignores this. An IANA id rather than an offset so
+    # DST resolves itself. Null until a user next opens the site, so every
+    # consumer must fall back to UTC.
+    timezone: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

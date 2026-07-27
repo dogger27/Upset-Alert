@@ -139,6 +139,16 @@ async def update_me(
     if body.full_name is not None:
         current_user.full_name = body.full_name
         current_user.display_name = body.full_name
+    if body.timezone is not None and body.timezone != current_user.timezone:
+        # Client-supplied, so validate before storing: an unresolvable zone id
+        # would raise later inside the email path, where the failure is a
+        # missing notification rather than a visible error.
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+        try:
+            ZoneInfo(body.timezone)
+        except (ZoneInfoNotFoundError, ValueError):
+            raise HTTPException(status_code=400, detail="Unknown timezone")
+        current_user.timezone = body.timezone
     await db.commit()
     await db.refresh(current_user)
     return current_user

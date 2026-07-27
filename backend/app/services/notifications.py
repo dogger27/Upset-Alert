@@ -446,7 +446,7 @@ async def notify_draw_release_batch(draw_ids: list[int], is_followup: bool = Fal
     from datetime import datetime, timedelta, timezone as tz
     from sqlalchemy import update as sa_update
     from sqlalchemy.exc import IntegrityError
-    from app.services.email import send_draw_release_digest, fmt_close_utc, _tier_badge
+    from app.services.email import send_draw_release_digest, fmt_close, _tier_badge
     from app.services.system_log import app_log
     from app.models.notification import DrawReleaseNotification
 
@@ -487,7 +487,10 @@ async def notify_draw_release_batch(draw_ids: list[int], is_followup: bool = Fal
                 "location": location or None,
                 "surface": d.surface,
                 "draw_size": d.draw_size,
-                "closes": fmt_close_utc(d.closing_time) if d.closing_time else None,
+                # Left raw: the display string is per-recipient, rendered in
+                # each reader's own zone in the send loop below. closes_soon is
+                # an absolute-instant comparison, so it is zone-independent.
+                "closing_time": d.closing_time,
                 "closes_soon": bool(
                     d.closing_time and (d.closing_time - now_naive) < timedelta(hours=24)
                 ),
@@ -499,18 +502,20 @@ async def notify_draw_release_batch(draw_ids: list[int], is_followup: bool = Fal
         week_start = min(starts) if starts else None
         week_label = f"{week_start.strftime('%B')} {week_start.day}" if week_start else "this week"
 
-        # Keyed by email, not user id: one address gets one message even if it
-        # somehow appears on two accounts.
         rows = (await db.execute(
-            select(User.email, func.min(User.id))
+            select(User.email, User.id, User.timezone)
             .join(NotificationPreference, NotificationPreference.user_id == User.id)
             .where(
                 NotificationPreference.pref_key == DRAW_RELEASED_PREF,
                 User.email_verified == True,
             )
-            .group_by(User.email)
+            .order_by(User.id)
         )).all()
-        recipients = {email: uid for email, uid in rows}
+        # Keyed by email, not user id: one address gets one message even if it
+        # somehow appears on two accounts (first by id wins).
+        recipients: dict[str, tuple[int, Optional[str]]] = {}
+        for email, uid, user_tz in rows:
+            recipients.setdefault(email, (uid, user_tz))
 
         await db.execute(
             sa_update(DrawReleaseNotification)
@@ -523,14 +528,19 @@ async def notify_draw_release_batch(draw_ids: list[int], is_followup: bool = Fal
         logger.debug("notify_draw_release_batch: no users opted in to %s", DRAW_RELEASED_PREF)
         return
 
-    for email, uid in recipients.items():
+    for email, (uid, user_tz) in recipients.items():
         unsubscribe_url = (
             f"{API_BASE}/unsubscribe?token="
             f"{create_unsubscribe_token(uid, DRAW_RELEASED_PREF)}"
         )
+        rows_for_user = [
+            {**p, "closes": fmt_close(p["closing_time"], user_tz) if p["closing_time"] else None}
+            for p in payload
+        ]
         await send_draw_release_digest(
-            email, payload, week_label,
+            email, rows_for_user, week_label,
             is_followup=is_followup, unsubscribe_url=unsubscribe_url,
+            tz_known=bool(user_tz),
         )
 
     names = ", ".join(f"{d.year} {d.name} ({d.gender})" for d in claimed)

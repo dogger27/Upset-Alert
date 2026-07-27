@@ -2,6 +2,23 @@ import { create } from 'zustand'
 import { getMe, login as apiLogin, register as apiRegister, updateMe as apiUpdateMe } from '../api/auth'
 import { queryClient } from '../main'
 
+// The server needs the reader's zone only to render deadlines in outgoing
+// email, where no browser is present to do it. Take it from the browser rather
+// than asking — Intl already knows, and a settings question users have to
+// answer would be both friction and a worse answer. Write only on change, so
+// this is a no-op on all but the first load (and after travel or a zone rename).
+async function syncTimezone(user) {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+    if (!tz || tz === user?.timezone) return user
+    return await apiUpdateMe({ timezone: tz })
+  } catch {
+    // Never let this block sign-in: a missing zone costs a UTC-labelled email,
+    // a thrown error costs the session.
+    return user
+  }
+}
+
 export const useAuth = create((set) => ({
   user: null,
   loading: true,
@@ -12,6 +29,7 @@ export const useAuth = create((set) => ({
     try {
       const user = await getMe()
       set({ user, loading: false })
+      set({ user: await syncTimezone(user) })
     } catch {
       localStorage.removeItem('token')
       set({ loading: false })
@@ -23,7 +41,7 @@ export const useAuth = create((set) => ({
     localStorage.setItem('token', access_token)
     const user = await getMe()
     queryClient.clear()
-    set({ user })
+    set({ user: await syncTimezone(user) })
   },
 
   register: async (email, username, fullName, password) => {
