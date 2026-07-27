@@ -191,8 +191,10 @@
    player boxes' .cv-slot (z-index 1). */
 .cv-live-score {
   position: absolute;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  /* Flush with the player boxes' right edge: .cv-slot insets them 4px from
+     .cv-col, and .cv-box fills that slot edge to edge. */
+  right: 4px;
+  transform: translateY(-50%);
   z-index: 2;
   line-height: 1;
   /* Sits in the 24px gap (2 * LIVE_SPREAD + the pair's natural 16px). 1.5rem
