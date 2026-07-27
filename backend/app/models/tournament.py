@@ -171,14 +171,25 @@ class Draw(Base):
 
     @property
     def is_locked(self) -> bool:
+        """Picks close at the exact moment the draw stops being Open.
+
+        Delegates to computed_status instead of comparing the clock to
+        closing_time. closing_time is only a PREDICTION of day 1's first
+        match (venue timezone + the schedule lookup table), and a wrong
+        prediction closes picks while the courts are still empty — 2026 Los
+        Cabos had no lookup entry, fell back to the Mexico default of 11:00
+        America/Mexico_City, and locked eight hours before ESPN's first
+        scheduled main-draw match.
+
+        computed_status only reaches "active" on evidence: ESPN watching a
+        main-draw match go live (picks_locked_at), the scraper recording a
+        real result, or the day rolling past start_date. closing_time still
+        feeds its day-after backstop, but can no longer lock anything early
+        on the start date itself.
+        """
         if self.selections_unlocked:
             return False
-        close = self.closing_time
-        if close is None:
-            return False
-        now = datetime.now(timezone.utc)
-        c = close if close.tzinfo else close.replace(tzinfo=timezone.utc)
-        return now >= c
+        return self.computed_status in ("active", "completed")
 
     @property
     def computed_status(self) -> str:

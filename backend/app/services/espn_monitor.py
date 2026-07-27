@@ -5,8 +5,10 @@ Polls ESPN ATP/WTA scoreboards every 60 seconds. Performs two jobs per cycle:
 
   JOB 1 — Picks locking (narrow window: start_date ± a few days)
     When a STATUS_IN_PROGRESS match features a player from our draw:
-      • Sets picks_locked_at = now  (idempotency guard)
-      • Overwrites closing_time = now  (is_locked becomes True immediately)
+      • Sets picks_locked_at = now  — this is what actually closes picks and
+        flips the draw Open -> Active (Draw.is_locked / computed_status)
+      • Overwrites closing_time = now, so the displayed lock time matches the
+        moment play really started rather than the schedule table's estimate
       • Emails every verified user with picks
       • SSE-broadcasts to connected browsers
 

@@ -74,6 +74,14 @@ _LOOKUP: list[tuple[list[str], Optional[str], str, int, int]] = [
     (['memphis open', 'open 13'],                    None, 'America/Chicago',     11,  0),
     (['hong kong open', 'hong kong tennis'],         None, 'Asia/Hong_Kong',      11,  0),
     (['singapore open'],                             None, 'Asia/Singapore',      11,  0),
+
+    # ── ATP/WTA 250 ──────────────────────────────────────────────────────────
+    # Los Cabos (Mifel Open): Baja California Sur runs on America/Mazatlan
+    # (UTC-7), NOT the America/Mexico_City default, and play starts in the
+    # evening to duck the July heat — ESPN has 2026 day 1 R1 at 01:00Z, i.e.
+    # 18:00 local. The country fallback (Mexico City, 11:00) was eight hours
+    # early.
+    (['los cabos', 'mifel'],                         None, 'America/Mazatlan',    18,  0),
 ]
 
 # ── Country → default timezone ────────────────────────────────────────────────
