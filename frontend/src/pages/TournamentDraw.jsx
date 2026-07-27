@@ -14,6 +14,16 @@ import CombinedView from '../components/CombinedView'
 import DrawSidebar from '../components/DrawSidebar'
 import './TournamentDraw.css'
 
+// Tier as it appears in the site's tournament-type pills — "GS" for the slams,
+// otherwise the tour level (mirrors DrawHistory's categoryShort).
+function categoryShort(cat) {
+  if (!cat) return ''
+  if (/slam/i.test(cat)) return 'GS'
+  if (cat.includes('1000')) return '1000'
+  if (cat.includes('500')) return '500'
+  return '250'
+}
+
 export default function TournamentDraw() {
   const { id } = useParams()
   const [searchParams] = useSearchParams()
@@ -778,6 +788,11 @@ export default function TournamentDraw() {
   // Header helpers
   const catShort = tournament.category ? tournament.category.replace(/^(ATP|WTA)\s+/, '') : ''
   const tourLabel = `${tournament.gender === 'M' ? 'ATP' : 'WTA'}${catShort ? ' ' + catShort : ''}`
+  // Same value in the site's pill form ("ATP 500", "WTA GS") for the phone
+  // dots bar, which has no room for "ATP Grand Slam".
+  const isATP = tournament.gender === 'M'
+  const catTier = categoryShort(tournament.category)
+  const catPill = `${isATP ? 'ATP' : 'WTA'}${catTier ? ' ' + catTier : ''}`
   const surface = tournament.surface ? tournament.surface.replace(/\s*\(.*?\)/g, '') : ''
 
   const fmtDateRange = (start, end) => {
@@ -1070,7 +1085,13 @@ export default function TournamentDraw() {
           own slim always-visible strip here instead. No arrows — the big edge
           round-nav buttons already float over the draw, and you can swipe. */}
       {showPager && headerForcedHidden && (
-        <div className="draw-page-dots-bar">{pageDots}</div>
+        <div className="draw-page-dots-bar">
+          <span className="draw-dots-bar-name" title={tournament.name}>{tournament.name}</span>
+          {pageDots}
+          <span className={clsx('draw-dots-bar-cat', isATP ? 'draw-dots-bar-cat--atp' : 'draw-dots-bar-cat--wta')}>
+            {catPill}
+          </span>
+        </div>
       )}
 
       {/* Swipe is bound here, not on .draw-main, so gestures that start on the

@@ -356,14 +356,44 @@
    column without stealing any from .draw-body (flex:1). Deliberately barely
    taller than the dots — the header was hidden to reclaim vertical space in
    the first place, so this must not give it back. */
+/* Since the collapsed header takes the tournament's identity with it, this
+   strip carries it: name left, dots centred, type pill right. 1fr/auto/1fr
+   keeps the dots on the true centre line whatever the name's length — the
+   name truncates (min-width:0) rather than pushing them off it. */
 .draw-page-dots-bar {
   flex-shrink: 0;
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: center;
+  gap: 8px;
+  padding: 0 8px;
   background: white;
   border-bottom: 1px solid var(--border);
 }
+
+.draw-dots-bar-name {
+  min-width: 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--ink-900);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Same pill as the rest of the site (cf. .dh-category on Draw History). */
+.draw-dots-bar-cat {
+  justify-self: end;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-radius: 4px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+.draw-dots-bar-cat--atp { background: #dbeafe; color: #1d4ed8; }
+.draw-dots-bar-cat--wta { background: #fce7f3; color: #be185d; }
 
 /* Phones: tighten arrows + dots so the switch, arrows and up to ~7 dots
    (a Grand Slam draw's worth of pages) still share one line. Must stay
