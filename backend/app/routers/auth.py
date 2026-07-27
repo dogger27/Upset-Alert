@@ -150,7 +150,10 @@ _DEFAULT_NOTIF_PREFS = [
     "draw_open:ATP 1000",
     "draw_open:WTA 1000",
     "round_standings",
-    "tournament_end",
+    # No "tournament_end": Draw Completion is only offered once round emails are
+    # switched off (the settings UI hides it otherwise, and enables it the moment
+    # rounds go off). Seeding both would start every account in a state the UI
+    # says cannot exist — and would silently suppress their final-round email.
     "league_member_joined",
 ]
 

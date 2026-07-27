@@ -107,7 +107,11 @@ export default function Navbar() {
     try {
       const { default: client } = await import('../api/client')
       const { data } = await client.get('/auth/me/notifications')
-      setNotifSelected(new Set(data.enabled_keys))
+      const keys = new Set(data.enabled_keys)
+      // Reconcile accounts saved before Draw Completion became conditional
+      // (the old defaults set both), so what's stored matches what's shown.
+      if (keys.has('round_standings')) keys.delete('tournament_end')
+      setNotifSelected(keys)
     } catch {
       setNotifError('Failed to load preferences')
     } finally {
@@ -119,6 +123,26 @@ export default function Navbar() {
     setNotifSelected(prev => {
       const next = new Set(prev)
       next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+  }
+
+  // Round Completion already reports every round, the Final included, so Draw
+  // Completion is only offered once rounds are switched off — and is turned on
+  // at that moment, since it becomes the only way to hear a draw's result.
+  // Switching rounds back on clears it: leaving it set but hidden would keep
+  // suppressing the final-round email (notify_round_complete drops that one for
+  // anyone holding tournament_end) with nothing on screen to explain why.
+  const toggleRoundStandings = () => {
+    setNotifSelected(prev => {
+      const next = new Set(prev)
+      if (next.has('round_standings')) {
+        next.delete('round_standings')
+        next.add('tournament_end')
+      } else {
+        next.add('round_standings')
+        next.delete('tournament_end')
+      }
       return next
     })
   }
@@ -345,24 +369,27 @@ export default function Navbar() {
                               <input
                                 type="checkbox"
                                 checked={notifSelected.has('round_standings')}
-                                onChange={() => toggleNotif('round_standings')}
+                                onChange={toggleRoundStandings}
                               />
                               Enabled
                             </label>
                           </div>
 
-                          <div className="notif-section">
-                            <p className="notif-section-title">Draw Completion</p>
-                            <p className="notif-section-desc">1 email with final standings, summarizing all draws</p>
-                            <label className="notif-check-row">
-                              <input
-                                type="checkbox"
-                                checked={notifSelected.has('tournament_end')}
-                                onChange={() => toggleNotif('tournament_end')}
-                              />
-                              Enabled
-                            </label>
-                          </div>
+                          {/* Only offered with round emails off — see toggleRoundStandings. */}
+                          {!notifSelected.has('round_standings') && (
+                            <div className="notif-section">
+                              <p className="notif-section-title">Draw Completion</p>
+                              <p className="notif-section-desc">1 email with final standings, summarizing all draws</p>
+                              <label className="notif-check-row">
+                                <input
+                                  type="checkbox"
+                                  checked={notifSelected.has('tournament_end')}
+                                  onChange={() => toggleNotif('tournament_end')}
+                                />
+                                Enabled
+                              </label>
+                            </div>
+                          )}
 
                           <div className="notif-section">
                             <p className="notif-section-title">New member joins your league</p>
