@@ -194,11 +194,12 @@ function scoreNodes(scores) {
 // which match.scores never carries at all (it only ever holds completed
 // sets). That in-progress set is rendered as a plain game score (no
 // tiebreak superscript — point-level score isn't tracked here, only game
-// counts) with an "(In Progress)" tag.
+// counts). No "(In Progress)"/"(Suspended)" tag: this score now renders
+// between the two opponents of the live match itself, inside a group that
+// already carries the In Progress / Suspended badge on its top border.
 function liveScoreNodes(live) {
   if (!live) return null
   const [aArr, bArr, , setWinsA] = live
-  const suspended = live[4] === 'suspended'
   const n = Math.max(aArr?.length ?? 0, bArr?.length ?? 0)
   const sets = []
   for (let i = 0; i < n; i++) {
@@ -212,20 +213,23 @@ function liveScoreNodes(live) {
     else sets.push(<>{A.g}-{B.g}</>)
   }
   if (sets.length === 0) return null
-  return (
-    <>
-      {sets.map((s, i) => <span key={i}>{i > 0 ? ', ' : ''}{s}</span>)}
-      {suspended
-        ? <span className="cv-live-tag cv-live-tag--suspended"> (Suspended)</span>
-        : <span className="cv-live-tag"> (In Progress)</span>}
-    </>
-  )
+  return sets.map((s, i) => <span key={i}>{i > 0 ? ', ' : ''}{s}</span>)
 }
+
+// A match is live while ESPN is feeding scores for it and no winner has been
+// recorded yet — the same test the In Progress badge uses.
+const isLiveMatch = (m) => m?.live_scores != null && m.winner == null
 
 const BOX_H = 32
 const SLOT = 58          // fallback slot (missing feeders only)
 const PAIR_SLOT = 130    // vertical slot per MATCH (pair) in the base column
 const PAIR_OFF = 24      // half the centre-to-centre gap of a match's two opponents
+// Extra half-gap opened between the two opponents of an IN-PROGRESS match, so
+// the running score fits between them. 4 (not more): the pair's grouping
+// outline grows by 2*LIVE_SPREAD, and PAIR_SLOT only has ~10px of slack over
+// the outline's normal height — at 4 two adjacent live pairs still clear each
+// other, at 6 their outlines overlap.
+const LIVE_SPREAD = 4
 // Reverted the previous 214 (a 25% cut off the ~184px name allotment) back to
 // 260 — the narrower width was truncating too many player names.
 const COL_W = 260
@@ -432,6 +436,22 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
     })
   }
 
+  // A live match prints its running score in the gap between its two
+  // opponents, so open that pair up a little to make room. Applied LAST, after
+  // every column (and afterCenters) has been derived, and symmetrically about
+  // the pair's midpoint — which is exactly what the next column's box centre,
+  // its H2H chip and the connector fan all key off, so none of them shift.
+  // Only the live pair itself moves, and only by LIVE_SPREAD each way.
+  visible.forEach((c) => {
+    const cc = centers[c]
+    R[c]?.forEach((m, ri) => {
+      const a = 2 * ri, b = 2 * ri + 1
+      if (!isLiveMatch(m) || cc[a] == null || cc[b] == null) return
+      cc[a] -= LIVE_SPREAD
+      cc[b] += LIVE_SPREAD
+    })
+  })
+
   // ---- box builders -------------------------------------------------------
   // Clicking a box picks ITS player as the predicted winner of the match they
   // feed into next (one column to the right) — e.g. clicking a player shown
@@ -485,7 +505,10 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
       && lossRound[pickId] <= match.round_number
     const wrong = pickId != null && ((realId != null && pickId !== realId) || deadPick)
     const realPlayer = realId != null ? playerById[realId] : null
-    const score = match.is_bye ? null : (match.live_scores ? liveScoreNodes(match.live_scores) : scoreNodes(match.scores))
+    // A live match's score belongs to the match's OWN box group (drawn between
+    // its two opponents), not under the box holding its eventual winner — so
+    // nothing is shown here until the match is decided and match.scores lands.
+    const score = match.is_bye || isLiveMatch(match) ? null : scoreNodes(match.scores)
 
     const onClick = nextMatchOnClick(c, i, displayId)
 
@@ -591,7 +614,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                     const top = Math.min(yTop, yBot) - BOX_H / 2 - topPad
                     const height = Math.abs(yBot - yTop) + BOX_H + topPad + bottomPad
                     const isSuspended = m.live_scores?.[4] === 'suspended'
-                    const isLive = m.live_scores != null && m.winner == null
+                    const isLive = isLiveMatch(m)
                     return (
                       <Fragment key={`mo${m.id}`}>
                         <div
@@ -601,6 +624,16 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                         {isLive && (
                           <span className={`in-progress-badge${isSuspended ? ' in-progress-badge--suspended' : ''}`} style={{ position: 'absolute', top, left: '50%', transform: 'translate(-50%, -50%)' }}>
                             {isSuspended ? 'Suspended' : 'In Progress'}
+                          </span>
+                        )}
+                        {/* Running score, centred in the gap the LIVE_SPREAD
+                            nudge opened between this match's two opponents. */}
+                        {isLive && (
+                          <span
+                            className={`cv-live-score${isSuspended ? ' cv-live-score--suspended' : ''}`}
+                            style={{ top: (yTop + yBot) / 2 }}
+                          >
+                            {liveScoreNodes(m.live_scores)}
                           </span>
                         )}
                       </Fragment>
