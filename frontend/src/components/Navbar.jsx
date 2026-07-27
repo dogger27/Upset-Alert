@@ -352,8 +352,8 @@ export default function Navbar() {
                           </div>
 
                           <div className="notif-section">
-                            <p className="notif-section-title">Tournament complete standings</p>
-                            <p className="notif-section-desc">When a tournament ends — covers all groups you're in</p>
+                            <p className="notif-section-title">Draw Completion</p>
+                            <p className="notif-section-desc">1 email with final standings, summarizing all draws</p>
                             <label className="notif-check-row">
                               <input
                                 type="checkbox"

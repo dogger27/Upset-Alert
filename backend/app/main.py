@@ -122,7 +122,8 @@ async def health():
 _UNSUB_PREF_LABELS = {
     "round_standings": "round-completion emails",
     "match_start": "match-start emails",
-    "tournament_end": "tournament-completion emails",
+    # Key is historical; the notification is "Draw Completion" everywhere users see it.
+    "tournament_end": "draw-completion emails",
     "draw_released": "draw-release emails",
 }
 
