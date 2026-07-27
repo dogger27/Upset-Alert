@@ -117,7 +117,7 @@ function resolveMatchPlayers(matches, picks, mode) {
 // and separates the ball from the pale box behind it.
 function TennisBall() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" style={{ display: 'block', flexShrink: 0 }}>
+    <svg width="16" height="16" viewBox="0 0 24 24" style={{ display: 'block', flexShrink: 0 }}>
       <circle cx="12" cy="12" r="11" fill="#7ba81f"/>
       <g fill="none" stroke="#fff" strokeWidth="2">
         <path d="M12 1A12.04 12.04 0 0 1 1 12"/>
