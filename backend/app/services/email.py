@@ -239,15 +239,31 @@ def _tier_badge(category: str, gender: str) -> str:
     return f"{tour} {tier}"
 
 
-def fmt_close_utc(dt) -> str:
-    """'Sun 18 Oct, 23:00 UTC'.
+def fmt_close(dt, tz_name: Optional[str] = None) -> str:
+    """'Sun 18 Oct, 11:00 PM PDT' in the reader's zone, or '… 6:00 AM UTC'.
 
-    Always UTC, always labelled. closing_time is stored as naive UTC, and we
-    hold no per-user timezone, so any attempt to render a "local" time would be
-    wrong for most readers — and being wrong about a pick deadline is the one
-    error this email cannot afford. The site shows the reader's own local time.
+    closing_time is stored as naive UTC. Rendering it in the reader's own zone
+    is the whole point of storing User.timezone — but the zone is null until
+    they next open the site, so UTC is the fallback and it is always labelled.
+    An unlabelled time would be worse than either: being wrong about a pick
+    deadline is the one error this email cannot afford.
     """
-    return f"{dt.strftime('%a')} {dt.day} {dt.strftime('%b')}, {dt.strftime('%H:%M')} UTC"
+    from datetime import timezone as _tz
+    from zoneinfo import ZoneInfo
+
+    aware = dt.replace(tzinfo=_tz.utc)
+    if tz_name:
+        try:
+            aware = aware.astimezone(ZoneInfo(tz_name))
+        except Exception:
+            # Stored zone no longer resolves (tzdata drop, hand-edited row).
+            # Fall through to UTC rather than lose the notification.
+            logger.warning("Unresolvable user timezone %r — falling back to UTC", tz_name)
+            aware = dt.replace(tzinfo=_tz.utc)
+
+    clock = f"{(aware.hour % 12) or 12}:{aware.strftime('%M')} {aware.strftime('%p')}"
+    label = aware.strftime("%Z") or "UTC"
+    return f"{aware.strftime('%a')} {aware.day} {aware.strftime('%b')}, {clock} {label}"
 
 
 def _digest_row(draw: dict, last: bool) -> str:
@@ -288,12 +304,13 @@ async def send_draw_release_digest(
     week_label: str,
     is_followup: bool = False,
     unsubscribe_url: str = "",
+    tz_known: bool = False,
 ) -> None:
-    """One email covering every draw released this week that *this* user follows.
+    """One email covering every draw released this week.
 
-    draws is already filtered to the recipient's tier preferences and sorted
-    soonest-deadline-first, so the list length varies per recipient — hence
-    subject and heading are built from it rather than from the batch.
+    draws is sorted soonest-deadline-first and its 'closes' strings are already
+    rendered in this recipient's zone — the caller does that per recipient,
+    which is why this takes a single address rather than a list.
     """
     n = len(draws)
     if not n:
@@ -342,8 +359,9 @@ async def send_draw_release_digest(
             {cta_text}
           </a>
           <p style="color:#9ca3af;line-height:1.6;margin:18px 0 0;font-size:12px">
-            Picks lock when each draw's first match starts. Times shown in UTC —
-            the site shows your local time.
+            Picks lock when each draw's first match starts.{
+              "" if tz_known else " Times shown in UTC — open the site to see your local time."
+            }
           </p>
         {_BODY_CLOSE}{_WRAP_CLOSE}{unsubscribe}""",
     })
