@@ -119,7 +119,11 @@ async def notify_round_complete(
         m_res = await db.execute(
             select(Match)
             .options(selectinload(Match.player1), selectinload(Match.player2), selectinload(Match.winner))
-            .where(Match.draw_id == tournament_id, Match.status == "completed")
+            # is_bye excluded: a bye is not a contest. It is stamped completed with
+            # an auto-advanced winner, and stray picks do exist on those rows, so
+            # scoring them hands out free points (see _persist_tournament_results).
+            .where(Match.draw_id == tournament_id, Match.status == "completed",
+                   Match.is_bye == False)  # noqa: E712
         )
         completed_matches = m_res.scalars().all()
 
@@ -641,7 +645,11 @@ async def notify_tournament_complete(tournament_id: int) -> None:
         m_res = await db.execute(
             select(Match)
             .options(selectinload(Match.player1), selectinload(Match.player2), selectinload(Match.winner))
-            .where(Match.draw_id == tournament_id, Match.status == "completed")
+            # is_bye excluded: a bye is not a contest. It is stamped completed with
+            # an auto-advanced winner, and stray picks do exist on those rows, so
+            # scoring them hands out free points (see _persist_tournament_results).
+            .where(Match.draw_id == tournament_id, Match.status == "completed",
+                   Match.is_bye == False)  # noqa: E712
         )
         completed_matches = m_res.scalars().all()
 
