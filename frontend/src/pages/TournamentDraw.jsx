@@ -637,10 +637,10 @@ export default function TournamentDraw() {
 
   // ── Swipe-to-page (touch only) ──────────────────────────────────────────
   // Touch events only fire on touch devices, so this is inherently mobile-only
-  // — no viewport check needed. The window is always sized so the visible
-  // rounds fit without horizontal scrolling (see computeWindow), so a sideways
-  // drag normally has no native scroll to compete with; onDrawTouchStart bows
-  // out for the cases where it would.
+  // — no viewport check needed. The sideways drag can't fight native scrolling
+  // because .draw-main--swipe (applied while showPager) restricts touch panning
+  // to the vertical axis; see that rule for why the draw has horizontal slack
+  // to steal the gesture in the first place.
   const SWIPE_MIN_PX = 45      // ignore taps and small drags (e.g. picking a player)
   const SWIPE_H_RATIO = 1.5    // must be clearly horizontal, not a vertical scroll
   const pageBy = (delta) => {
@@ -649,18 +649,10 @@ export default function TournamentDraw() {
   }
   const onDrawTouchStart = (e) => {
     if (!showPager || e.touches.length !== 1) { swipeRef.current = null; return }
-    // Don't hijack the drag if the inner scroller can genuinely pan sideways
-    // (Live Draw's .bracket-scroll is overflow-x:auto) — the browser should
-    // scroll it instead. Compact mode pins touch-action:pan-y, which disables
-    // native horizontal panning outright, so swiping is always safe there —
-    // and it deliberately leaves a few px of decorative overhang uncropped
-    // (see CombinedView.css), hence the tolerance rather than a > 0 test.
-    const sc = e.currentTarget.querySelector('.cv-scroll, .bracket-scroll')
-    if (sc && getComputedStyle(sc).touchAction !== 'pan-y'
-           && sc.scrollWidth - sc.clientWidth > 32) {
-      swipeRef.current = null
-      return
-    }
+    // No "defer to native horizontal scrolling" check here: whenever paging is
+    // available, .draw-main--swipe pins touch-action to the vertical axis, so
+    // there IS no native horizontal pan to defer to. Checking for one anyway
+    // would create a dead zone — a drag that neither pages nor scrolls.
     const t = e.touches[0]
     swipeRef.current = { x: t.clientX, y: t.clientY, fired: false }
   }
@@ -1061,7 +1053,7 @@ export default function TournamentDraw() {
         />
 
         <div
-          className="draw-main"
+          className={clsx('draw-main', { 'draw-main--swipe': showPager })}
           ref={mainRef}
           onTouchStart={onDrawTouchStart}
           onTouchMove={onDrawTouchMove}
