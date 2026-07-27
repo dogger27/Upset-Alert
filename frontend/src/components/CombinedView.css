@@ -191,9 +191,10 @@
    player boxes' .cv-slot (z-index 1). */
 .cv-live-score {
   position: absolute;
-  /* Flush with the player boxes' right edge: .cv-slot insets them 4px from
-     .cv-col, and .cv-box fills that slot edge to edge. */
-  right: 4px;
+  /* Lines up with the boxes' inner content edge rather than their border:
+     4px (.cv-slot inset) + 8px (.cv-box padding-right). Flush with the border
+     itself sat within a few px of the H2H chip, which straddles that edge. */
+  right: 12px;
   transform: translateY(-50%);
   z-index: 2;
   line-height: 1;
