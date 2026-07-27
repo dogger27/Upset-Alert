@@ -183,14 +183,27 @@
   font-weight: 500;
   color: #b02a2a;
 }
-.cv-live-tag {
-  font-style: italic;
-  font-weight: 600;
-  color: var(--green-600, #2f7a4d);
+
+/* Running score of an in-progress match, centred in the gap between that
+   match's two opponents (LIVE_SPREAD in CombinedView.jsx opens the pair up by
+   exactly this line's height). Colour-matched to the In Progress badge sitting
+   on the same group's top border. Above .cv-match-outline (z-index 0) and the
+   player boxes' .cv-slot (z-index 1). */
+.cv-live-score {
+  position: absolute;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  line-height: 1;
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #1d4ed8;
+  white-space: nowrap;
+  pointer-events: none;
 }
-.cv-live-tag--suspended {
-  color: #b45309;
-}
+.cv-live-score sup { font-size: 0.72em; }
+.cv-live-score--suspended { color: #b45309; }
 .cv-real-winner {
   position: absolute;
   left: 7px;
