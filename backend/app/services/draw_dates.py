@@ -85,7 +85,10 @@ _DEFAULTS: dict[str, tuple[int, int]] = {
     "WTA 250":     (2, 1),
 }
 
-MIN_SAMPLES = 3  # minimum historical entries before we trust the average
+# Minimum historical observations before a learned median is allowed to override
+# the curated default. Was 3, which let five observations from a single six-week
+# grass swing set the expected release date for every 250 on the calendar.
+MIN_SAMPLES = 8
 
 
 def _key(category: Optional[str], gender: Optional[str]) -> str:
@@ -128,9 +131,18 @@ async def calculate_draw_release_dates(
     """
     Return (direct_acceptance_date, qualifiers_added_date) for a tournament.
 
-    Uses the median of historical da_days_before / qual_days_before values for the
-    same category+gender when MIN_SAMPLES or more are available. Falls back to
-    hardcoded defaults when there is insufficient history.
+    Learns from bracket_first_seen_days_before — when the bracket was first
+    observed on Wikipedia — rather than da_days_before, which records when the
+    page crossed our 50%-complete threshold and so measures editor transcription
+    pace as much as publication.
+
+    A learned median may only ever move the estimate EARLIER than the curated
+    default (see the max() below). The two failure modes are not symmetric: an
+    estimate that lands early costs a few extra polls, while one that lands late
+    tells users the draw isn't out yet when it is, delays the batched
+    draw-release email toward the pick deadline, and — because the daily scraper
+    only polls once the estimated date arrives — suppresses the very evidence
+    that would correct it. Flooring at the default keeps that loop closed.
 
     Pass db=None (or omit) to always use the hardcoded defaults — useful in
     contexts where no DB session is available.
@@ -138,12 +150,14 @@ async def calculate_draw_release_dates(
     if not start_date or not category:
         return None, None
 
-    da_days, qual_days = get_defaults(category, gender)
-
+    default_da, default_qual = get_defaults(category, gender)
     if db is not None:
         db_vals = await _db_defaults(category, gender, db)
         if db_vals:
-            da_days, qual_days = db_vals
+            default_da, default_qual = db_vals
+    da_days, qual_days = default_da, default_qual
+
+    if db is not None:
         from sqlalchemy import select
         from app.models.tournament import Draw
 
@@ -152,27 +166,30 @@ async def calculate_draw_release_dates(
 
         rows = await db.execute(
             select(
-                Draw.da_days_before,
+                Draw.bracket_first_seen_days_before,
                 Draw.qual_days_before,
             ).where(
                 Draw.category == key,
-                Draw.da_days_before.isnot(None),
-                Draw.da_days_before > 0,
-                Draw.da_days_before <= 14,   # exclude implausible outliers
-            ).order_by(Draw.da_days_before)
+                Draw.bracket_first_seen_days_before.isnot(None),
+                # > 0 also drops the large negatives left by pre-launch backfill,
+                # where "days before start" was measured against a season already
+                # played out.
+                Draw.bracket_first_seen_days_before > 0,
+                Draw.bracket_first_seen_days_before <= 14,   # exclude implausible outliers
+            )
         )
         records = rows.all()
 
         if len(records) >= MIN_SAMPLES:
-            da_vals = sorted(r.da_days_before for r in records)
-            da_days = da_vals[len(da_vals) // 2]  # median
+            da_vals = sorted(r.bracket_first_seen_days_before for r in records)
+            da_days = max(da_vals[len(da_vals) // 2], default_da)  # median, floored
 
             qual_vals = sorted(
                 r.qual_days_before for r in records
                 if r.qual_days_before is not None and 0 < r.qual_days_before <= 14
             )
             if len(qual_vals) >= MIN_SAMPLES:
-                qual_days = qual_vals[len(qual_vals) // 2]
+                qual_days = max(qual_vals[len(qual_vals) // 2], default_qual)
 
     da_date = start_date - timedelta(days=da_days)
     # Grand Slams place all players (including qualifier slots) in the draw at the

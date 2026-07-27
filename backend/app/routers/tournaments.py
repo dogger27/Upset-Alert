@@ -22,6 +22,13 @@ from app.services.upsets import has_upset_pick
 
 router = APIRouter(prefix="/tournaments", tags=["tournaments"])
 
+# How many named unseeded players must hold bracket slots before we accept that
+# the draw has actually been made (see the publication-signal block in
+# _do_scrape). Small on purpose — the point is to catch publication early, and
+# unseeded names cannot appear from a seeds-only entry-list placement. Kept
+# above 1 so a single stray wildcard or parse artefact can't trip it.
+BRACKET_PUBLISHED_MIN_UNSEEDED = 4
+
 
 @router.get("", response_model=list[TournamentOut])
 async def list_tournaments(db: AsyncSession = Depends(get_db)):
@@ -991,6 +998,40 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
     days_until = (ref_date - date.today()).days if ref_date else 0
     too_far_future = ref_date is not None and days_until > 60
 
+    # --- Publication signal: has the draw ceremony actually happened? ---------
+    # Named UNSEEDED players holding bracket slots is the earliest honest
+    # evidence. Seeded players alone are not: editors place seeds into their
+    # slots as soon as the entry list is announced, days before Round-1 pairings
+    # exist — the same false positive the 50% threshold above guards against.
+    # An unseeded name can only come from a real draw.
+    #
+    # This is recorded separately from draw_released_direct_at because the two
+    # answer different questions. draw_released_direct_at asks "is the page
+    # complete enough to play from" (it gates picks and the release email, and
+    # 50% is the right bar for that). bracket_first_seen asks "when was the draw
+    # published", which is what next season's estimate must be built from.
+    # Learning from the completeness threshold instead made every prediction a
+    # measure of Wikipedia editor pace, and the daily scraper then only started
+    # polling once that late prediction arrived — so the estimate could never
+    # discover it was wrong.
+    unseeded_named = [p for p in da_players if p.seed is None]
+    bracket_published = len(unseeded_named) >= BRACKET_PUBLISHED_MIN_UNSEEDED
+    if bracket_published and tournament.bracket_first_seen_at is None and not too_far_future:
+        tournament.bracket_first_seen_at = date.today()
+        if tournament.start_date:
+            tournament.bracket_first_seen_days_before = (tournament.start_date - date.today()).days
+        logger.info("Tournament %s: Bracket first seen on %s (%d unseeded players placed, %s days before start)",
+                    tournament.wiki_page_title, date.today(), len(unseeded_named),
+                    tournament.bracket_first_seen_days_before)
+    elif not bracket_published and tournament.bracket_first_seen_at is not None \
+            and tournament.status not in ("active", "completed"):
+        # Signal retracted (page blanked, bad parse, vandalism) before play began —
+        # drop the observation rather than feed a phantom date into the estimator.
+        tournament.bracket_first_seen_at = None
+        tournament.bracket_first_seen_days_before = None
+        logger.info("Tournament %s: Clearing bracket-first-seen (%d unseeded players now present)",
+                    tournament.wiki_page_title, len(unseeded_named))
+
     if parsed.has_direct_draw and draw_substantially_complete:
         if not tournament.draw_released_direct_at and not too_far_future:
             tournament.draw_released_direct_at = date.today()
@@ -1006,9 +1047,13 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
                        tournament.da_days_before)
     elif tournament.draw_released_direct_at and not draw_substantially_complete \
             and tournament.status not in ("active", "completed"):
-        # Draw was stamped prematurely (e.g. only seeds visible) — revert until complete
+        # Draw was stamped prematurely (e.g. only seeds visible) — revert until complete.
+        # da_days_before goes with it: the observation it recorded has been retracted,
+        # and leaving it set means the next stamp silently overwrites it with a later,
+        # smaller value, so every flicker drags this category's history downward.
         tournament.draw_released_direct_at = None
         tournament.draw_release_detected_at = None
+        tournament.da_days_before = None
         logger.info("Tournament %s: Clearing premature draw release (%d/%d players present)",
                    tournament.wiki_page_title, len(da_players), tournament.draw_size)
 
