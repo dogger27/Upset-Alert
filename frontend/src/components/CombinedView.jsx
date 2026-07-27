@@ -252,10 +252,13 @@ function Flag({ nat }) {
 // Mirrors BracketView's TennisBall icon for visual consistency between views.
 function TennisBall() {
   return (
-    <svg width="11" height="11" viewBox="0 0 11 11" style={{ display: 'block', flexShrink: 0 }}>
-      <circle cx="5.5" cy="5.5" r="5.5" fill="#b5e04a" />
-      <path d="M1.5 5.5 Q5.5 2 9.5 5.5" stroke="white" strokeWidth="1.3" fill="none" />
-      <path d="M1.5 5.5 Q5.5 9 9.5 5.5" stroke="white" strokeWidth="1.3" fill="none" />
+    <svg width="11" height="11" viewBox="0 0 24 24" style={{ display: 'block', flexShrink: 0 }}>
+      <circle cx="12" cy="12" r="11" fill="#b5e04a" />
+      <g fill="none" stroke="#fff" strokeWidth="2.2">
+        <path d="M12 1A12.04 12.04 0 0 1 1 12" />
+        <path d="M12 23A12.04 12.04 0 0 1 23 12" />
+      </g>
+      <circle cx="12" cy="12" r="11" fill="none" stroke="#1b4332" strokeWidth="2" />
     </svg>
   )
 }
