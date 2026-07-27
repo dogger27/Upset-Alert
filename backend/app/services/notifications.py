@@ -745,10 +745,17 @@ async def notify_tournament_complete(tournament_id: int) -> None:
 
         if not groups:
             continue
+        # Opts out of draw-completion emails ONLY — round_standings is a separate
+        # preference with its own link.
+        unsubscribe_url = (
+            f"{API_BASE}/unsubscribe?token="
+            f"{create_unsubscribe_token(uid, 'tournament_end')}"
+        )
         try:
             await send_tournament_complete_notification(
                 email, t_name, t_year, tournament_id, groups,
                 category=t_category, gender=t_gender,
+                unsubscribe_url=unsubscribe_url,
             )
             logger.info(
                 "Tournament-complete email sent to user %d (%d group(s)) for %d %s",

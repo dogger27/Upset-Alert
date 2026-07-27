@@ -254,8 +254,14 @@ async def send_tournament_complete_notification(
     groups: list[tuple],  # [(group_name, rank, total_participants, points), ...]
     category: str = "",
     gender: str = "M",
+    unsubscribe_url: str = "",
 ) -> None:
-    """One email per user covering their standing in every group they participated in."""
+    """One email per user covering their standing in every group they participated in.
+
+    Draw Completion is its own notification type with its own opt-out — the
+    unsubscribe link here drops only the 'tournament_end' preference, leaving
+    round-completion emails untouched.
+    """
     tournament_url = f"{BASE_URL}/tournaments/{tournament_id}"
     label = _tournament_label(tournament_name, category, gender)
     rows = "".join(
@@ -265,6 +271,13 @@ async def send_tournament_complete_notification(
         f"<td style='padding:8px 12px;text-align:right'>{int(pts)}&nbsp;pts</td>"
         f"</tr>"
         for name, rank, total, pts in groups
+    )
+    # Standalone footer, outside the card entirely — mirrors the round-complete email.
+    unsubscribe = (
+        f'<p style="max-width:560px;margin:16px auto 0;text-align:center;font-size:12px;color:#9ca3af">'
+        f'<a href="{unsubscribe_url}" style="color:#9ca3af;text-decoration:underline">'
+        f'Unsubscribe from draw-completion emails</a></p>'
+        if unsubscribe_url else ""
     )
     await send_async({
         "from": FROM,
@@ -287,7 +300,8 @@ async def send_tournament_complete_notification(
              background:#1b4332;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
             View Draw &amp; Standings
           </a>
-        {_BODY_CLOSE}{_WRAP_CLOSE}""",
+        {_BODY_CLOSE}{_WRAP_CLOSE}
+        {unsubscribe}""",
     })
 
 
