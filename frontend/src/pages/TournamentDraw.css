@@ -225,6 +225,41 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
+  padding: 0 0.85rem;
+}
+
+/* Prev/next draw of the same status, flanking the name block. align-self
+   stretch takes the height from that block (title + meta line, whatever they
+   wrap to) and aspect-ratio turns it into a square, so the pair always match
+   the info they bracket without hard-coding a size. */
+.draw-sibling-nav {
+  align-self: stretch;
+  aspect-ratio: 1;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+  font-size: 2rem;
+  line-height: 1;
+  color: var(--green-dark, #2d5a3d);
+  background: var(--bg-subtle, #f4f6f5);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.draw-sibling-nav:hover:not(.draw-sibling-nav--off) {
+  background: #e8f0eb;
+  border-color: var(--green-400, #52b788);
+}
+/* aria-disabled, not the disabled ATTRIBUTE: a natively disabled control
+   swallows pointer events in some browsers, and its title tooltip — the one
+   that explains why it's greyed out — never appears. The click handler is a
+   no-op without a target draw anyway. */
+.draw-sibling-nav--off {
+  opacity: 0.35;
+  cursor: default;
 }
 
 

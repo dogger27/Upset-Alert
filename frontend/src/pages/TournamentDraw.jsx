@@ -2,11 +2,11 @@
  * TournamentDraw — shows the bracket for one tournament.
  * Logged-in users can make / update predictions until the lock time.
  */
-import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
-import { useParams, Link, useSearchParams } from 'react-router-dom'
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react'
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
-import { getDraw, refreshDraw, toggleUnlockSelections } from '../api/tournaments'
+import { getDraw, listTournaments, refreshDraw, toggleUnlockSelections } from '../api/tournaments'
 import { getPredictions, savePredictions } from '../api/predictions'
 import { useAuth } from '../store/auth'
 import BracketView from '../components/BracketView'
@@ -24,8 +24,18 @@ function categoryShort(cat) {
   return '250'
 }
 
-export default function TournamentDraw() {
+// The header's prev/next buttons swap :id in place, which React Router serves
+// from the SAME component instance — so picks state and the one-shot refs
+// below (auto default picks, "ever had picks") would leak from one draw into
+// the next. Keying on the id forces a clean mount per draw instead.
+export default function TournamentDrawRoute() {
   const { id } = useParams()
+  return <TournamentDraw key={id} />
+}
+
+function TournamentDraw() {
+  const { id } = useParams()
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const { user } = useAuth()
   const qc = useQueryClient()
@@ -514,6 +524,38 @@ export default function TournamentDraw() {
 
   const everHadPicksRef = useRef(false)
 
+  // ── Prev/next draw of the same status ──────────────────────────────────
+  // Shares the ['tournaments'] cache with the dashboard, so this is normally
+  // free. Every hook here must stay ABOVE the isLoading guard below (React
+  // error #310), hence the optional chaining on data.
+  const { data: allDraws } = useQuery({
+    queryKey: ['tournaments'],
+    queryFn: listTournaments,
+    staleTime: 5 * 60 * 1000,
+  })
+  const siblingDraws = useMemo(() => {
+    const status = data?.tournament?.status
+    if (!allDraws || !status) return []
+    return allDraws
+      .filter(d => d.status === status)
+      .sort((a, b) =>
+        (a.start_date || '').localeCompare(b.start_date || '') ||
+        (a.name || '').localeCompare(b.name || '') ||
+        a.id - b.id
+      )
+  }, [allDraws, data?.tournament?.status])
+
+  const siblingIdx = siblingDraws.findIndex(d => d.id === Number(id))
+  const stepDraw = (delta) => {
+    if (siblingDraws.length < 2 || siblingIdx < 0) return null
+    return siblingDraws[(siblingIdx + delta + siblingDraws.length) % siblingDraws.length]
+  }
+  const prevDraw = stepDraw(-1)
+  const nextDraw = stepDraw(1)
+  const drawNavTitle = (d) => d
+    ? `${d.name} — ${d.gender === 'M' ? 'ATP' : 'WTA'}${categoryShort(d.category) ? ' ' + categoryShort(d.category) : ''}`
+    : 'No other draws of this type'
+
   if (isLoading) return <div className="page-loading">Loading draw…</div>
   if (error) return <div className="page-error">Failed to load draw.</div>
 
@@ -820,6 +862,18 @@ export default function TournamentDraw() {
       <div className={clsx('draw-header', `draw-header--${headerStage}`, { 'draw-header--collapsed': headerHidden || headerForcedHidden })}>
         {headerStage === 'full' && (
         <div className="draw-header-top">
+          {/* Cycle through the other draws sharing this one's status (Open,
+              Active, …), looping at either end. Disabled — with an explanatory
+              tooltip — when this is the only draw of its kind. */}
+          <button
+            className={clsx('draw-sibling-nav', { 'draw-sibling-nav--off': !prevDraw })}
+            onClick={() => prevDraw && navigate(`/tournaments/${prevDraw.id}`)}
+            aria-disabled={!prevDraw}
+            title={drawNavTitle(prevDraw)}
+            aria-label={prevDraw ? `Previous draw: ${drawNavTitle(prevDraw)}` : 'No other draws of this type'}
+          >
+            ‹
+          </button>
           <div className="draw-name-block">
             <h1 className="draw-title">
               {tournament.name}
@@ -842,6 +896,15 @@ export default function TournamentDraw() {
               </span>
             </div>
           </div>
+          <button
+            className={clsx('draw-sibling-nav', { 'draw-sibling-nav--off': !nextDraw })}
+            onClick={() => nextDraw && navigate(`/tournaments/${nextDraw.id}`)}
+            aria-disabled={!nextDraw}
+            title={drawNavTitle(nextDraw)}
+            aria-label={nextDraw ? `Next draw: ${drawNavTitle(nextDraw)}` : 'No other draws of this type'}
+          >
+            ›
+          </button>
         </div>
         )}
         {/* Picks/Live Draw switcher. "Picks" renders CombinedView (picks +
