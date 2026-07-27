@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import client from '../api/client'
+import { useAuth } from '../store/auth'
 import './HallOfFame.css'
 
 const BracketIcon = () => (
@@ -24,10 +25,20 @@ function fetchHallOfFame() {
 
 const MEDAL = { 1: '🥇', 2: '🥈', 3: '🥉' }
 
-function GenderTable({ entries, label }) {
+const TOP_N = 5
+
+function rowClass(entry) {
+  const classes = []
+  if (entry.rank <= 3) classes.push(`hof-row--top${entry.rank}`)
+  if (entry.rank > TOP_N) classes.push('hof-row--extra')
+  if (entry.is_current_user) classes.push('hof-row--me')
+  return classes.join(' ')
+}
+
+function GenderTable({ entries, tour }) {
   return (
     <div className="hof-gender-col">
-      <p className="hof-gender-label">{label}</p>
+      <p className={`hof-gender-label hof-gender-label--${tour.toLowerCase()}`}>{tour}</p>
       {entries.length === 0 ? (
         <p className="hof-empty">No results yet.</p>
       ) : (
@@ -38,18 +49,23 @@ function GenderTable({ entries, label }) {
                 <th className="hof-th--rank">#</th>
                 <th>User</th>
                 <th>Tournament</th>
+                <th className="hof-th--num">Correct</th>
                 <th className="hof-th--num">Pts</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               {entries.map(entry => (
-                <tr key={`${entry.username}-${entry.tournament_id}`} className={entry.rank <= 3 ? `hof-row--top${entry.rank}` : ''}>
+                <tr key={`${entry.username}-${entry.tournament_id}`} className={rowClass(entry)}>
                   <td className="hof-rank">{MEDAL[entry.rank] ?? `#${entry.rank}`}</td>
                   <td className="hof-username">{entry.username}</td>
                   <td className="hof-tourn">
                     {entry.tournament_name}{' '}
                     <span className="hof-year">{entry.tournament_year}</span>
+                  </td>
+                  <td className="hof-correct">
+                    <span className="hof-correct-frac">{entry.correct_count}/{entry.total_matches}</span>{' '}
+                    <span className="hof-correct-pct">({pct(entry)}%)</span>
                   </td>
                   <td className="hof-points">{entry.points}</td>
                   <td className="hof-link-cell">
@@ -67,9 +83,15 @@ function GenderTable({ entries, label }) {
   )
 }
 
+function pct(entry) {
+  if (!entry.total_matches) return '0.0'
+  return ((entry.correct_count / entry.total_matches) * 100).toFixed(1)
+}
+
 export default function HallOfFame() {
+  const user = useAuth(s => s.user)
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['hall-of-fame'],
+    queryKey: ['hall-of-fame', user?.id ?? null],
     queryFn: fetchHallOfFame,
     staleTime: 10 * 60 * 1000,
   })
@@ -79,7 +101,7 @@ export default function HallOfFame() {
       <div className="hof-container">
         <div className="hof-header">
           <h1 className="hof-title">Hall of Fame</h1>
-          <p className="hof-subtitle">Top 10 all-time scores by tournament tier — global standings</p>
+          <p className="hof-subtitle">Top 5 all-time scores by tournament tier — global standings</p>
         </div>
 
         {isLoading && <div className="hof-state">Loading…</div>}
@@ -91,8 +113,8 @@ export default function HallOfFame() {
               <div key={section.tier} className="hof-section">
                 <h2 className="hof-tier-heading">{section.tier}</h2>
                 <div className="hof-two-col">
-                  <GenderTable entries={section.men} label="Men" />
-                  <GenderTable entries={section.women} label="Women" />
+                  <GenderTable entries={section.men} tour="ATP" />
+                  <GenderTable entries={section.women} tour="WTA" />
                 </div>
               </div>
             ))}

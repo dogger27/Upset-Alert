@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.auth import get_current_user
+from app.core.auth import get_current_user, get_optional_user
 from app.database import get_db
 from app.models.prediction import UserPrediction
 from app.models.rankings import TePlayer, TeRankingsSnapshot
@@ -252,8 +252,15 @@ def _tier(category: Optional[str]) -> str:
 _TIER_ORDER = ["Grand Slam", "1000", "500", "250"]
 
 
+_HOF_TOP_N = 5
+
+
 @router.get("/hall-of-fame")
-async def hall_of_fame(db: AsyncSession = Depends(get_db)):
+async def hall_of_fame(
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
+):
+    """Top 5 all-time scores per tier/gender, plus the caller's own best if outside the top 5."""
     from app.models.draw_history import TournamentResult
     from app.models.prediction import UserPrediction
 
@@ -278,8 +285,10 @@ async def hall_of_fame(db: AsyncSession = Depends(get_db)):
     res = await db.execute(
         select(
             TournamentResult.draw_id,
+            TournamentResult.user_id,
             TournamentResult.points,
             TournamentResult.correct_count,
+            match_count_sq.c.total.label("total_matches"),
             Draw.name,
             Draw.year,
             Draw.gender,
@@ -302,31 +311,53 @@ async def hall_of_fame(db: AsyncSession = Depends(get_db)):
     )
     rows = res.all()
 
+    me_id = current_user.id if current_user else None
+
     by_tier: dict[str, dict[str, list]] = {t: {"M": [], "F": []} for t in _TIER_ORDER}
     seen: dict[str, set] = {t: set() for t in _TIER_ORDER}  # (username, tournament_id) per tier
+    ranked: dict[str, dict[str, int]] = {t: {"M": 0, "F": 0} for t in _TIER_ORDER}
+    # Caller's best result per tier/gender when it falls outside the top 5
+    mine: dict[str, dict[str, Optional[dict]]] = {t: {"M": None, "F": None} for t in _TIER_ORDER}
 
     for row in rows:
         tier = _tier(row.category)
         gender = row.gender  # "M" or "F"
+        if gender not in ("M", "F"):
+            continue
         key = (row.username, row.draw_id)
         if key in seen[tier]:
             continue
-        if len(by_tier[tier][gender]) >= 10:
-            continue
         seen[tier].add(key)
-        bucket = by_tier[tier][gender]
-        bucket.append({
-            "rank": len(bucket) + 1,
+
+        ranked[tier][gender] += 1
+        entry = {
+            "rank": ranked[tier][gender],
+            "user_id": row.user_id,
             "username": row.username,
             "points": row.points,
             "correct_count": row.correct_count,
+            "total_matches": row.total_matches,
             "tournament_id": row.draw_id,
             "tournament_name": row.name,
             "tournament_year": row.year,
-        })
+            "is_current_user": row.user_id == me_id,
+        }
+
+        if entry["rank"] <= _HOF_TOP_N:
+            by_tier[tier][gender].append(entry)
+        elif row.user_id == me_id and mine[tier][gender] is None:
+            # rows are ordered by points desc, so the first one seen is their best
+            mine[tier][gender] = entry
+
+    def bucket(tier: str, gender: str) -> list:
+        entries = by_tier[tier][gender]
+        extra = mine[tier][gender]
+        if extra and not any(e["user_id"] == me_id for e in entries):
+            return entries + [extra]
+        return entries
 
     return [
-        {"tier": tier, "men": by_tier[tier]["M"], "women": by_tier[tier]["F"]}
+        {"tier": tier, "men": bucket(tier, "M"), "women": bucket(tier, "F")}
         for tier in _TIER_ORDER
     ]
 
