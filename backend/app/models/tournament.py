@@ -117,6 +117,16 @@ class Draw(Base):
     draw_release_notified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     da_days_before: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     qual_days_before: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # When the bracket was FIRST observed on Wikipedia, evidenced by named
+    # UNSEEDED players holding bracket slots (see tournaments.py). This is a
+    # different measurement from da_days_before, which records when the page
+    # reached "substantially complete" (50% of non-Q/LL slots) and therefore
+    # trails actual publication by however long an editor takes to finish
+    # transcribing the draw. Predictions learn from THIS field — measuring our
+    # own completeness threshold and then feeding it back into the estimate is
+    # what pinned ATP/WTA 250 release dates at start-minus-one-day.
+    bracket_first_seen_at: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    bracket_first_seen_days_before: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     city: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     country: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     wiki_page_title: Mapped[str] = mapped_column(String, nullable=False)

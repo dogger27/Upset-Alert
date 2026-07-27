@@ -147,6 +147,17 @@ async def _migrate(conn):
             "WHERE wiki_page_title = '2026 Iași Open –Singles'"
         ),
         "ALTER TABLE users ADD COLUMN is_bot BOOLEAN DEFAULT 0",
+        # Honest measure of when a draw was actually published on Wikipedia,
+        # replacing da_days_before as the input to the release-date predictor.
+        # Deliberately NOT backfilled from da_days_before: that column records
+        # when the page crossed our 50%-complete threshold, which is exactly the
+        # biased-late signal this column exists to stop learning from. Seeding it
+        # with those values would carry the bias straight into the new estimator.
+        # Until enough clean samples accumulate the predictor falls back to the
+        # curated draw_categories defaults, which is the desired conservative
+        # behaviour.
+        "ALTER TABLE draws ADD COLUMN bracket_first_seen_at DATE",
+        "ALTER TABLE draws ADD COLUMN bracket_first_seen_days_before INTEGER",
     ]
     for sql in migrations:
         try:

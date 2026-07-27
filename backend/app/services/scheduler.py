@@ -54,21 +54,39 @@ async def _auto_discover_tournaments() -> None:
     await _sync_subscriptions()
 
 
+# How far ahead of a draw's expected release date to start polling for it.
+# Kept modest because this job runs every 30 minutes and the Wikipedia response
+# cache expires just under that (25 min), so each extra day of lead is real
+# request volume, not cache hits. EventStreams handles real-time detection; this
+# is the backstop, and 3 days is enough headroom for the estimate to be wrong in
+# the safe direction without widening the sweep much.
+POLL_LEAD_DAYS = 3
+
+
 async def _refresh_active_tournaments(force_refresh: bool = False) -> None:
     """
-    Daily catch-up scrape covering two groups:
+    Catch-up scrape (every 30 min — see start_scheduler) covering two groups:
 
     1. Active tournaments — start_date within the last 14 days, not yet completed.
        Catches match results / tournament completion that EventStreams may have missed.
 
-    2. Upcoming tournaments awaiting draw release — expected DA or Qual date has
-       arrived but the draw hasn't been confirmed yet (no draw_released_*_at).
-       This is what sets the checkmarks when players are placed in the draw.
+    2. Upcoming tournaments awaiting draw release — expected DA or Qual date is
+       within POLL_LEAD_DAYS but the draw hasn't been confirmed yet (no
+       draw_released_*_at). This is what sets the checkmarks when players are
+       placed in the draw.
+
+    The lead time on group 2/3 matters more than it looks. Polling exactly from
+    the expected date made the estimate self-confirming: a draw predicted for
+    start-minus-one was not looked at until the day before play, so a draw that
+    had been up for three days was recorded as "released one day before start",
+    which fed the median that produced the next late prediction. Starting early
+    lets the observation disagree with the estimate.
     """
     from sqlalchemy import or_
     from app.routers.tournaments import _do_scrape
 
     today = date.today()
+    poll_from = today + timedelta(days=POLL_LEAD_DAYS)
 
     async with AsyncSessionLocal() as db:
         result = await db.execute(
@@ -81,16 +99,16 @@ async def _refresh_active_tournaments(force_refresh: bool = False) -> None:
                         (Draw.start_date <= today) &
                         (Draw.start_date >= today - timedelta(days=14))
                     ),
-                    # Group 2: upcoming — DA draw date has arrived, not yet confirmed
+                    # Group 2: upcoming — DA draw date is near, not yet confirmed
                     (
                         Draw.draw_release_direct.isnot(None) &
-                        (Draw.draw_release_direct <= today) &
+                        (Draw.draw_release_direct <= poll_from) &
                         Draw.draw_released_direct_at.is_(None)
                     ),
-                    # Group 3: upcoming — Qual date has arrived, not yet confirmed
+                    # Group 3: upcoming — Qual date is near, not yet confirmed
                     (
                         Draw.draw_release_qualifiers.isnot(None) &
-                        (Draw.draw_release_qualifiers <= today) &
+                        (Draw.draw_release_qualifiers <= poll_from) &
                         Draw.draw_released_qualifiers_at.is_(None)
                     ),
                 )
@@ -425,12 +443,16 @@ async def _check_draw_health() -> None:
         # Only escalate once the draw is actually overdue. Draw pages are
         # normally created on Wikipedia around the release date, so an
         # unresolved page before then is expected, not an error.
+        # draw_release_direct is deliberately a floor, not a best guess — it can
+        # only land on or before the real release (see draw_dates.py). Escalating
+        # the day after it passes would therefore fire on draws that are simply
+        # arriving on their normal schedule. Use the LATER of that date and the
+        # day before play, by which point a draw genuinely is always out.
+        deadline = t.start_date - timedelta(days=1) if t.start_date else None
         if t.draw_release_direct is not None:
-            release_overdue = (today - t.draw_release_direct).days >= 1
-        else:
-            # No expected release date known — draws are essentially always
-            # out by the day before start, so treat that as the deadline.
-            release_overdue = t.start_date is not None and (t.start_date - today).days <= 1
+            predicted_deadline = t.draw_release_direct + timedelta(days=1)
+            deadline = max(deadline, predicted_deadline) if deadline else predicted_deadline
+        release_overdue = deadline is not None and today >= deadline
         if t.wiki_page_id is None and release_overdue:
             await app_log(
                 "error", "scheduler",
