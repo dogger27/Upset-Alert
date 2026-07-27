@@ -31,6 +31,10 @@ logger = logging.getLogger(__name__)
 # Round-complete notification
 # ---------------------------------------------------------------------------
 
+# Max competitors shown in the Global block of a round-complete email.
+GLOBAL_ROWS = 9
+
+
 def _email_round_label(round_name: str) -> str:
     """Email-specific round label: R128/R64/R32/R16, Quarter-Finals, Semi-Finals, Final."""
     mapping = {
@@ -275,48 +279,23 @@ async def notify_round_complete(
         s = ranked[idx]
         return (idx + 1, user_info.get(s.user_id, {}).get("username", "—"), s.total_points, s.user_id == me)
 
-    def _display_plan(n: int, me_idx: int, target: int) -> list:
-        """Ordered display of exactly `target` rows from an n-item ranked list,
-        anchoring the rank leaders (top) and trailers (bottom) and always keeping
-        the recipient (me_idx). `None` entries are ellipsis/gap rows. Assumes n > target."""
-        def build(h: int, t: int) -> list:
-            shown = sorted(set(range(0, min(h, n))) | set(range(max(0, n - t), n)) | {me_idx})
-            out, prev = [], None
-            for idx in shown:
-                if prev is not None and idx != prev + 1:
-                    out.append(None)  # gap
-                out.append(idx)
-                prev = idx
-            return out
-        best = None
-        for h in range(1, target + 1):
-            for t in range(1, target + 1):
-                plan = build(h, t)
-                if len(plan) != target:
-                    continue
-                content = sum(1 for x in plan if x is not None)
-                # Center the recipient: prefer a balanced top/bottom split, then more
-                # real rows, then a fuller head.
-                score = (-abs(h - t), content, h)
-                if best is None or score > best[0]:
-                    best = (score, plan)
-        if best:
-            return best[1]
-        # Defensive fallback: top rows + recipient, trimmed to `target`.
-        plan = build(target, 0)
-        if me_idx not in [x for x in plan if x is not None]:
-            plan = plan[: target - 1] + [me_idx]
-        return plan[:target]
-
     def _standings_rows(ranked: list, me: int, limit: Optional[int] = None) -> list[tuple]:
         """Competitor list for a group as (rank, username, score, is_you).
-        When `limit` truncates, gap rows are (None, '…', None, False)."""
+
+        With `limit` set, shows the top `limit` competitors — unless the
+        recipient sits outside it, in which case the last of those slots goes
+        to them, preceded by a "…" gap row: (None, '…', None, False). So the
+        recipient is always present and the block never exceeds `limit`
+        competitors.
+        """
         if limit is None or len(ranked) <= limit:
             return [_row_of(ranked, i, me) for i in range(len(ranked))]
         me_idx = next((i for i, s in enumerate(ranked) if s.user_id == me), 0)
-        rows = []
-        for idx in _display_plan(len(ranked), me_idx, limit):
-            rows.append((None, "…", None, False) if idx is None else _row_of(ranked, idx, me))
+        if me_idx < limit:
+            return [_row_of(ranked, i, me) for i in range(limit)]
+        rows = [_row_of(ranked, i, me) for i in range(limit - 1)]
+        rows.append((None, "…", None, False))
+        rows.append(_row_of(ranked, me_idx, me))
         return rows
 
     for uid in to_notify:
@@ -336,10 +315,10 @@ async def notify_round_complete(
         leagues = []
         my_league_ids = sorted(user_league_ids.get(uid, []))
         if len(eligible) >= 2:
-            # Global truncates to the largest league this user is in, but only once
-            # Global has ≥10 people; otherwise it's shown in full.
-            largest = max((len(league_data[lg_id]["ranked"]) for lg_id in my_league_ids), default=None)
-            g_limit = largest if (len(global_ranked) >= 10 and largest is not None) else None
+            # Global shows at most 9 competitors, always including the recipient —
+            # _standings_rows anchors the leaders and trailers and drops in a "…"
+            # gap row when the recipient sits outside that head.
+            g_limit = GLOBAL_ROWS if len(global_ranked) > GLOBAL_ROWS else None
             leagues.append(("Global", _standings_rows(global_ranked, uid, g_limit)))
         for lg_id in my_league_ids:
             data = league_data[lg_id]

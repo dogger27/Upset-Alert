@@ -30,9 +30,13 @@ _LOGO_HEADER = """<table width="100%" cellpadding="0" cellspacing="0" border="0"
   </tr>
 </table>"""
 
-_WRAP_OPEN  = '<div style="font-family:sans-serif;max-width:560px;margin:0 auto;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb">'
+# background + color are set EXPLICITLY on the card and body: without them the
+# card inherited whatever the client painted behind it, so every dark-mode
+# inbox (and any dark-background preview) rendered our #111 text on near-black.
+_WRAP_OPEN  = ('<div style="font-family:sans-serif;max-width:560px;margin:0 auto;border-radius:8px;'
+               'overflow:hidden;border:1px solid #e5e7eb;background:#ffffff;color:#111111">')
 _WRAP_CLOSE = '</div>'
-_BODY_OPEN  = '<div style="padding:28px 24px">'
+_BODY_OPEN  = '<div style="padding:28px 24px;background:#ffffff;color:#111111">'
 _BODY_CLOSE = '</div>'
 
 
