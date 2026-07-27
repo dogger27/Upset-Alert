@@ -26,26 +26,30 @@
   z-index: 1;
 }
 
-/* Applied whenever swipe-paging is available (showPager). .draw-main inside
-   is overflow-x:auto, so the few px of deliberate, uncropped overhang in the
-   draw (connector-line tails, .cv-match-outline's -8px) give it just enough
-   scrollable slack for a swipe to visibly nudge the whole draw sideways and
-   rubber-band back — the same problem .cv-scroll--compact already solves with
-   pan-y, but that only covers the inner compact scroller, not .draw-main or
-   Live Draw's .bracket-scroll.
-   Set on .draw-body rather than .draw-main so it also covers the floating
-   round-nav edge buttons, which are absolutely positioned here and sit
-   OUTSIDE .draw-main — an edge-started swipe would otherwise escape it.
+/* Applied whenever swipe-paging is available (showPager). The draw can be
+   genuinely wider than the viewport (2 rounds don't always fit — a round
+   column gets cut off at the right edge), so there is real horizontal scroll
+   here for a swipe to steal, not just the few px of deliberate uncropped
+   overhang. Left unchecked the draw slides sideways mid-swipe and snaps back.
+   Declared on the SCROLLERS THEMSELVES, not only on their .draw-body
+   ancestor: an ancestor-only rule still let centre-of-draw swipes pan
+   .draw-main, since touch-action is honoured most reliably on the element
+   that actually scrolls. .draw-body stays in the list so gestures starting on
+   the floating round-nav edge buttons — absolutely positioned there, OUTSIDE
+   .draw-main — are covered too. Two classes, so this outranks
+   .cv-scroll--compact's own pan-y in CombinedView.css and re-grants
+   pinch-zoom on top of it.
    touch-action restricts panning to the vertical axis WITHOUT clipping
    anything (overflow-x:hidden was tried for this historically and
    reintroduced a connector-line clipping bug — see
-   feedback_css_zoom_webkit_bug). Because touch-action resolves by
-   intersecting an element's chain up to its scrolling ancestor, setting it
-   here covers every scroller nested inside.
-   'pinch-zoom' is kept so users can still zoom the bracket.
+   feedback_css_zoom_webkit_bug). Paging (swipe / dots / nav buttons) is what
+   reaches a cut-off column, so nothing becomes unreachable.
    overscroll-behavior-x stops any residual horizontal scroll from chaining
    out to the page and rubber-banding it. */
-.draw-body--swipe {
+.draw-body--swipe,
+.draw-body--swipe .draw-main,
+.draw-body--swipe .cv-scroll,
+.draw-body--swipe .bracket-scroll {
   touch-action: pan-y pinch-zoom;
   overscroll-behavior-x: contain;
 }

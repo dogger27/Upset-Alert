@@ -658,6 +658,12 @@ export default function TournamentDraw() {
   // to steal the gesture in the first place.
   const SWIPE_MIN_PX = 45      // ignore taps and small drags (e.g. picking a player)
   const SWIPE_H_RATIO = 1.5    // must be clearly horizontal, not a vertical scroll
+  // Axis is decided (and, if horizontal, the native pan cancelled) THIS early,
+  // because the browser starts panning after only a few px — waiting until
+  // SWIPE_MIN_PX to call preventDefault let the draw visibly slide and snap
+  // back before the swipe was ever recognised. Paging still waits for the
+  // full SWIPE_MIN_PX, so a short drag cancels harmlessly instead of paging.
+  const SWIPE_AXIS_LOCK_PX = 8
   const pageBy = (delta) => {
     if (delta === 0) return
     setWindowStart(Math.min(Math.max(windowPos + delta, 0), maxWindowStart))
@@ -671,22 +677,33 @@ export default function TournamentDraw() {
     // there IS no native horizontal pan to defer to. Checking for one anyway
     // would create a dead zone — a drag that neither pages nor scrolls.
     const t = e.touches[0]
-    swipeRef.current = { x: t.clientX, y: t.clientY, fired: false }
+    swipeRef.current = { x: t.clientX, y: t.clientY, axis: null, fired: false }
   }
   const onDrawTouchMove = (e) => {
     const s = swipeRef.current
-    // `fired` caps it at one round per gesture — without it a long drag would
-    // keep re-triggering on every touchmove and skip several rounds at once.
-    if (!s || s.fired || e.touches.length !== 1) return
+    if (!s || e.touches.length !== 1) return
     const t = e.touches[0]
     const dx = t.clientX - s.x
     const dy = t.clientY - s.y
-    if (Math.abs(dx) < SWIPE_MIN_PX || Math.abs(dx) < Math.abs(dy) * SWIPE_H_RATIO) return
-    s.fired = true
-    // Belt-and-braces with touch-action: cancel any native pan this gesture
-    // might already have started, so the draw can't drift sideways and snap
-    // back. Only reachable because this runs from a non-passive listener.
+
+    // Decide the axis once, as soon as the finger has moved enough to tell.
+    if (s.axis === null) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < SWIPE_AXIS_LOCK_PX) return
+      s.axis = Math.abs(dx) > Math.abs(dy) * SWIPE_H_RATIO ? 'h' : 'v'
+    }
+    // Vertical gesture — hands off, let it scroll normally.
+    if (s.axis !== 'h') return
+
+    // Horizontal gesture: this one is ours for its whole duration. Cancelling
+    // every move (not just the one that pages) is what actually keeps the draw
+    // still — belt-and-braces with touch-action, and only possible because
+    // this runs from a non-passive listener.
     if (e.cancelable) e.preventDefault()
+
+    // `fired` caps it at one round per gesture — without it a long drag would
+    // keep re-triggering on every touchmove and skip several rounds at once.
+    if (s.fired || Math.abs(dx) < SWIPE_MIN_PX) return
+    s.fired = true
     // Content follows the finger: dragging left pulls later rounds into view.
     pageBy(dx < 0 ? 1 : -1)
   }
