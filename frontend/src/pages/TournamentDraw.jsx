@@ -64,9 +64,24 @@ export default function TournamentDraw() {
   const navBtnLeftRef = useCallback(makeWidthRef(setNavBtnW), [])
   const navBtnRightRef = useCallback(makeWidthRef(setNavBtnW), [])
   // Also capture the .draw-body node so we can measure the drawn bracket's
-  // right edge (for positioning the right-hand round-nav button).
+  // right edge (for positioning the right-hand round-nav button), and to bind
+  // the swipe's touchmove natively (below).
   const bodyNodeRef = useRef(null)
-  const bodyRef = useCallback((node) => { bodyNodeRef.current = node; bodyWidthRef(node) }, [bodyWidthRef])
+  // Holds the current render's touchmove handler. Refreshed by plain
+  // assignment further down rather than in an effect: the handler is defined
+  // after this component's early returns, so a hook there would break the
+  // rules-of-hooks ordering.
+  const swipeMoveRef = useRef(null)
+  // React registers its synthetic touchmove as a PASSIVE listener, where
+  // preventDefault() is silently ignored — so cancelling a native pan requires
+  // listening natively with { passive: false }.
+  const nativeTouchMove = useCallback((e) => { swipeMoveRef.current?.(e) }, [])
+  const bodyRef = useCallback((node) => {
+    if (bodyNodeRef.current) bodyNodeRef.current.removeEventListener('touchmove', nativeTouchMove)
+    bodyNodeRef.current = node
+    bodyWidthRef(node)
+    if (node) node.addEventListener('touchmove', nativeTouchMove, { passive: false })
+  }, [bodyWidthRef, nativeTouchMove])
   const [viewedUserId, setViewedUserId] = useState(() => { const u = searchParams.get('user'); return u ? Number(u) : null })
   const [viewedUserName, setViewedUserName] = useState(null)
   const initialModeSet = useRef(false)
@@ -649,8 +664,10 @@ export default function TournamentDraw() {
   }
   const onDrawTouchStart = (e) => {
     if (!showPager || e.touches.length !== 1) { swipeRef.current = null; return }
+    // The sidebar is inside .draw-body too; leave its own gestures alone.
+    if (e.target?.closest?.('.draw-sidebar')) { swipeRef.current = null; return }
     // No "defer to native horizontal scrolling" check here: whenever paging is
-    // available, .draw-main--swipe pins touch-action to the vertical axis, so
+    // available, .draw-body--swipe pins touch-action to the vertical axis, so
     // there IS no native horizontal pan to defer to. Checking for one anyway
     // would create a dead zone — a drag that neither pages nor scrolls.
     const t = e.touches[0]
@@ -666,10 +683,16 @@ export default function TournamentDraw() {
     const dy = t.clientY - s.y
     if (Math.abs(dx) < SWIPE_MIN_PX || Math.abs(dx) < Math.abs(dy) * SWIPE_H_RATIO) return
     s.fired = true
+    // Belt-and-braces with touch-action: cancel any native pan this gesture
+    // might already have started, so the draw can't drift sideways and snap
+    // back. Only reachable because this runs from a non-passive listener.
+    if (e.cancelable) e.preventDefault()
     // Content follows the finger: dragging left pulls later rounds into view.
     pageBy(dx < 0 ? 1 : -1)
   }
   const onDrawTouchEnd = () => { swipeRef.current = null }
+  // Point the native listener at this render's closure (see swipeMoveRef).
+  swipeMoveRef.current = onDrawTouchMove
 
   // Off-screen unpicked matches: a match with no prediction can be paged out
   // of view, with nothing on screen hinting it's still there. Flag whichever
@@ -1033,7 +1056,19 @@ export default function TournamentDraw() {
         <div className="draw-page-dots-bar">{pageDots}</div>
       )}
 
-      <div className="draw-body" ref={bodyRef}>
+      {/* Swipe is bound here, not on .draw-main, so gestures that start on the
+          floating round-nav edge buttons count too — those are absolutely
+          positioned in .draw-body and sit OUTSIDE .draw-main, so an edge swipe
+          (a natural way to page) previously escaped both the handler and the
+          touch-action restriction. touchmove is attached natively inside
+          bodyRef; only these three go through React. */}
+      <div
+        className={clsx('draw-body', { 'draw-body--swipe': showPager })}
+        ref={bodyRef}
+        onTouchStart={onDrawTouchStart}
+        onTouchEnd={onDrawTouchEnd}
+        onTouchCancel={onDrawTouchEnd}
+      >
         <DrawSidebar
           tournamentId={Number(id)}
           tournament={tournament}
@@ -1052,14 +1087,7 @@ export default function TournamentDraw() {
           }}
         />
 
-        <div
-          className={clsx('draw-main', { 'draw-main--swipe': showPager })}
-          ref={mainRef}
-          onTouchStart={onDrawTouchStart}
-          onTouchMove={onDrawTouchMove}
-          onTouchEnd={onDrawTouchEnd}
-          onTouchCancel={onDrawTouchEnd}
-        >
+        <div className="draw-main" ref={mainRef}>
           {viewMode === 'combined' ? (
             <CombinedView
               tournament={tournament}
