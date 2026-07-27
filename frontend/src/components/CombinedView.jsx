@@ -627,15 +627,22 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                           </span>
                         )}
                         {/* Running score, centred in the gap the LIVE_SPREAD
-                            nudge opened between this match's two opponents. */}
-                        {isLive && (
-                          <span
-                            className={`cv-live-score${isSuspended ? ' cv-live-score--suspended' : ''}`}
-                            style={{ top: (yTop + yBot) / 2 }}
-                          >
-                            {liveScoreNodes(m.live_scores)}
-                          </span>
-                        )}
+                            nudge opened between this match's two opponents.
+                            Sized to fill that gap; the --sN modifier steps the
+                            type down as completed sets accumulate, so a
+                            five-set score still fits the column's width. */}
+                        {isLive && (() => {
+                          const nodes = liveScoreNodes(m.live_scores)
+                          if (!nodes) return null
+                          return (
+                            <span
+                              className={`cv-live-score cv-live-score--s${Math.min(nodes.length, 4)}${isSuspended ? ' cv-live-score--suspended' : ''}`}
+                              style={{ top: (yTop + yBot) / 2 }}
+                            >
+                              {nodes}
+                            </span>
+                          )
+                        })()}
                       </Fragment>
                     )
                   })}
