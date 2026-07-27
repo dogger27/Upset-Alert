@@ -235,6 +235,7 @@
      twice as wide as its own name, with the arrow stranded out to the right.
      Names past the cap ellipsis, with the full name on hover. */
   max-width: 24rem;
+  overflow: hidden;
 }
 
 /* Contributes width only — height 0 keeps the block exactly as tall as the two
@@ -245,6 +246,15 @@
   height: 0;
   visibility: hidden;
   pointer-events: none;
+  /* min-width:0 is what makes max-width above actually bite. These rows are
+     nowrap, so their MIN-content width is the full untruncatable string — and a
+     grid auto track never shrinks below an item's minimum contribution. The
+     track therefore stayed as wide as the longest name in the rotation, the
+     block's max-width clipped nothing, and the overflowing title painted
+     straight over the next-draw arrow. With a 0 minimum the track resolves to
+     min(max-content, available) — the widest draw when it fits, the cap when it
+     doesn't. */
+  min-width: 0;
 }
 .draw-name-sizer-row { white-space: nowrap; }
 
@@ -535,6 +545,7 @@
 .draw-meta-row {
   display: flex;
   align-items: center;
+  min-width: 0;
   /* Centred between the two sibling-nav arrows, like the title above it.
      (Was space-between, from when this row carried a second, right-hand item.) */
   justify-content: center;
