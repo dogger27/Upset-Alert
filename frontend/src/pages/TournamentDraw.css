@@ -220,48 +220,27 @@
   align-items: center;
 }
 
-/* Grid rather than a flex column so the hidden .draw-name-sizer can share one
-   cell with the real title + meta rows: the cell takes the WIDEST of them, so
-   the right-hand arrow button holds still while you page through draws. */
+/* Draw info, sitting to the right of the arrow pair. Natural width — nothing
+   downstream depends on it now that both buttons are ahead of it. */
 .draw-name-block {
   flex: 0 0 auto;
-  display: grid;
-  grid-template-columns: auto;
-  align-content: center;
-  padding: 0 0.85rem;
-  /* Cap on the sizer below. Without it the Completed rotation (75 draws) sized
-     itself to "U.S. Men's Clay Court Championships ATP 250" — 42 characters
-     against a 21-character median — so every ordinary draw sat in a block
-     twice as wide as its own name, with the arrow stranded out to the right.
-     Names past the cap ellipsis, with the full name on hover. */
-  max-width: 24rem;
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding-left: 0.9rem;
 }
 
-/* Contributes width only — height 0 keeps the block exactly as tall as the two
-   real lines no matter how many draws are in the rotation. */
-.draw-name-sizer {
-  grid-row: 1;
-  grid-column: 1;
-  height: 0;
-  visibility: hidden;
-  pointer-events: none;
-  /* min-width:0 is what makes max-width above actually bite. These rows are
-     nowrap, so their MIN-content width is the full untruncatable string — and a
-     grid auto track never shrinks below an item's minimum contribution. The
-     track therefore stayed as wide as the longest name in the rotation, the
-     block's max-width clipped nothing, and the overflowing title painted
-     straight over the next-draw arrow. With a 0 minimum the track resolves to
-     min(max-content, available) — the widest draw when it fits, the cap when it
-     doesn't. */
-  min-width: 0;
+/* Prev/next draw of the same status, paired at the header's left edge ahead of
+   the draw info — so neither button shifts when the name length changes.
+   align-self stretch takes the height from the name block beside them and
+   aspect-ratio squares it, so they still track the two info lines. */
+.draw-sibling-navs {
+  flex: 0 0 auto;
+  align-self: stretch;
+  display: flex;
+  gap: 6px;
 }
-.draw-name-sizer-row { white-space: nowrap; }
 
-/* Prev/next draw of the same status, flanking the name block. align-self
-   stretch takes the height from that block (title + meta line, whatever they
-   wrap to) and aspect-ratio turns it into a square, so the pair always match
-   the info they bracket without hard-coding a size. */
 .draw-sibling-nav {
   align-self: stretch;
   aspect-ratio: 1;
@@ -491,19 +470,6 @@
   font-size: 1.5rem;
   font-weight: 700;
   margin: 0;
-  /* Flex so the NAME alone truncates — the level pill and wiki globe after it
-     stay visible instead of being the first things cut. */
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  min-width: 0;
-}
-
-.draw-title-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .draw-wiki-link {
@@ -545,22 +511,12 @@
 .draw-meta-row {
   display: flex;
   align-items: center;
-  min-width: 0;
-  /* Centred between the two sibling-nav arrows, like the title above it.
-     (Was space-between, from when this row carried a second, right-hand item.) */
-  justify-content: center;
   gap: 1rem;
   font-size: 0.85rem;
   color: var(--text-muted);
 }
 
-.draw-meta-left {
-  font-variant-numeric: lining-nums;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+.draw-meta-left { font-variant-numeric: lining-nums; }
 .draw-meta-sep { opacity: 0.4; }
 
 .draw-header-actions {

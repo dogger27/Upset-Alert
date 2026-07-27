@@ -849,18 +849,6 @@ function TournamentDraw() {
       : `${mo(s)} ${s.getDate()} – ${mo(e)} ${e.getDate()}`
   }
 
-  // Title-level + meta line for ANY draw in the list payload, so the hidden
-  // width sizers below render byte-identical strings to the real header.
-  const drawLevelLabel = (d) => {
-    const cs = d.category ? d.category.replace(/^(ATP|WTA)\s+/, '') : ''
-    return cs ? `${d.gender === 'M' ? 'ATP' : 'WTA'} ${cs}` : ''
-  }
-  const drawMetaLine = (d) => [
-    d.city,
-    d.surface ? d.surface.replace(/\s*\(.*?\)/g, '') : '',
-    d.start_date ? fmtDateRange(d.start_date, d.end_date) : null,
-  ].filter(Boolean).join(' · ')
-
   const fmtModified = raw => {
     const d = new Date(raw.endsWith('Z') || raw.includes('+') ? raw : raw + 'Z')
     const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
@@ -874,21 +862,31 @@ function TournamentDraw() {
       <div className={clsx('draw-header', `draw-header--${headerStage}`, { 'draw-header--collapsed': headerHidden || headerForcedHidden })}>
         {headerStage === 'full' && (
         <div className="draw-header-top">
-          {/* Cycle through the other draws sharing this one's status (Open,
-              Active, …), looping at either end. Disabled — with an explanatory
-              tooltip — when this is the only draw of its kind. */}
-          <button
-            className={clsx('draw-sibling-nav', { 'draw-sibling-nav--off': !prevDraw })}
-            onClick={() => prevDraw && navigate(`/tournaments/${prevDraw.id}`)}
-            aria-disabled={!prevDraw}
-            title={drawNavTitle(prevDraw)}
-            aria-label={prevDraw ? `Previous draw: ${drawNavTitle(prevDraw)}` : 'No other draws of this type'}
-          >
-            ‹
-          </button>
+          {/* Both arrows sit together at the left, ahead of the draw info, so
+              neither moves as you page through draws of different name length. */}
+          <div className="draw-sibling-navs">
+            <button
+              className={clsx('draw-sibling-nav', { 'draw-sibling-nav--off': !prevDraw })}
+              onClick={() => prevDraw && navigate(`/tournaments/${prevDraw.id}`)}
+              aria-disabled={!prevDraw}
+              title={drawNavTitle(prevDraw)}
+              aria-label={prevDraw ? `Previous draw: ${drawNavTitle(prevDraw)}` : 'No other draws of this type'}
+            >
+              ‹
+            </button>
+            <button
+              className={clsx('draw-sibling-nav', { 'draw-sibling-nav--off': !nextDraw })}
+              onClick={() => nextDraw && navigate(`/tournaments/${nextDraw.id}`)}
+              aria-disabled={!nextDraw}
+              title={drawNavTitle(nextDraw)}
+              aria-label={nextDraw ? `Next draw: ${drawNavTitle(nextDraw)}` : 'No other draws of this type'}
+            >
+              ›
+            </button>
+          </div>
           <div className="draw-name-block">
             <h1 className="draw-title">
-              <span className="draw-title-name" title={tournament.name}>{tournament.name}</span>
+              {tournament.name}
               {catShort && <span className="draw-title-level">{tourLabel}</span>}
               {tournament.wiki_page_id && (
                 <a
@@ -907,35 +905,7 @@ function TournamentDraw() {
                 {[tournament.city, surface, tournament.start_date ? fmtDateRange(tournament.start_date, tournament.end_date) : null].filter(Boolean).join(' · ')}
               </span>
             </div>
-            {/* Zero-height stack of every draw the arrows can reach, sharing
-                the same grid cell as the real info above. The cell — and so
-                the right-hand arrow — is therefore as wide as the WIDEST draw
-                in the rotation and never moves as you page through them.
-                (Same trick .round-nav uses to size itself off "CHAMP".) */}
-            <div className="draw-name-sizer" aria-hidden="true">
-              {siblingDraws.map(d => (
-                <div key={d.id} className="draw-name-sizer-row">
-                  <div className="draw-title">
-                    <span className="draw-title-name">{d.name}</span>
-                    {drawLevelLabel(d) && <span className="draw-title-level">{drawLevelLabel(d)}</span>}
-                    <span className="draw-wiki-link">🌐</span>
-                  </div>
-                  <div className="draw-meta-row">
-                    <span className="draw-meta-left">{drawMetaLine(d)}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
-          <button
-            className={clsx('draw-sibling-nav', { 'draw-sibling-nav--off': !nextDraw })}
-            onClick={() => nextDraw && navigate(`/tournaments/${nextDraw.id}`)}
-            aria-disabled={!nextDraw}
-            title={drawNavTitle(nextDraw)}
-            aria-label={nextDraw ? `Next draw: ${drawNavTitle(nextDraw)}` : 'No other draws of this type'}
-          >
-            ›
-          </button>
         </div>
         )}
         {/* Picks/Live Draw switcher. "Picks" renders CombinedView (picks +
