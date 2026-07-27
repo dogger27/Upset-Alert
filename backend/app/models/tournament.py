@@ -194,6 +194,11 @@ class Draw(Base):
         # "upcoming"/"draw not yet released" even after the real draw is out,
         # right up until the exact calendar day it starts.
         if self.start_date and today < self.start_date:
+            # ESPN already watched a main-draw match go live, which for a venue
+            # far enough east of UTC can happen the UTC-evening before
+            # start_date. Bounded to 1 day = espn_monitor._LOCK_BEFORE_DAYS.
+            if self.picks_locked_at and (self.start_date - today).days <= 1:
+                return "active"
             if self.draw_released_direct_at and (self.start_date - today).days <= 30:
                 return "open"
             return "upcoming"
@@ -206,6 +211,17 @@ class Draw(Base):
 
         if self.start_date and (today - self.start_date).days > 14:
             return "completed"
+
+        # picks_locked_at is stamped ONLY by espn_monitor._on_match_start, i.e.
+        # ESPN reported a main-draw (never qualifying) match of this draw as in
+        # progress. That is a direct observation that play has begun, unlike
+        # closing_time, which is a *predicted* day-1 start and therefore can't
+        # be trusted on the start date itself (see the close block below).
+        # Without this, a draw whose first match is under way still reads "open"
+        # all day, because the scraper only stamps status="active" once
+        # Wikipedia publishes a completed non-bye result.
+        if self.picks_locked_at:
+            return "active"
 
         close = self.closing_time
         c = close.replace(tzinfo=timezone.utc) if (close and not close.tzinfo) else close
