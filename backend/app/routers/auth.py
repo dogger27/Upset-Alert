@@ -145,10 +145,9 @@ async def update_me(
 
 
 _DEFAULT_NOTIF_PREFS = [
-    "draw_open:Grand Slam:M",
-    "draw_open:Grand Slam:F",
-    "draw_open:ATP 1000",
-    "draw_open:WTA 1000",
+    # Draw-release emails are one weekly digest covering every draw released
+    # that week — a single on/off, not a per-tier selection.
+    "draw_released",
     "round_standings",
     # No "tournament_end": Draw Completion is only offered once round emails are
     # switched off (the settings UI hides it otherwise, and enables it the moment

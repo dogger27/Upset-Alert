@@ -418,76 +418,127 @@ async def notify_match_start(tournament_id: int, name: str, year: int, category:
 # Draw-released notification
 # ---------------------------------------------------------------------------
 
-def _draw_pref_key(category: str, gender: str) -> Optional[str]:
-    cat = category or ""
-    if "Slam" in cat or "Grand" in cat:
-        return f"draw_open:Grand Slam:{gender}"
-    if cat.startswith("ATP") or cat.startswith("WTA"):
-        return f"draw_open:{cat}"
-    return None
+# Draw-release emails are a single on/off. They were once selectable per tier
+# ('draw_open:ATP 250', …), which stopped making sense when the email became a
+# weekly digest: one message covers every draw released that week, so a per-tier
+# opt-in could only ever have filtered rows out of a mail the user was getting
+# regardless. The old keys are migrated into this one (see database.py).
+DRAW_RELEASED_PREF = "draw_released"
 
 
-async def notify_draw_released(
-    tournament_id: int,
-    category: str,
-    gender: str,
-    year: int,
-    name: str,
-) -> None:
+async def notify_draw_release_batch(draw_ids: list[int], is_followup: bool = False) -> None:
     """
-    Email all users opted-in to this tournament's category/gender.
+    Email every user with draw-release notifications on — one message covering
+    every draw in the batch.
 
-    Callers (scheduler.py's _notify_pending_draw_releases) decide WHEN this
-    should fire, via draw_release_notified_at + the stability cooldown — but
-    that's a plain SELECT-then-UPDATE with no protection against two
-    overlapping executions (a misfire re-run, or a migration resetting the
-    detection timestamp, as happened 2026-07-12). This function claims
-    (draw_id) in draw_release_notifications before sending as the hard,
-    unique-constrained backstop.
+    Draws for a given week are announced together, so they are emailed together
+    (scheduler.py's _notify_pending_draw_releases decides when a week's batch is
+    ready) rather than as five separate messages.
+
+    Claiming (draw_id) in draw_release_notifications is the hard,
+    unique-constrained backstop behind the caller's coarse
+    draw_release_notified_at check, which is a plain SELECT-then-UPDATE with no
+    protection against two overlapping executions (a misfire re-run, or a
+    migration resetting the detection timestamp, as happened 2026-07-12). Each
+    claim gets its own savepoint: one already-claimed draw must drop out of the
+    batch, not poison the session and abort the other four.
     """
+    from datetime import datetime, timedelta, timezone as tz
+    from sqlalchemy import update as sa_update
     from sqlalchemy.exc import IntegrityError
-    from app.services.email import send_draw_notification
+    from app.services.email import send_draw_release_digest, fmt_close_utc, _tier_badge
     from app.services.system_log import app_log
     from app.models.notification import DrawReleaseNotification
 
-    pref_key = _draw_pref_key(category, gender)
-    if not pref_key:
+    if not draw_ids:
         return
 
     async with AsyncSessionLocal() as db:
-        result = await db.execute(
-            select(User.email)
-            .join(NotificationPreference, NotificationPreference.user_id == User.id)
-            .where(
-                NotificationPreference.pref_key == pref_key,
-                User.email_verified == True,
-            )
-            .distinct()
-        )
-        emails = [r[0] for r in result.all()]
+        draws = (await db.execute(select(Draw).where(Draw.id.in_(draw_ids)))).scalars().all()
 
-        db.add(DrawReleaseNotification(draw_id=tournament_id, recipient_count=len(emails)))
-        try:
-            await db.commit()
-        except IntegrityError:
+        # Claim first, send second. A draw that fails to claim has already been
+        # emailed by an overlapping run and must be dropped from this batch.
+        claimed = []
+        for d in draws:
+            try:
+                async with db.begin_nested():
+                    db.add(DrawReleaseNotification(draw_id=d.id, recipient_count=0))
+                claimed.append(d)
+            except IntegrityError:
+                await app_log(
+                    "warning", "notifications",
+                    f"Draw-released email for draw {d.id} already sent — resend blocked",
+                    {"tournament_id": d.id},
+                    dedup_key=f"draw-release-dupe-{d.id}",
+                )
+        if not claimed:
             await db.rollback()
-            await app_log(
-                "warning", "notifications",
-                f"Draw-released email for draw {tournament_id} already sent — resend blocked",
-                {"tournament_id": tournament_id},
-                dedup_key=f"draw-release-dupe-{tournament_id}",
-            )
             return
 
-    if not emails:
-        logger.debug("notify_draw_released: no opted-in users for %s", pref_key)
+        now_naive = datetime.now(tz.utc).replace(tzinfo=None)
+        payload = []
+        for d in claimed:
+            location = ", ".join(p for p in (d.city, d.country) if p)
+            payload.append({
+                "id": d.id,
+                "name": d.name,
+                "gender": d.gender,
+                "tier": _tier_badge(d.category or "", d.gender),
+                "location": location or None,
+                "surface": d.surface,
+                "draw_size": d.draw_size,
+                "closes": fmt_close_utc(d.closing_time) if d.closing_time else None,
+                "closes_soon": bool(
+                    d.closing_time and (d.closing_time - now_naive) < timedelta(hours=24)
+                ),
+                "_sort": d.closing_time or datetime.max,
+            })
+        payload.sort(key=lambda p: p["_sort"])
+
+        starts = [d.start_date for d in claimed if d.start_date]
+        week_start = min(starts) if starts else None
+        week_label = f"{week_start.strftime('%B')} {week_start.day}" if week_start else "this week"
+
+        # Keyed by email, not user id: one address gets one message even if it
+        # somehow appears on two accounts.
+        rows = (await db.execute(
+            select(User.email, func.min(User.id))
+            .join(NotificationPreference, NotificationPreference.user_id == User.id)
+            .where(
+                NotificationPreference.pref_key == DRAW_RELEASED_PREF,
+                User.email_verified == True,
+            )
+            .group_by(User.email)
+        )).all()
+        recipients = {email: uid for email, uid in rows}
+
+        await db.execute(
+            sa_update(DrawReleaseNotification)
+            .where(DrawReleaseNotification.draw_id.in_([d.id for d in claimed]))
+            .values(recipient_count=len(recipients))
+        )
+        await db.commit()
+
+    if not recipients:
+        logger.debug("notify_draw_release_batch: no users opted in to %s", DRAW_RELEASED_PREF)
         return
 
-    await send_draw_notification(emails, name, tournament_id, category=category, gender=gender)
+    for email, uid in recipients.items():
+        unsubscribe_url = (
+            f"{API_BASE}/unsubscribe?token="
+            f"{create_unsubscribe_token(uid, DRAW_RELEASED_PREF)}"
+        )
+        await send_draw_release_digest(
+            email, payload, week_label,
+            is_followup=is_followup, unsubscribe_url=unsubscribe_url,
+        )
+
+    names = ", ".join(f"{d.year} {d.name} ({d.gender})" for d in claimed)
     await app_log("info", "notifications",
-                  f"Draw-released email sent to {len(emails)} user(s) for {year} {name}",
-                  {"tournament_id": tournament_id, "recipient_count": len(emails),
-                   "category": category, "gender": gender})
+                  f"Draw-release {'follow-up' if is_followup else 'digest'} sent to "
+                  f"{len(recipients)} user(s) covering {len(claimed)} draw(s): {names}",
+                  {"draw_ids": [d.id for d in claimed], "recipient_count": len(recipients),
+                   "week_label": week_label, "is_followup": is_followup})
 
 
 # ---------------------------------------------------------------------------
