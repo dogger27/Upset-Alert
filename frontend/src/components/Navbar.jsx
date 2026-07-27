@@ -7,19 +7,6 @@ import './Navbar.css'
 // Below this navbar width the primary nav links collapse into a hamburger menu.
 const NAV_BREAKPOINT = 900
 
-const DRAW_CATS_MEN = [
-  { key: 'draw_open:Grand Slam:M', label: 'Grand Slam' },
-  { key: 'draw_open:ATP 1000',     label: 'ATP 1000' },
-  { key: 'draw_open:ATP 500',      label: 'ATP 500' },
-  { key: 'draw_open:ATP 250',      label: 'ATP 250' },
-]
-const DRAW_CATS_WOMEN = [
-  { key: 'draw_open:Grand Slam:F', label: 'Grand Slam' },
-  { key: 'draw_open:WTA 1000',     label: 'WTA 1000' },
-  { key: 'draw_open:WTA 500',      label: 'WTA 500' },
-  { key: 'draw_open:WTA 250',      label: 'WTA 250' },
-]
-
 export default function Navbar() {
   const { user, logout, updateProfile } = useAuth()
   const navigate = useNavigate()
@@ -318,35 +305,15 @@ export default function Navbar() {
                         <>
                           <div className="notif-section">
                             <p className="notif-section-title">Draw Released Email</p>
-                            <p className="notif-section-desc">Email when a new draw is published and picks are open</p>
-                            <div className="notif-two-col">
-                              <div className="notif-col">
-                                <p className="notif-col-heading">Men</p>
-                                {DRAW_CATS_MEN.map(cat => (
-                                  <label key={cat.key} className="notif-check-row">
-                                    <input
-                                      type="checkbox"
-                                      checked={notifSelected.has(cat.key)}
-                                      onChange={() => toggleNotif(cat.key)}
-                                    />
-                                    {cat.label}
-                                  </label>
-                                ))}
-                              </div>
-                              <div className="notif-col">
-                                <p className="notif-col-heading">Women</p>
-                                {DRAW_CATS_WOMEN.map(cat => (
-                                  <label key={cat.key} className="notif-check-row">
-                                    <input
-                                      type="checkbox"
-                                      checked={notifSelected.has(cat.key)}
-                                      onChange={() => toggleNotif(cat.key)}
-                                    />
-                                    {cat.label}
-                                  </label>
-                                ))}
-                              </div>
-                            </div>
+                            <p className="notif-section-desc">1 email per week, covering every draw released that week</p>
+                            <label className="notif-check-row">
+                              <input
+                                type="checkbox"
+                                checked={notifSelected.has('draw_released')}
+                                onChange={() => toggleNotif('draw_released')}
+                              />
+                              Enabled
+                            </label>
                           </div>
 
                           <div className="notif-section">

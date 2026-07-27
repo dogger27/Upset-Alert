@@ -158,6 +158,17 @@ async def _migrate(conn):
         # behaviour.
         "ALTER TABLE draws ADD COLUMN bracket_first_seen_at DATE",
         "ALTER TABLE draws ADD COLUMN bracket_first_seen_days_before INTEGER",
+        # Draw-release emails became a weekly digest covering every draw released
+        # that week, which makes a per-tier opt-in meaningless — it could only
+        # filter rows out of a mail the user receives either way. Collapse the
+        # eight 'draw_open:<tier>' keys into one on/off. Anyone opted in to ANY
+        # tier stays opted in, so nobody silently stops being notified.
+        (
+            "INSERT OR IGNORE INTO notification_preferences (user_id, pref_key) "
+            "SELECT DISTINCT user_id, 'draw_released' FROM notification_preferences "
+            "WHERE pref_key LIKE 'draw_open:%'"
+        ),
+        "DELETE FROM notification_preferences WHERE pref_key LIKE 'draw_open:%'",
     ]
     for sql in migrations:
         try:

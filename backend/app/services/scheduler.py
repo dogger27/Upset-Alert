@@ -337,6 +337,17 @@ async def _refresh_elo() -> None:
 # minutes. Waiting this long out lets any such flicker settle before emailing.
 DRAW_RELEASE_NOTIFY_COOLDOWN = timedelta(minutes=10)
 
+# A week's draws are announced together, so their emails go out together — one
+# message per user per week rather than one per draw. Wikipedia doesn't publish
+# them in lockstep though, so the batch waits for the week's stragglers up to
+# this long, then sends what's ready. Anything later gets a follow-up email.
+DRAW_BATCH_MAX_LAG = timedelta(days=1)
+
+# ...unless a ready draw is about to lock. Holding a batch is only ever worth it
+# while there's still time to act on it; past this point the wait costs the
+# recipient their picks, so the batch goes out incomplete.
+DRAW_BATCH_DEADLINE_GUARD = timedelta(hours=12)
+
 
 async def _notify_pending_draw_releases() -> None:
     """
@@ -354,7 +365,8 @@ async def _notify_pending_draw_releases() -> None:
     haven't been notified yet — covering all paths uniformly, and only firing
     once the release has proven stable (fixing the Athens Open early-fire case).
     """
-    cutoff = datetime.now(timezone.utc) - DRAW_RELEASE_NOTIFY_COOLDOWN
+    now = datetime.now(timezone.utc)
+    cutoff = now - DRAW_RELEASE_NOTIFY_COOLDOWN
     async with AsyncSessionLocal() as db:
         result = await db.execute(
             select(Draw).where(
@@ -364,20 +376,74 @@ async def _notify_pending_draw_releases() -> None:
                 Draw.draw_release_detected_at <= cutoff,
             )
         )
-        tournaments = result.scalars().all()
-        if not tournaments:
+        ready = result.scalars().all()
+        if not ready:
             return
 
-        to_notify = [(t.id, t.category or "", t.gender, t.year, t.name) for t in tournaments]
-        now = datetime.now(timezone.utc)
-        for t in tournaments:
-            t.draw_release_notified_at = now
+        # Group by the tennis week the draws belong to. A draw with no week
+        # (unparsed start date) can't be batched with anything, so it goes out
+        # on its own rather than being held for a group it isn't part of.
+        groups: dict[tuple, list[Draw]] = {}
+        for t in ready:
+            key = (t.year, t.week) if t.week is not None else ("solo", t.id)
+            groups.setdefault(key, []).append(t)
+
+        batches: list[tuple[list[int], bool]] = []
+        for key, members in groups.items():
+            if key[0] == "solo":
+                batches.append(([members[0].id], False))
+                continue
+
+            year, week = key
+            siblings = (await db.execute(
+                select(Draw).where(Draw.year == year, Draw.week == week)
+            )).scalars().all()
+
+            ready_ids = {t.id for t in members}
+            # Already-notified siblings mean this week's digest has gone out, so
+            # anything ready now is a late arrival and gets the follow-up wording.
+            is_followup = any(s.draw_release_notified_at is not None for s in siblings)
+            outstanding = [
+                s for s in siblings
+                if s.id not in ready_ids and s.draw_release_notified_at is None
+            ]
+
+            # Hold for the rest of the week's draws — but only so long. Waiting
+            # is what makes this one email instead of five; waiting past a pick
+            # deadline would make it worthless.
+            oldest_ready = min(t.draw_release_detected_at for t in members)
+            if oldest_ready.tzinfo is None:
+                oldest_ready = oldest_ready.replace(tzinfo=timezone.utc)
+            lag_expired = (now - oldest_ready) >= DRAW_BATCH_MAX_LAG
+            deadline_near = any(
+                t.closing_time is not None
+                and (t.closing_time.replace(tzinfo=timezone.utc) if t.closing_time.tzinfo is None
+                     else t.closing_time) - now <= DRAW_BATCH_DEADLINE_GUARD
+                for t in members
+            )
+
+            if outstanding and not lag_expired and not deadline_near:
+                logger.info(
+                    "Draw-release digest for %s week %s held: %d ready, waiting on %s",
+                    year, week, len(members), [s.name for s in outstanding],
+                )
+                continue
+            batches.append(([t.id for t in members], is_followup))
+
+        if not batches:
+            return
+
+        for ids, _ in batches:
+            for t in ready:
+                if t.id in ids:
+                    t.draw_release_notified_at = now
         await db.commit()
 
-    from app.services.notifications import notify_draw_released
-    for t_id, category, gender, year, name in to_notify:
-        asyncio.create_task(notify_draw_released(t_id, category, gender, year, name))
-    logger.info("Draw-release notification: dispatched for %d tournament(s)", len(to_notify))
+    from app.services.notifications import notify_draw_release_batch
+    for ids, is_followup in batches:
+        asyncio.create_task(notify_draw_release_batch(ids, is_followup=is_followup))
+    logger.info("Draw-release notification: dispatched %d batch(es) covering %d draw(s)",
+                len(batches), sum(len(ids) for ids, _ in batches))
 
 
 # Re-alert cadence for the two draw-health checks below — long enough to not

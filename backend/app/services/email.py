@@ -220,30 +220,133 @@ async def send_match_start_notification(
         })
 
 
-async def send_draw_notification(
-    emails: list[str], tournament_name: str, tournament_id: int,
-    category: str = "", gender: str = "M",
+_NUMBER_WORDS = {
+    1: "One", 2: "Two", 3: "Three", 4: "Four", 5: "Five",
+    6: "Six", 7: "Seven", 8: "Eight", 9: "Nine", 10: "Ten",
+}
+
+# Row accent per tour, matching the blue/pink banding of the draws table on site.
+_TOUR_COLOURS = {"M": ("#1e3a8a", "#e0e7ff"), "F": ("#9d174d", "#fce7f3")}
+
+
+def _tier_badge(category: str, gender: str) -> str:
+    """Short tier label for the badge on each digest row: 'ATP 250', 'Grand Slam'."""
+    cat = (category or "").upper()
+    if "SLAM" in cat or "GRAND" in cat:
+        return "Grand Slam"
+    tour = "ATP" if gender == "M" else "WTA"
+    tier = "1000" if "1000" in cat else "500" if "500" in cat else "250"
+    return f"{tour} {tier}"
+
+
+def fmt_close_utc(dt) -> str:
+    """'Sun 18 Oct, 23:00 UTC'.
+
+    Always UTC, always labelled. closing_time is stored as naive UTC, and we
+    hold no per-user timezone, so any attempt to render a "local" time would be
+    wrong for most readers — and being wrong about a pick deadline is the one
+    error this email cannot afford. The site shows the reader's own local time.
+    """
+    return f"{dt.strftime('%a')} {dt.day} {dt.strftime('%b')}, {dt.strftime('%H:%M')} UTC"
+
+
+def _digest_row(draw: dict, last: bool) -> str:
+    fg, bg = _TOUR_COLOURS.get(draw["gender"], _TOUR_COLOURS["M"])
+    url = f"{BASE_URL}/tournaments/{draw['id']}"
+    meta = " &nbsp;·&nbsp; ".join(
+        p for p in (draw.get("location"), draw.get("surface"),
+                    f"{draw['draw_size']} draw" if draw.get("draw_size") else None) if p
+    )
+    close = draw.get("closes")
+    close_html = (
+        f'<td style="font-size:13px;color:{"#b45309" if draw.get("closes_soon") else "#6b7280"}">'
+        f'Picks close {close}</td>'
+        if close else '<td style="font-size:13px;color:#6b7280">Picks close at first ball</td>'
+    )
+    return f"""
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;
+         margin:0 0 {'22px' if last else '10px'};border:1px solid #e5e7eb;border-radius:6px">
+    <tr><td style="padding:12px 14px">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+        <td style="font-size:16px;font-weight:700;color:#111">{draw['name']}</td>
+        <td align="right"><span style="font-size:11px;font-weight:700;color:{fg};background:{bg};
+            border-radius:10px;padding:3px 8px">{draw['tier']}</span></td>
+      </tr></table>
+      <div style="font-size:13px;color:#6b7280;margin:5px 0 9px">{meta}</div>
+      <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+        {close_html}
+        <td align="right"><a href="{url}" style="font-size:13px;font-weight:600;color:#1b4332;
+           text-decoration:none">Make picks &rarr;</a></td>
+      </tr></table>
+    </td></tr>
+  </table>"""
+
+
+async def send_draw_release_digest(
+    email: str,
+    draws: list[dict],
+    week_label: str,
+    is_followup: bool = False,
+    unsubscribe_url: str = "",
 ) -> None:
-    tournament_url = f"{BASE_URL}/tournaments/{tournament_id}"
-    label = _tournament_label(tournament_name, category, gender)
-    html = f"""{_WRAP_OPEN}{_LOGO_HEADER}{_BODY_OPEN}
-          <h1 style="font-size:22px;margin:0 0 12px">The draw is live!</h1>
-          <p style="color:#444;line-height:1.6;margin:0 0 24px">
-            The draw for <strong>{tournament_name}</strong> has been released.
-            Head over to make your picks before play begins.
-          </p>
-          <a href="{tournament_url}" style="display:inline-block;padding:12px 24px;
+    """One email covering every draw released this week that *this* user follows.
+
+    draws is already filtered to the recipient's tier preferences and sorted
+    soonest-deadline-first, so the list length varies per recipient — hence
+    subject and heading are built from it rather than from the batch.
+    """
+    n = len(draws)
+    if not n:
+        return
+    count_word = _NUMBER_WORDS.get(n, str(n))
+
+    if is_followup:
+        # The week's digest already went out; these arrived late.
+        subject = (f"One more draw is live — {draws[0]['name']}" if n == 1
+                   else f"{n} more draws are live — week of {week_label}")
+        heading = (f"One more draw for the week of {week_label}" if n == 1
+                   else f"{count_word} more draws for the week of {week_label}")
+        intro = ("It wasn't out when we sent the rest of this week's draws. It's live now."
+                 if n == 1 else
+                 "They weren't out when we sent the rest of this week's draws. They're live now.")
+    else:
+        subject = (f"Draw released: {draws[0]['name']}" if n == 1
+                   else f"{n} draws are live — week of {week_label}")
+        heading = "The draw is live!" if n == 1 else "This week's draws are live"
+        intro = (f"The draw for <strong>{draws[0]['name']}</strong> has been released."
+                 if n == 1 else
+                 f"{count_word} draws opened for the week of <strong>{week_label}</strong>. "
+                 f"Soonest deadline first.")
+
+    rows = "".join(_digest_row(d, last=(i == n - 1)) for i, d in enumerate(draws))
+    cta_url = f"{BASE_URL}/tournaments/{draws[0]['id']}" if n == 1 else f"{BASE_URL}/tournaments"
+    cta_text = "Make Your Picks" if n == 1 else "View All Draws"
+    unsubscribe = (
+        f'<p style="max-width:560px;margin:16px auto 0;text-align:center;font-size:12px;color:#9ca3af;'
+        f'font-family:sans-serif">'
+        f'<a href="{unsubscribe_url}" style="color:#9ca3af;text-decoration:underline">'
+        f'Unsubscribe from draw-release emails</a></p>'
+        if unsubscribe_url else ""
+    )
+
+    await send_async({
+        "from": FROM,
+        "to": [email],
+        "subject": subject,
+        "html": f"""{_WRAP_OPEN}{_LOGO_HEADER}{_BODY_OPEN}
+          <h1 style="font-size:22px;margin:0 0 12px">{heading}</h1>
+          <p style="color:#444;line-height:1.6;margin:0 0 20px">{intro}</p>
+          {rows}
+          <a href="{cta_url}" style="display:inline-block;padding:12px 24px;
              background:#1b4332;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
-            Make Your Picks
+            {cta_text}
           </a>
-        {_BODY_CLOSE}{_WRAP_CLOSE}"""
-    for email in emails:
-        await send_async({
-            "from": FROM,
-            "to": [email],
-            "subject": f"Draw released: {label}",
-            "html": html,
-        })
+          <p style="color:#9ca3af;line-height:1.6;margin:18px 0 0;font-size:12px">
+            Picks lock when each draw's first match starts. Times shown in UTC —
+            the site shows your local time.
+          </p>
+        {_BODY_CLOSE}{_WRAP_CLOSE}{unsubscribe}""",
+    })
 
 
 async def send_tournament_complete_notification(
