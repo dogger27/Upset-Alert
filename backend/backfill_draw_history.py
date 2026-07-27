@@ -52,7 +52,11 @@ async def main() -> None:
         for tournament in tournaments:
             completed_matches = (
                 await db.execute(
-                    select(Match).where(Match.draw_id == tournament.id, Match.status == "completed")
+                    select(Match).where(
+                        Match.draw_id == tournament.id,
+                        Match.status == "completed",
+                        Match.is_bye == False,  # noqa: E712 — byes are not predictions
+                    )
                 )
             ).scalars().all()
             if not completed_matches:

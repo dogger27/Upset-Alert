@@ -445,7 +445,10 @@ async def leaderboard(
             selectinload(Match.player2),
             selectinload(Match.winner),
         )
-        .where(Match.draw_id == tournament_id, Match.status == "completed")
+        # is_bye excluded: a bye has no contest to predict, and scoring it awards
+        # free points to any stray pick sitting on that row.
+        .where(Match.draw_id == tournament_id, Match.status == "completed",
+               Match.is_bye == False)  # noqa: E712
     )
     completed_matches = completed_matches_result.scalars().all()
 

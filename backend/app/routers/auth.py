@@ -444,7 +444,8 @@ async def backfill_draw_history(
         m_res = await db.execute(
             select(Match)
             .options(selectinload(Match.player1), selectinload(Match.player2), selectinload(Match.winner))
-            .where(Match.draw_id == tournament.id, Match.status == "completed")
+            .where(Match.draw_id == tournament.id, Match.status == "completed",
+                   Match.is_bye == False)  # noqa: E712 — byes are not predictions
         )
         completed_matches = m_res.scalars().all()
         if not completed_matches:

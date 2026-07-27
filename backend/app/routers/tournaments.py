@@ -17,7 +17,7 @@ from app.schemas.tournament import DrawEntryOut, DrawOut, MatchOut, TournamentCr
 from app.schemas.user import UserPublicOut
 from app.services.rankings import assign_rankings
 from app.services.scraper import scrape_tournament, snap_to_monday
-from app.services.scoring import UserScore, rank_users
+from app.services.scoring import UserScore, _points_table, rank_users
 from app.services.upsets import has_upset_pick
 
 router = APIRouter(prefix="/tournaments", tags=["tournaments"])
@@ -531,7 +531,11 @@ async def global_standings(tournament_id: int, db: AsyncSession = Depends(get_db
     completed_result = await db.execute(
         select(Match)
         .options(selectinload(Match.player1), selectinload(Match.player2), selectinload(Match.winner))
-        .where(Match.draw_id == tournament_id, Match.status == "completed")
+        # is_bye excluded: a bye is not a contest. It is stamped completed with
+        # an auto-advanced winner, and stray picks do sit on those rows, so
+        # scoring them hands out free points.
+        .where(Match.draw_id == tournament_id, Match.status == "completed",
+               Match.is_bye == False)  # noqa: E712
     )
     completed_matches = completed_result.scalars().all()
 
@@ -548,8 +552,11 @@ async def global_standings(tournament_id: int, db: AsyncSession = Depends(get_db
     )
     all_entries = all_entries_result.scalars().all()
 
-    # Classic points: round_number → 2^(r-1)
-    pts_table = {r: 2 ** (r - 1) for r in range(1, tournament.num_rounds + 1)}
+    # The real Classic table (tier x round), same as league standings, stored
+    # results, the Hall of Fame and the round-complete emails. This used to be
+    # a local 2^(r-1) approximation, which quietly gave this one screen a
+    # different point total than every other view of the same picks.
+    pts_table = _points_table(tournament)
 
     # Users with at least one pick — those with a complete bracket are ranked
     # normally; partial pickers are appended after (greyed out on the frontend).
