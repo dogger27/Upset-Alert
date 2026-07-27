@@ -477,6 +477,10 @@ async def get_tournament(tournament_id: int, db: AsyncSession = Depends(get_db))
     t = await db.get(Draw, tournament_id)
     if not t:
         raise HTTPException(404, "Tournament not found")
+    # Same override every other serializing endpoint applies — "open" exists
+    # only in computed_status, so without this the raw column leaks out and
+    # any status === 'open' check against this endpoint silently fails.
+    t.status = t.computed_status
     lat = await db.execute(
         select(func.max(Match.completed_at)).where(Match.draw_id == tournament_id)
     )
