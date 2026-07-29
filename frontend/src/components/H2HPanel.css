@@ -276,6 +276,10 @@ html.h2h-modal-open body {
   display: flex;
   align-items: center;
   justify-content: center;
+  /* First and last name are separate flex items, so the whitespace between them
+     in the markup is gone — this puts it back. Mobile stacks them and sets its
+     own tighter gap. */
+  gap: 0.3em;
   /* Sized to hold the picked border without the name shifting when it appears */
   border: 2px solid transparent;
   border-radius: 8px;
@@ -421,10 +425,12 @@ html.h2h-modal-open body {
 .h2h-flag {
   width: 1.1em;
   height: 0.82em;
-  margin-right: 0.35em;
   vertical-align: middle;
   border-radius: 2px;
   flex-shrink: 0;
+  /* No right margin: .h2h-player-name is a gapped flex row, so the separation
+     is already there and a margin on top of it would read as a wider space
+     after the flag than between the two names. */
 }
 
 /* ── Table ── */
