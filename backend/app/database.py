@@ -173,6 +173,15 @@ async def _migrate(conn):
         # silently from the browser on next load, so it stays NULL for users who
         # never return — every read falls back to UTC.
         "ALTER TABLE users ADD COLUMN timezone VARCHAR",
+        # Round-completion emails became a weekly digest: a completed round is
+        # now claimed on detection and emailed later, once the week's other
+        # draws have reached the same round. digest_sent_at marks "actually
+        # emailed"; NULL means still pending.
+        "ALTER TABLE round_complete_notifications ADD COLUMN digest_sent_at DATETIME",
+        # Backfill every pre-existing row. Without this, each historical round
+        # would look pending on first boot and the digest job would re-send
+        # months of round emails to everyone.
+        "UPDATE round_complete_notifications SET digest_sent_at = sent_at WHERE digest_sent_at IS NULL",
     ]
     for sql in migrations:
         try:

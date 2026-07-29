@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from typing import Optional
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
@@ -32,9 +33,16 @@ class RoundCompleteNotification(Base):
     draw_id: Mapped[int] = mapped_column(Integer, ForeignKey("draws.id", ondelete="CASCADE"), nullable=False, index=True)
     round_number: Mapped[int] = mapped_column(Integer, nullable=False)
     recipient_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Now stamped when the round is DETECTED complete, which is also when the
+    # unique constraint claims it. Emailing happens later, once the week's other
+    # draws have reached the same round (see scheduler._notify_pending_round_digests).
     sent_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
+    # Null while a detected round is still waiting for its week's digest to go
+    # out. Backfilled to sent_at for every pre-existing row, so switching to the
+    # digest can't re-send months of historical rounds.
+    digest_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class MatchStartNotification(Base):

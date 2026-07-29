@@ -561,6 +561,138 @@ async def send_round_complete_notification(
     })
 
 
+def _week_summary(rows: list[tuple]) -> str:
+    """'Your week so far' table: one line per draw — correct picks and global place.
+
+    rows: [(draw_label, '12/16', '2nd of 13'), ...]
+    """
+    body = "".join(
+        f'<tr style="background:{"#ffffff" if i % 2 == 0 else "#f9fafb"}">'
+        f'<td style="padding:8px 12px 8px 14px;font-size:14px;color:#111">{label}</td>'
+        f'<td align="center" width="70" style="padding:8px 6px;font-size:14px;text-align:center;'
+        f'width:70px;color:#111;font-weight:700">{hits}</td>'
+        f'<td align="right" width="90" style="padding:8px 14px 8px 6px;font-size:14px;'
+        f'text-align:right;width:90px;color:#444;white-space:nowrap">{place}</td>'
+        f'</tr>'
+        for i, (label, hits, place) in enumerate(rows)
+    )
+    return f"""<div style="margin:0 0 24px">
+      <div style="padding:11px 14px;background:#1b4332;color:#fff;
+            border-top-left-radius:6px;border-top-right-radius:6px;
+            font-weight:600;font-size:14px">Your week so far</div>
+      <table width="100%" cellpadding="0" cellspacing="0" border="0"
+             style="width:100%;border-collapse:collapse;border:1px solid #e5e7eb;border-top:none;
+                    border-bottom-left-radius:6px;border-bottom-right-radius:6px">
+        <tr style="background:#f3f4f6">
+          <th align="left" style="padding:7px 12px 7px 14px;font-size:12px;text-transform:uppercase;
+              letter-spacing:0.5px;color:#6b7280;border-bottom:2px solid #e5e7eb">Draw</th>
+          <th align="center" width="70" style="padding:7px 6px;font-size:12px;text-align:center;width:70px;
+              text-transform:uppercase;letter-spacing:0.5px;color:#6b7280;
+              border-bottom:2px solid #e5e7eb">Round</th>
+          <th align="right" width="90" style="padding:7px 14px 7px 6px;font-size:12px;text-align:right;width:90px;
+              text-transform:uppercase;letter-spacing:0.5px;color:#6b7280;
+              border-bottom:2px solid #e5e7eb">Global</th>
+        </tr>
+        {body}
+      </table>
+    </div>"""
+
+
+def _draw_section(draw: dict, is_last: bool) -> str:
+    """One draw inside the weekly email: its own heading, standings, results."""
+    blocks = "".join(
+        _round_complete_league_block(n, rows, i == len(draw["leagues"]) - 1)
+        for i, (n, rows) in enumerate(draw["leagues"])
+    )
+    rule = "" if is_last else '<div style="border-top:1px solid #e5e7eb;margin:28px 0 0"></div>'
+    city = f"{draw['city']} &middot; " if draw.get("city") else ""
+    return f"""<div style="margin:0 0 4px">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;margin:0 0 14px">
+        <tr>
+          <td style="padding:0">
+            <div style="font-size:18px;font-weight:700;color:#111">{draw['label']}</div>
+            <div style="font-size:13px;color:#6b7280;padding-top:2px">
+              {city}{draw['round_name']} complete
+            </div>
+          </td>
+          <td align="right" style="padding:0;text-align:right;white-space:nowrap">
+            <a href="{BASE_URL}/tournaments/{draw['id']}"
+               style="font-size:13px;color:#1b4332;font-weight:600;text-decoration:underline">View draw</a>
+          </td>
+        </tr>
+      </table>
+      <div style="margin:0 0 4px">{blocks}</div>
+      {_round_results_widget(draw['round_name'], draw['match_results'])}
+      {rule}
+    </div>"""
+
+
+async def send_round_complete_digest(
+    email: str,
+    draws: list[dict],
+    round_name: str,
+    week_label: str,
+    reached: int,
+    total_in_week: int,
+    summary_rows: list[tuple],
+    unsubscribe_url: str = "",
+    is_followup: bool = False,
+) -> None:
+    """One email per user per round per week, covering every draw that reached it.
+
+    draws: [{id, label, city, round_name, leagues, match_results}, ...] — already
+    sliced to this recipient (their leagues, their pick correctness).
+    """
+    if not draws:
+        return
+
+    if is_followup:
+        subject = f"{round_name} Complete — {draws[0]['label']}" if len(draws) == 1 \
+            else f"{round_name} Complete — {len(draws)} more draws"
+        heading = f"{round_name} is complete"
+        scope = ("It finished after the rest of this week's draws."
+                 if len(draws) == 1 else
+                 "These finished after the rest of this week's draws.")
+    else:
+        subject = (f"{round_name} Complete: {draws[0]['label']}" if total_in_week == 1
+                   else f"{round_name} Complete — Week of {week_label}")
+        heading = f"{round_name} is complete"
+        # Naming every tournament would overflow the subject line, so the scope
+        # goes here instead — and it has to be honest about draws still playing.
+        scope = (f"all {total_in_week} draws" if reached == total_in_week and total_in_week > 1
+                 else f"{reached} of {total_in_week} draws has reached this round" if reached == 1
+                 else f"{reached} of {total_in_week} draws have reached this round")
+
+    intro = f"Week of {week_label} &middot; {scope}" if not is_followup else scope
+    sections = "".join(_draw_section(d, i == len(draws) - 1) for i, d in enumerate(draws))
+    summary = _week_summary(summary_rows) if len(summary_rows) > 1 else ""
+    unsubscribe = (
+        f'<p style="max-width:560px;margin:16px auto 0;text-align:center;font-size:12px;color:#9ca3af">'
+        f'<a href="{unsubscribe_url}" style="color:#9ca3af;text-decoration:underline">'
+        f'Unsubscribe from round-completion emails</a></p>'
+        if unsubscribe_url else ""
+    )
+    cta_url = f"{BASE_URL}/tournaments/{draws[0]['id']}" if len(draws) == 1 else f"{BASE_URL}/tournaments"
+    cta_text = "View Draw &amp; Standings" if len(draws) == 1 else "View This Week&#39;s Draws"
+
+    await send_async({
+        "from": FROM,
+        "to": [email],
+        "subject": subject,
+        "html": f"""{_WRAP_OPEN}{_LOGO_HEADER}{_BODY_OPEN}
+          <h1 style="font-size:22px;margin:0 0 6px">{heading}</h1>
+          <p style="color:#6b7280;font-size:13px;margin:0 0 18px">{intro}</p>
+          <a href="{cta_url}" style="display:inline-block;padding:12px 24px;margin:0 0 22px;
+             background:#1b4332;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
+            {cta_text}
+          </a>
+          {summary}
+          {sections}
+        {_BODY_CLOSE}{_WRAP_CLOSE}
+        {unsubscribe}""",
+    })
+
+
 
 async def send_league_added_existing(
     to_email: str,
