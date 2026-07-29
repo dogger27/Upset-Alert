@@ -242,15 +242,12 @@ const COL_W = 260
 const COMPACT_COL_W = 158
 // Length of the horizontal feeder runs between columns: half goes to the stubs
 // out of the two feeding boxes, half to the stub into the box they feed.
-// Halved from 64: at 64 a two-column compact view came to 2*158 + 64 + 17 =
-// 397px, which overflows a 390px phone by just enough to leave the whole draw
-// draggable sideways. 32 brings it to 362 and the drag goes away.
-const COL_GAP = 32
-// H2H chip's x within the gap. Pulled in from 8 so the chip still clears the
-// vertical bus, which sits at COL_GAP/2 and is now 16px from the gap's start
-// rather than 32 — the chip is 18px wide on screen (it is rotated), so at 8 it
-// would have run into the bus.
-const H2H_X = 5
+// Down from 64, where a two-column compact view came to 2*158 + 64 + 17 = 397px
+// and overflowed a 390px phone by just enough to leave the whole draw draggable
+// sideways. 44 measures 377 — still inside the screen, with more of the
+// connector visible than the 32 this was briefly set to.
+const COL_GAP = 44
+const H2H_X = 8          // H2H chip's x within the gap — centred on the match box's right border
 const BELL_OFFSET = 34   // distance (px) the bell sits left of the H2H chip's centre
 
 function Flag({ nat }) {

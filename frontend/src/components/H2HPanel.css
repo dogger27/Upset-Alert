@@ -329,11 +329,46 @@ html.h2h-modal-open body {
 }
 
 /* ── Table ── */
+/* Positioning context for the scroll indicator, which has to sit OUTSIDE the
+   scroller — anything inside it would scroll away with the content. */
+.h2h-list {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
 .h2h-table-wrap {
   overflow-y: auto;
   flex: 1;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  /* The native bar is replaced by .h2h-sb, which is drawn on every platform —
+     iOS hides its own until you are already scrolling, which is exactly when
+     the hint is no longer needed. Hiding it here stops desktop showing two. */
+  scrollbar-width: none;
+}
+.h2h-table-wrap::-webkit-scrollbar { display: none; }
+
+/* Rendered only when the list actually overflows — see measureList() */
+.h2h-sb {
+  position: absolute;
+  top: 0.5rem;
+  bottom: 0.5rem;
+  right: 3px;
+  width: 4px;
+  border-radius: 2px;
+  background: #e6eaea;
+  pointer-events: none;
+}
+
+.h2h-sb-thumb {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  border-radius: 2px;
+  background: var(--green, #2d6a4f);
+  opacity: 0.55;
 }
 
 /* Stands in for the column headers on mobile only — see the JSX comment */
@@ -669,6 +704,18 @@ html.h2h-modal-open body {
     letter-spacing: 0.07em;
     color: var(--text-muted);
   }
+
+  /* The count is the part worth reading at a glance — how many meetings there
+     are — so it carries the weight rather than the word after it. */
+  .h2h-list-count {
+    font-size: 0.86rem;
+    font-weight: 800;
+    color: var(--text);
+    margin-right: 0.1rem;
+  }
+
+  /* Clear of the rounded cards' right edge */
+  .h2h-sb { right: 1px; }
 
   .h2h-table,
   .h2h-table tbody,

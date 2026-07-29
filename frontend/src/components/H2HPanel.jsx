@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { getH2H, getPlayerForm } from '../api/players'
@@ -259,6 +259,23 @@ export default function H2HPanel({
     return () => root.classList.remove('h2h-modal-open')
   }, [])
 
+  // Scroll indicator for the match list. iOS hides native scrollbars entirely
+  // until you are already scrolling, so with three meetings and room for two
+  // there was nothing on screen to say a third existed. This draws one that is
+  // always visible — but only when there is actually something to scroll to.
+  const listRef = useRef(null)
+  const [scrollbar, setScrollbar] = useState(null)  // { size, offset } in %
+
+  const measureList = useCallback(() => {
+    const el = listRef.current
+    if (!el) return setScrollbar(null)
+    const { scrollHeight, clientHeight, scrollTop } = el
+    if (scrollHeight - clientHeight <= 1) return setScrollbar(null)
+    const size = Math.max((clientHeight / scrollHeight) * 100, 12)  // floor so it stays grabbable
+    const offset = Math.min((scrollTop / scrollHeight) * 100, 100 - size)
+    setScrollbar({ size, offset })
+  }, [])
+
   // The queries are keyed on the INCOMING match so navigation starts fetching
   // straight away, but keepPreviousData means they keep serving the match
   // currently on screen until the new one has arrived.
@@ -359,6 +376,15 @@ export default function H2HPanel({
   const displayMatches = surfFilter === 'surface'
     ? matches.filter(m => surfKeys.includes(m.surface))
     : matches
+  // Re-measure whenever the list's content or the viewport could have changed
+  // its scrollable height — including after navigating to a match with a
+  // different number of meetings.
+  useEffect(() => {
+    measureList()
+    window.addEventListener('resize', measureList)
+    return () => window.removeEventListener('resize', measureList)
+  }, [measureList, displayMatches.length, isLoading])
+
   const showRank = rank_p1 != null || rank_p2 != null
   const showElo = elo_rank_p1 != null || elo_rank_p2 != null
   const showAge = age_p1 != null || age_p2 != null
@@ -490,14 +516,16 @@ export default function H2HPanel({
 
         {data && !isLoading && (
           matches.length > 0 ? (
-            <div className="h2h-table-wrap">
+            <div className="h2h-list">
+             <div className="h2h-table-wrap" ref={listRef} onScroll={measureList}>
               {/* Mobile hides the column headers (six columns don't fit), which
                   left the list with nothing naming it. This caption replaces
                   them there — and, because Overall/Hard filter this list, it
                   also surfaces the active filter, which is otherwise invisible
                   once the headers are gone. Hidden on desktop. */}
               <div className="h2h-list-title">
-                {displayMatches.length} previous {displayMatches.length === 1 ? 'meeting' : 'meetings'}
+                <strong className="h2h-list-count">{displayMatches.length}</strong>
+                {' previous '}{displayMatches.length === 1 ? 'meeting' : 'meetings'}
                 {surfFilter === 'surface' && surfLabel ? ` · ${surfLabel}` : ''}
               </div>
               <table className="h2h-table">
@@ -532,6 +560,15 @@ export default function H2HPanel({
                   })}
                 </tbody>
               </table>
+             </div>
+             {scrollbar && (
+               <div className="h2h-sb" aria-hidden="true">
+                 <div
+                   className="h2h-sb-thumb"
+                   style={{ height: `${scrollbar.size}%`, top: `${scrollbar.offset}%` }}
+                 />
+               </div>
+             )}
             </div>
           ) : (
             <div className="h2h-empty">No head-to-head matches found.</div>
