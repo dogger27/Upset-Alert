@@ -240,8 +240,17 @@ const COL_W = 260
 // last-name-only (see lastNameOf below) instead of "F. Last" — widened by
 // ~2 characters (140 -> 158) after it came out a bit too tight.
 const COMPACT_COL_W = 158
-const COL_GAP = 64       // wide enough to seat the H2H chip on the connector "T"
-const H2H_X = 8          // H2H chip's x within the gap — centred on the match box's right border
+// Length of the horizontal feeder runs between columns: half goes to the stubs
+// out of the two feeding boxes, half to the stub into the box they feed.
+// Halved from 64: at 64 a two-column compact view came to 2*158 + 64 + 17 =
+// 397px, which overflows a 390px phone by just enough to leave the whole draw
+// draggable sideways. 32 brings it to 362 and the drag goes away.
+const COL_GAP = 32
+// H2H chip's x within the gap. Pulled in from 8 so the chip still clears the
+// vertical bus, which sits at COL_GAP/2 and is now 16px from the gap's start
+// rather than 32 — the chip is 18px wide on screen (it is rotated), so at 8 it
+// would have run into the bus.
+const H2H_X = 5
 const BELL_OFFSET = 34   // distance (px) the bell sits left of the H2H chip's centre
 
 function Flag({ nat }) {

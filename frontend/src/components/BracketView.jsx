@@ -61,7 +61,11 @@ const LABEL_H = 30
 const SLOT_BASE = 74
 const COL_W = 252
 const COL_W_SCORES = 300
-const COL_GAP = 24
+// Horizontal feeder length between columns — halved from 24 alongside
+// CombinedView's, to buy back width on a phone. Nothing is seated in this gap
+// (BracketView's H2H strip lives inside the match box), so it only shortens the
+// connector runs.
+const COL_GAP = 12
 
 
 
