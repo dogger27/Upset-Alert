@@ -181,7 +181,28 @@ async def _migrate(conn):
         # Backfill every pre-existing row. Without this, each historical round
         # would look pending on first boot and the digest job would re-send
         # months of round emails to everyone.
-        "UPDATE round_complete_notifications SET digest_sent_at = sent_at WHERE digest_sent_at IS NULL",
+        # Scoped to rows that predate the digest going live (2026-07-29 02:49 UTC).
+        # This list re-runs on EVERY startup, so the unscoped version of this
+        # statement did not backfill once — it re-fired on each deploy and
+        # stamped any round still waiting for its week's batch as already sent,
+        # silently dropping it. That is what swallowed the R32 digest for week
+        # 30: Los Cabos was queued at 09:24 and marked sent by a restart at
+        # 18:45 without an email ever going out.
+        (
+            "UPDATE round_complete_notifications SET digest_sent_at = sent_at "
+            "WHERE digest_sent_at IS NULL AND sent_at < '2026-07-29 02:49:00'"
+        ),
+        # Release the rounds the unscoped version above already swallowed. Its
+        # signature is exact: digest_sent_at copied verbatim from sent_at, and
+        # recipient_count still 0 because no send ever ran. A genuine
+        # zero-recipient send stamps a later digest_sent_at than sent_at, so it
+        # is not matched; and once these do send, recipient_count moves off 0,
+        # so this cannot re-fire on the next boot.
+        (
+            "UPDATE round_complete_notifications SET digest_sent_at = NULL "
+            "WHERE recipient_count = 0 AND digest_sent_at = sent_at "
+            "AND sent_at >= '2026-07-29 02:49:00'"
+        ),
     ]
     for sql in migrations:
         try:
