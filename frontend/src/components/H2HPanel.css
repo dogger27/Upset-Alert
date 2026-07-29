@@ -40,16 +40,22 @@
 }
 .h2h-close:hover { background: #f0f0f0; color: #333; }
 
-/* ── Header grid ── */
-/*  columns: [label] [p1-value] [vs] [p2-value]  */
+/* ── Header ── */
+/*  One grid per row: [label] [p1-value] [vs] [p2-value].
+    Rows are separate grids rather than one flat grid so the mobile layout can
+    reorder items within a row (`order` cannot move an item within its row in a
+    flat grid). Every row shares the same track sizes, so columns still line up. */
 .h2h-header {
-  display: grid;
-  grid-template-columns: 86px 1fr 44px 1fr;
-  align-items: center;
-  row-gap: 0.18rem;
   padding: 1.1rem 1.5rem 1rem 1.25rem;
   border-bottom: 1px solid #eee;
   flex-shrink: 0;
+}
+
+.h2h-row {
+  display: grid;
+  grid-template-columns: 86px 1fr 44px 1fr;
+  align-items: center;
+  margin-bottom: 0.18rem;
 }
 
 /* Row label (col 1) */
@@ -130,9 +136,8 @@
   display: inline-block;
 }
 
-/* Divider spanning all 4 grid columns */
+/* Divider — now a sibling of the rows rather than a grid item */
 .h2h-divider {
-  grid-column: 1 / -1;
   border-top: 1px solid #eee;
   margin: 0.4rem 0 0.25rem;
 }
@@ -375,3 +380,166 @@
   font-size: 0.88rem;
 }
 .h2h-error { color: #dc2626; }
+
+/* ══ Mobile ══════════════════════════════════════════════════════════════
+   Kept at the end of the file on purpose: these rules carry no more
+   specificity than the base ones above, so if they were placed earlier the
+   base rules would win at every width and the whole block would silently do
+   nothing. */
+@media (max-width: 560px) {
+
+  /* Bottom sheet rather than a centred box. The centred panel had nowhere to
+     grow — it overflowed the viewport and cut the match list off mid-row. */
+  .h2h-backdrop {
+    padding: 0;
+    align-items: flex-end;
+  }
+
+  .h2h-panel {
+    width: 100%;
+    max-height: 88dvh;
+    border-radius: 14px 14px 0 0;
+    animation: h2h-sheet-up 0.22s ease-out;
+  }
+
+  @keyframes h2h-sheet-up {
+    from { transform: translateY(100%); }
+    to   { transform: translateY(0); }
+  }
+
+  /* The close button gets its own band at the top. It used to sit on top of
+     the second player's name, which wraps to two lines at this width. */
+  .h2h-header {
+    padding: 2.1rem 0.85rem 0.85rem;
+  }
+
+  .h2h-close {
+    top: 0.4rem;
+    right: 0.4rem;
+    font-size: 1.05rem;
+    padding: 0.55rem 0.7rem;
+  }
+
+  /* ── The spine ──
+     p1 | LABEL | p2. The label leaves the left gutter and becomes the axis the
+     two players are compared across, which is what it has always meant — it
+     only sat in a gutter on desktop because there was room for one. Worth 86px
+     of a ~330px screen, all of it returned to the two value columns. */
+  .h2h-row {
+    grid-template-columns: 1fr minmax(66px, auto) 1fr;
+    column-gap: 0.25rem;
+  }
+
+  .h2h-val-p1 { order: 1; }
+  .h2h-label  { order: 2; }
+  .h2h-val-p2 { order: 3; }
+
+  .h2h-label,
+  .h2h-filter-btn {
+    text-align: center;
+    padding-right: 0;
+    font-size: 0.62rem;
+    line-height: 1.15;
+    white-space: normal;   /* "Rank (ATP)" may wrap in the narrow centre channel */
+  }
+
+  .h2h-label-with-info { justify-content: center; }
+
+  /* The empty label on the names row would otherwise hold the centre channel
+     open; "vs" takes that slot instead. */
+  .h2h-row--names .h2h-label { display: none; }
+  .h2h-row--names .h2h-vs { order: 2; display: block; }
+  .h2h-row:not(.h2h-row--names) .h2h-vs { display: none; }
+
+  .h2h-row--names { margin-bottom: 0.5rem; }
+
+  .h2h-player-name {
+    font-size: 0.88rem;
+    line-height: 1.2;
+    flex-wrap: wrap;
+  }
+
+  /* Scaled to keep the two-digit case on one line at this width */
+  .h2h-wins { font-size: 1.9rem; }
+  .h2h-meta-val { font-size: 1.05rem; }
+
+  /* ── Form ──
+     Was flex-wrap, so each player's ten squares broke wherever they happened to
+     run out of room — 5+5 on one side, 3+3+3+1 on the other. A fixed five-wide
+     grid makes both players the same 5x2 block, and the shape itself becomes
+     readable: top row is the last five matches. */
+  .h2h-form-row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 3px;
+    justify-items: center;
+    max-width: 122px;
+    margin: 0 auto;
+  }
+
+  .h2h-form-box {
+    width: 100%;
+    max-width: 21px;
+    height: 20px;
+  }
+
+  /* ── Match list ──
+     Six columns cannot fit; the table was clipping Tournament and Round with no
+     way to scroll to them. Each match becomes a stacked card instead: the
+     result on top, the context under it. */
+  .h2h-table-wrap { overflow-x: hidden; }
+
+  .h2h-table,
+  .h2h-table tbody,
+  .h2h-table tr { display: block; width: 100%; }
+
+  .h2h-table thead { display: none; }
+
+  .h2h-table tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 0.4rem;
+    padding: 0.55rem 0.85rem;
+    border-bottom: 1px solid #f0f0f0;
+  }
+
+  .h2h-table td {
+    padding: 0;
+    border: none;
+  }
+
+  .h2h-score  { order: 1; font-weight: 700; font-size: 0.82rem; }
+  .h2h-winner { order: 2; flex: 1; text-align: right; font-size: 0.78rem; }
+
+  /* flex-basis:100% forces the wrap, putting the context on its own line */
+  .h2h-tourn {
+    order: 3;
+    flex: 1 0 100%;
+    margin-top: 0.15rem;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+  }
+
+  .h2h-surface { order: 4; }
+  .h2h-year    { order: 5; }
+  .h2h-round   { order: 6; }
+
+  .h2h-surface,
+  .h2h-year,
+  .h2h-round {
+    font-size: 0.68rem;
+    color: var(--text-muted);
+  }
+
+  .h2h-surface::after,
+  .h2h-year::after { content: '·'; margin-left: 0.4rem; opacity: 0.5; }
+
+  /* Tap targets: the popup is dismissed by the next touch, so it must not be
+     able to swallow it. */
+  .h2h-form-popup { pointer-events: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .h2h-panel { animation: none; }
+}

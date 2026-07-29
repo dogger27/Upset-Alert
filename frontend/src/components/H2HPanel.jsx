@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getH2H, getPlayerForm } from '../api/players'
@@ -97,6 +97,21 @@ function FormBox({ m }) {
   const ref = useRef(null)
   const [pos, setPos] = useState(null)
 
+  const open = () => {
+    const r = ref.current?.getBoundingClientRect()
+    if (r) setPos({ x: r.left + r.width / 2, y: r.top })
+  }
+
+  // Dismiss on the next touch anywhere. Registered only while a popup is open,
+  // and on touchstart rather than click so it fires before the backdrop's own
+  // click handler can close the whole panel out from under the reader.
+  useEffect(() => {
+    if (!pos) return
+    const away = () => setPos(null)
+    document.addEventListener('touchstart', away, { passive: true })
+    return () => document.removeEventListener('touchstart', away)
+  }, [pos])
+
   if (!m) return <span className="h2h-form-box h2h-form-box--empty" />
 
   return (
@@ -104,11 +119,11 @@ function FormBox({ m }) {
       <span
         ref={ref}
         className={`h2h-form-box ${m.result === 'W' ? 'h2h-form-box--win' : 'h2h-form-box--loss'}`}
-        onMouseEnter={() => {
-          const r = ref.current?.getBoundingClientRect()
-          if (r) setPos({ x: r.left + r.width / 2, y: r.top })
-        }}
+        onMouseEnter={open}
         onMouseLeave={() => setPos(null)}
+        // Touch has no hover, so these squares were pure decoration on a phone —
+        // the match behind each result was unreachable. Tap opens the same popup.
+        onTouchStart={e => { e.stopPropagation(); pos ? setPos(null) : open() }}
       >
         {m.result}
       </span>
@@ -224,78 +239,96 @@ export default function H2HPanel({ slug1, slug2, player1, player2, tournSurface,
       <div className="h2h-panel" onClick={e => e.stopPropagation()}>
         <button className="h2h-close" onClick={onClose} aria-label="Close">✕</button>
 
-        {/* Header grid: label | p1 | vs | p2 */}
+        {/* Each stat is its own grid row. Desktop lays it out as
+            [label][p1][vs][p2]; on mobile the label reorders into the centre
+            channel so the two players sit against the edges — see H2HPanel.css.
+            The rows have to be separate grids for that reorder to be possible:
+            in one flat grid, `order` can't move an item within its own row. */}
         <div className="h2h-header">
           {/* Names row — always use our API names (Firstname Lastname order) */}
-          <div className="h2h-label" />
-          <div className="h2h-col-val h2h-player-name">
-            {iocToFlagClass(player1?.nationality) && <span className={`fi fi-${iocToFlagClass(player1.nationality)} h2h-flag`} />}
-            {player1?.name ?? fmtName(name_p1)}
-          </div>
-          <div className="h2h-vs">vs</div>
-          <div className="h2h-col-val h2h-player-name">
-            {iocToFlagClass(player2?.nationality) && <span className={`fi fi-${iocToFlagClass(player2.nationality)} h2h-flag`} />}
-            {player2?.name ?? fmtName(name_p2)}
+          <div className="h2h-row h2h-row--names">
+            <div className="h2h-label" />
+            <div className="h2h-col-val h2h-val-p1 h2h-player-name">
+              {iocToFlagClass(player1?.nationality) && <span className={`fi fi-${iocToFlagClass(player1.nationality)} h2h-flag`} />}
+              {player1?.name ?? fmtName(name_p1)}
+            </div>
+            <div className="h2h-vs">vs</div>
+            <div className="h2h-col-val h2h-val-p2 h2h-player-name">
+              {iocToFlagClass(player2?.nationality) && <span className={`fi fi-${iocToFlagClass(player2.nationality)} h2h-flag`} />}
+              {player2?.name ?? fmtName(name_p2)}
+            </div>
           </div>
 
           {/* Overall row — click to show all matches. Rendered immediately;
               values show a loading placeholder until the (possibly slow, TE-scraped) data arrives. */}
-          <button
-            className={`h2h-label h2h-filter-btn${surfFilter === 'all' ? ' h2h-filter-active' : ''}`}
-            onClick={() => setSurfFilter('all')}
-          >Overall</button>
-          <div className="h2h-col-val h2h-wins"><span className={bestCls(wins_p1, wins_p2)}>{isLoading ? '⋯' : (wins_p1 ?? '—')}</span></div>
-          <div />
-          <div className="h2h-col-val h2h-wins"><span className={bestCls(wins_p2, wins_p1)}>{isLoading ? '⋯' : (wins_p2 ?? '—')}</span></div>
+          <div className="h2h-row">
+            <button
+              className={`h2h-label h2h-filter-btn${surfFilter === 'all' ? ' h2h-filter-active' : ''}`}
+              onClick={() => setSurfFilter('all')}
+            >Overall</button>
+            <div className="h2h-col-val h2h-val-p1 h2h-wins"><span className={bestCls(wins_p1, wins_p2)}>{isLoading ? '⋯' : (wins_p1 ?? '—')}</span></div>
+            <div className="h2h-vs" />
+            <div className="h2h-col-val h2h-val-p2 h2h-wins"><span className={bestCls(wins_p2, wins_p1)}>{isLoading ? '⋯' : (wins_p2 ?? '—')}</span></div>
+          </div>
 
           {/* Surface row — click to filter matches by surface */}
-          {surfKeys.length > 0 && <>
-            <button
-              className={`h2h-label h2h-filter-btn${surfFilter === 'surface' ? ' h2h-filter-active' : ''}`}
-              onClick={() => setSurfFilter('surface')}
-            >{surfLabel}</button>
-            <div className="h2h-col-val h2h-wins"><span className={bestCls(surf_p1, surf_p2)}>{isLoading ? '⋯' : surf_p1}</span></div>
-            <div />
-            <div className="h2h-col-val h2h-wins"><span className={bestCls(surf_p2, surf_p1)}>{isLoading ? '⋯' : surf_p2}</span></div>
-          </>}
+          {surfKeys.length > 0 && (
+            <div className="h2h-row">
+              <button
+                className={`h2h-label h2h-filter-btn${surfFilter === 'surface' ? ' h2h-filter-active' : ''}`}
+                onClick={() => setSurfFilter('surface')}
+              >{surfLabel}</button>
+              <div className="h2h-col-val h2h-val-p1 h2h-wins"><span className={bestCls(surf_p1, surf_p2)}>{isLoading ? '⋯' : surf_p1}</span></div>
+              <div className="h2h-vs" />
+              <div className="h2h-col-val h2h-val-p2 h2h-wins"><span className={bestCls(surf_p2, surf_p1)}>{isLoading ? '⋯' : surf_p2}</span></div>
+            </div>
+          )}
 
           {/* Divider */}
           <div className="h2h-divider" />
 
           {/* Rank row */}
-          {showRank && <>
-            <div className="h2h-label">{tournGender === 'F' ? 'Rank (WTA)' : 'Rank (ATP)'}</div>
-            <div className="h2h-col-val h2h-meta-val"><span className={bestCls(rank_p1, rank_p2, true)}>{rank_p1 != null ? `#${rank_p1}` : '—'}</span></div>
-            <div />
-            <div className="h2h-col-val h2h-meta-val"><span className={bestCls(rank_p2, rank_p1, true)}>{rank_p2 != null ? `#${rank_p2}` : '—'}</span></div>
-          </>}
+          {showRank && (
+            <div className="h2h-row">
+              <div className="h2h-label">{tournGender === 'F' ? 'Rank (WTA)' : 'Rank (ATP)'}</div>
+              <div className="h2h-col-val h2h-val-p1 h2h-meta-val"><span className={bestCls(rank_p1, rank_p2, true)}>{rank_p1 != null ? `#${rank_p1}` : '—'}</span></div>
+              <div className="h2h-vs" />
+              <div className="h2h-col-val h2h-val-p2 h2h-meta-val"><span className={bestCls(rank_p2, rank_p1, true)}>{rank_p2 != null ? `#${rank_p2}` : '—'}</span></div>
+            </div>
+          )}
 
           {/* Elo row */}
-          {showElo && <>
-            <div className="h2h-label h2h-label-with-info">
-              Rank (Elo)
-              <button className="h2h-info-btn" onClick={e => { e.stopPropagation(); setShowEloInfo(true) }} aria-label="About Elo">ⓘ</button>
+          {showElo && (
+            <div className="h2h-row">
+              <div className="h2h-label h2h-label-with-info">
+                Rank (Elo)
+                <button className="h2h-info-btn" onClick={e => { e.stopPropagation(); setShowEloInfo(true) }} aria-label="About Elo">ⓘ</button>
+              </div>
+              <div className="h2h-col-val h2h-val-p1 h2h-meta-val"><span className={bestCls(elo_rank_p1, elo_rank_p2, true)}>{elo_rank_p1 != null ? `#${elo_rank_p1}` : '—'}</span></div>
+              <div className="h2h-vs" />
+              <div className="h2h-col-val h2h-val-p2 h2h-meta-val"><span className={bestCls(elo_rank_p2, elo_rank_p1, true)}>{elo_rank_p2 != null ? `#${elo_rank_p2}` : '—'}</span></div>
             </div>
-            <div className="h2h-col-val h2h-meta-val"><span className={bestCls(elo_rank_p1, elo_rank_p2, true)}>{elo_rank_p1 != null ? `#${elo_rank_p1}` : '—'}</span></div>
-            <div />
-            <div className="h2h-col-val h2h-meta-val"><span className={bestCls(elo_rank_p2, elo_rank_p1, true)}>{elo_rank_p2 != null ? `#${elo_rank_p2}` : '—'}</span></div>
-          </>}
+          )}
 
           {/* Age row */}
-          {showAge && <>
-            <div className="h2h-label">Age</div>
-            <div className="h2h-col-val h2h-meta-val">{age_p1 ?? '—'}</div>
-            <div />
-            <div className="h2h-col-val h2h-meta-val">{age_p2 ?? '—'}</div>
-          </>}
+          {showAge && (
+            <div className="h2h-row">
+              <div className="h2h-label">Age</div>
+              <div className="h2h-col-val h2h-val-p1 h2h-meta-val">{age_p1 ?? '—'}</div>
+              <div className="h2h-vs" />
+              <div className="h2h-col-val h2h-val-p2 h2h-meta-val">{age_p2 ?? '—'}</div>
+            </div>
+          )}
 
           {/* Form row — last 10 results, most recent first */}
-          {showForm && <>
-            <div className="h2h-label">Form</div>
-            <div className="h2h-col-val"><FormRow matches={form_p1} /></div>
-            <div />
-            <div className="h2h-col-val"><FormRow matches={form_p2} /></div>
-          </>}
+          {showForm && (
+            <div className="h2h-row h2h-row--form">
+              <div className="h2h-label">Form</div>
+              <div className="h2h-col-val h2h-val-p1"><FormRow matches={form_p1} /></div>
+              <div className="h2h-vs" />
+              <div className="h2h-col-val h2h-val-p2"><FormRow matches={form_p2} /></div>
+            </div>
+          )}
         </div>
 
         {isLoading && <div className="h2h-loading">Loading H2H data…</div>}
