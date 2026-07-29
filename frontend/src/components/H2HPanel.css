@@ -25,8 +25,10 @@
 
 /* ── Nav bar: ‹ › then the round, close at the far right ── */
 .h2h-navbar {
+  position: relative;   /* anchor for the centred round name */
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.6rem;
   padding: 0.5rem 0.6rem 0.5rem 0.55rem;
   border-bottom: 1px solid #eee;
@@ -35,28 +37,49 @@
 
 .h2h-nav-arrows {
   display: flex;
-  gap: 0.15rem;
+  gap: 0.3rem;
   flex-shrink: 0;
 }
 
-.h2h-nav-btn {
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 6px;
+/* Close is the same control as the arrows — same box, same weight — so it is
+   styled from the same rule rather than kept as a bare glyph. */
+.h2h-nav-btn,
+.h2h-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  border: 1.5px solid var(--border-strong, #cdd5d9);
+  border-radius: 7px;
   color: var(--green-dark, #1b4332);
-  font-size: 1.05rem;
+  font-weight: 600;
   line-height: 1;
   cursor: pointer;
-  padding: 0.2rem 0.5rem;
-  min-width: 30px;
+  min-width: 34px;
+  height: 32px;
+  padding: 0 0.5rem;
 }
-.h2h-nav-btn:hover:not(:disabled) { background: #f0f4f2; }
+.h2h-nav-btn { font-size: 1.5rem; }
+/* ✕ is a smaller glyph than ‹ › — matched by eye, not by number, so the two
+   buttons carry the same visual weight at the same box size. */
+.h2h-close { font-size: 0.95rem; }
+
+.h2h-nav-btn:hover:not(:disabled),
+.h2h-close:hover {
+  background: #f0f4f2;
+  border-color: var(--green);
+}
 .h2h-nav-btn:disabled { opacity: 0.3; cursor: default; }
 
+/* Centred on the bar itself, not on the space left between the arrows and the
+   close button — those two sides aren't the same width, so a flex-centred
+   label would sit visibly off centre. */
 .h2h-round-name {
-  flex: 1;
-  min-width: 0;
-  font-size: 0.7rem;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 11rem);
+  font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.07em;
@@ -64,21 +87,10 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  pointer-events: none;
 }
 
-/* ── Close button ── */
-.h2h-close {
-  background: transparent;
-  border: none;
-  font-size: 1rem;
-  color: #888;
-  cursor: pointer;
-  line-height: 1;
-  padding: 0.3rem 0.45rem;
-  border-radius: 4px;
-  flex-shrink: 0;
-}
-.h2h-close:hover { background: #f0f0f0; color: #333; }
+.h2h-close { flex-shrink: 0; }
 
 /* ── Header ── */
 /*  One grid per row: [label] [p1-value] [vs] [p2-value].
@@ -177,13 +189,16 @@
 }
 
 /* The pick. Border rather than a fill so the flag and the name keep their own
-   colours — a solid green block would swallow both. */
+   colours — a solid green block would swallow both.
+   The tint is mixed from #2e9e5b, the same green the form squares use for a
+   win, not from the muted forest --green: at the low alpha a tint needs, that
+   darker hue desaturates to something that just reads as grey. */
 .h2h-player-name--picked {
   border-color: var(--green-dark, #1b4332);
-  background: rgba(45, 106, 79, 0.08);
+  background: #d3edde;
 }
 .h2h-player-name--picked.h2h-player-name--pickable:hover {
-  background: rgba(45, 106, 79, 0.14);
+  background: #c2e6d1;
 }
 
 /* Overall wins — big green number */
@@ -467,22 +482,24 @@
    nothing. */
 @media (max-width: 560px) {
 
-  /* Bottom sheet rather than a centred box. The centred panel had nowhere to
-     grow — it overflowed the viewport and cut the match list off mid-row. */
+  /* Anchored to the top of the viewport. A centred box had nowhere to grow and
+     overflowed; anchoring puts the panel's own controls — the arrows and the
+     round it is showing — in a fixed place, so they stay put while stepping
+     through matches of different heights instead of sliding around. */
   .h2h-backdrop {
     padding: 0;
-    align-items: flex-end;
+    align-items: flex-start;
   }
 
   .h2h-panel {
     width: 100%;
     max-height: 88dvh;
-    border-radius: 14px 14px 0 0;
-    animation: h2h-sheet-up 0.22s ease-out;
+    border-radius: 0 0 14px 14px;
+    animation: h2h-sheet-down 0.22s ease-out;
   }
 
-  @keyframes h2h-sheet-up {
-    from { transform: translateY(100%); }
+  @keyframes h2h-sheet-down {
+    from { transform: translateY(-100%); }
     to   { transform: translateY(0); }
   }
 
@@ -493,22 +510,25 @@
   }
 
   .h2h-navbar {
-    padding: 0.45rem 0.5rem;
+    /* max() so this is a no-op in a browser tab and only pays out when the
+       panel really is against the top of the screen (installed to home screen,
+       where the notch would otherwise sit over the arrows). */
+    padding: max(0.45rem, env(safe-area-inset-top)) 0.5rem 0.45rem;
     gap: 0.5rem;
   }
 
-  /* 44px targets — these are the two controls most likely to be tapped
-     repeatedly, and the close is right beside them. */
-  .h2h-nav-btn {
-    font-size: 1.25rem;
-    padding: 0.4rem 0.75rem;
-    min-width: 44px;
-  }
-
+  /* 44px targets — all three are tapped repeatedly and sit next to each other */
+  .h2h-nav-btn,
   .h2h-close {
-    font-size: 1.05rem;
-    padding: 0.5rem 0.6rem;
+    min-width: 46px;
+    height: 42px;
+    padding: 0 0.7rem;
   }
+  .h2h-nav-btn { font-size: 1.7rem; }
+  .h2h-close   { font-size: 1.1rem; }
+
+  /* Two arrows plus the close button need more clearance here than on desktop */
+  .h2h-round-name { max-width: calc(100% - 10.5rem); }
 
   /* ── The spine ──
      p1 | LABEL | p2. The label leaves the left gutter and becomes the axis the

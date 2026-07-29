@@ -557,7 +557,7 @@ export default function BracketView({ tournament, matches, players, picks, onPic
         beforeDrawId={tournament?.id}
         beforeRound={h2hPlayers.match?.round_number}
         match={h2hPlayers.match}
-        pickedId={picks[h2hPlayers.match?.id] ?? null}
+        picks={picks}
         onPick={onPick}
         canPick={mode === 'picks' && !locked}
         onPrev={h2hNav.prev ? () => setH2HPlayers(h2hNav.prev) : null}

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { getH2H, getPlayerForm } from '../api/players'
 import './H2HPanel.css'
 
@@ -142,6 +142,11 @@ function fmtFormDate(iso) {
 const FORM_POPUP_W = 230
 const FORM_POPUP_EDGE = 8
 
+// Longest the panel will keep showing the previous match while waiting for the
+// next one's data. Past this the wait is doing more harm than the flicker it
+// avoids — see the commit effect in H2HPanel.
+const SWAP_WAIT_MS = 2500
+
 function FormBox({ m }) {
   const ref = useRef(null)
   const [pos, setPos] = useState(null)
@@ -234,16 +239,24 @@ function EloInfoPopup({ onClose }) {
 }
 
 export default function H2HPanel({
-  slug1, slug2, player1, player2, tournSurface, tournGender, beforeDrawId, beforeRound, onClose,
-  match = null, pickedId = null, onPick = null, canPick = false, onPrev = null, onNext = null,
+  // Suffixed "In" so the difference is impossible to miss: these describe the
+  // match being navigated TO. Everything rendered below comes from `view`.
+  slug1: slug1In, slug2: slug2In, player1: player1In, player2: player2In,
+  beforeDrawId: beforeDrawIdIn, beforeRound: beforeRoundIn, match: matchIn = null,
+  tournSurface, tournGender, onClose,
+  picks = null, onPick = null, canPick = false, onPrev = null, onNext = null,
 }) {
   const [surfFilter, setSurfFilter] = useState('all') // 'all' | 'surface'
   const [showEloInfo, setShowEloInfo] = useState(false)
 
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ['h2h', slug1, slug2],
-    queryFn: () => getH2H(slug1, slug2),
+  // The queries are keyed on the INCOMING match so navigation starts fetching
+  // straight away, but keepPreviousData means they keep serving the match
+  // currently on screen until the new one has arrived.
+  const { data, isLoading, isError, isPlaceholderData } = useQuery({
+    queryKey: ['h2h', slug1In, slug2In],
+    queryFn: () => getH2H(slug1In, slug2In),
     staleTime: 15 * 60 * 1000,
+    placeholderData: keepPreviousData,
   })
 
   // Form is sourced from our own db (not the TE scrape behind getH2H above), so
@@ -251,18 +264,58 @@ export default function H2HPanel({
   // beforeDrawId/beforeRound restrict Form to results before that match's date,
   // so viewing an old draw shows form leading up to it, not each player's
   // current form.
-  const { data: form_p1 } = useQuery({
-    queryKey: ['h2h-form', slug1, beforeDrawId, beforeRound],
-    queryFn: () => getPlayerForm(slug1, { beforeDrawId, beforeRound }),
-    enabled: !!slug1,
+  const { data: form_p1, isPlaceholderData: f1Stale } = useQuery({
+    queryKey: ['h2h-form', slug1In, beforeDrawIdIn, beforeRoundIn],
+    queryFn: () => getPlayerForm(slug1In, { beforeDrawId: beforeDrawIdIn, beforeRound: beforeRoundIn }),
+    enabled: !!slug1In,
     staleTime: 5 * 60 * 1000,
+    placeholderData: keepPreviousData,
   })
-  const { data: form_p2 } = useQuery({
-    queryKey: ['h2h-form', slug2, beforeDrawId, beforeRound],
-    queryFn: () => getPlayerForm(slug2, { beforeDrawId, beforeRound }),
-    enabled: !!slug2,
+  const { data: form_p2, isPlaceholderData: f2Stale } = useQuery({
+    queryKey: ['h2h-form', slug2In, beforeDrawIdIn, beforeRoundIn],
+    queryFn: () => getPlayerForm(slug2In, { beforeDrawId: beforeDrawIdIn, beforeRound: beforeRoundIn }),
+    enabled: !!slug2In,
     staleTime: 5 * 60 * 1000,
+    placeholderData: keepPreviousData,
   })
+
+  // Everything rendered comes from `view`, never from the *In props.
+  //
+  // Arrowing to the next match used to swap the props immediately, which blew
+  // every field away and refilled it a moment later — the panel visibly
+  // collapsed and jumped. Now the incoming match is held back until all three
+  // queries have it, then the whole panel changes at once. While it's in flight
+  // the previous match stays on screen intact, because the queries are still
+  // serving its data.
+  //
+  // isPlaceholderData means exactly "this data belongs to the previous key", so
+  // committing only when all three are false is what stops the names, the H2H
+  // numbers and the two form rows from ever describing different matches.
+  const incomingRef = useRef(null)
+  incomingRef.current = {
+    slug1: slug1In, slug2: slug2In, player1: player1In, player2: player2In,
+    match: matchIn, beforeDrawId: beforeDrawIdIn, beforeRound: beforeRoundIn,
+  }
+
+  const settling = isPlaceholderData || f1Stale || f2Stale
+  const [view, setView] = useState(() => incomingRef.current)
+
+  useEffect(() => {
+    if (!settling) {
+      setView(incomingRef.current)
+      return
+    }
+    // Holding the old match is only right while the new one is genuinely on its
+    // way. A slow or retrying query would otherwise strand the panel on the
+    // previous match with the arrows appearing to do nothing at all, which is a
+    // worse failure than the flicker this replaces. Give up waiting and show
+    // the new match with its fields filling in.
+    const t = setTimeout(() => setView(incomingRef.current), SWAP_WAIT_MS)
+    return () => clearTimeout(t)
+  }, [settling, slug1In, slug2In, matchIn?.id])
+
+  const { slug1, slug2, player1, player2, match, beforeDrawId, beforeRound } = view
+  const pickedId = picks && match ? (picks[match.id] ?? null) : null
   const showForm = (form_p1?.length ?? 0) > 0 || (form_p2?.length ?? 0) > 0
 
   const slug1IsA = data ? slug1 === data.slug_a : true

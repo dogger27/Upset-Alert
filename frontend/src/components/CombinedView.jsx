@@ -539,7 +539,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
           tournSurface={tournament?.surface} tournGender={tournament?.gender}
           beforeDrawId={tournament?.id} beforeRound={h2h.match?.round_number}
           match={h2h.match}
-          pickedId={picks?.[h2h.match?.id] ?? null}
+          picks={picks}
           onPick={onPick}
           canPick={!locked}
           onPrev={h2hNav.prev ? () => setH2H(h2hNav.prev) : null}
