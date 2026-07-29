@@ -22,9 +22,15 @@ html.h2h-modal-open body {
   background: rgba(0, 0, 0, 0.45);
   z-index: 200;
   display: flex;
-  align-items: center;
+  /* Pinned to a fixed top, not centred. Centring made the panel's top edge a
+     function of its own height, so arrowing between a match with one previous
+     meeting and one with six moved the whole window — including the arrows
+     being clicked. 7.5vh is where a centred panel sits once it reaches its
+     85vh cap, so the position is unchanged for the tallest case and every
+     shorter one now matches it. */
+  align-items: flex-start;
   justify-content: center;
-  padding: 1rem;
+  padding: 7.5vh 1rem 1rem;
   /* A scroll that runs past the end of the match list stops here instead of
      handing the rest of the gesture to the bracket underneath. */
   overscroll-behavior: contain;
