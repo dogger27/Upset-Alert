@@ -849,9 +849,12 @@ class ESPNMonitor:
                         )
                     )
                     if incomplete.scalar_one() == 0:
-                        from app.services.notifications import notify_round_complete
-                        asyncio.create_task(notify_round_complete(tournament.id, rn))
-                        logger.info("Round %d complete for tournament %d — notification queued", rn, tournament.id)
+                        # Records the round; the email is a weekly digest sent by
+                        # scheduler._notify_pending_round_digests once the week's
+                        # other draws have reached the same round.
+                        from app.services.notifications import record_round_complete
+                        asyncio.create_task(record_round_complete(tournament.id, rn))
+                        logger.info("Round %d complete for tournament %d — queued for digest", rn, tournament.id)
 
                 # Check whether the whole tournament is now complete
                 total_incomplete = await db.execute(

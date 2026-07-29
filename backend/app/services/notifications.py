@@ -9,6 +9,7 @@ independent of the caller's transaction.
 import asyncio
 import logging
 from collections import defaultdict
+from datetime import datetime, timezone as tz
 from typing import Optional
 
 from sqlalchemy import func, select
@@ -16,7 +17,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.security import create_unsubscribe_token
 from app.database import AsyncSessionLocal
-from app.services.email import API_BASE
+from app.services.email import API_BASE, _tournament_label
 from app.models.league import League, LeagueMember
 from app.models.notification import NotificationPreference
 from app.models.prediction import UserPrediction
@@ -79,205 +80,150 @@ def _match_score_str(match: Match) -> str:
     return ", ".join(parts)
 
 
-async def notify_round_complete(
-    tournament_id: int,
-    round_number: int,
-    only_user_ids: Optional[set] = None,
-    force: bool = False,
-) -> None:
+def _ordinal(n: int) -> str:
+    """1 -> '1st', 2 -> '2nd', 11 -> '11th'."""
+    if 10 <= n % 100 <= 20:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"
+
+
+async def record_round_complete(tournament_id: int, round_number: int) -> None:
     """
-    For every participant who opted into 'round_standings', send ONE email
-    showing their standing after this round in every qualifying group.
-    Groups / global with fewer than 2 participants are excluded.
+    Mark a round as finished, without emailing anyone yet.
+
+    Round emails are a weekly digest — one message covering every draw in the
+    week that has reached the same round — so detection and dispatch are
+    separate steps. This claims (draw_id, round_number) the moment the round
+    completes; scheduler._notify_pending_round_digests decides when the week's
+    batch is ready and sends it. The unique constraint makes the claim the
+    idempotency guard it always was: a re-triggered completion (a winner being
+    cleared and re-set by a later scrape) silently loses the race and no second
+    email is ever queued.
     """
     from sqlalchemy.exc import IntegrityError
-    from app.services.email import send_round_complete_notification
     from app.services.system_log import app_log
     from app.models.notification import RoundCompleteNotification
 
     async with AsyncSessionLocal() as db:
-        tournament = await db.get(Draw, tournament_id)
-        if not tournament:
-            return
-
-        already_sent = None if force else await db.scalar(
-            select(RoundCompleteNotification.id).where(
-                RoundCompleteNotification.draw_id == tournament_id,
-                RoundCompleteNotification.round_number == round_number,
-            )
-        )
-        if already_sent:
-            await app_log(
-                "warning", "notifications",
-                f"Round-complete email for round {round_number} of draw {tournament_id} "
-                f"already sent — resend blocked",
-                {"draw_id": tournament_id, "round_number": round_number},
-                dedup_key=f"round-complete-dupe-{tournament_id}-{round_number}",
+        db.add(RoundCompleteNotification(
+            draw_id=tournament_id, round_number=round_number, recipient_count=0,
+        ))
+        try:
+            await db.commit()
+        except IntegrityError:
+            await db.rollback()
+            logger.debug(
+                "Round %d of draw %d already recorded — not re-queued",
+                round_number, tournament_id,
             )
             return
+    await app_log("info", "notifications",
+                  f"Round {round_number} complete for draw {tournament_id} — queued for weekly digest",
+                  {"draw_id": tournament_id, "round_number": round_number})
 
-        round_name = _email_round_label(tournament.round_name(round_number))
-        is_final_round = round_number == tournament.num_rounds
-        t_name = tournament.name
-        t_year = tournament.year
-        m_res = await db.execute(
-            select(Match)
-            .options(selectinload(Match.player1), selectinload(Match.player2), selectinload(Match.winner))
-            # is_bye excluded: a bye is not a contest. It is stamped completed with
-            # an auto-advanced winner, and stray picks do exist on those rows, so
-            # scoring them hands out free points (see _persist_tournament_results).
-            .where(Match.draw_id == tournament_id, Match.status == "completed",
-                   Match.is_bye == False)  # noqa: E712
+
+async def _gather_round_payload(
+    db,
+    tournament: Draw,
+    round_number: int,
+) -> Optional[dict]:
+    """
+    Everything one draw's completed round contributes to the digest.
+
+    Returns None when there is nothing to report. Recipient selection is
+    deliberately NOT final here: the digest merges several draws first and only
+    then decides who to email, because a user may be eligible in one draw of the
+    week and not another.
+    """
+    round_name = _email_round_label(tournament.round_name(round_number))
+    is_final_round = round_number == tournament.num_rounds
+
+    m_res = await db.execute(
+        select(Match)
+        .options(selectinload(Match.player1), selectinload(Match.player2), selectinload(Match.winner))
+        # is_bye excluded: a bye is not a contest. It is stamped completed with
+        # an auto-advanced winner, and stray picks do exist on those rows, so
+        # scoring them hands out free points (see _persist_tournament_results).
+        .where(Match.draw_id == tournament.id, Match.status == "completed",
+               Match.is_bye == False)  # noqa: E712
+    )
+    completed_matches = m_res.scalars().all()
+
+    round_matches = sorted(
+        (m for m in completed_matches
+         if m.round_number == round_number and not m.is_bye and m.winner_id),
+        key=lambda m: m.match_number,
+    )
+    round_match_info = []  # (match_id, winner_id, winner_last, loser_last, score)
+    for m in round_matches:
+        winner_entry = m.winner
+        loser_entry = m.player2 if m.winner_id == m.player1_id else m.player1
+        if not winner_entry or not loser_entry:
+            continue
+        round_match_info.append((
+            m.id, m.winner_id, _last_name(winner_entry.name), _last_name(loser_entry.name),
+            _match_score_str(m),
+        ))
+
+    total_res = await db.execute(
+        select(func.count()).where(Match.draw_id == tournament.id, Match.is_bye == False)  # noqa: E712
+    )
+    total_matches = total_res.scalar_one()
+    if total_matches == 0:
+        return None
+
+    pred_res = await db.execute(
+        select(UserPrediction).where(
+            UserPrediction.draw_id == tournament.id,
+            UserPrediction.predicted_winner_id.isnot(None),
         )
-        completed_matches = m_res.scalars().all()
+    )
+    preds_by_user: dict[int, list] = defaultdict(list)
+    for p in pred_res.scalars().all():
+        preds_by_user[p.user_id].append(p)
 
-        # This round's results, in bracket order, for the email's results widget.
-        # Per-user correctness (vs. this recipient's own pick) is layered on below,
-        # once we know each recipient's predictions.
-        round_matches = sorted(
-            (m for m in completed_matches if m.round_number == round_number and not m.is_bye and m.winner_id),
-            key=lambda m: m.match_number,
-        )
-        round_match_info = []  # (match_id, winner_id, winner_last, loser_last, score)
-        for m in round_matches:
-            winner_entry = m.winner
-            loser_entry = m.player2 if m.winner_id == m.player1_id else m.player1
-            if not winner_entry or not loser_entry:
-                continue
-            round_match_info.append((
-                m.id, m.winner_id, _last_name(winner_entry.name), _last_name(loser_entry.name), _match_score_str(m),
-            ))
+    eligible = {uid for uid, preds in preds_by_user.items() if len(preds) >= total_matches}
+    if not eligible:
+        return None
 
-        # Total non-bye matches in the draw
-        total_res = await db.execute(
-            select(func.count()).where(
-                Match.draw_id == tournament_id,
-                Match.is_bye == False,
-            )
-        )
-        total_matches = total_res.scalar_one()
-        if total_matches == 0:
-            return
+    global_scores = {
+        uid: score_user(uid, preds_by_user[uid], completed_matches, tournament, None)
+        for uid in eligible
+    }
+    global_ranked = rank_users(list(global_scores.values()), tournament.num_rounds)
 
-        # Predictions
-        pred_res = await db.execute(
-            select(UserPrediction).where(
-                UserPrediction.draw_id == tournament_id,
-                UserPrediction.predicted_winner_id.isnot(None),
-            )
-        )
-        all_preds = pred_res.scalars().all()
-
-        preds_by_user: dict[int, list] = defaultdict(list)
-        for p in all_preds:
-            preds_by_user[p.user_id].append(p)
-
-        eligible = {uid for uid, preds in preds_by_user.items() if len(preds) >= total_matches}
-        if not eligible:
-            return
-
-        # Users opted into round_standings who participated.
-        # For the final round: exclude users who also have tournament_end enabled —
-        # they'll get the tournament-completion email and don't need a duplicate.
-        round_prefs_res = await db.execute(
-            select(NotificationPreference.user_id)
-            .join(User, User.id == NotificationPreference.user_id)
-            .where(
-                NotificationPreference.pref_key == "round_standings",
-                NotificationPreference.user_id.in_(eligible),
-                User.email_verified == True,
-            )
-        )
-        round_pref_ids = {r[0] for r in round_prefs_res.all()}
-
-        if only_user_ids is not None:
-            # Forced/test send: target these users directly (must still be eligible so
-            # they appear in the standings), ignoring opt-in / verified filters.
-            to_notify = eligible & only_user_ids
-        elif is_final_round:
-            # Find who has tournament_end; subtract them — they'll get the completion email
-            end_pref_res = await db.execute(
-                select(NotificationPreference.user_id)
-                .where(
-                    NotificationPreference.pref_key == "tournament_end",
-                    NotificationPreference.user_id.in_(round_pref_ids),
-                )
-            )
-            has_end_pref = {r[0] for r in end_pref_res.all()}
-            to_notify = round_pref_ids - has_end_pref
-        else:
-            to_notify = round_pref_ids
-        if not to_notify:
-            return
-
-        # Claim this (draw, round) before doing any more work / sending anything.
-        # The unique constraint catches a concurrent duplicate trigger; the
-        # already_sent check above catches one that arrives later (e.g. next day).
-        # A forced/test send does not claim, so it can't block the real batch.
-        if not force:
-            db.add(RoundCompleteNotification(
-                draw_id=tournament_id, round_number=round_number, recipient_count=len(to_notify),
-            ))
-            try:
-                await db.commit()
-            except IntegrityError:
-                await db.rollback()
-                await app_log(
-                    "warning", "notifications",
-                    f"Round-complete email for round {round_number} of draw {tournament_id} "
-                    f"already sent — resend blocked (race)",
-                    {"draw_id": tournament_id, "round_number": round_number},
-                    dedup_key=f"round-complete-dupe-{tournament_id}-{round_number}",
-                )
-                return
-        logger.info(
-            "Round-complete email batch claimed for draw %d round %d (%s) — %d recipient(s)",
-            tournament_id, round_number, round_name, len(to_notify),
-        )
-
-        # Global scores
-        global_scores = {
+    lg_res = await db.execute(select(League).options(selectinload(League.members)))
+    league_data: dict[int, dict] = {}
+    for lg in lg_res.scalars().all():
+        participants = eligible & {m.user_id for m in lg.members}
+        if len(participants) < 2:
+            continue
+        lg_scores = {
             uid: score_user(uid, preds_by_user[uid], completed_matches, tournament, None)
-            for uid in eligible
+            for uid in participants
         }
-        global_ranked = rank_users(list(global_scores.values()), tournament.num_rounds)
+        lg_ranked = rank_users(list(lg_scores.values()), tournament.num_rounds)
+        league_data[lg.id] = {
+            "name": lg.name,
+            "ranked": lg_ranked,
+            "member_ids": {s.user_id for s in lg_ranked},
+        }
 
-        # Per-league scores (≥2 participants only)
-        lg_res = await db.execute(
-            select(League).options(selectinload(League.members))
-        )
-        all_leagues = lg_res.scalars().all()
+    user_league_ids: dict[int, list] = defaultdict(list)
+    for lg_id, data in league_data.items():
+        for uid in data["member_ids"]:
+            user_league_ids[uid].append(lg_id)
 
-        league_data: dict[int, dict] = {}
-        for lg in all_leagues:
-            member_ids = {m.user_id for m in lg.members}
-            participants = eligible & member_ids
-            if len(participants) < 2:
-                continue
-            lg_scores = {
-                uid: score_user(uid, preds_by_user[uid], completed_matches, tournament, None)
-                for uid in participants
-            }
-            lg_ranked = rank_users(list(lg_scores.values()), tournament.num_rounds)
-            league_data[lg.id] = {
-                "name":   lg.name,
-                "ranked": lg_ranked,  # rank-ordered UserScore list
-                "member_ids": {s.user_id for s in lg_ranked},
-            }
-
-        user_league_ids: dict[int, list] = defaultdict(list)
-        for lg_id, data in league_data.items():
-            for uid in data["member_ids"]:
-                user_league_ids[uid].append(lg_id)
-
-        users_res = await db.execute(
-            select(User.id, User.email, User.username).where(User.id.in_(eligible))
-        )
-        user_info = {r[0]: {"email": r[1], "username": r[2]} for r in users_res.all()}
+    users_res = await db.execute(
+        select(User.id, User.username).where(User.id.in_(eligible))
+    )
+    usernames = {r[0]: r[1] for r in users_res.all()}
 
     def _row_of(ranked: list, idx: int, me: int) -> tuple:
         s = ranked[idx]
-        return (idx + 1, user_info.get(s.user_id, {}).get("username", "—"), s.total_points, s.user_id == me)
+        return (idx + 1, usernames.get(s.user_id, "—"), s.total_points, s.user_id == me)
 
     def _standings_rows(ranked: list, me: int, limit: Optional[int] = None) -> list[tuple]:
         """Competitor list for a group as (rank, username, score, is_you).
@@ -285,8 +231,7 @@ async def notify_round_complete(
         With `limit` set, shows the top `limit` competitors — unless the
         recipient sits outside it, in which case the last of those slots goes
         to them, preceded by a "…" gap row: (None, '…', None, False). So the
-        recipient is always present and the block never exceeds `limit`
-        competitors.
+        recipient is always present and the block never exceeds `limit`.
         """
         if limit is None or len(ranked) <= limit:
             return [_row_of(ranked, i, me) for i in range(len(ranked))]
@@ -298,14 +243,11 @@ async def notify_round_complete(
         rows.append(_row_of(ranked, me_idx, me))
         return rows
 
-    for uid in to_notify:
-        email = user_info.get(uid, {}).get("email")
-        if not email:
-            continue
+    global_place = {s.user_id: i + 1 for i, s in enumerate(global_ranked)}
+    label = _tournament_label(tournament.name, tournament.category or "", tournament.gender or "M")
 
-        # This recipient's own pick correctness per match, for the results widget's
-        # green check / red X — the winner list is shared, but "did I get it right"
-        # is per-user.
+    per_user: dict[int, dict] = {}
+    for uid in eligible:
         user_preds_by_match = {p.match_id: p.predicted_winner_id for p in preds_by_user.get(uid, [])}
         match_results = [
             (w_last, l_last, score, user_preds_by_match.get(mid) == winner_id)
@@ -313,35 +255,215 @@ async def notify_round_complete(
         ]
 
         leagues = []
-        my_league_ids = sorted(user_league_ids.get(uid, []))
         if len(eligible) >= 2:
             # Global shows at most 9 competitors, always including the recipient —
-            # _standings_rows anchors the leaders and trailers and drops in a "…"
-            # gap row when the recipient sits outside that head.
+            # _standings_rows anchors the leaders and drops in a "…" gap row when
+            # the recipient sits outside that head.
             g_limit = GLOBAL_ROWS if len(global_ranked) > GLOBAL_ROWS else None
             leagues.append(("Global", _standings_rows(global_ranked, uid, g_limit)))
-        for lg_id in my_league_ids:
+        for lg_id in sorted(user_league_ids.get(uid, [])):
             data = league_data[lg_id]
             leagues.append((data["name"], _standings_rows(data["ranked"], uid)))
-
         if not leagues:
             continue
-        unsubscribe_url = (
-            f"{API_BASE}/unsubscribe?token="
-            f"{create_unsubscribe_token(uid, 'round_standings')}"
-        )
+
+        hits = sum(1 for r in match_results if r[3])
+        place = global_place.get(uid)
+        per_user[uid] = {
+            "section": {
+                "id": tournament.id,
+                "label": label,
+                "city": tournament.city,
+                "round_name": round_name,
+                "leagues": leagues,
+                "match_results": match_results,
+            },
+            "summary": (
+                label,
+                f"{hits}/{len(match_results)}",
+                f"{_ordinal(place)} of {len(global_ranked)}" if place else "—",
+            ),
+        }
+
+    return {
+        "id": tournament.id,
+        "round_number": round_number,
+        "round_name": round_name,
+        "is_final_round": is_final_round,
+        "eligible": eligible,
+        "per_user": per_user,
+    }
+
+
+async def notify_round_complete_digest(
+    entries: list[tuple],
+    is_followup: bool = False,
+    total_in_week: Optional[int] = None,
+    only_user_ids: Optional[set] = None,
+    claim: bool = True,
+) -> None:
+    """
+    Send ONE round-completion email per user, covering every draw in `entries`.
+
+    entries: [(draw_id, round_number), ...] — all the same round *label* in the
+    same tennis week. Round label rather than number, because the same name sits
+    at a different number in different draw sizes: R32 is round 1 of a 32-draw
+    and round 3 of a 128-draw.
+
+    Recipients are unioned across the draws and then sliced back per user: a
+    user eligible in two of the week's three draws gets those two sections and
+    a two-row summary, not a blank third.
+    """
+    from sqlalchemy import update as sa_update
+    from app.services.email import send_round_complete_digest
+    from app.services.system_log import app_log
+    from app.models.notification import RoundCompleteNotification
+
+    if not entries:
+        return
+
+    async with AsyncSessionLocal() as db:
+        payloads = []
+        for draw_id, round_number in entries:
+            tournament = await db.get(Draw, draw_id)
+            if not tournament:
+                continue
+            payload = await _gather_round_payload(db, tournament, round_number)
+            if payload:
+                payloads.append(payload)
+        if not payloads:
+            return
+
+        round_name = payloads[0]["round_name"]
+        starts = [
+            d.start_date for d in
+            (await db.execute(select(Draw).where(Draw.id.in_([p["id"] for p in payloads])))).scalars().all()
+            if d.start_date
+        ]
+        week_start = min(starts) if starts else None
+        week_label = f"{week_start.strftime('%B')} {week_start.day}" if week_start else "this week"
+
+        # Everyone eligible in at least one of the week's draws.
+        candidates: set[int] = set()
+        for p in payloads:
+            candidates |= set(p["per_user"].keys())
+        if not candidates:
+            return
+
+        if only_user_ids is not None:
+            # Forced/test send: target these directly, ignoring opt-in/verified.
+            to_notify = candidates & only_user_ids
+        else:
+            pref_res = await db.execute(
+                select(NotificationPreference.user_id)
+                .join(User, User.id == NotificationPreference.user_id)
+                .where(
+                    NotificationPreference.pref_key == "round_standings",
+                    NotificationPreference.user_id.in_(candidates),
+                    User.email_verified == True,  # noqa: E712
+                )
+            )
+            to_notify = {r[0] for r in pref_res.all()}
+
+            # A draw at its final round is covered by the tournament-completion
+            # email for anyone who takes that one, so those users must not get
+            # the same standings twice — but only that draw drops out of their
+            # digest, not the whole email.
+            final_ids = {p["id"] for p in payloads if p["is_final_round"]}
+            if final_ids:
+                end_res = await db.execute(
+                    select(NotificationPreference.user_id).where(
+                        NotificationPreference.pref_key == "tournament_end",
+                        NotificationPreference.user_id.in_(to_notify),
+                    )
+                )
+                has_end_pref = {r[0] for r in end_res.all()}
+            else:
+                has_end_pref = set()
+
+        if only_user_ids is not None:
+            has_end_pref = set()
+            final_ids = set()
+
+        emails_res = await db.execute(select(User.id, User.email).where(User.id.in_(to_notify)))
+        emails = {r[0]: r[1] for r in emails_res.all()}
+
+        if claim:
+            now = datetime.now(tz.utc)
+            await db.execute(
+                sa_update(RoundCompleteNotification)
+                .where(
+                    RoundCompleteNotification.draw_id.in_([p["id"] for p in payloads]),
+                    RoundCompleteNotification.round_number.in_([p["round_number"] for p in payloads]),
+                    RoundCompleteNotification.digest_sent_at.is_(None),
+                )
+                .values(digest_sent_at=now, recipient_count=len(to_notify))
+            )
+            await db.commit()
+
+    if not to_notify:
+        logger.debug("Round digest %s week of %s: no opted-in recipients", round_name, week_label)
+        return
+
+    reached = len(payloads)
+    span = total_in_week if total_in_week is not None else reached
+
+    sent = 0
+    for uid in to_notify:
+        email = emails.get(uid)
+        if not email:
+            continue
+        sections, summary_rows = [], []
+        for p in payloads:
+            if uid in has_end_pref and p["id"] in final_ids:
+                continue
+            entry = p["per_user"].get(uid)
+            if not entry:
+                continue
+            sections.append(entry["section"])
+            summary_rows.append(entry["summary"])
+        if not sections:
+            continue
         try:
-            await send_round_complete_notification(
-                email, t_name, t_year, tournament_id, round_name, leagues,
-                category=tournament.category or "", gender=tournament.gender or "M",
-                unsubscribe_url=unsubscribe_url, match_results=match_results,
+            await send_round_complete_digest(
+                email, sections, round_name, week_label,
+                reached=reached, total_in_week=span, summary_rows=summary_rows,
+                unsubscribe_url=(
+                    f"{API_BASE}/unsubscribe?token="
+                    f"{create_unsubscribe_token(uid, 'round_standings')}"
+                ),
+                is_followup=is_followup,
             )
-            logger.info(
-                "Round-complete email sent to user %d (%d group(s)) — %d %s %s",
-                uid, len(leagues), t_year, t_name, round_name,
-            )
+            sent += 1
         except Exception as exc:
-            logger.warning("Failed to send round-complete email to user %d: %s", uid, exc)
+            logger.warning("Failed to send round digest to user %d: %s", uid, exc)
+
+    await app_log("info", "notifications",
+                  f"Round-complete {'follow-up' if is_followup else 'digest'} ({round_name}, week of "
+                  f"{week_label}) sent to {sent} user(s) covering {reached} draw(s)",
+                  {"draw_ids": [p["id"] for p in payloads], "round_name": round_name,
+                   "recipient_count": sent, "is_followup": is_followup})
+
+
+async def notify_round_complete(
+    tournament_id: int,
+    round_number: int,
+    only_user_ids: Optional[set] = None,
+    force: bool = False,
+) -> None:
+    """Single-draw immediate send — the admin/test path (send_test_round_email.py).
+
+    The real pipeline no longer goes through here: espn_monitor records the
+    round and the scheduler batches it into the week's digest. This renders the
+    same template with one section and never claims, so a test send can't
+    suppress the genuine digest.
+    """
+    await notify_round_complete_digest(
+        [(tournament_id, round_number)],
+        only_user_ids=only_user_ids,
+        claim=not force,
+        total_in_week=1,
+    )
 
 
 # ---------------------------------------------------------------------------

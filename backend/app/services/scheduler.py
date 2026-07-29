@@ -446,6 +446,121 @@ async def _notify_pending_draw_releases() -> None:
                 len(batches), sum(len(ids) for ids, _ in batches))
 
 
+# How long a week's round digest waits for the draws still playing that round.
+# Same shape as DRAW_BATCH_MAX_LAG and the same reasoning: waiting is what makes
+# this one email instead of four, but a rain-delayed draw must not hold the
+# standings hostage indefinitely. Late finishers get a follow-up.
+ROUND_DIGEST_MAX_LAG = timedelta(days=1)
+
+
+async def _notify_pending_round_digests() -> None:
+    """
+    Weekly round-completion digest dispatch.
+
+    espn_monitor records each round the moment it completes
+    (notifications.record_round_complete); this decides when a week's batch is
+    worth sending. Draws in a week finish the same round hours or days apart, so
+    a per-draw email meant four messages for one afternoon of tennis.
+
+    Grouping is by round *label*, not round number: R32 is round 1 of a 32-draw
+    and round 3 of a 128-draw, so the same name sits at different numbers and
+    grouping on the number would put unrelated rounds in one email.
+    """
+    from app.models.notification import RoundCompleteNotification
+    from app.services.notifications import notify_round_complete_digest
+
+    now = datetime.now(timezone.utc)
+    async with AsyncSessionLocal() as db:
+        pending = (await db.execute(
+            select(RoundCompleteNotification)
+            .where(RoundCompleteNotification.digest_sent_at.is_(None))
+        )).scalars().all()
+        if not pending:
+            return
+
+        draws = {
+            d.id: d for d in (await db.execute(
+                select(Draw).where(Draw.id.in_([p.draw_id for p in pending]))
+            )).scalars().all()
+        }
+
+        groups: dict[tuple, list] = {}
+        for p in pending:
+            d = draws.get(p.draw_id)
+            if not d:
+                continue
+            label = d.round_name(p.round_number)
+            key = (d.year, d.week, label) if d.week is not None else ("solo", p.draw_id, label)
+            groups.setdefault(key, []).append((p, d))
+
+        batches = []
+        for key, members in groups.items():
+            if key[0] == "solo":
+                p, d = members[0]
+                batches.append(([(d.id, p.round_number)], False, 1))
+                continue
+
+            year, week, label = key
+            siblings = (await db.execute(
+                select(Draw).where(Draw.year == year, Draw.week == week)
+            )).scalars().all()
+
+            # Which of the week's draws will ever produce this round label, and
+            # of those, which have not reported it yet. A draw whose bracket
+            # never contains this label (a 32-draw has no R128) is not a
+            # straggler and must not hold the batch.
+            in_scope, outstanding = [], []
+            for s in siblings:
+                rn = next((r for r in range(1, s.num_rounds + 1) if s.round_name(r) == label), None)
+                if rn is None:
+                    continue
+                in_scope.append(s)
+                reported = await db.scalar(
+                    select(RoundCompleteNotification.id).where(
+                        RoundCompleteNotification.draw_id == s.id,
+                        RoundCompleteNotification.round_number == rn,
+                    )
+                )
+                if not reported:
+                    outstanding.append(s)
+
+            # Already-sent siblings mean this week's digest for this round has
+            # gone; anything arriving now is a late finisher.
+            is_followup = await db.scalar(
+                select(RoundCompleteNotification.id).where(
+                    RoundCompleteNotification.draw_id.in_([s.id for s in in_scope]),
+                    RoundCompleteNotification.digest_sent_at.isnot(None),
+                    RoundCompleteNotification.round_number.in_([p.round_number for p, _ in members]),
+                )
+            ) is not None
+
+            oldest = min(p.sent_at for p, _ in members)
+            if oldest.tzinfo is None:
+                oldest = oldest.replace(tzinfo=timezone.utc)
+            lag_expired = (now - oldest) >= ROUND_DIGEST_MAX_LAG
+
+            if outstanding and not lag_expired:
+                logger.info(
+                    "Round digest %s for %s week %s held: %d ready, waiting on %s",
+                    label, year, week, len(members), [s.name for s in outstanding],
+                )
+                continue
+            batches.append((
+                [(d.id, p.round_number) for p, d in members],
+                is_followup,
+                len(in_scope),
+            ))
+
+    if not batches:
+        return
+    for entries, is_followup, span in batches:
+        asyncio.create_task(notify_round_complete_digest(
+            entries, is_followup=is_followup, total_in_week=span,
+        ))
+    logger.info("Round-complete digest: dispatched %d batch(es) covering %d draw-round(s)",
+                len(batches), sum(len(e) for e, _, _ in batches))
+
+
 # Re-alert cadence for the two draw-health checks below — long enough to not
 # spam on every run, short enough that a genuinely stuck tournament doesn't
 # go unnoticed for days (as Iași Open's title did before anyone looked).
@@ -637,6 +752,15 @@ def start_scheduler() -> None:
         "interval",
         minutes=10,
         id="notify_draw_releases",
+        misfire_grace_time=300,
+    )
+    # Weekly round-completion digest. 10 min matches the draw-release job: a
+    # round that completes the batch waits at most one tick before going out.
+    scheduler.add_job(
+        _notify_pending_round_digests,
+        "interval",
+        minutes=10,
+        id="notify_round_digests",
         misfire_grace_time=300,
     )
     # Sanity sweep for silent failures (released-but-not-open, wiki title
