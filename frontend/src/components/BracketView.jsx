@@ -12,7 +12,7 @@ import { useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import H2HPanel from './H2HPanel'
-import { buildH2HSequence, h2hNeighbours } from '../utils/h2hSequence'
+import { buildH2HSequence, buildMatchIndex, h2hNeighbours } from '../utils/h2hSequence'
 import './BracketView.css'
 
 // IOC 3-letter → ISO 2-letter for flag emoji generation
@@ -477,6 +477,7 @@ export default function BracketView({ tournament, matches, players, picks, onPic
   // it follows the user's own cascade rather than the official draw.
   const h2hSeq = buildH2HSequence(matches, resolved, playerById)
   const h2hNav = h2hNeighbours(h2hSeq, h2hPlayers?.match?.id)
+  const matchIndex = buildMatchIndex(matches)
 
   // Number unplaced Q slots by bracket position: Qualifier 1, Qualifier 2, …
   const qualifierNums = {}
@@ -561,6 +562,8 @@ export default function BracketView({ tournament, matches, players, picks, onPic
         beforeDrawId={tournament?.id}
         beforeRound={h2hPlayers.match?.round_number}
         match={h2hPlayers.match}
+        matchOrder={matchIndex.order}
+        matchTotal={matchIndex.total}
         picks={picks}
         onPick={onPick}
         canPick={mode === 'picks' && !locked}

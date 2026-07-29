@@ -245,6 +245,7 @@ export default function H2HPanel({
   beforeDrawId: beforeDrawIdIn, beforeRound: beforeRoundIn, match: matchIn = null,
   tournSurface, tournGender, onClose,
   picks = null, onPick = null, canPick = false, onPrev = null, onNext = null,
+  matchOrder = null, matchTotal = 0,
 }) {
   const [surfFilter, setSurfFilter] = useState('all') // 'all' | 'surface'
   const [showEloInfo, setShowEloInfo] = useState(false)
@@ -411,7 +412,16 @@ export default function H2HPanel({
               aria-label="Next match"
             >›</button>
           </div>
-          <span className="h2h-round-name">{match?.round_name || ''}</span>
+          {/* Reads off `view`, like everything else, so the counter can't
+              advance ahead of the match whose data is on screen. */}
+          <span className="h2h-round-name">
+            <span className="h2h-round-label">{match?.round_name || ''}</span>
+            {matchOrder?.[match?.id] != null && matchTotal > 0 && (
+              <span className="h2h-match-pos">
+                Match {matchOrder[match.id]} / {matchTotal}
+              </span>
+            )}
+          </span>
           <button className="h2h-close" onClick={onClose} aria-label="Close">✕</button>
         </div>
 

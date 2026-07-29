@@ -26,6 +26,28 @@ export function buildH2HSequence(matches, resolved, playerById) {
       a.match.match_number - b.match.match_number)
 }
 
+/**
+ * Position of every match within the whole draw, read in bracket order:
+ * round 1's first match is 1, the final is the last number.
+ *
+ * Byes are left out — a bye is a slot, not a contest, so counting them would
+ * make the total disagree with "matches in this draw". Unlike
+ * buildH2HSequence this does NOT drop matches whose players lack a Tennis
+ * Explorer slug: the denominator has to describe the draw, not the subset the
+ * H2H panel happens to be able to talk about. That does mean the arrows can
+ * step 5 -> 7 where a match in between has no slug on one side.
+ */
+export function buildMatchIndex(matches) {
+  const ordered = matches
+    .filter(m => !m.is_bye)
+    .sort((a, b) =>
+      a.round_number - b.round_number ||
+      a.match_number - b.match_number)
+  const order = {}
+  ordered.forEach((m, i) => { order[m.id] = i + 1 })
+  return { order, total: ordered.length }
+}
+
 /** Neighbours of `matchId` within a sequence from buildH2HSequence. */
 export function h2hNeighbours(seq, matchId) {
   const i = seq.findIndex(e => e.match.id === matchId)
