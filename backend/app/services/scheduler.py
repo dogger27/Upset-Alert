@@ -808,6 +808,7 @@ def start_scheduler() -> None:
     logger.info("Subscription sync scheduled (every 5 min)")
     logger.info("Weekly rankings refresh scheduled (Sunday 6pm PDT)")
     logger.info("Draw-release notification check scheduled (every 10 min)")
+    logger.info("Round-complete digest check scheduled (every 10 min)")
     logger.info("Draw health check scheduled (every 60 min)")
     logger.info("Highest_Rank bot sync scheduled (every 10 min)")
     asyncio.create_task(eventstream.start())
