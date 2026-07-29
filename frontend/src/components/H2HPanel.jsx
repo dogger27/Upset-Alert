@@ -535,9 +535,9 @@ export default function H2HPanel({
           {showAge && (
             <div className="h2h-row">
               <div className="h2h-label">Age</div>
-              <div className="h2h-col-val h2h-val-p1 h2h-meta-val">{age_p1 ?? '—'}</div>
+              <div className="h2h-col-val h2h-val-p1 h2h-meta-val"><span>{age_p1 ?? '—'}</span></div>
               <div className="h2h-vs" />
-              <div className="h2h-col-val h2h-val-p2 h2h-meta-val">{age_p2 ?? '—'}</div>
+              <div className="h2h-col-val h2h-val-p2 h2h-meta-val"><span>{age_p2 ?? '—'}</span></div>
             </div>
           )}
 

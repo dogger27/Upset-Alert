@@ -320,6 +320,17 @@ html.h2h-modal-open body {
   line-height: 1.3;
 }
 
+/* Every value in these rows carries the pill's box, whether or not it wins one.
+   Only the Rank rows can be "best", so only they were getting .h2h-best's
+   padding — which left the Age row measurably shorter than the two above it.
+   .h2h-best now contributes colour alone; the geometry is here and identical
+   for all of them. */
+.h2h-meta-val > span {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 6px;
+}
+
 /* ── Form (last 10 results) ── */
 .h2h-form-row {
   display: flex;
