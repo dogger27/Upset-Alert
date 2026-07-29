@@ -9,8 +9,8 @@ import clsx from 'clsx'
 import { getDraw, listTournaments, refreshDraw, toggleUnlockSelections } from '../api/tournaments'
 import { getPredictions, savePredictions } from '../api/predictions'
 import { useAuth } from '../store/auth'
-import BracketView from '../components/BracketView'
-import CombinedView from '../components/CombinedView'
+import BracketView, { COL_W as BV_COL_W, COL_W_SCORES as BV_COL_W_SCORES, COL_GAP as BV_COL_GAP } from '../components/BracketView'
+import CombinedView, { COL_W as CV_COL_W, COMPACT_COL_W as CV_COMPACT_COL_W, COL_GAP as CV_COL_GAP, H2H_X as CV_H2H_X } from '../components/CombinedView'
 import DrawSidebar from '../components/DrawSidebar'
 import './TournamentDraw.css'
 
@@ -214,10 +214,12 @@ function TournamentDraw() {
   // there's room again. Disabled once the user manually toggles it.
   useEffect(() => {
     if (sidebarManual || bodyWidth <= 0 || !data) return
-    // Combined: mirrors CombinedView's COL_W(260) + COL_GAP(64). Live: mirrors
-    // BracketView's COL_W_SCORES(300)/COL_W(252) + COL_GAP(24) — see fit calc below.
+    // Column widths come from the view components themselves — see the note on
+    // the fit calc below for why these must not be re-typed as literals here.
     const anyScores = data.matches.some(m => (m.scores?.length > 0) || m.live_scores != null)
-    const colUnit = viewMode === 'combined' ? 260 + 64 : (anyScores ? 300 : 252) + 24
+    const colUnit = viewMode === 'combined'
+      ? CV_COL_W + CV_COL_GAP
+      : (anyScores ? BV_COL_W_SCORES : BV_COL_W) + BV_COL_GAP
     const needed4Main = 4 * colUnit + 16 // draw-main width needed to fit 4 full rounds
     const projMainIfExpanded = bodyWidth - expandedSidebarW.current
     setSidebarCollapsed(projMainIfExpanded < needed4Main)
@@ -619,9 +621,16 @@ function TournamentDraw() {
   // Combined: 324, mirroring CombinedView's COL_W(260) + COL_GAP(64). Live:
   // mirrors BracketView's COL_W_SCORES(300)/COL_W(252) + its own COL_GAP(24),
   // depending on whether any match in the draw already carries score data.
-  const COL_GAP_PX = 24 // credited back for the last column's missing trailing gap
+  // Every width below is imported from the component that actually renders it.
+  // These were once local literals copied from those components, and they went
+  // stale the moment the feeder gap changed: the page then computed the fit and
+  // the zoom against columns wider than the ones on screen, so it shrank the
+  // draw further than it needed to and dropped columns sooner than it had to.
+  const COL_GAP_PX = BV_COL_GAP // credited back for the last column's missing trailing gap
   const anyScores = matches.some(m => (m.scores?.length > 0) || m.live_scores != null)
-  const colUnit = viewMode === 'combined' ? 260 + 64 : (anyScores ? 300 : 252) + 24
+  const colUnit = viewMode === 'combined'
+    ? CV_COL_W + CV_COL_GAP
+    : (anyScores ? BV_COL_W_SCORES : BV_COL_W) + BV_COL_GAP
   // Left gutter reserved INSIDE the draw for the left round-nav button when the
   // sidebar is expanded (collapsed → the button lives in the page-edge gutter).
   // Tuned tight to the button's own footprint (left:3px + its CHAMP-sized
@@ -668,8 +677,8 @@ function TournamentDraw() {
   // NOT colUnit/COL_GAP_PX (260+24), which describe normal mode's wider
   // columns and would shrink the draw more than the actually-rendered
   // (narrower) compact content needs.
-  const COMPACT_COL_W = 158
-  const COMPACT_GAP = 64
+  const COMPACT_COL_W = CV_COMPACT_COL_W
+  const COMPACT_GAP = CV_COL_GAP
   const RIGHT_BTN_MARGIN = 3 // the right button's own distance from the body's right edge
   const H2H_GAP = 3          // requested clearance between the trailing H2H chip and the button
   const drawLeftPad = NAV_INSET + 4
@@ -679,7 +688,7 @@ function TournamentDraw() {
   // decorative and is meant to overflow off the viewport edge once zoomed
   // in, not reserve dead space that would otherwise separate the H2H chip
   // from the right button.
-  const TRAILING_W = 8 + 9
+  const TRAILING_W = CV_H2H_X + 9
   const naturalWCompact = 2 * COMPACT_COL_W + 1 * COMPACT_GAP + TRAILING_W
   const rightBoundary = bodyWidth - RIGHT_BTN_MARGIN - navBtnW - H2H_GAP
   const drawZoom = compactDraw

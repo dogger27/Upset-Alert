@@ -233,21 +233,21 @@ const PAIR_OFF = 24      // half the centre-to-centre gap of a match's two oppon
 const LIVE_SPREAD = 4
 // Reverted the previous 214 (a 25% cut off the ~184px name allotment) back to
 // 260 — the narrower width was truncating too many player names.
-const COL_W = 260
+export const COL_W = 260
 // Compact (phone) mode drops the flag AND shrinks further still — the name
 // allotment there should be smaller yet, not just re-inherit the 75% cut.
 // Narrower than COL_W (was 168, briefly 140) now that compact mode shows
 // last-name-only (see lastNameOf below) instead of "F. Last" — widened by
 // ~2 characters (140 -> 158) after it came out a bit too tight.
-const COMPACT_COL_W = 158
+export const COMPACT_COL_W = 158
 // Length of the horizontal feeder runs between columns: half goes to the stubs
 // out of the two feeding boxes, half to the stub into the box they feed.
 // Down from 64, where a two-column compact view came to 2*158 + 64 + 17 = 397px
 // and overflowed a 390px phone by just enough to leave the whole draw draggable
 // sideways. 44 measures 377 — still inside the screen, with more of the
 // connector visible than the 32 this was briefly set to.
-const COL_GAP = 44
-const H2H_X = 8          // H2H chip's x within the gap — centred on the match box's right border
+export const COL_GAP = 44
+export const H2H_X = 8          // H2H chip's x within the gap — centred on the match box's right border
 const BELL_OFFSET = 34   // distance (px) the bell sits left of the H2H chip's centre
 
 function Flag({ nat }) {
