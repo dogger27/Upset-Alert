@@ -139,6 +139,56 @@ html.h2h-modal-open body {
 
 .h2h-close { flex-shrink: 0; }
 
+/* ── Content area + busy state ── */
+/* Everything below the nav bar. Positioned so the busy veil can cover exactly
+   this — the arrows and the round stay legible and clickable while loading. */
+.h2h-content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  /* Room for the spinner before any content exists, so the panel doesn't open
+     as a bare strip and then jump to full height. */
+  min-height: 170px;
+}
+
+.h2h-busy {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.h2h-spinner {
+  width: 26px;
+  height: 26px;
+  border: 2.5px solid var(--border-strong, #cdd5d9);
+  border-top-color: var(--green-dark, #1b4332);
+  border-radius: 50%;
+  animation: h2h-spin 0.7s linear infinite;
+}
+
+@keyframes h2h-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .h2h-spinner { animation-duration: 2.2s; }
+}
+
+/* Announced to screen readers, invisible on screen */
+.h2h-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 /* ── Header ── */
 /*  One grid per row: [label] [p1-value] [vs] [p2-value].
     Rows are separate grids rather than one flat grid so the mobile layout can

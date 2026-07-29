@@ -280,7 +280,7 @@ export default function H2HPanel({
   // The queries are keyed on the INCOMING match so navigation starts fetching
   // straight away, but keepPreviousData means they keep serving the match
   // currently on screen until the new one has arrived.
-  const { data, isLoading, isError, isPlaceholderData } = useQuery({
+  const h2hQ = useQuery({
     queryKey: ['h2h', slug1In, slug2In],
     queryFn: () => getH2H(slug1In, slug2In),
     staleTime: 15 * 60 * 1000,
@@ -292,20 +292,36 @@ export default function H2HPanel({
   // beforeDrawId/beforeRound restrict Form to results before that match's date,
   // so viewing an old draw shows form leading up to it, not each player's
   // current form.
-  const { data: form_p1, isPlaceholderData: f1Stale } = useQuery({
+  const f1Q = useQuery({
     queryKey: ['h2h-form', slug1In, beforeDrawIdIn, beforeRoundIn],
     queryFn: () => getPlayerForm(slug1In, { beforeDrawId: beforeDrawIdIn, beforeRound: beforeRoundIn }),
     enabled: !!slug1In,
     staleTime: 5 * 60 * 1000,
     placeholderData: keepPreviousData,
   })
-  const { data: form_p2, isPlaceholderData: f2Stale } = useQuery({
+  const f2Q = useQuery({
     queryKey: ['h2h-form', slug2In, beforeDrawIdIn, beforeRoundIn],
     queryFn: () => getPlayerForm(slug2In, { beforeDrawId: beforeDrawIdIn, beforeRound: beforeRoundIn }),
     enabled: !!slug2In,
     staleTime: 5 * 60 * 1000,
     placeholderData: keepPreviousData,
   })
+
+  const { data, isLoading, isError, isPlaceholderData } = h2hQ
+  const form_p1 = f1Q.data
+  const form_p2 = f2Q.data
+  const f1Stale = f1Q.isPlaceholderData
+  const f2Stale = f2Q.isPlaceholderData
+
+  // "This query has produced its answer." A disabled query (no slug on that
+  // side) is idle and never will, so it counts as settled — otherwise the panel
+  // would wait forever on a player it was never going to look up.
+  const settled = q => q.isSuccess || q.isError || q.fetchStatus === 'idle'
+  // Form comes from our own db and lands in a few ms; the H2H numbers come from
+  // a Tennis Explorer scrape and can take a second or more. Rendering each as
+  // it arrived meant the W/L squares appeared against an otherwise empty panel.
+  // Nothing is drawn until all three have answered.
+  const allReady = settled(h2hQ) && settled(f1Q) && settled(f2Q)
 
   // Everything rendered comes from `view`, never from the *In props.
   //
@@ -326,6 +342,12 @@ export default function H2HPanel({
   }
 
   const settling = isPlaceholderData || f1Stale || f2Stale
+  // Busy = what is on screen is not yet what was asked for: either nothing has
+  // loaded at all, or an arrow press is still in flight. During navigation the
+  // previous match stays visible underneath, so the spinner sits on a veil over
+  // it rather than replacing it — the panel keeps its size and the arrows stay
+  // where they are.
+  const busy = !allReady || settling
   const [view, setView] = useState(() => incomingRef.current)
 
   useEffect(() => {
@@ -425,6 +447,14 @@ export default function H2HPanel({
           <button className="h2h-close" onClick={onClose} aria-label="Close">✕</button>
         </div>
 
+        <div className="h2h-content">
+        {busy && (
+          <div className="h2h-busy" role="status" aria-live="polite">
+            <span className="h2h-spinner" />
+            <span className="h2h-sr">Loading match data</span>
+          </div>
+        )}
+        {allReady && <>
         {/* Each stat is its own grid row. Desktop lays it out as
             [label][p1][vs][p2]; on mobile the label reorders into the centre
             channel so the two players sit against the edges — see H2HPanel.css.
@@ -584,6 +614,8 @@ export default function H2HPanel({
             <div className="h2h-empty">No head-to-head matches found.</div>
           )
         )}
+        </>}
+        </div>
       </div>
     </div>,
     document.body
