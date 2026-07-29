@@ -419,21 +419,16 @@ export default function H2HPanel({
         {/* Arrows paired at the left with the title to their right, matching
             the draw header's own nav bar rather than inventing a second
             arrangement for the same gesture. */}
+        {/* The arrows flank what they move: ‹ round / match › reads as one
+            control, rather than two arrows parked together with the thing they
+            change sitting elsewhere on the bar. */}
         <div className="h2h-navbar">
-          <div className="h2h-nav-arrows">
-            <button
-              className="h2h-nav-btn"
-              onClick={onPrev || undefined}
-              disabled={!onPrev}
-              aria-label="Previous match"
-            >‹</button>
-            <button
-              className="h2h-nav-btn"
-              onClick={onNext || undefined}
-              disabled={!onNext}
-              aria-label="Next match"
-            >›</button>
-          </div>
+          <button
+            className="h2h-nav-btn"
+            onClick={onPrev || undefined}
+            disabled={!onPrev}
+            aria-label="Previous match"
+          >‹</button>
           {/* Reads off `view`, like everything else, so the counter can't
               advance ahead of the match whose data is on screen. */}
           <span className="h2h-round-name">
@@ -444,6 +439,12 @@ export default function H2HPanel({
               </span>
             )}
           </span>
+          <button
+            className="h2h-nav-btn"
+            onClick={onNext || undefined}
+            disabled={!onNext}
+            aria-label="Next match"
+          >›</button>
           <button className="h2h-close" onClick={onClose} aria-label="Close">✕</button>
         </div>
 
