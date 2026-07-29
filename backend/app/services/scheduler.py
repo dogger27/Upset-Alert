@@ -13,10 +13,10 @@ from datetime import date, datetime, timedelta, timezone
 import httpx
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from sqlalchemy import select
+from sqlalchemy import case, func, select
 
 from app.database import AsyncSessionLocal
-from app.models.tournament import Draw
+from app.models.tournament import Draw, Match
 from app.services.espn_monitor import ESPNMonitor
 from app.services.eventstream import EventStreamListener
 
@@ -453,6 +453,65 @@ async def _notify_pending_draw_releases() -> None:
 ROUND_DIGEST_MAX_LAG = timedelta(days=1)
 
 
+async def _record_completed_rounds(db) -> None:
+    """
+    Find rounds that are finished but were never recorded, and record them.
+
+    Detection used to live only in espn_monitor, firing in the same pass that
+    wrote a result. That misses a round whose last winner arrives any other way
+    — a Wikipedia scrape, an admin refresh, a backfill — and misses it
+    permanently, because nothing ever looks again. Washington (M) and Memphis
+    both finished R32 on 2026-07-29 and neither was ever queued.
+
+    Sweeping here instead makes the digest depend on the state of the draw
+    rather than on which code path happened to write the deciding result.
+    Scoped to draws still in play: a completed tournament's rounds are history,
+    and queueing them now would email standings for events that finished weeks
+    ago. The unique (draw, round) row still makes this idempotent.
+    """
+    from sqlalchemy.exc import IntegrityError
+    from app.models.notification import RoundCompleteNotification
+
+    draws = (await db.execute(
+        select(Draw).where(Draw.status.in_(["active", "open"]))
+    )).scalars().all()
+    if not draws:
+        return
+
+    for d in draws:
+        rows = (await db.execute(
+            select(
+                Match.round_number,
+                func.count().label("total"),
+                func.sum(case((Match.winner_id.is_(None), 1), else_=0)).label("open"),
+            )
+            .where(Match.draw_id == d.id, Match.is_bye == False)  # noqa: E712
+            .group_by(Match.round_number)
+        )).all()
+
+        for round_number, total, still_open in rows:
+            if total == 0 or still_open:
+                continue
+            already = await db.scalar(
+                select(RoundCompleteNotification.id).where(
+                    RoundCompleteNotification.draw_id == d.id,
+                    RoundCompleteNotification.round_number == round_number,
+                )
+            )
+            if already:
+                continue
+            try:
+                async with db.begin_nested():
+                    db.add(RoundCompleteNotification(
+                        draw_id=d.id, round_number=round_number, recipient_count=0,
+                    ))
+                logger.info("Round %d of draw %d found complete — queued for digest",
+                            round_number, d.id)
+            except IntegrityError:
+                pass  # recorded concurrently by espn_monitor
+    await db.commit()
+
+
 async def _notify_pending_round_digests() -> None:
     """
     Weekly round-completion digest dispatch.
@@ -471,6 +530,7 @@ async def _notify_pending_round_digests() -> None:
 
     now = datetime.now(timezone.utc)
     async with AsyncSessionLocal() as db:
+        await _record_completed_rounds(db)
         pending = (await db.execute(
             select(RoundCompleteNotification)
             .where(RoundCompleteNotification.digest_sent_at.is_(None))
