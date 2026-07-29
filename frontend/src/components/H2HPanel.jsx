@@ -249,6 +249,16 @@ export default function H2HPanel({
   const [surfFilter, setSurfFilter] = useState('all') // 'all' | 'surface'
   const [showEloInfo, setShowEloInfo] = useState(false)
 
+  // Freeze the page behind the panel for as long as it is open — see the
+  // .h2h-modal-open rule in H2HPanel.css for why this matters more on iOS than
+  // it looks. Keyed to mount/unmount, so it can't leak if the panel is closed
+  // by a route change rather than the ✕.
+  useEffect(() => {
+    const root = document.documentElement
+    root.classList.add('h2h-modal-open')
+    return () => root.classList.remove('h2h-modal-open')
+  }, [])
+
   // The queries are keyed on the INCOMING match so navigation starts fetching
   // straight away, but keepPreviousData means they keep serving the match
   // currently on screen until the new one has arrived.

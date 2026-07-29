@@ -1,13 +1,33 @@
+/* While the panel is open the page behind it must not scroll.
+   On iOS the cost of letting it isn't just a moving background: scrolling
+   collapses the Safari toolbar, which changes what 100dvh resolves to, and a
+   fixed backdrop laid out against the (now taller) layout viewport ends up
+   offset from what is actually on screen — the panel appears to slide up the
+   page and the overlay stops covering the bottom of it. */
+html.h2h-modal-open,
+html.h2h-modal-open body {
+  overflow: hidden;
+}
+
 /* ── Backdrop ── */
 .h2h-backdrop {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  /* Explicit dvh rather than inset:0 — dvh tracks the collapsing toolbar,
+     inset:0 resolves against the layout viewport, which drifts from it. */
+  height: 100vh;
+  height: 100dvh;
   background: rgba(0, 0, 0, 0.45);
   z-index: 200;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 1rem;
+  /* A scroll that runs past the end of the match list stops here instead of
+     handing the rest of the gesture to the bracket underneath. */
+  overscroll-behavior: contain;
 }
 
 /* ── Panel ── */
@@ -312,6 +332,8 @@
 .h2h-table-wrap {
   overflow-y: auto;
   flex: 1;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Stands in for the column headers on mobile only — see the JSX comment */
@@ -379,7 +401,11 @@
 /* ── Elo info popup ── */
 .h2h-elo-popup-backdrop {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100vh;
+  height: 100dvh;   /* same reason as .h2h-backdrop */
   z-index: 400;
   display: flex;
   align-items: center;
