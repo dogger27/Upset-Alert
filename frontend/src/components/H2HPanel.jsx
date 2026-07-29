@@ -423,6 +423,7 @@ export default function H2HPanel({
             control, rather than two arrows parked together with the thing they
             change sitting elsewhere on the bar. */}
         <div className="h2h-navbar">
+          <div className="h2h-nav-group">
           <button
             className="h2h-nav-btn"
             onClick={onPrev || undefined}
@@ -445,6 +446,7 @@ export default function H2HPanel({
             disabled={!onNext}
             aria-label="Next match"
           >›</button>
+          </div>
           <button className="h2h-close" onClick={onClose} aria-label="Close">✕</button>
         </div>
 

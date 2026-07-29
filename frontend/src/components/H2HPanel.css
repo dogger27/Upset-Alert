@@ -51,12 +51,27 @@ html.h2h-modal-open body {
 
 /* ── Nav bar: ‹ round/match ›, close at the far right ── */
 .h2h-navbar {
+  position: relative;   /* anchor for the close button */
   display: flex;
   align-items: center;
-  gap: 0.45rem;
-  padding: 0.5rem 0.6rem 0.5rem 0.55rem;
+  justify-content: center;
+  /* Equal side padding keeps the group truly centred, and 3rem is enough that
+     it never reaches the close button sitting on top of the right edge. */
+  padding: 0.5rem 3rem;
   border-bottom: 1px solid #eee;
   flex-shrink: 0;
+}
+
+/* The arrows hug the label rather than being pushed to the panel's edges, so
+   the three read as one control. The group is centred, which does mean the
+   buttons shift a little as the round name changes width — accepted, because
+   arrows sitting next to what they change matters more than them holding a
+   fixed x. */
+.h2h-nav-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
 }
 
 /* Close is the same control as the arrows — same box, same weight — so it is
@@ -89,11 +104,10 @@ html.h2h-modal-open body {
 }
 .h2h-nav-btn:disabled { opacity: 0.3; cursor: default; }
 
-/* Sits between the arrows and takes the slack, so it is centred on the span
-   they enclose. Was absolutely centred on the whole bar when both arrows lived
-   together on the left. */
+/* Sized to its own content: the arrows sit against it, so it must not stretch
+   or they would be pushed back out to the bar's edges. */
 .h2h-round-name {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -128,7 +142,13 @@ html.h2h-modal-open body {
   font-variant-numeric: tabular-nums;
 }
 
-.h2h-close { flex-shrink: 0; }
+.h2h-close {
+  position: absolute;
+  right: 0.6rem;
+  top: 50%;
+  transform: translateY(-50%);
+  flex-shrink: 0;
+}
 
 /* ── Content area + busy state ── */
 /* Everything below the nav bar. Positioned so the busy veil can cover exactly
@@ -653,8 +673,9 @@ html.h2h-modal-open body {
     /* max() so this is a no-op in a browser tab and only pays out when the
        panel really is against the top of the screen (installed to home screen,
        where the notch would otherwise sit over the arrows). */
-    padding: max(0.45rem, env(safe-area-inset-top)) 0.5rem 0.45rem;
-    gap: 0.5rem;
+    /* Side padding still has to clear the absolutely-placed close button —
+       a bare 0.5rem here would let the centred group run under it. */
+    padding: max(0.45rem, env(safe-area-inset-top)) 3.4rem 0.45rem;
   }
 
   /* 44px targets — all three are tapped repeatedly and sit next to each other */
