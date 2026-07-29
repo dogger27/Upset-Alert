@@ -223,6 +223,9 @@
   flex: 1;
 }
 
+/* Stands in for the column headers on mobile only — see the JSX comment */
+.h2h-list-title { display: none; }
+
 .h2h-table {
   width: 100%;
   border-collapse: collapse;
@@ -453,10 +456,33 @@
 
   .h2h-row--names { margin-bottom: 0.5rem; }
 
+  /* Flag, first name, surname each on their own line. At this width a name
+     like "Corentin Moutet" could not sit beside its flag without pushing into
+     the centre channel, and the two players broke differently from each other
+     depending on name length. Stacking makes both sides the same shape. */
   .h2h-player-name {
-    font-size: 0.88rem;
-    line-height: 1.2;
-    flex-wrap: wrap;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 0.1rem;
+    font-size: 0.95rem;
+    line-height: 1.15;
+  }
+
+  .h2h-player-name .h2h-flag {
+    width: 1.5rem;
+    height: 1.12rem;
+    margin: 0 0 0.12rem;
+  }
+
+  .h2h-name-first {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+
+  .h2h-name-last {
+    font-weight: 800;
+    letter-spacing: -0.01em;
   }
 
   /* Scaled to keep the two-digit case on one line at this width */
@@ -484,10 +510,32 @@
   }
 
   /* ── Match list ──
-     Six columns cannot fit; the table was clipping Tournament and Round with no
-     way to scroll to them. Each match becomes a stacked card instead: the
-     result on top, the context under it. */
-  .h2h-table-wrap { overflow-x: hidden; }
+     Six columns cannot fit, so the headers are hidden and each match becomes a
+     card: who won and the score on one line, where and when beneath. Leading
+     with the winner rather than the score is what makes the list scannable —
+     the question a head-to-head list answers is who won, and the score is the
+     detail. Without the headers the previous version had the score leading and
+     an unlabelled name floating right, which read as a stray footer. */
+  .h2h-table-wrap {
+    overflow-x: hidden;
+    padding: 0 0.6rem 0.6rem;
+    /* Clears the iOS home indicator so the last card isn't half under it */
+    padding-bottom: max(0.6rem, env(safe-area-inset-bottom));
+  }
+
+  .h2h-list-title {
+    display: block;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: #fff;
+    padding: 0.7rem 0.25rem 0.45rem;
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-muted);
+  }
 
   .h2h-table,
   .h2h-table tbody,
@@ -500,25 +548,49 @@
     flex-wrap: wrap;
     align-items: baseline;
     gap: 0 0.4rem;
-    padding: 0.55rem 0.85rem;
-    border-bottom: 1px solid #f0f0f0;
+    padding: 0.5rem 0.7rem 0.55rem;
+    margin-bottom: 0.35rem;
+    border-bottom: none;
+    border-radius: 8px;
+    /* The win/loss fill was edge-to-edge, which read as a band across the sheet
+       rather than one item in a list. Inset with a rounded corner and an accent
+       edge, it reads as a card and still carries the same colour meaning. */
+    border-left: 3px solid transparent;
   }
+
+  .h2h-table tr.h2h-row-win  { border-left-color: #2e9e5b; }
+  .h2h-table tr.h2h-row-loss { border-left-color: #c0392b; }
 
   .h2h-table td {
     padding: 0;
     border: none;
   }
 
-  .h2h-score  { order: 1; font-weight: 700; font-size: 0.82rem; }
-  .h2h-winner { order: 2; flex: 1; text-align: right; font-size: 0.78rem; }
+  .h2h-winner {
+    order: 1;
+    flex: 1;
+    text-align: left;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .h2h-score {
+    order: 2;
+    flex: 0 0 auto;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
 
   /* flex-basis:100% forces the wrap, putting the context on its own line */
   .h2h-tourn {
     order: 3;
     flex: 1 0 100%;
-    margin-top: 0.15rem;
+    margin-top: 0.2rem;
     font-size: 0.72rem;
-    color: var(--text-muted);
+    color: var(--text);
   }
 
   .h2h-surface { order: 4; }

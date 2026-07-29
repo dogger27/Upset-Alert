@@ -40,6 +40,27 @@ function fmtName(teName) {
   return `${parts[parts.length - 1]} ${parts.slice(0, -1).join(' ')}`
 }
 
+/** "Alejandro Davidovich Fokina" -> ["Alejandro", "Davidovich Fokina"].
+ *  Splits at the FIRST space, so compound surnames stay whole on their line. */
+function splitName(full) {
+  if (!full) return ['', '']
+  const s = full.trim()
+  const i = s.indexOf(' ')
+  return i === -1 ? [s, ''] : [s.slice(0, i), s.slice(i + 1)]
+}
+
+function PlayerName({ player, fallback }) {
+  const iso = iocToFlagClass(player?.nationality)
+  const [first, last] = splitName(player?.name ?? fmtName(fallback))
+  return (
+    <>
+      {iso && <span className={`fi fi-${iso} h2h-flag`} />}
+      <span className="h2h-name-first">{first}</span>
+      {last && <span className="h2h-name-last">{last}</span>}
+    </>
+  )
+}
+
 const IOC_TO_ISO2 = {
   AUS:'AU', USA:'US', GBR:'GB', FRA:'FR', GER:'DE', ESP:'ES', ITA:'IT',
   RUS:'RU', CAN:'CA', JPN:'JP', CHN:'CN', KOR:'KR', ARG:'AR', BRA:'BR',
@@ -249,13 +270,11 @@ export default function H2HPanel({ slug1, slug2, player1, player2, tournSurface,
           <div className="h2h-row h2h-row--names">
             <div className="h2h-label" />
             <div className="h2h-col-val h2h-val-p1 h2h-player-name">
-              {iocToFlagClass(player1?.nationality) && <span className={`fi fi-${iocToFlagClass(player1.nationality)} h2h-flag`} />}
-              {player1?.name ?? fmtName(name_p1)}
+              <PlayerName player={player1} fallback={name_p1} />
             </div>
             <div className="h2h-vs">vs</div>
             <div className="h2h-col-val h2h-val-p2 h2h-player-name">
-              {iocToFlagClass(player2?.nationality) && <span className={`fi fi-${iocToFlagClass(player2.nationality)} h2h-flag`} />}
-              {player2?.name ?? fmtName(name_p2)}
+              <PlayerName player={player2} fallback={name_p2} />
             </div>
           </div>
 
@@ -337,6 +356,15 @@ export default function H2HPanel({ slug1, slug2, player1, player2, tournSurface,
         {data && !isLoading && (
           matches.length > 0 ? (
             <div className="h2h-table-wrap">
+              {/* Mobile hides the column headers (six columns don't fit), which
+                  left the list with nothing naming it. This caption replaces
+                  them there — and, because Overall/Hard filter this list, it
+                  also surfaces the active filter, which is otherwise invisible
+                  once the headers are gone. Hidden on desktop. */}
+              <div className="h2h-list-title">
+                {displayMatches.length} previous {displayMatches.length === 1 ? 'meeting' : 'meetings'}
+                {surfFilter === 'surface' && surfLabel ? ` · ${surfLabel}` : ''}
+              </div>
               <table className="h2h-table">
                 <thead>
                   <tr>
