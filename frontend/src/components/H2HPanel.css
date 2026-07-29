@@ -111,7 +111,7 @@ html.h2h-modal-open body {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  color: var(--text-muted);
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -119,14 +119,14 @@ html.h2h-modal-open body {
 }
 
 /* Position in the draw, read in bracket order — round 1's first match is 1,
-   the final is the last. Quieter than the round it sits under: it answers
-   "where am I", which is context, not the heading. */
+   the final is the last. Set at the round's own size, so the two lines are
+   separated by weight and colour alone: the round is the heading, this is the
+   context under it. */
 .h2h-match-pos {
-  font-size: 0.63rem;
+  font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   color: var(--text-muted);
-  opacity: 0.75;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
