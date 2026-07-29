@@ -61,6 +61,29 @@ function PlayerName({ player, fallback }) {
   )
 }
 
+/** The name block, which doubles as this match's pick control.
+ *
+ *  Rendered as a real <button> only when a pick can actually be made, so the
+ *  panel stays inert where the bracket is (locked draws, live mode, someone
+ *  else's picks) instead of offering a control that silently does nothing. */
+function PickableName({ className, player, fallback, picked, onPick }) {
+  const cls = `${className} h2h-player-name${picked ? ' h2h-player-name--picked' : ''}`
+  if (!onPick) {
+    return <div className={cls}><PlayerName player={player} fallback={fallback} /></div>
+  }
+  return (
+    <button
+      type="button"
+      className={`${cls} h2h-player-name--pickable`}
+      onClick={onPick}
+      aria-pressed={picked}
+      aria-label={`Pick ${player?.name ?? fallback ?? 'this player'} to win`}
+    >
+      <PlayerName player={player} fallback={fallback} />
+    </button>
+  )
+}
+
 const IOC_TO_ISO2 = {
   AUS:'AU', USA:'US', GBR:'GB', FRA:'FR', GER:'DE', ESP:'ES', ITA:'IT',
   RUS:'RU', CAN:'CA', JPN:'JP', CHN:'CN', KOR:'KR', ARG:'AR', BRA:'BR',
@@ -114,13 +137,33 @@ function fmtFormDate(iso) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+// Must match .h2h-form-popup's width in H2HPanel.css — the clamp in open()
+// needs the width in JS, so it is fixed there rather than sized by content.
+const FORM_POPUP_W = 230
+const FORM_POPUP_EDGE = 8
+
 function FormBox({ m }) {
   const ref = useRef(null)
   const [pos, setPos] = useState(null)
 
   const open = () => {
     const r = ref.current?.getBoundingClientRect()
-    if (r) setPos({ x: r.left + r.width / 2, y: r.top })
+    if (!r) return
+    // The popup is centred on the square it belongs to, which pushes it off
+    // screen for the squares at either end of a row — the leftmost one hid its
+    // own labels past the left edge. Clamp the centre so the popup always lands
+    // inside the viewport; it keeps pointing at the right square because it is
+    // wider than the gap it moves by. FORM_POPUP_W must match the width set in
+    // H2HPanel.css, which is why that width is fixed rather than content-driven.
+    const half = FORM_POPUP_W / 2
+    const limit = window.innerWidth - half - FORM_POPUP_EDGE
+    const min = half + FORM_POPUP_EDGE
+    const centre = r.left + r.width / 2
+    setPos({
+      // On a screen too narrow to hold the popup at all, min > limit — centre it.
+      x: min > limit ? window.innerWidth / 2 : Math.min(Math.max(centre, min), limit),
+      y: r.top,
+    })
   }
 
   // Dismiss on the next touch anywhere. Registered only while a popup is open,
@@ -190,7 +233,10 @@ function EloInfoPopup({ onClose }) {
   )
 }
 
-export default function H2HPanel({ slug1, slug2, player1, player2, tournSurface, tournGender, beforeDrawId, beforeRound, onClose }) {
+export default function H2HPanel({
+  slug1, slug2, player1, player2, tournSurface, tournGender, beforeDrawId, beforeRound, onClose,
+  match = null, pickedId = null, onPick = null, canPick = false, onPrev = null, onNext = null,
+}) {
   const [surfFilter, setSurfFilter] = useState('all') // 'all' | 'surface'
   const [showEloInfo, setShowEloInfo] = useState(false)
 
@@ -258,7 +304,27 @@ export default function H2HPanel({ slug1, slug2, player1, player2, tournSurface,
     <div className="h2h-backdrop" onClick={onClose}>
       {showEloInfo && <EloInfoPopup onClose={() => setShowEloInfo(false)} />}
       <div className="h2h-panel" onClick={e => e.stopPropagation()}>
-        <button className="h2h-close" onClick={onClose} aria-label="Close">✕</button>
+        {/* Arrows paired at the left with the title to their right, matching
+            the draw header's own nav bar rather than inventing a second
+            arrangement for the same gesture. */}
+        <div className="h2h-navbar">
+          <div className="h2h-nav-arrows">
+            <button
+              className="h2h-nav-btn"
+              onClick={onPrev || undefined}
+              disabled={!onPrev}
+              aria-label="Previous match"
+            >‹</button>
+            <button
+              className="h2h-nav-btn"
+              onClick={onNext || undefined}
+              disabled={!onNext}
+              aria-label="Next match"
+            >›</button>
+          </div>
+          <span className="h2h-round-name">{match?.round_name || ''}</span>
+          <button className="h2h-close" onClick={onClose} aria-label="Close">✕</button>
+        </div>
 
         {/* Each stat is its own grid row. Desktop lays it out as
             [label][p1][vs][p2]; on mobile the label reorders into the centre
@@ -269,13 +335,19 @@ export default function H2HPanel({ slug1, slug2, player1, player2, tournSurface,
           {/* Names row — always use our API names (Firstname Lastname order) */}
           <div className="h2h-row h2h-row--names">
             <div className="h2h-label" />
-            <div className="h2h-col-val h2h-val-p1 h2h-player-name">
-              <PlayerName player={player1} fallback={name_p1} />
-            </div>
+            <PickableName
+              className="h2h-col-val h2h-val-p1"
+              player={player1} fallback={name_p1}
+              picked={pickedId != null && pickedId === player1?.id}
+              onPick={canPick && player1?.id != null ? () => onPick(match.id, player1.id) : null}
+            />
             <div className="h2h-vs">vs</div>
-            <div className="h2h-col-val h2h-val-p2 h2h-player-name">
-              <PlayerName player={player2} fallback={name_p2} />
-            </div>
+            <PickableName
+              className="h2h-col-val h2h-val-p2"
+              player={player2} fallback={name_p2}
+              picked={pickedId != null && pickedId === player2?.id}
+              onPick={canPick && player2?.id != null ? () => onPick(match.id, player2.id) : null}
+            />
           </div>
 
           {/* Overall row — click to show all matches. Rendered immediately;

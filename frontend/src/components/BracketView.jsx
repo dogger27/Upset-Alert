@@ -12,6 +12,7 @@ import { useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import H2HPanel from './H2HPanel'
+import { buildH2HSequence, h2hNeighbours } from '../utils/h2hSequence'
 import './BracketView.css'
 
 // IOC 3-letter → ISO 2-letter for flag emoji generation
@@ -468,6 +469,11 @@ export default function BracketView({ tournament, matches, players, picks, onPic
   const drawRanks = computeDrawRanks(players)
   const resolved = resolveMatchPlayers(matches, picks, mode)
 
+  // Order for the panel's ‹ › arrows. Built from `resolved`, so in picks mode
+  // it follows the user's own cascade rather than the official draw.
+  const h2hSeq = buildH2HSequence(matches, resolved, playerById)
+  const h2hNav = h2hNeighbours(h2hSeq, h2hPlayers?.match?.id)
+
   // Number unplaced Q slots by bracket position: Qualifier 1, Qualifier 2, …
   const qualifierNums = {}
   const unplacedQs = players
@@ -550,6 +556,12 @@ export default function BracketView({ tournament, matches, players, picks, onPic
         tournGender={tournament?.gender}
         beforeDrawId={tournament?.id}
         beforeRound={h2hPlayers.match?.round_number}
+        match={h2hPlayers.match}
+        pickedId={picks[h2hPlayers.match?.id] ?? null}
+        onPick={onPick}
+        canPick={mode === 'picks' && !locked}
+        onPrev={h2hNav.prev ? () => setH2HPlayers(h2hNav.prev) : null}
+        onNext={h2hNav.next ? () => setH2HPlayers(h2hNav.next) : null}
         onClose={() => setH2HPlayers(null)}
       />
     )}

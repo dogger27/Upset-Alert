@@ -18,6 +18,7 @@
 import { Fragment, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import H2HPanel from './H2HPanel'
+import { buildH2HSequence, h2hNeighbours } from '../utils/h2hSequence'
 import './CombinedView.css'
 
 // Upset bell with the same hover tooltip as BracketView's (portal-rendered,
@@ -362,6 +363,10 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
 
   const resolved = resolveCombinedPlayers(matches, picks)
 
+  // Order for the H2H panel's ‹ › arrows — see BracketView for the same pair.
+  const h2hSeq = buildH2HSequence(matches, resolved, playerById)
+  const h2hNav = h2hNeighbours(h2hSeq, h2h?.match?.id)
+
   // Round each player was actually eliminated in (real results only) — a pick
   // of that player as the winner of that round or any later one is a dead
   // pick, shown wrong immediately rather than waiting for the picked match
@@ -532,7 +537,13 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
           slug1={h2h.p1.te_slug} slug2={h2h.p2.te_slug}
           player1={h2h.p1} player2={h2h.p2}
           tournSurface={tournament?.surface} tournGender={tournament?.gender}
-          beforeDrawId={tournament?.id} beforeRound={h2h.round}
+          beforeDrawId={tournament?.id} beforeRound={h2h.match?.round_number}
+          match={h2h.match}
+          pickedId={picks?.[h2h.match?.id] ?? null}
+          onPick={onPick}
+          canPick={!locked}
+          onPrev={h2hNav.prev ? () => setH2H(h2hNav.prev) : null}
+          onNext={h2hNav.next ? () => setH2H(h2hNav.next) : null}
           onClose={() => setH2H(null)}
         />
       )}
@@ -725,7 +736,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                         className="cv-h2h"
                         style={{ top: y, left: gapX + H2H_X, pointerEvents: 'auto' }}
                         title={`Head-to-head: ${a.name} vs ${b.name}`}
-                        onClick={() => setH2H({ p1: a, p2: b, round: m.round_number })}
+                        onClick={() => setH2H({ p1: a, p2: b, match: m })}
                       >
                         H2H
                       </button>
