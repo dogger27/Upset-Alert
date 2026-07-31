@@ -569,8 +569,8 @@ def _week_summary(rows: list[tuple]) -> str:
     body = "".join(
         f'<tr style="background:{"#ffffff" if i % 2 == 0 else "#f9fafb"}">'
         f'<td style="padding:8px 12px 8px 14px;font-size:14px;color:#111">{label}</td>'
-        f'<td align="center" width="70" style="padding:8px 6px;font-size:14px;text-align:center;'
-        f'width:70px;color:#111;font-weight:700">{hits}</td>'
+        f'<td align="center" width="86" style="padding:8px 6px;font-size:14px;text-align:center;'
+        f'width:86px;color:#111;font-weight:700">{hits}</td>'
         f'<td align="right" width="90" style="padding:8px 14px 8px 6px;font-size:14px;'
         f'text-align:right;width:90px;color:#444;white-space:nowrap">{place}</td>'
         f'</tr>'
@@ -586,9 +586,9 @@ def _week_summary(rows: list[tuple]) -> str:
         <tr style="background:#f3f4f6">
           <th align="left" style="padding:7px 12px 7px 14px;font-size:12px;text-transform:uppercase;
               letter-spacing:0.5px;color:#6b7280;border-bottom:2px solid #e5e7eb">Draw</th>
-          <th align="center" width="70" style="padding:7px 6px;font-size:12px;text-align:center;width:70px;
-              text-transform:uppercase;letter-spacing:0.5px;color:#6b7280;
-              border-bottom:2px solid #e5e7eb">Round</th>
+          <th align="center" width="86" style="padding:7px 6px;font-size:12px;text-align:center;width:86px;
+              text-transform:uppercase;letter-spacing:0.5px;color:#6b7280;line-height:1.25;
+              border-bottom:2px solid #e5e7eb">Correct Picks</th>
           <th align="right" width="90" style="padding:7px 14px 7px 6px;font-size:12px;text-align:right;width:90px;
               text-transform:uppercase;letter-spacing:0.5px;color:#6b7280;
               border-bottom:2px solid #e5e7eb">Global</th>

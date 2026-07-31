@@ -446,13 +446,6 @@ async def _notify_pending_draw_releases() -> None:
                 len(batches), sum(len(ids) for ids, _ in batches))
 
 
-# How long a week's round digest waits for the draws still playing that round.
-# Same shape as DRAW_BATCH_MAX_LAG and the same reasoning: waiting is what makes
-# this one email instead of four, but a rain-delayed draw must not hold the
-# standings hostage indefinitely. Late finishers get a follow-up.
-ROUND_DIGEST_MAX_LAG = timedelta(days=1)
-
-
 async def _record_completed_rounds(db) -> None:
     """
     Find rounds that are finished but were never recorded, and record them.
@@ -581,7 +574,10 @@ async def _notify_pending_round_digests() -> None:
                         RoundCompleteNotification.round_number == rn,
                     )
                 )
-                if not reported:
+                # A finished tournament can no longer produce this round, so it
+                # must not hold the batch open forever — the only escape from an
+                # otherwise unbounded wait.
+                if not reported and s.status != "completed":
                     outstanding.append(s)
 
             # Already-sent siblings mean this week's digest for this round has
@@ -594,12 +590,11 @@ async def _notify_pending_round_digests() -> None:
                 )
             ) is not None
 
-            oldest = min(p.sent_at for p, _ in members)
-            if oldest.tzinfo is None:
-                oldest = oldest.replace(tzinfo=timezone.utc)
-            lag_expired = (now - oldest) >= ROUND_DIGEST_MAX_LAG
-
-            if outstanding and not lag_expired:
+            # No deadline: the batch waits until every draw in the week that can
+            # reach this round has, however long that takes. One email per round
+            # per week is the whole point, and a partial send followed by a
+            # follow-up is exactly what that is meant to avoid.
+            if outstanding:
                 logger.info(
                     "Round digest %s for %s week %s held: %d ready, waiting on %s",
                     label, year, week, len(members), [s.name for s in outstanding],

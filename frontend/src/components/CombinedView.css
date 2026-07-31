@@ -211,6 +211,12 @@
 /* Step down as completed sets accumulate — the gap's height is fixed but the
    score's WIDTH is not, and a five-set line at 1.5rem would run past the
    column. After the base rule so equal specificity resolves in source order. */
+/* Clear of the upset bell when this match has one. The bell's centre sits
+   BELL_OFFSET(34) - H2H_X(8) = 26px inside the column's right edge and it is
+   ~24px wide, so its left edge lands at 38px; 44 leaves a little air. After the
+   base rule so equal specificity resolves in source order. */
+.cv-live-score--bell { right: 44px; }
+
 .cv-live-score--s2 { font-size: 1rem; }
 .cv-live-score--s3 { font-size: 0.88rem; }
 .cv-live-score--s4 { font-size: 0.78rem; }

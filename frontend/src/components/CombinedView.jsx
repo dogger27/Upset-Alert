@@ -657,9 +657,19 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                         {isLive && (() => {
                           const nodes = liveScoreNodes(m.live_scores)
                           if (!nodes) return null
+                          // The upset bell for this same match hangs in the
+                          // column's right edge, where the score was also
+                          // anchored — the two sat on top of each other. The
+                          // bell keeps its place and the score steps left of it.
+                          const pickId = picks?.[m.id] ?? null
+                          const rankA = aId != null ? drawRanks[aId] : null
+                          const rankB = bId != null ? drawRanks[bId] : null
+                          const expectedId = rankA != null && rankB != null
+                            ? (rankA <= rankB ? aId : bId) : null
+                          const hasBell = pickId != null && expectedId != null && pickId !== expectedId
                           return (
                             <span
-                              className={`cv-live-score cv-live-score--s${Math.min(nodes.length, 4)}${isSuspended ? ' cv-live-score--suspended' : ''}`}
+                              className={`cv-live-score cv-live-score--s${Math.min(nodes.length, 4)}${isSuspended ? ' cv-live-score--suspended' : ''}${hasBell ? ' cv-live-score--bell' : ''}`}
                               style={{ top: (yTop + yBot) / 2 }}
                             >
                               {nodes}
