@@ -337,16 +337,8 @@ async def _refresh_elo() -> None:
 # minutes. Waiting this long out lets any such flicker settle before emailing.
 DRAW_RELEASE_NOTIFY_COOLDOWN = timedelta(minutes=10)
 
-# A week's draws are announced together, so their emails go out together — one
-# message per user per week rather than one per draw. Wikipedia doesn't publish
-# them in lockstep though, so the batch waits for the week's stragglers up to
-# this long, then sends what's ready. Anything later gets a follow-up email.
-DRAW_BATCH_MAX_LAG = timedelta(days=1)
-
-# ...unless a ready draw is about to lock. Holding a batch is only ever worth it
-# while there's still time to act on it; past this point the wait costs the
-# recipient their picks, so the batch goes out incomplete.
-DRAW_BATCH_DEADLINE_GUARD = timedelta(hours=12)
+# A week's draws are announced together, so exactly one email covers the week.
+# It waits for every draw in that week to be released — see the hold below.
 
 
 async def _notify_pending_draw_releases() -> None:
@@ -401,34 +393,28 @@ async def _notify_pending_draw_releases() -> None:
 
             ready_ids = {t.id for t in members}
             # Already-notified siblings mean this week's digest has gone out, so
-            # anything ready now is a late arrival and gets the follow-up wording.
-            is_followup = any(s.draw_release_notified_at is not None for s in siblings)
+            # Any sibling in the week that hasn't been emailed yet holds the
+            # batch. A draw that is released but still inside its stability
+            # cooldown counts as outstanding, not as absent — Canadian Open's
+            # two draws were detected 93 minutes apart and the second was still
+            # cooling down when the first was dispatched.
             outstanding = [
                 s for s in siblings
                 if s.id not in ready_ids and s.draw_release_notified_at is None
             ]
 
-            # Hold for the rest of the week's draws — but only so long. Waiting
-            # is what makes this one email instead of five; waiting past a pick
-            # deadline would make it worthless.
-            oldest_ready = min(t.draw_release_detected_at for t in members)
-            if oldest_ready.tzinfo is None:
-                oldest_ready = oldest_ready.replace(tzinfo=timezone.utc)
-            lag_expired = (now - oldest_ready) >= DRAW_BATCH_MAX_LAG
-            deadline_near = any(
-                t.closing_time is not None
-                and (t.closing_time.replace(tzinfo=timezone.utc) if t.closing_time.tzinfo is None
-                     else t.closing_time) - now <= DRAW_BATCH_DEADLINE_GUARD
-                for t in members
-            )
-
-            if outstanding and not lag_expired and not deadline_near:
+            # No escape hatches. There is exactly one draw-release email per
+            # week and it waits for every draw in that week, however long that
+            # takes — the lag cap and the pick-deadline guard that used to be
+            # here could each release a partial batch, and a partial batch is
+            # by definition a second email.
+            if outstanding:
                 logger.info(
                     "Draw-release digest for %s week %s held: %d ready, waiting on %s",
                     year, week, len(members), [s.name for s in outstanding],
                 )
                 continue
-            batches.append(([t.id for t in members], is_followup))
+            batches.append(([t.id for t in members], False))
 
         if not batches:
             return
