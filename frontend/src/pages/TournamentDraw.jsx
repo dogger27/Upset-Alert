@@ -105,13 +105,11 @@ function TournamentDraw() {
   const [viewedUserId, setViewedUserId] = useState(() => { const u = searchParams.get('user'); return u ? Number(u) : null })
   const [viewedUserName, setViewedUserName] = useState(null)
   const initialModeSet = useRef(false)
-  const [celebrating, setCelebrating] = useState(false)
   const [showUnlockConfirm, setShowUnlockConfirm] = useState(false)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
   const [resetToast, setResetToast] = useState(null)
   const [showDefaultPicksBanner, setShowDefaultPicksBanner] = useState(false)
   const resetToastKeyRef = useRef(0)
-  const celebrateTimerRef = useRef(null)
   const resetToastTimerRef = useRef(null)
   const autoInitShownRef = useRef(false)
 
@@ -160,7 +158,7 @@ function TournamentDraw() {
           autoInitShownRef.current = true
           const newPicks = computeAutoPicks()
           if (newPicks) {
-            applyPicksAndCelebrate(newPicks)
+            applyPicks(newPicks)
             setShowDefaultPicksBanner(true)
           }
         }
@@ -323,19 +321,9 @@ function TournamentDraw() {
     onSuccess: () => { qc.invalidateQueries(['draw', id]); setShowUnlockConfirm(false) },
   })
 
-  const applyPicksAndCelebrate = (newPicks) => {
+  const applyPicks = (newPicks) => {
     setPicks(newPicks)
     if (user) saveMutation.mutate(newPicks)
-    if (data) {
-      const nonByeIds = new Set(data.matches.filter(m => !m.is_bye).map(m => m.id))
-      const total = nonByeIds.size
-      const filled = Object.entries(newPicks).filter(([k, v]) => v != null && nonByeIds.has(Number(k))).length
-      if (total > 0 && filled >= total) {
-        if (celebrateTimerRef.current) clearTimeout(celebrateTimerRef.current)
-        setCelebrating(true)
-        celebrateTimerRef.current = setTimeout(() => setCelebrating(false), 3600)
-      }
-    }
   }
 
   const computeAutoPicks = () => {
@@ -468,7 +456,7 @@ function TournamentDraw() {
   const handleResetSelections = () => {
     const newPicks = computeAutoPicks() ?? {}
     const filled = Object.values(newPicks).filter(v => v != null).length
-    applyPicksAndCelebrate(newPicks)
+    applyPicks(newPicks)
     setShowResetConfirm(false)
     resetToastKeyRef.current += 1
     setResetToast({ key: resetToastKeyRef.current, msg: `${filled} selection${filled !== 1 ? 's' : ''} reset to higher-ranked picks` })
@@ -504,17 +492,6 @@ function TournamentDraw() {
       saveMutation.mutate(newPicks)
     }
 
-    // Celebrate when every non-bye match has a pick
-    if (data && !locked) {
-      const nonByeIds = new Set(data.matches.filter(m => !m.is_bye).map(m => m.id))
-      const total = nonByeIds.size
-      const filled = Object.entries(newPicks).filter(([k, v]) => v != null && nonByeIds.has(Number(k))).length
-      if (total > 0 && filled >= total) {
-        if (celebrateTimerRef.current) clearTimeout(celebrateTimerRef.current)
-        setCelebrating(true)
-        celebrateTimerRef.current = setTimeout(() => setCelebrating(false), 3600)
-      }
-    }
   }
 
   // Admin making picks on behalf of another user
@@ -1095,7 +1072,6 @@ function TournamentDraw() {
         </div>
       )}
 
-      {celebrating && <CelebrationOverlay />}
 
       {showResetConfirm && (() => {
         const { total, upsets } = countPicksAndUpsets()
@@ -1263,49 +1239,3 @@ function TournamentDraw() {
   )
 }
 
-// ---------------------------------------------------------------------------
-// Celebration overlay
-// ---------------------------------------------------------------------------
-
-const PARTY_EMOJIS = ['🎉', '🎊', '🥳', '🏆', '🎾', '⭐', '✨', '🌟']
-
-function CelebrationOverlay() {
-  const [particles] = useState(() =>
-    Array.from({ length: 30 }, (_, i) => {
-      const angle = (i / 30) * 2 * Math.PI + (Math.random() - 0.5) * 0.4
-      const dist = 130 + Math.random() * 210
-      return {
-        id: i,
-        emoji: PARTY_EMOJIS[i % PARTY_EMOJIS.length],
-        tx: Math.round(Math.cos(angle) * dist),
-        ty: Math.round(Math.sin(angle) * dist),
-        rot: Math.round((Math.random() - 0.5) * 720),
-        delay: `${(Math.random() * 0.3).toFixed(2)}s`,
-        dur: `${(1.2 + Math.random() * 0.9).toFixed(2)}s`,
-        size: `${(1.5 + Math.random() * 1.5).toFixed(1)}rem`,
-      }
-    })
-  )
-
-  return (
-    <div className="celebration-overlay">
-      {particles.map(p => (
-        <span
-          key={p.id}
-          className="celebration-particle"
-          style={{
-            '--tx': `${p.tx}px`,
-            '--ty': `${p.ty}px`,
-            '--rot': `${p.rot}deg`,
-            '--delay': p.delay,
-            '--dur': p.dur,
-            fontSize: p.size,
-          }}
-        >
-          {p.emoji}
-        </span>
-      ))}
-      <div className="celebration-banner">🎉 Bracket complete!</div>
-    </div>
-  )
-}
