@@ -1,9 +1,42 @@
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 
 from app.core.config import settings
 
-engine = create_async_engine(settings.database_url, echo=False)
+_IS_SQLITE = settings.database_url.startswith("sqlite")
+
+# timeout is the DRIVER-level wait for a held write lock. Without it sqlite3
+# gives up immediately, which is what surfaced as "Failed to save: Unknown
+# error" when a user saved picks while the scheduler or the ESPN monitor
+# happened to be writing.
+engine = create_async_engine(
+    settings.database_url,
+    echo=False,
+    connect_args={"timeout": 30} if _IS_SQLITE else {},
+)
+
+
+if _IS_SQLITE:
+    @event.listens_for(engine.sync_engine, "connect")
+    def _sqlite_pragmas(dbapi_connection, _record):
+        """WAL + busy_timeout on every connection.
+
+        The default rollback journal takes an exclusive lock for the whole of a
+        write, so any concurrent writer fails outright rather than waiting —
+        and this app always has background writers (the 30-minute scrape, the
+        ESPN poller, the notification jobs). WAL lets readers continue during a
+        write and, with busy_timeout, makes a competing writer queue for up to
+        30s instead of raising "database is locked" on the spot.
+
+        synchronous=NORMAL is the standard companion to WAL: still crash-safe,
+        without an fsync per commit.
+        """
+        cur = dbapi_connection.cursor()
+        cur.execute("PRAGMA journal_mode=WAL")
+        cur.execute("PRAGMA busy_timeout=30000")
+        cur.execute("PRAGMA synchronous=NORMAL")
+        cur.close()
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 

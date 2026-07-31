@@ -73,13 +73,15 @@ app = FastAPI(title="Tennis Fantasy League", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
+ALLOWED_ORIGINS = [
+    "http://localhost:5173",        # Vite dev server
+    "https://upsetalert.ca",        # Primary domain
+    "https://www.upsetalert.ca",    # www variant
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",        # Vite dev server
-        "https://upsetalert.ca",        # Primary domain
-        "https://www.upsetalert.ca",    # www variant
-    ],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -111,7 +113,23 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
         dedup_key=f"api_{request.method}_{request.url.path}_{type(exc).__name__}",
         dedup_hours=1.0,
     )
-    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+    # Starlette installs a bare `Exception` handler on ServerErrorMiddleware,
+    # which wraps the user middleware stack — so this response never passes
+    # back through CORSMiddleware and carries no Access-Control-Allow-Origin.
+    # The browser then reports every 500 as "blocked by CORS policy", hiding
+    # the actual failure: a genuine server error looked like a CORS
+    # misconfiguration, and the client only ever saw "Unknown error".
+    origin = request.headers.get("origin")
+    headers = {}
+    if origin in ALLOWED_ORIGINS:
+        headers = {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+            "Vary": "Origin",
+        }
+    return JSONResponse(
+        status_code=500, content={"detail": "Internal server error"}, headers=headers,
+    )
 
 
 @app.get("/health")
