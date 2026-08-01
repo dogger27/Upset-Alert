@@ -58,3 +58,27 @@ export function h2hNeighbours(seq, matchId) {
     total: seq.length,
   }
 }
+
+/**
+ * Resolution for the H2H panel: the players who ACTUALLY met, falling back to
+ * the picks cascade only where the match hasn't been played.
+ *
+ * The panel was fed the same cascade the bracket draws, which in picks mode is
+ * the user's own predictions. Once a round is played that cascade still names
+ * whoever they picked — including players who lost — so opening H2H on a
+ * finished match could compare two people who never played each other, or a
+ * player already out of the draw. Real entrants win wherever they exist; the
+ * cascade still covers rounds not yet played, where a predicted matchup is the
+ * only thing there is to show.
+ */
+export function resolveRealFirst(matches, resolved) {
+  const out = {}
+  for (const m of matches) {
+    const r = resolved[m.id] || {}
+    out[m.id] = {
+      p1: m.player1?.id ?? r.p1 ?? null,
+      p2: m.player2?.id ?? r.p2 ?? null,
+    }
+  }
+  return out
+}

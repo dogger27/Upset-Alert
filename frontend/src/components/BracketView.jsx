@@ -12,7 +12,7 @@ import { useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import H2HPanel from './H2HPanel'
-import { buildH2HSequence, buildMatchIndex, h2hNeighbours } from '../utils/h2hSequence'
+import { buildH2HSequence, buildMatchIndex, h2hNeighbours, resolveRealFirst } from '../utils/h2hSequence'
 import './BracketView.css'
 
 // IOC 3-letter → ISO 2-letter for flag emoji generation
@@ -248,7 +248,7 @@ function playerNeedsTypeSlot(p) {
   return !!p?.entry_type
 }
 
-function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick, locked, style, mode, lossRound, onH2H, qualifierNums, forceTypeSlot, hoveredPlayerId, onHoverPlayer }) {
+function MatchBox({ match, resolvedPlayers, h2hPair, playerById, drawRanks, picks, onPick, locked, style, mode, lossRound, onH2H, qualifierNums, forceTypeSlot, hoveredPlayerId, onHoverPlayer }) {
   const { p1: p1id, p2: p2id } = resolvedPlayers || { p1: match.player1?.id, p2: match.player2?.id }
   const pickedId = picks[match.id]
   const actualWinnerId = match.winner?.id
@@ -293,7 +293,11 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
   const showScores = mode === 'live'
 
   // H2H strip: both players must have TE slugs (works in live and picks mode)
-  const h2hAvailable = !!p1?.te_slug && !!p2?.te_slug
+  // H2H opens on the players who really met, not on the picks cascade — the
+  // bracket around it still shows the cascade. See resolveRealFirst.
+  const h2hP1 = h2hPair?.p1 != null ? playerById[h2hPair.p1] : p1
+  const h2hP2 = h2hPair?.p2 != null ? playerById[h2hPair.p2] : p2
+  const h2hAvailable = !!h2hP1?.te_slug && !!h2hP2?.te_slug
 
   // Upset: lower-ranked player won (picks mode: user's pick; live mode: actual result)
   const rank1 = drawRanks[p1id] ?? Infinity
@@ -418,7 +422,7 @@ function MatchBox({ match, resolvedPlayers, playerById, drawRanks, picks, onPick
       {h2hAvailable && (
         <button
           className="h2h-strip"
-          onClick={() => onH2H(p1, p2, match)}
+          onClick={() => onH2H(h2hP1, h2hP2, match)}
           title={`Head-to-head: ${p1.name} vs ${p2.name}`}
         >
           <span className="h2h-strip-label">H2H</span>
@@ -475,7 +479,10 @@ export default function BracketView({ tournament, matches, players, picks, onPic
 
   // Order for the panel's ‹ › arrows. Built from `resolved`, so in picks mode
   // it follows the user's own cascade rather than the official draw.
-  const h2hSeq = buildH2HSequence(matches, resolved, playerById)
+  // Real entrants first, so H2H never compares two players who never met —
+  // in picks mode `resolved` is the user's cascade. See resolveRealFirst.
+  const h2hResolved = resolveRealFirst(matches, resolved)
+  const h2hSeq = buildH2HSequence(matches, h2hResolved, playerById)
   const h2hNav = h2hNeighbours(h2hSeq, h2hPlayers?.match?.id)
   const matchIndex = buildMatchIndex(matches)
 
@@ -603,6 +610,7 @@ export default function BracketView({ tournament, matches, players, picks, onPic
                       key={m.id}
                       match={m}
                       resolvedPlayers={resolved[m.id]}
+                      h2hPair={h2hResolved[m.id]}
                       playerById={playerById}
                       drawRanks={drawRanks}
                       picks={picks}
