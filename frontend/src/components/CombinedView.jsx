@@ -748,7 +748,10 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                 const isUpsetPick = pickId != null && expectedId != null && pickId !== expectedId
                 return (
                   <Fragment key={m.id}>
-                    {ha?.te_slug && hb?.te_slug && (
+                    {/* Both opponents known is the bar, not TE coverage — a
+                        player we have not matched to Tennis Explorer must not
+                        take the button away from a real match. */}
+                    {ha?.name && hb?.name && (
                       <button
                         className="cv-h2h"
                         style={{ top: y, left: gapX + H2H_X, pointerEvents: 'auto' }}

@@ -1118,7 +1118,11 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
         if pe.bracket_position in existing_players:
             player = existing_players[pe.bracket_position]
             if player.name != pe.name:
-                player.te_player_id = None  # name changed (withdrawal/replacement) — re-match on next assign_rankings
+                # Name changed (withdrawal/replacement) — re-match on next
+                # assign_rankings. The slug has to go with the id: left behind,
+                # it points the H2H panel at the player who was replaced.
+                player.te_player_id = None
+                player.te_slug = None
             player.name = pe.name
             player.nationality = pe.nationality
             player.seed = pe.seed

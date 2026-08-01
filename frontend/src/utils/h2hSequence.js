@@ -4,12 +4,16 @@
  * Bracket order (round, then match number) — the same order the draw is read
  * in, so "next" means what it looks like it means on screen.
  *
- * Byes are skipped (not a contest), and so is any match where either side
- * lacks a Tennis Explorer slug: the panel is driven by TE data, and landing on
- * a match it can say nothing about would be a dead end the user has to arrow
- * back out of. Resolution is passed in rather than recomputed so the sequence
- * follows whatever the caller is already showing — in picks mode that is the
- * user's own cascade, not the official draw.
+ * Byes are skipped (not a contest), and so is any match where a side has no
+ * name yet — an empty qualifier slot or an unreached round has no opponents to
+ * compare. A missing Tennis Explorer slug does NOT disqualify a match: rank,
+ * Elo, age and the pick control all come from our own draw data, and the panel
+ * says plainly which player it has no TE profile for. Requiring a slug here
+ * made the button vanish from real matches the moment an unmatched player
+ * reached them, which is when it is most wanted.
+ *
+ * Resolution is passed in rather than recomputed so the sequence follows
+ * whatever the caller is already showing.
  */
 export function buildH2HSequence(matches, resolved, playerById) {
   return matches
@@ -18,7 +22,7 @@ export function buildH2HSequence(matches, resolved, playerById) {
       const { p1: aId, p2: bId } = resolved[m.id] || {}
       const p1 = aId != null ? playerById[aId] : null
       const p2 = bId != null ? playerById[bId] : null
-      return p1?.te_slug && p2?.te_slug ? { match: m, p1, p2 } : null
+      return p1?.name && p2?.name ? { match: m, p1, p2 } : null
     })
     .filter(Boolean)
     .sort((a, b) =>

@@ -292,12 +292,15 @@ function MatchBox({ match, resolvedPlayers, h2hPair, playerById, drawRanks, pick
   const showTypeSlot = forceTypeSlot || playerNeedsTypeSlot(p1) || playerNeedsTypeSlot(p2)
   const showScores = mode === 'live'
 
-  // H2H strip: both players must have TE slugs (works in live and picks mode)
+  // H2H strip: both opponents must be known (works in live and picks mode).
+  // Deliberately NOT gated on te_slug — an unmatched player would otherwise
+  // take the button away from a match that is actually being played. See
+  // buildH2HSequence.
   // H2H opens on the players who really met, not on the picks cascade — the
   // bracket around it still shows the cascade. See resolveRealFirst.
   const h2hP1 = h2hPair?.p1 != null ? playerById[h2hPair.p1] : p1
   const h2hP2 = h2hPair?.p2 != null ? playerById[h2hPair.p2] : p2
-  const h2hAvailable = !!h2hP1?.te_slug && !!h2hP2?.te_slug
+  const h2hAvailable = !!h2hP1?.name && !!h2hP2?.name
 
   // Upset: lower-ranked player won (picks mode: user's pick; live mode: actual result)
   const rank1 = drawRanks[p1id] ?? Infinity

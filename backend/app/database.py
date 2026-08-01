@@ -236,6 +236,19 @@ async def _migrate(conn):
             "WHERE recipient_count = 0 AND digest_sent_at = sent_at "
             "AND sent_at >= '2026-07-29 02:49:00'"
         ),
+        # A draw entry matched to a TE player but never slug-stamped (qualifiers
+        # who arrive between ranking runs are the usual case) loses its Form and
+        # head-to-head record even though we know exactly whose profile it is.
+        # assign_rankings does this too; here it is idempotent and needs no
+        # scrape, so the gap closes at boot rather than at the next ranking run.
+        # Safe now that a name change clears te_slug alongside te_player_id
+        # (routers/tournaments.py) — otherwise this could restore a replaced
+        # player's slug.
+        (
+            "UPDATE draw_entries SET te_slug = ("
+            "  SELECT te_slug FROM te_players WHERE te_players.id = draw_entries.te_player_id"
+            ") WHERE te_slug IS NULL AND te_player_id IS NOT NULL"
+        ),
     ]
     for sql in migrations:
         try:
