@@ -191,10 +191,12 @@
    player boxes' .cv-slot (z-index 1). */
 .cv-live-score {
   position: absolute;
-  /* Lines up with the boxes' inner content edge rather than their border:
-     4px (.cv-slot inset) + 8px (.cv-box padding-right). Flush with the border
-     itself sat within a few px of the H2H chip, which straddles that edge. */
-  right: 12px;
+  /* Clear of the upset bell, which hangs centred 26px inside the column's
+     right edge (BELL_OFFSET 34 - H2H_X 8) and renders wider than its 1.5rem
+     font-size because it is an emoji. Applied to every live score, not only
+     the ones that have a bell: a conditional offset made the score jump
+     between matches, and the reserved space costs nothing when it is empty. */
+  right: 56px;
   transform: translateY(-50%);
   z-index: 2;
   line-height: 1;
@@ -211,12 +213,6 @@
 /* Step down as completed sets accumulate — the gap's height is fixed but the
    score's WIDTH is not, and a five-set line at 1.5rem would run past the
    column. After the base rule so equal specificity resolves in source order. */
-/* Clear of the upset bell when this match has one. The bell's centre sits
-   BELL_OFFSET(34) - H2H_X(8) = 26px inside the column's right edge and it is
-   ~24px wide, so its left edge lands at 38px; 44 leaves a little air. After the
-   base rule so equal specificity resolves in source order. */
-.cv-live-score--bell { right: 44px; }
-
 .cv-live-score--s2 { font-size: 1rem; }
 .cv-live-score--s3 { font-size: 0.88rem; }
 .cv-live-score--s4 { font-size: 0.78rem; }
