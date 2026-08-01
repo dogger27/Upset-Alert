@@ -280,9 +280,15 @@ export default function H2HPanel({
   // The queries are keyed on the INCOMING match so navigation starts fetching
   // straight away, but keepPreviousData means they keep serving the match
   // currently on screen until the new one has arrived.
+  // Both sides need a Tennis Explorer profile before there is a head-to-head to
+  // ask for. The panel still opens without one (rank, Elo, age and the pick
+  // control are all our own data) — it just says so instead of showing a record
+  // it does not have.
+  const teIn = !!slug1In && !!slug2In
   const h2hQ = useQuery({
     queryKey: ['h2h', slug1In, slug2In],
     queryFn: () => getH2H(slug1In, slug2In),
+    enabled: teIn,
     staleTime: 15 * 60 * 1000,
     placeholderData: keepPreviousData,
   })
@@ -307,11 +313,18 @@ export default function H2HPanel({
     placeholderData: keepPreviousData,
   })
 
-  const { data, isLoading, isError, isPlaceholderData } = h2hQ
-  const form_p1 = f1Q.data
-  const form_p2 = f2Q.data
-  const f1Stale = f1Q.isPlaceholderData
-  const f2Stale = f2Q.isPlaceholderData
+  // keepPreviousData fills `data` even for a query that is disabled, so a match
+  // with an unmatched player would otherwise inherit the PREVIOUS pair's
+  // head-to-head record — and, because that data reads as placeholder forever,
+  // strand the swap logic below waiting for a fetch that will never run. A
+  // disabled side has no data and nothing to wait for.
+  const { isLoading, isError } = h2hQ
+  const data = teIn ? h2hQ.data : undefined
+  const isPlaceholderData = teIn && h2hQ.isPlaceholderData
+  const form_p1 = slug1In ? f1Q.data : undefined
+  const form_p2 = slug2In ? f2Q.data : undefined
+  const f1Stale = !!slug1In && f1Q.isPlaceholderData
+  const f2Stale = !!slug2In && f2Q.isPlaceholderData
 
   // "This query has produced its answer." A disabled query (no slug on that
   // side) is idle and never will, so it counts as settled — otherwise the panel
@@ -365,6 +378,10 @@ export default function H2HPanel({
   }, [settling, slug1In, slug2In, matchIn?.id])
 
   const { slug1, slug2, player1, player2, match, beforeDrawId, beforeRound } = view
+  // Same test as teIn, but read off `view` — what is on screen, not what was
+  // asked for — so the notice can never describe a different match.
+  const teView = !!slug1 && !!slug2
+  const noTeNames = [slug1 ? null : player1?.name, slug2 ? null : player2?.name].filter(Boolean)
   const pickedId = picks && match ? (picks[match.id] ?? null) : null
   const showForm = (form_p1?.length ?? 0) > 0 || (form_p2?.length ?? 0) > 0
 
@@ -501,9 +518,11 @@ export default function H2HPanel({
                 className={`h2h-label h2h-filter-btn${surfFilter === 'surface' ? ' h2h-filter-active' : ''}`}
                 onClick={() => setSurfFilter('surface')}
               >{surfLabel}</button>
-              <div className="h2h-col-val h2h-val-p1 h2h-wins"><span className={bestCls(surf_p1, surf_p2)}>{isLoading ? '⋯' : surf_p1}</span></div>
+              {/* A zero here would claim they have never met on this surface.
+                  Without a TE profile we do not know that — say nothing. */}
+              <div className="h2h-col-val h2h-val-p1 h2h-wins"><span className={bestCls(surf_p1, surf_p2)}>{isLoading ? '⋯' : (teView ? surf_p1 : '—')}</span></div>
               <div className="h2h-vs" />
-              <div className="h2h-col-val h2h-val-p2 h2h-wins"><span className={bestCls(surf_p2, surf_p1)}>{isLoading ? '⋯' : surf_p2}</span></div>
+              <div className="h2h-col-val h2h-val-p2 h2h-wins"><span className={bestCls(surf_p2, surf_p1)}>{isLoading ? '⋯' : (teView ? surf_p2 : '—')}</span></div>
             </div>
           )}
 
@@ -556,6 +575,15 @@ export default function H2HPanel({
 
         {isLoading && <div className="h2h-loading">Loading H2H data…</div>}
         {isError && <div className="h2h-error">Could not load H2H data.</div>}
+
+        {/* Name the gap rather than leaving the space blank — "no meetings
+            found" would be a claim, and this is an absence of data. */}
+        {!teView && (
+          <div className="h2h-empty">
+            No Tennis Explorer profile for {noTeNames.join(' or ') || 'one of these players'},
+            so their head-to-head record and form are unavailable.
+          </div>
+        )}
 
         {data && !isLoading && (
           matches.length > 0 ? (
