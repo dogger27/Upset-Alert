@@ -18,7 +18,7 @@
 import { Fragment, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import H2HPanel from './H2HPanel'
-import { buildH2HSequence, buildMatchIndex, h2hNeighbours } from '../utils/h2hSequence'
+import { buildH2HSequence, buildMatchIndex, h2hNeighbours, resolveRealFirst } from '../utils/h2hSequence'
 import './CombinedView.css'
 
 // Upset bell with the same hover tooltip as BracketView's (portal-rendered,
@@ -369,8 +369,11 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
 
   const resolved = resolveCombinedPlayers(matches, picks)
 
-  // Order for the H2H panel's ‹ › arrows — see BracketView for the same pair.
-  const h2hSeq = buildH2HSequence(matches, resolved, playerById)
+  // The H2H panel reads real entrants first, so it never compares two players
+  // who did not actually meet — see resolveRealFirst. The bracket itself keeps
+  // using `resolved`, which is what the user picked.
+  const h2hResolved = resolveRealFirst(matches, resolved)
+  const h2hSeq = buildH2HSequence(matches, h2hResolved, playerById)
   const h2hNav = h2hNeighbours(h2hSeq, h2h?.match?.id)
   const matchIndex = buildMatchIndex(matches)
 
@@ -733,6 +736,11 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                 const { p1: aId, p2: bId } = resolved[m.id] || {}
                 const a = aId != null ? playerById[aId] : null
                 const b = bId != null ? playerById[bId] : null
+                // H2H compares who really played; the bell below stays on the
+                // cascade, since it is about the user's pick, not the result.
+                const { p1: hAId, p2: hBId } = h2hResolved[m.id] || {}
+                const ha = hAId != null ? playerById[hAId] : null
+                const hb = hBId != null ? playerById[hBId] : null
                 const pickId = picks?.[m.id] ?? null
                 const rankA = aId != null ? drawRanks[aId] : null
                 const rankB = bId != null ? drawRanks[bId] : null
@@ -740,12 +748,12 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                 const isUpsetPick = pickId != null && expectedId != null && pickId !== expectedId
                 return (
                   <Fragment key={m.id}>
-                    {a?.te_slug && b?.te_slug && (
+                    {ha?.te_slug && hb?.te_slug && (
                       <button
                         className="cv-h2h"
                         style={{ top: y, left: gapX + H2H_X, pointerEvents: 'auto' }}
-                        title={`Head-to-head: ${a.name} vs ${b.name}`}
-                        onClick={() => setH2H({ p1: a, p2: b, match: m })}
+                        title={`Head-to-head: ${ha.name} vs ${hb.name}`}
+                        onClick={() => setH2H({ p1: ha, p2: hb, match: m })}
                       >
                         H2H
                       </button>
