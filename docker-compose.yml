@@ -5,7 +5,16 @@ services:
     ports:
       - "127.0.0.1:8001:8001"
     volumes:
-      - ./backend/tennis_fantasy.db:/data/tennis_fantasy.db
+      # Mount the DIRECTORY, never the .db file on its own. SQLite in WAL mode
+      # writes to sibling files (-wal, -shm) next to the database; with a
+      # single-file bind mount those siblings are created in the CONTAINER's
+      # writable layer, so every committed transaction sat outside the host
+      # until an auto-checkpoint happened to fold it in. `up --force-recreate`
+      # discards that layer — i.e. every deploy silently rolled the database
+      # back to the last checkpoint, and the nightly backup was copying a host
+      # file that had been frozen for days. Mounting the directory keeps the
+      # WAL on the host where it belongs.
+      - /home/paulwiens/upsetalert/data:/data
       - /home/paulwiens/upsetalert/logs:/logs
     environment:
       - DATABASE_URL=sqlite+aiosqlite:////data/tennis_fantasy.db

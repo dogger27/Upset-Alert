@@ -67,6 +67,13 @@ async def lifespan(app: FastAPI):
     yield
     if scrapers_on:
         stop_scheduler()
+    # Close every pooled connection so SQLite runs its closing checkpoint and
+    # folds the WAL back into the database file. Not a correctness requirement
+    # now that the WAL lives on the host (see docker-compose.yml), but it keeps
+    # the .db file current between deploys, which is what the nightly backup
+    # and any out-of-band read see.
+    from app.database import engine
+    await engine.dispose()
 
 
 app = FastAPI(title="Tennis Fantasy League", version="0.1.0", lifespan=lifespan)
