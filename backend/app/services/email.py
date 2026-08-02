@@ -502,8 +502,50 @@ async def send_round_complete_notification(
     })
 
 
-def _week_summary(rows: list[tuple]) -> str:
-    """'Your week so far' table: one line per draw — correct picks and global place.
+def _round_abbrev(round_name: str) -> str:
+    """'Semi-Finals' -> 'SF'. Column headers have ~86px to work with, so the
+    round name has to shrink to fit beside the word it qualifies."""
+    n = (round_name or "").strip()
+    low = n.lower()
+    if low.startswith("semi"):
+        return "SF"
+    if low.startswith("quarter"):
+        return "QF"
+    if low.startswith("final"):
+        return "F"
+    return n  # R128 / R64 / R32 / R16 are already short
+
+
+def _section_banner(title: str, subtitle: str = "", link_url: str = "", link_text: str = "") -> str:
+    """Full-bleed section header — a green bar spanning the whole email card,
+    edge to edge like the logo header, not inset the way the body content is.
+
+    Built as a table (not a padded div) so it can sit outside the body's own
+    horizontal padding: that padding is what would otherwise stop it short of
+    the card edges in every client.
+    """
+    link_cell = (
+        f'<td align="right" valign="middle" bgcolor="#1b4332" '
+        f'style="padding:13px 24px 13px 8px;background:#1b4332;text-align:right;white-space:nowrap">'
+        f'<a href="{link_url}" style="color:#ffffff;font-size:13px;font-weight:600;'
+        f'text-decoration:underline">{link_text}</a></td>'
+        if link_url and link_text else ""
+    )
+    sub = (
+        f'<div style="font-size:12px;font-weight:400;color:#b7cdbf;padding-top:3px">{subtitle}</div>'
+        if subtitle else ""
+    )
+    return (
+        f'<table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#1b4332" '
+        f'style="width:100%;background:#1b4332;border-collapse:collapse">'
+        f'<tr><td valign="middle" bgcolor="#1b4332" '
+        f'style="padding:13px 24px;background:#1b4332;color:#ffffff;font-size:16px;'
+        f'font-weight:700;line-height:1.25">{title}{sub}</td>{link_cell}</tr></table>'
+    )
+
+
+def _week_summary(rows: list[tuple], round_name: str) -> str:
+    """'Summary' section: one line per draw — correct picks and global place.
 
     rows: [(draw_label, '12/16', '2nd of 13'), ...]
     """
@@ -517,19 +559,16 @@ def _week_summary(rows: list[tuple]) -> str:
         f'</tr>'
         for i, (label, hits, place) in enumerate(rows)
     )
-    return f"""<div style="margin:0 0 24px">
-      <div style="padding:11px 14px;background:#1b4332;color:#fff;
-            border-top-left-radius:6px;border-top-right-radius:6px;
-            font-weight:600;font-size:14px">Your week so far</div>
+    return f"""{_section_banner("Summary")}
+    <div style="padding:20px 24px 22px;background:#ffffff">
       <table width="100%" cellpadding="0" cellspacing="0" border="0"
-             style="width:100%;border-collapse:collapse;border:1px solid #e5e7eb;border-top:none;
-                    border-bottom-left-radius:6px;border-bottom-right-radius:6px">
+             style="width:100%;border-collapse:collapse;border:1px solid #e5e7eb;border-radius:6px">
         <tr style="background:#f3f4f6">
           <th align="left" style="padding:7px 12px 7px 14px;font-size:12px;text-transform:uppercase;
               letter-spacing:0.5px;color:#6b7280;border-bottom:2px solid #e5e7eb">Draw</th>
           <th align="center" width="86" style="padding:7px 6px;font-size:12px;text-align:center;width:86px;
               text-transform:uppercase;letter-spacing:0.5px;color:#6b7280;line-height:1.25;
-              border-bottom:2px solid #e5e7eb">Correct Picks</th>
+              border-bottom:2px solid #e5e7eb">{_round_abbrev(round_name)} Correct</th>
           <th align="right" width="90" style="padding:7px 14px 7px 6px;font-size:12px;text-align:right;width:90px;
               text-transform:uppercase;letter-spacing:0.5px;color:#6b7280;
               border-bottom:2px solid #e5e7eb">Global</th>
@@ -540,31 +579,24 @@ def _week_summary(rows: list[tuple]) -> str:
 
 
 def _draw_section(draw: dict, is_last: bool) -> str:
-    """One draw inside the weekly email: its own heading, standings, results."""
+    """One draw inside the weekly email: full-bleed banner, then its standings
+    and results boxed beneath it."""
     blocks = "".join(
         _round_complete_league_block(n, rows, i == len(draw["leagues"]) - 1)
         for i, (n, rows) in enumerate(draw["leagues"])
     )
-    rule = "" if is_last else '<div style="border-top:1px solid #e5e7eb;margin:28px 0 0"></div>'
     city = f"{draw['city']} &middot; " if draw.get("city") else ""
-    return f"""<div style="margin:0 0 4px">
-      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;margin:0 0 14px">
-        <tr>
-          <td style="padding:0">
-            <div style="font-size:18px;font-weight:700;color:#111">{draw['label']}</div>
-            <div style="font-size:13px;color:#6b7280;padding-top:2px">
-              {city}{draw['round_name']} complete
-            </div>
-          </td>
-          <td align="right" style="padding:0;text-align:right;white-space:nowrap">
-            <a href="{BASE_URL}/tournaments/{draw['id']}"
-               style="font-size:13px;color:#1b4332;font-weight:600;text-decoration:underline">View draw</a>
-          </td>
-        </tr>
-      </table>
-      <div style="margin:0 0 4px">{blocks}</div>
+    banner = _section_banner(
+        draw["label"],
+        f"{city}{draw['round_name']} complete",
+        f"{BASE_URL}/tournaments/{draw['id']}",
+        "View draw",
+    )
+    pad_bottom = "24px" if is_last else "22px"
+    return f"""{banner}
+    <div style="padding:20px 24px {pad_bottom};background:#ffffff">
+      {blocks}
       {_round_results_widget(draw['round_name'], draw['match_results'])}
-      {rule}
     </div>"""
 
 
@@ -621,7 +653,7 @@ async def send_round_complete_digest(
 
     intro = f"Week of {week_label} &middot; {scope}" if not is_followup else scope
     sections = "".join(_draw_section(d, i == len(draws) - 1) for i, d in enumerate(draws))
-    summary = _week_summary(summary_rows) if len(summary_rows) > 1 else ""
+    summary = _week_summary(summary_rows, round_name) if len(summary_rows) > 1 else ""
     unsubscribe = (
         f'<p style="max-width:560px;margin:16px auto 0;text-align:center;font-size:12px;color:#9ca3af">'
         f'<a href="{unsubscribe_url}" style="color:#9ca3af;text-decoration:underline">'
@@ -635,16 +667,21 @@ async def send_round_complete_digest(
         "from": FROM,
         "to": [email],
         "subject": subject,
-        "html": f"""{_WRAP_OPEN}{_LOGO_HEADER}{_BODY_OPEN}
-          <h1 style="font-size:22px;margin:0 0 6px">{heading}</h1>
-          <p style="color:#6b7280;font-size:13px;margin:0 0 18px">{intro}</p>
-          <a href="{cta_url}" style="display:inline-block;padding:12px 24px;margin:0 0 22px;
-             background:#1b4332;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
-            {cta_text}
-          </a>
+        # The intro block keeps the body padding; everything after it is a
+        # banner-headed section that must reach both card edges, so those sit
+        # outside the padded div rather than inside it.
+        "html": f"""{_WRAP_OPEN}{_LOGO_HEADER}
+          <div style="padding:28px 24px 24px;background:#ffffff;color:#111111">
+            <h1 style="font-size:22px;margin:0 0 6px">{heading}</h1>
+            <p style="color:#6b7280;font-size:13px;margin:0 0 18px">{intro}</p>
+            <a href="{cta_url}" style="display:inline-block;padding:12px 24px;margin:0;
+               background:#1b4332;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
+              {cta_text}
+            </a>
+          </div>
           {summary}
           {sections}
-        {_BODY_CLOSE}{_WRAP_CLOSE}
+        {_WRAP_CLOSE}
         {unsubscribe}""",
     })
 
