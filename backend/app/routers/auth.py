@@ -317,7 +317,6 @@ async def _global_draw_history(db: AsyncSession, user_id: int) -> list[dict]:
     """
     from app.models.draw_history import TournamentResult
     from app.models.tournament import Draw, Match
-    from app.models.prediction import UserPrediction
     from sqlalchemy import func
 
     res = await db.execute(
@@ -341,33 +340,13 @@ async def _global_draw_history(db: AsyncSession, user_id: int) -> list[dict]:
     )
     total_matches = {row.draw_id: row.total for row in match_counts_res}
 
-    # Count user's completed predictions per tournament
-    pred_counts_res = await db.execute(
-        select(UserPrediction.draw_id, func.count().label("total"))
-        .where(
-            UserPrediction.draw_id.in_(tourn_ids),
-            UserPrediction.user_id == user_id,
-            UserPrediction.predicted_winner_id.isnot(None),
-        )
-        .group_by(UserPrediction.draw_id)
-    )
-    user_preds = {row.draw_id: row.total for row in pred_counts_res}
-
-    # Only include tournaments where user made all predictions
-    competed_ids = {
-        tid for tid in tourn_ids
-        if user_preds.get(tid, 0) >= total_matches.get(tid, 1)
-    }
-    if not competed_ids:
-        return []
-
-    t_res = await db.execute(select(Draw).where(Draw.id.in_(competed_ids)))
+    # Every draw with a stored result counts — a partial bracket competes like
+    # any other, it just forfeits points on the matches left unpicked.
+    t_res = await db.execute(select(Draw).where(Draw.id.in_(tourn_ids)))
     tournaments = {t.id: t for t in t_res.scalars().all()}
 
     entries = []
     for tid in tourn_ids:
-        if tid not in competed_ids:
-            continue
         t = tournaments.get(tid)
         if not t:
             continue
@@ -400,7 +379,7 @@ async def get_draw_history(
 
 @router.get("/users/draw-counts")
 async def get_draw_counts(db: AsyncSession = Depends(get_db)):
-    """Return competed draw counts for all users (draws where they fully entered picks)."""
+    """Return competed draw counts for all users (draws they entered picks in)."""
     from app.models.draw_history import TournamentResult
     res = await db.execute(
         select(TournamentResult.user_id, func.count().label("draw_count"))

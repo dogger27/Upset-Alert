@@ -58,7 +58,7 @@ async def _main(email: str, name_like: str, gender: str, round_label: str) -> No
             return
         print(f"Round: {round_label} -> round_number={round_number}")
 
-        # Eligibility check (mirrors notify_round_complete: needs a full bracket).
+        # Eligibility check (mirrors notify_round_complete: needs ≥1 pick).
         total_matches = await db.scalar(
             select(func.count()).where(Match.draw_id == draw.id, Match.is_bye == False)
         )
@@ -70,8 +70,8 @@ async def _main(email: str, name_like: str, gender: str, round_label: str) -> No
             )
         )
         print(f"Eligibility: predictions={my_preds} / non-bye matches={total_matches}")
-        if not total_matches or my_preds < total_matches:
-            print("ABORT: user is not eligible (incomplete bracket) — email would not send.")
+        if not total_matches or not my_preds:
+            print("ABORT: user is not eligible (no picks in this draw) — email would not send.")
             return
 
     print("Sending forced, single-recipient round-complete email ...")

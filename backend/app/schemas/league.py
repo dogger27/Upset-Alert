@@ -51,7 +51,8 @@ class LeaderboardEntry(BaseModel):
     user: UserOut
     total_points: float
     correct_count: int
-    is_complete: bool = True
+    # Picking zero upsets is the only thing that disqualifies an entry; an
+    # unfinished bracket still competes.
     has_upset_pick: bool = True
 
 

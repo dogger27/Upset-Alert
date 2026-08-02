@@ -369,23 +369,15 @@ async def league_tournaments(
     if not t_ids:
         return []
 
-    # Total non-bye matches per tournament
-    totals_result = await db.execute(
-        select(Match.draw_id, func.count().label("total"))
-        .where(Match.draw_id.in_(t_ids), Match.is_bye == False)
-        .group_by(Match.draw_id)
-    )
-    total_by_t = {r.draw_id: r.total for r in totals_result.all()}
-
-    # Count members who have picks for ALL non-bye matches
+    # Count members competing in each draw — one pick is enough to be entered.
     from collections import defaultdict
-    fully_entered = defaultdict(int)
+    entered = defaultdict(int)
     for r in picks_rows:
-        if r.pick_count >= total_by_t.get(r.draw_id, 0) > 0:
-            fully_entered[r.draw_id] += 1
+        if r.pick_count > 0:
+            entered[r.draw_id] += 1
 
     out = []
-    for t_id, picker_count in fully_entered.items():
+    for t_id, picker_count in entered.items():
         t = await db.get(Draw, t_id)
         if t:
             t.status = t.computed_status
@@ -452,7 +444,8 @@ async def leaderboard(
     )
     completed_matches = completed_matches_result.scalars().all()
 
-    # Total non-bye matches — a member must have a pick for every one to be entered
+    # Total non-bye matches in the draw — reported to the frontend as the
+    # denominator for progress, not as an entry requirement.
     total_matches_result = await db.execute(
         select(func.count())
         .where(Match.draw_id == tournament_id, Match.is_bye == False)
@@ -472,11 +465,11 @@ async def leaderboard(
     )
     all_entries = all_entries_result.scalars().all()
 
-    # Members with at least one pick are included; those with a complete
-    # bracket are ranked normally, partial pickers are appended after (greyed
-    # out on the frontend), and members with zero picks are excluded entirely.
-    complete_scores = []
-    partial_scores = []
+    # Members with at least one pick are included and ranked together. A
+    # partial bracket is still a competing entry — it simply forfeits points on
+    # the matches left unpicked. The only bar to competing is picking zero
+    # upsets (has_upset_pick below). Members with zero picks are excluded.
+    scores = []
     has_upset_map: dict[int, bool] = {}
     for member in league.members:
         preds_result = await db.execute(
@@ -489,16 +482,11 @@ async def leaderboard(
         preds = preds_result.scalars().all()
         if len(preds) == 0:
             continue
-        score = score_user(member.user_id, preds, completed_matches, tournament, league)
+        scores.append((member.user, score_user(member.user_id, preds, completed_matches, tournament, league)))
         has_upset_map[member.user_id] = has_upset_pick(preds, all_matches, all_entries)
-        if len(preds) < total_matches:
-            partial_scores.append((member.user, score))
-        else:
-            complete_scores.append((member.user, score))
 
-    ranked = rank_users([s for _, s in complete_scores], tournament.num_rounds)
-    partial_ranked = rank_users([s for _, s in partial_scores], tournament.num_rounds)
-    user_map = {u.id: u for u, _ in complete_scores + partial_scores}
+    ranked = rank_users([s for _, s in scores], tournament.num_rounds)
+    user_map = {u.id: u for u, _ in scores}
 
     entries = [
         LeaderboardEntry(
@@ -509,16 +497,6 @@ async def leaderboard(
             has_upset_pick=has_upset_map[score.user_id],
         )
         for rank_idx, score in enumerate(ranked, start=1)
-    ] + [
-        LeaderboardEntry(
-            rank=len(ranked) + rank_idx,
-            user=user_map[score.user_id],
-            total_points=score.total_points,
-            correct_count=score.correct_count,
-            is_complete=False,
-            has_upset_pick=has_upset_map[score.user_id],
-        )
-        for rank_idx, score in enumerate(partial_ranked, start=1)
     ]
 
     def _is_upset(match) -> bool:

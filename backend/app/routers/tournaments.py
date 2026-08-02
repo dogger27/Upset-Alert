@@ -275,19 +275,9 @@ async def hall_of_fame(
 ):
     """Top 5 all-time scores per tier/gender, plus the caller's own best if outside the top 5."""
     from app.models.draw_history import TournamentResult
-    from app.models.prediction import UserPrediction
 
-    # Subqueries to enforce "competed" = user picked every non-bye match
-    pick_count_sq = (
-        select(
-            UserPrediction.draw_id,
-            UserPrediction.user_id,
-            func.count().label("picks"),
-        )
-        .where(UserPrediction.predicted_winner_id.isnot(None))
-        .group_by(UserPrediction.draw_id, UserPrediction.user_id)
-        .subquery()
-    )
+    # Every stored result counts — a partial bracket competes like any other,
+    # it just has fewer chances to score. Only the draw's match count is needed.
     match_count_sq = (
         select(Match.draw_id, func.count().label("total"))
         .where(Match.is_bye == False)  # noqa: E712
@@ -310,16 +300,8 @@ async def hall_of_fame(
         )
         .join(Draw, Draw.id == TournamentResult.draw_id)
         .join(User, User.id == TournamentResult.user_id)
-        .join(
-            pick_count_sq,
-            (pick_count_sq.c.draw_id == TournamentResult.draw_id)
-            & (pick_count_sq.c.user_id == TournamentResult.user_id),
-        )
         .join(match_count_sq, match_count_sq.c.draw_id == TournamentResult.draw_id)
-        .where(
-            TournamentResult.league_id.is_(None),
-            pick_count_sq.c.picks >= match_count_sq.c.total,
-        )
+        .where(TournamentResult.league_id.is_(None))
         .order_by(TournamentResult.points.desc())
     )
     rows = res.all()
@@ -443,7 +425,7 @@ async def global_gs_totals(db: AsyncSession = Depends(get_db)):
 
 @router.get("/global-draws", response_model=list[LeagueTournamentOut])
 async def global_draws(db: AsyncSession = Depends(get_db)):
-    """Draws where at least one user has fully entered picks, with global picker counts."""
+    """Draws where at least one user has entered picks, with global picker counts."""
     from collections import defaultdict
 
     picks_result = await db.execute(
@@ -461,20 +443,14 @@ async def global_draws(db: AsyncSession = Depends(get_db)):
     if not t_ids:
         return []
 
-    totals_result = await db.execute(
-        select(Match.draw_id, func.count().label("total"))
-        .where(Match.draw_id.in_(t_ids), Match.is_bye == False)
-        .group_by(Match.draw_id)
-    )
-    total_by_t = {r.draw_id: r.total for r in totals_result.all()}
-
-    fully_entered: defaultdict = defaultdict(int)
+    # One pick is enough to be entered — a partial bracket still competes.
+    entered: defaultdict = defaultdict(int)
     for r in picks_rows:
-        if r.pick_count >= total_by_t.get(r.draw_id, 0) > 0:
-            fully_entered[r.draw_id] += 1
+        if r.pick_count > 0:
+            entered[r.draw_id] += 1
 
     out = []
-    for draw_id, picker_count in fully_entered.items():
+    for draw_id, picker_count in entered.items():
         t = await db.get(Draw, draw_id)
         if t:
             t.status = t.computed_status
@@ -503,15 +479,7 @@ async def get_tournament(tournament_id: int, db: AsyncSession = Depends(get_db))
 
 @router.get("/{tournament_id}/competitors", response_model=list[UserPublicOut])
 async def tournament_competitors(tournament_id: int, db: AsyncSession = Depends(get_db)):
-    """Return all users who have submitted complete picks for this tournament."""
-    total_result = await db.execute(
-        select(func.count())
-        .where(Match.draw_id == tournament_id, Match.is_bye == False)
-    )
-    total = total_result.scalar_one()
-    if total == 0:
-        return []
-
+    """Return all users competing in this tournament — one pick is enough."""
     sub = (
         select(UserPrediction.user_id)
         .where(
@@ -519,7 +487,6 @@ async def tournament_competitors(tournament_id: int, db: AsyncSession = Depends(
             UserPrediction.predicted_winner_id.isnot(None),
         )
         .group_by(UserPrediction.user_id)
-        .having(func.count() >= total)
     )
     result = await db.execute(
         select(User).where(User.id.in_(sub)).order_by(User.display_name)
@@ -654,8 +621,9 @@ async def global_standings(tournament_id: int, db: AsyncSession = Depends(get_db
     # different point total than every other view of the same picks.
     pts_table = _points_table(tournament)
 
-    # Users with at least one pick — those with a complete bracket are ranked
-    # normally; partial pickers are appended after (greyed out on the frontend).
+    # Users with at least one pick. A partial bracket is still a competing
+    # entry — it simply forfeits points on the matches left unpicked. The only
+    # bar to competing is picking zero upsets (has_upset_pick below).
     sub = (
         select(UserPrediction.user_id)
         .where(UserPrediction.draw_id == tournament_id, UserPrediction.predicted_winner_id.isnot(None))
@@ -664,8 +632,7 @@ async def global_standings(tournament_id: int, db: AsyncSession = Depends(get_db
     users_result = await db.execute(select(User).where(User.id.in_(sub)))
     users = users_result.scalars().all()
 
-    complete_scores: list[UserScore] = []
-    partial_scores: list[UserScore] = []
+    scores: list[UserScore] = []
     has_upset_map: dict[int, bool] = {}
     for user in users:
         preds_result = await db.execute(
@@ -689,30 +656,21 @@ async def global_standings(tournament_id: int, db: AsyncSession = Depends(get_db
                 total_pts += pts_table.get(m.round_number, 0)
                 correct += 1
                 correct_by_round[m.round_number] = correct_by_round.get(m.round_number, 0) + 1
-        score = UserScore(user_id=user.id, total_points=total_pts, correct_count=correct,
-                          correct_by_round=correct_by_round)
-        if len(preds) < total_matches:
-            partial_scores.append(score)
-        else:
-            complete_scores.append(score)
+        scores.append(UserScore(user_id=user.id, total_points=total_pts, correct_count=correct,
+                                correct_by_round=correct_by_round))
 
-    ranked = rank_users(complete_scores, tournament.num_rounds)
-    partial_ranked = rank_users(partial_scores, tournament.num_rounds)
+    ranked = rank_users(scores, tournament.num_rounds)
     user_map = {u.id: u for u in users}
     return [
         LeaderboardEntry(rank=i + 1, user=user_map[s.user_id], total_points=s.total_points,
                          correct_count=s.correct_count, has_upset_pick=has_upset_map[s.user_id])
         for i, s in enumerate(ranked)
-    ] + [
-        LeaderboardEntry(rank=len(ranked) + i + 1, user=user_map[s.user_id], total_points=s.total_points,
-                         correct_count=s.correct_count, is_complete=False, has_upset_pick=has_upset_map[s.user_id])
-        for i, s in enumerate(partial_ranked)
     ]
 
 
 @router.get("/{tournament_id}/global-round-scores")
 async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get_db)):
-    """Per-round point breakdown for ALL fully-entered users in a tournament."""
+    """Per-round point breakdown for every user competing in a tournament."""
     from collections import defaultdict
     from app.services.scoring import _points_table
 
@@ -733,16 +691,12 @@ async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get
     )
     completed_matches = completed_matches_result.scalars().all()
 
-    total_result = await db.execute(
-        select(func.count()).where(Match.draw_id == tournament_id, Match.is_bye == False)
-    )
-    total_matches = total_result.scalar_one()
-
+    # Anyone with at least one pick is competing — a partial bracket simply
+    # scores nothing on the matches it left unpicked.
     sub = (
         select(UserPrediction.user_id)
         .where(UserPrediction.draw_id == tournament_id, UserPrediction.predicted_winner_id.isnot(None))
         .group_by(UserPrediction.user_id)
-        .having(func.count() >= total_matches)
     )
     users_result = await db.execute(select(User).where(User.id.in_(sub)))
     users = users_result.scalars().all()

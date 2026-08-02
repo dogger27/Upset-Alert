@@ -195,14 +195,13 @@ export default function DrawSidebar({ tournamentId, tournament, selectedUserId, 
                   {globalEntries.map((entry, i) => {
                     const m = entry.user
                     const isActive = m.id === activeDrawUserId
-                    const incomplete = entry.is_complete === false
-                    const noUpset = !incomplete && entry.has_upset_pick === false
+                    const noUpset = entry.has_upset_pick === false
                     return (
                       <li
                         key={m.id}
-                        className={['sidebar-member sidebar-member--standing sidebar-member--global', isActive && 'sidebar-member--selected', (incomplete || noUpset) && 'sidebar-member--incomplete'].filter(Boolean).join(' ')}
+                        className={['sidebar-member sidebar-member--standing sidebar-member--global', isActive && 'sidebar-member--selected', noUpset && 'sidebar-member--no-upset'].filter(Boolean).join(' ')}
                         onClick={() => handleMemberClick(m.id, m.username)}
-                        title={incomplete ? `${m.display_name} (picks incomplete)` : noUpset ? `${m.display_name} (must pick at least 1 upset to compete)` : m.display_name}
+                        title={noUpset ? `${m.display_name} (must pick at least 1 upset to compete)` : m.display_name}
                       >
                         <span className="sidebar-rank">{i + 1}</span>
                         <span className="sidebar-points">{entry.total_points % 1 === 0 ? entry.total_points : entry.total_points.toFixed(1)}</span>
@@ -239,14 +238,13 @@ export default function DrawSidebar({ tournamentId, tournament, selectedUserId, 
                   {leagueEntries.map((entry, i) => {
                     const m = entry.user
                     const isActive = m.id === activeDrawUserId
-                    const incomplete = entry.is_complete === false
-                    const noUpset = !incomplete && entry.has_upset_pick === false
+                    const noUpset = entry.has_upset_pick === false
                     return (
                       <li
                         key={m.id}
-                        className={['sidebar-member sidebar-member--standing sidebar-member--global', isActive && 'sidebar-member--selected', (incomplete || noUpset) && 'sidebar-member--incomplete'].filter(Boolean).join(' ')}
+                        className={['sidebar-member sidebar-member--standing sidebar-member--global', isActive && 'sidebar-member--selected', noUpset && 'sidebar-member--no-upset'].filter(Boolean).join(' ')}
                         onClick={() => handleMemberClick(m.id, m.username)}
-                        title={incomplete ? `${m.display_name} (picks incomplete)` : noUpset ? `${m.display_name} (must pick at least 1 upset to compete)` : m.display_name}
+                        title={noUpset ? `${m.display_name} (must pick at least 1 upset to compete)` : m.display_name}
                       >
                         <span className="sidebar-rank">{i + 1}</span>
                         <span className="sidebar-points">{entry.total_points % 1 === 0 ? entry.total_points : entry.total_points.toFixed(1)}</span>
