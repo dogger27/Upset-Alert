@@ -88,9 +88,14 @@ async def _refresh_active_tournaments(force_refresh: bool = False) -> None:
     today = date.today()
     poll_from = today + timedelta(days=POLL_LEAD_DAYS)
 
+    # Identify the work as plain tuples, not ORM instances. A scrape that fails
+    # rolls its session back, and rollback expires every instance still attached
+    # to it — so a Draw read before the loop would need a lazy reload afterwards,
+    # which is sync IO inside the event loop (MissingGreenlet) and killed the rest
+    # of the cycle. Tuples can't expire; the Draw is re-fetched below per draw.
     async with AsyncSessionLocal() as db:
         result = await db.execute(
-            select(Draw).where(
+            select(Draw.id, Draw.name, Draw.wiki_page_title).where(
                 Draw.status != "completed",
                 or_(
                     # Group 1: active window (started within last 14 days)
@@ -114,15 +119,18 @@ async def _refresh_active_tournaments(force_refresh: bool = False) -> None:
                 )
             )
         )
-        tournaments = result.scalars().all()
-        logger.info("Daily refresh: %d tournaments to check", len(tournaments))
-        for t in tournaments:
-            await asyncio.sleep(5)  # throttle Wikipedia requests to avoid 429s
-            # Capture before any DB operation can expire these attributes
-            t_id = t.id
-            t_name = t.name
-            t_wiki = t.wiki_page_title
+        tournaments = result.all()
+
+    logger.info("Daily refresh: %d tournaments to check", len(tournaments))
+    for t_id, t_name, t_wiki in tournaments:
+        await asyncio.sleep(5)  # throttle Wikipedia requests to avoid 429s
+        # One session per draw, so a failed scrape's rollback is contained to the
+        # draw that caused it instead of poisoning every draw still to come.
+        async with AsyncSessionLocal() as db:
             try:
+                t = await db.get(Draw, t_id)
+                if t is None:
+                    continue  # deleted between the sweep and now
                 prev_status = t.status
 
                 await _do_scrape(t, db, force_refresh=force_refresh)
