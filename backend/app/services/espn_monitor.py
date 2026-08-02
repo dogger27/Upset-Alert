@@ -621,9 +621,23 @@ class ESPNMonitor:
         pairs: list,
         tok_index: dict,
     ) -> None:
-        live_comps = _singles_comps(espn_event, tournament.gender, "STATUS_IN_PROGRESS")
+        # A match that is under way OR already played is equally good evidence
+        # that the draw has begun. Watching only STATUS_IN_PROGRESS meant a
+        # first match that finished (or was suspended by rain) between two
+        # 60-second polls left the draw Open with results already on the board.
+        # Suspended/played comps must carry linescores, so a merely scheduled
+        # match can never lock anything.
+        started_comps = _singles_comps(espn_event, tournament.gender, "STATUS_IN_PROGRESS")
+        started_comps += [
+            c for c in _singles_comps(
+                espn_event, tournament.gender,
+                ("STATUS_SUSPENDED", "STATUS_SCHEDULED") + _FINAL_STATUSES,
+            )
+            if _comp_has_linescores(c)
+        ]
+
         trigger_name = None
-        for comp in live_comps:
+        for comp in started_comps:
             for name in _comp_live_players(comp):
                 if _player_in_draw(name, pairs, tok_index):
                     trigger_name = name
@@ -633,7 +647,7 @@ class ESPNMonitor:
 
         if trigger_name:
             logger.info(
-                "ESPN LIVE MATCH DETECTED — %d %s (%s): '%s' is in progress",
+                "ESPN MAIN-DRAW PLAY DETECTED — %d %s (%s): '%s' is under way or played",
                 tournament.year, tournament.name, tournament.gender, trigger_name,
             )
             await self._on_match_start(tournament.id, trigger_name)
@@ -738,12 +752,17 @@ class ESPNMonitor:
         """
         live_comps = _singles_comps(espn_event, tournament.gender, "STATUS_IN_PROGRESS")
 
-        # Suspended matches: ESPN reverts them to STATUS_SCHEDULED (for the
-        # resumption) but keeps the partial linescores. Track them alongside
-        # live matches so the draw can show "7-6, 4-6 (Suspended)" instead of
-        # silently dropping the score.
+        # Suspended matches keep their partial linescores; track them alongside
+        # live matches so the draw shows "7-6, 4-6 (Suspended)" instead of
+        # silently dropping the score. ESPN reports them two different ways: an
+        # explicit STATUS_SUSPENDED, or a revert to STATUS_SCHEDULED (for the
+        # resumption) with the linescores left in place. Only the second was
+        # handled, so rain at 2026 Canadian Open R1 left three matches with no
+        # live state at all — the draw looked like play had never begun.
         suspended_comps = [
-            c for c in _singles_comps(espn_event, tournament.gender, "STATUS_SCHEDULED")
+            c for c in _singles_comps(
+                espn_event, tournament.gender, ("STATUS_SUSPENDED", "STATUS_SCHEDULED")
+            )
             if _comp_has_linescores(c)
         ]
 
