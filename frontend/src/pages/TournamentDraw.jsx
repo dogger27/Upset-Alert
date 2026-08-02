@@ -33,6 +33,13 @@ export default function TournamentDrawRoute() {
   return <TournamentDraw key={id} />
 }
 
+// Boxes awaiting a pick, in either view: CombinedView outlines the pair of
+// feeder boxes, BracketView outlines the match box itself. Both classes are
+// only ever applied when the viewer can actually make the pick.
+const MISSING_PICK_SEL = '.cv-match-outline--missing, .match-box.missing-pick'
+// How far past the viewport edge a box must be before it counts as off-screen.
+const EDGE_SLACK = 8
+
 function TournamentDraw() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -87,6 +94,7 @@ function TournamentDraw() {
   // right edge (for positioning the right-hand round-nav button), and to bind
   // the swipe's touchmove natively (below).
   const bodyNodeRef = useRef(null)
+  const scrollerRef = useRef(null)   // .cv-scroll / .bracket-scroll, re-found on each measure
   // Holds the current render's touchmove handler. Refreshed by plain
   // assignment further down rather than in an effect: the handler is defined
   // after this component's early returns, so a hook there would break the
@@ -300,6 +308,97 @@ function TournamentDraw() {
     ro.observe(body)
     return () => ro.disconnect()
   }, [windowStart, data, mainWidth, bodyWidth, sidebarCollapsed, viewMode, headerHidden])
+
+  // ── Unpicked matches scrolled off the top/bottom of the round on screen ───
+  // The round-nav buttons cover the horizontal case (an unpicked match in a
+  // round that's been paged away). This is the vertical one: a 128-draw column
+  // is many screens tall on a phone, so a match still waiting for a pick can
+  // sit above or below the fold with nothing on screen saying it's there.
+  //
+  // Measured from the DOM rather than recomputed from bracket geometry. Both
+  // views already mark these boxes with a class, the class encodes every rule
+  // about whether a pick is actually possible (locked, viewing someone else,
+  // both opponents known), and getBoundingClientRect reads through
+  // CombinedView's transform:scale for free. Re-measuring is driven by
+  // observers instead of a dependency list because the inputs that matter —
+  // a pick being made, a page turn, the header collapsing — all show up as a
+  // mutation, a resize, or a scroll on this subtree.
+  const [pickNav, setPickNav] = useState(null)   // { above, below, top, bottom, cx }
+  useLayoutEffect(() => {
+    let raf = 0
+    const measure = () => {
+      raf = 0
+      const body = bodyNodeRef.current
+      const sc = body?.querySelector('.cv-scroll, .bracket-scroll')
+      scrollerRef.current = sc ?? null
+      if (!body || !sc) { setPickNav(prev => (prev ? null : prev)); return }
+
+      const sr = sc.getBoundingClientRect()
+      const br = body.getBoundingClientRect()
+      let above = 0, below = 0
+      for (const el of sc.querySelectorAll(MISSING_PICK_SEL)) {
+        const r = el.getBoundingClientRect()
+        if (r.height === 0) continue
+        // Fully past the edge only — a match half in view is visible enough
+        // to act on, and flagging it would leave the arrow permanently up.
+        if (r.bottom <= sr.top + EDGE_SLACK) above++
+        else if (r.top >= sr.bottom - EDGE_SLACK) below++
+      }
+
+      const next = (above || below)
+        ? { above, below, top: sr.top - br.top, bottom: sr.bottom - br.top, cx: sr.left - br.left + sr.width / 2 }
+        : null
+      setPickNav(prev => {
+        if (!prev && !next) return prev
+        if (prev && next && prev.above === next.above && prev.below === next.below
+            && Math.abs(prev.top - next.top) < 0.5 && Math.abs(prev.bottom - next.bottom) < 0.5
+            && Math.abs(prev.cx - next.cx) < 0.5) return prev
+        return next
+      })
+    }
+    const schedule = () => { if (!raf) raf = requestAnimationFrame(measure) }
+
+    measure()
+    const onScroll = (e) => {
+      const el = e.target
+      if (el instanceof HTMLElement && el.matches?.('.cv-scroll, .bracket-scroll')) schedule()
+    }
+    document.addEventListener('scroll', onScroll, { capture: true, passive: true })
+    const body = bodyNodeRef.current
+    const ro = new ResizeObserver(schedule)
+    const mo = new MutationObserver(schedule)
+    if (body) {
+      ro.observe(body)
+      mo.observe(body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] })
+    }
+    return () => {
+      document.removeEventListener('scroll', onScroll, { capture: true })
+      ro.disconnect()
+      mo.disconnect()
+      if (raf) cancelAnimationFrame(raf)
+    }
+  }, [data, viewMode, id])
+
+  // Bring the nearest off-screen unpicked match into the middle of the view.
+  const scrollToMissingPick = (dir) => {
+    const sc = scrollerRef.current
+    if (!sc) return
+    const sr = sc.getBoundingClientRect()
+    let best = null
+    for (const el of sc.querySelectorAll(MISSING_PICK_SEL)) {
+      const r = el.getBoundingClientRect()
+      if (r.height === 0) continue
+      const off = dir < 0 ? r.bottom <= sr.top + EDGE_SLACK : r.top >= sr.bottom - EDGE_SLACK
+      if (!off) continue
+      // Nearest first: the last one above, or the first one below.
+      if (!best || (dir < 0 ? r.top > best.top : r.top < best.top)) best = r
+    }
+    if (!best) return
+    sc.scrollBy({
+      top: best.top - sr.top - Math.max(0, (sr.height - best.height) / 2),
+      behavior: 'smooth',
+    })
+  }
 
   const saveMutation = useMutation({
     mutationFn: (latestPicks) => savePredictions(Number(id), latestPicks),
@@ -1232,6 +1331,36 @@ function TournamentDraw() {
           >
             <span className="round-nav-label round-nav-label--sizer" aria-hidden="true">CHAMP</span>
             <span className="round-nav-label">{pagerColumns[windowPos + DRAW_WINDOW].nav}</span>
+          </button>
+        )}
+
+        {/* Vertical counterpart to the round-nav buttons above: unpicked
+            matches in the round on screen that are scrolled out of sight.
+            Pinned to the scroller's own top/bottom edge (measured, since the
+            sidebar and collapsing header both move it) and tapping jumps to
+            the nearest one. */}
+        {pickNav?.above > 0 && (
+          <button
+            className="pick-nav pick-nav--up"
+            style={{ top: pickNav.top + 6, left: pickNav.cx }}
+            onClick={() => scrollToMissingPick(-1)}
+            title={`${pickNav.above} match${pickNav.above > 1 ? 'es' : ''} above still needs a pick`}
+            aria-label={`Scroll up to ${pickNav.above} unpicked match${pickNav.above > 1 ? 'es' : ''}`}
+          >
+            <span className="pick-nav-arrow" aria-hidden="true">▲</span>
+            <span className="pick-nav-count">{pickNav.above}</span>
+          </button>
+        )}
+        {pickNav?.below > 0 && (
+          <button
+            className="pick-nav pick-nav--down"
+            style={{ top: pickNav.bottom - 6, left: pickNav.cx }}
+            onClick={() => scrollToMissingPick(1)}
+            title={`${pickNav.below} match${pickNav.below > 1 ? 'es' : ''} below still needs a pick`}
+            aria-label={`Scroll down to ${pickNav.below} unpicked match${pickNav.below > 1 ? 'es' : ''}`}
+          >
+            <span className="pick-nav-count">{pickNav.below}</span>
+            <span className="pick-nav-arrow" aria-hidden="true">▼</span>
           </button>
         )}
       </div>

@@ -97,6 +97,52 @@
   50%      { box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.45), 0 2px 10px rgba(0, 0, 0, 0.2); }
 }
 
+/* ── Off-screen unpicked matches, vertically ──
+   Same job as .round-nav--missing-pick, one axis over: the round-nav buttons
+   point at unpicked matches in a round that's been paged away; these point at
+   unpicked matches in the round you're already looking at, scrolled past the
+   top or bottom of the draw. Positioned inline against the scroller's measured
+   edges (the sidebar and the collapsing header both move them). Small and
+   translucent on purpose — it floats over live bracket content, so it has to
+   be legible without hiding a match box behind it. */
+.pick-nav {
+  position: absolute;
+  z-index: 26;
+  display: flex;
+  align-items: center;
+  gap: 0.28rem;
+  padding: 0.32rem 0.62rem;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  background: rgba(220, 38, 38, 0.92);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
+  animation: pick-nav-pulse 1.8s ease-in-out infinite;
+}
+.pick-nav--up   { transform: translateX(-50%); }
+/* Anchored to the scroller's bottom edge, so it grows upward from it. */
+.pick-nav--down { transform: translate(-50%, -100%); }
+
+.pick-nav:hover  { background: rgba(185, 28, 28, 0.96); }
+.pick-nav:active { background: rgba(153, 27, 27, 1); }
+
+.pick-nav-arrow { font-size: 0.7rem; }
+
+@keyframes pick-nav-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.5), 0 2px 10px rgba(0, 0, 0, 0.28); }
+  50%      { box-shadow: 0 0 0 6px rgba(220, 38, 38, 0), 0 2px 10px rgba(0, 0, 0, 0.28); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pick-nav,
+  .round-nav--missing-pick { animation: none; }
+}
+
 .round-nav-label {
   grid-area: 1 / 1;
   writing-mode: vertical-rl;
