@@ -184,7 +184,10 @@ async def _gather_round_payload(
     for p in pred_res.scalars().all():
         preds_by_user[p.user_id].append(p)
 
-    eligible = {uid for uid, preds in preds_by_user.items() if len(preds) >= total_matches}
+    # Competing = at least one pick. A partial bracket is a real entry that
+    # simply forfeits the matches it left unpicked, so it belongs in the
+    # standings and its owner gets the digest like anyone else.
+    eligible = {uid for uid, preds in preds_by_user.items() if preds}
     if not eligible:
         return None
 
@@ -501,11 +504,7 @@ async def notify_match_start(tournament_id: int, name: str, year: int, category:
     from app.models.notification import MatchStartNotification
 
     async with AsyncSessionLocal() as db:
-        total_res = await db.execute(
-            select(func.count()).where(Match.draw_id == tournament_id, Match.is_bye == False)
-        )
-        total_matches = total_res.scalar_one()
-
+        # Competing = at least one pick; an unfinished bracket still competes.
         competing_subq = (
             select(UserPrediction.user_id)
             .where(
@@ -513,7 +512,6 @@ async def notify_match_start(tournament_id: int, name: str, year: int, category:
                 UserPrediction.predicted_winner_id.isnot(None),
             )
             .group_by(UserPrediction.user_id)
-            .having(func.count() >= total_matches)
         )
 
         result = await db.execute(
@@ -857,8 +855,8 @@ async def notify_tournament_complete(tournament_id: int) -> None:
         for p in all_preds:
             preds_by_user[p.user_id].append(p)
 
-        # Every user with any predictions — draw history records partial
-        # brackets too; the competed-only filter is applied on read.
+        # Every user with any predictions — a partial bracket competes and is
+        # ranked alongside the rest, so it belongs in draw history too.
         all_participants = set(preds_by_user.keys())
 
         # Load all leagues (needed for both results persistence and notifications)
