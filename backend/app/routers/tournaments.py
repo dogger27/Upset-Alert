@@ -151,16 +151,22 @@ async def backfill_rankings(
     from datetime import date
     logger = logging.getLogger(__name__)
 
-    tournaments_res = await db.execute(select(Draw))
-    tournaments = tournaments_res.scalars().all()
+    # Same rule as refresh_all above: hold ids/names, not ORM objects. One
+    # failure's rollback expires every attached instance, and reading `t.name`
+    # on the next pass would then need a lazy reload the event loop can't do.
+    tournaments_res = await db.execute(select(Draw.id, Draw.name))
+    tournament_info = tournaments_res.all()
 
     updated_total = 0
     failed = []
 
-    for t in tournaments:
+    for t_id, t_name in tournament_info:
         try:
+            t = await db.get(Draw, t_id)
+            if t is None:
+                continue
             ref_date = t.entry_ranking_week or t.start_date or date.today()
-            players_res = await db.execute(select(DrawEntry).where(DrawEntry.draw_id == t.id))
+            players_res = await db.execute(select(DrawEntry).where(DrawEntry.draw_id == t_id))
             players = players_res.scalars().all()
 
             before = [p.ranking for p in players]
@@ -170,11 +176,11 @@ async def backfill_rankings(
             updated = sum(1 for b, a in zip(before, after) if b != a)
             await db.commit()
             updated_total += updated
-            logger.info("%s: updated %d/%d player rankings", t.name, updated, len(players))
+            logger.info("%s: updated %d/%d player rankings", t_name, updated, len(players))
         except Exception as exc:
-            logger.error("Failed rankings backfill for %s: %s", t.name, exc)
+            logger.error("Failed rankings backfill for %s: %s", t_name, exc)
             await db.rollback()
-            failed.append(t.name)
+            failed.append(t_name)
 
     return {"updated_players": updated_total, "failed": failed}
 
