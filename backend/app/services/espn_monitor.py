@@ -43,7 +43,7 @@ import httpx
 from sqlalchemy import func, select
 
 from app.database import AsyncSessionLocal
-from app.models.tournament import DrawEntry, Match, Draw
+from app.models.tournament import DrawEntry, Match, Draw, LOCK_LEAD_DAYS
 from app.services.rankings import _norm
 
 logger = logging.getLogger(__name__)
@@ -55,8 +55,15 @@ _ESPN_URLS = {"M": _ESPN_ATP_URL, "F": _ESPN_WTA_URL}
 _FILLER = {"open", "the", "powered", "by", "cup", "championships", "masters",
            "international", "tennis", "classic"}
 
-_LOCK_BEFORE_DAYS = 1   # start watching for picks-lock N days before start_date
-_LOCK_AFTER_DAYS  = 3   # stop watching N days after start_date
+# Picks-lock watch window, relative to start_date. The LEAD bound is the one
+# that matters: a main-draw match cannot be under way days before the draw
+# starts, so ESPN claiming otherwise means we have the wrong event, not an
+# early start. It was 3 days, and that is exactly how 2026 Canadian Open
+# (start Aug 3) locked on Jul 31 off a Washington match. Keep it equal to the
+# allowance in Draw.computed_status, which accepts a pre-start lock only within
+# 1 day — one venue far enough east can genuinely begin the UTC evening before.
+_LOCK_LEAD_DAYS  = LOCK_LEAD_DAYS  # accept a lock at most N days BEFORE start_date
+_LOCK_TRAIL_DAYS = 1    # keep watching N days AFTER start_date
 _RESULT_AFTER_DAYS = 16  # keep syncing results up to N days after start_date
 
 # Minimum player-set Jaccard for a name/city-independent event match. Our field
@@ -210,7 +217,14 @@ def _player_jaccard(entries: list, event: dict, gender: str) -> float:
     return inter / union if union else 0.0
 
 
-def _match_event(tournament, events: list, entries: list) -> Optional[dict]:
+# Confidence assigned to a non-Jaccard match, so competing claims on the same
+# ESPN event can be compared on one scale. A name match is definitive; a bare
+# city match is the weakest signal we act on and must lose to any real overlap.
+_NAME_MATCH_CONFIDENCE = 1.0
+_CITY_MATCH_CONFIDENCE = 0.2
+
+
+def _match_event(tournament, events: list, entries: list) -> tuple[Optional[dict], float]:
     """
     Find the ESPN event for this tournament, most-specific signal first:
       1. Name-token overlap  — cheap; handles the common case.
@@ -218,12 +232,14 @@ def _match_event(tournament, events: list, entries: list) -> Optional[dict]:
                                (e.g. ESPN's 'Nordea Open' == our 'Swedish Open');
                                matches on who's actually in the draw.
       3. Venue city          — final cheap tiebreak against the event venue.
-    Returns the matched event dict, or None.
+    Returns (event, confidence) — (None, 0.0) if nothing matched. The confidence
+    is what _poll uses to settle two draws claiming the same event; it is not a
+    probability, only an ordering.
     """
     # 1. Name
     for e in events:
         if _names_match(tournament.name, e.get("name", "")):
-            return e
+            return e, _NAME_MATCH_CONFIDENCE
 
     # 2. Player-set Jaccard (only worth computing if we have a draw to compare)
     if entries:
@@ -237,7 +253,7 @@ def _match_event(tournament, events: list, entries: list) -> Optional[dict]:
                 "ESPN: matched '%s' → '%s' by player overlap (Jaccard=%.2f)",
                 tournament.name, best.get("name"), best_score,
             )
-            return best
+            return best, best_score
 
     # 3. Venue city
     city = getattr(tournament, "city", None)
@@ -245,9 +261,9 @@ def _match_event(tournament, events: list, entries: list) -> Optional[dict]:
         for e in events:
             vcity = _venue_city(e)
             if vcity and _norm(city) == _norm(vcity):
-                return e
+                return e, _CITY_MATCH_CONFIDENCE
 
-    return None
+    return None, 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -439,8 +455,8 @@ class ESPNMonitor:
         today = date.today()
 
         # Job 1 watchlist: narrow window around start_date for picks locking
-        lock_start  = today - timedelta(days=_LOCK_BEFORE_DAYS)
-        lock_end    = today + timedelta(days=_LOCK_AFTER_DAYS)
+        lock_start  = today - timedelta(days=_LOCK_TRAIL_DAYS)
+        lock_end    = today + timedelta(days=_LOCK_LEAD_DAYS)
 
         # Job 2 watchlist: full tournament window for match results
         result_cutoff = today - timedelta(days=_RESULT_AFTER_DAYS)
@@ -486,18 +502,68 @@ class ESPNMonitor:
         wta_events = await _fetch_events("F")
         espn_events = {"M": atp_events, "F": wta_events}
 
+        # Load draw entries once — needed for player-overlap matching AND both jobs
+        entries_by_id: dict[int, list] = {}
         for tid in all_ids:
-            tournament = by_id[tid]
-            events = espn_events[tournament.gender]
-
-            # Load draw entries once — needed for player-overlap matching AND both jobs
             async with AsyncSessionLocal() as db:
                 de_res = await db.execute(
                     select(DrawEntry).where(DrawEntry.draw_id == tid)
                 )
-                entries = de_res.scalars().all()
+                entries_by_id[tid] = de_res.scalars().all()
 
-            espn_event = _match_event(tournament, events, entries)
+        # An ESPN event is one tournament, so two draws of the same gender can
+        # never both own it — but nothing used to stop them. 2026 Canadian Open
+        # matched 'Mubadala DC Open' at Jaccard 0.32 (a Masters 1000 shares much
+        # of its field with the ATP 500 the week before, and its own event was
+        # not on the scoreboard yet) while Washington matched that same event at
+        # 0.70. Canadian Open then locked its picks off a Washington match three
+        # days before its own first ball. Strongest claim takes the event; the
+        # loser is left unmatched rather than pointed at someone else's draw.
+        claims: dict[int, tuple] = {}
+        for tid in all_ids:
+            tournament = by_id[tid]
+            event, confidence = _match_event(
+                tournament, espn_events[tournament.gender], entries_by_id[tid]
+            )
+            if event is not None:
+                claims[tid] = (event, confidence)
+
+        holder: dict[tuple, int] = {}
+        for tid, (event, confidence) in claims.items():
+            key = (by_id[tid].gender, str(event.get("id") or event.get("name")))
+            if key not in holder or confidence > claims[holder[key]][1]:
+                holder[key] = tid
+        matched = {tid: claims[tid][0] for tid in holder.values()}
+
+        for tid, (event, confidence) in claims.items():
+            if tid in matched:
+                continue
+            key = (by_id[tid].gender, str(event.get("id") or event.get("name")))
+            winner = by_id[holder[key]]
+            logger.debug(
+                "ESPN: '%s' (%s) dropped its claim on '%s' (%.2f) — '%s' matched it better (%.2f)",
+                by_id[tid].name, by_id[tid].gender, event.get("name"), confidence,
+                winner.name, claims[holder[key]][1],
+            )
+            from app.services.system_log import app_log
+            await app_log(
+                "warning", "espn",
+                f"'{by_id[tid].name}' ({by_id[tid].gender}) matched ESPN event "
+                f"'{event.get('name')}' at {confidence:.2f}, but '{winner.name}' matched it "
+                f"at {claims[holder[key]][1]:.2f} — left unmatched rather than tracking the wrong event",
+                {"tournament_id": tid, "tournament_name": by_id[tid].name,
+                 "gender": by_id[tid].gender, "espn_event": event.get("name"),
+                 "confidence": round(confidence, 3),
+                 "winner_tournament_id": winner.id, "winner_name": winner.name,
+                 "winner_confidence": round(claims[holder[key]][1], 3)},
+                dedup_key=f"espn_claim_lost_{tid}", dedup_hours=6,
+            )
+
+        for tid in all_ids:
+            tournament = by_id[tid]
+            entries = entries_by_id[tid]
+
+            espn_event = matched.get(tid)
             if espn_event is None:
                 logger.debug(
                     "ESPN: no event match for '%s' (%s)",
@@ -583,6 +649,29 @@ class ESPNMonitor:
             tournament = await db.get(Draw, tournament_id)
             if tournament is None or tournament.picks_locked_at is not None:
                 return  # already handled (race guard)
+
+            # A main-draw match cannot be under way days before the draw starts.
+            # If we got here anyway, the evidence is about some other event and
+            # locking on it would shut users out of a draw that hasn't begun —
+            # refuse at the write site, not just at the watchlist that led here.
+            days_early = (tournament.start_date - date.today()).days if tournament.start_date else 0
+            if days_early > _LOCK_LEAD_DAYS:
+                logger.warning(
+                    "Refusing to lock %d %s (%s) — starts in %d days, "
+                    "so '%s' being live is not this draw",
+                    tournament.year, tournament.name, tournament.gender,
+                    days_early, trigger_name,
+                )
+                await app_log(
+                    "warning", "espn",
+                    f"Refused an early picks-lock for '{tournament.name}' ({tournament.gender}): "
+                    f"starts in {days_early} days but ESPN reported '{trigger_name}' live — wrong event",
+                    {"tournament_id": tournament.id, "tournament_name": tournament.name,
+                     "gender": tournament.gender, "trigger_player": trigger_name,
+                     "start_date": str(tournament.start_date), "days_early": days_early},
+                    dedup_key=f"espn_early_lock_refused_{tournament.id}", dedup_hours=6,
+                )
+                return
 
             # Capture predicted closing_time before overwriting it
             original_ct = tournament.closing_time

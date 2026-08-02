@@ -6,6 +6,14 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 
+# How many days before start_date a picks-lock can legitimately happen. One
+# venue far enough east of UTC can genuinely start play the UTC evening before;
+# nothing legitimately starts earlier. Lives here rather than in espn_monitor so
+# the monitor (which stamps picks_locked_at) and computed_status (which trusts
+# it) read the same number — they were separate, drifted to 3 vs 1, and 2026
+# Canadian Open locked three days early off another tournament's live match.
+LOCK_LEAD_DAYS = 1
+
 
 class DrawCategory(Base):
     """
@@ -217,8 +225,13 @@ class Draw(Base):
         if self.start_date and today < self.start_date:
             # ESPN already watched a main-draw match go live, which for a venue
             # far enough east of UTC can happen the UTC-evening before
-            # start_date. Bounded to 1 day = espn_monitor._LOCK_BEFORE_DAYS.
-            if self.picks_locked_at and (self.start_date - today).days <= 1:
+            # start_date. Bounded to 1 day = espn_monitor._LOCK_LEAD_DAYS, which
+            # is also the widest window in which the monitor will stamp
+            # picks_locked_at at all — the two MUST stay equal, or a lock the
+            # monitor considers legitimate reads as "upcoming" here (or worse, a
+            # lock it should never have made turns a draw active days early, as
+            # 2026 Canadian Open did off a Washington match).
+            if self.picks_locked_at and (self.start_date - today).days <= LOCK_LEAD_DAYS:
                 return "active"
             if self.draw_released_direct_at and (self.start_date - today).days <= 30:
                 return "open"
