@@ -18,6 +18,7 @@
 import { Fragment, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import H2HPanel from './H2HPanel'
+import PredictorsPopup from './PredictorsPopup'
 import { buildH2HSequence, buildMatchIndex, h2hNeighbours, resolveRealFirst } from '../utils/h2hSequence'
 import './CombinedView.css'
 
@@ -53,6 +54,19 @@ function UpsetBell({ style }) {
         document.body
       )}
     </>
+  )
+}
+
+// Two-person glyph for the predictors chip. Counter-rotated in CSS, since the
+// chip it sits in is rotated -90deg to match the H2H pill's footprint.
+function GroupIcon() {
+  return (
+    <svg className="cv-group-icon" viewBox="0 0 20 20" aria-hidden="true">
+      <circle cx="7.6" cy="6.4" r="3.1" />
+      <path d="M1.6 16.4c0-3.1 2.7-5.2 6-5.2s6 2.1 6 5.2z" />
+      <circle cx="15" cy="7.4" r="2.4" opacity="0.75" />
+      <path d="M13.1 12.1c.6-.2 1.2-.3 1.9-.3 2.6 0 4.6 1.6 4.6 4h-4.9c0-1.5-.6-2.8-1.6-3.7z" opacity="0.75" />
+    </svg>
   )
 }
 
@@ -249,6 +263,9 @@ export const COMPACT_COL_W = 158
 export const COL_GAP = 44
 export const H2H_X = 8          // H2H chip's x within the gap — centred on the match box's right border
 const BELL_OFFSET = 34   // distance (px) the bell sits left of the H2H chip's centre
+// Left padding when there's no nav gutter: H2H_X (the chip's centre, 8px past
+// the column edge) + half its rotated visual width (9px), rounded up.
+const GROUP_CHIP_GUTTER = 20
 
 function Flag({ nat }) {
   const iso2 = nationalityIso2(nat)
@@ -309,8 +326,10 @@ function Connectors({ leftCenters, rightCenters, totalH }) {
 // compact: phone-width mode — country flags are dropped to buy name space.
 // zoom:    scales the whole rendered draw (layout included, via CSS zoom) so
 //          the parent can shrink it until the target number of rounds fits.
-export default function CombinedView({ tournament, matches, players, picks, onPick, locked = true, windowStart = 0, windowSize = 4, labelsHidden = false, insetLeft = 0, compact = false, zoom = 1 }) {
+export default function CombinedView({ tournament, matches, players, picks, onPick, locked = true, windowStart = 0, windowSize = 4, labelsHidden = false, insetLeft = 0, compact = false, zoom = 1, leagueId = null }) {
   const [h2h, setH2H] = useState(null)
+  // Completed match whose predictors popup is open (the group chip's target).
+  const [predictorsMatch, setPredictorsMatch] = useState(null)
   // Hovering any box of a player highlights ALL that player's boxes across
   // the bracket (ported from BracketView's hoveredPlayerId behaviour).
   const [hoveredPlayerId, setHoveredPlayerId] = useState(null)
@@ -559,11 +578,25 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
           onClose={() => setH2H(null)}
         />
       )}
+      {predictorsMatch && (
+        <PredictorsPopup
+          drawId={tournament?.id}
+          match={predictorsMatch}
+          leagueId={leagueId}
+          onClose={() => setPredictorsMatch(null)}
+        />
+      )}
       {/* insetLeft's caller (NAV_INSET) is already tuned tight to the nav
           button's own footprint — stacking the full 0.75rem base padding on
           top of it left a visibly wide gap; a few px is enough breathing
           room between the button and the first box. */}
-      <div className={`cv-scroll${compact ? ' cv-scroll--compact' : ''}`} style={insetLeft ? { paddingLeft: `${insetLeft + 4}px` } : undefined}>
+      {/* Left padding has to clear the group chip, which is centred on the
+          leftmost column's outline border and so overhangs it by 8px + half
+          the chip's rotated width (9px). Overflow to the LEFT of a scroll
+          container's content origin can't be scrolled to, it's simply clipped,
+          so without this the first column's chips lose their left edge. When
+          the nav gutter is present its own inset is already wider than that. */}
+      <div className={`cv-scroll${compact ? ' cv-scroll--compact' : ''}`} style={{ paddingLeft: insetLeft ? `${insetLeft + 4}px` : `${GROUP_CHIP_GUTTER}px` }}>
         {/* Scale-to-fit: outer claims the SMALLER (zoomed) footprint so
             .cv-scroll's scrollWidth shrinks with it (needed for 2 rounds to
             fit a narrow phone without horizontal scrolling); inner renders at
@@ -759,6 +792,22 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                         onClick={() => setH2H({ p1: ha, p2: hb, match: m })}
                       >
                         H2H
+                      </button>
+                    )}
+                    {/* Group chip: same pill as H2H, on the match outline's
+                        LEFT border instead of its right (the outline overhangs
+                        its column by 8px each side, which is what H2H_X
+                        centres on). Completed matches only — an undecided
+                        match has no outcome to have been right about. */}
+                    {m.winner?.id != null && !m.is_bye && (
+                      <button
+                        className="cv-group"
+                        style={{ top: y, left: colIdx * (colW + COL_GAP) - H2H_X, pointerEvents: 'auto' }}
+                        title={`Who predicted ${m.winner.name}?`}
+                        aria-label={`Who predicted ${m.winner.name}?`}
+                        onClick={() => setPredictorsMatch(m)}
+                      >
+                        <GroupIcon />
                       </button>
                     )}
                     {isUpsetPick && (

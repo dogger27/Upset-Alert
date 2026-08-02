@@ -281,6 +281,37 @@
 }
 .cv-h2h:hover { background: var(--green-600, #2f7a4d); color: #fff; }
 
+/* Predictors chip — the H2H pill mirrored onto the match outline's LEFT
+   border. Deliberately identical in footprint, border, colour and rotation:
+   the two chips bracket a finished match, so any difference between them
+   reads as a mistake rather than a distinction. */
+.cv-group {
+  position: absolute;
+  transform: translate(-50%, -50%) rotate(-90deg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;                 /* same fixed footprint as .cv-h2h */
+  height: 18px;                /* visual on-screen WIDTH, since it's rotated */
+  border: 1px solid var(--green-500, #4a9d6a);
+  background: #fff;
+  color: var(--green-600, #2f7a4d);
+  border-radius: 4px;
+  padding: 0;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 2;
+}
+.cv-group:hover { background: var(--green-600, #2f7a4d); color: #fff; }
+
+/* Undo the pill's rotation so the glyph itself sits upright. */
+.cv-group-icon {
+  width: 15px;
+  height: 15px;
+  transform: rotate(90deg);
+  fill: currentColor;
+}
+
 /* Upset bell — free to overlap the boxes to its left; sits above them. */
 .cv-bell {
   position: absolute;

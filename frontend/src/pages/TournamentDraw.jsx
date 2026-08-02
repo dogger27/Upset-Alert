@@ -95,6 +95,10 @@ function TournamentDraw() {
   // the swipe's touchmove natively (below).
   const bodyNodeRef = useRef(null)
   const scrollerRef = useRef(null)   // .cv-scroll / .bracket-scroll, re-found on each measure
+  // Which league the sidebar is showing (null = Global). Owned here because the
+  // draw itself needs it — the per-match predictors popup lists that league's
+  // members — while the <select> that sets it lives in DrawSidebar.
+  const [activeLeagueId, setActiveLeagueId] = useState(null)
   // Holds the current render's touchmove handler. Refreshed by plain
   // assignment further down rather than in an effect: the handler is defined
   // after this component's early returns, so a hook there would break the
@@ -1249,6 +1253,7 @@ function TournamentDraw() {
           tournament={tournament}
           selectedUserId={viewedUserId}
           defaultLeagueId={searchParams.get('league') ? Number(searchParams.get('league')) : undefined}
+          onLeagueChange={setActiveLeagueId}
           collapsed={sidebarCollapsed}
           overlay={compactDraw}
           onToggleCollapsed={() => { setSidebarManual(true); setSidebarCollapsed(c => !c) }}
@@ -1277,6 +1282,7 @@ function TournamentDraw() {
               insetLeft={drawInsetLeft}
               compact={compactDraw}
               zoom={drawZoom}
+              leagueId={activeLeagueId}
             />
           ) : (
             <BracketView
