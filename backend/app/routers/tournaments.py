@@ -594,8 +594,13 @@ async def match_predictors(
     )
     picked_winner = {uid: wid for uid, wid in picks_res.all()}
 
+    # Case-insensitive: a plain ORDER BY username puts every capitalised handle
+    # ahead of every lowercase one ("Tono" before "dogger27"), which reads as
+    # unsorted. Ordered on the handle the UI actually shows — see UserName.
     users_res = await db.execute(
-        select(User).where(User.id.in_(participant_ids)).order_by(User.username, User.display_name)
+        select(User)
+        .where(User.id.in_(participant_ids))
+        .order_by(func.lower(func.coalesce(User.username, User.display_name)))
     )
     correct, incorrect = [], []
     for u in users_res.scalars().all():
