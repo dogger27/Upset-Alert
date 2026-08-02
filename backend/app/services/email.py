@@ -367,65 +367,6 @@ async def send_draw_release_digest(
     })
 
 
-async def send_tournament_complete_notification(
-    email: str,
-    tournament_name: str,
-    year: int,
-    tournament_id: int,
-    groups: list[tuple],  # [(group_name, rank, total_participants, points), ...]
-    category: str = "",
-    gender: str = "M",
-    unsubscribe_url: str = "",
-) -> None:
-    """One email per user covering their standing in every group they participated in.
-
-    Draw Completion is its own notification type with its own opt-out — the
-    unsubscribe link here drops only the 'tournament_end' preference, leaving
-    round-completion emails untouched.
-    """
-    tournament_url = f"{BASE_URL}/tournaments/{tournament_id}"
-    label = _tournament_label(tournament_name, category, gender)
-    rows = "".join(
-        f"<tr>"
-        f"<td style='padding:8px 12px'>{name}</td>"
-        f"<td style='padding:8px 12px;text-align:center'>#{rank}&nbsp;/&nbsp;{total}</td>"
-        f"<td style='padding:8px 12px;text-align:right'>{int(pts)}&nbsp;pts</td>"
-        f"</tr>"
-        for name, rank, total, pts in groups
-    )
-    # Standalone footer, outside the card entirely — mirrors the round-complete email.
-    unsubscribe = (
-        f'<p style="max-width:560px;margin:16px auto 0;text-align:center;font-size:12px;color:#9ca3af">'
-        f'<a href="{unsubscribe_url}" style="color:#9ca3af;text-decoration:underline">'
-        f'Unsubscribe from draw-completion emails</a></p>'
-        if unsubscribe_url else ""
-    )
-    await send_async({
-        "from": FROM,
-        "to": [email],
-        "subject": f"{label} {year} - Final Standings",
-        "html": f"""{_WRAP_OPEN}{_LOGO_HEADER}{_BODY_OPEN}
-          <h1 style="font-size:22px;margin:0 0 12px">{label} {year} is complete!</h1>
-          <p style="color:#444;line-height:1.6;margin:0 0 12px">Here are your final standings across all groups:</p>
-          <table style="width:100%;border-collapse:collapse;font-size:14px;margin:0 0 20px">
-            <thead>
-              <tr style="background:#f3f4f6">
-                <th style="padding:8px 12px;text-align:left">League</th>
-                <th style="padding:8px 12px;text-align:center">Rank</th>
-                <th style="padding:8px 12px;text-align:right">Points</th>
-              </tr>
-            </thead>
-            <tbody>{rows}</tbody>
-          </table>
-          <a href="{tournament_url}" style="display:inline-block;padding:12px 24px;
-             background:#1b4332;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
-            View Draw &amp; Standings
-          </a>
-        {_BODY_CLOSE}{_WRAP_CLOSE}
-        {unsubscribe}""",
-    })
-
-
 def _round_complete_league_block(name: str, rows: list[tuple], is_last: bool) -> str:
     """One vertically-stacked league: full-width table with the league name as a
     header spanning above the Name / Score column headers, then the numbered list.
@@ -636,23 +577,38 @@ async def send_round_complete_digest(
     total_in_week: int,
     summary_rows: list[tuple],
     unsubscribe_url: str = "",
+    unsubscribe_label: str = "round-completion emails",
+    is_final: bool = False,
     is_followup: bool = False,
 ) -> None:
     """One email per user per round per week, covering every draw that reached it.
 
     draws: [{id, label, city, round_name, leagues, match_results}, ...] — already
     sliced to this recipient (their leagues, their pick correctness).
+
+    is_final: this batch is the Final round, so it is also the draw-completion
+    digest — the standings in it are final, not a mid-tournament snapshot, and
+    the wording says so. Same content either way; only the voice changes.
     """
     if not draws:
         return
 
     if is_followup:
-        subject = f"{round_name} Complete — {draws[0]['label']}" if len(draws) == 1 \
-            else f"{round_name} Complete — {len(draws)} more draws"
-        heading = f"{round_name} is complete"
+        lead = "Final Standings" if is_final else f"{round_name} Complete"
+        subject = f"{lead} — {draws[0]['label']}" if len(draws) == 1 \
+            else f"{lead} — {len(draws)} more draws"
+        heading = "The draw is complete" if is_final else f"{round_name} is complete"
         scope = ("It finished after the rest of this week's draws."
                  if len(draws) == 1 else
                  "These finished after the rest of this week's draws.")
+    elif is_final:
+        subject = (f"Final Standings: {draws[0]['label']}" if total_in_week == 1
+                   else f"Final Standings — Week of {week_label}")
+        heading = ("The draw is complete" if reached == 1
+                   else "This week's draws are complete")
+        scope = (f"all {total_in_week} draws" if reached == total_in_week and total_in_week > 1
+                 else f"{reached} of {total_in_week} draws has finished" if reached == 1
+                 else f"{reached} of {total_in_week} draws have finished")
     else:
         subject = (f"{round_name} Complete: {draws[0]['label']}" if total_in_week == 1
                    else f"{round_name} Complete — Week of {week_label}")
@@ -669,7 +625,7 @@ async def send_round_complete_digest(
     unsubscribe = (
         f'<p style="max-width:560px;margin:16px auto 0;text-align:center;font-size:12px;color:#9ca3af">'
         f'<a href="{unsubscribe_url}" style="color:#9ca3af;text-decoration:underline">'
-        f'Unsubscribe from round-completion emails</a></p>'
+        f'Unsubscribe from {unsubscribe_label}</a></p>'
         if unsubscribe_url else ""
     )
     cta_url = f"{BASE_URL}/tournaments/{draws[0]['id']}" if len(draws) == 1 else f"{BASE_URL}/tournaments"

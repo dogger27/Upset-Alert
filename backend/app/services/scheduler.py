@@ -451,13 +451,33 @@ async def _record_completed_rounds(db) -> None:
     from sqlalchemy.exc import IntegrityError
     from app.models.notification import RoundCompleteNotification
 
-    draws = (await db.execute(
-        select(Draw).where(Draw.status.in_(["active", "open"]))
-    )).scalars().all()
+    draws = [
+        (d, False) for d in (await db.execute(
+            select(Draw).where(Draw.status.in_(["active", "open"]))
+        )).scalars().all()
+    ]
+
+    # A draw flips to 'completed' the moment its final ends, so the scan above
+    # can never catch a FINAL round the event-driven path missed — the draw is
+    # already out of scope by the time anything looks again. Since the weekly
+    # digest is now also the draw-completion email, a missed final round means a
+    # draw silently absent from the one message reporting the week's results.
+    # Recently-completed draws are therefore swept too, but for their final
+    # round only: every earlier round had its chance while the draw was active,
+    # and re-queueing those would mail rounds that are already history.
+    draws += [
+        (d, True) for d in (await db.execute(
+            select(Draw).where(
+                Draw.status == "completed",
+                Draw.completion_notified_at.isnot(None),
+                Draw.completion_notified_at >= datetime.now(timezone.utc) - timedelta(days=3),
+            )
+        )).scalars().all()
+    ]
     if not draws:
         return
 
-    for d in draws:
+    for d, final_only in draws:
         rows = (await db.execute(
             select(
                 Match.round_number,
@@ -470,6 +490,8 @@ async def _record_completed_rounds(db) -> None:
 
         for round_number, total, still_open in rows:
             if total == 0 or still_open:
+                continue
+            if final_only and round_number != d.num_rounds:
                 continue
             already = await db.scalar(
                 select(RoundCompleteNotification.id).where(

@@ -350,9 +350,17 @@ async def notify_round_complete_digest(
         if not candidates:
             return
 
+        # "Final" is a round label like any other, so a batch carrying it is
+        # every draw in the week that finished — this IS the draw-completion
+        # digest. There is no separate per-draw "Final Standings" email any
+        # more; sending one meant a message per tournament instead of one for
+        # the week, and it duplicated what this already reports.
+        is_final_batch = bool(payloads) and all(p["is_final_round"] for p in payloads)
+
         if only_user_ids is not None:
             # Forced/test send: target these directly, ignoring opt-in/verified.
             to_notify = candidates & only_user_ids
+            end_only = set()
         else:
             pref_res = await db.execute(
                 select(NotificationPreference.user_id)
@@ -365,25 +373,23 @@ async def notify_round_complete_digest(
             )
             to_notify = {r[0] for r in pref_res.all()}
 
-            # A draw at its final round is covered by the tournament-completion
-            # email for anyone who takes that one, so those users must not get
-            # the same standings twice — but only that draw drops out of their
-            # digest, not the whole email.
-            final_ids = {p["id"] for p in payloads if p["is_final_round"]}
-            if final_ids:
+            # 'tournament_end' means "only tell me how draws finished, not every
+            # round" — the settings UI offers it exactly when round emails are
+            # off. Those users belong in this batch and no other, so the final
+            # round is the one time the audience is wider than round_standings.
+            end_only = set()
+            if is_final_batch:
                 end_res = await db.execute(
-                    select(NotificationPreference.user_id).where(
+                    select(NotificationPreference.user_id)
+                    .join(User, User.id == NotificationPreference.user_id)
+                    .where(
                         NotificationPreference.pref_key == "tournament_end",
-                        NotificationPreference.user_id.in_(to_notify),
+                        NotificationPreference.user_id.in_(candidates),
+                        User.email_verified == True,  # noqa: E712
                     )
                 )
-                has_end_pref = {r[0] for r in end_res.all()}
-            else:
-                has_end_pref = set()
-
-        if only_user_ids is not None:
-            has_end_pref = set()
-            final_ids = set()
+                end_only = {r[0] for r in end_res.all()} - to_notify
+                to_notify |= end_only
 
         emails_res = await db.execute(select(User.id, User.email).where(User.id.in_(to_notify)))
         emails = {r[0]: r[1] for r in emails_res.all()}
@@ -415,8 +421,6 @@ async def notify_round_complete_digest(
             continue
         sections, summary_rows = [], []
         for p in payloads:
-            if uid in has_end_pref and p["id"] in final_ids:
-                continue
             entry = p["per_user"].get(uid)
             if not entry:
                 continue
@@ -424,25 +428,36 @@ async def notify_round_complete_digest(
             summary_rows.append(entry["summary"])
         if not sections:
             continue
+        # Unsubscribe has to drop the preference that actually put this email in
+        # their inbox, or the link silently does nothing for the final-round-only
+        # audience.
+        pref_key = "tournament_end" if uid in end_only else "round_standings"
         try:
             await send_round_complete_digest(
                 email, sections, round_name, week_label,
                 reached=reached, total_in_week=span, summary_rows=summary_rows,
                 unsubscribe_url=(
                     f"{API_BASE}/unsubscribe?token="
-                    f"{create_unsubscribe_token(uid, 'round_standings')}"
+                    f"{create_unsubscribe_token(uid, pref_key)}"
                 ),
+                unsubscribe_label=(
+                    "draw-completion emails" if pref_key == "tournament_end"
+                    else "round-completion emails"
+                ),
+                is_final=is_final_batch,
                 is_followup=is_followup,
             )
             sent += 1
         except Exception as exc:
             logger.warning("Failed to send round digest to user %d: %s", uid, exc)
 
+    kind = "Draw-completion" if is_final_batch else "Round-complete"
     await app_log("info", "notifications",
-                  f"Round-complete {'follow-up' if is_followup else 'digest'} ({round_name}, week of "
+                  f"{kind} {'follow-up' if is_followup else 'digest'} ({round_name}, week of "
                   f"{week_label}) sent to {sent} user(s) covering {reached} draw(s)",
                   {"draw_ids": [p["id"] for p in payloads], "round_name": round_name,
-                   "recipient_count": sent, "is_followup": is_followup})
+                   "recipient_count": sent, "is_followup": is_followup,
+                   "is_final": is_final_batch, "final_round_only_recipients": len(end_only)})
 
 
 async def notify_round_complete(
@@ -754,14 +769,24 @@ async def _persist_tournament_results(
 
 
 # ---------------------------------------------------------------------------
-# Tournament-completion notification
+# Draw completion — persist final standings (no email; see below)
 # ---------------------------------------------------------------------------
 
 async def notify_tournament_complete(tournament_id: int) -> None:
     """
-    For every participant who opted into 'tournament_end', send ONE email
-    showing their final standing in every group (global + all leagues), and
-    persist final standings to draw history for every participant.
+    Persist final standings to draw history for every participant.
+
+    **Sends nothing.** This used to email each participant a per-draw "Final
+    Standings" message the moment its final ended, which meant one email per
+    tournament — four in a week where four draws finish. The result of a draw
+    now arrives in the Final-round entry of the weekly round digest
+    (notify_round_complete_digest), which already carries the same match
+    results, pick ✓/✗ and league standings for every draw that finished that
+    week, in one message.
+
+    Draw history is a different concern and stays here: it is recorded for ALL
+    participants (not just the opted-in, not just complete brackets) and must
+    land when the draw ends, not when an email happens to go out.
 
     Idempotent: claims (draw_id) in tournament_complete_notifications before
     doing any work — the unique-constrained primary key is the hard guard.
@@ -772,7 +797,6 @@ async def notify_tournament_complete(tournament_id: int) -> None:
     longer the sole guard.
     """
     from sqlalchemy.exc import IntegrityError
-    from app.services.email import send_tournament_complete_notification
     from app.services.system_log import app_log
     from app.models.notification import TournamentCompleteNotification
     from datetime import datetime, timezone as tz
@@ -792,16 +816,11 @@ async def notify_tournament_complete(tournament_id: int) -> None:
             await db.rollback()
             await app_log(
                 "warning", "notifications",
-                f"Tournament-complete email for draw {tournament_id} already sent — resend blocked",
+                f"Draw {tournament_id} completion already recorded — re-run blocked",
                 {"tournament_id": tournament_id},
                 dedup_key=f"tournament-complete-dupe-{tournament_id}",
             )
             return
-
-        t_name = tournament.name
-        t_year = tournament.year
-        t_category = tournament.category or ""
-        t_gender = tournament.gender or "M"
 
         # All completed matches (needed for scoring)
         m_res = await db.execute(
@@ -838,9 +857,9 @@ async def notify_tournament_complete(tournament_id: int) -> None:
         for p in all_preds:
             preds_by_user[p.user_id].append(p)
 
-        # All users with any predictions (for draw history); eligible = complete bracket
+        # Every user with any predictions — draw history records partial
+        # brackets too; the competed-only filter is applied on read.
         all_participants = set(preds_by_user.keys())
-        eligible = {uid for uid, preds in preds_by_user.items() if len(preds) >= total_matches}
 
         # Load all leagues (needed for both results persistence and notifications)
         lg_res = await db.execute(
@@ -855,94 +874,8 @@ async def notify_tournament_complete(tournament_id: int) -> None:
                 completed_matches, tournament, all_leagues,
             )
 
-        if not eligible:
-            return
-
-        # Users opted into tournament_end who also participated
-        opted_res = await db.execute(
-            select(NotificationPreference.user_id)
-            .join(User, User.id == NotificationPreference.user_id)
-            .where(
-                NotificationPreference.pref_key == "tournament_end",
-                NotificationPreference.user_id.in_(eligible),
-                User.email_verified == True,
-            )
+        logger.info(
+            "Draw %d complete — final standings recorded for %d participant(s); "
+            "the result reaches users in this week's Final-round digest",
+            tournament_id, len(all_participants),
         )
-        to_notify = {r[0] for r in opted_res.all()}
-        if not to_notify:
-            return
-
-        # Recompute scores for email (eligible subset only)
-        global_scores = {
-            uid: score_user(uid, preds_by_user[uid], completed_matches, tournament, None)
-            for uid in eligible
-        }
-        global_ranked = rank_users(list(global_scores.values()), tournament.num_rounds)
-        global_rank_of = {s.user_id: i + 1 for i, s in enumerate(global_ranked)}
-
-        league_data: dict[int, dict] = {}
-        for lg in all_leagues:
-            member_ids = {m.user_id for m in lg.members}
-            participants = eligible & member_ids
-            if len(participants) < 2:
-                continue
-            lg_scores = {
-                uid: score_user(uid, preds_by_user[uid], completed_matches, tournament, None)
-                for uid in participants
-            }
-            lg_ranked = rank_users(list(lg_scores.values()), tournament.num_rounds)
-            league_data[lg.id] = {
-                "name": lg.name,
-                "rank_of": {s.user_id: i + 1 for i, s in enumerate(lg_ranked)},
-                "total":   len(participants),
-                "points":  {s.user_id: s.total_points for s in lg_ranked},
-            }
-
-        user_league_ids: dict[int, list] = defaultdict(list)
-        for lg_id, data in league_data.items():
-            for uid in data["rank_of"]:
-                user_league_ids[uid].append(lg_id)
-
-        users_res = await db.execute(
-            select(User.id, User.email).where(User.id.in_(to_notify))
-        )
-        user_email = {r[0]: r[1] for r in users_res.all()}
-
-    # Send outside the session (no DB needed)
-    for uid in to_notify:
-        email = user_email.get(uid)
-        if not email:
-            continue
-
-        groups = []
-        if len(eligible) >= 2:
-            groups.append(("Global", global_rank_of[uid], len(eligible), global_scores[uid].total_points))
-        for lg_id in sorted(user_league_ids.get(uid, [])):
-            data = league_data[lg_id]
-            groups.append((
-                data["name"],
-                data["rank_of"][uid],
-                data["total"],
-                data["points"][uid],
-            ))
-
-        if not groups:
-            continue
-        # Opts out of draw-completion emails ONLY — round_standings is a separate
-        # preference with its own link.
-        unsubscribe_url = (
-            f"{API_BASE}/unsubscribe?token="
-            f"{create_unsubscribe_token(uid, 'tournament_end')}"
-        )
-        try:
-            await send_tournament_complete_notification(
-                email, t_name, t_year, tournament_id, groups,
-                category=t_category, gender=t_gender,
-                unsubscribe_url=unsubscribe_url,
-            )
-            logger.info(
-                "Tournament-complete email sent to user %d (%d group(s)) for %d %s",
-                uid, len(groups), t_year, t_name,
-            )
-        except Exception as exc:
-            logger.warning("Failed to send completion email to user %d: %s", uid, exc)

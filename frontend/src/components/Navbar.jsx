@@ -117,9 +117,9 @@ export default function Navbar() {
   // Round Completion already reports every round, the Final included, so Draw
   // Completion is only offered once rounds are switched off — and is turned on
   // at that moment, since it becomes the only way to hear a draw's result.
-  // Switching rounds back on clears it: leaving it set but hidden would keep
-  // suppressing the final-round email (notify_round_complete drops that one for
-  // anyone holding tournament_end) with nothing on screen to explain why.
+  // Both now arrive as the same weekly digest; tournament_end simply narrows it
+  // to the Final round. Switching rounds back on clears it, so nobody holds two
+  // preferences that would put them in the same batch twice.
   const toggleRoundStandings = () => {
     setNotifSelected(prev => {
       const next = new Set(prev)
@@ -346,7 +346,7 @@ export default function Navbar() {
                           {!notifSelected.has('round_standings') && (
                             <div className="notif-section">
                               <p className="notif-section-title">Draw Completion</p>
-                              <p className="notif-section-desc">1 email with final standings, summarizing all draws</p>
+                              <p className="notif-section-desc">One weekly email with final standings for every draw that finished</p>
                               <label className="notif-check-row">
                                 <input
                                   type="checkbox"
