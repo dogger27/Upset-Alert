@@ -9,6 +9,11 @@ export const refreshAllCompleted = () => client.post('/tournaments/refresh-compl
 export const syncTournaments = () => client.post('/tournaments/sync-tournaments').then(r => r.data)
 export const getTournamentCompetitors = (id) => client.get(`/tournaments/${id}/competitors`).then(r => r.data)
 export const getGlobalStandings = (id) => client.get(`/tournaments/${id}/standings`).then(r => r.data)
+// leagueId null = Global (every participant in the draw)
+export const getMatchPredictors = (id, matchId, leagueId) =>
+  client.get(`/tournaments/${id}/matches/${matchId}/predictors`, {
+    params: leagueId != null ? { league_id: leagueId } : {},
+  }).then(r => r.data)
 export const getGlobalRoundScores = (id) => client.get(`/tournaments/${id}/global-round-scores`).then(r => r.data)
 export const getGlobalDraws = () => client.get('/tournaments/global-draws').then(r => r.data)
 export const getGlobalGSTotals = () => client.get('/tournaments/global-gs-totals').then(r => r.data)

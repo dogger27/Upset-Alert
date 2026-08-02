@@ -527,6 +527,84 @@ async def tournament_competitors(tournament_id: int, db: AsyncSession = Depends(
     return result.scalars().all()
 
 
+@router.get("/{tournament_id}/matches/{match_id}/predictors")
+async def match_predictors(
+    tournament_id: int,
+    match_id: int,
+    league_id: Optional[int] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
+):
+    """Who called a finished match right, and who didn't.
+
+    Scoped to the league the draw page currently has selected, or to every
+    participant in the draw when it is on Global. "Participant" means at least
+    one pick in this draw — the same bar the standings use. A league member who
+    never entered this draw is not wrong about the match, they simply are not
+    playing it, and listing them would misrepresent both columns.
+
+    Only completed non-bye matches answer; anything else has no outcome to have
+    been right about.
+    """
+    from app.models.league import League, LeagueMember
+    from app.routers.leagues import _check_access
+
+    match = await db.get(Match, match_id)
+    if not match or match.draw_id != tournament_id:
+        raise HTTPException(404, "Match not found")
+    if match.is_bye or match.winner_id is None:
+        return {"correct": [], "incorrect": [], "league_name": None}
+
+    # Everyone with a pick in this draw — the participant pool.
+    participants_res = await db.execute(
+        select(UserPrediction.user_id)
+        .where(
+            UserPrediction.draw_id == tournament_id,
+            UserPrediction.predicted_winner_id.isnot(None),
+        )
+        .group_by(UserPrediction.user_id)
+    )
+    participant_ids = {r[0] for r in participants_res.all()}
+
+    league_name = None
+    if league_id is not None:
+        league_res = await db.execute(
+            select(League)
+            .options(selectinload(League.owner), selectinload(League.members))
+            .where(League.id == league_id)
+        )
+        league = league_res.scalar_one_or_none()
+        if not league:
+            raise HTTPException(404, "League not found")
+        _check_access(league, current_user)
+        league_name = league.name
+        member_res = await db.execute(
+            select(LeagueMember.user_id).where(LeagueMember.league_id == league_id)
+        )
+        participant_ids &= {r[0] for r in member_res.all()}
+
+    if not participant_ids:
+        return {"correct": [], "incorrect": [], "league_name": league_name}
+
+    picks_res = await db.execute(
+        select(UserPrediction.user_id, UserPrediction.predicted_winner_id).where(
+            UserPrediction.match_id == match_id,
+            UserPrediction.user_id.in_(participant_ids),
+        )
+    )
+    picked_winner = {uid: wid for uid, wid in picks_res.all()}
+
+    users_res = await db.execute(
+        select(User).where(User.id.in_(participant_ids)).order_by(User.username, User.display_name)
+    )
+    correct, incorrect = [], []
+    for u in users_res.scalars().all():
+        got_it = picked_winner.get(u.id) == match.winner_id
+        (correct if got_it else incorrect).append(UserPublicOut.model_validate(u))
+
+    return {"correct": correct, "incorrect": incorrect, "league_name": league_name}
+
+
 @router.get("/{tournament_id}/standings", response_model=list[LeaderboardEntry])
 async def global_standings(tournament_id: int, db: AsyncSession = Depends(get_db)):
     """Global standings for a tournament using classic scoring (no league)."""

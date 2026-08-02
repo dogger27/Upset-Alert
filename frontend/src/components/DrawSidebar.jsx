@@ -27,10 +27,21 @@ function Toast({ message, onDone }) {
 
 // overlay: compact (phone) draw mode — the sidebar floats over the draw
 // instead of taking flex-row space, so the bracket can use the full width.
-export default function DrawSidebar({ tournamentId, tournament, selectedUserId, defaultLeagueId, onSelectUser, collapsed = false, onToggleCollapsed, overlay = false }) {
+export default function DrawSidebar({ tournamentId, tournament, selectedUserId, defaultLeagueId, onSelectUser, onLeagueChange, collapsed = false, onToggleCollapsed, overlay = false }) {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [selectedLeagueId, setSelectedLeagueId] = useState(defaultLeagueId ?? 'global')
+
+  // Publish the active league so the draw itself can scope per-match views to
+  // it (the predictors popup). From an effect, not the change handler, so the
+  // initial value — which may come from the ?league= deep link — is published
+  // too. The callback is held in a ref so an inline arrow from the parent
+  // can't turn this into a re-render loop.
+  const leagueCbRef = useRef(onLeagueChange)
+  leagueCbRef.current = onLeagueChange
+  useEffect(() => {
+    leagueCbRef.current?.(selectedLeagueId === 'global' ? null : Number(selectedLeagueId))
+  }, [selectedLeagueId])
   const [toast, setToast] = useState(null)
   const toastKey = useRef(0)
 

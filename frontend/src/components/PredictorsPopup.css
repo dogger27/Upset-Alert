@@ -1,0 +1,138 @@
+/* Predictors popup — two columns, right and wrong, for one finished match.
+   Sizing mirrors .h2h-elo-popup so the draw's two popups feel like siblings;
+   the dvh height and overscroll containment are there for the same iOS
+   reasons documented on .h2h-backdrop. */
+.pp-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100vh;
+  height: 100dvh;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  overscroll-behavior: contain;
+}
+
+.pp-popup {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
+  width: min(420px, 100%);
+  max-height: 80vh;
+  max-height: 80dvh;
+  display: flex;
+  flex-direction: column;
+  padding: 1rem 1.1rem 0.9rem;
+}
+
+.pp-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.pp-title {
+  font-size: 0.92rem;
+  line-height: 1.3;
+  color: var(--text);
+}
+.pp-winner { font-weight: 800; }
+.pp-def    { color: var(--text-muted, #777); font-weight: 600; }
+.pp-loser  { font-weight: 600; color: var(--text-muted, #777); }
+
+.pp-close {
+  background: none;
+  border: none;
+  font-size: 0.85rem;
+  color: #aaa;
+  cursor: pointer;
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.pp-close:hover { background: #f0f0f0; color: #555; }
+
+.pp-scope {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted, #777);
+  margin: 0.15rem 0 0.7rem;
+}
+
+.pp-state {
+  font-size: 0.82rem;
+  color: var(--text-muted, #777);
+  padding: 0.9rem 0;
+  text-align: center;
+}
+
+/* Two equal columns that scroll together — one long list must not make the
+   other column's names drift out of line with it. */
+.pp-lists {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.9rem;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.pp-list { min-width: 0; }
+
+.pp-list-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding-bottom: 0.4rem;
+  margin-bottom: 0.4rem;
+  border-bottom: 2px solid #eceff1;
+  position: sticky;
+  top: 0;
+  background: #fff;
+}
+
+.pp-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+.pp-badge--check { color: #16a34a; }
+.pp-badge--square {
+  background: #dc2626;
+  border-radius: 3px;
+}
+.pp-icon { width: 100%; height: 100%; }
+
+.pp-count {
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--text-muted, #777);
+  font-variant-numeric: tabular-nums;
+}
+
+.pp-names {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.82rem;
+}
+.pp-names li {
+  padding: 0.18rem 0;
+  overflow-wrap: anywhere;
+}
+.pp-none {
+  color: var(--text-muted, #999);
+  font-style: italic;
+}
