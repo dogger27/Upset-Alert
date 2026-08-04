@@ -612,8 +612,9 @@ async def send_round_complete_digest(
     unsubscribe_label: str = "round-completion emails",
     is_final: bool = False,
     is_followup: bool = False,
+    event_label: Optional[str] = None,
 ) -> None:
-    """One email per user per round per week, covering every draw that reached it.
+    """One email per user per round per bucket, covering every draw that reached it.
 
     draws: [{id, label, city, round_name, leagues, match_results}, ...] — already
     sliced to this recipient (their leagues, their pick correctness).
@@ -621,6 +622,11 @@ async def send_round_complete_digest(
     is_final: this batch is the Final round, so it is also the draw-completion
     digest — the standings in it are final, not a mid-tournament snapshot, and
     the wording says so. Same content either way; only the voice changes.
+
+    event_label: the batch is one 1000/Slam event rather than a tennis week, so
+    it is titled after the event and covers that event's draws — both genders
+    where it hosts both. total_in_week is then the event's draw count, not the
+    week's.
     """
     if not draws:
         return
@@ -630,9 +636,24 @@ async def send_round_complete_digest(
         subject = f"{lead} — {draws[0]['label']}" if len(draws) == 1 \
             else f"{lead} — {len(draws)} more draws"
         heading = "The draw is complete" if is_final else f"{round_name} is complete"
-        scope = ("It finished after the rest of this week's draws."
-                 if len(draws) == 1 else
-                 "These finished after the rest of this week's draws.")
+        peers = "this event's other draw" if event_label else "the rest of this week's draws"
+        scope = (f"It finished after {peers}." if len(draws) == 1
+                 else f"These finished after {peers}.")
+    elif event_label:
+        # A major is its own bucket, so the event name is the scope — "Week of
+        # August 2" would be both redundant and wrong for a draw that runs into
+        # the following week.
+        lead = "Final Standings" if is_final else f"{round_name} Complete"
+        subject = f"{lead} — {event_label}"
+        if is_final:
+            heading = ("The draw is complete" if reached == 1
+                       else "Both draws are complete" if reached == 2
+                       else "The draws are complete")
+        else:
+            heading = f"{round_name} is complete"
+        scope = ("the men's and women's draws" if reached == 2 and reached == total_in_week
+                 else "the singles draw" if total_in_week == 1
+                 else f"{reached} of {total_in_week} draws")
     elif is_final:
         subject = (f"Final Standings: {draws[0]['label']}" if total_in_week == 1
                    else f"Final Standings — Week of {week_label}")
@@ -651,7 +672,10 @@ async def send_round_complete_digest(
                  else f"{reached} of {total_in_week} draws has reached this round" if reached == 1
                  else f"{reached} of {total_in_week} draws have reached this round")
 
-    intro = f"Week of {week_label} &middot; {scope}" if not is_followup else scope
+    if is_followup:
+        intro = scope
+    else:
+        intro = f"{event_label or f'Week of {week_label}'} &middot; {scope}"
     sections = "".join(_draw_section(d, i == len(draws) - 1) for i, d in enumerate(draws))
     summary = _week_summary(summary_rows, round_name) if len(summary_rows) > 1 else ""
     unsubscribe = (

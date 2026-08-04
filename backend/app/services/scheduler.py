@@ -440,6 +440,48 @@ async def _notify_pending_draw_releases() -> None:
                 len(batches), sum(len(ids) for ids, _ in batches))
 
 
+async def _record_missed_completions() -> None:
+    """
+    Fire draw-completion for draws that finished without anything noticing.
+
+    notify_tournament_complete is what persists final standings to draw history,
+    and it runs from exactly two places: the periodic refresh, on a status flip,
+    and espn_monitor. A final written by any other path — a Wikipedia edit
+    arriving through EventStreams, an admin refresh, a page-load scrape — flips
+    the draw to 'completed' inside _do_scrape without either of them seeing it.
+    2026 Washington (M) finished that way: five predictors lost their draw
+    history, and because the same gap leaves completion_notified_at null, which
+    is what _record_completed_rounds keys on, it also dropped out of its week's
+    digest.
+
+    Scoped by end_date rather than by the stamp this is about to write: a draw
+    that ended long ago and was never recorded stays that way. Resurrecting one
+    would queue a Final round for an event that finished months ago and mail its
+    standings out as news.
+    """
+    from app.services.notifications import notify_tournament_complete
+
+    cutoff = datetime.now(timezone.utc).date() - timedelta(days=3)
+    async with AsyncSessionLocal() as db:
+        missed = (await db.execute(
+            select(Draw.id, Draw.name, Draw.gender).where(
+                Draw.status == "completed",
+                Draw.completion_notified_at.is_(None),
+                Draw.end_date.isnot(None),
+                Draw.end_date >= cutoff,
+            )
+        )).all()
+
+    # Outside the session above: notify_tournament_complete opens its own and
+    # writes, and SQLite does not want a second writer under an open read.
+    for draw_id, name, gender in missed:
+        logger.info("Draw %d (%s %s) completed but was never recorded — firing completion",
+                    draw_id, name, gender)
+        # Idempotent: completion_notified_at plus a unique claim row, so a
+        # redundant call here costs nothing.
+        await notify_tournament_complete(draw_id)
+
+
 async def _record_completed_rounds(db) -> None:
     """
     Find rounds that are finished but were never recorded, and record them.
@@ -521,21 +563,57 @@ async def _record_completed_rounds(db) -> None:
     await db.commit()
 
 
+# Tiers that get their own digest instead of sharing the week's.
+#
+# A 1000 or a Slam runs 8-14 days, so bucketing it by start-week stalls every
+# 250 and 500 that finished days earlier: the week-30 Final digest sat for days
+# behind the Canadian Open, which merely *starts* in week 30 and doesn't finish
+# until week 31. It also buried a Masters result among four 250s. A major's
+# bucket is therefore the EVENT, which is equally what keeps the men's and
+# women's draws of a combined event (Canadian Open, Indian Wells, every Slam) in
+# one email instead of two.
+MAJOR_DIGEST_TIERS = {"GS", "1000"}
+
+
+def _digest_bucket(d: Draw) -> tuple:
+    """Which digest a draw's completed rounds belong to.
+
+    Draws sharing a bucket are batched into one email per round label, and each
+    holds that batch open until the others have reached the same round.
+    """
+    if d.scoring_tier in MAJOR_DIGEST_TIERS:
+        # tournament_id is what links the M and F draws of one event. Fall back
+        # to the name so an unlinked draw still buckets with its sibling rather
+        # than emailing on its own.
+        return ("event", d.year, d.tournament_id or d.name)
+    if d.week is not None:
+        return ("week", d.year, d.week)
+    return ("solo", d.id, None)
+
+
 async def _notify_pending_round_digests() -> None:
     """
-    Weekly round-completion digest dispatch.
+    Round-completion digest dispatch.
 
     espn_monitor records each round the moment it completes
-    (notifications.record_round_complete); this decides when a week's batch is
-    worth sending. Draws in a week finish the same round hours or days apart, so
-    a per-draw email meant four messages for one afternoon of tennis.
+    (notifications.record_round_complete); this decides when a batch is worth
+    sending. Draws that run alongside each other finish the same round hours or
+    days apart, so a per-draw email meant four messages for one afternoon of
+    tennis.
 
-    Grouping is by round *label*, not round number: R32 is round 1 of a 32-draw
-    and round 3 of a 128-draw, so the same name sits at different numbers and
-    grouping on the number would put unrelated rounds in one email.
+    Batches are (bucket, round label). The bucket is the tennis week for 250s
+    and 500s and the event itself for 1000s and Slams — see _digest_bucket.
+    Grouping on the round *label* rather than the round number matters because
+    the same name sits at different numbers in different draw sizes: R32 is
+    round 1 of a 32-draw and round 3 of a 128-draw.
     """
     from app.models.notification import RoundCompleteNotification
     from app.services.notifications import notify_round_complete_digest
+
+    # Before the round sweep, not after: it only considers a completed draw's
+    # final round once completion_notified_at is set, so an unrecorded
+    # completion would otherwise hide that draw's Final for another cycle.
+    await _record_missed_completions()
 
     now = datetime.now(timezone.utc)
     async with AsyncSessionLocal() as db:
@@ -558,24 +636,37 @@ async def _notify_pending_round_digests() -> None:
             d = draws.get(p.draw_id)
             if not d:
                 continue
-            label = d.round_name(p.round_number)
-            key = (d.year, d.week, label) if d.week is not None else ("solo", p.draw_id, label)
-            groups.setdefault(key, []).append((p, d))
+            groups.setdefault((_digest_bucket(d), d.round_name(p.round_number)), []).append((p, d))
 
         batches = []
-        for key, members in groups.items():
-            if key[0] == "solo":
+        for (bucket, label), members in groups.items():
+            kind = bucket[0]
+            if kind == "solo":
                 p, d = members[0]
-                batches.append(([(d.id, p.round_number)], False, 1))
+                batches.append(([(d.id, p.round_number)], False, 1, None))
                 continue
 
-            year, week, label = key
-            siblings = (await db.execute(
-                select(Draw).where(Draw.year == year, Draw.week == week)
-            )).scalars().all()
+            if kind == "event":
+                _, year, ident = bucket
+                event_label = members[0][1].name
+                bucket_desc = f"{year} {event_label}"
+                q = select(Draw).where(Draw.year == year)
+                q = (q.where(Draw.tournament_id == ident) if isinstance(ident, int)
+                     else q.where(Draw.name == ident))
+            else:
+                _, year, week = bucket
+                event_label = None
+                bucket_desc = f"{year} week {week}"
+                q = select(Draw).where(Draw.year == year, Draw.week == week)
 
-            # Which of the week's draws will ever produce this round label, and
-            # of those, which have not reported it yet. A draw whose bracket
+            # Re-bucket the candidates rather than trusting the query: a week
+            # query still returns the 1000s and Slams starting that week, and
+            # those belong to their own digest, not this one.
+            siblings = [s for s in (await db.execute(q)).scalars().all()
+                        if _digest_bucket(s) == bucket]
+
+            # Which of the bucket's draws will ever produce this round label,
+            # and of those, which have not reported it yet. A draw whose bracket
             # never contains this label (a 32-draw has no R128) is not a
             # straggler and must not hold the batch.
             in_scope, outstanding = [], []
@@ -596,7 +687,7 @@ async def _notify_pending_round_digests() -> None:
                 if not reported and s.status != "completed":
                     outstanding.append(s)
 
-            # Already-sent siblings mean this week's digest for this round has
+            # Already-sent siblings mean this bucket's digest for this round has
             # gone; anything arriving now is a late finisher.
             is_followup = await db.scalar(
                 select(RoundCompleteNotification.id).where(
@@ -606,30 +697,35 @@ async def _notify_pending_round_digests() -> None:
                 )
             ) is not None
 
-            # No deadline: the batch waits until every draw in the week that can
-            # reach this round has, however long that takes. One email per round
-            # per week is the whole point, and a partial send followed by a
-            # follow-up is exactly what that is meant to avoid.
+            # No deadline: the batch waits until every draw in the bucket that
+            # can reach this round has, however long that takes. One email per
+            # round per bucket is the whole point, and a partial send followed
+            # by a follow-up is exactly what that is meant to avoid. Bounded
+            # because a bucket is now either one week of short events or one
+            # event — never a week gated on a fortnight-long major.
             if outstanding:
                 logger.info(
-                    "Round digest %s for %s week %s held: %d ready, waiting on %s",
-                    label, year, week, len(members), [s.name for s in outstanding],
+                    "Round digest %s for %s held: %d ready, waiting on %s",
+                    label, bucket_desc, len(members),
+                    [f"{s.name} ({s.gender})" for s in outstanding],
                 )
                 continue
             batches.append((
                 [(d.id, p.round_number) for p, d in members],
                 is_followup,
                 len(in_scope),
+                event_label,
             ))
 
     if not batches:
         return
-    for entries, is_followup, span in batches:
+    for entries, is_followup, span, event_label in batches:
         asyncio.create_task(notify_round_complete_digest(
             entries, is_followup=is_followup, total_in_week=span,
+            event_label=event_label,
         ))
     logger.info("Round-complete digest: dispatched %d batch(es) covering %d draw-round(s)",
-                len(batches), sum(len(e) for e, _, _ in batches))
+                len(batches), sum(len(e) for e, _, _, _ in batches))
 
 
 # Re-alert cadence for the two draw-health checks below — long enough to not

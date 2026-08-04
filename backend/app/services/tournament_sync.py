@@ -205,16 +205,27 @@ async def _apply_update(
     # freezes them once active/completed (see tournaments.py), so discovery
     # must not clobber refined dates on frozen draws.
     dates_frozen = existing.status in ("active", "completed")
+    # Bracket shape belongs to the scraper once a real draw exists. The season
+    # page carries a nominal entry count ("48S") that counts qualifying and bye
+    # slots the played bracket doesn't contain, and applying it to a live draw
+    # renumbers every round: 2026 Washington (M) was rewritten 32/5 → 48/6 hours
+    # after its final, which moved "Final" onto a round 6 that has no matches.
+    # Nothing could then record the draw as finished, so it silently dropped out
+    # of the week's digest and its predictors lost their draw history.
+    shape_frozen = dates_frozen or existing.draw_released_direct_at is not None
     fields = [
         ("wiki_page_title", discovered.wiki_page_title),
         ("name", discovered.name),
         ("surface", discovered.surface),
         ("category", discovered.category),
-        ("draw_size", discovered.draw_size),
-        ("num_rounds", _num_rounds(discovered.draw_size)),
         ("city", discovered.city),
         ("country", discovered.country),
     ]
+    if not shape_frozen:
+        fields += [
+            ("draw_size", discovered.draw_size),
+            ("num_rounds", _num_rounds(discovered.draw_size)),
+        ]
     if not dates_frozen:
         fields += [
             ("start_date", discovered.start_date),
