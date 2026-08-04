@@ -304,14 +304,20 @@ async def notify_round_complete_digest(
     total_in_week: Optional[int] = None,
     only_user_ids: Optional[set] = None,
     claim: bool = True,
+    event_label: Optional[str] = None,
 ) -> None:
     """
     Send ONE round-completion email per user, covering every draw in `entries`.
 
     entries: [(draw_id, round_number), ...] — all the same round *label* in the
-    same tennis week. Round label rather than number, because the same name sits
-    at a different number in different draw sizes: R32 is round 1 of a 32-draw
-    and round 3 of a 128-draw.
+    same digest bucket. Round label rather than number, because the same name
+    sits at a different number in different draw sizes: R32 is round 1 of a
+    32-draw and round 3 of a 128-draw.
+
+    event_label: set when the bucket is a single 1000/Slam event rather than a
+    tennis week (scheduler._digest_bucket). The batch is then that event's own
+    draws — both genders where it hosts both — and the email is titled after the
+    event instead of the week.
 
     Recipients are unioned across the draws and then sliced back per user: a
     user eligible in two of the week's three draws gets those two sections and
@@ -449,6 +455,7 @@ async def notify_round_complete_digest(
                 ),
                 is_final=is_final_batch,
                 is_followup=is_followup,
+                event_label=event_label,
             )
             sent += 1
         except Exception as exc:
@@ -456,11 +463,13 @@ async def notify_round_complete_digest(
 
     kind = "Draw-completion" if is_final_batch else "Round-complete"
     await app_log("info", "notifications",
-                  f"{kind} {'follow-up' if is_followup else 'digest'} ({round_name}, week of "
-                  f"{week_label}) sent to {sent} user(s) covering {reached} draw(s)",
+                  f"{kind} {'follow-up' if is_followup else 'digest'} ({round_name}, "
+                  f"{event_label or f'week of {week_label}'}) sent to {sent} user(s) "
+                  f"covering {reached} draw(s)",
                   {"draw_ids": [p["id"] for p in payloads], "round_name": round_name,
                    "recipient_count": sent, "is_followup": is_followup,
-                   "is_final": is_final_batch, "final_round_only_recipients": len(end_only)})
+                   "is_final": is_final_batch, "final_round_only_recipients": len(end_only),
+                   "event_label": event_label})
 
 
 async def notify_round_complete(
