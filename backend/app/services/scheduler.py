@@ -493,41 +493,36 @@ async def _record_completed_rounds(db) -> None:
     both finished R32 on 2026-07-29 and neither was ever queued.
 
     Sweeping here instead makes the digest depend on the state of the draw
-    rather than on which code path happened to write the deciding result.
-    Scoped to draws still in play: a completed tournament's rounds are history,
-    and queueing them now would email standings for events that finished weeks
-    ago. The unique (draw, round) row still makes this idempotent.
+    rather than on which code path happened to write the deciding result. The
+    unique (draw, round) row still makes this idempotent.
     """
     from sqlalchemy.exc import IntegrityError
     from app.models.notification import RoundCompleteNotification
 
-    draws = [
-        (d, False) for d in (await db.execute(
-            select(Draw).where(Draw.status.in_(["active", "open"]))
-        )).scalars().all()
-    ]
+    draws = (await db.execute(
+        select(Draw).where(Draw.status.in_(["active", "open"]))
+    )).scalars().all()
 
     # A draw flips to 'completed' the moment its final ends, so the scan above
-    # can never catch a FINAL round the event-driven path missed — the draw is
-    # already out of scope by the time anything looks again. Since the weekly
-    # digest is now also the draw-completion email, a missed final round means a
-    # draw silently absent from the one message reporting the week's results.
-    # Recently-completed draws are therefore swept too, but for their final
-    # round only: every earlier round had its chance while the draw was active,
-    # and re-queueing those would mail rounds that are already history.
-    draws += [
-        (d, True) for d in (await db.execute(
-            select(Draw).where(
-                Draw.status == "completed",
-                Draw.completion_notified_at.isnot(None),
-                Draw.completion_notified_at >= datetime.now(timezone.utc) - timedelta(days=3),
-            )
-        )).scalars().all()
-    ]
+    # can never catch a round the event-driven path missed — the draw is already
+    # out of scope by the time anything looks again. Recently-completed draws are
+    # therefore swept too, and for EVERY round, not just the final: a digest
+    # waits for every draw in its bucket without exception, so a single
+    # unrecorded round on a finished draw would hold that bucket's email open
+    # forever. Recording the round is the right way out of that wait — publishing
+    # without the draw is not. The recency guard is what stops this queueing
+    # rounds for events that finished weeks ago.
+    draws += (await db.execute(
+        select(Draw).where(
+            Draw.status == "completed",
+            Draw.completion_notified_at.isnot(None),
+            Draw.completion_notified_at >= datetime.now(timezone.utc) - timedelta(days=3),
+        )
+    )).scalars().all()
     if not draws:
         return
 
-    for d, final_only in draws:
+    for d in draws:
         rows = (await db.execute(
             select(
                 Match.round_number,
@@ -540,8 +535,6 @@ async def _record_completed_rounds(db) -> None:
 
         for round_number, total, still_open in rows:
             if total == 0 or still_open:
-                continue
-            if final_only and round_number != d.num_rounds:
                 continue
             already = await db.scalar(
                 select(RoundCompleteNotification.id).where(
@@ -573,6 +566,11 @@ async def _record_completed_rounds(db) -> None:
 # women's draws of a combined event (Canadian Open, Indian Wells, every Slam) in
 # one email instead of two.
 MAJOR_DIGEST_TIERS = {"GS", "1000"}
+
+# How far past a draw's own end date the digest will wait before treating the
+# silence as a fault worth alerting on. It never shortens the wait — the batch
+# still holds for the lagging draw — it only stops a stall being invisible.
+DIGEST_STALL_DAYS = 3
 
 
 def _digest_bucket(d: Draw) -> tuple:
@@ -681,10 +679,16 @@ async def _notify_pending_round_digests() -> None:
                         RoundCompleteNotification.round_number == rn,
                     )
                 )
-                # A finished tournament can no longer produce this round, so it
-                # must not hold the batch open forever — the only escape from an
-                # otherwise unbounded wait.
-                if not reported and s.status != "completed":
+                # Unconditional: a draw in the bucket that has not reported this
+                # round holds the batch, whatever its status. There used to be an
+                # exemption for 'completed' draws, on the reasoning that a
+                # finished tournament can no longer produce the round — but that
+                # published the bucket without it, which is exactly what a digest
+                # must never do. A finished draw that has not reported is a
+                # recording failure, and _record_completed_rounds now sweeps every
+                # round of a recently-completed draw so the report arrives instead
+                # of the batch going out short.
+                if not reported:
                     outstanding.append(s)
 
             # Already-sent siblings mean this bucket's digest for this round has
@@ -697,18 +701,40 @@ async def _notify_pending_round_digests() -> None:
                 )
             ) is not None
 
-            # No deadline: the batch waits until every draw in the bucket that
-            # can reach this round has, however long that takes. One email per
-            # round per bucket is the whole point, and a partial send followed
-            # by a follow-up is exactly what that is meant to avoid. Bounded
-            # because a bucket is now either one week of short events or one
-            # event — never a week gated on a fortnight-long major.
+            # No deadline, and no exceptions: the batch waits until every draw
+            # in the bucket that can reach this round has reported, however long
+            # that takes. Publishing a bucket while one of its draws is still
+            # lagging is the thing a digest exists to prevent — there is no
+            # timeout, no partial send, no "send now and follow up later".
+            # Bounded because a bucket is either one week of short events or one
+            # event, never a week gated on a fortnight-long major.
             if outstanding:
                 logger.info(
                     "Round digest %s for %s held: %d ready, waiting on %s",
                     label, bucket_desc, len(members),
                     [f"{s.name} ({s.gender})" for s in outstanding],
                 )
+                # Waiting is correct; waiting silently forever is not. A draw
+                # whose own end date is well past should have reported this round
+                # already, so the wait has stopped being normal lag and become a
+                # recording failure. Raise it instead of shortening the wait.
+                cutoff = date.today() - timedelta(days=DIGEST_STALL_DAYS)
+                stalled = [s for s in outstanding if s.end_date and s.end_date < cutoff]
+                if stalled:
+                    from app.services.system_log import app_log
+                    await app_log(
+                        "error", "notifications",
+                        f"{label} digest for {bucket_desc} is held with {len(members)} "
+                        f"draw(s) ready: "
+                        f"{', '.join(f'{s.name} ({s.gender})' for s in stalled)} "
+                        f"finished on or before {max(s.end_date for s in stalled)} but has "
+                        f"never recorded this round, so the email cannot go out",
+                        {"round_name": label, "bucket": bucket_desc,
+                         "stalled_draw_ids": [s.id for s in stalled],
+                         "ready_draw_ids": [d.id for _, d in members]},
+                        dedup_key=f"digest_stalled_{bucket_desc}_{label}",
+                        dedup_hours=DRAW_HEALTH_REALERT_HOURS,
+                    )
                 continue
             batches.append((
                 [(d.id, p.round_number) for p, d in members],
