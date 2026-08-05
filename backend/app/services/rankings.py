@@ -541,11 +541,19 @@ async def assign_rankings(
 
                 # Fallback 2: TE list-players search then slug-guess for unranked players.
                 slug, name_display, dob, first_name, last_name, nationality = await _find_te_player(player.name, gender)
+                # Both outcomes used to open with "Player not matched in TE
+                # rankings", so the success case read as a failure that happened
+                # to mention a slug — the found-anyway line and the genuinely
+                # missing line were near-identical at a glance in the console.
+                # Say which of the two actually happened, and what it costs.
                 await app_log(
                     "warning" if not slug else "info",
                     "rankings",
-                    f"Player not matched in TE rankings: {player.name!r}"
-                    + (f" — found via TE profile (slug={slug!r})" if slug else " — no TE profile found"),
+                    f"Player resolved via TE profile lookup, not the rankings list: "
+                    f"{player.name!r} (slug={slug!r})"
+                    if slug else
+                    f"No Tennis Explorer profile for {player.name!r} — no ranking, "
+                    f"ELO, H2H or recent form will be available for this player",
                     {"player_name": player.name, "gender": gender, "te_slug": slug},
                     dedup_key=f"match_fail_{player.name.lower()}", dedup_hours=24,
                 )
