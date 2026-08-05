@@ -541,22 +541,26 @@ async def assign_rankings(
 
                 # Fallback 2: TE list-players search then slug-guess for unranked players.
                 slug, name_display, dob, first_name, last_name, nationality = await _find_te_player(player.name, gender)
-                # Both outcomes used to open with "Player not matched in TE
-                # rankings", so the success case read as a failure that happened
-                # to mention a slug — the found-anyway line and the genuinely
-                # missing line were near-identical at a glance in the console.
-                # Say which of the two actually happened, and what it costs.
-                await app_log(
-                    "warning" if not slug else "info",
-                    "rankings",
-                    f"Player resolved via TE profile lookup, not the rankings list: "
-                    f"{player.name!r} (slug={slug!r})"
-                    if slug else
-                    f"No Tennis Explorer profile for {player.name!r} — no ranking, "
-                    f"ELO, H2H or recent form will be available for this player",
-                    {"player_name": player.name, "gender": gender, "te_slug": slug},
-                    dedup_key=f"match_fail_{player.name.lower()}", dedup_hours=24,
-                )
+                if slug:
+                    await app_log(
+                        "info", "rankings",
+                        f"Player resolved via TE profile lookup, not the rankings "
+                        f"list: {player.name!r} (slug={slug!r})",
+                        {"player_name": player.name, "gender": gender, "te_slug": slug},
+                        dedup_key=f"match_fail_{player.name.lower()}", dedup_hours=24,
+                    )
+                else:
+                    # Deliberately not a warning. Every scrape now re-tries the
+                    # players still missing an id, so a first miss is a state the
+                    # system routinely gets itself out of: TE publishes late for
+                    # new qualifiers and wildcards, and a profile lookup that
+                    # loses to rate limiting succeeds on the next sweep. Warning
+                    # here paged about work already scheduled to happen.
+                    # _check_rankings_health escalates the players that are still
+                    # unresolved once their draw is under way — the point at
+                    # which retrying has demonstrably stopped helping.
+                    logger.debug("No TE profile yet for %r (%s) — will retry next scrape",
+                                 player.name, gender)
                 if slug:
                     owner = (
                         await db.execute(select(TePlayer).where(TePlayer.te_slug == slug))

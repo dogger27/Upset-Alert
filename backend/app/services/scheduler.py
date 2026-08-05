@@ -14,7 +14,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import case, func, select
 
 from app.database import AsyncSessionLocal
-from app.models.tournament import Draw, Match
+from app.models.tournament import Draw, DrawEntry, Match
 from app.services.espn_monitor import ESPNMonitor
 from app.services.eventstream import EventStreamListener
 from app.services.http_errors import describe_exception, is_transient_http_error
@@ -954,6 +954,41 @@ async def _check_rankings_health() -> None:
                     {"latest_week": str(latest_week), "elo_rows": elo_rows},
                     dedup_key="elo_missing", dedup_hours=DRAW_HEALTH_REALERT_HOURS,
                 )
+
+        # Players the retry loop has given up on. Every scrape re-attempts the
+        # entries with no te_player_id, so one that is still unresolved after
+        # play has begun is not waiting on TE to publish — it is a name our
+        # matcher cannot bridge, and it costs that player's ranking, ELO, H2H
+        # and form on a draw people are actively picking.
+        unresolved = (
+            await db.execute(
+                select(Draw.id, Draw.name, Draw.gender, Draw.year, DrawEntry.name)
+                .join(DrawEntry, DrawEntry.draw_id == Draw.id)
+                .where(
+                    DrawEntry.te_player_id.is_(None),
+                    DrawEntry.name.isnot(None),
+                    DrawEntry.name != "",
+                    Draw.status != "completed",
+                    Draw.start_date.isnot(None),
+                    Draw.start_date <= today,
+                )
+            )
+        ).all()
+        by_draw: dict[int, tuple[str, list[str]]] = {}
+        for draw_id, name, gender, year, player in unresolved:
+            label, names = by_draw.setdefault(draw_id, (f"{year} {name} ({gender})", []))
+            names.append(player)
+        for draw_id, (label, names) in by_draw.items():
+            await app_log(
+                "error", "rankings",
+                f"{len(names)} player(s) in {label} have no Tennis Explorer match after "
+                f"the draw started — no ranking, ELO, H2H or form for them: "
+                f"{', '.join(sorted(names)[:10])}"
+                + (f" (+{len(names) - 10} more)" if len(names) > 10 else ""),
+                {"draw_id": draw_id, "draw": label, "player_names": sorted(names),
+                 "unresolved_count": len(names)},
+                dedup_key=f"unresolved_players_{draw_id}", dedup_hours=DRAW_HEALTH_REALERT_HOURS,
+            )
 
 
 async def _sync_subscriptions() -> None:

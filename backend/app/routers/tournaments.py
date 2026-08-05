@@ -1184,11 +1184,25 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
         pos_to_player_id[pe.bracket_position] = player.id
         upserted_players.append(player)
 
-    if roster_changed:
+    # Retry unresolved players even when the roster is unchanged. Skipping the
+    # whole pass on "no roster change" meant a player who couldn't be matched at
+    # the moment they entered the draw stayed unmatched forever — nothing ever
+    # looked at them again unless someone else's name happened to change. Now
+    # the 30-min sweep keeps re-trying, so a player TE hadn't published yet, or
+    # one whose profile lookup lost to rate limiting, resolves on its own.
+    # assign_rankings only touches players with te_player_id IS NULL, so this
+    # costs one index load and nothing else once everyone is matched.
+    unresolved = [p for p in upserted_players if p.te_player_id is None]
+    if roster_changed or unresolved:
         try:
             ref_date = tournament.entry_ranking_week or tournament.start_date or date.today()
             await assign_rankings(upserted_players, tournament.gender, ref_date, db)
-            logger.info("Roster change in %s — rankings assigned", tournament.name)
+            if roster_changed:
+                logger.info("Roster change in %s — rankings assigned", tournament.name)
+            else:
+                still = sum(1 for p in upserted_players if p.te_player_id is None)
+                logger.info("%s: retried %d unresolved player(s), %d still unresolved",
+                            tournament.name, len(unresolved), still)
         except Exception as exc:
             logger.warning("Could not assign rankings for %s: %s", tournament.name, exc)
 
