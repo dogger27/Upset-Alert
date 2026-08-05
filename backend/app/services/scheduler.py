@@ -50,8 +50,13 @@ async def _auto_discover_tournaments() -> None:
                 is_future_not_found = year > current_year and isinstance(exc, WikiPageNotFound)
                 if not is_future_not_found:
                     from app.services.system_log import app_log
-                    await app_log("error", "scheduler", f"Tournament discovery failed for {year}: {exc}",
-                                  {"year": year, "error": str(exc)})
+                    # Not suppressed for transient errors like the polling jobs
+                    # are: discovery runs once a day and is deduped, so a row
+                    # here is at most one a day and does mean Wikipedia was
+                    # unreachable at the moment it mattered.
+                    err = describe_exception(exc)
+                    await app_log("error", "scheduler", f"Tournament discovery failed for {year}: {err}",
+                                  {"year": year, "error": err})
 
     # Sync EventStream subscriptions after DB is updated
     await _sync_subscriptions()
@@ -1021,8 +1026,9 @@ async def _sync_highest_rank_bot() -> None:
             logger.info("Highest_Rank bot: synced picks for %d draw(s)", synced)
     except Exception as exc:
         logger.error("Highest_Rank bot sync failed: %s", exc)
-        await app_log("error", "highest_rank_bot", f"Sync job failed: {exc}",
-                      {"error": str(exc)}, dedup_key="highest_rank_bot_fail", dedup_hours=6)
+        err = describe_exception(exc)
+        await app_log("error", "highest_rank_bot", f"Sync job failed: {err}",
+                      {"error": err}, dedup_key="highest_rank_bot_fail", dedup_hours=6)
 
 
 async def _scan_system_alerts() -> None:
@@ -1147,6 +1153,7 @@ def start_scheduler() -> None:
     logger.info("Draw-release notification check scheduled (every 10 min)")
     logger.info("Round-complete digest check scheduled (every 10 min)")
     logger.info("Draw health check scheduled (every 60 min)")
+    logger.info("Rankings/ELO freshness check scheduled (every 60 min)")
     logger.info("Highest_Rank bot sync scheduled (every 10 min)")
     logger.info("System alert scan scheduled (every 15 min)")
     asyncio.create_task(eventstream.start())

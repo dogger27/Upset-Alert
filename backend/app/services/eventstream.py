@@ -22,6 +22,7 @@ from typing import Callable, Optional
 
 import httpx
 
+from app.services.http_errors import describe_exception
 from app.services.scraper import WikiPageNotFound
 
 logger = logging.getLogger(__name__)
@@ -134,7 +135,12 @@ class EventStreamListener:
             try:
                 await self._stream_events()
             except Exception as exc:
-                logger.warning("EventStreams connection lost: %s. Reconnecting in 5s…", exc)
+                # A dropped long-lived SSE connection stringifies to '', which
+                # logged as "connection lost: . Reconnecting in 5s…" — the one
+                # detail worth having, which transport actually failed, was the
+                # part that went missing.
+                logger.warning("EventStreams connection lost: %s. Reconnecting in 5s…",
+                               describe_exception(exc))
                 await asyncio.sleep(5)
 
     def _stream_url(self) -> str:
