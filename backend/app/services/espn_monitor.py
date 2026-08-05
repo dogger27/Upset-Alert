@@ -278,6 +278,13 @@ def _match_event(tournament, events: list, entries: list) -> tuple[Optional[dict
 # checked against the data instead (see _check_rankings_health).
 _ESPN_FAIL_STREAK: dict[str, int] = {}
 ESPN_FAIL_STREAK_ALERT = 20
+# Once alerted, stay quiet for this many further failed polls (~6h at 60s)
+# before saying it again. Without this the alert fires on EVERY poll past the
+# threshold — a minute apart, forever. app_log's dedup would absorb the
+# duplicates, but that cache is in-process and resets on every deploy, so an
+# outage spanning a restart would emit again immediately. Rate-limit at the
+# source instead of trusting a cache that is designed to be lost.
+ESPN_OUTAGE_REALERT_POLLS = 360
 
 
 async def _fetch_events(gender: str) -> list:
@@ -300,7 +307,8 @@ async def _fetch_events(gender: str) -> list:
             streak = _ESPN_FAIL_STREAK.get(gender, 0) + 1
             _ESPN_FAIL_STREAK[gender] = streak
             logger.debug("ESPN %s unreachable (%d in a row): %s", gender, streak, err_msg)
-            if streak >= ESPN_FAIL_STREAK_ALERT:
+            over = streak - ESPN_FAIL_STREAK_ALERT
+            if over >= 0 and over % ESPN_OUTAGE_REALERT_POLLS == 0:
                 from app.services.system_log import app_log
                 await app_log("error", "espn",
                               f"ESPN {gender} unreachable for {streak} consecutive polls "
