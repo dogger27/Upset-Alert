@@ -913,6 +913,18 @@ async def _sync_highest_rank_bot() -> None:
                       {"error": str(exc)}, dedup_key="highest_rank_bot_fail", dedup_hours=6)
 
 
+async def _scan_system_alerts() -> None:
+    """Email digest of new errors/warnings in system_logs — see alerts.py for
+    the recurrence gate and daily cap. Wrapped because a failure here must not
+    take down the scheduler tick that reports every other failure."""
+    from app.services import alerts
+
+    try:
+        await alerts.scan_and_alert()
+    except Exception as exc:
+        logger.error("System alert scan failed: %s", exc, exc_info=True)
+
+
 def start_scheduler() -> None:
     scheduler.add_job(
         _auto_discover_tournaments,
@@ -974,6 +986,19 @@ def start_scheduler() -> None:
         id="sync_highest_rank_bot",
         misfire_grace_time=300,
     )
+    # Error/warning email digest. 15 min is the worst-case delay before a new
+    # problem reaches the inbox; the daily cap and 24h recurrence gate live in
+    # alerts.py, not here, so shortening this cadence can't increase volume.
+    # Deliberately NOT also kicked off at startup like the jobs below: a deploy
+    # restart is when transient connect/timeout noise is most likely, and the
+    # first interval tick picks up anything real 15 minutes later anyway.
+    scheduler.add_job(
+        _scan_system_alerts,
+        "interval",
+        minutes=15,
+        id="scan_system_alerts",
+        misfire_grace_time=600,
+    )
     scheduler.add_job(
         _refresh_weekly_rankings,
         "cron",
@@ -1004,6 +1029,7 @@ def start_scheduler() -> None:
     logger.info("Round-complete digest check scheduled (every 10 min)")
     logger.info("Draw health check scheduled (every 60 min)")
     logger.info("Highest_Rank bot sync scheduled (every 10 min)")
+    logger.info("System alert scan scheduled (every 15 min)")
     asyncio.create_task(eventstream.start())
     asyncio.create_task(espn_monitor.start())
     # Subscribe immediately on startup so EventStreams catches edits from the
