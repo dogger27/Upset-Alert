@@ -19,6 +19,7 @@ from app.database import AsyncSessionLocal
 from app.models.tournament import Draw, Match
 from app.services.espn_monitor import ESPNMonitor
 from app.services.eventstream import EventStreamListener
+from app.services.scraper import WikiPageNotFound
 
 logger = logging.getLogger(__name__)
 scheduler = AsyncIOScheduler()
@@ -42,9 +43,12 @@ async def _auto_discover_tournaments() -> None:
             except Exception as exc:
                 await db.rollback()
                 logger.warning("Failed to sync tournaments for %d: %s", year, exc)
-                # "Page not found" for a future year is expected — Wikipedia page won't
-                # exist until the season is underway. Skip app_log entirely.
-                is_future_not_found = year > current_year and "Page not found" in str(exc)
+                # A missing season page for a future year is expected — Wikipedia
+                # won't have one until the season is underway. Skip app_log
+                # entirely. Matched on the exception type rather than on the text
+                # of its message, which was one reworded f-string away from
+                # silently becoming an error again.
+                is_future_not_found = year > current_year and isinstance(exc, WikiPageNotFound)
                 if not is_future_not_found:
                     from app.services.system_log import app_log
                     await app_log("error", "scheduler", f"Tournament discovery failed for {year}: {exc}",
@@ -95,7 +99,7 @@ async def _refresh_active_tournaments(force_refresh: bool = False) -> None:
     # of the cycle. Tuples can't expire; the Draw is re-fetched below per draw.
     async with AsyncSessionLocal() as db:
         result = await db.execute(
-            select(Draw.id, Draw.name, Draw.wiki_page_title).where(
+            select(Draw.id, Draw.name, Draw.wiki_page_title, Draw.wiki_page_id).where(
                 Draw.status != "completed",
                 or_(
                     # Group 1: active window (started within last 14 days)
@@ -122,7 +126,7 @@ async def _refresh_active_tournaments(force_refresh: bool = False) -> None:
         tournaments = result.all()
 
     logger.info("Daily refresh: %d tournaments to check", len(tournaments))
-    for t_id, t_name, t_wiki in tournaments:
+    for t_id, t_name, t_wiki, t_page_id in tournaments:
         await asyncio.sleep(5)  # throttle Wikipedia requests to avoid 429s
         # One session per draw, so a failed scrape's rollback is contained to the
         # draw that caused it instead of poisoning every draw still to come.
@@ -155,6 +159,33 @@ async def _refresh_active_tournaments(force_refresh: bool = False) -> None:
             except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout) as exc:
                 logger.debug("Network blip refreshing %s: %s", t_wiki, exc)
                 await db.rollback()
+            except WikiPageNotFound as exc:
+                # Not a failure while the draw has never resolved a page: the
+                # singles page is created on Wikipedia around publication day,
+                # so every upcoming draw returns this on every poll for the
+                # whole POLL_LEAD_DAYS window — one row per draw per 30 min,
+                # for days, describing the normal state of waiting. There is
+                # nothing for a human to do with it, and _check_draw_health
+                # already escalates the same condition once it is genuinely
+                # overdue (see its Check 2), which is the point at which
+                # someone can act.
+                #
+                # A page_id that resolved before and now 404s is the opposite
+                # case — the page was deleted, merged or the id went stale, and
+                # nothing else watches for it — so that still gets logged.
+                await db.rollback()
+                if t_page_id is None:
+                    logger.debug("Draw page not up yet for %s: %s", t_wiki, exc)
+                else:
+                    logger.warning("Resolved wiki page %s vanished for %s: %s",
+                                   t_page_id, t_wiki, exc)
+                    from app.services.system_log import app_log
+                    await app_log("error", "scheduler",
+                                  f"Wiki page for '{t_name}' no longer exists: {exc}",
+                                  {"tournament_id": t_id, "tournament_name": t_name,
+                                   "wiki_title": t_wiki, "wiki_page_id": t_page_id,
+                                   "error": str(exc)},
+                                  dedup_key=f"page_vanished_{t_id}", dedup_hours=24.0)
             except Exception as exc:
                 tb = traceback.format_exc()
                 logger.warning("Failed to refresh %s: %s\n%s", t_wiki, exc, tb)
