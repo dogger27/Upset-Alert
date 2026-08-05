@@ -107,9 +107,10 @@ export default function LeagueDetail() {
   })
 
   // Group non-upcoming tournaments by display status: Open → Active → Previous.
-  // On this page only, "Last Week" is folded into "Previous" (no separate tab) —
-  // Within each group sort by tier desc, then start_date desc, so the merged
-  // Previous bucket still shows Last Week's more recent draws first.
+  // On this page only, "Last Week" is folded into "Previous" (no separate tab),
+  // so the merged Previous bucket is sorted most-recent-first to keep Last
+  // Week's draws at the top of it. Open/Active sorts by tier instead — see the
+  // comparator below.
   const STATUS_ORDER = { open: 0, active: 1, previous: 2 }
   const categoryGroups = useMemo(() => {
     const cohortInfo = computeCohortInfo(allTournaments)
@@ -125,10 +126,20 @@ export default function LeagueDetail() {
       groups.get(ds).items.push(lt)
     }
     for (const g of groups.values()) {
+      // Previous is a history list, so recency leads there and tier only breaks
+      // ties between draws of the same week. Sorting tier-first put Wimbledon at
+      // the head of a list whose 3rd entry (French Open, May 25) was two months
+      // older than draws that had just finished, and since Previous reveals only
+      // 5 at a time, everything after Wimbledon was hidden behind "Show more".
+      // Open/Active keeps tier first: nothing is truncated there, so the biggest
+      // live event leading is a help rather than a filter.
+      const recencyFirst = g.key === 'previous'
       g.items.sort((a, b) => {
-        const td = tierValue(b.tournament.category) - tierValue(a.tournament.category)
-        if (td !== 0) return td
-        return (b.tournament.start_date || '') > (a.tournament.start_date || '') ? 1 : -1
+        const ad = a.tournament.start_date || ''
+        const bd = b.tournament.start_date || ''
+        const byTier = tierValue(b.tournament.category) - tierValue(a.tournament.category)
+        const byDate = bd > ad ? 1 : bd < ad ? -1 : 0
+        return recencyFirst ? (byDate || byTier) : (byTier || byDate)
       })
     }
     return [...groups.values()].sort((a, b) => a.order - b.order)
