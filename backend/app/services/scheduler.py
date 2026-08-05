@@ -10,8 +10,6 @@ import logging
 import traceback
 from datetime import date, datetime, timedelta, timezone
 
-import httpx
-
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import case, func, select
 
@@ -19,6 +17,7 @@ from app.database import AsyncSessionLocal
 from app.models.tournament import Draw, Match
 from app.services.espn_monitor import ESPNMonitor
 from app.services.eventstream import EventStreamListener
+from app.services.http_errors import describe_exception, is_transient_http_error
 from app.services.scraper import WikiPageNotFound
 
 logger = logging.getLogger(__name__)
@@ -156,9 +155,6 @@ async def _refresh_active_tournaments(force_refresh: bool = False) -> None:
                 just_completed = prev_status != "completed" and t.status == "completed"
                 if just_completed:
                     asyncio.create_task(notify_tournament_complete(t_id))
-            except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout) as exc:
-                logger.debug("Network blip refreshing %s: %s", t_wiki, exc)
-                await db.rollback()
             except WikiPageNotFound as exc:
                 # Not a failure while the draw has never resolved a page: the
                 # singles page is created on Wikipedia around publication day,
@@ -187,13 +183,23 @@ async def _refresh_active_tournaments(force_refresh: bool = False) -> None:
                                    "error": str(exc)},
                                   dedup_key=f"page_vanished_{t_id}", dedup_hours=24.0)
             except Exception as exc:
-                tb = traceback.format_exc()
-                logger.warning("Failed to refresh %s: %s\n%s", t_wiki, exc, tb)
                 await db.rollback()
+                # Transient first, and via the shared test rather than a
+                # hand-written tuple — the tuple that used to live here listed
+                # three httpx classes and the other call sites listed two
+                # different ones, which is how ReadTimeout ended up silenced in
+                # one place and alerted from another.
+                if is_transient_http_error(exc):
+                    logger.debug("Network blip refreshing %s: %s",
+                                 t_wiki, describe_exception(exc))
+                    continue
+                tb = traceback.format_exc()
+                err = describe_exception(exc)
+                logger.warning("Failed to refresh %s: %s\n%s", t_wiki, err, tb)
                 from app.services.system_log import app_log
-                await app_log("error", "scheduler", f"Failed to refresh '{t_name}': {exc}",
+                await app_log("error", "scheduler", f"Failed to refresh '{t_name}': {err}",
                               {"tournament_id": t_id, "tournament_name": t_name,
-                               "wiki_title": t_wiki, "error": str(exc),
+                               "wiki_title": t_wiki, "error": err,
                                "traceback": tb},
                               dedup_key=f"refresh_fail_{t_id}_{type(exc).__name__}", dedup_hours=1.0)
 
@@ -357,9 +363,14 @@ async def _refresh_weekly_rankings() -> None:
         else:
             logger.info("Weekly rankings: week %s already populated or not yet published", week_date)
     except Exception as exc:
-        logger.error("Weekly rankings job failed: %s", exc)
-        await app_log("error", "rankings", f"Weekly rankings job failed: {exc}",
-                      {"week_date": str(week_date), "error": str(exc)},
+        err = describe_exception(exc)
+        if is_transient_http_error(exc):
+            # _check_rankings_health notices if the week never lands.
+            logger.debug("Weekly rankings source unreachable: %s", err)
+            return
+        logger.error("Weekly rankings job failed: %s", err)
+        await app_log("error", "rankings", f"Weekly rankings job failed: {err}",
+                      {"week_date": str(week_date), "error": err},
                       dedup_key="weekly_rankings_job_fail", dedup_hours=12)
 
 
@@ -870,6 +881,76 @@ async def _check_draw_health() -> None:
             )
 
 
+# How stale rankings may get before it stops being the normal weekly rhythm.
+# Weeks are Monday-anchored and refreshed weekly, so the honest maximum lag is
+# 6 days (Sunday, looking at Monday's data). 10 leaves room for a week that TE
+# publishes late or skips without crying wolf, while still catching a refresh
+# that has genuinely stopped.
+RANKINGS_STALE_DAYS = 10
+# The ELO cron runs Monday 01:00 UTC, so a brand-new week legitimately has no
+# ELO for a few hours. Only judge a week that has had a full day to fill in.
+ELO_GRACE_DAYS = 2
+
+
+async def _check_rankings_health() -> None:
+    """
+    Escalate rankings/ELO that have stopped updating.
+
+    This is the other half of suppressing transient network errors at the TE
+    scrape sites. Individual failures there are now debug-only — TE times out
+    and 403s often enough that alerting per attempt was pure noise — but "the
+    scrape failed once" and "rankings have not moved in two weeks" are different
+    claims, and only the second one is worth an email. So instead of counting
+    failed attempts (useless for a weekly job: the next data point is seven days
+    away, and any in-process counter dies at the next deploy), this asks the data
+    whether the outcome actually arrived.
+    """
+    from app.models.rankings import TeRankingsSnapshot
+    from app.services.system_log import app_log
+
+    today = date.today()
+    async with AsyncSessionLocal() as db:
+        latest_week = (
+            await db.execute(select(func.max(TeRankingsSnapshot.week_date)))
+        ).scalar()
+        if latest_week is None:
+            return  # Empty table — a fresh dev DB, not a stalled refresh.
+
+        days_behind = (today - latest_week).days
+        if days_behind > RANKINGS_STALE_DAYS:
+            await app_log(
+                "error", "rankings",
+                f"Rankings have not updated in {days_behind} days — newest week is "
+                f"{latest_week}, expected one no older than {RANKINGS_STALE_DAYS} days",
+                {"latest_week": str(latest_week), "days_behind": days_behind,
+                 "threshold_days": RANKINGS_STALE_DAYS},
+                dedup_key="rankings_stale", dedup_hours=DRAW_HEALTH_REALERT_HOURS,
+            )
+
+        # ELO rides on the same snapshot rows, so a week can arrive complete on
+        # ranking and empty on ELO — which is what a silently failing ELO
+        # refresh looks like from the outside.
+        if (today - latest_week).days >= ELO_GRACE_DAYS:
+            elo_rows = (
+                await db.execute(
+                    select(func.count())
+                    .select_from(TeRankingsSnapshot)
+                    .where(
+                        TeRankingsSnapshot.week_date == latest_week,
+                        TeRankingsSnapshot.elo.isnot(None),
+                    )
+                )
+            ).scalar() or 0
+            if elo_rows == 0:
+                await app_log(
+                    "error", "rankings",
+                    f"No ELO ratings for week {latest_week} — the ELO refresh has "
+                    f"not landed for a week that is {(today - latest_week).days} days old",
+                    {"latest_week": str(latest_week), "elo_rows": elo_rows},
+                    dedup_key="elo_missing", dedup_hours=DRAW_HEALTH_REALERT_HOURS,
+                )
+
+
 async def _sync_subscriptions() -> None:
     """Sync EventStreams subscriptions with active/pending tournaments + season pages."""
     async with AsyncSessionLocal() as db:
@@ -1008,6 +1089,13 @@ def start_scheduler() -> None:
         id="check_draw_health",
         misfire_grace_time=600,
     )
+    scheduler.add_job(
+        _check_rankings_health,
+        "interval",
+        minutes=60,
+        id="check_rankings_health",
+        misfire_grace_time=600,
+    )
     # Keep the "Highest_Rank" baseline user's picks current as entries/rankings
     # firm up. 10 min cadence matches the draw-release notify job.
     scheduler.add_job(
@@ -1073,6 +1161,7 @@ def start_scheduler() -> None:
     asyncio.create_task(_notify_pending_draw_releases())
     # Catch any tournaments that were already stuck before this restart.
     asyncio.create_task(_check_draw_health())
+    asyncio.create_task(_check_rankings_health())
     # Catch any draws whose entries/rankings firmed up while the server was down.
     asyncio.create_task(_sync_highest_rank_bot())
     # Backfill DOB for any te_players missing it (no-op if all already set).

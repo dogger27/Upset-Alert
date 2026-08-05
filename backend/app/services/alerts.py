@@ -57,6 +57,7 @@ ALERT_TZ = ZoneInfo("America/Los_Angeles")
 
 _DIGITS = re.compile(r"\d+")
 _WHITESPACE = re.compile(r"\s+")
+_EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
 
 
 def log_fingerprint(level: str, category: str, message: str) -> str:
@@ -69,13 +70,21 @@ def log_fingerprint(level: str, category: str, message: str) -> str:
     email are the same thing by construction, so the two can't drift apart as
     the normalisation rules change.
 
-    Numbers are the only thing normalised away, and that is deliberate: it
-    collapses the year/id/count that differ between occurrences of one problem
-    ("Page not found: 2026 Cincinnati Open ...") while keeping the parts that
-    distinguish genuinely different problems — the Men's and Women's Cincinnati
-    draws stay two signatures, because that is two titles to go and fix.
+    Numbers and email addresses are what get normalised away, and that is
+    deliberate: it collapses the year/id/count/recipient that differ between
+    occurrences of one problem ("Page not found: 2026 Cincinnati Open ...")
+    while keeping the parts that distinguish genuinely different problems — the
+    Men's and Women's Cincinnati draws stay two signatures, because that is two
+    titles to go and fix.
+
+    Addresses matter as much as digits here. "Email send failed: … → a@b.com"
+    fingerprinted per recipient, so a mailer that was down for one send to four
+    people read as four separate problems: four rows in the panel, four of the
+    twenty slots in a digest, and four entries competing for a three-a-day
+    budget. It is one broken mailer. Normalising the address says so.
     """
-    normalised = _DIGITS.sub("#", message)
+    normalised = _EMAIL.sub("<email>", message)
+    normalised = _DIGITS.sub("#", normalised)
     normalised = _WHITESPACE.sub(" ", normalised).strip()
     raw = f"{level}|{category}|{normalised}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]

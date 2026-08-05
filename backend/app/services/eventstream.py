@@ -274,13 +274,20 @@ class EventStreamListener:
             # escalates it once it's overdue.
             logger.debug("Draw page not up yet for %s: %s", title, exc)
         except Exception as exc:
+            from app.services.http_errors import describe_exception, is_transient_http_error
+            err = describe_exception(exc)
+            if is_transient_http_error(exc):
+                # The 30-min catch-up sweep re-scrapes the same draw anyway, so
+                # a blip here costs nothing but a delay.
+                logger.debug("Wikipedia unreachable scraping %s: %s", title, err)
+                return
             import traceback
             tb = traceback.format_exc()
-            logger.warning("Failed to scrape %s: %s", title, exc)
+            logger.warning("Failed to scrape %s: %s", title, err)
             from app.services.system_log import app_log
             await app_log(
                 "error", "scheduler",
-                f"EventStream scrape failed for '{title}': {exc}",
-                {"wiki_title": title, "error": str(exc), "traceback": tb},
+                f"EventStream scrape failed for '{title}': {err}",
+                {"wiki_title": title, "error": err, "traceback": tb},
                 dedup_key=f"eventstream_fail_{title}_{type(exc).__name__}", dedup_hours=1.0,
             )

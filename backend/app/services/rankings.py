@@ -308,12 +308,20 @@ async def _scrape_te(gender: str, week_date: Optional[date] = None, log_errors: 
                 await asyncio.sleep(0.1)
         logger.info("Tennis Explorer %s scrape: %d players across %d pages", gender, len(results), page - 1)
     except Exception as exc:
-        logger.warning("Tennis Explorer %s scrape failed: %s", gender, exc)
-        if log_errors:
-            from app.services.system_log import app_log
-            await app_log("error", "rankings", f"Tennis Explorer {gender} scrape failed: {exc}",
-                          {"gender": gender, "error": str(exc)},
-                          dedup_key=f"te_scrape_fail_{gender}", dedup_hours=2)
+        from app.services.http_errors import describe_exception, is_transient_http_error
+        err = describe_exception(exc)
+        # TE answers a burst with 403 and is slow often enough to time out; both
+        # are the network, not a scrape bug. The refresh runs again, and
+        # _check_rankings_health escalates if the week's data never lands.
+        if is_transient_http_error(exc):
+            logger.debug("Tennis Explorer %s unreachable: %s", gender, err)
+        else:
+            logger.warning("Tennis Explorer %s scrape failed: %s", gender, err)
+            if log_errors:
+                from app.services.system_log import app_log
+                await app_log("error", "rankings", f"Tennis Explorer {gender} scrape failed: {err}",
+                              {"gender": gender, "error": err},
+                              dedup_key=f"te_scrape_fail_{gender}", dedup_hours=2)
 
     return results
 
@@ -1195,8 +1203,17 @@ async def refresh_elo_ratings() -> None:
                 logger.info("ELO refresh (%s): %d/%d players ranked for week %s",
                             gender, len(ranked), len(rows), week_date)
         except Exception as exc:
-            logger.warning("ELO refresh failed for gender=%s: %s", gender, exc)
-            from app.services.system_log import app_log
-            await app_log("error", "rankings", f"ELO refresh failed for {gender}: {exc}",
-                          {"gender": gender, "error": str(exc)},
-                          dedup_key=f"elo_fail_{gender}", dedup_hours=6)
+            from app.services.http_errors import describe_exception, is_transient_http_error
+            err = describe_exception(exc)
+            # This is what produced "ELO refresh failed for M: " — an httpx
+            # timeout stringifies to '', so the alert carried no information at
+            # all. It also ran on every container restart, so a deploy burst
+            # was enough to trip TE's rate limiting and page about nothing.
+            if is_transient_http_error(exc):
+                logger.debug("ELO source unreachable for gender=%s: %s", gender, err)
+            else:
+                logger.warning("ELO refresh failed for gender=%s: %s", gender, err)
+                from app.services.system_log import app_log
+                await app_log("error", "rankings", f"ELO refresh failed for {gender}: {err}",
+                              {"gender": gender, "error": err},
+                              dedup_key=f"elo_fail_{gender}", dedup_hours=6)

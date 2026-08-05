@@ -237,22 +237,20 @@ async def _scrape_h2h(slug_a: str, slug_b: str) -> dict:
             resp.raise_for_status()
             html = resp.text
     except Exception as exc:
-        import httpx as _httpx
-        is_network_err = isinstance(exc, (_httpx.ConnectError, _httpx.ConnectTimeout))
-        is_rate_limited = (
-            isinstance(exc, _httpx.HTTPStatusError)
-            and exc.response.status_code in (403, 429)
-        )
-        if is_network_err or is_rate_limited:
-            # DNS/connection failure or TE bot-block — don't spam app_log
-            logger.debug("H2H blocked/unreachable for %s vs %s: %s", slug_a, slug_b, exc)
+        from app.services.http_errors import describe_exception, is_transient_http_error
+        err = describe_exception(exc)
+        if is_transient_http_error(exc):
+            # DNS/connection failure, a timeout, or TE's bot-block — don't spam
+            # app_log. H2H is cached and re-fetched on the next request, so a
+            # blip costs one uncached lookup, not correctness.
+            logger.debug("H2H blocked/unreachable for %s vs %s: %s", slug_a, slug_b, err)
         else:
-            logger.warning("H2H scrape failed for %s vs %s: %s", slug_a, slug_b, exc)
+            logger.warning("H2H scrape failed for %s vs %s: %s", slug_a, slug_b, err)
             from app.services.system_log import app_log
             await app_log("warning", "h2h", f"H2H scrape failed: {slug_a} vs {slug_b}",
-                          {"slug_a": slug_a, "slug_b": slug_b, "error": str(exc)},
+                          {"slug_a": slug_a, "slug_b": slug_b, "error": err},
                           dedup_key=f"h2h_fail_{slug_a}_{slug_b}", dedup_hours=6)
-        return {**_empty(slug_a, slug_b, slug_a, slug_b), "error": str(exc)}
+        return {**_empty(slug_a, slug_b, slug_a, slug_b), "error": err}
 
     return _parse_h2h_html(html, slug_a, slug_b)
 
