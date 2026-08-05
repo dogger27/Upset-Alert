@@ -14,16 +14,33 @@ from app.models.user import User
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
+# Enough occurrences to see a pattern (is it hourly? did it stop?) without
+# shipping all 65 rows of a stuck problem to the browser. count is always the
+# true total, so a truncated list never misrepresents how often it fired.
+MAX_OCCURRENCES_PER_GROUP = 25
+
+
 @router.get("/logs")
 async def get_logs(
     level: Optional[str] = Query(None),
     category: Optional[str] = Query(None),
-    limit: int = Query(300, le=1000),
+    limit: int = Query(1000, le=5000),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """
+    Log entries collapsed into one row per *problem*, newest activity first.
+
+    Grouping uses alerts.log_fingerprint — the same function the email alerter
+    groups on — so a problem the panel shows as one row is exactly a problem
+    that earns one alert email. Reimplementing the normalisation here (in
+    Python or in the browser) would let the two definitions drift, and then
+    "why did I get 1 email for 65 rows?" would have no single answer.
+    """
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin only")
+
+    from app.services.alerts import log_fingerprint
 
     q = select(SystemLog).order_by(SystemLog.created_at.desc())
     if level:
@@ -34,17 +51,45 @@ async def get_logs(
 
     result = await db.execute(q)
     logs = result.scalars().all()
-    return [
-        {
+
+    groups: dict[str, dict] = {}
+    for log in logs:
+        entry = {
             "id": log.id,
             "created_at": (log.created_at.isoformat() + "Z") if log.created_at else None,
-            "level": log.level,
-            "category": log.category,
             "message": log.message,
             "detail": log.detail_json,
         }
-        for log in logs
-    ]
+        fp = log_fingerprint(log.level, log.category, log.message)
+        group = groups.get(fp)
+        if group is None:
+            groups[fp] = {
+                "fingerprint": fp,
+                "level": log.level,
+                "category": log.category,
+                # Rows arrive newest-first, so the group's headline message is
+                # the most recent wording of a problem whose text can vary in
+                # the parts the fingerprint normalises away.
+                "message": log.message,
+                "count": 1,
+                "last_seen": entry["created_at"],
+                "first_seen": entry["created_at"],
+                "occurrences": [entry],
+            }
+        else:
+            group["count"] += 1
+            # Walking backwards in time, so every later row is older than the
+            # last. A floor rather than the true first occurrence when `limit`
+            # cuts the scan short — `truncated` tells the client when that is.
+            group["first_seen"] = entry["created_at"]
+            if len(group["occurrences"]) < MAX_OCCURRENCES_PER_GROUP:
+                group["occurrences"].append(entry)
+
+    return {
+        "groups": sorted(groups.values(), key=lambda g: g["last_seen"] or "", reverse=True),
+        "entry_count": len(logs),
+        "truncated": len(logs) >= limit,
+    }
 
 
 @router.delete("/logs")

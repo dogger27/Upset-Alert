@@ -353,3 +353,61 @@
 .log-detail-row { display: flex; gap: 0.5rem; }
 .log-detail-key { color: var(--text-muted); flex-shrink: 0; min-width: 90px; }
 .log-detail-val { color: var(--text); word-break: break-all; font-family: var(--font-mono, monospace); }
+
+/* Grouped problems */
+.log-group-summary {
+  margin-left: 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.log-group-toggle {
+  all: unset;
+  cursor: pointer;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1;
+  vertical-align: middle;
+  margin-right: 0.35rem;
+}
+.log-group-toggle:hover { color: var(--text); }
+
+.log-group-count {
+  display: inline-block;
+  margin-left: 0.45rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.log-group-range {
+  margin-left: 0.5rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* Occurrence rows sit under their group, indented and recessed so the eye
+   still reads the group headings as the list. */
+.log-occurrence-row > td {
+  background: var(--surface-sunken);
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+  font-size: 0.78rem;
+}
+.log-occurrence-row .log-message { padding-left: 1.5rem; }
+
+.log-occurrence-msg { color: var(--text-muted); }
+
+.log-occurrence-more {
+  padding-left: 1.5rem;
+  font-size: 0.75rem;
+  font-style: italic;
+  color: var(--text-muted);
+}
