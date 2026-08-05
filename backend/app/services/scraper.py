@@ -16,6 +16,22 @@ WIKI_API = "https://en.wikipedia.org/w/api.php"
 
 ENTRY_TYPES = {"Q", "WC", "LL", "PR"}
 
+
+class WikiPageNotFound(ValueError):
+    """
+    The requested Wikipedia page does not exist.
+
+    Distinct from every other scrape failure because for an upcoming draw it is
+    usually not a failure at all: editors create the singles draw page around
+    the time the draw is published, so every draw spends its whole pre-release
+    polling window returning this. Callers use the type to decide whether that
+    is expected (page never resolved yet — the routine case) or genuinely
+    broken (a page_id that used to resolve and now 404s).
+
+    Subclasses ValueError so pre-existing `except ValueError` handlers — notably
+    scrape_tournament's title-variant fallback — keep working unchanged.
+    """
+
 # Points (per round_number 1-7) for ATP/WTA mirror mode — keyed by draw_size
 # Grand Slam values; scaled proportionally for smaller draws
 ATP_WTA_POINTS: dict[int, dict[int, int]] = {
@@ -333,7 +349,7 @@ async def fetch_wikitext(
     data = resp.json()
     pages = data["query"]["pages"]
     if not pages or "revisions" not in pages[0]:
-        raise ValueError(f"Page not found: {page_title!r} (id={page_id})")
+        raise WikiPageNotFound(f"Page not found: {page_title!r} (id={page_id})")
     page_data = pages[0]
     resolved_id: int = page_data["pageid"]
     content = page_data["revisions"][0]["slots"]["main"]["content"]

@@ -22,6 +22,8 @@ from typing import Callable, Optional
 
 import httpx
 
+from app.services.scraper import WikiPageNotFound
+
 logger = logging.getLogger(__name__)
 
 WIKIMEDIA_STREAM_URL = "https://stream.wikimedia.org/v2/stream/recentchange"
@@ -264,6 +266,13 @@ class EventStreamListener:
                     logger.info("Scraping draw for %s %s", tournament.year, tournament.name)
                     await _do_scrape(tournament, db, force_refresh=True)
                     await db.commit()
+        except WikiPageNotFound as exc:
+            # An edit to one title variant doesn't mean the variant this record
+            # actually stores exists yet, so a still-missing page here is the
+            # same routine "draw isn't out" state _refresh_active_tournaments
+            # sees — not a failure worth a console row. _check_draw_health
+            # escalates it once it's overdue.
+            logger.debug("Draw page not up yet for %s: %s", title, exc)
         except Exception as exc:
             import traceback
             tb = traceback.format_exc()
