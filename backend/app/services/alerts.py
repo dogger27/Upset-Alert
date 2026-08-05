@@ -50,6 +50,7 @@ ALERT_LOOKBACK_HOURS = 48.0
 ALERT_RECURRENCE_HOURS = 24.0
 ALERT_MAX_PER_DAY = 3
 ALERT_MIN_GAP_HOURS = 4.0
+ALERT_MAX_ISSUES_PER_EMAIL = 20
 # The day the cap is counted against, and the zone every timestamp in the email
 # is rendered in. UTC would roll the budget over at 5pm local, mid-evening.
 ALERT_TZ = ZoneInfo("America/Los_Angeles")
@@ -204,10 +205,20 @@ async def scan_and_alert() -> None:
         pending.sort(key=lambda i: (i["level"] != "error", -i["count"]))
         remaining_today = ALERT_MAX_PER_DAY - sent_today - 1
 
+        # One event can produce dozens of distinct signatures at once — a
+        # rankings refresh logs an unmatched-player warning per player, and each
+        # name fingerprints separately. Cap the email and carry the rest: the
+        # overflow is left un-alerted, so it goes out in the next digest rather
+        # than being marked sent behind a 24h gate it was never shown through.
+        overflow = len(pending) - ALERT_MAX_ISSUES_PER_EMAIL
+        if overflow > 0:
+            pending = pending[:ALERT_MAX_ISSUES_PER_EMAIL]
+
         from app.services.email import send_system_alert_digest
 
         delivered = await send_system_alert_digest(
-            ALERT_TO, pending, remaining_today=remaining_today, tz=ALERT_TZ
+            ALERT_TO, pending, remaining_today=remaining_today,
+            held_back=max(0, overflow), tz=ALERT_TZ,
         )
         if not delivered:
             # Leave every signature un-alerted and the budget unspent: the next
