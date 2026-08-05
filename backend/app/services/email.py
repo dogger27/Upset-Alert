@@ -832,6 +832,7 @@ async def send_system_alert_digest(
     to_email: str,
     issues: list[dict],
     remaining_today: int = 0,
+    held_back: int = 0,
     tz=None,
 ) -> bool:
     """
@@ -887,6 +888,15 @@ async def send_system_alert_digest(
 
     cards = "".join(_alert_card(i, tz, is_last=(n == len(issues) - 1))
                     for n, i in enumerate(issues))
+
+    if held_back:
+        cards += (
+            f'<p style="font-size:13px;color:#6b7280;margin:0 0 22px;padding:10px 14px;'
+            f'background:#f3f4f6;border-radius:6px">'
+            f'&hellip; and {held_back} more distinct issue{"s" if held_back != 1 else ""} '
+            f'not shown here. {"They are" if held_back != 1 else "It is"} still queued and '
+            f'will appear in the next alert.</p>'
+        )
 
     budget = (
         "This is the last alert of the day — anything new from here is held until "
