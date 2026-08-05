@@ -55,6 +55,7 @@ async def init_db():
     import app.models.rankings   # noqa: F401
     import app.models.draw_history  # noqa: F401
     import app.models.notification  # noqa: F401
+    import app.models.alert  # noqa: F401
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

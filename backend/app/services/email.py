@@ -711,6 +711,213 @@ async def send_round_complete_digest(
 
 
 
+_ALERT_STYLES = {
+    "error":   {"label": "Error",   "fg": "#b91c1c", "bg": "#fee2e2", "bar": "#dc2626"},
+    "warning": {"label": "Warning", "fg": "#92400e", "bg": "#fef3c7", "bar": "#f59e0b"},
+}
+
+
+def _alert_time(dt, tz) -> str:
+    """'Tue 5 Aug, 6:40 PM PDT' — every timestamp in an alert is zone-labelled."""
+    local = dt.astimezone(tz)
+    clock = f"{(local.hour % 12) or 12}:{local.strftime('%M')} {local.strftime('%p')}"
+    return f"{local.strftime('%a')} {local.day} {local.strftime('%b')}, {clock} {local.strftime('%Z')}"
+
+
+def _alert_ago(delta) -> str:
+    """'25 hours' / '3 days' — coarse on purpose, these are never precise claims."""
+    hours = delta.total_seconds() / 3600
+    if hours < 1:
+        return f"{max(1, int(delta.total_seconds() // 60))} minutes"
+    if hours < 48:
+        return f"{round(hours)} hours"
+    return f"{round(hours / 24)} days"
+
+
+# Multi-line and always long — a truncated first frame identifies nothing, so
+# it would cost the card's whole width to say "there was a traceback". The full
+# thing is in the admin panel, one click away via the button below.
+_ALERT_DETAIL_SKIP = {"traceback", "stack", "stacktrace"}
+
+
+def _alert_detail(detail: dict, message: str = "") -> str:
+    """Compact key/value strip from detail_json, so the facts you'd triage with
+    (which tournament, which title, which status code) are in the email rather
+    than one admin-panel visit away.
+
+    Values the message already contains are dropped: app_log callers routinely
+    pass the same string as both, and printing it twice pushes the parts that
+    are only in detail_json off the visible end of the row.
+    """
+    if not isinstance(detail, dict) or not detail:
+        return ""
+    parts = []
+    for key, value in detail.items():
+        if key in _ALERT_DETAIL_SKIP:
+            continue
+        text = str(value).strip()
+        # Length floor so a coincidental short token ("M", "503") isn't mistaken
+        # for a genuine repeat of a phrase in the message.
+        if not text or (len(text) >= 8 and text in message):
+            continue
+        if len(text) > 90:
+            text = text[:87] + "…"
+        parts.append(
+            f'<span style="white-space:nowrap"><span style="color:#9ca3af">{_esc(key)}</span> '
+            f'<span style="color:#4b5563">{_esc(text)}</span></span>'
+        )
+        if len(parts) == 6:
+            break
+    if not parts:
+        return ""
+    return (f'<div style="font-size:12px;font-family:monospace;line-height:1.9;'
+            f'margin:8px 0 0">{" &nbsp;·&nbsp; ".join(parts)}</div>')
+
+
+def _esc(text) -> str:
+    """These strings are exception text and scraped page titles — they contain
+    angle brackets and ampersands often enough to break the markup."""
+    return (str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+
+
+def _alert_card(issue: dict, tz, is_last: bool) -> str:
+    style = _ALERT_STYLES.get(issue["level"], _ALERT_STYLES["error"])
+    count = issue["count"]
+
+    if issue["is_recurrence"]:
+        ago = _alert_ago(issue["last_seen"] - issue["last_alerted"]) if issue["last_alerted"] else ""
+        nth = issue["previous_alerts"] + 1
+        recurrence = (
+            f'<div style="font-size:12px;color:{style["fg"]};font-weight:600;margin:8px 0 0">'
+            f'Still happening — you were last alerted about this {ago} ago '
+            f'(alert #{nth})</div>'
+        )
+    else:
+        recurrence = ""
+
+    occurrences = "Once" if count == 1 else f"{count} times"
+    window = (
+        f'{occurrences}, {_alert_time(issue["last_seen"], tz)}' if count == 1 else
+        f'{occurrences} &nbsp;·&nbsp; first {_alert_time(issue["first_seen"], tz)} '
+        f'&nbsp;·&nbsp; latest {_alert_time(issue["last_seen"], tz)}'
+    )
+
+    return f"""
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;
+         margin:0 0 {'22px' if is_last else '12px'};border:1px solid #e5e7eb;border-radius:6px">
+    <tr>
+      <td width="4" bgcolor="{style['bar']}" style="background:{style['bar']};width:4px;
+          border-radius:6px 0 0 6px;font-size:0;line-height:0">&nbsp;</td>
+      <td style="padding:13px 15px">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+          <td>
+            <span style="font-size:11px;font-weight:700;color:{style['fg']};background:{style['bg']};
+                  border-radius:10px;padding:3px 8px;text-transform:uppercase;
+                  letter-spacing:0.04em">{style['label']}</span>
+            <span style="font-size:12px;font-weight:600;color:#6b7280;margin-left:8px">
+              {_esc(issue['category'])}</span>
+          </td>
+        </tr></table>
+        <div style="font-size:14px;color:#111;line-height:1.5;margin:9px 0 0;
+             word-break:break-word">{_esc(issue['message'])}</div>
+        {_alert_detail(issue['detail'], issue['message'])}
+        <div style="font-size:12px;color:#6b7280;margin:9px 0 0">{window}</div>
+        {recurrence}
+      </td>
+    </tr>
+  </table>"""
+
+
+async def send_system_alert_digest(
+    to_email: str,
+    issues: list[dict],
+    remaining_today: int = 0,
+    tz=None,
+) -> bool:
+    """
+    Admin-only health digest — one email covering every problem that qualified
+    in this scan. Returns True only if Resend accepted it.
+
+    Deliberately does NOT go through send_async. send_async records its own
+    failures via app_log at level "error", which is precisely the input this
+    alerter reads: a bounced alert would log an error, which would become a new
+    problem, which would send an alert. This path reports success/failure to
+    its caller instead, and alerts.py logs the outcome under a category the
+    scan excludes.
+    """
+    from zoneinfo import ZoneInfo
+    tz = tz or ZoneInfo("America/Los_Angeles")
+    if not issues:
+        return False
+    if not settings.resend_api_key or settings.environment != "production":
+        logger.info("Skipping alert digest (ENVIRONMENT=%r): %d issue(s)",
+                    settings.environment, len(issues))
+        return False
+
+    errors = sum(1 for i in issues if i["level"] == "error")
+    warnings = len(issues) - errors
+
+    if len(issues) == 1:
+        one = issues[0]
+        headline = one["message"][:70] + ("…" if len(one["message"]) > 70 else "")
+        subject = f"Upset Alert {one['level']} in {one['category']} — {headline}"
+        heading = "Something needs your attention"
+    else:
+        counts = " and ".join(
+            p for p in (f"{errors} error{'s' if errors != 1 else ''}" if errors else "",
+                        f"{warnings} warning{'s' if warnings != 1 else ''}" if warnings else "")
+            if p
+        )
+        subject = f"Upset Alert: {len(issues)} issues ({counts})"
+        heading = f"{len(issues)} issues need your attention"
+
+    recurrences = sum(1 for i in issues if i["is_recurrence"])
+    if len(issues) == 1:
+        recurring = " It has been alerted before and is still going." if recurrences else ""
+    elif recurrences == len(issues):
+        recurring = " All of them have been alerted before and are still going."
+    elif recurrences:
+        recurring = f" {recurrences} of them have been alerted before and are still going."
+    else:
+        recurring = ""
+    intro = (
+        f"{'This problem has' if len(issues) == 1 else 'These problems have'} been logged since "
+        f"the last alert.{recurring}"
+    )
+
+    cards = "".join(_alert_card(i, tz, is_last=(n == len(issues) - 1))
+                    for n, i in enumerate(issues))
+
+    budget = (
+        "This is the last alert of the day — anything new from here is held until "
+        "tomorrow's first digest."
+        if remaining_today <= 0 else
+        f"{remaining_today} more alert{'s' if remaining_today != 1 else ''} available today."
+    )
+
+    html = f"""{_WRAP_OPEN}{_LOGO_HEADER}{_BODY_OPEN}
+          <h1 style="font-size:22px;margin:0 0 12px">{heading}</h1>
+          <p style="color:#444;line-height:1.6;margin:0 0 20px">{intro}</p>
+          {cards}
+          <a href="{BASE_URL}/admin" style="display:inline-block;padding:12px 24px;
+             background:#1b4332;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
+            Open Admin Logs
+          </a>
+          <p style="color:#9ca3af;line-height:1.6;margin:18px 0 0;font-size:12px">
+            Each problem is alerted at most once every 24 hours; repeats in between are
+            counted, not sent. Maximum 3 alerts a day. {budget}
+          </p>
+        {_BODY_CLOSE}{_WRAP_CLOSE}"""
+
+    exc = await asyncio.to_thread(_send, {
+        "from": FROM,
+        "to": [to_email],
+        "subject": subject,
+        "html": html,
+    })
+    return exc is None
+
+
 async def send_league_added_existing(
     to_email: str,
     username: str,
