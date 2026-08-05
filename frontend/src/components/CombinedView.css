@@ -211,11 +211,25 @@
   pointer-events: none;
 }
 /* Step down as completed sets accumulate — the gap's height is fixed but the
-   score's WIDTH is not, and a five-set line at 1.5rem would run past the
-   column. After the base rule so equal specificity resolves in source order. */
+   score's WIDTH is not, and a five-set line at the 1.2rem base would run past
+   the column. After the base rule so equal specificity resolves in source order.
+
+   Sized against the room actually available rather than by set count alone:
+   the score is pinned right:56px inside a COL_W (260px) column, so it has
+   ~204px to grow leftwards into. A set renders about 1.7em wide plus 0.58em
+   for its ", " separator, i.e. roughly (2.28n - 0.58)em for n sets — so even
+   five sets need only ~180px at 1rem. Two and three sets therefore share a
+   size: stepping 3 down to 0.88 made the common mid-match score visibly
+   smaller than the two-set one beside it for no width reason at all. */
 .cv-live-score--s2 { font-size: 1rem; }
-.cv-live-score--s3 { font-size: 0.88rem; }
-.cv-live-score--s4 { font-size: 0.78rem; }
+.cv-live-score--s3 { font-size: 1rem; }
+.cv-live-score--s4 { font-size: 0.92rem; }
+/* Compact (phone) columns are COMPACT_COL_W (158px), leaving only ~102px past
+   the same 56px offset — a third of the desktop budget, where the step-down is
+   still load-bearing. Keep the original ramp there. Scoped by the wrapper so
+   the higher specificity wins regardless of source order. */
+.cv-scroll--compact .cv-live-score--s3 { font-size: 0.88rem; }
+.cv-scroll--compact .cv-live-score--s4 { font-size: 0.78rem; }
 /* Tiebreak superscript, offset without growing the line box (which is already
    the full height of the gap). */
 .cv-live-score sup {

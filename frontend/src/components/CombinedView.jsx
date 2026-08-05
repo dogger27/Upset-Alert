@@ -688,8 +688,10 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                         {/* Running score, centred in the gap the LIVE_SPREAD
                             nudge opened between this match's two opponents.
                             Sized to fill that gap; the --sN modifier steps the
-                            type down as completed sets accumulate, so a
-                            five-set score still fits the column's width. */}
+                            type down once a score is long enough to threaten
+                            the column's width (see CombinedView.css — 2 and 3
+                            sets share a size, since 3 sets fits at full size
+                            everywhere but compact). */}
                         {isLive && (() => {
                           const nodes = liveScoreNodes(m.live_scores)
                           if (!nodes) return null
