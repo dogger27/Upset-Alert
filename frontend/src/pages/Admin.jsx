@@ -13,7 +13,12 @@ import './Tournaments.css'
 const CURRENT_YEAR = new Date().getFullYear()
 const ATP_URL = `https://en.wikipedia.org/wiki/${CURRENT_YEAR}_ATP_Tour`
 const WTA_URL = `https://en.wikipedia.org/wiki/${CURRENT_YEAR}_WTA_Tour`
-const CATEGORIES = ['rankings', 'espn', 'h2h', 'scheduler', 'notifications', 'discovery', 'scraper']
+// Every category app_log() is actually called with. A category missing here is
+// a filter that silently can't reach its own rows.
+const CATEGORIES = [
+  'admin', 'alerts', 'api', 'contact', 'discovery', 'espn', 'h2h',
+  'highest_rank_bot', 'leagues', 'notifications', 'rankings', 'scheduler', 'scraper',
+]
 
 const TABS = ['Users', 'Tournaments', 'Logs', 'Info', 'Players', 'Rankings']
 
@@ -383,17 +388,86 @@ function TournamentsPanel({ user }) {
   )
 }
 
+/* One collapsed problem. Occurrences stay hidden until asked for — the whole
+   point of grouping is that 65 rows of the same broken wiki title is one thing
+   to fix, not 65 things to read. A one-off keeps the old flat-row look: no
+   expander, detail toggle inline, exactly as it rendered before grouping. */
+function LogGroup({ group }) {
+  const [open, setOpen] = useState(false)
+  const many = group.count > 1
+
+  return (
+    <>
+      <tr className={`log-row log-row-${group.level}${many ? ' log-group-row' : ''}`}>
+        <td className="td-left td-muted td-nowrap log-col-time">{fmtTime(group.last_seen)}</td>
+        <td className="log-col-level">
+          <span className={`log-badge log-badge-${group.level}`}>{group.level}</span>
+        </td>
+        <td className="log-col-cat">
+          <span className="log-cat">{group.category}</span>
+        </td>
+        <td className="td-left log-message">
+          {many && (
+            <button
+              className="log-group-toggle"
+              onClick={() => setOpen(o => !o)}
+              aria-expanded={open}
+              title={open ? 'Hide occurrences' : `Show ${group.count} occurrences`}
+            >
+              {open ? '▾' : '▸'}
+            </button>
+          )}
+          {group.message}
+          {many && <span className="log-group-count">×{group.count}</span>}
+          {!many && <LogDetail detail={group.occurrences[0]?.detail} />}
+          {many && (
+            <span className="log-group-range">since {fmtTime(group.first_seen)}</span>
+          )}
+        </td>
+      </tr>
+      {open && group.occurrences.map(o => (
+        <tr key={o.id} className="log-occurrence-row">
+          <td className="td-left td-muted td-nowrap log-col-time">{fmtTime(o.created_at)}</td>
+          <td className="log-col-level" />
+          <td className="log-col-cat" />
+          <td className="td-left log-message">
+            {/* Only worth repeating when the fingerprint normalised away a
+                difference — otherwise it's the group heading again, 25 times. */}
+            {o.message !== group.message && (
+              <span className="log-occurrence-msg">{o.message}</span>
+            )}
+            <LogDetail detail={o.detail} />
+          </td>
+        </tr>
+      ))}
+      {open && group.count > group.occurrences.length && (
+        <tr className="log-occurrence-row">
+          <td />
+          <td className="log-col-level" />
+          <td className="log-col-cat" />
+          <td className="td-left log-occurrence-more">
+            + {group.count - group.occurrences.length} earlier occurrence
+            {group.count - group.occurrences.length !== 1 ? 's' : ''} not shown
+          </td>
+        </tr>
+      )}
+    </>
+  )
+}
+
 function LogsPanel({ user }) {
   const qc = useQueryClient()
   const [levelFilter, setLevelFilter] = useState('')
   const [catFilter, setCatFilter] = useState('')
 
-  const { data: logs = [], isLoading, dataUpdatedAt } = useQuery({
+  const { data, isLoading, dataUpdatedAt } = useQuery({
     queryKey: ['admin-logs', levelFilter, catFilter],
     queryFn: () => getLogs({ level: levelFilter || undefined, category: catFilter || undefined }),
     enabled: !!user,
     refetchInterval: 30_000,
   })
+  const logs = data?.groups ?? []
+  const entryCount = data?.entry_count ?? 0
 
   const clearMutation = useMutation({
     mutationFn: () => clearLogs(30),
@@ -404,6 +478,8 @@ function LogsPanel({ user }) {
     onSuccess: () => qc.invalidateQueries(['admin-logs']),
   })
 
+  // Counts are of distinct problems, not log rows: 172 rows of two broken wiki
+  // titles is two things to fix, and a badge reading 172 implies 172 of them.
   const errorCount = logs.filter(l => l.level === 'error').length
   const warnCount  = logs.filter(l => l.level === 'warning').length
 
@@ -416,6 +492,12 @@ function LogsPanel({ user }) {
           {warnCount > 0  && <span className="admin-count log-count-warn">{warnCount} warning{warnCount !== 1 ? 's' : ''}</span>}
           {errorCount === 0 && warnCount === 0 && logs.length > 0 && (
             <span className="admin-count">all clear</span>
+          )}
+          {entryCount > logs.length && (
+            <span className="log-group-summary">
+              {entryCount} entries grouped into {logs.length} problem{logs.length !== 1 ? 's' : ''}
+              {data?.truncated ? ' (most recent scanned)' : ''}
+            </span>
           )}
         </h2>
         <div className="logs-controls">
@@ -471,20 +553,8 @@ function LogsPanel({ user }) {
               </tr>
             </thead>
             <tbody>
-              {logs.map(log => (
-                <tr key={log.id} className={`log-row log-row-${log.level}`}>
-                  <td className="td-left td-muted td-nowrap log-col-time">{fmtTime(log.created_at)}</td>
-                  <td className="log-col-level">
-                    <span className={`log-badge log-badge-${log.level}`}>{log.level}</span>
-                  </td>
-                  <td className="log-col-cat">
-                    <span className="log-cat">{log.category}</span>
-                  </td>
-                  <td className="td-left log-message">
-                    {log.message}
-                    <LogDetail detail={log.detail} />
-                  </td>
-                </tr>
+              {logs.map(group => (
+                <LogGroup key={group.fingerprint} group={group} />
               ))}
             </tbody>
           </table>

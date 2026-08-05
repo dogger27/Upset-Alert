@@ -59,10 +59,15 @@ _DIGITS = re.compile(r"\d+")
 _WHITESPACE = re.compile(r"\s+")
 
 
-def _fingerprint(level: str, category: str, message: str) -> str:
+def log_fingerprint(level: str, category: str, message: str) -> str:
     """
     Stable id for "the same problem", derived from the message with its
     variable parts blanked.
+
+    Public because the admin Logs panel groups on it too (routers/admin.py):
+    what the panel shows as one collapsed problem and what earns one alert
+    email are the same thing by construction, so the two can't drift apart as
+    the normalisation rules change.
 
     Numbers are the only thing normalised away, and that is deliberate: it
     collapses the year/id/count that differ between occurrences of one problem
@@ -122,7 +127,7 @@ async def scan_and_alert() -> None:
         grouped: dict[str, list[SystemLog]] = {}
         for row in rows:
             grouped.setdefault(
-                _fingerprint(row.level, row.category, row.message), []
+                log_fingerprint(row.level, row.category, row.message), []
             ).append(row)
 
         known = {
