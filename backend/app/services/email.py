@@ -80,8 +80,13 @@ async def send_async(params: resend.Emails.SendParams) -> None:
     subject = params.get("subject", "")
     recipient = to[0] if len(to) == 1 else to
     if exc is not None:
+        # Not routed through is_transient_http_error on purpose: a transient
+        # failure elsewhere self-heals on the next poll, but there is no retry
+        # here — a blip means this particular email was never delivered, which
+        # is exactly the thing worth knowing about.
+        from app.services.http_errors import describe_exception
         await app_log("error", "notifications", f"Email send failed: {subject!r} → {recipient}",
-                      {"to": to, "subject": subject, "error": str(exc)})
+                      {"to": to, "subject": subject, "error": describe_exception(exc)})
     else:
         await app_log("info", "notifications", f"Email sent: {subject!r} → {recipient}",
                       {"to": to, "subject": subject})

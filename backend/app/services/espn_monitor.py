@@ -270,19 +270,46 @@ def _match_event(tournament, events: list, entries: list) -> tuple[Optional[dict
 # ESPN API helpers
 # ---------------------------------------------------------------------------
 
+# Consecutive transient failures per gender, and the streak length that turns
+# "ESPN is being slow" into "ESPN has been unreachable for a third of an hour".
+# In-memory is sound here specifically because the poll is 60s: a restart clears
+# the streak, but a real outage rebuilds it in 20 minutes. The same approach
+# would be useless for a weekly job, which is why rankings/ELO staleness is
+# checked against the data instead (see _check_rankings_health).
+_ESPN_FAIL_STREAK: dict[str, int] = {}
+ESPN_FAIL_STREAK_ALERT = 20
+
+
 async def _fetch_events(gender: str) -> list:
     try:
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.get(_ESPN_URLS[gender])
             resp.raise_for_status()
-            return resp.json().get("events", [])
+            events = resp.json().get("events", [])
+        _ESPN_FAIL_STREAK[gender] = 0
+        return events
     except Exception as exc:
-        err_msg = str(exc) or type(exc).__name__
-        is_network_err = isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout))
-        if is_network_err:
-            logger.debug("ESPN %s unreachable: %s", gender, exc)
+        from app.services.http_errors import describe_exception, is_transient_http_error
+        err_msg = describe_exception(exc)
+        # The old test here listed only ConnectError/ConnectTimeout, so ESPN
+        # answering slowly (ReadTimeout) was logged as an application error —
+        # on a 60s poll loop, for a service that times out routinely. One slow
+        # response is not worth waking anyone; a sustained outage stops live
+        # scores, so the streak is what earns the log.
+        if is_transient_http_error(exc):
+            streak = _ESPN_FAIL_STREAK.get(gender, 0) + 1
+            _ESPN_FAIL_STREAK[gender] = streak
+            logger.debug("ESPN %s unreachable (%d in a row): %s", gender, streak, err_msg)
+            if streak >= ESPN_FAIL_STREAK_ALERT:
+                from app.services.system_log import app_log
+                await app_log("error", "espn",
+                              f"ESPN {gender} unreachable for {streak} consecutive polls "
+                              f"(~{streak} min) — live scores are not updating: {err_msg}",
+                              {"gender": gender, "error": err_msg,
+                               "exc_type": type(exc).__name__, "consecutive_failures": streak},
+                              dedup_key=f"espn_outage_{gender}", dedup_hours=6)
         else:
-            logger.warning("ESPN %s fetch failed: %s", gender, exc)
+            logger.warning("ESPN %s fetch failed: %s", gender, err_msg)
             from app.services.system_log import app_log
             await app_log("error", "espn", f"ESPN {gender} API failed: {err_msg}",
                           {"gender": gender, "error": err_msg, "exc_type": type(exc).__name__},
