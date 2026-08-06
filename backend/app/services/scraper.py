@@ -16,11 +16,18 @@ import httpx
 WIKI_API = "https://en.wikipedia.org/w/api.php"
 
 # Entry designations that appear in a draw's seed column. SE (special exempt),
-# Alt (alternate) and NG (next-gen wildcard) were missing here, so every player
-# carrying one was parsed to entry_type=None and lost their badge — the frontend
-# had shipped a .pos-badge.entry-se style for a value the scraper could never
-# produce. Matched case-insensitively via _ENTRY_TYPE_CANON so wikitext casing
-# ("alt", "ALT") still lands on one stored spelling.
+# Alt (alternate) and NG were missing here, so every player carrying one was
+# parsed to entry_type=None and lost their badge — the frontend had shipped a
+# .pos-badge.entry-se style for a value the scraper could never produce.
+# Matched case-insensitively via _ENTRY_TYPE_CANON so wikitext casing ("alt",
+# "ALT") still lands on one stored spelling.
+#
+# NG is a Next Gen wild card, and is real despite being rare and unexplained by
+# any legend on the draw pages themselves — do not mistake it for scrape noise.
+# Delray Beach 2026 is the proof: the draw stores 2 WC + 1 NG while the page's
+# infobox declares "28 (4 Qualifiers / 3 Wild Cards)", so NG counts toward the
+# wildcard total while being labelled separately in the bracket. All three
+# holders so far were teenagers ranked outside the top 140.
 ENTRY_TYPES = {"Q", "WC", "LL", "PR", "SE", "Alt", "NG"}
 _ENTRY_TYPE_CANON = {t.upper(): t for t in ENTRY_TYPES}
 
