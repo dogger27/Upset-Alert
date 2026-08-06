@@ -385,6 +385,12 @@
 .pos-badge.entry-ll { background: #f8d7da; color: #58151c; border: 1px solid #e28a92; }
 .pos-badge.entry-pr { background: #e2d9f3; color: #432874; border: 1px solid #a68fd9; }
 .pos-badge.entry-se { background: #cdeef1; color: #0e4f57; border: 1px solid #6bc0cc; }
+/* Alt (alternate) and NG (next-gen wildcard) — the scraper only started
+   producing these once ENTRY_TYPES stopped dropping them, so they had no style
+   and would have fallen back to the plain grey .pos-badge. Hues kept clear of
+   WC blue, Q green, LL red, PR purple and SE cyan. */
+.pos-badge.entry-alt { background: #fde9d0; color: #7a4100; border: 1px solid #dda86a; }
+.pos-badge.entry-ng  { background: #fdf3c8; color: #6b5200; border: 1px solid #d9c05a; }
 
 /* ── Player name ── */
 .pname {
