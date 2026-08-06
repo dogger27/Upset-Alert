@@ -7,7 +7,9 @@ independent of the caller's transaction.
 """
 
 import asyncio
+import html
 import logging
+import re
 from collections import defaultdict
 from datetime import datetime, timezone as tz
 from typing import Optional
@@ -34,6 +36,10 @@ logger = logging.getLogger(__name__)
 
 # Max competitors shown in the Global block of a round-complete email.
 GLOBAL_ROWS = 9
+# Sort weight for a player with no ranking, so those matches land at the bottom
+# of their group instead of the top (None can't be compared to an int, and 0
+# would read as "better than world #1").
+_UNRANKED = 10**6
 
 
 def _email_round_label(round_name: str) -> str:
@@ -48,6 +54,28 @@ def _email_round_label(round_name: str) -> str:
     if round_name.startswith("Round of "):
         return "R" + round_name[len("Round of "):]
     return round_name
+
+
+def _entry_status(entry) -> str:
+    """
+    The badge the draw shows against a player: seed number, else entry type
+    (WC / Q / LL / PR / SE / Alt / NG).
+
+    Seed and entry_type are mutually exclusive in the data — 0 rows carry both —
+    so this is one value, not two.
+
+    Sanitised rather than trusted: entry_type is scraped from wikitext and a
+    handful of rows hold what the parser swallowed whole — '&nbsp;' and
+    '<small>1/WC</small>'. Unescaped, that would render as literal markup in the
+    email; escaped, as visible tags. Strip the tags, unescape the entities, and
+    let a value that was only whitespace collapse to no badge at all.
+    """
+    if entry is None:
+        return ""
+    if entry.seed:
+        return str(entry.seed)
+    raw = re.sub(r"<[^>]+>", "", entry.entry_type or "")
+    return html.unescape(raw).replace("\xa0", " ").strip()
 
 
 def _last_name(full: str) -> str:
@@ -156,14 +184,17 @@ async def _gather_round_payload(
          if m.round_number == round_number and not m.is_bye and m.winner_id),
         key=lambda m: m.match_number,
     )
-    round_match_info = []  # (match_id, winner_id, winner_last, loser_last, score)
+    # (match_id, winner_id, w_last, w_status, w_rank, l_last, l_status, l_rank, score)
+    round_match_info = []
     for m in round_matches:
         winner_entry = m.winner
         loser_entry = m.player2 if m.winner_id == m.player1_id else m.player1
         if not winner_entry or not loser_entry:
             continue
         round_match_info.append((
-            m.id, m.winner_id, _last_name(winner_entry.name), _last_name(loser_entry.name),
+            m.id, m.winner_id,
+            _last_name(winner_entry.name), _entry_status(winner_entry), winner_entry.ranking,
+            _last_name(loser_entry.name), _entry_status(loser_entry), loser_entry.ranking,
             _match_score_str(m),
         ))
 
@@ -252,10 +283,24 @@ async def _gather_round_payload(
     per_user: dict[int, dict] = {}
     for uid in eligible:
         user_preds_by_match = {p.match_id: p.predicted_winner_id for p in preds_by_user.get(uid, [])}
-        match_results = [
-            (w_last, l_last, score, user_preds_by_match.get(mid) == winner_id)
-            for mid, winner_id, w_last, l_last, score in round_match_info
-        ]
+        # Ordered per recipient, not in bracket order: the picks they got right
+        # lead, then the biggest names. "Highest ranked" is read as the best
+        # rank present in the match, not the winner's — a seed going out in the
+        # first round is the result you want at the top of its group, and
+        # ranking by the winner would bury it under the match that produced it.
+        # Unranked players sort last rather than first, which an absent ranking
+        # would otherwise do.
+        ordered = []
+        for (mid, winner_id, w_last, w_status, w_rank,
+             l_last, l_status, l_rank, score) in round_match_info:
+            is_correct = user_preds_by_match.get(mid) == winner_id
+            ranks = [r for r in (w_rank, l_rank) if r is not None]
+            ordered.append((
+                (not is_correct, min(ranks) if ranks else _UNRANKED),
+                (w_last, w_status, l_last, l_status, score, is_correct),
+            ))
+        ordered.sort(key=lambda t: t[0])
+        match_results = [row for _, row in ordered]
 
         leagues = []
         if len(eligible) >= 2:
@@ -270,7 +315,7 @@ async def _gather_round_payload(
         if not leagues:
             continue
 
-        hits = sum(1 for r in match_results if r[3])
+        hits = sum(1 for r in match_results if r[5])
         place = global_place.get(uid)
         per_user[uid] = {
             "section": {
