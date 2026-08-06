@@ -64,11 +64,12 @@ def _entry_status(entry) -> str:
     Seed and entry_type are mutually exclusive in the data — 0 rows carry both —
     so this is one value, not two.
 
-    Sanitised rather than trusted: entry_type is scraped from wikitext and a
-    handful of rows hold what the parser swallowed whole — '&nbsp;' and
-    '<small>1/WC</small>'. Unescaped, that would render as literal markup in the
-    email; escaped, as visible tags. Strip the tags, unescape the entities, and
-    let a value that was only whitespace collapse to no badge at all.
+    Still sanitised, but as a backstop rather than a workaround: the scraper
+    used to store what it swallowed whole ('&nbsp;', '<small>1/WC</small>') and
+    now strips wrapper tags and entities itself, with those rows re-parsed. This
+    stays because entry_type is arbitrary scraped wikitext reaching an email —
+    the one place where markup that slipped through would either render live or
+    show as visible tags.
     """
     if entry is None:
         return ""

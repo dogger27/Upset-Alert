@@ -5,6 +5,7 @@ Supports 16TeamBracket-Compact-Tennis5/3 sections (R1→R4) and the
 8TeamBracket-Tennis5/3 finals section (QF→F), covering 32/64/128-player draws.
 """
 
+import html
 import re
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
@@ -14,7 +15,19 @@ import httpx
 
 WIKI_API = "https://en.wikipedia.org/w/api.php"
 
-ENTRY_TYPES = {"Q", "WC", "LL", "PR"}
+# Entry designations that appear in a draw's seed column. SE (special exempt),
+# Alt (alternate) and NG (next-gen wildcard) were missing here, so every player
+# carrying one was parsed to entry_type=None and lost their badge — the frontend
+# had shipped a .pos-badge.entry-se style for a value the scraper could never
+# produce. Matched case-insensitively via _ENTRY_TYPE_CANON so wikitext casing
+# ("alt", "ALT") still lands on one stored spelling.
+ENTRY_TYPES = {"Q", "WC", "LL", "PR", "SE", "Alt", "NG"}
+_ENTRY_TYPE_CANON = {t.upper(): t for t in ENTRY_TYPES}
+
+
+def _canon_entry_type(value: str) -> Optional[str]:
+    """Canonical entry type for a raw token, or None if it isn't one."""
+    return _ENTRY_TYPE_CANON.get(value.strip().upper())
 
 
 class WikiPageNotFound(ValueError):
@@ -474,13 +487,24 @@ def _extract_scores(params: dict, rd: int, slot_a: int, slot_b: int) -> Optional
 
 
 _INNER_TEMPLATE_RE = re.compile(r'\{\{[^{}]*\}\}')
+_HTML_TAG_RE = re.compile(r'<[^>]+>')
 _WRAPPER_TEMPLATE_NAMES = frozenset({
     'nowrap', 'small', 'plaintext', 'nobr', 'bigger', 'smaller', 'nowrap2',
 })
 
 
 def _strip_seed_templates(v: str) -> str:
-    """Iteratively strip display wrapper templates: {{nowrap|X}} → X, {{small|X}} → X."""
+    """
+    Reduce a seed cell to its bare value: {{nowrap|X}} → X, {{small|X}} → X,
+    <small>X</small> → X, and HTML entities to their characters.
+
+    Wikitext expresses the same emphasis two ways, and only the template form
+    was handled — so "<small>1/WC</small>" survived intact and then failed every
+    downstream test, losing BOTH the seed and the wildcard for players like
+    Auger-Aliassime (seed 1 + WC at the Open Occitanie). Entities matter for the
+    same reason: a cell holding only "&nbsp;" is an empty cell, and must reduce
+    to "" rather than to a non-empty string that parses as nothing.
+    """
     prev = None
     while prev != v:
         prev = v
@@ -494,7 +518,9 @@ def _strip_seed_templates(v: str) -> str:
                 v = v[:m.start()] + content + v[m.end():]
                 continue
         v = v[:m.start()] + v[m.end():]
-    return v.strip()
+    v = _HTML_TAG_RE.sub('', v)
+    # &nbsp; unescapes to U+00A0, which str.strip() does not remove on its own.
+    return html.unescape(v).replace('\xa0', ' ').strip()
 
 
 def _parse_seed(raw: str) -> tuple[Optional[int], Optional[str]]:
@@ -512,15 +538,17 @@ def _parse_seed(raw: str) -> tuple[Optional[int], Optional[str]]:
         parts = [p.strip() for p in v.split('/')]
         try:
             seed = int(parts[0])
-            et = parts[1] if len(parts) > 1 else None
-            return seed, et if et in ENTRY_TYPES else None
+            return seed, _canon_entry_type(parts[1]) if len(parts) > 1 else None
         except ValueError:
             # Compound of non-numeric entry types (e.g. "Q/LL") — no seed.
             if 'Q' in parts:
                 return None, 'Q'
-            return None, next((p for p in parts if p in ENTRY_TYPES), None)
-    if v in ENTRY_TYPES:
-        return None, v
+            return None, next(
+                (c for c in (_canon_entry_type(p) for p in parts) if c), None
+            )
+    canon = _canon_entry_type(v)
+    if canon:
+        return None, canon
     try:
         return int(v), None
     except ValueError:
