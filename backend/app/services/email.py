@@ -418,7 +418,27 @@ def _round_complete_league_block(name: str, rows: list[tuple], is_last: bool) ->
     )
 
 
-def _match_result_row(i: int, winner_last: str, loser_last: str, score: str, is_correct: bool) -> str:
+def _status_badge(status: str) -> str:
+    """Seed number or entry type (WC/Q/LL/PR/SE) beside a player's name.
+
+    Inline styles only, and no flex/border-radius load-bearing: Outlook drops
+    most of this and is left with a plain grey-on-white token, which still
+    reads. Empty status renders nothing at all rather than an empty box —
+    most players are neither seeded nor special entries.
+    """
+    if not status:
+        return ""
+    return (
+        f'<span style="display:inline-block;margin-left:5px;padding:0 4px;'
+        f'font-size:11px;font-weight:700;line-height:16px;color:#6b7280;'
+        f'background:#f3f4f6;border:1px solid #e5e7eb;border-radius:3px">'
+        f'{_esc(status)}</span>'
+    )
+
+
+def _match_result_row(i: int, winner_last: str, winner_status: str,
+                      loser_last: str, loser_status: str,
+                      score: str, is_correct: bool) -> str:
     # Alternating row background (matches _round_complete_league_block) instead
     # of bolding the winner name — easier to scan a long list of results.
     bg = "#ffffff" if i % 2 == 0 else "#f9fafb"
@@ -430,7 +450,8 @@ def _match_result_row(i: int, winner_last: str, loser_last: str, score: str, is_
         f'<td width="24" style="padding:8px 4px 8px 12px;font-size:14px;'
         f'font-weight:700;color:{mark_color};width:24px">{mark_char}</td>'
         f'<td style="padding:8px 12px 8px 4px;font-size:14px;color:#111">'
-        f'{winner_last} def. {loser_last}</td>'
+        f'{_esc(winner_last)}{_status_badge(winner_status)} def. '
+        f'{_esc(loser_last)}{_status_badge(loser_status)}</td>'
         f'<td align="right" style="padding:8px 12px;font-size:14px;color:#444;'
         f'white-space:nowrap;text-align:right">{score}</td>'
         f'</tr>'
@@ -441,13 +462,15 @@ def _round_results_widget(round_name: str, results: list[tuple]) -> str:
     """Always-visible match-results panel. Gmail (web and mobile app) strips
     <style> tags and doesn't support the CSS-only ":checked" accordion trick,
     so this is plain static markup rather than a collapsible widget.
-    results: [(winner_last, loser_last, score, is_correct), ...] in bracket order,
-    where is_correct reflects this recipient's own pick for that match."""
+    results: [(winner_last, winner_status, loser_last, loser_status, score,
+    is_correct), ...] already ordered by the caller — correct picks first, then
+    by the best-ranked player in the match — where is_correct reflects this
+    recipient's own pick, so the order differs per recipient."""
     if not results:
         return ""
     rows = "".join(
-        _match_result_row(i, w, l, s, c)
-        for i, (w, l, s, c) in enumerate(results)
+        _match_result_row(i, w, ws, l, ls, s, c)
+        for i, (w, ws, l, ls, s, c) in enumerate(results)
     )
     return f"""<div style="margin:24px 0 0">
           <div style="padding:11px 14px;background:#f3f4f6;border:1px solid #e5e7eb;
@@ -473,7 +496,7 @@ async def send_round_complete_notification(
     category: str = "",
     gender: str = "M",
     unsubscribe_url: str = "",
-    match_results: Optional[list[tuple]] = None,  # [(winner_last, loser_last, score, is_correct), ...]
+    match_results: Optional[list[tuple]] = None,  # [(w_last, w_status, l_last, l_status, score, is_correct), ...]
 ) -> None:
     """One email per user: every group's competitor list, stacked vertically."""
     tournament_url = f"{BASE_URL}/tournaments/{tournament_id}"
