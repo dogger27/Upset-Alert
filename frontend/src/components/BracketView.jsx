@@ -314,11 +314,19 @@ function MatchBox({ match, resolvedPlayers, h2hPair, playerById, drawRanks, pick
   )
 
   if (match.is_bye) {
+    // Seed on the outer line of its match, bye on the inner one — see the
+    // note in CombinedView.entrantBox for the ATP 7.16/7.18 derivation.
+    // Even-numbered first-round matches put the seed BELOW the bye, which is
+    // what places the #2 seed (or the lucky loser replacing them) on the very
+    // last line of the draw. Display order only; no stored position changes.
+    const rows = [
+      <PlayerRow key="p" playerId={p1id} playerById={playerById} drawRanks={drawRanks}
+        showTypeSlot={playerNeedsTypeSlot(p1)} isWinner locked showScores={false} />,
+      <div key="b" className="player-row bye-slot"><span className="muted">BYE</span></div>,
+    ]
     return (
       <div className="match-box bye" style={style}>
-        <PlayerRow playerId={p1id} playerById={playerById} drawRanks={drawRanks}
-          showTypeSlot={playerNeedsTypeSlot(p1)} isWinner locked showScores={false} />
-        <div className="player-row bye-slot"><span className="muted">BYE</span></div>
+        {match.match_number % 2 === 0 ? [rows[1], rows[0]] : rows}
       </div>
     )
   }
