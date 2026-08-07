@@ -8,6 +8,25 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+
+    <!-- Installed-app identity. scope:"/" in the manifest is what lets Chrome on
+         Android mint a WebAPK and capture upsetalert.ca links device-wide;
+         handle_links + launch_handler there decide that an emailed link reuses
+         the open window instead of stacking a new one. -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#c9783a" />
+
+    <!-- iOS ignores the manifest's display mode before 17.4 and never captures
+         links at all, so these only control how a Home Screen launch looks.
+         apple-mobile-web-app-capable is the legacy spelling of display:standalone
+         and is still what older iOS reads; mobile-web-app-capable is the standard
+         one. apple-mobile-web-app-title stops iOS falling back to <title>, which
+         is long enough to be truncated under the icon. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Upset Alert" />
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=Saira+Condensed:wght@500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
