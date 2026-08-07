@@ -517,9 +517,22 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
 
   function entrantBox(c, i) {
     const match = R[0][Math.floor(i / 2)]
-    const pid = i % 2 === 0 ? match.player1?.id : match.player2?.id
+    // Which line of a bye match the player occupies is not in the source data
+    // — Wikipedia lists a bye'd seed only in round 2 — so it is decided here.
+    // ATP rulebook 7.16 fixes the seed lines (1, 8, 9, 16 … 121, 128 for a 96
+    // draw) and 7.18 gives every seed a bye, which puts the seed on the OUTER
+    // line of its first-round match: line 1 in match 1, line 8 in match 4,
+    // line 128 in match 64. Seed lines are always ≡ 0 or 1 (mod 4), and an odd
+    // line is ≡1 only in odd-numbered matches while an even line is ≡0 only in
+    // even-numbered ones — so match parity alone decides it. Half the byes sit
+    // below their bye, including the #2 seed's line at the very bottom.
+    // Display order only: bracket_position is untouched, so no pick moves.
+    const playerSlot = match.is_bye && match.match_number % 2 === 0 ? 1 : 0
+    const pid = match.is_bye
+      ? (i % 2 === playerSlot ? match.player1?.id ?? null : null)
+      : (i % 2 === 0 ? match.player1?.id : match.player2?.id)
     const player = pid != null ? playerById[pid] : null
-    const isBye = match.is_bye && i % 2 === 1 && pid == null
+    const isBye = match.is_bye && i % 2 !== playerSlot
     // A bye match has no real outcome to predict — neither the bye
     // placeholder slot (isBye, handled above) NOR the opponent's own slot
     // should be clickable, so a click can never save a redundant "pick"
