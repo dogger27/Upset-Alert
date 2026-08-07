@@ -383,6 +383,15 @@ a.profile-dropdown-item:visited {
   font-style: italic;
 }
 
+/* Push errors and the iOS "install first" hint. Sits under the toggle rather
+   than in the panel's shared error slot, which is scoped to saving prefs —
+   push applies immediately and fails independently of Save. */
+.notif-push-note {
+  margin: 0.4rem 0 0;
+  font-style: normal;
+  color: #b45309;
+}
+
 .notif-check-row {
   display: flex;
   align-items: center;

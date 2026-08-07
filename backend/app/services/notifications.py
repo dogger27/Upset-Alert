@@ -733,6 +733,48 @@ async def notify_draw_release_batch(draw_ids: list[int], is_followup: bool = Fal
             tz_known=bool(user_tz),
         )
 
+    # Push rides on the same batch decision as the email — one notification per
+    # week, only once every draw in that week is out (scheduler.py's
+    # _notify_pending_draw_releases holds the batch until then). Sent after the
+    # emails and never allowed to raise: the batch is already claimed at this
+    # point, so a push failure must not unwind a send that has happened.
+    try:
+        from app.services.push import send_push_to_users
+        from app.models.push import PushSubscription
+
+        async with AsyncSessionLocal() as db:
+            push_uids = [
+                r[0] for r in (await db.execute(
+                    select(PushSubscription.user_id).distinct()
+                )).all()
+            ]
+        if push_uids:
+            n = len(claimed)
+            first = min(claimed, key=lambda d: d.closing_time or datetime.max)
+            labelled = [f"{d.name} ({d.gender})" for d in claimed]
+            title = (
+                f"{n} draws released — {week_label}" if n > 1
+                else f"{first.name} ({first.gender}) draw released"
+            )
+            body = (
+                ", ".join(labelled[:3]) + (f" +{n - 3} more" if n > 3 else "")
+                if n > 1 else "Make your picks before it closes"
+            )
+            delivered = await send_push_to_users(
+                push_uids,
+                title=title,
+                body=body,
+                # Straight to the draw when there is only one; otherwise the
+                # home page, which already lists the week's open draws.
+                url=f"/tournaments/{first.id}" if n == 1 else "/",
+                # One tag per week so a device that was offline across two
+                # batches shows the newer notification instead of stacking both.
+                tag=f"draw-release-{first.year}-{first.week}",
+            )
+            logger.info("Draw-release push: %d delivered to %d user(s)", delivered, len(push_uids))
+    except Exception as exc:
+        logger.warning("Draw-release push failed: %s", exc)
+
     names = ", ".join(f"{d.year} {d.name} ({d.gender})" for d in claimed)
     await app_log("info", "notifications",
                   f"Draw-release {'follow-up' if is_followup else 'digest'} sent to "

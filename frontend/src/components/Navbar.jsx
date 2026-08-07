@@ -31,6 +31,13 @@ export default function Navbar() {
   const [notifSaving, setNotifSaving] = useState(false)
   const [notifError, setNotifError] = useState('')
 
+  // Push lives outside notifSelected on purpose: enabling it must happen on the
+  // click itself, because both iOS and Chrome reject a permission request that
+  // isn't tied to a user gesture — deferring it to Save would fail silently.
+  const [pushOn, setPushOn] = useState(false)
+  const [pushBusy, setPushBusy] = useState(false)
+  const [pushNote, setPushNote] = useState('')
+
   const menuRef = useRef(null)
   const navRef = useRef(null)
   const hamburgerRef = useRef(null)
@@ -103,6 +110,55 @@ export default function Navbar() {
       setNotifError('Failed to load preferences')
     } finally {
       setNotifLoading(false)
+    }
+
+    // "On" means this browser holds a live subscription AND the server still
+    // has a row for it — either half alone would show a switch that lies.
+    try {
+      const { isPushSupported, getPushStatus } = await import('../api/push')
+      if (!isPushSupported()) return setPushOn(false)
+      const reg = await navigator.serviceWorker.getRegistration()
+      const sub = reg && (await reg.pushManager.getSubscription())
+      const status = await getPushStatus()
+      setPushOn(Boolean(sub) && status.device_count > 0)
+    } catch {
+      setPushOn(false)
+    }
+  }
+
+  const togglePush = async () => {
+    setPushBusy(true)
+    setPushNote('')
+    try {
+      const push = await import('../api/push')
+      if (pushOn) {
+        await push.disablePush()
+        setPushOn(false)
+      } else {
+        if (!push.isPushSupported()) {
+          setPushNote(
+            push.needsInstall()
+              ? 'On iPhone, add Upset Alert to your Home Screen first — Safari only allows notifications for installed apps.'
+              : 'This browser does not support notifications.'
+          )
+          return
+        }
+        await push.enablePush()
+        setPushOn(true)
+      }
+    } catch (e) {
+      const m = e?.message
+      setPushNote(
+        m === 'denied'
+          ? 'Notifications are blocked for this site. Re-allow them in your browser settings, then try again.'
+          : m === 'not-configured'
+          ? 'Push is not configured on the server yet.'
+          : m === 'unsupported'
+          ? 'This browser does not support notifications.'
+          : 'Could not change notification settings.'
+      )
+    } finally {
+      setPushBusy(false)
     }
   }
 
@@ -314,6 +370,23 @@ export default function Navbar() {
                               />
                               Enabled
                             </label>
+                          </div>
+
+                          <div className="notif-section">
+                            <p className="notif-section-title">Draw Released Push</p>
+                            <p className="notif-section-desc">
+                              A phone notification once every draw for the week is out — same timing as the email
+                            </p>
+                            <label className="notif-check-row">
+                              <input
+                                type="checkbox"
+                                checked={pushOn}
+                                disabled={pushBusy}
+                                onChange={togglePush}
+                              />
+                              {pushBusy ? 'Working…' : 'Enabled on this device'}
+                            </label>
+                            {pushNote && <p className="notif-section-desc notif-push-note">{pushNote}</p>}
                           </div>
 
                           <div className="notif-section">

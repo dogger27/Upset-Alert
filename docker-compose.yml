@@ -21,6 +21,10 @@ services:
       - LOG_FILE=/logs/backend.log
       - SECRET_KEY=${SECRET_KEY:-change-me-to-a-long-random-string}
       - RESEND_API_KEY=${RESEND_API_KEY}
+      # Web Push signing keys. Absent -> push is skipped rather than erroring,
+      # so a machine without them configured still boots normally.
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
       - ENVIRONMENT=production
     dns:
       - 8.8.8.8
