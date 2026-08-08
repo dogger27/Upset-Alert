@@ -68,6 +68,15 @@ async def users_with_push(email_pref_key: str) -> list[int]:
     return [r[0] for r in rows]
 
 
+# How long the push service should hold a message for a device that is offline
+# when it is sent. pywebpush defaults this to 0, which means "deliver this
+# instant or discard" — a phone that is powered off, out of signal, or simply
+# asleep at the moment a batch fires would never receive the notification, and
+# nothing would report it as lost. A day covers an overnight or a flight while
+# still being short enough that nobody is told about a draw after it closed.
+PUSH_TTL_SECONDS = 24 * 60 * 60
+
+
 def _send_one(sub_info: dict, payload: str) -> Optional[int]:
     """
     Blocking send. Returns the HTTP status on failure, None on success.
@@ -84,6 +93,7 @@ def _send_one(sub_info: dict, payload: str) -> Optional[int]:
             vapid_private_key=settings.vapid_private_key,
             vapid_claims={"sub": settings.vapid_subject},
             timeout=10,
+            ttl=PUSH_TTL_SECONDS,
         )
         return None
     except WebPushException as exc:
