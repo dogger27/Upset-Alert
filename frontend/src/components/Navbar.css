@@ -383,9 +383,54 @@ a.profile-dropdown-item:visited {
   font-style: italic;
 }
 
-/* Push errors and the iOS "install first" hint. Sits under the toggle rather
+/* Notification settings grid: one row per type, one column per channel. */
+.notif-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.notif-grid th {
+  padding: 0.4rem 0.5rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted, #6b7280);
+  border-bottom: 1px solid var(--border, #e5e7eb);
+  text-align: center;
+  /* Channel columns only need to fit their header; the type column takes the
+     rest, so long descriptions wrap instead of squeezing the checkboxes. */
+  width: 3.5rem;
+}
+.notif-grid th.notif-grid-type,
+.notif-grid td.notif-grid-type {
+  width: auto;
+  text-align: left;
+}
+.notif-grid td {
+  padding: 0.5rem;
+  text-align: center;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--border-subtle, #f1f2f4);
+}
+.notif-grid tr:last-child td { border-bottom: none; }
+.notif-grid input[type='checkbox'] {
+  width: 1.05rem;
+  height: 1.05rem;
+  cursor: pointer;
+}
+.notif-grid input[type='checkbox']:disabled { cursor: progress; opacity: 0.5; }
+.notif-grid-label { display: block; font-weight: 600; }
+.notif-grid-desc {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--text-muted, #6b7280);
+  font-style: italic;
+  margin-top: 0.1rem;
+}
+
+/* Push errors and the iOS "install first" hint. Sits under the grid rather
    than in the panel's shared error slot, which is scoped to saving prefs —
-   push applies immediately and fails independently of Save. */
+   enabling push happens on the click and fails independently of Save. */
 .notif-push-note {
   margin: 0.4rem 0 0;
   font-style: normal;

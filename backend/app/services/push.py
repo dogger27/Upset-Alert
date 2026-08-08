@@ -36,6 +36,38 @@ def push_enabled() -> bool:
     return bool(settings.vapid_public_key and settings.vapid_private_key)
 
 
+# Push preferences are ordinary notification_preferences rows under a "push_"
+# prefix of the email key, so one settings save writes both columns of the grid
+# and neither can wipe the other. The device subscription is a separate thing:
+# it says a browser CAN receive, these say WHAT it should receive. Both are
+# required — a pref with no device has nowhere to go, a device with no prefs
+# gets nothing.
+PUSH_PREFIX = "push_"
+
+
+def push_key(email_pref_key: str) -> str:
+    return PUSH_PREFIX + email_pref_key
+
+
+async def users_with_push(email_pref_key: str) -> list[int]:
+    """User ids holding both a registered device and this push preference."""
+    if not push_enabled():
+        return []
+    from app.models.notification import NotificationPreference
+
+    async with AsyncSessionLocal() as db:
+        rows = (await db.execute(
+            select(PushSubscription.user_id)
+            .join(
+                NotificationPreference,
+                NotificationPreference.user_id == PushSubscription.user_id,
+            )
+            .where(NotificationPreference.pref_key == push_key(email_pref_key))
+            .distinct()
+        )).all()
+    return [r[0] for r in rows]
+
+
 def _send_one(sub_info: dict, payload: str) -> Optional[int]:
     """
     Blocking send. Returns the HTTP status on failure, None on success.

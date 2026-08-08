@@ -507,6 +507,28 @@ async def notify_round_complete_digest(
         except Exception as exc:
             logger.warning("Failed to send round digest to user %d: %s", uid, exc)
 
+    # Push mirrors the email: one per batch, same moment, same audience via the
+    # parallel push_ preference. The two round preferences are mutually
+    # exclusive by design (round_standings covers every round including the
+    # Final; tournament_end narrows it to the Final), so a batch pushes under
+    # whichever one produced it.
+    try:
+        from app.services.push import send_push_to_users, users_with_push
+        push_pref = "tournament_end" if is_final_batch else "round_standings"
+        push_uids = await users_with_push(push_pref)
+        if push_uids:
+            where = event_label or f"week of {week_label}"
+            await send_push_to_users(
+                push_uids,
+                title=(f"{round_name} complete — {where}" if not is_final_batch
+                       else f"Final standings — {where}"),
+                body=(f"{reached} draw(s) reported. See how your picks did."),
+                url="/",
+                tag=f"round-{round_name}-{where}",
+            )
+    except Exception as exc:
+        logger.warning("Round-digest push failed: %s", exc)
+
     kind = "Draw-completion" if is_final_batch else "Round-complete"
     await app_log("info", "notifications",
                   f"{kind} {'follow-up' if is_followup else 'digest'} ({round_name}, "
@@ -599,6 +621,24 @@ async def notify_match_start(tournament_id: int, name: str, year: int, category:
         return
 
     await send_match_start_notification(emails, name, year, tournament_id, category=category, gender=gender)
+
+    # Push mirrors the email's audience via the parallel push_ preference.
+    # Wrapped like every other push send: the email has already gone and the
+    # claim is committed, so a push failure must not surface as a failed send.
+    try:
+        from app.services.push import send_push_to_users, users_with_push
+        push_uids = await users_with_push("match_start")
+        if push_uids:
+            await send_push_to_users(
+                push_uids,
+                title=f"{name} ({gender}) is under way",
+                body="First match has started — picks are locked",
+                url=f"/tournaments/{tournament_id}",
+                tag=f"match-start-{tournament_id}",
+            )
+    except Exception as exc:
+        logger.warning("Match-start push failed: %s", exc)
+
     await app_log("info", "notifications",
                   f"Match-start email sent to {len(emails)} user(s) for {year} {name}",
                   {"tournament_id": tournament_id, "recipient_count": len(emails)})
@@ -746,8 +786,7 @@ async def notify_draw_release_batch(draw_ids: list[int], is_followup: bool = Fal
     # Runs after the emails and can never raise: the batch is already claimed by
     # this point, so a push failure must not unwind a send that has happened.
     try:
-        from app.services.push import send_push_to_users
-        from app.models.push import PushSubscription
+        from app.services.push import send_push_to_users, users_with_push
 
         claimed_ids = [d.id for d in claimed]
         weeks = {(d.year, d.week) for d in claimed if d.week is not None}
@@ -769,11 +808,7 @@ async def notify_draw_release_batch(draw_ids: list[int], is_followup: bool = Fal
                     .limit(1)
                 )).scalar())
 
-            push_uids = [] if already_announced else [
-                r[0] for r in (await db.execute(
-                    select(PushSubscription.user_id).distinct()
-                )).all()
-            ]
+        push_uids = [] if already_announced else await users_with_push(DRAW_RELEASED_PREF)
 
         if already_announced:
             logger.info("Draw-release push skipped: week already announced")

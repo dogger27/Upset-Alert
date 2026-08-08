@@ -126,15 +126,22 @@ export default function Navbar() {
     }
   }
 
-  const togglePush = async () => {
-    setPushBusy(true)
+  // Ticking any Push box has to do two separate things: record the preference
+  // (saved with everything else on Save) and make sure THIS device can actually
+  // receive. The second half must happen on the click, because iOS and Chrome
+  // both reject a permission request that isn't tied to a user gesture — so it
+  // cannot be deferred to Save like the checkbox state can.
+  const togglePushFor = async (key) => {
+    const pk = `push_${key}`
+    if (notifSelected.has(pk)) {
+      toggleNotif(pk)
+      return
+    }
     setPushNote('')
-    try {
-      const push = await import('../api/push')
-      if (pushOn) {
-        await push.disablePush()
-        setPushOn(false)
-      } else {
+    if (!pushOn) {
+      setPushBusy(true)
+      try {
+        const push = await import('../api/push')
         if (!push.isPushSupported()) {
           setPushNote(
             push.needsInstall()
@@ -145,22 +152,45 @@ export default function Navbar() {
         }
         await push.enablePush()
         setPushOn(true)
+      } catch (e) {
+        const m = e?.message
+        setPushNote(
+          m === 'denied'
+            ? 'Notifications are blocked for this site. Re-allow them in your browser settings, then try again.'
+            : m === 'not-configured'
+            ? 'Push is not configured on the server yet.'
+            : m === 'unsupported'
+            ? 'This browser does not support notifications.'
+            : 'Could not enable notifications on this device.'
+        )
+        return
+      } finally {
+        setPushBusy(false)
       }
-    } catch (e) {
-      const m = e?.message
-      setPushNote(
-        m === 'denied'
-          ? 'Notifications are blocked for this site. Re-allow them in your browser settings, then try again.'
-          : m === 'not-configured'
-          ? 'Push is not configured on the server yet.'
-          : m === 'unsupported'
-          ? 'This browser does not support notifications.'
-          : 'Could not change notification settings.'
-      )
-    } finally {
-      setPushBusy(false)
     }
+    toggleNotif(pk)
   }
+
+  // Rows of the settings grid. Email and push are separate preference keys, so
+  // a row can be on for one channel and off for the other.
+  const NOTIF_ROWS = [
+    { key: 'draw_released', label: 'Draw released',
+      desc: "Once a week, when every draw for that week is out" },
+    { key: 'match_start', label: 'Play starts',
+      desc: 'When the first match begins and picks lock' },
+    { key: 'round_standings', label: 'Round completion',
+      // Wrapped rather than referenced directly: NOTIF_ROWS is built above
+      // toggleRoundStandings' const declaration, so naming it here would read
+      // it in the temporal dead zone and throw on every render.
+      desc: 'Once per round, summarising every draw', onEmail: () => toggleRoundStandings() },
+    { key: 'tournament_end', label: 'Draw completion',
+      desc: 'Final standings for every draw that finished',
+      // Round completion already reports every round, the Final included — see
+      // toggleRoundStandings.
+      hidden: () => notifSelected.has('round_standings') },
+    { key: 'league_member_joined', label: 'New league member',
+      desc: 'When someone joins a league you own' },
+  ]
 
   const toggleNotif = (key) => {
     setNotifSelected(prev => {
@@ -359,90 +389,43 @@ export default function Navbar() {
                         <p className="notif-loading">Loading…</p>
                       ) : (
                         <>
-                          <div className="notif-section">
-                            <p className="notif-section-title">Draw Released Email</p>
-                            <p className="notif-section-desc">1 email per week, covering every draw released that week</p>
-                            <label className="notif-check-row">
-                              <input
-                                type="checkbox"
-                                checked={notifSelected.has('draw_released')}
-                                onChange={() => toggleNotif('draw_released')}
-                              />
-                              Enabled
-                            </label>
-                          </div>
-
-                          <div className="notif-section">
-                            <p className="notif-section-title">Draw Released Push</p>
-                            <p className="notif-section-desc">
-                              1 phone notification per week, sent once all that week's draws are out
-                            </p>
-                            <label className="notif-check-row">
-                              <input
-                                type="checkbox"
-                                checked={pushOn}
-                                disabled={pushBusy}
-                                onChange={togglePush}
-                              />
-                              {pushBusy ? 'Working…' : 'Enabled on this device'}
-                            </label>
-                            {pushNote && <p className="notif-section-desc notif-push-note">{pushNote}</p>}
-                          </div>
-
-                          <div className="notif-section">
-                            <p className="notif-section-title">Play starts</p>
-                            <p className="notif-section-desc">When the first match begins and picks are locked</p>
-                            <label className="notif-check-row">
-                              <input
-                                type="checkbox"
-                                checked={notifSelected.has('match_start')}
-                                onChange={() => toggleNotif('match_start')}
-                              />
-                              Enabled
-                            </label>
-                          </div>
-
-                          <div className="notif-section">
-                            <p className="notif-section-title">Round Completion Email</p>
-                            <p className="notif-section-desc">1 email per round, summarizing all draws</p>
-                            <label className="notif-check-row">
-                              <input
-                                type="checkbox"
-                                checked={notifSelected.has('round_standings')}
-                                onChange={toggleRoundStandings}
-                              />
-                              Enabled
-                            </label>
-                          </div>
-
-                          {/* Only offered with round emails off — see toggleRoundStandings. */}
-                          {!notifSelected.has('round_standings') && (
-                            <div className="notif-section">
-                              <p className="notif-section-title">Draw Completion</p>
-                              <p className="notif-section-desc">One weekly email with final standings for every draw that finished</p>
-                              <label className="notif-check-row">
-                                <input
-                                  type="checkbox"
-                                  checked={notifSelected.has('tournament_end')}
-                                  onChange={() => toggleNotif('tournament_end')}
-                                />
-                                Enabled
-                              </label>
-                            </div>
-                          )}
-
-                          <div className="notif-section">
-                            <p className="notif-section-title">New member joins your league</p>
-                            <p className="notif-section-desc">Email when someone joins a league you own</p>
-                            <label className="notif-check-row">
-                              <input
-                                type="checkbox"
-                                checked={notifSelected.has('league_member_joined')}
-                                onChange={() => toggleNotif('league_member_joined')}
-                              />
-                              Enabled
-                            </label>
-                          </div>
+                          <table className="notif-grid">
+                            <thead>
+                              <tr>
+                                <th className="notif-grid-type">Notification</th>
+                                <th>Email</th>
+                                <th>Push</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {NOTIF_ROWS.filter(r => !(r.hidden && r.hidden())).map(r => (
+                                <tr key={r.key}>
+                                  <td className="notif-grid-type">
+                                    <span className="notif-grid-label">{r.label}</span>
+                                    <span className="notif-grid-desc">{r.desc}</span>
+                                  </td>
+                                  <td>
+                                    <input
+                                      type="checkbox"
+                                      aria-label={`${r.label} email`}
+                                      checked={notifSelected.has(r.key)}
+                                      onChange={r.onEmail || (() => toggleNotif(r.key))}
+                                    />
+                                  </td>
+                                  <td>
+                                    <input
+                                      type="checkbox"
+                                      aria-label={`${r.label} push`}
+                                      disabled={pushBusy}
+                                      checked={notifSelected.has(`push_${r.key}`)}
+                                      onChange={() => togglePushFor(r.key)}
+                                    />
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                          {pushNote && <p className="notif-push-note">{pushNote}</p>}
 
                           {notifError && <p className="profile-edit-error" style={{ padding: '0 1rem' }}>{notifError}</p>}
                           <div className="profile-edit-actions" style={{ padding: '0.5rem 1rem 0.85rem' }}>
