@@ -12,7 +12,6 @@ the useful detail (which draws, when they close, how many matches) belongs here
 rather than being trimmed away to fit a preview nobody reads twice.
 """
 
-from datetime import datetime
 from typing import Optional
 
 # Android's expanded view will show far more than the collapsed two lines; this
@@ -20,15 +19,28 @@ from typing import Optional
 MAX_BODY = 900
 
 
-def _fmt_close(dt: Optional[datetime]) -> str:
-    if not dt:
-        return ""
-    return dt.strftime("%a %-d %b, %-I:%M%p").replace("AM", "am").replace("PM", "pm")
+def tier_label(category: Optional[str], gender: str) -> str:
+    """'ATP 1000', 'WTA 500', 'ATP Grand Slam'.
+
+    The tour prefix is always present, including for majors — email's badge
+    renders a bare "Grand Slam", which would make the men's and women's lines of
+    a Slam week identical here.
+    """
+    cat = (category or "").upper()
+    tour = "ATP" if gender == "M" else "WTA"
+    if "SLAM" in cat or "GRAND" in cat:
+        return f"{tour} Grand Slam"
+    tier = "1000" if "1000" in cat else "500" if "500" in cat else "250"
+    return f"{tour} {tier}"
 
 
 def draw_release(draws: list[dict], week_label: str) -> dict:
     """
-    draws: [{name, gender, tier, closing_time, location}, ...] soonest first.
+    draws: [{name, gender, category}, ...] soonest deadline first.
+
+    Name and tier only. Locations and pick deadlines were in here and made a
+    six-draw week an unreadable slab on the lock screen — the deadline is on the
+    site, and the notification's job is to say which tournaments are open.
     """
     n = len(draws)
     names = {d["name"] for d in draws}
@@ -43,15 +55,7 @@ def draw_release(draws: list[dict], week_label: str) -> dict:
     else:
         title = f"{n} draws released — {week_label}"
 
-    lines = []
-    for d in draws:
-        bits = [f"{d['name']} ({d['gender']})"]
-        if d.get("location"):
-            bits.append(d["location"])
-        closes = _fmt_close(d.get("closing_time"))
-        if closes:
-            bits.append(f"picks close {closes}")
-        lines.append(" · ".join(bits))
+    lines = [f"{d['name']} · {tier_label(d.get('category'), d['gender'])}" for d in draws]
     body = "\n".join(lines) or "Make your picks before they close."
 
     return {
@@ -114,8 +118,7 @@ def sample(pref_key: str) -> dict:
     return {
         "draw_released": {
             "title": "Cincinnati Open draws released",
-            "body": "Cincinnati Open (M) · Cincinnati, United States · picks close Sun 10 Aug, 11:00am\n"
-                    "Cincinnati Open (F) · Cincinnati, United States · picks close Sun 10 Aug, 11:00am",
+            "body": "Cincinnati Open · ATP 1000\nCincinnati Open · WTA 1000",
             "url": "/",
             "tag": "sample-draw-release",
             "actions": [{"action": "open", "title": "Make picks", "url": "/"}],

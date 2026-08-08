@@ -745,9 +745,7 @@ async def notify_draw_release_batch(draw_ids: list[int], is_followup: bool = Fal
         elif push_uids:
             from app.services import push_content
             content = push_content.draw_release(
-                [{"name": d.name, "gender": d.gender,
-                  "location": ", ".join(p for p in (d.city, d.country) if p) or None,
-                  "closing_time": d.closing_time}
+                [{"name": d.name, "gender": d.gender, "category": d.category}
                  for d in sorted(claimed, key=lambda d: d.closing_time or datetime.max)],
                 week_label,
             )
