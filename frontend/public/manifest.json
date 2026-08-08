@@ -10,6 +10,10 @@
   "theme_color": "#c9783a",
   "categories": ["sports", "games"],
   "handle_links": "preferred",
+  "_comment_related_applications": "Lists itself so navigator.getInstalledRelatedApps() can tell a browser tab that the app is already installed — without this entry the API returns nothing and the install banner would be offered to people who already have it. Chromium/Android only; Safari has no equivalent.",
+  "related_applications": [
+    { "platform": "webapp", "url": "https://upsetalert.ca/manifest.json" }
+  ],
   "launch_handler": {
     "client_mode": "navigate-existing"
   },
