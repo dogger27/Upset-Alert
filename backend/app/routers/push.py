@@ -70,6 +70,27 @@ async def subscribe(
             auth=body.keys.auth,
             user_agent=ua,
         ))
+
+    # Reinstalling the app mints a brand-new endpoint while the old row lives
+    # on, so the account quietly accumulates a duplicate and every notification
+    # arrives twice. Delivery failure can't clean it up: Apple went on
+    # ACCEPTING pushes for a channel whose app had been deleted, returning 200
+    # rather than the 410 that prunes.
+    #
+    # So a device is identified by its user-agent, and re-registering replaces
+    # whatever that device had before. The cost is two physically identical
+    # devices on one account — same model, same OS build, therefore the same
+    # user-agent string — where the second registration displaces the first.
+    # That is rarer than reinstalling, and its failure mode (notifications on
+    # one phone instead of two) is milder than guaranteed duplicates.
+    if ua:
+        await db.execute(
+            delete(PushSubscription).where(
+                PushSubscription.user_id == current_user.id,
+                PushSubscription.user_agent == ua,
+                PushSubscription.endpoint != body.endpoint,
+            )
+        )
     await db.commit()
 
 
