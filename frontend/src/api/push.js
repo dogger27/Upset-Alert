@@ -74,6 +74,12 @@ export async function enablePush() {
   return true
 }
 
+/** Fire a notification at this account's own devices. Returns {devices, delivered}. */
+export async function sendTestPush() {
+  const { data } = await client.post('/push/test')
+  return data
+}
+
 export async function disablePush() {
   let endpoint = null
   if (isPushSupported()) {
