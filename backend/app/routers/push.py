@@ -100,29 +100,35 @@ async def _latest_content(db: AsyncSession, pref_key: str) -> dict:
     six-draw week. Falls back to a representative sample when the type has
     never fired, so the button still shows the shape rather than erroring.
     """
-    from datetime import datetime
+    from datetime import timedelta
     from app.models.tournament import Draw
     from app.services import push_content
 
     if pref_key == "draw_released":
-        last = (await db.execute(
-            select(Draw.year, Draw.week)
-            .where(Draw.draw_release_notified_at.isnot(None), Draw.week.isnot(None))
+        # The most recent SEND, not the most recent week. Week 30 went out as
+        # four separate batches before one-per-week was enforced, so keying on
+        # the week replayed six draws from four different notifications. Draws
+        # announced together share a timestamp within minutes of each other,
+        # so a short window around the newest one reconstructs that batch.
+        newest = (await db.execute(
+            select(Draw.draw_release_notified_at)
+            .where(Draw.draw_release_notified_at.isnot(None))
             .order_by(Draw.draw_release_notified_at.desc())
             .limit(1)
-        )).first()
-        if last:
+        )).scalar()
+        if newest:
+            window_start = newest - timedelta(hours=1)
             draws = (await db.execute(
-                select(Draw).where(Draw.year == last[0], Draw.week == last[1])
+                select(Draw)
+                .where(Draw.draw_release_notified_at >= window_start)
                 .order_by(Draw.closing_time)
             )).scalars().all()
             if draws:
                 start = min((d.start_date for d in draws if d.start_date), default=None)
                 week_label = f"{start.strftime('%B')} {start.day}" if start else "this week"
                 return push_content.draw_release(
-                    [{"name": d.name, "gender": d.gender,
-                      "location": ", ".join(p for p in (d.city, d.country) if p) or None,
-                      "closing_time": d.closing_time} for d in draws],
+                    [{"name": d.name, "gender": d.gender, "category": d.category}
+                     for d in draws],
                     week_label,
                 )
 
