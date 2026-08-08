@@ -174,12 +174,14 @@ export default function Navbar() {
   // cannot be deferred to Save like the checkbox state can.
   const togglePushFor = async (key) => {
     const pk = `push_${key}`
-    if (notifSelected.has(pk)) {
-      toggleNotif(pk)
-      return
-    }
-    setPushNote('')
+    // Enrolment comes first on a device that has none — before, and regardless
+    // of, the tick state. The ticks are ACCOUNT preferences, so on a second
+    // device they already render ticked from the first one; the old order read
+    // that as "turning it off", unticked, and returned without ever
+    // registering. A laptop could therefore never be enrolled at all: every
+    // Push box was already ticked, so every click took the off path.
     if (!pushOn) {
+      setPushNote('')
       setPushBusy(true)
       try {
         const push = await import('../api/push')
@@ -193,6 +195,7 @@ export default function Navbar() {
         }
         await push.enablePush()
         setPushOn(true)
+        setPushDevices((n) => n + 1)
       } catch (e) {
         const m = e?.message
         setPushNote(
@@ -208,6 +211,11 @@ export default function Navbar() {
       } finally {
         setPushBusy(false)
       }
+      // Enrolling IS the whole intent of a click on an unregistered device.
+      // The preference may already be on from another device, and unticking it
+      // here would undo a setting the user never asked to change.
+      if (!notifSelected.has(pk)) toggleNotif(pk)
+      return
     }
     toggleNotif(pk)
   }
