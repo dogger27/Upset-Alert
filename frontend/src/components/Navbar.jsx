@@ -200,8 +200,6 @@ export default function Navbar() {
   const NOTIF_ROWS = [
     { key: 'draw_released', label: 'Draw released',
       desc: 'Once a week, when all draws are out' },
-    { key: 'match_start', label: 'Play starts',
-      desc: 'First match begins, picks lock' },
     { key: 'round_standings', label: 'Round completion',
       // Wrapped rather than referenced directly: NOTIF_ROWS is built above
       // toggleRoundStandings' const declaration, so naming it here would read

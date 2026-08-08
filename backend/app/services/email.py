@@ -196,44 +196,6 @@ async def send_new_user_notification(new_email: str, new_username: str) -> None:
     })
 
 
-async def send_match_start_notification(
-    emails: list[str], tournament_name: str, year: int, tournament_id: int,
-    category: str = "", gender: str = "M",
-) -> None:
-    tournament_url = f"{BASE_URL}/tournaments/{tournament_id}"
-    label = _tournament_label(tournament_name, category, gender)
-    html = f"""{_WRAP_OPEN}{_LOGO_HEADER}{_BODY_OPEN}
-          <h1 style="font-size:22px;margin:0 0 12px">The first match is underway!</h1>
-          <p style="color:#444;line-height:1.6;margin:0 0 24px">
-            <strong>{tournament_name} {year}</strong> is officially live — a main-draw match
-            has just started. Your picks are now locked.
-          </p>
-          <a href="{tournament_url}" style="display:inline-block;padding:12px 24px;
-             background:#1b4332;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
-            View Draw &amp; Picks
-          </a>
-          <p style="margin-top:24px;font-size:13px;color:#888">
-            Good luck — let's see those upsets!
-          </p>
-        {_BODY_CLOSE}{_WRAP_CLOSE}"""
-    for email in emails:
-        await send_async({
-            "from": FROM,
-            "to": [email],
-            "subject": f"Play has started — {label}",
-            "html": html,
-        })
-
-
-_NUMBER_WORDS = {
-    1: "One", 2: "Two", 3: "Three", 4: "Four", 5: "Five",
-    6: "Six", 7: "Seven", 8: "Eight", 9: "Nine", 10: "Ten",
-}
-
-# Row accent per tour, matching the blue/pink banding of the draws table on site.
-_TOUR_COLOURS = {"M": ("#1e3a8a", "#e0e7ff"), "F": ("#9d174d", "#fce7f3")}
-
-
 def _tier_badge(category: str, gender: str) -> str:
     """Short tier label for the badge on each digest row: 'ATP 250', 'Grand Slam'."""
     cat = (category or "").upper()
