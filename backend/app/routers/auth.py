@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy import delete, func, select, and_
+from sqlalchemy import delete, func, or_, select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import get_current_user
@@ -44,6 +44,26 @@ async def admin_list_users(
         .order_by(User.created_at.desc())
     )
     users = result.scalars().all()
+
+    # Which users have a phone or tablet registered for push. One query for the
+    # whole list rather than a lookup per row, and matched on the user_agent so
+    # a laptop registration doesn't show up as a mobile device.
+    from app.models.push import PushSubscription
+
+    mobile_uids = {
+        uid for uid, in (await db.execute(
+            select(PushSubscription.user_id).distinct().where(
+                or_(
+                    PushSubscription.user_agent.ilike("%iPhone%"),
+                    PushSubscription.user_agent.ilike("%iPad%"),
+                    PushSubscription.user_agent.ilike("%iPod%"),
+                    PushSubscription.user_agent.ilike("%Android%"),
+                    PushSubscription.user_agent.ilike("%Mobile%"),
+                )
+            )
+        )).all()
+    }
+
     return [
         {
             "id": u.id,
@@ -53,6 +73,7 @@ async def admin_list_users(
             "email_verified": u.email_verified,
             "is_admin": u.is_admin,
             "created_at": u.created_at.strftime("%Y-%m-%d") if u.created_at else None,
+            "has_mobile_device": u.id in mobile_uids,
         }
         for u in users
     ]

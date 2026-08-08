@@ -37,6 +37,10 @@ export default function Navbar() {
   const [pushOn, setPushOn] = useState(false)
   const [pushBusy, setPushBusy] = useState(false)
   const [pushNote, setPushNote] = useState('')
+  // Whether this browser could ever receive a push, as distinct from whether it
+  // currently does. Null until checked, so the column isn't flashed and hidden.
+  const [pushSupported, setPushSupported] = useState(null)
+  const [pushDevices, setPushDevices] = useState(0)
 
   const menuRef = useRef(null)
   const navRef = useRef(null)
@@ -116,12 +120,19 @@ export default function Navbar() {
     // has a row for it — either half alone would show a switch that lies.
     try {
       const { isPushSupported, getPushStatus } = await import('../api/push')
-      if (!isPushSupported()) return setPushOn(false)
+      if (!isPushSupported()) {
+        setPushSupported(false)
+        setPushOn(false)
+        return
+      }
+      setPushSupported(true)
       const reg = await navigator.serviceWorker.getRegistration()
       const sub = reg && (await reg.pushManager.getSubscription())
       const status = await getPushStatus()
+      setPushDevices(status.device_count || 0)
       setPushOn(Boolean(sub) && status.device_count > 0)
     } catch {
+      setPushSupported(false)
       setPushOn(false)
     }
   }
@@ -416,7 +427,7 @@ export default function Navbar() {
                               <tr>
                                 <th className="notif-grid-type">Notification</th>
                                 <th>Email</th>
-                                <th>Push</th>
+                                {pushSupported !== false && <th>Push</th>}
                               </tr>
                             </thead>
                             <tbody>
@@ -434,19 +445,30 @@ export default function Navbar() {
                                       onChange={r.onEmail || (() => toggleNotif(r.key))}
                                     />
                                   </td>
-                                  <td>
-                                    <input
-                                      type="checkbox"
-                                      aria-label={`${r.label} push`}
-                                      disabled={pushBusy}
-                                      checked={notifSelected.has(`push_${r.key}`)}
-                                      onChange={() => togglePushFor(r.key)}
-                                    />
-                                  </td>
+                                  {pushSupported !== false && (
+                                    <td>
+                                      <input
+                                        type="checkbox"
+                                        aria-label={`${r.label} push`}
+                                        disabled={pushBusy}
+                                        checked={notifSelected.has(`push_${r.key}`)}
+                                        onChange={() => togglePushFor(r.key)}
+                                      />
+                                    </td>
+                                  )}
                                 </tr>
                               ))}
                             </tbody>
                           </table>
+                          <p className={`notif-device-state${pushOn ? ' is-on' : ''}`}>
+                            {pushSupported === false
+                              ? 'Push isn’t available in this browser — the ticks above still control your other devices.'
+                              : pushOn
+                              ? pushDevices > 1
+                                ? `Notifications are on for this device (${pushDevices} devices registered).`
+                                : 'Notifications are on for this device.'
+                              : 'This device isn’t set up yet — tick a Push box to turn it on here. The ticks show what your account receives, not this device.'}
+                          </p>
                           {pushOn && (
                             <button
                               type="button"
