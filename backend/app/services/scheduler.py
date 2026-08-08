@@ -436,6 +436,9 @@ async def _notify_pending_draw_releases() -> None:
             groups.setdefault(key, []).append(t)
 
         batches: list[tuple[list[int], bool]] = []
+        # Draws that arrived after their week's digest already went out. Stamped
+        # as notified but never emailed — see the suppression branch below.
+        suppressed: list[int] = []
         for key, members in groups.items():
             if key[0] == "solo":
                 batches.append(([members[0].id], False))
@@ -469,15 +472,33 @@ async def _notify_pending_draw_releases() -> None:
                     year, week, len(members), [s.name for s in outstanding],
                 )
                 continue
+
+            # One email per week, full stop. If a sibling in this week was
+            # already announced, that week has had its digest and these draws
+            # arrived after it — a draw added late, or one whose release was
+            # detected after the batch went out. There is no follow-up: a second
+            # message for the same week is exactly what a digest exists to
+            # prevent. They are still stamped, or the sweep reconsiders them
+            # every ten minutes forever.
+            if any(s.draw_release_notified_at is not None
+                   for s in siblings if s.id not in ready_ids):
+                suppressed.extend(t.id for t in members)
+                logger.info(
+                    "Draw-release digest for %s week %s suppressed: week already "
+                    "announced, %d late draw(s) not emailed (%s)",
+                    year, week, len(members), ", ".join(t.name for t in members),
+                )
+                continue
+
             batches.append(([t.id for t in members], False))
 
-        if not batches:
+        if not batches and not suppressed:
             return
 
-        for ids, _ in batches:
-            for t in ready:
-                if t.id in ids:
-                    t.draw_release_notified_at = now
+        announced = {i for ids, _ in batches for i in ids} | set(suppressed)
+        for t in ready:
+            if t.id in announced:
+                t.draw_release_notified_at = now
         await db.commit()
 
     from app.services.notifications import notify_draw_release_batch
@@ -684,6 +705,9 @@ async def _notify_pending_round_digests() -> None:
             groups.setdefault((_digest_bucket(d), d.round_name(p.round_number)), []).append((p, d))
 
         batches = []
+        # Late finishers whose bucket digest already went out: claimed so the
+        # sweep stops re-reading them, but deliberately never emailed.
+        late_stamped: list[tuple[int, int]] = []
         for (bucket, label), members in groups.items():
             kind = bucket[0]
             if kind == "solo":
@@ -739,8 +763,12 @@ async def _notify_pending_round_digests() -> None:
                     outstanding.append(s)
 
             # Already-sent siblings mean this bucket's digest for this round has
-            # gone; anything arriving now is a late finisher.
-            is_followup = await db.scalar(
+            # gone, so anything arriving now is a late finisher — and a late
+            # finisher gets NO email. One message per bucket per round, full
+            # stop; a follow-up is the same failure a digest exists to prevent,
+            # just arriving second. This used to send one flagged
+            # is_followup=True.
+            already_sent = await db.scalar(
                 select(RoundCompleteNotification.id).where(
                     RoundCompleteNotification.draw_id.in_([s.id for s in in_scope]),
                     RoundCompleteNotification.digest_sent_at.isnot(None),
@@ -783,12 +811,43 @@ async def _notify_pending_round_digests() -> None:
                         dedup_hours=DRAW_HEALTH_REALERT_HOURS,
                     )
                 continue
+
+            # Suppressed, not sent: mark the rows claimed so the sweep stops
+            # reconsidering them, and say plainly in the log which draws never
+            # made it into an email.
+            if already_sent:
+                late_stamped.extend((d.id, p.round_number) for p, d in members)
+                logger.info(
+                    "Round digest %s for %s suppressed: bucket already sent, "
+                    "%d late draw(s) not emailed (%s)",
+                    label, bucket_desc, len(members),
+                    ", ".join(f"{d.name} ({d.gender})" for _, d in members),
+                )
+                continue
+
             batches.append((
                 [(d.id, p.round_number) for p, d in members],
-                is_followup,
+                False,
                 len(in_scope),
                 event_label,
             ))
+
+    if late_stamped:
+        # Same claim the digest itself would write, without the send.
+        from app.models.notification import RoundCompleteNotification
+        from sqlalchemy import update as sa_update
+        async with AsyncSessionLocal() as db:
+            for draw_id, rnd in late_stamped:
+                await db.execute(
+                    sa_update(RoundCompleteNotification)
+                    .where(
+                        RoundCompleteNotification.draw_id == draw_id,
+                        RoundCompleteNotification.round_number == rnd,
+                        RoundCompleteNotification.digest_sent_at.is_(None),
+                    )
+                    .values(digest_sent_at=datetime.now(timezone.utc), recipient_count=0)
+                )
+            await db.commit()
 
     if not batches:
         return
