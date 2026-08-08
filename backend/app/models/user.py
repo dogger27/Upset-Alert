@@ -37,6 +37,16 @@ class User(Base):
     # DST resolves itself. Null until a user next opens the site, so every
     # consumer must fall back to UTC.
     timezone: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    # Last time this account was seen running the INSTALLED app on a phone or
+    # tablet — reported by the client, because nothing about a PWA install is
+    # visible to the server otherwise. A push subscription used to be the only
+    # device signal we had, which under-counts badly: installing the app and
+    # enabling notifications are separate acts, and iOS installs are invisible
+    # to push detection entirely. Null until the user next opens the app, so
+    # this can never be backfilled for an install that already happened.
+    mobile_app_seen_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
