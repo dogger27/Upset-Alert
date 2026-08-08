@@ -210,12 +210,12 @@ function TournamentsPanel({ user }) {
   return (
     <>
       {/* Filters */}
-      <div className="card admin-section" style={{ width: 'fit-content', marginBottom: '1.25rem' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+      <div className="card admin-section t-filter-card">
+        <div className="t-filter-head">
           <h2 style={{ margin: 0 }}>Filters</h2>
-          <span className="muted" style={{ fontSize: '0.82rem', marginLeft: '1rem' }}>{filtered.length} tournament{filtered.length !== 1 ? 's' : ''}</span>
+          <span className="muted">{filtered.length} tournament{filtered.length !== 1 ? 's' : ''}</span>
         </div>
-        <div style={{ display: 'flex', gap: '2.5rem', alignItems: 'flex-start' }}>
+        <div className="t-filter-groups">
           <div>
             <h3 className="filter-label">Status</h3>
             {STATUS_GROUP_ORDER.map(value => (
@@ -255,10 +255,10 @@ function TournamentsPanel({ user }) {
               </label>
             ))}
           </div>
-          <div style={{ marginLeft: 'auto', paddingLeft: '2rem', borderLeft: '1px solid var(--border)', alignSelf: 'stretch', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '0.5rem' }}>
+          <div className="t-filter-legend">
             <h3 className="filter-label">Legend</h3>
             {[{ label: "Men's", color: GENDER_COLORS.M, border: '#93b8ff' }, { label: "Women's", color: GENDER_COLORS.F, border: '#ffb3c6' }].map(({ label, color, border }) => (
-              <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.88rem' }}>
+              <div key={label} className="t-legend-item">
                 <span style={{ display: 'inline-block', width: 14, height: 14, borderRadius: 3, background: color, border: `1.5px solid ${border}`, flexShrink: 0 }} />
                 {label}
               </div>
@@ -268,7 +268,7 @@ function TournamentsPanel({ user }) {
       </div>
 
       {/* Table */}
-      <div className="card admin-section" style={{ width: 'fit-content' }}>
+      <div className="card admin-section t-table-card">
         {isLoading ? (
           <p className="muted">Loading tournaments…</p>
         ) : (
