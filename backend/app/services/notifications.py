@@ -521,30 +521,30 @@ async def notify_round_complete_digest(
             # 1000s and Slams (bucketed by event), and a week that happens to
             # hold a single draw is named from that draw. Only a genuinely
             # mixed week falls back to the date, where no single name is true.
-            # label and match_results are draw-level facts that live inside each
-            # recipient's section, not on the payload itself — only is_correct
-            # varies per user, and this payload goes to everyone. Reading them
-            # off the payload raised KeyError straight into the wrapper below,
-            # which is why this push went quiet without anything reporting it.
-            def _facts(p):
-                users = p.get("per_user") or {}
-                sec = next(iter(users.values()))["section"] if users else None
-                return {
-                    "label": (sec or {}).get("label") or f"Draw {p['id']}",
-                    "matches": len((sec or {}).get("match_results") or []),
-                }
+            # Fetched fresh rather than read off the payload: name, gender and
+            # category are draw columns, and the payload only carries per-user
+            # sections (an earlier version reached for payloads[0]["label"] and
+            # raised KeyError straight into the wrapper below).
+            async with AsyncSessionLocal() as db:
+                batch = (await db.execute(
+                    select(Draw).where(Draw.id.in_([p["id"] for p in payloads]))
+                )).scalars().all()
+            by_id = {d.id: d for d in batch}
+            ordered = [by_id[p["id"]] for p in payloads if p["id"] in by_id]
 
-            facts = [_facts(p) for p in payloads]
             if event_label:
                 where = event_label
-            elif reached == 1:
-                where = facts[0]["label"]
+            elif len(ordered) == 1:
+                where = ordered[0].name
             else:
                 where = f"week of {week_label}"
 
             from app.services import push_content
             content = push_content.round_complete(
-                round_name, where, facts, is_final_batch,
+                round_name, where,
+                [{"name": d.name, "gender": d.gender, "category": d.category}
+                 for d in ordered],
+                is_final_batch,
             )
             await send_push_to_users(push_uids, **content)
     except Exception as exc:

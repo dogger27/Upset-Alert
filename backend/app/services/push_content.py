@@ -74,22 +74,20 @@ def round_complete(
     is_final: bool,
 ) -> dict:
     """
-    draws: [{label, matches, upsets}, ...] — one entry per draw in the batch.
+    draws: [{name, gender, category}, ...] — EVERY draw the digest covers.
+
+    A round digest batches the men's and women's draws of an event (and a whole
+    week of smaller events), so listing one of them describes the email wrongly:
+    "R32 complete — Canadian Open" with a single ATP line reads as though the
+    WTA draw hadn't reported. Same name · tier lines as draw-release, so the two
+    notification types are scannable the same way.
     """
     title = (f"Final standings — {where}" if is_final
              else f"{round_name} complete — {where}")
 
-    lines = []
-    for d in draws:
-        bits = [d["label"]]
-        if d.get("matches"):
-            bits.append(f"{d['matches']} matches")
-        if d.get("upsets"):
-            bits.append(f"{d['upsets']} upsets")
-        lines.append(" · ".join(bits))
-    detail = "\n".join(lines)
-    lead = "See how your picks did" if len(draws) == 1 else f"{len(draws)} draws reported"
-    body = f"{lead}\n{detail}" if detail else lead
+    body = "\n".join(
+        f"{d['name']} · {tier_label(d.get('category'), d['gender'])}" for d in draws
+    ) or "See how your picks did"
 
     return {
         "title": title,
