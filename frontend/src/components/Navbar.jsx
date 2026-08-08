@@ -375,7 +375,7 @@ export default function Navbar() {
                           <div className="notif-section">
                             <p className="notif-section-title">Draw Released Push</p>
                             <p className="notif-section-desc">
-                              A phone notification once every draw for the week is out — same timing as the email
+                              1 phone notification per week, sent once all that week's draws are out
                             </p>
                             <label className="notif-check-row">
                               <input

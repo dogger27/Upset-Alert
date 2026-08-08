@@ -733,29 +733,57 @@ async def notify_draw_release_batch(draw_ids: list[int], is_followup: bool = Fal
             tz_known=bool(user_tz),
         )
 
-    # Push rides on the same batch decision as the email — one notification per
-    # week, only once every draw in that week is out (scheduler.py's
-    # _notify_pending_draw_releases holds the batch until then). Sent after the
-    # emails and never allowed to raise: the batch is already claimed at this
-    # point, so a push failure must not unwind a send that has happened.
+    # Exactly ONE push per week, after every draw in that week is out.
+    #
+    # The batch already guarantees the "after every draw" half —
+    # _notify_pending_draw_releases holds a week until none of its draws are
+    # outstanding. It does NOT guarantee the "exactly one" half: a draw added to
+    # a week whose batch has already gone out forms a second batch of its own,
+    # which would be a second push for the same week. Email tolerates that as a
+    # follow-up; a phone notification should not, so this sends only for the
+    # first announced batch of a given week.
+    #
+    # Runs after the emails and can never raise: the batch is already claimed by
+    # this point, so a push failure must not unwind a send that has happened.
     try:
         from app.services.push import send_push_to_users
         from app.models.push import PushSubscription
 
+        claimed_ids = [d.id for d in claimed]
+        weeks = {(d.year, d.week) for d in claimed if d.week is not None}
+
         async with AsyncSessionLocal() as db:
-            push_uids = [
+            already_announced = False
+            if len(weeks) == 1:
+                year, week = next(iter(weeks))
+                # Any sibling in this week that was notified before this batch
+                # means the week has already had its push.
+                already_announced = bool((await db.execute(
+                    select(Draw.id)
+                    .where(
+                        Draw.year == year,
+                        Draw.week == week,
+                        Draw.draw_release_notified_at.isnot(None),
+                        Draw.id.notin_(claimed_ids),
+                    )
+                    .limit(1)
+                )).scalar())
+
+            push_uids = [] if already_announced else [
                 r[0] for r in (await db.execute(
                     select(PushSubscription.user_id).distinct()
                 )).all()
             ]
-        if push_uids:
+
+        if already_announced:
+            logger.info("Draw-release push skipped: week already announced")
+        elif push_uids:
             n = len(claimed)
-            first = min(claimed, key=lambda d: d.closing_time or datetime.max)
-            labelled = [f"{d.name} ({d.gender})" for d in claimed]
             title = (
                 f"{n} draws released — {week_label}" if n > 1
-                else f"{first.name} ({first.gender}) draw released"
+                else f"{claimed[0].name} ({claimed[0].gender}) draw released"
             )
+            labelled = [f"{d.name} ({d.gender})" for d in claimed]
             body = (
                 ", ".join(labelled[:3]) + (f" +{n - 3} more" if n > 3 else "")
                 if n > 1 else "Make your picks before it closes"
@@ -764,12 +792,12 @@ async def notify_draw_release_batch(draw_ids: list[int], is_followup: bool = Fal
                 push_uids,
                 title=title,
                 body=body,
-                # Straight to the draw when there is only one; otherwise the
-                # home page, which already lists the week's open draws.
-                url=f"/tournaments/{first.id}" if n == 1 else "/",
-                # One tag per week so a device that was offline across two
-                # batches shows the newer notification instead of stacking both.
-                tag=f"draw-release-{first.year}-{first.week}",
+                # Always the dashboard: it lists every open draw for the week,
+                # which is the whole point of a notification that covers several.
+                url="/",
+                # One tag per week, so a device offline across two weeks shows
+                # the newer notification rather than stacking both.
+                tag=f"draw-release-{claimed[0].year}-{claimed[0].week}",
             )
             logger.info("Draw-release push: %d delivered to %d user(s)", delivered, len(push_uids))
     except Exception as exc:
