@@ -134,37 +134,38 @@ async def _latest_content(db: AsyncSession, pref_key: str) -> dict:
 
     if pref_key in ("round_standings", "tournament_end"):
         from app.models.notification import RoundCompleteNotification
-        from app.models.tournament import Match
 
-        last = (await db.execute(
-            select(RoundCompleteNotification.draw_id, RoundCompleteNotification.round_number)
+        # Every draw in a digest is stamped by one UPDATE, so the batch is
+        # exactly the rows sharing the newest digest_sent_at. Taking a single
+        # row described a two-draw event as one draw — "R32 complete — Canadian
+        # Open" listing only the ATP side.
+        newest = (await db.execute(
+            select(func.max(RoundCompleteNotification.digest_sent_at))
             .where(RoundCompleteNotification.digest_sent_at.isnot(None))
-            .order_by(RoundCompleteNotification.digest_sent_at.desc())
-            .limit(1)
-        )).first()
-        if last:
-            draw = await db.get(Draw, last[0])
-            if draw:
-                from app.services.email import _tournament_label
-                matches = (await db.execute(
-                    select(func.count()).select_from(Match).where(
-                        Match.draw_id == draw.id,
-                        Match.round_number == last[1],
-                        Match.is_bye == False,  # noqa: E712
-                    )
-                )).scalar() or 0
+        )).scalar()
+        if newest:
+            rows = (await db.execute(
+                select(RoundCompleteNotification.draw_id, RoundCompleteNotification.round_number)
+                .where(RoundCompleteNotification.digest_sent_at == newest)
+            )).all()
+            draws = []
+            round_no = None
+            for draw_id, rnd in rows:
+                d = await db.get(Draw, draw_id)
+                if d:
+                    draws.append(d)
+                    round_no = rnd
+            if draws:
+                base = draws[0]
+                names = {d.name for d in draws}
+                where = base.name if len(names) == 1 else f"week of {base.start_date:%B %-d}" \
+                    if base.start_date else base.name
                 from app.services.notifications import _email_round_label
-                label = _tournament_label(draw.name, draw.category or "", draw.gender or "M")
                 return push_content.round_complete(
-                    # Same short label the real sends use ("R32"), not the raw
-                    # "Round of 32" — a test that reads differently from the
-                    # thing it imitates defeats the point.
-                    _email_round_label(draw.round_name(last[1])),
-                    draw.name,
-                    [{"label": label, "matches": matches}],
-                    # Draw-completion is asked about specifically, so show the
-                    # final-standings wording even if the most recent digest we
-                    # can find happened to be a mid-tournament round.
+                    _email_round_label(base.round_name(round_no)),
+                    where,
+                    [{"name": d.name, "gender": d.gender, "category": d.category}
+                     for d in draws],
                     pref_key == "tournament_end",
                 )
 
