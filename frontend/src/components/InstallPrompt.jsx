@@ -64,6 +64,9 @@ export default function InstallPrompt() {
   const [visible, setVisible] = useState(false)
   const [showSteps, setShowSteps] = useState(false)
   const [deferred, setDeferred] = useState(null)
+  // Android/Chromium can tell us; iOS never can, so there it stays false and
+  // the sheet covers both possibilities in one set of steps instead.
+  const [installed, setInstalled] = useState(false)
   const os = platform()
 
   useEffect(() => {
@@ -85,8 +88,12 @@ export default function InstallPrompt() {
     // rides along inside it.
     let cancelled = false
     const t = setTimeout(async () => {
-      if (await isAlreadyInstalled()) return   // has the app; don't pester
+      // Shown whether or not the app is installed: for someone who has it the
+      // banner is a way back into it, and for someone who doesn't it's the
+      // offer. Only the sheet behind the button differs.
+      const inst = await isAlreadyInstalled()
       if (cancelled) return
+      setInstalled(inst)
       // Burn the one offer at the moment it appears. Waiting for a dismissal
       // would re-show on every visit to anyone who just scrolls past it, which
       // is the behaviour "only once" exists to prevent.
@@ -108,7 +115,9 @@ export default function InstallPrompt() {
   }
 
   const onInstallClick = async () => {
-    if (deferred) {
+    // Only a not-yet-installed Android Chrome ever hands us this, and it's the
+    // one path that can finish the job in a single tap.
+    if (!installed && deferred) {
       deferred.prompt()
       const { outcome } = await deferred.userChoice
       setDeferred(null)
@@ -120,18 +129,31 @@ export default function InstallPrompt() {
 
   if (!visible) return null
 
+  /*
+   * There is no web API that launches an installed PWA from a browser tab —
+   * on any platform. Chrome exposes it as a user-driven menu item in its own
+   * UI, and Android's link capturing handles navigations arriving from OTHER
+   * apps, but a page cannot hand itself over. So "open the app" is directions,
+   * not an action, and saying so beats a button that appears to do nothing.
+   */
   const steps =
     isInAppBrowser()
       ? [
           'Tap the ⋯ menu in this app’s browser bar.',
           'Choose “Open in browser” (Safari on iPhone, Chrome on Android).',
-          'Then follow the install steps there — this in-app browser can’t add to your Home Screen.',
+          'Then follow the steps there — this in-app browser can’t open or add apps.',
+        ]
+      : installed
+      ? [
+          'Tap the ⋮ menu in the top right.',
+          'Choose “Open in Upset Alert”.',
+          'Or just tap the Upset Alert icon on your home screen.',
         ]
       : os === 'ios'
       ? [
-          'Tap the Share button — the square with an arrow pointing up.',
-          'Scroll down the list and tap “Add to Home Screen”.',
-          'Tap “Add” in the top right.',
+          'Already added it? Open Upset Alert from your Home Screen — iPhone can’t switch you there automatically.',
+          'Not yet? Tap the Share button — the square with an arrow pointing up.',
+          'Scroll down and tap “Add to Home Screen”, then “Add”.',
         ]
       : [
           'Tap the ⋮ menu in the top right.',
@@ -141,13 +163,19 @@ export default function InstallPrompt() {
 
   return (
     <>
-      <div className="install-banner" role="dialog" aria-label="Install Upset Alert">
+      <div className="install-banner" role="dialog" aria-label="Open Upset Alert in the app">
         <img className="install-banner-icon" src="/favicon-192x192.png" alt="" />
         <div className="install-banner-text">
-          <strong>Install Upset Alert</strong>
-          <span>Full screen, and notifications when draws are released.</span>
+          <strong>Open in app</strong>
+          <span>
+            {installed
+              ? 'You already have Upset Alert installed.'
+              : 'Full screen, and notifications when draws are released.'}
+          </span>
         </div>
-        <button className="install-banner-cta" onClick={onInstallClick}>Install</button>
+        <button className="install-banner-cta" onClick={onInstallClick}>
+          {installed ? 'How' : 'Open'}
+        </button>
         <button className="install-banner-x" onClick={dismiss} aria-label="Dismiss">×</button>
       </div>
 
@@ -157,8 +185,10 @@ export default function InstallPrompt() {
             <h3>
               {isInAppBrowser()
                 ? 'Open in your browser first'
+                : installed
+                ? 'Open the Upset Alert app'
                 : os === 'ios'
-                ? 'Add to your iPhone Home Screen'
+                ? 'Open or add to your Home Screen'
                 : 'Install on Android'}
             </h3>
             <ol>
