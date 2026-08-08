@@ -303,7 +303,12 @@ async def send_draw_release_digest(
                  f"Soonest deadline first.")
 
     rows = "".join(_digest_row(d, last=(i == n - 1)) for i, d in enumerate(draws))
-    cta_url = f"{BASE_URL}/tournaments/{draws[0]['id']}" if n == 1 else f"{BASE_URL}/tournaments"
+    # Same admin-gated destination the round digest had: /tournaments is wrapped
+    # in RequireAdmin, so "View All Draws" bounced every non-admin recipient.
+    # The dashboard is the right landing page for this one rather than /leagues —
+    # this email is about draws that just opened for picking, and the dashboard
+    # is what lists them (it is also where the matching push notification goes).
+    cta_url = f"{BASE_URL}/tournaments/{draws[0]['id']}" if n == 1 else BASE_URL
     cta_text = "Make Your Picks" if n == 1 else "View All Draws"
     unsubscribe = (
         f'<p style="max-width:560px;margin:16px auto 0;text-align:center;font-size:12px;color:#9ca3af;'
@@ -674,8 +679,15 @@ async def send_round_complete_digest(
         f'Unsubscribe from {unsubscribe_label}</a></p>'
         if unsubscribe_url else ""
     )
-    cta_url = f"{BASE_URL}/tournaments/{draws[0]['id']}" if len(draws) == 1 else f"{BASE_URL}/tournaments"
-    cta_text = "View Draw &amp; Standings" if len(draws) == 1 else "View This Week&#39;s Draws"
+    # Always the leagues page: this email is about where everyone placed, and
+    # that is the page that answers it for every draw at once.
+    #
+    # The multi-draw branch this replaces pointed at /tournaments, which is
+    # admin-gated (App.jsx wraps it in RequireAdmin) — so every non-admin
+    # recipient of a multi-draw digest, which is most of them most weeks, was
+    # sent to a page they are bounced off.
+    cta_url = f"{BASE_URL}/leagues"
+    cta_text = "View Standings"
 
     await send_async({
         "from": FROM,
