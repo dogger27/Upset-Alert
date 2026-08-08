@@ -248,9 +248,11 @@ export default function Navbar() {
       desc: 'After every round', onEmail: () => toggleRoundStandings() },
     { key: 'tournament_end', label: 'Draw completion',
       desc: 'Final standings only',
-      // Round completion already reports every round, the Final included — see
-      // toggleRoundStandings.
-      hidden: () => notifSelected.has('round_standings') },
+      // Round completion already reports every round, the Final included, so
+      // while that is on this row is covered by it: shown ticked and greyed
+      // rather than removed. Hiding it made the panel's rows move under the
+      // finger that had just tapped the row above.
+      coveredBy: 'round_standings' },
     { key: 'league_member_joined', label: 'New league member',
       desc: 'Someone joins a league you own' },
   ]
@@ -452,7 +454,7 @@ export default function Navbar() {
                         <p className="notif-loading">Loading…</p>
                       ) : (
                         <>
-                          <table className="notif-grid">
+                          <table className={`notif-grid${pushBusy ? ' is-busy' : ''}`}>
                             <thead>
                               <tr>
                                 <th className="notif-grid-type">Notification</th>
@@ -461,7 +463,17 @@ export default function Navbar() {
                               </tr>
                             </thead>
                             <tbody>
-                              {NOTIF_ROWS.filter(r => !(r.hidden && r.hidden())).map(r => (
+                              {NOTIF_ROWS.map(r => {
+                                // Each channel locks independently: round-completion
+                                // email covers draw-completion email, and the same
+                                // for push, but one being on says nothing about the
+                                // other. Locked shows ticked because the recipient
+                                // does get that notification — via the row above.
+                                const emailLocked = !!r.coveredBy && notifSelected.has(r.coveredBy)
+                                const pushLocked = !!r.coveredBy && notifSelected.has(`push_${r.coveredBy}`)
+                                const covered = NOTIF_ROWS.find(x => x.key === r.coveredBy)
+                                const why = covered ? `Included in ${covered.label}` : undefined
+                                return (
                                 <tr key={r.key}>
                                   <td className="notif-grid-type">
                                     <span className="notif-grid-label">{r.label}</span>
@@ -471,7 +483,9 @@ export default function Navbar() {
                                     <input
                                       type="checkbox"
                                       aria-label={`${r.label} email`}
-                                      checked={notifSelected.has(r.key)}
+                                      title={emailLocked ? why : undefined}
+                                      disabled={emailLocked}
+                                      checked={emailLocked || notifSelected.has(r.key)}
                                       onChange={r.onEmail || (() => toggleNotif(r.key))}
                                     />
                                   </td>
@@ -480,14 +494,16 @@ export default function Navbar() {
                                       <input
                                         type="checkbox"
                                         aria-label={`${r.label} push`}
-                                        disabled={pushBusy}
-                                        checked={notifSelected.has(`push_${r.key}`)}
+                                        title={pushLocked ? why : undefined}
+                                        disabled={pushBusy || pushLocked}
+                                        checked={pushLocked || notifSelected.has(`push_${r.key}`)}
                                         onChange={() => togglePushFor(r.key)}
                                       />
                                     </td>
                                   )}
                                 </tr>
-                              ))}
+                                )
+                              })}
                             </tbody>
                           </table>
                           <p className={`notif-device-state${pushOn ? ' is-on' : ''}`}>
