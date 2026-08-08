@@ -80,6 +80,15 @@ export async function sendTestPush() {
   return data
 }
 
+/**
+ * Replay the most recent real notification of one type to this account's
+ * devices. Returns {devices, delivered, title}.
+ */
+export async function sendTypedTestPush(prefKey) {
+  const { data } = await client.post(`/push/test/${prefKey}`)
+  return data
+}
+
 export async function disablePush() {
   let endpoint = null
   if (isPushSupported()) {

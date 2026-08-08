@@ -91,6 +91,110 @@ async def unsubscribe(
     await db.commit()
 
 
+async def _latest_content(db: AsyncSession, pref_key: str) -> dict:
+    """
+    Rebuild the most recent real notification of this type.
+
+    Replaying actual data is the point: a generic "test" proves the pipe works
+    but says nothing about what a draw-release notification will look like on a
+    six-draw week. Falls back to a representative sample when the type has
+    never fired, so the button still shows the shape rather than erroring.
+    """
+    from datetime import datetime
+    from app.models.tournament import Draw
+    from app.services import push_content
+
+    if pref_key == "draw_released":
+        last = (await db.execute(
+            select(Draw.year, Draw.week)
+            .where(Draw.draw_release_notified_at.isnot(None), Draw.week.isnot(None))
+            .order_by(Draw.draw_release_notified_at.desc())
+            .limit(1)
+        )).first()
+        if last:
+            draws = (await db.execute(
+                select(Draw).where(Draw.year == last[0], Draw.week == last[1])
+                .order_by(Draw.closing_time)
+            )).scalars().all()
+            if draws:
+                start = min((d.start_date for d in draws if d.start_date), default=None)
+                week_label = f"{start.strftime('%B')} {start.day}" if start else "this week"
+                return push_content.draw_release(
+                    [{"name": d.name, "gender": d.gender,
+                      "location": ", ".join(p for p in (d.city, d.country) if p) or None,
+                      "closing_time": d.closing_time} for d in draws],
+                    week_label,
+                )
+
+    if pref_key in ("round_standings", "tournament_end"):
+        from app.models.notification import RoundCompleteNotification
+        from app.models.tournament import Match
+
+        last = (await db.execute(
+            select(RoundCompleteNotification.draw_id, RoundCompleteNotification.round_number)
+            .where(RoundCompleteNotification.digest_sent_at.isnot(None))
+            .order_by(RoundCompleteNotification.digest_sent_at.desc())
+            .limit(1)
+        )).first()
+        if last:
+            draw = await db.get(Draw, last[0])
+            if draw:
+                from app.services.email import _tournament_label
+                matches = (await db.execute(
+                    select(func.count()).select_from(Match).where(
+                        Match.draw_id == draw.id,
+                        Match.round_number == last[1],
+                        Match.is_bye == False,  # noqa: E712
+                    )
+                )).scalar() or 0
+                from app.services.notifications import _email_round_label
+                label = _tournament_label(draw.name, draw.category or "", draw.gender or "M")
+                return push_content.round_complete(
+                    # Same short label the real sends use ("R32"), not the raw
+                    # "Round of 32" — a test that reads differently from the
+                    # thing it imitates defeats the point.
+                    _email_round_label(draw.round_name(last[1])),
+                    draw.name,
+                    [{"label": label, "matches": matches}],
+                    # Draw-completion is asked about specifically, so show the
+                    # final-standings wording even if the most recent digest we
+                    # can find happened to be a mid-tournament round.
+                    pref_key == "tournament_end",
+                )
+
+    return push_content.sample(pref_key)
+
+
+@router.post("/test/{pref_key}")
+async def send_typed_test_push(
+    pref_key: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Replay this account's most recent notification of one type."""
+    from app.services.push import push_enabled, send_push_to_users
+
+    if not push_enabled():
+        raise HTTPException(status_code=503, detail="Push is not configured on this server")
+
+    devices = (await db.execute(
+        select(func.count()).select_from(PushSubscription)
+        .where(PushSubscription.user_id == current_user.id)
+    )).scalar() or 0
+    if devices == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="No devices registered — turn a Push notification on first",
+        )
+
+    content = await _latest_content(db, pref_key)
+    # A distinct tag so a replay never collapses into, or replaces, the real
+    # notification it is imitating.
+    content = {**content, "tag": f"test-{pref_key}"}
+    delivered = await send_push_to_users([current_user.id], **content)
+    return {"devices": devices, "delivered": delivered, "title": content["title"]}
+
+
 @router.post("/test")
 async def send_test_push(
     db: AsyncSession = Depends(get_db),

@@ -462,21 +462,29 @@ a.profile-dropdown-item:visited {
   border-color: #bbf7d0;
 }
 
-.notif-test-push {
-  display: block;
-  width: 100%;
-  margin-top: 0.6rem;
-  padding: 0.45rem 0.5rem;
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--text-muted, #4a4f54);
+/* Paper-plane test trigger, sitting beside each row's Push checkbox. Icon only
+   — the column header already says Push, and a word per row would double the
+   height of the grid on a phone. */
+.notif-push-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.notif-test-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  padding: 0;
+  color: #6b7280;
   background: transparent;
-  border: 1px dashed var(--border, #d7dade);
-  border-radius: 5px;
+  border: 1px solid transparent;
+  border-radius: 4px;
   cursor: pointer;
 }
-.notif-test-push:hover:not(:disabled) { background: rgba(0, 0, 0, 0.03); }
-.notif-test-push:disabled { opacity: 0.55; cursor: progress; }
+.notif-test-icon:hover:not(:disabled) { color: #1b4332; border-color: #d7dade; }
+.notif-test-icon:disabled { opacity: 0.4; cursor: progress; }
 
 /* Push errors and the iOS "install first" hint. Sits under the grid rather
    than in the panel's shared error slot, which is scoped to saving prefs —

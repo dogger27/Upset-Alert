@@ -215,16 +215,18 @@ export default function Navbar() {
   // Proves the last hop — signing and subscribing can both be fine while
   // delivery to the handset still fails, and the alternative is discovering
   // that when a real draw releases.
-  const testPush = async () => {
+  // Replays the most recent REAL notification of that type, so what lands is
+  // what the next one will look like — a generic "test" only proves the pipe.
+  const testPush = async (prefKey) => {
     setPushBusy(true)
     setPushNote('')
     try {
-      const { sendTestPush } = await import('../api/push')
-      const { devices, delivered } = await sendTestPush()
+      const { sendTypedTestPush } = await import('../api/push')
+      const { devices, delivered, title } = await sendTypedTestPush(prefKey)
       setPushNote(
         delivered === 0
           ? 'No device accepted it — the registration may have expired. Untick and re-tick a Push box to re-register.'
-          : `Sent to ${delivered} of ${devices} device(s). It should arrive within a few seconds.`
+          : `Sent “${title}” to ${delivered} of ${devices} device(s).`
       )
     } catch (e) {
       setPushNote(e?.response?.data?.detail || 'Could not send the test notification.')
@@ -491,14 +493,35 @@ export default function Navbar() {
                                   </td>
                                   {pushSupported !== false && (
                                     <td>
-                                      <input
-                                        type="checkbox"
-                                        aria-label={`${r.label} push`}
-                                        title={pushLocked ? why : undefined}
-                                        disabled={pushBusy || pushLocked}
-                                        checked={pushLocked || notifSelected.has(`push_${r.key}`)}
-                                        onChange={() => togglePushFor(r.key)}
-                                      />
+                                      <span className="notif-push-cell">
+                                        <input
+                                          type="checkbox"
+                                          aria-label={`${r.label} push`}
+                                          title={pushLocked ? why : undefined}
+                                          disabled={pushBusy || pushLocked}
+                                          checked={pushLocked || notifSelected.has(`push_${r.key}`)}
+                                          onChange={() => togglePushFor(r.key)}
+                                        />
+                                        {/* Only offered once this device can actually
+                                            receive — otherwise it's a button whose only
+                                            outcome is an error. */}
+                                        {pushOn && (
+                                          <button
+                                            type="button"
+                                            className="notif-test-icon"
+                                            disabled={pushBusy}
+                                            aria-label={`Send a test ${r.label} notification`}
+                                            title={`Send a test ${r.label} notification`}
+                                            onClick={() => testPush(r.key)}
+                                          >
+                                            <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+                                              <path d="M1.5 7.6 14 2 8.9 14.3l-1.8-4.4-4.4-1.8Z"
+                                                    fill="none" stroke="currentColor"
+                                                    strokeWidth="1.4" strokeLinejoin="round" />
+                                            </svg>
+                                          </button>
+                                        )}
+                                      </span>
                                     </td>
                                   )}
                                 </tr>
@@ -517,16 +540,6 @@ export default function Navbar() {
                                 : 'Notifications are on for this device.'
                               : 'This device isn’t set up yet — tick a Push box to turn it on here. The ticks show what your account receives, not this device.'}
                           </p>
-                          {pushOn && (
-                            <button
-                              type="button"
-                              className="notif-test-push"
-                              onClick={testPush}
-                              disabled={pushBusy}
-                            >
-                              {pushBusy ? 'Sending…' : 'Send a test notification to this device'}
-                            </button>
-                          )}
                           {pushNote && <p className="notif-push-note">{pushNote}</p>}
 
                           {notifError && <p className="profile-edit-error" style={{ padding: '0 1rem' }}>{notifError}</p>}
