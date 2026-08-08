@@ -517,13 +517,24 @@ async def notify_round_complete_digest(
         push_pref = "tournament_end" if is_final_batch else "round_standings"
         push_uids = await users_with_push(push_pref)
         if push_uids:
-            where = event_label or f"week of {week_label}"
+            # Name the event when the batch is one: event_label covers the
+            # 1000s and Slams (bucketed by event), and a week that happens to
+            # hold a single draw is named from that draw. Only a genuinely
+            # mixed week falls back to the date, where no single name is true.
+            if event_label:
+                where = event_label
+            elif reached == 1:
+                where = payloads[0]["label"]
+            else:
+                where = f"week of {week_label}"
             await send_push_to_users(
                 push_uids,
                 title=(f"{round_name} complete — {where}" if not is_final_batch
                        else f"Final standings — {where}"),
-                body=(f"{reached} draw(s) reported. See how your picks did."),
-                url="/",
+                body=("See how your picks did"
+                      if reached == 1 else
+                      f"{reached} draws reported. See how your picks did."),
+                url="/leagues",
                 tag=f"round-{round_name}-{where}",
             )
     except Exception as exc:
@@ -723,15 +734,25 @@ async def notify_draw_release_batch(draw_ids: list[int], is_followup: bool = Fal
             logger.info("Draw-release push skipped: week already announced")
         elif push_uids:
             n = len(claimed)
-            title = (
-                f"{n} draws released — {week_label}" if n > 1
-                else f"{claimed[0].name} ({claimed[0].gender}) draw released"
-            )
             labelled = [f"{d.name} ({d.gender})" for d in claimed]
-            body = (
-                ", ".join(labelled[:3]) + (f" +{n - 3} more" if n > 3 else "")
-                if n > 1 else "Make your picks before it closes"
-            )
+            # Name the event whenever the batch IS one event, which is not the
+            # same as n == 1: a Slam or a 1000 week is two draws (men's and
+            # women's) of a single tournament, so keying on the count alone
+            # produced "2 draws released" for a week that is simply Wimbledon.
+            event_names = {d.name for d in claimed}
+            if len(event_names) == 1:
+                name = claimed[0].name
+                title = (
+                    f"{name} ({claimed[0].gender}) draw released" if n == 1
+                    else f"{name} draws released"
+                )
+                body = (
+                    "Make your picks before it closes" if n == 1
+                    else ", ".join(labelled)
+                )
+            else:
+                title = f"{n} draws released — {week_label}"
+                body = ", ".join(labelled[:3]) + (f" +{n - 3} more" if n > 3 else "")
             delivered = await send_push_to_users(
                 push_uids,
                 title=title,
