@@ -194,23 +194,26 @@ export default function Navbar() {
 
   // Rows of the settings grid. Email and push are separate preference keys, so
   // a row can be on for one channel and off for the other.
+  // Descriptions are kept to roughly one line at panel width: with a bold
+  // label above each, a two-line description made every row three lines tall
+  // and four rows filled the whole dropdown.
   const NOTIF_ROWS = [
     { key: 'draw_released', label: 'Draw released',
-      desc: "Once a week, when every draw for that week is out" },
+      desc: 'Once a week, when all draws are out' },
     { key: 'match_start', label: 'Play starts',
-      desc: 'When the first match begins and picks lock' },
+      desc: 'First match begins, picks lock' },
     { key: 'round_standings', label: 'Round completion',
       // Wrapped rather than referenced directly: NOTIF_ROWS is built above
       // toggleRoundStandings' const declaration, so naming it here would read
       // it in the temporal dead zone and throw on every render.
-      desc: 'Once per round, summarising every draw', onEmail: () => toggleRoundStandings() },
+      desc: 'After every round', onEmail: () => toggleRoundStandings() },
     { key: 'tournament_end', label: 'Draw completion',
-      desc: 'Final standings for every draw that finished',
+      desc: 'Final standings only',
       // Round completion already reports every round, the Final included — see
       // toggleRoundStandings.
       hidden: () => notifSelected.has('round_standings') },
     { key: 'league_member_joined', label: 'New league member',
-      desc: 'When someone joins a league you own' },
+      desc: 'Someone joins a league you own' },
   ]
 
   const toggleNotif = (key) => {
