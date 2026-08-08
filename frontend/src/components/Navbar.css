@@ -418,7 +418,11 @@ a.profile-dropdown-item:visited {
   height: 1.05rem;
   cursor: pointer;
 }
-.notif-grid input[type='checkbox']:disabled { cursor: progress; opacity: 0.5; }
+/* Disabled covers two cases: mid-enrolment (transient, hence the wait cursor
+   via .is-busy) and covered-by-another-row, which is a settled state and
+   should just read as unavailable rather than pending. */
+.notif-grid input[type='checkbox']:disabled { cursor: default; opacity: 0.45; }
+.notif-grid.is-busy input[type='checkbox']:disabled { cursor: progress; }
 .notif-grid-label {
   display: block;
   font-size: 0.9rem;
