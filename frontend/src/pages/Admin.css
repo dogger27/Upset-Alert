@@ -154,7 +154,9 @@
 }
 
 /* Players + Rankings tables — fit-content width + sortable headers */
-.players-table-wrap { width: fit-content; max-width: 100%; }
+/* overflow-x is not optional here: this was the one table without a scroll
+   box, so a wide player list pushed the page sideways instead of the table. */
+.players-table-wrap { width: fit-content; max-width: 100%; overflow-x: auto; }
 .players-table { width: auto; }
 .rankings-table-wrap { width: fit-content; max-width: 100%; }
 .rankings-table { width: auto; }
@@ -410,4 +412,66 @@
   font-size: 0.75rem;
   font-style: italic;
   color: var(--text-muted);
+}
+
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Mobile. The admin page is dense by nature — six tabs of wide tables — so
+   the goal is that every table scrolls inside its own box and the PAGE never
+   scrolls sideways, rather than trying to reflow tables into cards.
+   ───────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .admin-page { padding: 1rem 0.75rem; }
+  .admin-page h1 { font-size: 1.25rem; margin-bottom: 0.75rem; }
+
+  /* All six tabs stay visible by wrapping — a scrolling strip would hide half
+     of them behind a gesture with nothing to suggest it. */
+  .admin-subnav { gap: 0; margin-bottom: 1rem; }
+  .admin-subnav-btn { padding: 0.5rem 0.65rem; font-size: 0.82rem; }
+
+  /* The Tournaments panel sets width:fit-content inline so its card hugs the
+     table on desktop. On a phone that makes the card wider than the viewport,
+     which scrolls the whole page sideways instead of the table — hence the
+     !important, which is the only thing that beats an inline style. */
+  .admin-section,
+  .card.admin-section { width: auto !important; max-width: 100%; }
+
+  /* Every table gets its own horizontal scroller. */
+  .admin-table-wrap,
+  .players-table-wrap,
+  .rankings-table-wrap,
+  .t-table-wrap {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .admin-table, .t-table { font-size: 0.8rem; }
+  .admin-table th, .t-table th { padding: 0.45rem 0.5rem; }
+  .admin-table td, .t-table td { padding: 0.5rem; }
+
+  /* table-layout:fixed with 120/80/100px columns crushes the message column to
+     a few characters at phone width. Size to content and scroll instead. */
+  .logs-table { table-layout: auto; min-width: 600px; }
+  .log-col-time { width: auto; white-space: nowrap; }
+  .log-col-level, .log-col-cat { width: auto; }
+
+  /* Controls stack instead of crowding onto one line. */
+  .logs-header, .logs-controls, .log-filters,
+  .admin-filters-bar, .admin-search-form { width: 100%; }
+  .log-filters { flex-wrap: wrap; }
+  .admin-search-form { flex-wrap: wrap; }
+  .admin-search-input { flex: 1; min-width: 0; width: auto; }
+
+  /* Name on one line, control on the next, rather than squeezed side by side. */
+  .admin-action { flex-direction: column; align-items: stretch; gap: 0.6rem; }
+  .admin-action-ctrl { width: 100%; }
+
+  /* Info tab: the schedule pill is pushed right by margin-left:auto, which on a
+     narrow screen leaves the step title orphaned on its own line. */
+  .scraping-step-header { flex-wrap: wrap; gap: 0.4rem; }
+  .scraping-schedule { margin-left: 0; }
+  .scraping-explainer { max-width: 100%; }
 }
