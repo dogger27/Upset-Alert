@@ -428,6 +428,22 @@ a.profile-dropdown-item:visited {
   margin-top: 0.1rem;
 }
 
+.notif-test-push {
+  display: block;
+  width: 100%;
+  margin-top: 0.6rem;
+  padding: 0.45rem 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted, #4a4f54);
+  background: transparent;
+  border: 1px dashed var(--border, #d7dade);
+  border-radius: 5px;
+  cursor: pointer;
+}
+.notif-test-push:hover:not(:disabled) { background: rgba(0, 0, 0, 0.03); }
+.notif-test-push:disabled { opacity: 0.55; cursor: progress; }
+
 /* Push errors and the iOS "install first" hint. Sits under the grid rather
    than in the panel's shared error slot, which is scoped to saving prefs —
    enabling push happens on the click and fails independently of Save. */

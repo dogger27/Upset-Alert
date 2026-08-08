@@ -1,8 +1,8 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import get_current_user
@@ -89,6 +89,51 @@ async def unsubscribe(
         q = q.where(PushSubscription.endpoint == body.endpoint)
     await db.execute(q)
     await db.commit()
+
+
+@router.post("/test")
+async def send_test_push(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Send a test notification to the caller's own devices.
+
+    Not admin-gated, because it can only ever reach the caller's own
+    subscriptions — there is nothing to abuse, and gating it would stop the
+    person who most needs it (someone setting up a new phone) from checking
+    their own setup.
+
+    Ignores the per-type push preferences on purpose: the question this answers
+    is "can this device receive anything at all", which is a different question
+    from "which notifications did I ask for".
+    """
+    from app.services.push import push_enabled, send_push_to_users
+
+    if not push_enabled():
+        raise HTTPException(status_code=503, detail="Push is not configured on this server")
+
+    devices = (await db.execute(
+        select(func.count())
+        .select_from(PushSubscription)
+        .where(PushSubscription.user_id == current_user.id)
+    )).scalar() or 0
+    if devices == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="No devices registered — enable a push notification first",
+        )
+
+    delivered = await send_push_to_users(
+        [current_user.id],
+        title="Upset Alert test",
+        body="Push notifications are working on this device.",
+        url="/",
+        tag="upset-alert-test",
+    )
+    # delivered < devices means some channel is dead; send_push_to_users has
+    # already pruned those rows, so the count is the honest post-cleanup number.
+    return {"devices": devices, "delivered": delivered}
 
 
 @router.get("/status")

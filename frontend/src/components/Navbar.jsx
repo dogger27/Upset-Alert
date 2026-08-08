@@ -171,6 +171,27 @@ export default function Navbar() {
     toggleNotif(pk)
   }
 
+  // Proves the last hop — signing and subscribing can both be fine while
+  // delivery to the handset still fails, and the alternative is discovering
+  // that when a real draw releases.
+  const testPush = async () => {
+    setPushBusy(true)
+    setPushNote('')
+    try {
+      const { sendTestPush } = await import('../api/push')
+      const { devices, delivered } = await sendTestPush()
+      setPushNote(
+        delivered === 0
+          ? 'No device accepted it — the registration may have expired. Untick and re-tick a Push box to re-register.'
+          : `Sent to ${delivered} of ${devices} device(s). It should arrive within a few seconds.`
+      )
+    } catch (e) {
+      setPushNote(e?.response?.data?.detail || 'Could not send the test notification.')
+    } finally {
+      setPushBusy(false)
+    }
+  }
+
   // Rows of the settings grid. Email and push are separate preference keys, so
   // a row can be on for one channel and off for the other.
   const NOTIF_ROWS = [
@@ -425,6 +446,16 @@ export default function Navbar() {
                               ))}
                             </tbody>
                           </table>
+                          {pushOn && (
+                            <button
+                              type="button"
+                              className="notif-test-push"
+                              onClick={testPush}
+                              disabled={pushBusy}
+                            >
+                              {pushBusy ? 'Sending…' : 'Send a test notification to this device'}
+                            </button>
+                          )}
                           {pushNote && <p className="notif-push-note">{pushNote}</p>}
 
                           {notifError && <p className="profile-edit-error" style={{ padding: '0 1rem' }}>{notifError}</p>}
