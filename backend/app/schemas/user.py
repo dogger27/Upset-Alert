@@ -52,6 +52,10 @@ class UserAdminOut(BaseModel):
     is_admin: bool
     is_bot: bool = False
     created_at: Optional[str] = None
+    # True when at least one registered push device looks like a phone or
+    # tablet. Counted from the stored user_agent rather than from "has any
+    # subscription", so a desktop-only registration doesn't read as mobile.
+    has_mobile_device: bool = False
 
     model_config = {"from_attributes": True}
 

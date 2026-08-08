@@ -105,6 +105,7 @@ function UsersPanel({ user }) {
                 <th className="td-left">Name</th>
                 <th className="td-left">Username</th>
                 <th className="td-left">Email</th>
+                <th>Mobile</th>
                 <th>Admin</th>
                 <th>Joined</th>
               </tr>
@@ -116,6 +117,9 @@ function UsersPanel({ user }) {
                   <td className="td-left">{u.display_name}</td>
                   <td className="td-left td-muted">@{u.username}</td>
                   <td className="td-left td-muted">{u.email}</td>
+                  <td title={u.has_mobile_device ? 'Has a phone or tablet registered for push' : 'No mobile device registered'}>
+                    {u.has_mobile_device ? '✓' : ''}
+                  </td>
                   <td style={{ whiteSpace: 'nowrap' }}>
                     {u.is_admin && <span style={{ marginRight: '0.4rem' }}>✓</span>}
                     {u.id !== user?.id && (
