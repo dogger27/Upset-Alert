@@ -419,13 +419,23 @@ a.profile-dropdown-item:visited {
   cursor: pointer;
 }
 .notif-grid input[type='checkbox']:disabled { cursor: progress; opacity: 0.5; }
-.notif-grid-label { display: block; font-weight: 600; }
+.notif-grid-label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text, #1f2328);
+  line-height: 1.25;
+}
+/* Was 0.72rem grey italic, which was unreadable on a phone. Italic is the
+   worst offender at this size — it thins the strokes on top of the small type
+   and the muted colour. Upright, a step larger, and dark enough to clear
+   WCAG AA against the panel's white. */
 .notif-grid-desc {
   display: block;
-  font-size: 0.72rem;
-  color: var(--text-muted, #6b7280);
-  font-style: italic;
-  margin-top: 0.1rem;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: #4b5563;
+  margin-top: 0.15rem;
 }
 
 .notif-test-push {
