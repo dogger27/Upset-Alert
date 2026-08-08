@@ -47,7 +47,22 @@ self.addEventListener('push', (event) => {
       actionUrls: actions.reduce((m, a) => ({ ...m, [a.action]: a.url || data.url || '/' }), {}),
     },
   }
-  event.waitUntil(self.registration.showNotification(title, options))
+  // If showNotification rejects, nothing appears and nothing is recorded — the
+  // push looks delivered from the server's side and simply vanishes. Retry
+  // stripped down to the fields every platform supports, because the usual
+  // cause is one option the OS's notification centre won't take (macOS ignores
+  // action buttons entirely, for instance) rather than the notification itself
+  // being unwelcome.
+  event.waitUntil(
+    self.registration.showNotification(title, options).catch(() =>
+      self.registration.showNotification(title, {
+        body: options.body,
+        icon: '/icon-512.png',
+        tag: options.tag,
+        data: options.data,
+      })
+    )
+  )
 })
 
 self.addEventListener('notificationclick', (event) => {
