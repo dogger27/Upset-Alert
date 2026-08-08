@@ -238,6 +238,22 @@ async def join_league_by_code(
                 new_username=current_user.username,
             )
 
+        # Push is opted into separately from the email, so it is checked on its
+        # own rather than nested under the email preference above.
+        try:
+            from app.services.push import send_push_to_users, users_with_push
+            if league.owner_id in await users_with_push("league_member_joined"):
+                await send_push_to_users(
+                    [league.owner_id],
+                    title=f"{current_user.username} joined {league.name}",
+                    body="Tap to see your league standings",
+                    url=f"/leagues/{league.id}",
+                    tag=f"league-join-{league.id}",
+                )
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning("League-join push failed", exc_info=True)
+
 
 @router.post("/{league_id}/join", status_code=204)
 async def join_league(
