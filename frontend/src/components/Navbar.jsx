@@ -41,6 +41,11 @@ export default function Navbar() {
   // currently does. Null until checked, so the column isn't flashed and hidden.
   const [pushSupported, setPushSupported] = useState(null)
   const [pushDevices, setPushDevices] = useState(0)
+  // Which capability is absent, so an "unavailable" report from a device I
+  // can't inspect says WHY rather than just that.
+  const [pushMissing, setPushMissing] = useState([])
+  // The status lookup failed. Distinct from unsupported: the column stays.
+  const [pushCheckFailed, setPushCheckFailed] = useState(false)
 
   const menuRef = useRef(null)
   const navRef = useRef(null)
@@ -118,22 +123,47 @@ export default function Navbar() {
 
     // "On" means this browser holds a live subscription AND the server still
     // has a row for it — either half alone would show a switch that lies.
+    // Support is a capability question, answered synchronously and with no
+    // network involved. It used to share a try/catch with the status lookup
+    // below, so ANY failure there — a blip on /push/status, a service worker
+    // call throwing — reported "push isn't available in this browser" and hid
+    // the whole column, on devices that were already receiving pushes.
+    let supported = false
+    let missing = []
     try {
-      const { isPushSupported, getPushStatus } = await import('../api/push')
-      if (!isPushSupported()) {
-        setPushSupported(false)
+      const push = await import('../api/push')
+      supported = push.isPushSupported()
+      if (!supported) {
+        if (!('serviceWorker' in navigator)) missing.push('service worker')
+        if (!('PushManager' in window)) missing.push('push')
+        if (!('Notification' in window)) missing.push('notifications')
+      }
+      setPushSupported(supported)
+      setPushMissing(missing)
+      if (!supported) {
         setPushOn(false)
         return
       }
-      setPushSupported(true)
-      const reg = await navigator.serviceWorker.getRegistration()
-      const sub = reg && (await reg.pushManager.getSubscription())
-      const status = await getPushStatus()
-      setPushDevices(status.device_count || 0)
-      setPushOn(Boolean(sub) && status.device_count > 0)
+
+      // Separate from the capability answer: this can fail without meaning
+      // anything about what the browser can do, so it only ever clears the
+      // "on" state — never the column.
+      try {
+        const reg = await navigator.serviceWorker.getRegistration()
+        const sub = reg && (await reg.pushManager.getSubscription())
+        const status = await push.getPushStatus()
+        setPushDevices(status.device_count || 0)
+        setPushOn(Boolean(sub) && status.device_count > 0)
+        setPushCheckFailed(false)
+      } catch {
+        setPushOn(false)
+        setPushCheckFailed(true)
+      }
     } catch {
-      setPushSupported(false)
+      // Only the module import itself failed; still not a capability verdict.
+      setPushSupported(true)
       setPushOn(false)
+      setPushCheckFailed(true)
     }
   }
 
@@ -462,7 +492,9 @@ export default function Navbar() {
                           </table>
                           <p className={`notif-device-state${pushOn ? ' is-on' : ''}`}>
                             {pushSupported === false
-                              ? 'Push isn’t available in this browser — the ticks above still control your other devices.'
+                              ? `Push isn’t available in this browser${pushMissing.length ? ` (no ${pushMissing.join(', ')})` : ''} — the ticks above still control your other devices.`
+                              : pushCheckFailed
+                              ? 'Couldn’t check this device just now. Reopen this panel, or tick a Push box to set it up.'
                               : pushOn
                               ? pushDevices > 1
                                 ? `Notifications are on for this device (${pushDevices} devices registered).`
