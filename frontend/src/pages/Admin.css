@@ -476,9 +476,21 @@
     -webkit-overflow-scrolling: touch;
   }
 
+  /* The card's 1.5rem padding costs 3rem of a ~390px screen before a single
+     column is drawn, and the table's own 1rem side padding costs another 2rem
+     per column. Both come back as usable width. Vertical padding is kept —
+     rows still need to be separable and tappable. */
+  .card.admin-section { padding: 0.75rem 0.5rem; }
   .admin-table, .t-table { font-size: 0.8rem; }
-  .admin-table th, .t-table th { padding: 0.45rem 0.5rem; }
-  .admin-table td, .t-table td { padding: 0.5rem; }
+  .admin-table th, .t-table th { padding: 0.45rem 0.3rem; }
+  .admin-table td, .t-table td { padding: 0.5rem 0.3rem; }
+  /* First and last cells keep a little breathing room from the card edge. */
+  .admin-table th:first-child, .admin-table td:first-child,
+  .t-table th:first-child, .t-table td:first-child { padding-left: 0.5rem; }
+  .admin-table th:last-child, .admin-table td:last-child,
+  .t-table th:last-child, .t-table td:last-child { padding-right: 0.5rem; }
+  /* Group headers span the row, so they follow the card rather than the cells. */
+  .admin-table tr.status-group-header td { padding: 0.5rem 0.5rem 0.25rem; }
 
   /* table-layout:fixed with 120/80/100px columns crushes the message column to
      a few characters at phone width. Size to content and scroll instead. */
