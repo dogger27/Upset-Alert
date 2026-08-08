@@ -56,6 +56,9 @@ class UserAdminOut(BaseModel):
     # tablet. Counted from the stored user_agent rather than from "has any
     # subscription", so a desktop-only registration doesn't read as mobile.
     has_mobile_device: bool = False
+    # When the installed app was last opened on a phone; None when the tick
+    # comes from a push registration rather than an observed app launch.
+    mobile_app_seen_at: Optional[str] = None
 
     model_config = {"from_attributes": True}
 

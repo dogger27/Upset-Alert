@@ -34,8 +34,30 @@ function RequireAdmin({ children }) {
 }
 
 export default function App() {
-  const { init } = useAuth()
+  const { init, user } = useAuth()
   useEffect(() => { init() }, [])
+
+  // Tell the server this account is running the INSTALLED app. Standalone mode
+  // is the only moment a PWA install is observable at all — nothing about the
+  // install itself reaches the server — so without this the admin "Mobile"
+  // column can only ever reflect push registrations, which misses anyone who
+  // installed the app but never enabled notifications.
+  //
+  // Once per session: the fact doesn't change while the app is open, and a
+  // request on every route change would be pure noise. Fire-and-forget, since
+  // nothing in the UI depends on it.
+  useEffect(() => {
+    if (!user) return
+    const standalone =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      window.navigator.standalone === true
+    if (!standalone) return
+    if (sessionStorage.getItem('ua-app-open-sent')) return
+    sessionStorage.setItem('ua-app-open-sent', '1')
+    import('./api/client').then(({ default: client }) => {
+      client.post('/auth/me/app-open').catch(() => {})
+    })
+  }, [user])
 
   return (
     <>

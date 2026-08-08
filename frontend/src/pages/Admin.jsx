@@ -117,7 +117,13 @@ function UsersPanel({ user }) {
                   <td className="td-left">{u.display_name}</td>
                   <td className="td-left td-muted">@{u.username}</td>
                   <td className="td-left td-muted">{u.email}</td>
-                  <td title={u.has_mobile_device ? 'Has a phone or tablet registered for push' : 'No mobile device registered'}>
+                  <td title={
+                    u.mobile_app_seen_at
+                      ? `Installed app last opened ${u.mobile_app_seen_at}`
+                      : u.has_mobile_device
+                      ? 'Phone or tablet registered for push (app not seen opened)'
+                      : 'No mobile device seen'
+                  }>
                     {u.has_mobile_device ? '✓' : ''}
                   </td>
                   <td style={{ whiteSpace: 'nowrap' }}>

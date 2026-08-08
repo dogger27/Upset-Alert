@@ -1,7 +1,7 @@
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import delete, func, or_, select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -45,9 +45,11 @@ async def admin_list_users(
     )
     users = result.scalars().all()
 
-    # Which users have a phone or tablet registered for push. One query for the
-    # whole list rather than a lookup per row, and matched on the user_agent so
-    # a laptop registration doesn't show up as a mobile device.
+    # Two independent signals, unioned, because either alone under-counts:
+    # a push subscription misses anyone who installed but never enabled
+    # notifications (and misses iOS installs almost entirely), while the
+    # app-open stamp misses anyone who registered for push from a mobile
+    # browser tab without installing.
     from app.models.push import PushSubscription
 
     mobile_uids = {
@@ -73,10 +75,38 @@ async def admin_list_users(
             "email_verified": u.email_verified,
             "is_admin": u.is_admin,
             "created_at": u.created_at.strftime("%Y-%m-%d") if u.created_at else None,
-            "has_mobile_device": u.id in mobile_uids,
+            "has_mobile_device": u.id in mobile_uids or u.mobile_app_seen_at is not None,
+            "mobile_app_seen_at": (u.mobile_app_seen_at.strftime("%Y-%m-%d")
+                                   if u.mobile_app_seen_at else None),
         }
         for u in users
     ]
+
+
+_MOBILE_UA = ("iphone", "ipad", "ipod", "android", "mobile")
+
+
+@router.post("/me/app-open", status_code=status.HTTP_204_NO_CONTENT)
+async def record_app_open(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    The client reporting "I am the installed app, on a phone".
+
+    Called only when the page is running in standalone display mode, which is
+    the one moment a PWA install becomes observable at all — nothing about the
+    install itself reaches the server. Whether it counts as MOBILE is decided
+    here from the User-Agent rather than trusted from the client, so an
+    installed desktop app can't mark an account as having a phone.
+    """
+    ua = (request.headers.get("user-agent") or "").lower()
+    if not any(k in ua for k in _MOBILE_UA):
+        return
+    # Cheap and idempotent: one UPDATE per app launch, no row growth.
+    current_user.mobile_app_seen_at = datetime.now(timezone.utc)
+    await db.commit()
 
 
 @router.patch("/admin/users/{user_id}")
