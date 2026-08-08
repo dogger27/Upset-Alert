@@ -27,9 +27,10 @@ logger = logging.getLogger(__name__)
 # else (429, 5xx, a timeout) is transient and the row stays.
 _DEAD_STATUSES = {404, 410}
 
-# Web Push payloads are capped (4KB is the practical floor across services), and
-# a notification body longer than a phrase is truncated by the OS anyway.
-_MAX_BODY = 180
+# Web Push payloads are capped (4KB is the practical floor across services).
+# Generous rather than preview-sized: Android renders the full body once the
+# notification is expanded.
+_MAX_BODY = 900
 
 
 def push_enabled() -> bool:
@@ -109,6 +110,7 @@ async def send_push_to_users(
     body: str,
     url: str = "/",
     tag: Optional[str] = None,
+    actions: Optional[list] = None,
 ) -> int:
     """
     Fan out one notification to every subscription owned by user_ids.
@@ -125,9 +127,13 @@ async def send_push_to_users(
 
     payload = json.dumps({
         "title": title,
+        # Not truncated to a preview length: the collapsed notification shows a
+        # couple of lines and the expanded one shows the rest, so trimming here
+        # would throw away exactly the detail long-press exists to reveal.
         "body": body[:_MAX_BODY],
         "url": url,
         "tag": tag or "upset-alert",
+        "actions": actions or [],
     })
 
     async with AsyncSessionLocal() as db:

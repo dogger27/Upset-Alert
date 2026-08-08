@@ -27,6 +27,7 @@ self.addEventListener('push', (event) => {
   }
 
   const title = data.title || 'Upset Alert'
+  const actions = (data.actions || []).slice(0, 2) // most platforms show 2
   const options = {
     body: data.body || '',
     icon: '/icon-512.png',
@@ -35,14 +36,27 @@ self.addEventListener('push', (event) => {
     // Replace an older notification carrying the same tag rather than stacking,
     // but still alert — a silent replace can go unnoticed entirely.
     renotify: true,
-    data: { url: data.url || '/' },
+    // The multi-line detail in body is only visible once expanded, so ask the
+    // OS to keep the notification around long enough to be pressed and held.
+    requireInteraction: false,
+    actions: actions.map((a) => ({ action: a.action, title: a.title })),
+    // Per-action URLs travel alongside, since notificationclick only receives
+    // the action id.
+    data: {
+      url: data.url || '/',
+      actionUrls: actions.reduce((m, a) => ({ ...m, [a.action]: a.url || data.url || '/' }), {}),
+    },
   }
   event.waitUntil(self.registration.showNotification(title, options))
 })
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
-  const target = (event.notification.data && event.notification.data.url) || '/'
+  const d = event.notification.data || {}
+  // An action button carries its own destination; tapping the body falls back
+  // to the notification's own url.
+  const target =
+    (event.action && d.actionUrls && d.actionUrls[event.action]) || d.url || '/'
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {

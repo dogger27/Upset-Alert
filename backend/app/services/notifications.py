@@ -521,22 +521,32 @@ async def notify_round_complete_digest(
             # 1000s and Slams (bucketed by event), and a week that happens to
             # hold a single draw is named from that draw. Only a genuinely
             # mixed week falls back to the date, where no single name is true.
+            # label and match_results are draw-level facts that live inside each
+            # recipient's section, not on the payload itself — only is_correct
+            # varies per user, and this payload goes to everyone. Reading them
+            # off the payload raised KeyError straight into the wrapper below,
+            # which is why this push went quiet without anything reporting it.
+            def _facts(p):
+                users = p.get("per_user") or {}
+                sec = next(iter(users.values()))["section"] if users else None
+                return {
+                    "label": (sec or {}).get("label") or f"Draw {p['id']}",
+                    "matches": len((sec or {}).get("match_results") or []),
+                }
+
+            facts = [_facts(p) for p in payloads]
             if event_label:
                 where = event_label
             elif reached == 1:
-                where = payloads[0]["label"]
+                where = facts[0]["label"]
             else:
                 where = f"week of {week_label}"
-            await send_push_to_users(
-                push_uids,
-                title=(f"{round_name} complete — {where}" if not is_final_batch
-                       else f"Final standings — {where}"),
-                body=("See how your picks did"
-                      if reached == 1 else
-                      f"{reached} draws reported. See how your picks did."),
-                url="/leagues",
-                tag=f"round-{round_name}-{where}",
+
+            from app.services import push_content
+            content = push_content.round_complete(
+                round_name, where, facts, is_final_batch,
             )
+            await send_push_to_users(push_uids, **content)
     except Exception as exc:
         logger.warning("Round-digest push failed: %s", exc)
 
@@ -733,37 +743,15 @@ async def notify_draw_release_batch(draw_ids: list[int], is_followup: bool = Fal
         if already_announced:
             logger.info("Draw-release push skipped: week already announced")
         elif push_uids:
-            n = len(claimed)
-            labelled = [f"{d.name} ({d.gender})" for d in claimed]
-            # Name the event whenever the batch IS one event, which is not the
-            # same as n == 1: a Slam or a 1000 week is two draws (men's and
-            # women's) of a single tournament, so keying on the count alone
-            # produced "2 draws released" for a week that is simply Wimbledon.
-            event_names = {d.name for d in claimed}
-            if len(event_names) == 1:
-                name = claimed[0].name
-                title = (
-                    f"{name} ({claimed[0].gender}) draw released" if n == 1
-                    else f"{name} draws released"
-                )
-                body = (
-                    "Make your picks before it closes" if n == 1
-                    else ", ".join(labelled)
-                )
-            else:
-                title = f"{n} draws released — {week_label}"
-                body = ", ".join(labelled[:3]) + (f" +{n - 3} more" if n > 3 else "")
-            delivered = await send_push_to_users(
-                push_uids,
-                title=title,
-                body=body,
-                # Always the dashboard: it lists every open draw for the week,
-                # which is the whole point of a notification that covers several.
-                url="/",
-                # One tag per week, so a device offline across two weeks shows
-                # the newer notification rather than stacking both.
-                tag=f"draw-release-{claimed[0].year}-{claimed[0].week}",
+            from app.services import push_content
+            content = push_content.draw_release(
+                [{"name": d.name, "gender": d.gender,
+                  "location": ", ".join(p for p in (d.city, d.country) if p) or None,
+                  "closing_time": d.closing_time}
+                 for d in sorted(claimed, key=lambda d: d.closing_time or datetime.max)],
+                week_label,
             )
+            delivered = await send_push_to_users(push_uids, **content)
             logger.info("Draw-release push: %d delivered to %d user(s)", delivered, len(push_uids))
     except Exception as exc:
         logger.warning("Draw-release push failed: %s", exc)
