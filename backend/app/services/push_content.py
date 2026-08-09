@@ -136,25 +136,35 @@ def draw_change(draws: list[dict], affects_your_picks: bool, event_seq: int = 0)
     from app.services.draw_changes import change_line
 
     total = sum(len(d["changes"]) for d in draws)
-    if len(draws) == 1:
-        d = draws[0]
-        where = f"{d['name']} ({tour_label(d['gender'])})"
-        title = f"Draw change — {where}" if total == 1 else f"{total} draw changes — {where}"
-    else:
-        title = f"{total} draw changes — {len(draws)} draws"
+    # No tournament name in the title — it truncated ("Draw change — Cincin…").
+    # The name is the body's first line instead, where it has the width to
+    # survive alongside its tier.
+    title = "Draw Changes Made"
 
-    lines = []
-    if affects_your_picks:
-        lines.append("⚠️ One of your picks was replaced.")
-    shown = 0
-    for d in draws:
-        if shown >= MAX_LISTED_CHANGES:
-            break
-        if len(draws) > 1:
-            lines.append(f"{d['name']} · {tier_label(d.get('category'), d['gender'])}")
-        for c in d["changes"][:MAX_LISTED_CHANGES - shown]:
-            lines.append(("• " if len(draws) > 1 else "") + change_line(c))
+    def header(d):
+        return f"{d['name']} · {tier_label(d.get('category'), d['gender'])}"
+
+    lines, shown = [], 0
+    if len(draws) == 1:
+        # Name first, then the warning: the reader needs to know WHICH draw
+        # before being told something in it moved.
+        lines.append(header(draws[0]))
+        if affects_your_picks:
+            lines.append("⚠️ One of your picks was replaced.")
+        for c in draws[0]["changes"][:MAX_LISTED_CHANGES]:
+            lines.append(change_line(c))
             shown += 1
+    else:
+        # Across several draws the warning belongs to no single one, so it leads.
+        if affects_your_picks:
+            lines.append("⚠️ One of your picks was replaced.")
+        for d in draws:
+            if shown >= MAX_LISTED_CHANGES:
+                break
+            lines.append(header(d))
+            for c in d["changes"][:MAX_LISTED_CHANGES - shown]:
+                lines.append("• " + change_line(c))
+                shown += 1
     if total > shown:
         lines.append(f"…and {total - shown} more change{'' if total - shown == 1 else 's'}")
 
@@ -212,14 +222,14 @@ def qualifiers_added(draws: list[dict], affects_your_picks: bool, event_seq: int
 
     # The headline counts QUALIFIERS; the list shows MATCHES. They differ when
     # two qualifiers are drawn against each other, and both numbers are true.
+    # The headline counts QUALIFIERS; the list shows MATCHES. They differ when
+    # two qualifiers are drawn against each other, and both numbers are true.
+    #
+    # The count stays in the title (it is short and cannot truncate) but the
+    # tournament name does not — that is the part that got cut. It leads the
+    # body instead, the same shape as every other type.
     total = sum(len(d["changes"]) for d in draws)
-    if len(draws) == 1:
-        d = draws[0]
-        where = f"{d['name']} ({tour_label(d['gender'])})"
-        title = (f"Qualifier added — {where}" if total == 1
-                 else f"{total} qualifiers added — {where}")
-    else:
-        title = f"{total} qualifiers added — {len(draws)} draws"
+    title = "Qualifier Added" if total == 1 else f"{total} Qualifiers Added"
 
     matches = {id(d): dedupe_matchups(d["changes"]) for d in draws}
     total_matches = sum(len(m) for m in matches.values())
@@ -228,8 +238,7 @@ def qualifiers_added(draws: list[dict], affects_your_picks: bool, event_seq: int
     for d in draws:
         if shown >= MAX_LISTED_QUALIFIERS:
             break
-        if len(draws) > 1:
-            lines.append(f"{d['name']} · {tier_label(d.get('category'), d['gender'])}")
+        lines.append(f"{d['name']} · {tier_label(d.get('category'), d['gender'])}")
         for c in matches[id(d)][:MAX_LISTED_QUALIFIERS - shown]:
             lines.append(matchup_line(c))
             shown += 1
@@ -352,8 +361,9 @@ def sample(pref_key: str) -> dict:
             "actions": [{"action": "open", "title": "View league", "url": "/leagues"}],
         },
         "draw_changed": {
-            "title": "Draw change — Cincinnati Open (ATP)",
-            "body": "⚠️ One of your picks was replaced.\nFils → Bergs (LL)",
+            "title": "Draw Changes Made",
+            "body": "Cincinnati Open · ATP 1000\n"
+                    "⚠️ One of your picks was replaced.\nFils → Bergs (LL)",
             "url": "/",
             "tag": "sample-draw-change",
             "actions": [{"action": "open", "title": "Check your picks", "url": "/"}],
@@ -362,9 +372,9 @@ def sample(pref_key: str) -> dict:
         # draw that actually has a qualifying field, because an invented
         # three-qualifier ATP 1000 is a number that event cannot produce.
         "qualifiers_added": {
-            "title": "12 qualifiers added — Cincinnati Open (ATP)",
-            "body": "Cobolli (Q) vs Fils\nBergs (Q) vs Alcaraz [1]\n"
-                    "Damm (Q) vs de Minaur [7]\n…and 9 more",
+            "title": "12 Qualifiers Added",
+            "body": "Cincinnati Open · ATP 1000\nCobolli (Q) vs Fils\n"
+                    "Bergs (Q) vs Alcaraz [1]\nDamm (Q) vs de Minaur [7]\n…and 9 more",
             "url": "/",
             "tag": "sample-qualifiers-added",
             "actions": [{"action": "open", "title": "View draw", "url": "/"}],
