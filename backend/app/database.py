@@ -279,46 +279,30 @@ async def _migrate(conn):
             "CREATE TABLE IF NOT EXISTS applied_seeds "
             "(name VARCHAR PRIMARY KEY, applied_at DATETIME NOT NULL)"
         ),
-        # Two new notification types. Existing accounts predate the checkbox, so
-        # their preference is seeded from the closest choice they have already
-        # made rather than left off — an account that asked to hear when draws
-        # are released has said it wants draw news, and one that asked for round
-        # standings has said it wants to hear how its picks did.
+        # draw_changed and standout_pick are opt-in, full stop — nobody is
+        # enrolled into a notification they did not ask for, however closely it
+        # resembles one they already take.
         #
-        # Seeded per CHANNEL: the push variants follow the push preference, so
-        # nobody is enrolled into phone notifications on the strength of an email
-        # opt-in.
+        # This undoes a seeding pass that briefly shipped on 2026-08-09 and
+        # derived each new preference from the nearest existing one
+        # (draw_changed from draw_released, standout_pick from round_standings,
+        # each per channel). It ran once against production before being
+        # reversed, so the rows it created have to be cleared here rather than
+        # simply not created.
+        #
+        # Ledger-guarded, and this one HAS to be: without the guard it is a
+        # standing DELETE that would wipe the preference again on every restart,
+        # silently undoing the choice of anyone who later turns these on. That is
+        # the same trap the seeds were guarded against, pointed the other way.
         (
-            "INSERT OR IGNORE INTO notification_preferences (user_id, pref_key) "
-            "SELECT user_id, 'draw_changed' FROM notification_preferences "
-            "WHERE pref_key = 'draw_released' "
-            "AND NOT EXISTS (SELECT 1 FROM applied_seeds WHERE name = 'seed_draw_changed_prefs')"
-        ),
-        (
-            "INSERT OR IGNORE INTO notification_preferences (user_id, pref_key) "
-            "SELECT user_id, 'push_draw_changed' FROM notification_preferences "
-            "WHERE pref_key = 'push_draw_released' "
-            "AND NOT EXISTS (SELECT 1 FROM applied_seeds WHERE name = 'seed_draw_changed_prefs')"
-        ),
-        (
-            "INSERT OR IGNORE INTO applied_seeds (name, applied_at) "
-            "VALUES ('seed_draw_changed_prefs', datetime('now'))"
-        ),
-        (
-            "INSERT OR IGNORE INTO notification_preferences (user_id, pref_key) "
-            "SELECT user_id, 'standout_pick' FROM notification_preferences "
-            "WHERE pref_key = 'round_standings' "
-            "AND NOT EXISTS (SELECT 1 FROM applied_seeds WHERE name = 'seed_standout_pick_prefs')"
-        ),
-        (
-            "INSERT OR IGNORE INTO notification_preferences (user_id, pref_key) "
-            "SELECT user_id, 'push_standout_pick' FROM notification_preferences "
-            "WHERE pref_key = 'push_round_standings' "
-            "AND NOT EXISTS (SELECT 1 FROM applied_seeds WHERE name = 'seed_standout_pick_prefs')"
+            "DELETE FROM notification_preferences "
+            "WHERE pref_key IN ('draw_changed', 'push_draw_changed', "
+            "                   'standout_pick', 'push_standout_pick') "
+            "AND NOT EXISTS (SELECT 1 FROM applied_seeds WHERE name = 'unseed_optional_notifications')"
         ),
         (
             "INSERT OR IGNORE INTO applied_seeds (name, applied_at) "
-            "VALUES ('seed_standout_pick_prefs', datetime('now'))"
+            "VALUES ('unseed_optional_notifications', datetime('now'))"
         ),
         # Pre-stamp every match that had already finished before standout-pick
         # measurement existed. Without this the first sweep after deploy would
