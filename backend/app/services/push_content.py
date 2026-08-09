@@ -164,35 +164,44 @@ def standout_pick(picks: list[dict]) -> dict:
 
     One user's correct calls that most of the field missed.
 
-    The result is the headline, on its own line under "You called it!" — that is
-    the whole message, and it should land without expanding anything. The
-    newline in the title is deliberate: the OS appends "from Upset Alert" after
-    the title, so a result left to wrap ran straight into that attribution and
-    read as one sentence ("You called it — Bergs def. Fritz from Upset Alert").
+    The result leads the BODY, not the title, and that placement is load-bearing.
+    A newline in the title does not break the line on iOS — it truncates there,
+    silently dropping everything after it, so "You called it!\\nBergs def. Fritz"
+    arrived as bare "You called it!" with the result gone. The title is therefore
+    one short line, and the result is the body's first line, which lands
+    immediately under the OS's "from Upset Alert" — near enough to the intended
+    reading, and the attribution line between them is not ours to move.
 
-    Expanded, the body carries what the headline leaves out: which draw and
-    round, and how alone the call was — as a share, not a bare fraction, since
-    "2 / 11" needs arithmetic to land and "(18%)" does not. The set-by-set score
-    used to be here and is gone: it says nothing about the pick being a
-    standout, which is the only reason this notification exists.
+    Everything here is written for the COLLAPSED banner, which shows several
+    lines and is where this will actually be read. So each line has to fit
+    without wrapping: the round ("· R32") was the one thing pushing the draw line
+    onto a second row, and it is dropped. The email keeps it, having room.
 
-    Ordered rarest-first by the caller, so a collapsed notification leads with
-    the best call of the batch and the link points at its draw.
+    The share is a percentage as well as a fraction — "2 / 11" needs arithmetic
+    before it means anything, "(18%)" does not. The set-by-set score is
+    deliberately absent: it says nothing about the pick being a standout, which
+    is the only reason this notification exists.
+
+    Ordered rarest-first by the caller, so the batch leads with its best call and
+    the link points at that draw.
     """
     n = len(picks)
     top = picks[0]
-    headline = (f"{top['winner']} def. {top['loser']}" if n == 1
-                else f"{n} picks the field missed")
-    title = f"You called it!\n{headline}"
 
     lines = []
     for p in picks[:MAX_LISTED_PICKS]:
-        head = f"{p['draw_name']} · {tier_label(p.get('category'), p['gender'])} · {p['round_name']}"
         share = round(100 * p["correct_count"] / p["participant_count"])
-        lines.append(f"{head}\nOnly {p['correct_count']} / {p['participant_count']} "
-                     f"({share}%) got this!")
+        lines.append(
+            f"{p['winner']} def. {p['loser']}\n"
+            f"{p['draw_name']} · {tier_label(p.get('category'), p['gender'])}\n"
+            f"Only {p['correct_count']} / {p['participant_count']} ({share}%) got this!"
+        )
     if n > MAX_LISTED_PICKS:
         lines.append(f"…and {n - MAX_LISTED_PICKS} more")
+
+    # Constant regardless of batch size: it is the one line guaranteed not to
+    # wrap, and the body enumerates whatever else is in there.
+    title = "You called it!"
 
     url = f"/tournaments/{top['draw_id']}"
     return {
@@ -260,8 +269,9 @@ def sample(pref_key: str) -> dict:
             "actions": [{"action": "open", "title": "Check your picks", "url": "/"}],
         },
         "standout_pick": {
-            "title": "You called it!\nBergs def. Fritz",
-            "body": "Cincinnati Open · ATP 1000 · R32\nOnly 2 / 11 (18%) got this!",
+            "title": "You called it!",
+            "body": "Bergs def. Fritz\nCincinnati Open · ATP 1000\n"
+                    "Only 2 / 11 (18%) got this!",
             "url": "/",
             "tag": "sample-standout",
             "actions": [{"action": "open", "title": "View draw", "url": "/"}],
