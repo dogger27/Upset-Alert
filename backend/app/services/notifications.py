@@ -500,15 +500,25 @@ async def notify_round_complete_digest(
         except Exception as exc:
             logger.warning("Failed to send round digest to user %d: %s", uid, exc)
 
-    # Push mirrors the email: one per batch, same moment, same audience via the
-    # parallel push_ preference. The two round preferences are mutually
-    # exclusive by design (round_standings covers every round including the
-    # Final; tournament_end narrows it to the Final), so a batch pushes under
-    # whichever one produced it.
+    # Push mirrors the email: one per batch, same moment, and — now — the same
+    # audience rule, built the same way a few dozen lines above.
+    #
+    # round_standings covers every round INCLUDING the Final; tournament_end is
+    # the narrower opt-in for people who want only the Final. So a final batch
+    # goes to both, and every other round goes to round_standings alone. This
+    # used to pick one preference per batch — tournament_end for a final,
+    # round_standings otherwise — which meant someone holding only Round
+    # completion got no push for the Final, the round they care most about,
+    # while the settings grid greyed out Draw completion telling them it was
+    # covered. Email never had the bug; it unions the two audiences.
+    #
+    # A set, not a list: a user holding both preferences would otherwise be
+    # pushed to twice.
     try:
         from app.services.push import send_push_to_users, users_with_push
-        push_pref = "tournament_end" if is_final_batch else "round_standings"
-        push_uids = await users_with_push(push_pref)
+        push_uids = set(await users_with_push("round_standings"))
+        if is_final_batch:
+            push_uids |= set(await users_with_push("tournament_end"))
         if push_uids:
             # Name the event when the batch is one: event_label covers the
             # 1000s and Slams (bucketed by event), and a week that happens to
