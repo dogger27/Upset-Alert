@@ -777,6 +777,49 @@ async def notify_draw_release_batch(draw_ids: list[int], is_followup: bool = Fal
 
 DRAW_CHANGED_PREF = "draw_changed"
 
+# Qualifier placements are their own notification, not a flavour of draw change.
+# The two answer different questions and land differently: a replacement is
+# "someone you picked is gone, go look", a qualifier placement is "the draw is
+# complete, here is who plays whom". Merging them meant one message opening with
+# a warning and then listing routine slot fills underneath it.
+QUALIFIERS_ADDED_PREF = "qualifiers_added"
+
+# DrawChangeEvent.kind → the preference that carries it.
+_KIND_PREF = {"replaced": DRAW_CHANGED_PREF, "filled": QUALIFIERS_ADDED_PREF}
+
+
+async def _round1_matchups(db, draw_id: int, entry_ids: set) -> dict:
+    """
+    entry_id → (opponent_name, opponent_status, is_bye) for round 1.
+
+    A qualifier's name on its own says nothing worth acting on; who they drew is
+    the whole story, and it is what makes the notification answer "does this
+    change my bracket". opponent_status is the badge the draw shows — seed
+    number, else entry type — via the same _entry_status used by the round
+    emails, so a qualifier drawn against the top seed reads as one.
+
+    Missing entries are simply absent from the result: a slot can be filled on
+    the page before the pairing is parsed, and "opponent not known yet" is a
+    real state rather than an error.
+    """
+    if not entry_ids:
+        return {}
+    res = await db.execute(
+        select(Match)
+        .options(selectinload(Match.player1), selectinload(Match.player2))
+        .where(Match.draw_id == draw_id, Match.round_number == 1)
+    )
+    out: dict = {}
+    for m in res.scalars().all():
+        for mine, theirs in ((m.player1_id, m.player2), (m.player2_id, m.player1)):
+            if mine in entry_ids:
+                out[mine] = (
+                    theirs.name if theirs else None,
+                    _entry_status(theirs) if theirs else "",
+                    bool(m.is_bye),
+                )
+    return out
+
 
 async def _gather_draw_change_payload(db, draw: Draw, events: list) -> Optional[dict]:
     """
@@ -805,8 +848,17 @@ async def _gather_draw_change_payload(db, draw: Draw, events: list) -> Optional[
 
     from app.services.email import _tier_badge
 
-    changes = [
-        {
+    # Only the qualifier notification renders an opponent, but resolving it here
+    # keeps the round-1 lookup to one query for the whole draw rather than one
+    # per slot, and leaves the payload shape the same for both kinds.
+    opponents = await _round1_matchups(
+        db, draw.id, {e.entry_id for e in events if e.kind == "filled" and e.entry_id}
+    )
+
+    changes = []
+    for e in sorted(events, key=lambda e: e.bracket_position):
+        opp_name, opp_status, opp_bye = opponents.get(e.entry_id, (None, "", False))
+        changes.append({
             "entry_id": e.entry_id,
             "bracket_position": e.bracket_position,
             "kind": e.kind,
@@ -815,9 +867,10 @@ async def _gather_draw_change_payload(db, draw: Draw, events: list) -> Optional[
             "old_entry_type": e.old_entry_type,
             "new_entry_type": e.new_entry_type,
             "old_seed": e.old_seed,
-        }
-        for e in sorted(events, key=lambda e: e.bracket_position)
-    ]
+            "opponent": opp_name,
+            "opponent_status": opp_status,
+            "opponent_bye": opp_bye,
+        })
     return {
         "id": draw.id,
         "name": draw.name,
@@ -832,13 +885,18 @@ async def _gather_draw_change_payload(db, draw: Draw, events: list) -> Optional[
     }
 
 
-async def notify_draw_change_batch(draw_ids: list[int]) -> None:
+async def notify_draw_change_batch(draw_ids: list[int], kind: str = "replaced") -> None:
     """
-    Tell everyone competing in these draws that their bracket changed.
+    Tell everyone competing in these draws what moved in their bracket.
+
+    `kind` selects both the events claimed and the message sent — "replaced" is
+    the draw-change notification, "filled" is qualifiers-added. They are claimed
+    separately so a draw with both pending sends one of each rather than a single
+    message that opens with a warning and then lists routine slot fills.
 
     Audience is competitors only — a user with at least one pick in the draw,
     the same "participant" bar the standings and round digests use. Someone who
-    has not entered has nothing to re-check, and a draw change is not an
+    has not entered has nothing to re-check, and neither message is an
     invitation to enter.
 
     Claim first, send second, exactly as notify_draw_release_batch does: the
@@ -846,12 +904,15 @@ async def notify_draw_change_batch(draw_ids: list[int]) -> None:
     the previous one finds nothing left to claim rather than sending twice.
     """
     from sqlalchemy import update as sa_update
-    from app.services.email import send_draw_change_digest
+    from app.services.email import send_draw_change_digest, send_qualifiers_added_digest
     from app.services.system_log import app_log
     from app.models.notification import DrawChangeEvent
 
     if not draw_ids:
         return
+
+    is_qualifiers = kind == "filled"
+    pref = _KIND_PREF[kind]
 
     async with AsyncSessionLocal() as db:
         now = datetime.now(tz.utc)
@@ -859,19 +920,21 @@ async def notify_draw_change_batch(draw_ids: list[int]) -> None:
             sa_update(DrawChangeEvent)
             .where(
                 DrawChangeEvent.draw_id.in_(draw_ids),
+                DrawChangeEvent.kind == kind,
                 DrawChangeEvent.notified_at.is_(None),
             )
             .values(notified_at=now)
         )
         if claim.rowcount == 0:
             await db.rollback()
-            logger.debug("Draw-change batch %s already claimed — nothing to send", draw_ids)
+            logger.debug("%s batch %s already claimed — nothing to send", kind, draw_ids)
             return
         await db.commit()
 
         claimed = (await db.execute(
             select(DrawChangeEvent).where(
                 DrawChangeEvent.draw_id.in_(draw_ids),
+                DrawChangeEvent.kind == kind,
                 DrawChangeEvent.notified_at == now,
             )
         )).scalars().all()
@@ -900,7 +963,7 @@ async def notify_draw_change_batch(draw_ids: list[int]) -> None:
             select(NotificationPreference.user_id)
             .join(User, User.id == NotificationPreference.user_id)
             .where(
-                NotificationPreference.pref_key == DRAW_CHANGED_PREF,
+                NotificationPreference.pref_key == pref,
                 NotificationPreference.user_id.in_(candidates),
                 User.email_verified == True,  # noqa: E712
             )
@@ -913,6 +976,7 @@ async def notify_draw_change_batch(draw_ids: list[int]) -> None:
         await db.execute(
             sa_update(DrawChangeEvent)
             .where(DrawChangeEvent.notified_at == now,
+                   DrawChangeEvent.kind == kind,
                    DrawChangeEvent.draw_id.in_([p["id"] for p in payloads]))
             .values(recipient_count=len(to_email))
         )
@@ -938,17 +1002,18 @@ async def notify_draw_change_batch(draw_ids: list[int]) -> None:
         sections = _sections_for(uid)
         if not email or not sections:
             continue
+        send = send_qualifiers_added_digest if is_qualifiers else send_draw_change_digest
         try:
-            await send_draw_change_digest(
+            await send(
                 email, sections,
                 unsubscribe_url=(
                     f"{API_BASE}/unsubscribe?token="
-                    f"{create_unsubscribe_token(uid, DRAW_CHANGED_PREF)}"
+                    f"{create_unsubscribe_token(uid, pref)}"
                 ),
             )
             sent += 1
         except Exception as exc:
-            logger.warning("Failed to send draw-change email to user %d: %s", uid, exc)
+            logger.warning("Failed to send %s email to user %d: %s", pref, uid, exc)
 
     # Push is built per user, unlike every other type here, because the one line
     # that matters most — whether the swap hit a pick of theirs — differs per
@@ -958,21 +1023,23 @@ async def notify_draw_change_batch(draw_ids: list[int]) -> None:
         from app.services.push import send_push_to_users, users_with_push
         from app.services import push_content
 
-        push_uids = set(await users_with_push(DRAW_CHANGED_PREF)) & candidates
+        push_uids = set(await users_with_push(pref)) & candidates
         newest_event = max((e.id for e in claimed), default=0)
+        builder = push_content.qualifiers_added if is_qualifiers else push_content.draw_change
         for uid in push_uids:
             sections = _sections_for(uid)
             if not sections:
                 continue
             affected = any(c["affects_you"] for s in sections for c in s["changes"])
-            content = push_content.draw_change(sections, affected, newest_event)
+            content = builder(sections, affected, newest_event)
             await send_push_to_users([uid], **content)
     except Exception as exc:
-        logger.warning("Draw-change push failed: %s", exc)
+        logger.warning("%s push failed: %s", pref, exc)
 
     total_changes = sum(len(p["changes"]) for p in payloads)
+    label = "Qualifiers-added" if is_qualifiers else "Draw-change"
     await app_log("info", "notifications",
-                  f"Draw-change notification sent to {sent} user(s) covering "
+                  f"{label} notification sent to {sent} user(s) covering "
                   f"{total_changes} change(s) in {len(payloads)} draw(s)",
                   {"draw_ids": [p["id"] for p in payloads], "recipient_count": sent,
                    "changes": [change_line(c) for p in payloads for c in p["changes"]]})

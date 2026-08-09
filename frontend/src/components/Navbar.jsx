@@ -253,6 +253,8 @@ export default function Navbar() {
       desc: 'Once a week, when all draws are out' },
     { key: 'draw_changed', label: 'Draw change',
       desc: 'A player is replaced in a draw you entered' },
+    { key: 'qualifiers_added', label: 'Qualifiers added',
+      desc: 'Qualifying slots are filled, with their first matches' },
     { key: 'standout_pick', label: 'Standout pick',
       desc: 'You called a result most competitors missed' },
     { key: 'round_standings', label: 'Round completion',

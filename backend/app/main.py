@@ -152,6 +152,7 @@ _UNSUB_PREF_LABELS = {
     "tournament_end": "draw-completion emails",
     "draw_released": "draw-release emails",
     "draw_changed": "draw-change emails",
+    "qualifiers_added": "qualifier emails",
     "standout_pick": "standout-pick emails",
 }
 
