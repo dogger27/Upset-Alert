@@ -861,6 +861,138 @@ async def send_draw_change_digest(
     })
 
 
+def _matchup_row(change: dict, is_last: bool) -> str:
+    """One placed qualifier and the first-round match it creates."""
+    mine = change.get("affects_you")
+    opp = change.get("opponent")
+    status = change.get("opponent_status")
+    if change.get("opponent_bye"):
+        right = '<span style="color:#6b7280">bye</span>'
+    elif opp:
+        badge = (f'<span style="font-size:11px;font-weight:700;color:#1b4332;background:#e8f0ea;'
+                 f'border-radius:9px;padding:2px 6px;margin-left:6px">{_esc(status)}</span>'
+                 if status else "")
+        right = f'{_esc(opp)}{badge}'
+    else:
+        right = '<span style="color:#6b7280">opponent to be confirmed</span>'
+    flag = (
+        '<div style="font-size:12px;font-weight:700;color:#b45309;padding-top:5px">'
+        'You picked this slot</div>' if mine else ""
+    )
+    return f"""
+      <tr>
+        <td style="padding:{'10px 14px' if is_last else '10px 14px 0'};">
+          <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                 style="border-collapse:separate;border:1px solid {'#fcd34d' if mine else '#e5e7eb'};
+                        border-radius:6px;background:{'#fffbeb' if mine else '#ffffff'}">
+            <tr><td style="padding:11px 13px">
+              <div style="font-size:15px;font-weight:700;color:#111">{_esc(change['new_name'])}</div>
+              <div style="font-size:14px;color:#444;padding-top:3px">
+                <span style="color:#6b7280">vs</span> {right}
+              </div>
+              {flag}
+            </td></tr>
+          </table>
+        </td>
+      </tr>"""
+
+
+def _qualifiers_section(draw: dict, is_last: bool) -> str:
+    n = len(draw["changes"])
+    banner = _section_banner(
+        draw["label"],
+        f"{n} qualifier{'' if n == 1 else 's'} placed &middot; "
+        + ("picks are locked" if draw.get("locked") else "picks still open"),
+        f"{BASE_URL}/tournaments/{draw['id']}",
+        "View draw",
+    )
+    rows = "".join(_matchup_row(c, i == n - 1) for i, c in enumerate(draw["changes"]))
+    return f"""{banner}
+    <div style="padding:10px 10px {'20px' if is_last else '14px'};background:#ffffff">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">{rows}</table>
+    </div>"""
+
+
+async def send_qualifiers_added_digest(
+    email: str,
+    draws: list[dict],
+    unsubscribe_url: str = "",
+) -> None:
+    """
+    The qualifying slots in a draw this reader entered now have players.
+
+    A separate message from send_draw_change_digest, not a variant of it: a
+    replacement is something to go and check, this is the draw becoming complete.
+    Every placement is listed with the first-round match it creates, because the
+    opponent is what makes it mean anything — a list of qualifier names on its
+    own is a list of strangers.
+    """
+    if not draws:
+        return
+
+    changes = [c for d in draws for c in d["changes"]]
+    n = len(changes)
+    yours = [c for c in changes if c.get("affects_you")]
+    one_draw = draws[0] if len(draws) == 1 else None
+
+    subject = (
+        f"Qualifier added: {one_draw['name']}" if one_draw and n == 1
+        else f"{n} qualifiers added — {one_draw['name']}" if one_draw
+        else f"{n} qualifiers added across {len(draws)} draws"
+    )
+    heading = "The qualifiers are in" if n > 1 else "A qualifier is in"
+    intro = (
+        "The qualifying slots in your draw now have players. Here's who came "
+        "through and who they face first."
+    )
+    if yours:
+        intro += (
+            f" {'One' if len(yours) == 1 else str(len(yours))} of them "
+            f"{'is' if len(yours) == 1 else 'are'} in a slot you picked, so your "
+            f"bracket now backs a real player rather than a placeholder."
+        )
+
+    open_draws = [d for d in draws if not d.get("locked")]
+    footer = (
+        "Picks are still open for " + ", ".join(d["name"] for d in open_draws)
+        + " — you can change yours."
+        if open_draws else
+        "Picks are locked for these draws, so this is just so you know who your "
+        "bracket is backing."
+    )
+
+    sections = "".join(_qualifiers_section(d, i == len(draws) - 1) for i, d in enumerate(draws))
+    cta_url = f"{BASE_URL}/tournaments/{draws[0]['id']}" if len(draws) == 1 else BASE_URL
+    cta_text = "Check Your Picks" if open_draws else "View Draw" if len(draws) == 1 else "View Draws"
+    unsubscribe = (
+        f'<p style="max-width:560px;margin:16px auto 0;text-align:center;font-size:12px;color:#9ca3af;'
+        f'font-family:sans-serif">'
+        f'<a href="{unsubscribe_url}" style="color:#9ca3af;text-decoration:underline">'
+        f'Unsubscribe from qualifier emails</a></p>'
+        if unsubscribe_url else ""
+    )
+
+    await send_async({
+        "from": FROM,
+        "to": [email],
+        "subject": subject,
+        "html": f"""{_WRAP_OPEN}{_LOGO_HEADER}
+          <div style="padding:28px 24px 22px;background:#ffffff;color:#111111">
+            <h1 style="font-size:22px;margin:0 0 8px">{heading}</h1>
+            <p style="color:#444;line-height:1.6;margin:0 0 18px;font-size:14px">{intro}</p>
+            <a href="{cta_url}" style="display:inline-block;padding:12px 24px;
+               background:#1b4332;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
+              {cta_text}
+            </a>
+          </div>
+          {sections}
+          <div style="padding:0 24px 24px;background:#ffffff">
+            <p style="color:#9ca3af;line-height:1.6;margin:0;font-size:12px">{_esc(footer)}</p>
+          </div>
+        {_WRAP_CLOSE}{unsubscribe}""",
+    })
+
+
 def _standout_row(pick: dict, is_last: bool) -> str:
     """One minority-correct call: the result, the score, and how alone they were."""
     pct = round(100 * pick["correct_count"] / pick["participant_count"])

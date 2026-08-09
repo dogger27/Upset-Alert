@@ -25,6 +25,11 @@ MAX_BODY = 900
 # finishing can genuinely produce a dozen minority-correct picks for one user.
 MAX_LISTED_CHANGES = 8
 MAX_LISTED_PICKS = 5
+# Qualifier placements are listed in full, not sampled: this notification says
+# "here is who is in the draw now", and a truncated answer to that is worse than
+# none. Sixteen covers a Grand Slam's full complement (a 1000 has twelve), and
+# at roughly 35 characters a matchup the whole list still clears MAX_BODY.
+MAX_LISTED_QUALIFIERS = 16
 
 
 def tier_label(category: Optional[str], gender: str) -> str:
@@ -157,6 +162,73 @@ def draw_change(draws: list[dict], affects_your_picks: bool, event_seq: int = 0)
     }
 
 
+def matchup_line(change: dict) -> str:
+    """'Flavio Cobolli vs Arthur Fils [1]' — a placed qualifier and who they drew.
+
+    The opponent is the point. A list of qualifier names is a list of strangers;
+    the same list against their first-round opponents tells a competitor whether
+    anything in their bracket just got harder. The seed (or entry type) rides
+    along in brackets, because "vs Alcaraz" and "vs Alcaraz [1]" are different
+    pieces of news.
+    """
+    name = change["new_name"]
+    if change.get("opponent_bye"):
+        return f"{name} — bye"
+    opp = change.get("opponent")
+    if not opp:
+        return f"{name} — opponent TBD"
+    status = change.get("opponent_status")
+    return f"{name} vs {opp}" + (f" [{status}]" if status else "")
+
+
+def qualifiers_added(draws: list[dict], affects_your_picks: bool, event_seq: int = 0) -> dict:
+    """
+    draws: [{name, gender, category, id, changes: [...]}, ...] — this user's
+    slice, each change a placed qualifier carrying its round-1 opponent.
+
+    Separate from draw_change because it is separate news: the draw is now
+    complete, and every line is a matchup rather than a loss. Nothing here is a
+    warning, so nothing here leads with one — a competitor who picked a qualifier
+    slot gets a note at the end, since their pick has followed the slot and is
+    now a real player rather than a placeholder.
+
+    Every matchup is listed rather than the first few: MAX_LISTED_QUALIFIERS
+    covers a Slam's full sixteen, and a partial list of "who's in the draw now"
+    is the one thing this notification cannot usefully be.
+    """
+    total = sum(len(d["changes"]) for d in draws)
+    if len(draws) == 1:
+        d = draws[0]
+        where = f"{d['name']} ({d['gender']})"
+        title = (f"Qualifier added — {where}" if total == 1
+                 else f"{total} qualifiers added — {where}")
+    else:
+        title = f"{total} qualifiers added — {len(draws)} draws"
+
+    lines, shown = [], 0
+    for d in draws:
+        if shown >= MAX_LISTED_QUALIFIERS:
+            break
+        if len(draws) > 1:
+            lines.append(f"{d['name']} · {tier_label(d.get('category'), d['gender'])}")
+        for c in d["changes"][:MAX_LISTED_QUALIFIERS - shown]:
+            lines.append(matchup_line(c))
+            shown += 1
+    if total > shown:
+        lines.append(f"…and {total - shown} more")
+    if affects_your_picks:
+        lines.append("You picked one of these slots — it's a real player now.")
+
+    url = f"/tournaments/{draws[0]['id']}" if len(draws) == 1 else "/"
+    return {
+        "title": title,
+        "body": "\n".join(lines)[:MAX_BODY],
+        "url": url,
+        "tag": f"qualifiers-added-{event_seq}",
+        "actions": [{"action": "open", "title": "View draw", "url": url}],
+    }
+
+
 def standout_pick(picks: list[dict]) -> dict:
     """
     picks: [{draw_name, gender, category, draw_id, winner, loser,
@@ -261,12 +333,21 @@ def sample(pref_key: str) -> dict:
             "actions": [{"action": "open", "title": "View league", "url": "/leagues"}],
         },
         "draw_changed": {
-            "title": "2 draw changes — Cincinnati Open (M)",
+            "title": "Draw change — Cincinnati Open (M)",
             "body": "⚠️ One of your picks was replaced.\n"
-                    "Arthur Fils → Zizou Bergs (LL)\nQualifier → Flavio Cobolli (Q)",
+                    "Arthur Fils → Zizou Bergs (LL)",
             "url": "/",
             "tag": "sample-draw-change",
             "actions": [{"action": "open", "title": "Check your picks", "url": "/"}],
+        },
+        "qualifiers_added": {
+            "title": "3 qualifiers added — Cincinnati Open (M)",
+            "body": "Flavio Cobolli vs Arthur Fils\n"
+                    "Zizou Bergs vs Carlos Alcaraz [1]\n"
+                    "Martin Damm vs Alex de Minaur [7]",
+            "url": "/",
+            "tag": "sample-qualifiers-added",
+            "actions": [{"action": "open", "title": "View draw", "url": "/"}],
         },
         "standout_pick": {
             "title": "You called it!",

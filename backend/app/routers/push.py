@@ -197,40 +197,59 @@ async def _latest_content(db: AsyncSession, pref_key: str, user_id: int) -> dict
                     pref_key == "tournament_end",
                 )
 
-    if pref_key == "draw_changed":
+    if pref_key in ("draw_changed", "qualifiers_added"):
         from app.models.notification import DrawChangeEvent
+        from app.services.notifications import _round1_matchups
 
+        # Scoped to the kind being replayed, since the two types now come from
+        # the same table: replaying the newest row regardless of kind would show
+        # a qualifier list under "Draw change" whenever a qualifier went in last.
+        kind = "filled" if pref_key == "qualifiers_added" else "replaced"
         # Every event in a batch is stamped by one UPDATE, so the batch is
         # exactly the rows sharing the newest notified_at.
         newest = (await db.execute(
             select(func.max(DrawChangeEvent.notified_at))
-            .where(DrawChangeEvent.notified_at.isnot(None))
+            .where(DrawChangeEvent.notified_at.isnot(None),
+                   DrawChangeEvent.kind == kind)
         )).scalar()
         if newest:
             events = (await db.execute(
                 select(DrawChangeEvent)
-                .where(DrawChangeEvent.notified_at == newest)
+                .where(DrawChangeEvent.notified_at == newest,
+                       DrawChangeEvent.kind == kind)
                 .order_by(DrawChangeEvent.draw_id, DrawChangeEvent.bracket_position)
             )).scalars().all()
-            sections: dict[int, dict] = {}
+            by_draw: dict[int, list] = {}
             for e in events:
-                d = await db.get(Draw, e.draw_id)
+                by_draw.setdefault(e.draw_id, []).append(e)
+            sections: dict[int, dict] = {}
+            for draw_id, evs in by_draw.items():
+                d = await db.get(Draw, draw_id)
                 if not d:
                     continue
-                sec = sections.setdefault(d.id, {
+                opponents = await _round1_matchups(
+                    db, draw_id, {e.entry_id for e in evs if e.entry_id}
+                )
+                sections[d.id] = {
                     "id": d.id, "name": d.name, "gender": d.gender,
-                    "category": d.category, "changes": [],
-                })
-                sec["changes"].append({
-                    "kind": e.kind, "old_name": e.old_name, "new_name": e.new_name,
-                    "old_entry_type": e.old_entry_type, "new_entry_type": e.new_entry_type,
-                    "bracket_position": e.bracket_position,
-                })
+                    "category": d.category,
+                    "changes": [{
+                        "kind": e.kind, "old_name": e.old_name, "new_name": e.new_name,
+                        "old_entry_type": e.old_entry_type,
+                        "new_entry_type": e.new_entry_type,
+                        "bracket_position": e.bracket_position,
+                        "opponent": opponents.get(e.entry_id, (None, "", False))[0],
+                        "opponent_status": opponents.get(e.entry_id, (None, "", False))[1],
+                        "opponent_bye": opponents.get(e.entry_id, (None, "", False))[2],
+                    } for e in evs],
+                }
             if sections:
                 # Replayed with the "affects your picks" line on: the caller is
-                # looking at this to see what the real thing looks like, and the
-                # warning line is the part of it worth checking renders.
-                return push_content.draw_change(
+                # looking at this to see what the real thing looks like, and that
+                # line is the part of it worth checking renders.
+                builder = (push_content.qualifiers_added if kind == "filled"
+                           else push_content.draw_change)
+                return builder(
                     list(sections.values()), True, max(e.id for e in events),
                 )
 

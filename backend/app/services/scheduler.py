@@ -607,15 +607,22 @@ async def _notify_pending_draw_changes() -> None:
     from app.models.notification import DrawChangeEvent
 
     cutoff = datetime.now(timezone.utc) - DRAW_CHANGE_NOTIFY_COOLDOWN
+    ready_by_kind: dict[str, list] = {}
     async with AsyncSessionLocal() as db:
-        ready = (await db.execute(
-            select(DrawChangeEvent.draw_id)
-            .where(DrawChangeEvent.notified_at.is_(None))
-            .group_by(DrawChangeEvent.draw_id)
-            .having(func.max(DrawChangeEvent.detected_at) <= cutoff)
-        )).scalars().all()
+        # Settled independently per kind. A draw whose qualifiers went in an hour
+        # ago and whose withdrawal landed a minute ago should send the qualifier
+        # message now and hold the other — one kind still moving must not pin the
+        # other behind it.
+        for kind in ("replaced", "filled"):
+            ready_by_kind[kind] = list((await db.execute(
+                select(DrawChangeEvent.draw_id)
+                .where(DrawChangeEvent.notified_at.is_(None),
+                       DrawChangeEvent.kind == kind)
+                .group_by(DrawChangeEvent.draw_id)
+                .having(func.max(DrawChangeEvent.detected_at) <= cutoff)
+            )).scalars().all())
 
-        if not ready:
+        if not any(ready_by_kind.values()):
             held = (await db.execute(
                 select(func.count()).select_from(DrawChangeEvent)
                 .where(DrawChangeEvent.notified_at.is_(None))
@@ -625,8 +632,11 @@ async def _notify_pending_draw_changes() -> None:
             return
 
     from app.services.notifications import notify_draw_change_batch
-    logger.info("Draw-change dispatch: %d draw(s) ready", len(ready))
-    await notify_draw_change_batch(list(ready))
+    for kind, ready in ready_by_kind.items():
+        if not ready:
+            continue
+        logger.info("Draw-change dispatch (%s): %d draw(s) ready", kind, len(ready))
+        await notify_draw_change_batch(ready, kind)
 
 
 # Matches finish in waves — a full round can land inside an hour — so a user who
