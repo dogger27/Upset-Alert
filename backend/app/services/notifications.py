@@ -23,7 +23,7 @@ from app.services.email import API_BASE, _tournament_label
 from app.models.league import League, LeagueMember
 from app.models.notification import NotificationPreference
 from app.models.prediction import UserPrediction
-from app.models.tournament import Match, Draw
+from app.models.tournament import Draw, DrawEntry, Match
 from app.models.user import User
 from app.services.draw_changes import change_line
 from app.services.scoring import rank_users, score_user
@@ -821,6 +821,96 @@ async def _round1_matchups(db, draw_id: int, entry_ids: set) -> dict:
     return out
 
 
+async def draw_is_fully_transcribed(db, draw_id: int) -> bool:
+    """
+    True when no slot in the draw is still waiting for a name.
+
+    An unfilled qualifier slot exists as a DrawEntry with entry_type 'Q' and an
+    empty name — that is what the bracket renders as "Qualifier N" — so a blank
+    name anywhere is the page telling us it is not finished. Checking blanks of
+    ANY entry type rather than just Q, because a half-transcribed main draw is
+    equally not the moment to announce that the field is set.
+
+    Deliberately not a count against draw_size: that column holds the bracket
+    size, not the number of players. 2026 Canadian Open is stored as 128 with 96
+    entries, so "entries == draw_size" is false for every 96- and 56-draw event
+    and would have held their notification forever.
+    """
+    blanks = (await db.execute(
+        select(func.count()).select_from(DrawEntry).where(
+            DrawEntry.draw_id == draw_id,
+            func.trim(func.coalesce(DrawEntry.name, "")) == "",
+        )
+    )).scalar() or 0
+    return blanks == 0
+
+
+async def _gather_qualifier_payload(db, draw: Draw) -> Optional[dict]:
+    """
+    Every qualifier in the draw and the first-round match each one creates.
+
+    Sourced from the draw's own Q entries rather than from the pending change
+    events, because the message is "here is the qualifying field" and that has to
+    be the whole field. Qualifiers can arrive in more than one wave, and some may
+    have been placed before the draw was announced (nothing is recorded then —
+    see the draw_release_notified_at gate in _do_scrape), so the events say WHEN
+    to send and the draw says WHAT to send.
+    """
+    pick_res = await db.execute(
+        select(UserPrediction.user_id, UserPrediction.predicted_winner_id).where(
+            UserPrediction.draw_id == draw.id,
+            UserPrediction.predicted_winner_id.isnot(None),
+        )
+    )
+    picked_entries: dict[int, set] = defaultdict(set)
+    for uid, entry_id in pick_res.all():
+        picked_entries[uid].add(entry_id)
+    if not picked_entries:
+        return None
+
+    quals = (await db.execute(
+        select(DrawEntry)
+        .where(DrawEntry.draw_id == draw.id, DrawEntry.entry_type == "Q")
+        .order_by(DrawEntry.bracket_position)
+    )).scalars().all()
+    quals = [q for q in quals if (q.name or "").strip()]
+    if not quals:
+        return None
+
+    from app.services.email import _tier_badge
+
+    opponents = await _round1_matchups(db, draw.id, {q.id for q in quals})
+    changes = []
+    for q in quals:
+        opp_name, opp_status, opp_bye = opponents.get(q.id, (None, "", False))
+        changes.append({
+            "entry_id": q.id,
+            "bracket_position": q.bracket_position,
+            "kind": "filled",
+            "old_name": None,
+            "new_name": q.name,
+            "old_entry_type": "Q",
+            "new_entry_type": q.entry_type,
+            "old_seed": None,
+            "opponent": opp_name,
+            "opponent_status": opp_status,
+            "opponent_bye": opp_bye,
+        })
+
+    return {
+        "id": draw.id,
+        "name": draw.name,
+        "gender": draw.gender,
+        "category": draw.category,
+        "label": _tournament_label(draw.name, draw.category or "", draw.gender or "M"),
+        "tier": _tier_badge(draw.category or "", draw.gender),
+        "locked": draw.is_locked,
+        "changes": changes,
+        "competitors": set(picked_entries.keys()),
+        "picked_entries": picked_entries,
+    }
+
+
 async def _gather_draw_change_payload(db, draw: Draw, events: list) -> Optional[dict]:
     """
     One draw's pending swaps, plus who in that draw is affected by each.
@@ -916,6 +1006,28 @@ async def notify_draw_change_batch(draw_ids: list[int], kind: str = "replaced") 
 
     async with AsyncSessionLocal() as db:
         now = datetime.now(tz.utc)
+
+        # A draw announces its qualifying field exactly once. The unique primary
+        # key is the hard guard; a draw that fails to claim drops out of the
+        # batch, and its events are still stamped below so they do not queue
+        # forever. Each claim gets its own savepoint so one already-announced
+        # draw cannot abort the rest.
+        if is_qualifiers:
+            from sqlalchemy.exc import IntegrityError
+            from app.models.notification import QualifiersAddedNotification
+            fresh = []
+            for draw_id in draw_ids:
+                try:
+                    async with db.begin_nested():
+                        db.add(QualifiersAddedNotification(draw_id=draw_id))
+                    fresh.append(draw_id)
+                except IntegrityError:
+                    logger.info("Qualifiers already announced for draw %d — "
+                                "later placements reach users as draw changes", draw_id)
+            await db.commit()
+        else:
+            fresh = list(draw_ids)
+
         claim = await db.execute(
             sa_update(DrawChangeEvent)
             .where(
@@ -931,9 +1043,12 @@ async def notify_draw_change_batch(draw_ids: list[int], kind: str = "replaced") 
             return
         await db.commit()
 
+        if not fresh:
+            return
+
         claimed = (await db.execute(
             select(DrawChangeEvent).where(
-                DrawChangeEvent.draw_id.in_(draw_ids),
+                DrawChangeEvent.draw_id.in_(fresh),
                 DrawChangeEvent.kind == kind,
                 DrawChangeEvent.notified_at == now,
             )
@@ -944,11 +1059,14 @@ async def notify_draw_change_batch(draw_ids: list[int], kind: str = "replaced") 
             by_draw[e.draw_id].append(e)
 
         payloads = []
-        for draw_id, events in by_draw.items():
+        # Qualifiers are keyed off the DRAW, not the events: the events say when
+        # to send, the draw says what to send (see _gather_qualifier_payload).
+        for draw_id in (fresh if is_qualifiers else list(by_draw.keys())):
             draw = await db.get(Draw, draw_id)
             if not draw:
                 continue
-            payload = await _gather_draw_change_payload(db, draw, events)
+            payload = (await _gather_qualifier_payload(db, draw) if is_qualifiers
+                       else await _gather_draw_change_payload(db, draw, by_draw[draw_id]))
             if payload:
                 payloads.append(payload)
         if not payloads:
@@ -980,6 +1098,15 @@ async def notify_draw_change_batch(draw_ids: list[int], kind: str = "replaced") 
                    DrawChangeEvent.draw_id.in_([p["id"] for p in payloads]))
             .values(recipient_count=len(to_email))
         )
+        if is_qualifiers:
+            from app.models.notification import QualifiersAddedNotification
+            for p in payloads:
+                await db.execute(
+                    sa_update(QualifiersAddedNotification)
+                    .where(QualifiersAddedNotification.draw_id == p["id"])
+                    .values(recipient_count=len(to_email),
+                            qualifier_count=len(p["changes"]))
+                )
         await db.commit()
 
     def _sections_for(uid: int) -> list[dict]:
