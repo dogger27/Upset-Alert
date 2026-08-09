@@ -181,20 +181,20 @@ def matchup_line(change: dict) -> str:
     along in brackets, because "vs Alcaraz" and "vs Alcaraz [1]" are different
     pieces of news.
     """
-    from app.services.draw_changes import entry_suffix
+    from app.services.draw_changes import entry_suffix, last_name
 
     # The (Q) is not decoration: in a list of two names per line, it is the only
     # thing marking which of them is the qualifier. Read from the entry rather
     # than hardcoded, so a slot that resolved to something else (LL taking an
     # unclaimed qualifying spot) is labelled as what it actually is.
-    name = change["new_name"] + entry_suffix(change.get("new_entry_type"))
+    name = last_name(change["new_name"]) + entry_suffix(change.get("new_entry_type"))
     if change.get("opponent_bye"):
         return f"{name} — bye"
     opp = change.get("opponent")
     if not opp:
         return f"{name} — opponent TBD"
     status = change.get("opponent_status")
-    return f"{name} vs {opp}" + (f" [{status}]" if status else "")
+    return f"{name} vs {last_name(opp)}" + (f" [{status}]" if status else "")
 
 
 def qualifiers_added(draws: list[dict], affects_your_picks: bool, event_seq: int = 0) -> dict:
@@ -357,8 +357,7 @@ def sample(pref_key: str) -> dict:
         },
         "draw_changed": {
             "title": "Draw change — Cincinnati Open (ATP)",
-            "body": "⚠️ One of your picks was replaced.\n"
-                    "Arthur Fils → Zizou Bergs (LL)",
+            "body": "⚠️ One of your picks was replaced.\nFils → Bergs (LL)",
             "url": "/",
             "tag": "sample-draw-change",
             "actions": [{"action": "open", "title": "Check your picks", "url": "/"}],
@@ -368,9 +367,8 @@ def sample(pref_key: str) -> dict:
         # three-qualifier ATP 1000 is a number that event cannot produce.
         "qualifiers_added": {
             "title": "12 qualifiers added — Cincinnati Open (ATP)",
-            "body": "Flavio Cobolli (Q) vs Arthur Fils\n"
-                    "Zizou Bergs (Q) vs Carlos Alcaraz [1]\n"
-                    "Martin Damm (Q) vs Alex de Minaur [7]\n…and 9 more",
+            "body": "Cobolli (Q) vs Fils\nBergs (Q) vs Alcaraz [1]\n"
+                    "Damm (Q) vs de Minaur [7]\n…and 9 more",
             "url": "/",
             "tag": "sample-qualifiers-added",
             "actions": [{"action": "open", "title": "View draw", "url": "/"}],
