@@ -159,33 +159,38 @@ def draw_change(draws: list[dict], affects_your_picks: bool, event_seq: int = 0)
 
 def standout_pick(picks: list[dict]) -> dict:
     """
-    picks: [{draw_name, gender, category, draw_id, winner, loser, score,
+    picks: [{draw_name, gender, category, draw_id, winner, loser,
              correct_count, participant_count}, ...] rarest call first.
 
-    One user's correct calls that most of the field missed. The body names the
-    draw, both players and who won — the three things needed to remember the
-    pick without opening anything — and the tap goes to that draw, which is
-    where the bracket showing it lives.
+    One user's correct calls that most of the field missed.
 
-    Ordered rarest-first by the caller, so the single line a collapsed
-    notification shows is the best call of the batch, and the link points at its
-    draw when the batch spans several.
+    The result is the headline, on its own line under "You called it!" — that is
+    the whole message, and it should land without expanding anything. The
+    newline in the title is deliberate: the OS appends "from Upset Alert" after
+    the title, so a result left to wrap ran straight into that attribution and
+    read as one sentence ("You called it — Bergs def. Fritz from Upset Alert").
+
+    Expanded, the body carries what the headline leaves out: which draw and
+    round, and how alone the call was — as a share, not a bare fraction, since
+    "2 / 11" needs arithmetic to land and "(18%)" does not. The set-by-set score
+    used to be here and is gone: it says nothing about the pick being a
+    standout, which is the only reason this notification exists.
+
+    Ordered rarest-first by the caller, so a collapsed notification leads with
+    the best call of the batch and the link points at its draw.
     """
     n = len(picks)
     top = picks[0]
-    if n == 1:
-        title = f"You called it — {top['winner']} def. {top['loser']}"
-    else:
-        title = f"{n} picks the field missed"
+    headline = (f"{top['winner']} def. {top['loser']}" if n == 1
+                else f"{n} picks the field missed")
+    title = f"You called it!\n{headline}"
 
     lines = []
     for p in picks[:MAX_LISTED_PICKS]:
         head = f"{p['draw_name']} · {tier_label(p.get('category'), p['gender'])} · {p['round_name']}"
-        result = f"{p['winner']} def. {p['loser']}"
-        if p.get("score"):
-            result += f" {p['score']}"
-        lines.append(f"{head}\n{result} — {p['correct_count']} of "
-                     f"{p['participant_count']} got it")
+        share = round(100 * p["correct_count"] / p["participant_count"])
+        lines.append(f"{head}\nOnly {p['correct_count']} / {p['participant_count']} "
+                     f"({share}%) got this!")
     if n > MAX_LISTED_PICKS:
         lines.append(f"…and {n - MAX_LISTED_PICKS} more")
 
@@ -255,9 +260,8 @@ def sample(pref_key: str) -> dict:
             "actions": [{"action": "open", "title": "Check your picks", "url": "/"}],
         },
         "standout_pick": {
-            "title": "You called it — Bergs def. Fritz",
-            "body": "Cincinnati Open · ATP 1000 · R32\n"
-                    "Bergs def. Fritz 7-6, 4-6, 6-3 — 2 of 11 got it",
+            "title": "You called it!\nBergs def. Fritz",
+            "body": "Cincinnati Open · ATP 1000 · R32\nOnly 2 / 11 (18%) got this!",
             "url": "/",
             "tag": "sample-standout",
             "actions": [{"action": "open", "title": "View draw", "url": "/"}],

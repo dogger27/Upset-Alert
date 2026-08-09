@@ -989,12 +989,16 @@ STANDOUT_PICK_PREF = "standout_pick"
 # flattered into "you saw something they didn't".
 STANDOUT_MAX_SHARE = 0.5
 
-# Below this many competitors the share is noise, not insight: in a field of two
-# the only outcomes are 0%, 50% and 100%, so every correct minority call is a
-# solo one and the notification says nothing about the pick. Three is the
-# smallest field where "fewer than half" describes the field rather than the
-# arithmetic.
-STANDOUT_MIN_PARTICIPANTS = 3
+# Minimum number of competitors who actually picked the match before it can be
+# called a standout. Below this the share is noise rather than insight — in a
+# field of two the only outcomes are 0%, 50% and 100%, so every correct minority
+# call is a solo one and says nothing about the pick.
+#
+# Measured on picks for THAT MATCH, not on entrants in the draw. It is the
+# stricter of the two readings and implies the other: everyone who picked the
+# match is by definition a participant, so prediction_count >= 6 guarantees
+# participant_count >= 6 as well.
+STANDOUT_MIN_PREDICTIONS = 6
 
 
 async def record_standout_picks(db, draw: Draw, since=None) -> int:
@@ -1026,7 +1030,9 @@ async def record_standout_picks(db, draw: Draw, since=None) -> int:
         .group_by(UserPrediction.user_id)
     )
     participants = {r[0] for r in participants_res.all()}
-    if len(participants) < STANDOUT_MIN_PARTICIPANTS:
+    # No match in a draw this small can clear the prediction floor, since every
+    # picker of a match is one of these participants.
+    if len(participants) < STANDOUT_MIN_PREDICTIONS:
         return 0
 
     measured_res = await db.execute(
@@ -1058,9 +1064,13 @@ async def record_standout_picks(db, draw: Draw, since=None) -> int:
         .where(UserPrediction.match_id.in_([m.id for m in fresh]))
     )
     correct_by_match: dict[int, set] = defaultdict(set)
+    picked_by_match: dict[int, set] = defaultdict(set)
     winner_of = {m.id: m.winner_id for m in fresh}
     for match_id, uid, picked in picks_res.all():
-        if uid in participants and picked == winner_of.get(match_id):
+        if uid not in participants or picked is None:
+            continue
+        picked_by_match[match_id].add(uid)
+        if picked == winner_of.get(match_id):
             correct_by_match[match_id].add(uid)
 
     for m in fresh:
@@ -1069,6 +1079,7 @@ async def record_standout_picks(db, draw: Draw, since=None) -> int:
             draw_id=draw.id,
             correct_count=len(correct_by_match.get(m.id, ())),
             participant_count=len(participants),
+            prediction_count=len(picked_by_match.get(m.id, ())),
         ))
     return len(fresh)
 
@@ -1086,7 +1097,8 @@ async def _gather_standout_payload(db, rows: list) -> list[dict]:
     keep = [
         r for r in rows
         if r.correct_count
-        and r.participant_count >= STANDOUT_MIN_PARTICIPANTS
+        and r.prediction_count >= STANDOUT_MIN_PREDICTIONS
+        and r.participant_count > 0
         and r.correct_count / r.participant_count < STANDOUT_MAX_SHARE
     ]
     if not keep:

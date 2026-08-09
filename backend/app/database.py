@@ -330,6 +330,12 @@ async def _migrate(conn):
             "INSERT OR IGNORE INTO applied_seeds (name, applied_at) "
             "VALUES ('seed_standout_backfill', datetime('now'))"
         ),
+        # How many competitors picked the match itself, which is what gates the
+        # standout notification (>= 6). Rows written before this column existed
+        # default to 0 and therefore can never qualify — correct, not a gap:
+        # they are the pre-stamped historical backfill plus anything measured in
+        # the few hours between the two deploys, none of which should notify.
+        "ALTER TABLE standout_pick_notifications ADD COLUMN prediction_count INTEGER NOT NULL DEFAULT 0",
     ]
     for sql in migrations:
         try:
