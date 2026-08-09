@@ -100,9 +100,13 @@ def round_complete(
     "R32 complete — Canadian Open" with a single ATP line reads as though the
     WTA draw hadn't reported. Same name · tier lines as draw-release, so the two
     notification types are scannable the same way.
+
+    `where` no longer appears in the title — "R32 complete — Canadian Open"
+    arrived as "R32 complete — Cana…", and the body names every draw in the
+    batch anyway, which is strictly more than the title could fit. It still
+    keys the tag, where it stops one event's digest replacing another's.
     """
-    title = (f"Final standings — {where}" if is_final
-             else f"{round_name} complete — {where}")
+    title = "Final Standings" if is_final else f"{round_name} Complete"
 
     body = "\n".join(
         f"{d['name']} · {tier_label(d.get('category'), d['gender'])}" for d in draws
@@ -339,16 +343,15 @@ def sample(pref_key: str) -> dict:
             "actions": [{"action": "open", "title": "Make picks", "url": "/"}],
         },
         "round_standings": {
-            "title": "R16 complete — Canadian Open",
-            "body": "2 draws reported\nCanadian Open ATP1000 · 8 matches · 3 upsets\n"
-                    "Canadian Open WTA1000 · 8 matches · 2 upsets",
+            "title": "R16 Complete",
+            "body": "Canadian Open · ATP 1000\nCanadian Open · WTA 1000",
             "url": "/leagues",
             "tag": "sample-round",
             "actions": [{"action": "open", "title": "View standings", "url": "/leagues"}],
         },
         "tournament_end": {
-            "title": "Final standings — Canadian Open",
-            "body": "2 draws reported\nCanadian Open ATP1000 · 1 match · 1 upset",
+            "title": "Final Standings",
+            "body": "Canadian Open · ATP 1000\nCanadian Open · WTA 1000",
             "url": "/leagues",
             "tag": "sample-final",
             "actions": [{"action": "open", "title": "View standings", "url": "/leagues"}],
