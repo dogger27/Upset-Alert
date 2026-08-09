@@ -41,12 +41,16 @@ _BODY_CLOSE = '</div>'
 
 
 def _tournament_label(tournament_name: str, category: str, gender: str) -> str:
-    """Return 'Wimbledon Men' for GS or 'Canadian Open ATP1000' for tour events."""
+    """Return 'Wimbledon ATP' for GS or 'Canadian Open ATP1000' for tour events.
+
+    The tour, never the gender. Slams used to read 'Wimbledon Men' — the only
+    label in the app that named the draw any other way, and the reason the two
+    halves of a combined event did not line up beside each other.
+    """
     cat = (category or "").upper()
-    is_gs = "SLAM" in cat or "GRAND" in cat
-    if is_gs:
-        return f"{tournament_name} {'Men' if gender == 'M' else 'Women'}"
     tour = "ATP" if gender == "M" else "WTA"
+    if "SLAM" in cat or "GRAND" in cat:
+        return f"{tournament_name} {tour}"
     tier = "1000" if "1000" in cat else "500" if "500" in cat else "250"
     return f"{tournament_name} {tour}{tier}"
 
@@ -879,6 +883,14 @@ def _matchup_row(change: dict, is_last: bool) -> str:
         '<div style="font-size:12px;font-weight:700;color:#b45309;padding-top:5px">'
         'You picked this slot</div>' if mine else ""
     )
+    # Marks which of the two names on the card is the qualifier. Read from the
+    # entry, so a slot that resolved to something else is labelled accurately.
+    entry_type = (change.get("new_entry_type") or "").strip()
+    qual_badge = (
+        f'<span style="font-size:11px;font-weight:700;color:#5b21b6;background:#ede9fe;'
+        f'border-radius:9px;padding:2px 6px;margin-left:6px">{_esc(entry_type)}</span>'
+        if entry_type else ""
+    )
     return f"""
       <tr>
         <td style="padding:{'10px 14px' if is_last else '10px 14px 0'};">
@@ -886,7 +898,9 @@ def _matchup_row(change: dict, is_last: bool) -> str:
                  style="border-collapse:separate;border:1px solid {'#fcd34d' if mine else '#e5e7eb'};
                         border-radius:6px;background:{'#fffbeb' if mine else '#ffffff'}">
             <tr><td style="padding:11px 13px">
-              <div style="font-size:15px;font-weight:700;color:#111">{_esc(change['new_name'])}</div>
+              <div style="font-size:15px;font-weight:700;color:#111">
+                {_esc(change['new_name'])}{qual_badge}
+              </div>
               <div style="font-size:14px;color:#444;padding-top:3px">
                 <span style="color:#6b7280">vs</span> {right}
               </div>
@@ -898,7 +912,13 @@ def _matchup_row(change: dict, is_last: bool) -> str:
 
 
 def _qualifiers_section(draw: dict, is_last: bool) -> str:
+    from app.services.draw_changes import dedupe_matchups
+
     n = len(draw["changes"])
+    # One card per MATCH, headline counts QUALIFIERS — two qualifiers drawn
+    # against each other are one match, and printing it from both sides read as
+    # a duplicate.
+    rows_data = dedupe_matchups(draw["changes"])
     banner = _section_banner(
         draw["label"],
         f"{n} qualifier{'' if n == 1 else 's'} placed &middot; "
@@ -906,7 +926,8 @@ def _qualifiers_section(draw: dict, is_last: bool) -> str:
         f"{BASE_URL}/tournaments/{draw['id']}",
         "View draw",
     )
-    rows = "".join(_matchup_row(c, i == n - 1) for i, c in enumerate(draw["changes"]))
+    rows = "".join(_matchup_row(c, i == len(rows_data) - 1)
+                   for i, c in enumerate(rows_data))
     return f"""{banner}
     <div style="padding:10px 10px {'20px' if is_last else '14px'};background:#ffffff">
       <table width="100%" cellpadding="0" cellspacing="0" border="0">{rows}</table>

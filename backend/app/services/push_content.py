@@ -32,6 +32,16 @@ MAX_LISTED_PICKS = 5
 MAX_LISTED_QUALIFIERS = 16
 
 
+def tour_label(gender: str) -> str:
+    """'ATP' / 'WTA'. Never '(M)' / '(F)'.
+
+    The tour is what the sport calls itself and what a reader recognises at a
+    glance; M/F is a database column leaking into a notification. One helper so
+    the two can never drift apart across the six places this is rendered.
+    """
+    return "ATP" if gender == "M" else "WTA"
+
+
 def tier_label(category: Optional[str], gender: str) -> str:
     """'ATP 1000', 'WTA 500', 'ATP Grand Slam'.
 
@@ -40,7 +50,7 @@ def tier_label(category: Optional[str], gender: str) -> str:
     a Slam week identical here.
     """
     cat = (category or "").upper()
-    tour = "ATP" if gender == "M" else "WTA"
+    tour = tour_label(gender)
     if "SLAM" in cat or "GRAND" in cat:
         return f"{tour} Grand Slam"
     tier = "1000" if "1000" in cat else "500" if "500" in cat else "250"
@@ -57,13 +67,13 @@ def draw_release(draws: list[dict], week_label: str) -> dict:
     """
     n = len(draws)
     names = {d["name"] for d in draws}
-    labelled = [f"{d['name']} ({d['gender']})" for d in draws]
+
 
     # One event (a Slam or 1000 is two draws of the same tournament) reads by
     # name; a genuinely mixed week can only be described by its date.
     if len(names) == 1:
         name = draws[0]["name"]
-        title = (f"{name} ({draws[0]['gender']}) draw released" if n == 1
+        title = (f"{name} ({tour_label(draws[0]['gender'])}) draw released" if n == 1
                  else f"{name} draws released")
     else:
         title = f"{n} draws released — {week_label}"
@@ -132,7 +142,7 @@ def draw_change(draws: list[dict], affects_your_picks: bool, event_seq: int = 0)
     total = sum(len(d["changes"]) for d in draws)
     if len(draws) == 1:
         d = draws[0]
-        where = f"{d['name']} ({d['gender']})"
+        where = f"{d['name']} ({tour_label(d['gender'])})"
         title = f"Draw change — {where}" if total == 1 else f"{total} draw changes — {where}"
     else:
         title = f"{total} draw changes — {len(draws)} draws"
@@ -171,7 +181,13 @@ def matchup_line(change: dict) -> str:
     along in brackets, because "vs Alcaraz" and "vs Alcaraz [1]" are different
     pieces of news.
     """
-    name = change["new_name"]
+    from app.services.draw_changes import entry_suffix
+
+    # The (Q) is not decoration: in a list of two names per line, it is the only
+    # thing marking which of them is the qualifier. Read from the entry rather
+    # than hardcoded, so a slot that resolved to something else (LL taking an
+    # unclaimed qualifying spot) is labelled as what it actually is.
+    name = change["new_name"] + entry_suffix(change.get("new_entry_type"))
     if change.get("opponent_bye"):
         return f"{name} — bye"
     opp = change.get("opponent")
@@ -196,14 +212,21 @@ def qualifiers_added(draws: list[dict], affects_your_picks: bool, event_seq: int
     covers a Slam's full sixteen, and a partial list of "who's in the draw now"
     is the one thing this notification cannot usefully be.
     """
+    from app.services.draw_changes import dedupe_matchups
+
+    # The headline counts QUALIFIERS; the list shows MATCHES. They differ when
+    # two qualifiers are drawn against each other, and both numbers are true.
     total = sum(len(d["changes"]) for d in draws)
     if len(draws) == 1:
         d = draws[0]
-        where = f"{d['name']} ({d['gender']})"
+        where = f"{d['name']} ({tour_label(d['gender'])})"
         title = (f"Qualifier added — {where}" if total == 1
                  else f"{total} qualifiers added — {where}")
     else:
         title = f"{total} qualifiers added — {len(draws)} draws"
+
+    matches = {id(d): dedupe_matchups(d["changes"]) for d in draws}
+    total_matches = sum(len(m) for m in matches.values())
 
     lines, shown = [], 0
     for d in draws:
@@ -211,11 +234,11 @@ def qualifiers_added(draws: list[dict], affects_your_picks: bool, event_seq: int
             break
         if len(draws) > 1:
             lines.append(f"{d['name']} · {tier_label(d.get('category'), d['gender'])}")
-        for c in d["changes"][:MAX_LISTED_QUALIFIERS - shown]:
+        for c in matches[id(d)][:MAX_LISTED_QUALIFIERS - shown]:
             lines.append(matchup_line(c))
             shown += 1
-    if total > shown:
-        lines.append(f"…and {total - shown} more")
+    if total_matches > shown:
+        lines.append(f"…and {total_matches - shown} more")
     if affects_your_picks:
         lines.append("You picked one of these slots — it's a real player now.")
 
@@ -333,18 +356,21 @@ def sample(pref_key: str) -> dict:
             "actions": [{"action": "open", "title": "View league", "url": "/leagues"}],
         },
         "draw_changed": {
-            "title": "Draw change — Cincinnati Open (M)",
+            "title": "Draw change — Cincinnati Open (ATP)",
             "body": "⚠️ One of your picks was replaced.\n"
                     "Arthur Fils → Zizou Bergs (LL)",
             "url": "/",
             "tag": "sample-draw-change",
             "actions": [{"action": "open", "title": "Check your picks", "url": "/"}],
         },
+        # Last resort only: _latest_content rebuilds this from the most recent
+        # draw that actually has a qualifying field, because an invented
+        # three-qualifier ATP 1000 is a number that event cannot produce.
         "qualifiers_added": {
-            "title": "3 qualifiers added — Cincinnati Open (M)",
-            "body": "Flavio Cobolli vs Arthur Fils\n"
-                    "Zizou Bergs vs Carlos Alcaraz [1]\n"
-                    "Martin Damm vs Alex de Minaur [7]",
+            "title": "12 qualifiers added — Cincinnati Open (ATP)",
+            "body": "Flavio Cobolli (Q) vs Arthur Fils\n"
+                    "Zizou Bergs (Q) vs Carlos Alcaraz [1]\n"
+                    "Martin Damm (Q) vs Alex de Minaur [7]\n…and 9 more",
             "url": "/",
             "tag": "sample-qualifiers-added",
             "actions": [{"action": "open", "title": "View draw", "url": "/"}],

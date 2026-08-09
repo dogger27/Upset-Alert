@@ -763,7 +763,8 @@ async def notify_draw_release_batch(draw_ids: list[int], is_followup: bool = Fal
     except Exception as exc:
         logger.warning("Draw-release push failed: %s", exc)
 
-    names = ", ".join(f"{d.year} {d.name} ({d.gender})" for d in claimed)
+    from app.services.push_content import tour_label
+    names = ", ".join(f"{d.year} {d.name} ({tour_label(d.gender)})" for d in claimed)
     await app_log("info", "notifications",
                   f"Draw-release {'follow-up' if is_followup else 'digest'} sent to "
                   f"{len(recipients)} user(s) covering {len(claimed)} draw(s): {names}",
