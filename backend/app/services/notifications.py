@@ -25,6 +25,7 @@ from app.models.notification import NotificationPreference
 from app.models.prediction import UserPrediction
 from app.models.tournament import Match, Draw
 from app.models.user import User
+from app.services.draw_changes import change_line
 from app.services.scoring import rank_users, score_user
 
 logger = logging.getLogger(__name__)
@@ -586,6 +587,14 @@ async def notify_round_complete(
 # Match-start notification
 # ---------------------------------------------------------------------------
 
+# Draw-release emails are a single on/off. They were once selectable per tier
+# ('draw_open:ATP 250', …), which stopped making sense when the email became a
+# weekly digest: one message covers every draw released that week, so a per-tier
+# opt-in could only ever have filtered rows out of a mail the user was getting
+# regardless. The old keys are migrated into this one (see database.py).
+DRAW_RELEASED_PREF = "draw_released"
+
+
 async def notify_draw_release_batch(draw_ids: list[int], is_followup: bool = False) -> None:
     """
     Email every user with draw-release notifications on — one message covering
@@ -760,6 +769,498 @@ async def notify_draw_release_batch(draw_ids: list[int], is_followup: bool = Fal
                   f"{len(recipients)} user(s) covering {len(claimed)} draw(s): {names}",
                   {"draw_ids": [d.id for d in claimed], "recipient_count": len(recipients),
                    "week_label": week_label, "is_followup": is_followup})
+
+
+# ---------------------------------------------------------------------------
+# Draw-change notification (a player swapped after the draw was announced)
+# ---------------------------------------------------------------------------
+
+DRAW_CHANGED_PREF = "draw_changed"
+
+
+async def _gather_draw_change_payload(db, draw: Draw, events: list) -> Optional[dict]:
+    """
+    One draw's pending swaps, plus who in that draw is affected by each.
+
+    "Affected" is exact rather than inferred: the scraper rewrites DrawEntry in
+    place, so a prediction whose predicted_winner_id equals the rewritten
+    entry's id IS a pick on the player who just left. That user's bracket now
+    silently backs someone they never chose, which is the entire reason this
+    notification exists.
+    """
+    pick_res = await db.execute(
+        select(UserPrediction.user_id, UserPrediction.predicted_winner_id).where(
+            UserPrediction.draw_id == draw.id,
+            UserPrediction.predicted_winner_id.isnot(None),
+        )
+    )
+    picked_entries: dict[int, set] = defaultdict(set)
+    for uid, entry_id in pick_res.all():
+        picked_entries[uid].add(entry_id)
+    if not picked_entries:
+        # Nobody is competing in this draw, so nobody is affected by a change to
+        # it. The events are still claimed by the caller — an unclaimed batch
+        # would be reconsidered every ten minutes forever.
+        return None
+
+    from app.services.email import _tier_badge
+
+    changes = [
+        {
+            "entry_id": e.entry_id,
+            "bracket_position": e.bracket_position,
+            "kind": e.kind,
+            "old_name": e.old_name,
+            "new_name": e.new_name,
+            "old_entry_type": e.old_entry_type,
+            "new_entry_type": e.new_entry_type,
+            "old_seed": e.old_seed,
+        }
+        for e in sorted(events, key=lambda e: e.bracket_position)
+    ]
+    return {
+        "id": draw.id,
+        "name": draw.name,
+        "gender": draw.gender,
+        "category": draw.category,
+        "label": _tournament_label(draw.name, draw.category or "", draw.gender or "M"),
+        "tier": _tier_badge(draw.category or "", draw.gender),
+        "locked": draw.is_locked,
+        "changes": changes,
+        "competitors": set(picked_entries.keys()),
+        "picked_entries": picked_entries,
+    }
+
+
+async def notify_draw_change_batch(draw_ids: list[int]) -> None:
+    """
+    Tell everyone competing in these draws that their bracket changed.
+
+    Audience is competitors only — a user with at least one pick in the draw,
+    the same "participant" bar the standings and round digests use. Someone who
+    has not entered has nothing to re-check, and a draw change is not an
+    invitation to enter.
+
+    Claim first, send second, exactly as notify_draw_release_batch does: the
+    conditional UPDATE on notified_at is the guard, so a dispatch run overlapping
+    the previous one finds nothing left to claim rather than sending twice.
+    """
+    from sqlalchemy import update as sa_update
+    from app.services.email import send_draw_change_digest
+    from app.services.system_log import app_log
+    from app.models.notification import DrawChangeEvent
+
+    if not draw_ids:
+        return
+
+    async with AsyncSessionLocal() as db:
+        now = datetime.now(tz.utc)
+        claim = await db.execute(
+            sa_update(DrawChangeEvent)
+            .where(
+                DrawChangeEvent.draw_id.in_(draw_ids),
+                DrawChangeEvent.notified_at.is_(None),
+            )
+            .values(notified_at=now)
+        )
+        if claim.rowcount == 0:
+            await db.rollback()
+            logger.debug("Draw-change batch %s already claimed — nothing to send", draw_ids)
+            return
+        await db.commit()
+
+        claimed = (await db.execute(
+            select(DrawChangeEvent).where(
+                DrawChangeEvent.draw_id.in_(draw_ids),
+                DrawChangeEvent.notified_at == now,
+            )
+        )).scalars().all()
+
+        by_draw: dict[int, list] = defaultdict(list)
+        for e in claimed:
+            by_draw[e.draw_id].append(e)
+
+        payloads = []
+        for draw_id, events in by_draw.items():
+            draw = await db.get(Draw, draw_id)
+            if not draw:
+                continue
+            payload = await _gather_draw_change_payload(db, draw, events)
+            if payload:
+                payloads.append(payload)
+        if not payloads:
+            return
+
+        # Everyone competing in at least one of the changed draws.
+        candidates: set[int] = set()
+        for p in payloads:
+            candidates |= p["competitors"]
+
+        pref_res = await db.execute(
+            select(NotificationPreference.user_id)
+            .join(User, User.id == NotificationPreference.user_id)
+            .where(
+                NotificationPreference.pref_key == DRAW_CHANGED_PREF,
+                NotificationPreference.user_id.in_(candidates),
+                User.email_verified == True,  # noqa: E712
+            )
+        )
+        to_email = {r[0] for r in pref_res.all()}
+
+        emails_res = await db.execute(select(User.id, User.email).where(User.id.in_(to_email)))
+        emails = {r[0]: r[1] for r in emails_res.all()}
+
+        await db.execute(
+            sa_update(DrawChangeEvent)
+            .where(DrawChangeEvent.notified_at == now,
+                   DrawChangeEvent.draw_id.in_([p["id"] for p in payloads]))
+            .values(recipient_count=len(to_email))
+        )
+        await db.commit()
+
+    def _sections_for(uid: int) -> list[dict]:
+        """This user's slice of the batch: only draws they compete in, with each
+        change flagged when it is one of their own picks that moved."""
+        out = []
+        for p in payloads:
+            if uid not in p["competitors"]:
+                continue
+            mine = p["picked_entries"].get(uid, set())
+            out.append({
+                **{k: p[k] for k in ("id", "name", "gender", "category", "label", "tier", "locked")},
+                "changes": [{**c, "affects_you": c["entry_id"] in mine} for c in p["changes"]],
+            })
+        return out
+
+    sent = 0
+    for uid in to_email:
+        email = emails.get(uid)
+        sections = _sections_for(uid)
+        if not email or not sections:
+            continue
+        try:
+            await send_draw_change_digest(
+                email, sections,
+                unsubscribe_url=(
+                    f"{API_BASE}/unsubscribe?token="
+                    f"{create_unsubscribe_token(uid, DRAW_CHANGED_PREF)}"
+                ),
+            )
+            sent += 1
+        except Exception as exc:
+            logger.warning("Failed to send draw-change email to user %d: %s", uid, exc)
+
+    # Push is built per user, unlike every other type here, because the one line
+    # that matters most — whether the swap hit a pick of theirs — differs per
+    # recipient and is what the collapsed notification leads with. Two shared
+    # payloads would be cheaper and would tell half the audience the wrong thing.
+    try:
+        from app.services.push import send_push_to_users, users_with_push
+        from app.services import push_content
+
+        push_uids = set(await users_with_push(DRAW_CHANGED_PREF)) & candidates
+        newest_event = max((e.id for e in claimed), default=0)
+        for uid in push_uids:
+            sections = _sections_for(uid)
+            if not sections:
+                continue
+            affected = any(c["affects_you"] for s in sections for c in s["changes"])
+            content = push_content.draw_change(sections, affected, newest_event)
+            await send_push_to_users([uid], **content)
+    except Exception as exc:
+        logger.warning("Draw-change push failed: %s", exc)
+
+    total_changes = sum(len(p["changes"]) for p in payloads)
+    await app_log("info", "notifications",
+                  f"Draw-change notification sent to {sent} user(s) covering "
+                  f"{total_changes} change(s) in {len(payloads)} draw(s)",
+                  {"draw_ids": [p["id"] for p in payloads], "recipient_count": sent,
+                   "changes": [change_line(c) for p in payloads for c in p["changes"]]})
+
+
+# ---------------------------------------------------------------------------
+# Standout-pick notification (a correct call most of the field missed)
+# ---------------------------------------------------------------------------
+
+STANDOUT_PICK_PREF = "standout_pick"
+
+# A pick is a standout when strictly fewer than half the draw's competitors
+# called the same match right. Strict, so a field split down the middle is not
+# flattered into "you saw something they didn't".
+STANDOUT_MAX_SHARE = 0.5
+
+# Below this many competitors the share is noise, not insight: in a field of two
+# the only outcomes are 0%, 50% and 100%, so every correct minority call is a
+# solo one and the notification says nothing about the pick. Three is the
+# smallest field where "fewer than half" describes the field rather than the
+# arithmetic.
+STANDOUT_MIN_PARTICIPANTS = 3
+
+
+async def record_standout_picks(db, draw: Draw, since=None) -> int:
+    """
+    Measure every newly-finished match in this draw against the field.
+
+    Records a row for EVERY match measured, not just the standouts — the row is
+    the claim, and a match that most of the field called right must be recorded
+    too or the sweep would re-measure it on every pass forever.
+
+    `since` bounds how far back an unmeasured match will be picked up. A match
+    that finished before it is skipped silently and permanently: with no row of
+    its own it stays a candidate, but it can never come back into the window, so
+    the effect is the same as having been measured. That is what stops a draw
+    whose participant pool changes late from suddenly qualifying a whole
+    tournament's worth of old results for notification.
+
+    Returns the number of matches newly measured. Does not commit; the caller
+    owns the transaction.
+    """
+    from app.models.notification import StandoutPickNotification
+
+    participants_res = await db.execute(
+        select(UserPrediction.user_id)
+        .where(
+            UserPrediction.draw_id == draw.id,
+            UserPrediction.predicted_winner_id.isnot(None),
+        )
+        .group_by(UserPrediction.user_id)
+    )
+    participants = {r[0] for r in participants_res.all()}
+    if len(participants) < STANDOUT_MIN_PARTICIPANTS:
+        return 0
+
+    measured_res = await db.execute(
+        select(StandoutPickNotification.match_id).where(
+            StandoutPickNotification.draw_id == draw.id
+        )
+    )
+    measured = {r[0] for r in measured_res.all()}
+
+    # is_bye excluded for the same reason it is everywhere else: nobody predicted
+    # a contest that was never played, and stray picks do exist on those rows.
+    q = select(Match).where(
+        Match.draw_id == draw.id,
+        Match.winner_id.isnot(None),
+        Match.is_bye == False,  # noqa: E712
+    )
+    if since is not None:
+        # completed_at is null on results imported before it was stamped, and a
+        # null must not read as "recent" — those are exactly the historical rows
+        # this window exists to exclude.
+        q = q.where(Match.completed_at.isnot(None), Match.completed_at >= since)
+    matches_res = await db.execute(q)
+    fresh = [m for m in matches_res.scalars().all() if m.id not in measured]
+    if not fresh:
+        return 0
+
+    picks_res = await db.execute(
+        select(UserPrediction.match_id, UserPrediction.user_id, UserPrediction.predicted_winner_id)
+        .where(UserPrediction.match_id.in_([m.id for m in fresh]))
+    )
+    correct_by_match: dict[int, set] = defaultdict(set)
+    winner_of = {m.id: m.winner_id for m in fresh}
+    for match_id, uid, picked in picks_res.all():
+        if uid in participants and picked == winner_of.get(match_id):
+            correct_by_match[match_id].add(uid)
+
+    for m in fresh:
+        db.add(StandoutPickNotification(
+            match_id=m.id,
+            draw_id=draw.id,
+            correct_count=len(correct_by_match.get(m.id, ())),
+            participant_count=len(participants),
+        ))
+    return len(fresh)
+
+
+async def _gather_standout_payload(db, rows: list) -> list[dict]:
+    """
+    Turn measured matches into per-match payloads, keeping only the standouts.
+
+    A row with nobody correct is dropped here rather than filtered at the
+    recording step: it still had to be recorded (see record_standout_picks), it
+    simply has no audience.
+    """
+    from app.services.email import _tier_badge
+
+    keep = [
+        r for r in rows
+        if r.correct_count
+        and r.participant_count >= STANDOUT_MIN_PARTICIPANTS
+        and r.correct_count / r.participant_count < STANDOUT_MAX_SHARE
+    ]
+    if not keep:
+        return []
+
+    matches_res = await db.execute(
+        select(Match)
+        .options(selectinload(Match.player1), selectinload(Match.player2), selectinload(Match.winner))
+        .where(Match.id.in_([r.match_id for r in keep]))
+    )
+    match_by_id = {m.id: m for m in matches_res.scalars().all()}
+
+    # Who was right, per match, in one query. The frozen correct_count on the row
+    # is the historical measure of the field; this is the audience to notify, and
+    # it is re-read rather than derived from that count because the two can
+    # legitimately disagree (an admin editing picks between measurement and
+    # send). The audience must be whoever actually holds the pick now.
+    winner_of = {m.id: m.winner_id for m in match_by_id.values()}
+    picked_winner_res = await db.execute(
+        select(UserPrediction.match_id, UserPrediction.user_id, UserPrediction.predicted_winner_id)
+        .where(UserPrediction.match_id.in_([r.match_id for r in keep]))
+    )
+    correct_by_match: dict[int, set] = defaultdict(set)
+    for match_id, uid, picked in picked_winner_res.all():
+        if picked is not None and picked == winner_of.get(match_id):
+            correct_by_match[match_id].add(uid)
+
+    out = []
+    for r in keep:
+        m = match_by_id.get(r.match_id)
+        if not m or not m.winner or not m.player1 or not m.player2:
+            continue
+        draw = await db.get(Draw, r.draw_id)
+        if not draw:
+            continue
+        loser = m.player2 if m.winner_id == m.player1_id else m.player1
+        correct_now = correct_by_match.get(r.match_id, set())
+        if not correct_now:
+            continue
+        out.append({
+            "match_id": m.id,
+            "draw_id": draw.id,
+            "draw_name": draw.name,
+            "gender": draw.gender,
+            "category": draw.category,
+            "label": _tournament_label(draw.name, draw.category or "", draw.gender or "M"),
+            "tier": _tier_badge(draw.category or "", draw.gender),
+            "round_name": _email_round_label(draw.round_name(m.round_number)),
+            "winner": m.winner.name,
+            "loser": loser.name,
+            "score": _match_score_str(m),
+            "correct_count": r.correct_count,
+            "participant_count": r.participant_count,
+            "correct_users": correct_now,
+        })
+    # Rarest call first — that is the one worth leading with when a user has
+    # several, and the one whose draw the notification links to.
+    out.sort(key=lambda p: p["correct_count"] / p["participant_count"])
+    return out
+
+
+async def notify_standout_picks(match_ids: list[int]) -> None:
+    """
+    One message per user covering every minority-correct call they just made.
+
+    Batched rather than per match: a round finishing writes results in waves,
+    and a user who called three of them right wants one notification listing
+    three, not three notifications.
+    """
+    from sqlalchemy import update as sa_update
+    from app.services.email import send_standout_pick_digest
+    from app.services.system_log import app_log
+    from app.models.notification import StandoutPickNotification
+
+    if not match_ids:
+        return
+
+    async with AsyncSessionLocal() as db:
+        now = datetime.now(tz.utc)
+        claim = await db.execute(
+            sa_update(StandoutPickNotification)
+            .where(
+                StandoutPickNotification.match_id.in_(match_ids),
+                StandoutPickNotification.notified_at.is_(None),
+            )
+            .values(notified_at=now)
+        )
+        if claim.rowcount == 0:
+            await db.rollback()
+            logger.debug("Standout-pick batch already claimed — nothing to send")
+            return
+        await db.commit()
+
+        rows = (await db.execute(
+            select(StandoutPickNotification).where(
+                StandoutPickNotification.match_id.in_(match_ids),
+                StandoutPickNotification.notified_at == now,
+            )
+        )).scalars().all()
+
+        payloads = await _gather_standout_payload(db, rows)
+        if not payloads:
+            return
+
+        candidates: set[int] = set()
+        for p in payloads:
+            candidates |= p["correct_users"]
+        if not candidates:
+            return
+
+        pref_res = await db.execute(
+            select(NotificationPreference.user_id)
+            .join(User, User.id == NotificationPreference.user_id)
+            .where(
+                NotificationPreference.pref_key == STANDOUT_PICK_PREF,
+                NotificationPreference.user_id.in_(candidates),
+                User.email_verified == True,  # noqa: E712
+            )
+        )
+        to_email = {r[0] for r in pref_res.all()}
+        emails_res = await db.execute(select(User.id, User.email).where(User.id.in_(to_email)))
+        emails = {r[0]: r[1] for r in emails_res.all()}
+
+        await db.execute(
+            sa_update(StandoutPickNotification)
+            .where(StandoutPickNotification.match_id.in_([p["match_id"] for p in payloads]))
+            .values(recipient_count=len(to_email))
+        )
+        await db.commit()
+
+    def _picks_of(uid: int) -> list[dict]:
+        return [p for p in payloads if uid in p["correct_users"]]
+
+    sent = 0
+    for uid in to_email:
+        email = emails.get(uid)
+        picks = _picks_of(uid)
+        if not email or not picks:
+            continue
+        try:
+            await send_standout_pick_digest(
+                email, picks,
+                unsubscribe_url=(
+                    f"{API_BASE}/unsubscribe?token="
+                    f"{create_unsubscribe_token(uid, STANDOUT_PICK_PREF)}"
+                ),
+            )
+            sent += 1
+        except Exception as exc:
+            logger.warning("Failed to send standout-pick email to user %d: %s", uid, exc)
+
+    # Per-user push for the same reason the email is per-user: the whole content
+    # is "the calls YOU made that the field missed". There is no shared payload
+    # that could be correct for two different recipients.
+    try:
+        from app.services.push import send_push_to_users, users_with_push
+        from app.services import push_content
+
+        push_uids = set(await users_with_push(STANDOUT_PICK_PREF)) & candidates
+        for uid in push_uids:
+            picks = _picks_of(uid)
+            if not picks:
+                continue
+            await send_push_to_users([uid], **push_content.standout_pick(picks))
+    except Exception as exc:
+        logger.warning("Standout-pick push failed: %s", exc)
+
+    await app_log("info", "notifications",
+                  f"Standout-pick notification sent to {sent} user(s) covering "
+                  f"{len(payloads)} match(es)",
+                  {"match_ids": [p["match_id"] for p in payloads],
+                   "recipient_count": sent,
+                   "picks": [f"{p['winner']} def. {p['loser']} "
+                             f"({p['correct_count']}/{p['participant_count']})" for p in payloads]})
 
 
 # ---------------------------------------------------------------------------

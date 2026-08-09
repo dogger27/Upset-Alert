@@ -52,11 +52,24 @@ async def get_db():
 async def init_db():
     # Ensure all model modules are imported so their tables are registered with
     # Base.metadata before create_all runs.
-    import app.models.rankings   # noqa: F401
-    import app.models.draw_history  # noqa: F401
-    import app.models.notification  # noqa: F401
+    # EVERY model module, not just the ones without a home elsewhere. The list
+    # used to name five, and worked only because main.py imports the routers
+    # first, which drag in the rest — so create_all was resolving foreign keys
+    # against a registry this function had not actually populated. Anything
+    # calling init_db on its own (a migration script, a test) hit
+    # NoReferencedTableError instead, and each newly cross-referenced table made
+    # that trap a little worse.
     import app.models.alert  # noqa: F401
+    import app.models.draw_history  # noqa: F401
+    import app.models.h2h  # noqa: F401
+    import app.models.league  # noqa: F401
+    import app.models.notification  # noqa: F401
+    import app.models.prediction  # noqa: F401
     import app.models.push  # noqa: F401
+    import app.models.rankings   # noqa: F401
+    import app.models.system_log  # noqa: F401
+    import app.models.tournament  # noqa: F401
+    import app.models.user  # noqa: F401
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -251,6 +264,87 @@ async def _migrate(conn):
             "UPDATE draw_entries SET te_slug = ("
             "  SELECT te_slug FROM te_players WHERE te_players.id = draw_entries.te_player_id"
             ") WHERE te_slug IS NULL AND te_player_id IS NOT NULL"
+        ),
+        # Ledger for statements that must run exactly ONCE, ever.
+        #
+        # Everything else in this list is idempotent by construction — an ALTER
+        # that fails because the column exists, an UPDATE whose WHERE stops
+        # matching. Seeding a user preference is neither: it re-matches forever,
+        # so an unguarded seed re-enables on the next deploy whatever the user
+        # switched off after the last one. The same trap already cost this file a
+        # swallowed round digest (see the round_complete_notifications backfill
+        # above), where a timestamp literal was the fix; a named ledger says what
+        # it means and does not need a magic date.
+        (
+            "CREATE TABLE IF NOT EXISTS applied_seeds "
+            "(name VARCHAR PRIMARY KEY, applied_at DATETIME NOT NULL)"
+        ),
+        # Two new notification types. Existing accounts predate the checkbox, so
+        # their preference is seeded from the closest choice they have already
+        # made rather than left off — an account that asked to hear when draws
+        # are released has said it wants draw news, and one that asked for round
+        # standings has said it wants to hear how its picks did.
+        #
+        # Seeded per CHANNEL: the push variants follow the push preference, so
+        # nobody is enrolled into phone notifications on the strength of an email
+        # opt-in.
+        (
+            "INSERT OR IGNORE INTO notification_preferences (user_id, pref_key) "
+            "SELECT user_id, 'draw_changed' FROM notification_preferences "
+            "WHERE pref_key = 'draw_released' "
+            "AND NOT EXISTS (SELECT 1 FROM applied_seeds WHERE name = 'seed_draw_changed_prefs')"
+        ),
+        (
+            "INSERT OR IGNORE INTO notification_preferences (user_id, pref_key) "
+            "SELECT user_id, 'push_draw_changed' FROM notification_preferences "
+            "WHERE pref_key = 'push_draw_released' "
+            "AND NOT EXISTS (SELECT 1 FROM applied_seeds WHERE name = 'seed_draw_changed_prefs')"
+        ),
+        (
+            "INSERT OR IGNORE INTO applied_seeds (name, applied_at) "
+            "VALUES ('seed_draw_changed_prefs', datetime('now'))"
+        ),
+        (
+            "INSERT OR IGNORE INTO notification_preferences (user_id, pref_key) "
+            "SELECT user_id, 'standout_pick' FROM notification_preferences "
+            "WHERE pref_key = 'round_standings' "
+            "AND NOT EXISTS (SELECT 1 FROM applied_seeds WHERE name = 'seed_standout_pick_prefs')"
+        ),
+        (
+            "INSERT OR IGNORE INTO notification_preferences (user_id, pref_key) "
+            "SELECT user_id, 'push_standout_pick' FROM notification_preferences "
+            "WHERE pref_key = 'push_round_standings' "
+            "AND NOT EXISTS (SELECT 1 FROM applied_seeds WHERE name = 'seed_standout_pick_prefs')"
+        ),
+        (
+            "INSERT OR IGNORE INTO applied_seeds (name, applied_at) "
+            "VALUES ('seed_standout_pick_prefs', datetime('now'))"
+        ),
+        # Pre-stamp every match that had already finished before standout-pick
+        # measurement existed. Without this the first sweep after deploy would
+        # measure an entire tournament's worth of history at once and send every
+        # competitor a notification for picks they made weeks ago.
+        #
+        # Ledger-guarded like the seeds above, and for a sharper reason: this
+        # statement matches every completed match there will ever be, so an
+        # unguarded re-run on the next deploy would pre-stamp — and therefore
+        # permanently silence — every match that finished since the last one.
+        # That would not degrade the feature, it would disable it.
+        #
+        # Marked notified rather than merely measured, and with zero counts: no
+        # message was ever sent for these and none should be, so recording a
+        # correct_count would only invite a later reader to believe one was.
+        (
+            "INSERT OR IGNORE INTO standout_pick_notifications "
+            "(match_id, draw_id, correct_count, participant_count, detected_at, "
+            " notified_at, recipient_count) "
+            "SELECT id, draw_id, 0, 0, datetime('now'), datetime('now'), 0 "
+            "FROM matches WHERE winner_id IS NOT NULL AND is_bye = 0 "
+            "AND NOT EXISTS (SELECT 1 FROM applied_seeds WHERE name = 'seed_standout_backfill')"
+        ),
+        (
+            "INSERT OR IGNORE INTO applied_seeds (name, applied_at) "
+            "VALUES ('seed_standout_backfill', datetime('now'))"
         ),
     ]
     for sql in migrations:

@@ -508,6 +508,148 @@ async def _notify_pending_draw_releases() -> None:
                 len(batches), sum(len(ids) for ids, _ in batches))
 
 
+# A withdrawal rarely arrives alone: an editor updating a draw page replaces a
+# player, then places the qualifier who takes the slot, then fixes the seed —
+# several scrapes' worth of separate changes describing one piece of news. This
+# holds a draw's pending changes until it has been quiet for a spell, so the
+# reader gets one message about the draw rather than one per edit.
+#
+# Longer than the draw-release cooldown because the failure modes differ. There
+# the cost of waiting is a late "you can pick now"; here it is a late "your pick
+# moved", and the batching is worth more than the minutes.
+DRAW_CHANGE_NOTIFY_COOLDOWN = timedelta(minutes=20)
+
+
+async def _notify_pending_draw_changes() -> None:
+    """
+    Dispatch player swaps in draws people are already competing in.
+
+    _do_scrape records the swaps (it is the only place the old name still
+    exists); this decides when they have settled enough to send, on the same
+    detect-here/dispatch-there split as the draw-release job, and for the same
+    reason: every scrape path funnels through _do_scrape, so no path can record
+    a change that nothing then sends.
+
+    The cooldown is measured per draw on the NEWEST pending change, so a run of
+    edits keeps resetting the clock and goes out as one message once the page
+    stops moving. Comparison happens in SQL rather than Python: detected_at
+    comes back from SQLite naive, and comparing it to an aware `cutoff` here
+    would raise instead of batching.
+    """
+    from app.models.notification import DrawChangeEvent
+
+    cutoff = datetime.now(timezone.utc) - DRAW_CHANGE_NOTIFY_COOLDOWN
+    async with AsyncSessionLocal() as db:
+        ready = (await db.execute(
+            select(DrawChangeEvent.draw_id)
+            .where(DrawChangeEvent.notified_at.is_(None))
+            .group_by(DrawChangeEvent.draw_id)
+            .having(func.max(DrawChangeEvent.detected_at) <= cutoff)
+        )).scalars().all()
+
+        if not ready:
+            held = (await db.execute(
+                select(func.count()).select_from(DrawChangeEvent)
+                .where(DrawChangeEvent.notified_at.is_(None))
+            )).scalar() or 0
+            if held:
+                logger.info("Draw-change dispatch: %d change(s) still settling", held)
+            return
+
+    from app.services.notifications import notify_draw_change_batch
+    logger.info("Draw-change dispatch: %d draw(s) ready", len(ready))
+    await notify_draw_change_batch(list(ready))
+
+
+# Matches finish in waves — a full round can land inside an hour — so a user who
+# called three of them right should hear about three in one message, not three
+# times. Shorter than the draw-change cooldown: nothing here needs re-checking,
+# and the pleasure of "you called it" fades with the delay.
+STANDOUT_NOTIFY_COOLDOWN = timedelta(minutes=15)
+
+# How far back the sweep will look for a finished match it has never measured.
+# Everything already completed when this feature shipped is pre-stamped as
+# notified by a migration, so this is not what prevents a historical blast — it
+# is the second line of defence, bounding the damage if a draw's participant
+# pool ever changes late enough to make a batch of old matches newly measurable.
+STANDOUT_MEASURE_WINDOW = timedelta(days=2)
+
+
+async def _notify_pending_standout_picks() -> None:
+    """
+    Measure finished matches against the field, then tell the minority who
+    called them right.
+
+    Measuring is a sweep over draw state rather than a hook on the code path
+    that writes a result, for the reason spelled out on _record_completed_rounds:
+    a winner can arrive from ESPN, a Wikipedia scrape, an admin refresh or a
+    backfill, and a hook on one of those misses the other three permanently.
+    """
+    from app.models.notification import StandoutPickNotification
+    from app.services.notifications import record_standout_picks
+
+    now = datetime.now(timezone.utc)
+    async with AsyncSessionLocal() as db:
+        # Same scope as the round-completion sweep: draws in play, plus ones that
+        # ended recently enough that their final rounds still deserve a message.
+        draw_ids = list((await db.execute(
+            select(Draw.id).where(Draw.status.in_(["active", "open"]))
+        )).scalars().all())
+        draw_ids += list((await db.execute(
+            select(Draw.id).where(
+                Draw.status == "completed",
+                Draw.completion_notified_at.isnot(None),
+                Draw.completion_notified_at >= now - timedelta(days=3),
+            )
+        )).scalars().all())
+
+    # One session per draw. A failed measurement rolls its session back, and a
+    # rollback expires every instance still attached to it — sharing one session
+    # across the loop meant one bad draw took the rest of the sweep down with it,
+    # the same trap documented on _refresh_active_tournaments.
+    measured = 0
+    for draw_id in draw_ids:
+        async with AsyncSessionLocal() as db:
+            try:
+                d = await db.get(Draw, draw_id)
+                if d is None:
+                    continue
+                n = await record_standout_picks(db, d, since=now - STANDOUT_MEASURE_WINDOW)
+                if n:
+                    await db.commit()
+                    measured += n
+            except Exception as exc:
+                await db.rollback()
+                logger.warning("Standout measurement failed for draw %d: %s", draw_id, exc)
+    if measured:
+        logger.info("Standout picks: measured %d newly-finished match(es)", measured)
+
+    async with AsyncSessionLocal() as db:
+        cutoff = now - STANDOUT_NOTIFY_COOLDOWN
+        ready_draws = (await db.execute(
+            select(StandoutPickNotification.draw_id)
+            .where(StandoutPickNotification.notified_at.is_(None))
+            .group_by(StandoutPickNotification.draw_id)
+            .having(func.max(StandoutPickNotification.detected_at) <= cutoff)
+        )).scalars().all()
+        if not ready_draws:
+            return
+
+        # One call covering every ready draw, so a user competing in two of them
+        # gets one message listing both rather than a message per tournament.
+        match_ids = (await db.execute(
+            select(StandoutPickNotification.match_id).where(
+                StandoutPickNotification.notified_at.is_(None),
+                StandoutPickNotification.draw_id.in_(list(ready_draws)),
+            )
+        )).scalars().all()
+
+    if match_ids:
+        from app.services.notifications import notify_standout_picks
+        logger.info("Standout picks: dispatching %d measured match(es)", len(match_ids))
+        await notify_standout_picks(list(match_ids))
+
+
 async def _record_missed_completions() -> None:
     """
     Fire draw-completion for draws that finished without anything noticing.
@@ -1180,6 +1322,27 @@ def start_scheduler() -> None:
         id="notify_round_digests",
         misfire_grace_time=300,
     )
+    # Player swaps in draws people are already competing in. 5 min rather than
+    # the 10 the other notify jobs use: the cooldown (20 min) is what decides
+    # when a batch goes out, so a tighter tick only sharpens that boundary — it
+    # cannot make anything send sooner than the draw settling allows.
+    scheduler.add_job(
+        _notify_pending_draw_changes,
+        "interval",
+        minutes=5,
+        id="notify_draw_changes",
+        misfire_grace_time=300,
+    )
+    # Measure finished matches against the field and tell the minority who
+    # called them right. Also on 5 min: this job does the measuring as well as
+    # the sending, and a match that is measured late is notified late.
+    scheduler.add_job(
+        _notify_pending_standout_picks,
+        "interval",
+        minutes=5,
+        id="notify_standout_picks",
+        misfire_grace_time=300,
+    )
     # Sanity sweep for silent failures (released-but-not-open, wiki title
     # never resolving) — see _check_draw_health docstring.
     scheduler.add_job(
@@ -1246,6 +1409,8 @@ def start_scheduler() -> None:
     logger.info("Weekly rankings refresh scheduled (Sunday 6pm PDT)")
     logger.info("Draw-release notification check scheduled (every 10 min)")
     logger.info("Round-complete digest check scheduled (every 10 min)")
+    logger.info("Draw-change notification check scheduled (every 5 min)")
+    logger.info("Standout-pick notification check scheduled (every 5 min)")
     logger.info("Draw health check scheduled (every 60 min)")
     logger.info("Rankings/ELO freshness check scheduled (every 60 min)")
     logger.info("Highest_Rank bot sync scheduled (every 10 min)")
@@ -1260,6 +1425,11 @@ def start_scheduler() -> None:
     asyncio.create_task(_refresh_active_tournaments(force_refresh=True))
     # Catch any draw releases that went stable while the server was down.
     asyncio.create_task(_notify_pending_draw_releases())
+    # Same for draw changes and standout picks recorded before a restart — both
+    # are cooldown-gated, so a batch mid-settle at shutdown would otherwise wait
+    # for the first interval tick.
+    asyncio.create_task(_notify_pending_draw_changes())
+    asyncio.create_task(_notify_pending_standout_picks())
     # Catch any tournaments that were already stuck before this restart.
     asyncio.create_task(_check_draw_health())
     asyncio.create_task(_check_rankings_health())
