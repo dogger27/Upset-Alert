@@ -64,19 +64,15 @@ def draw_release(draws: list[dict], week_label: str) -> dict:
     Name and tier only. Locations and pick deadlines were in here and made a
     six-draw week an unreadable slab on the lock screen — the deadline is on the
     site, and the notification's job is to say which tournaments are open.
+
+    The title deliberately carries NO tournament name. It used to ("Canadian Open
+    draws released") and iOS truncated it to "Canadian Open draws…", spending the
+    whole line to say less than two words would. Every draw is named in the body
+    with its tier, so the name is not lost — it moves to where there is room for
+    all of them rather than just the first.
     """
     n = len(draws)
-    names = {d["name"] for d in draws}
-
-
-    # One event (a Slam or 1000 is two draws of the same tournament) reads by
-    # name; a genuinely mixed week can only be described by its date.
-    if len(names) == 1:
-        name = draws[0]["name"]
-        title = (f"{name} ({tour_label(draws[0]['gender'])}) draw released" if n == 1
-                 else f"{name} draws released")
-    else:
-        title = f"{n} draws released — {week_label}"
+    title = "Draw Released" if n == 1 else "Draws Released"
 
     lines = [f"{d['name']} · {tier_label(d.get('category'), d['gender'])}" for d in draws]
     body = "\n".join(lines) or "Make your picks before they close."
@@ -327,7 +323,7 @@ def sample(pref_key: str) -> dict:
     """
     return {
         "draw_released": {
-            "title": "Cincinnati Open draws released",
+            "title": "Draws Released",
             "body": "Cincinnati Open · ATP 1000\nCincinnati Open · WTA 1000",
             "url": "/",
             "tag": "sample-draw-release",
