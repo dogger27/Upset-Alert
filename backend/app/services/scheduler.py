@@ -587,6 +587,14 @@ async def _notify_pending_draw_releases() -> None:
 # moved", and the batching is worth more than the minutes.
 DRAW_CHANGE_NOTIFY_COOLDOWN = timedelta(minutes=20)
 
+# Qualifiers get a longer wait than replacements, because their notification is
+# once-per-draw and therefore unfixable: a qualifying draw finishes and its
+# sixteen winners are transcribed in one sitting, but an editor can break off
+# halfway and come back. Twenty minutes of quiet would call that done and
+# announce half a field. Ninety is long enough to cover a break and still lands
+# well inside the day between the qualifying final and the first main-draw match.
+QUALIFIERS_SETTLE_COOLDOWN = timedelta(minutes=90)
+
 
 async def _notify_pending_draw_changes() -> None:
     """
@@ -606,21 +614,41 @@ async def _notify_pending_draw_changes() -> None:
     """
     from app.models.notification import DrawChangeEvent
 
-    cutoff = datetime.now(timezone.utc) - DRAW_CHANGE_NOTIFY_COOLDOWN
+    now = datetime.now(timezone.utc)
     ready_by_kind: dict[str, list] = {}
     async with AsyncSessionLocal() as db:
         # Settled independently per kind. A draw whose qualifiers went in an hour
         # ago and whose withdrawal landed a minute ago should send the qualifier
         # message now and hold the other — one kind still moving must not pin the
         # other behind it.
-        for kind in ("replaced", "filled"):
+        for kind, cooldown in (("replaced", DRAW_CHANGE_NOTIFY_COOLDOWN),
+                               ("filled", QUALIFIERS_SETTLE_COOLDOWN)):
             ready_by_kind[kind] = list((await db.execute(
                 select(DrawChangeEvent.draw_id)
                 .where(DrawChangeEvent.notified_at.is_(None),
                        DrawChangeEvent.kind == kind)
                 .group_by(DrawChangeEvent.draw_id)
-                .having(func.max(DrawChangeEvent.detected_at) <= cutoff)
+                .having(func.max(DrawChangeEvent.detected_at) <= now - cooldown)
             )).scalars().all())
+
+        # A qualifying field is announced once, complete. A draw still carrying
+        # an un-named slot is mid-transcription, so it waits however long that
+        # takes rather than announcing a partial field it can never correct —
+        # the once-per-draw claim means there is no second message to fix it
+        # with. This is the "when ALL qualifiers are in" half; the settle
+        # cooldown above only establishes that the page has stopped moving.
+        from app.services.notifications import draw_is_fully_transcribed
+        held_incomplete = []
+        complete = []
+        for draw_id in ready_by_kind["filled"]:
+            if await draw_is_fully_transcribed(db, draw_id):
+                complete.append(draw_id)
+            else:
+                held_incomplete.append(draw_id)
+        if held_incomplete:
+            logger.info("Qualifier announcement held for %d draw(s) still being "
+                        "transcribed: %s", len(held_incomplete), held_incomplete)
+        ready_by_kind["filled"] = complete
 
         if not any(ready_by_kind.values()):
             held = (await db.execute(

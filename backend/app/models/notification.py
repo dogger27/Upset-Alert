@@ -127,6 +127,35 @@ class DrawChangeEvent(Base):
     recipient_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
+class QualifiersAddedNotification(Base):
+    """
+    Idempotency + audit record: one row per draw once the "qualifiers are in"
+    message has been sent. draw_id is the primary key, so the claiming INSERT is
+    itself the guard — see MatchStartNotification for the same reasoning.
+
+    This one is stricter than the other claim tables and deliberately so. Draw
+    changes are a running commentary: every withdrawal is news, so a draw sends
+    as many as it has. Qualifiers are a single event — the qualifying draw
+    finishes and sixteen slots fill at once — so a draw gets exactly ONE such
+    message, ever. Later Q-slot movement (a lucky loser taking a qualifier's
+    place) is a replacement and reaches people through draw_changed instead.
+
+    Without this the 20-minute settle window alone decided, and a qualifying
+    draw transcribed in two sittings produced two notifications for one event.
+    """
+
+    __tablename__ = "qualifiers_added_notifications"
+
+    draw_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("draws.id", ondelete="CASCADE"), primary_key=True
+    )
+    qualifier_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    recipient_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    sent_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+
 class StandoutPickNotification(Base):
     """
     Idempotency + audit record: one row per completed match once it has been
