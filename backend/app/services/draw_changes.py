@@ -97,6 +97,32 @@ def entry_suffix(entry_type: Optional[str]) -> str:
     return f" ({et})" if et in _NOTABLE_ENTRY_TYPES else ""
 
 
+def dedupe_matchups(changes: list[dict]) -> list[dict]:
+    """
+    Collapse a qualifier-vs-qualifier pair into the one match it actually is.
+
+    Two qualifiers drawn against each other are two entries pointing at the same
+    first-round match, so listing per qualifier printed it from both sides —
+    "Jones vs Tararudee" immediately followed by "Tararudee vs Jones". 2026
+    Canadian Open (WTA) had three such pairs among its sixteen qualifiers.
+
+    Round-1 matches occupy consecutive bracket positions from 1, so (pos-1)//2
+    names the match without needing the match row itself. A qualifier drawn
+    against a non-qualifier is the only holder of its key and always survives.
+
+    The COUNT of qualifiers is deliberately not derived from this — sixteen
+    qualifiers really did enter, they just produce thirteen matches.
+    """
+    seen, out = set(), []
+    for c in changes:
+        key = (c["bracket_position"] - 1) // 2
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(c)
+    return out
+
+
 def change_line(change: dict) -> str:
     """
     One swap as a single line: 'Arthur Fils → Zizou Bergs (LL)'.

@@ -253,6 +253,44 @@ async def _latest_content(db: AsyncSession, pref_key: str, user_id: int) -> dict
                     list(sections.values()), True, max(e.id for e in events),
                 )
 
+        if kind == "filled":
+            # No draw has announced its qualifiers yet, so rebuild the message
+            # from the most recent draw that HAS a qualifying field. The invented
+            # sample said "3 qualifiers added" for an ATP 1000, which is not a
+            # number that event can produce — a 1000 takes twelve and a Slam
+            # sixteen — so the one thing the test button exists to show, whether
+            # a full field is readable on a lock screen, was exactly what it hid.
+            recent = (await db.execute(
+                select(Draw)
+                .join(DrawEntry, DrawEntry.draw_id == Draw.id)
+                .where(DrawEntry.entry_type == "Q",
+                       func.trim(func.coalesce(DrawEntry.name, "")) != "")
+                .group_by(Draw.id)
+                .order_by(Draw.start_date.desc())
+                .limit(1)
+            )).scalars().first()
+            if recent:
+                quals = (await db.execute(
+                    select(DrawEntry)
+                    .where(DrawEntry.draw_id == recent.id, DrawEntry.entry_type == "Q")
+                    .order_by(DrawEntry.bracket_position)
+                )).scalars().all()
+                quals = [q for q in quals if (q.name or "").strip()]
+                if quals:
+                    opponents = await _round1_matchups(db, recent.id, {q.id for q in quals})
+                    return push_content.qualifiers_added([{
+                        "id": recent.id, "name": recent.name, "gender": recent.gender,
+                        "category": recent.category,
+                        "changes": [{
+                            "kind": "filled", "new_name": q.name,
+                            "new_entry_type": q.entry_type,
+                            "bracket_position": q.bracket_position,
+                            "opponent": opponents.get(q.id, (None, "", False))[0],
+                            "opponent_status": opponents.get(q.id, (None, "", False))[1],
+                            "opponent_bye": opponents.get(q.id, (None, "", False))[2],
+                        } for q in quals],
+                    }], True, 0)
+
     if pref_key == "standout_pick":
         from app.models.notification import StandoutPickNotification
         from app.models.tournament import Match

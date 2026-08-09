@@ -18,6 +18,7 @@ from app.models.tournament import Draw, DrawEntry, Match
 from app.services.espn_monitor import ESPNMonitor
 from app.services.eventstream import EventStreamListener
 from app.services.http_errors import describe_exception, is_transient_http_error
+from app.services.push_content import tour_label
 from app.services.scraper import WikiPageNotFound
 
 logger = logging.getLogger(__name__)
@@ -265,7 +266,7 @@ async def _refresh_dates_from_event_page(draw_id: int) -> None:
             from app.services.system_log import app_log
             await app_log(
                 "info", "scraper",
-                f"Corrected dates for {d.year} {d.name} ({d.gender}) from the event page: "
+                f"Corrected dates for {d.year} {d.name} ({tour_label(d.gender)}) from the event page: "
                 f"{old_start} → {start}, {old_end} → {d.end_date}",
                 {"draw_id": d.id, "old_start": str(old_start), "new_start": str(start),
                  "old_end": str(old_end), "new_end": str(d.end_date),
@@ -1069,7 +1070,7 @@ async def _notify_pending_round_digests() -> None:
                     "Round digest %s for %s suppressed: bucket already sent, "
                     "%d late draw(s) not emailed (%s)",
                     label, bucket_desc, len(members),
-                    ", ".join(f"{d.name} ({d.gender})" for _, d in members),
+                    ", ".join(f"{d.name} ({tour_label(d.gender)})" for _, d in members),
                 )
                 continue
 
