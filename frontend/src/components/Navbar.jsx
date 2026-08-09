@@ -248,6 +248,10 @@ export default function Navbar() {
   // Descriptions are kept to roughly one line at panel width: with a bold
   // label above each, a two-line description made every row three lines tall
   // and four rows filled the whole dropdown.
+  // Keys here must match ALL_NOTIFICATION_KEYS in constants/notifications.js,
+  // which is what PushPrompt switches on wholesale — a type added here and not
+  // there stays off for everyone who enabled push from the prompt.
+  //
   // Two groups, because the rows answer two different questions. The first two
   // reach you whether or not you have entered anything; the rest only ever fire
   // about a draw you are already competing in, which is the single fact that
