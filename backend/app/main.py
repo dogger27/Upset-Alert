@@ -151,6 +151,8 @@ _UNSUB_PREF_LABELS = {
     # Key is historical; the notification is "Draw Completion" everywhere users see it.
     "tournament_end": "draw-completion emails",
     "draw_released": "draw-release emails",
+    "draw_changed": "draw-change emails",
+    "standout_pick": "standout-pick emails",
 }
 
 

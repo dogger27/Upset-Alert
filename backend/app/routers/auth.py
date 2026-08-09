@@ -209,6 +209,12 @@ _DEFAULT_NOTIF_PREFS = [
     # Draw-release emails are one weekly digest covering every draw released
     # that week — a single on/off, not a per-tier selection.
     "draw_released",
+    # Only ever reaches someone who has already entered the draw that changed,
+    # so it cannot become noise for a dormant account — and a pick silently
+    # transferring to a player they never chose is the one thing a competitor
+    # would be annoyed to find out about late.
+    "draw_changed",
+    "standout_pick",
     "round_standings",
     # No "tournament_end": Draw Completion is only offered once round emails are
     # switched off (the settings UI hides it otherwise, and enables it the moment

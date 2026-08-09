@@ -722,6 +722,231 @@ async def send_round_complete_digest(
 
 
 
+def _change_row(change: dict, is_last: bool) -> str:
+    """One swap: who left, who took the slot, and whether it was the reader's pick.
+
+    The arrow is a table cell rather than inline text so the two names stay on
+    their own lines when a client narrows the card — a wrapped 'X → Y' that
+    breaks after the arrow reads as two unrelated players.
+    """
+    from app.services.draw_changes import entry_suffix, slot_label
+
+    mine = change.get("affects_you")
+    src = (change["old_name"] if change["kind"] == "replaced"
+           else slot_label(change.get("old_entry_type"), change["bracket_position"]))
+    src_style = ("color:#6b7280;text-decoration:line-through" if change["kind"] == "replaced"
+                 else "color:#6b7280;font-style:italic")
+    flag = (
+        '<div style="font-size:12px;font-weight:700;color:#b45309;padding-top:5px">'
+        '&#9888;&#65039; This was your pick</div>' if mine else ""
+    )
+    return f"""
+      <tr>
+        <td style="padding:{'10px 14px' if is_last else '10px 14px 0'};">
+          <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                 style="border-collapse:separate;border:1px solid {'#fcd34d' if mine else '#e5e7eb'};
+                        border-radius:6px;background:{'#fffbeb' if mine else '#ffffff'}">
+            <tr><td style="padding:11px 13px">
+              <div style="font-size:14px;{src_style}">{_esc(src)}</div>
+              <div style="font-size:15px;font-weight:700;color:#111;padding-top:3px">
+                &#8595;&nbsp; {_esc(change['new_name'])}{_esc(entry_suffix(change.get('new_entry_type')))}
+              </div>
+              {flag}
+            </td></tr>
+          </table>
+        </td>
+      </tr>"""
+
+
+def _draw_change_section(draw: dict, is_last: bool) -> str:
+    n = len(draw["changes"])
+    banner = _section_banner(
+        draw["label"],
+        f"{n} change{'' if n == 1 else 's'} &middot; "
+        + ("picks are locked" if draw.get("locked") else "picks still open"),
+        f"{BASE_URL}/tournaments/{draw['id']}",
+        "View draw",
+    )
+    rows = "".join(_change_row(c, i == n - 1) for i, c in enumerate(draw["changes"]))
+    return f"""{banner}
+    <div style="padding:10px 10px {'20px' if is_last else '14px'};background:#ffffff">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">{rows}</table>
+    </div>"""
+
+
+async def send_draw_change_digest(
+    email: str,
+    draws: list[dict],
+    unsubscribe_url: str = "",
+) -> None:
+    """
+    A draw this reader has entered changed after they picked from it.
+
+    draws is already sliced to this recipient: only draws they compete in, and
+    each change carries affects_you. That flag drives the subject line as well
+    as the card styling — "your pick was replaced" is a different message from
+    "the draw moved around you", and putting both behind one neutral subject
+    would bury the one that needs acting on.
+    """
+    if not draws:
+        return
+
+    changes = [c for d in draws for c in d["changes"]]
+    n = len(changes)
+    yours = [c for c in changes if c.get("affects_you")]
+    one_draw = draws[0] if len(draws) == 1 else None
+
+    if yours:
+        first = yours[0]
+        subject = (
+            f"Your pick was replaced: {first['new_name']} is in for {first['old_name']}"
+            if len(yours) == 1 and first["kind"] == "replaced"
+            else f"{len(yours)} of your picks changed"
+        )
+        heading = "One of your picks has changed" if len(yours) == 1 else "Some of your picks have changed"
+        intro = (
+            "A player you picked is no longer in the draw. Your bracket now backs "
+            "whoever took their place, so it's worth a look."
+        )
+    else:
+        subject = (
+            f"Draw change: {one_draw['name']}" if one_draw and n == 1
+            else f"{n} draw changes — {one_draw['name']}" if one_draw
+            else f"{n} draw changes across {len(draws)} draws"
+        )
+        heading = "The draw has changed" if n == 1 else "The draw has changed"
+        intro = (
+            "None of your picks are affected, but the bracket around them has moved."
+        )
+
+    open_draws = [d for d in draws if not d.get("locked")]
+    footer = (
+        "Picks are still open for "
+        + ", ".join(d["name"] for d in open_draws)
+        + " — you can change yours."
+        if open_draws else
+        "Picks are locked for these draws, so nothing needs doing — this is just so "
+        "you know who your bracket is backing."
+    )
+
+    sections = "".join(_draw_change_section(d, i == len(draws) - 1) for i, d in enumerate(draws))
+    cta_url = f"{BASE_URL}/tournaments/{draws[0]['id']}" if len(draws) == 1 else BASE_URL
+    cta_text = "Check Your Picks" if open_draws else "View Draw" if len(draws) == 1 else "View Draws"
+    unsubscribe = (
+        f'<p style="max-width:560px;margin:16px auto 0;text-align:center;font-size:12px;color:#9ca3af;'
+        f'font-family:sans-serif">'
+        f'<a href="{unsubscribe_url}" style="color:#9ca3af;text-decoration:underline">'
+        f'Unsubscribe from draw-change emails</a></p>'
+        if unsubscribe_url else ""
+    )
+
+    await send_async({
+        "from": FROM,
+        "to": [email],
+        "subject": subject,
+        "html": f"""{_WRAP_OPEN}{_LOGO_HEADER}
+          <div style="padding:28px 24px 22px;background:#ffffff;color:#111111">
+            <h1 style="font-size:22px;margin:0 0 8px">{heading}</h1>
+            <p style="color:#444;line-height:1.6;margin:0 0 18px;font-size:14px">{intro}</p>
+            <a href="{cta_url}" style="display:inline-block;padding:12px 24px;
+               background:#1b4332;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
+              {cta_text}
+            </a>
+          </div>
+          {sections}
+          <div style="padding:0 24px 24px;background:#ffffff">
+            <p style="color:#9ca3af;line-height:1.6;margin:0;font-size:12px">{_esc(footer)}</p>
+          </div>
+        {_WRAP_CLOSE}{unsubscribe}""",
+    })
+
+
+def _standout_row(pick: dict, is_last: bool) -> str:
+    """One minority-correct call: the result, the score, and how alone they were."""
+    pct = round(100 * pick["correct_count"] / pick["participant_count"])
+    score = f'<div style="font-size:13px;color:#6b7280;padding-top:3px">{_esc(pick["score"])}</div>' \
+        if pick.get("score") else ""
+    return f"""
+      <tr>
+        <td style="padding:{'10px 14px' if is_last else '10px 14px 0'};">
+          <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                 style="border-collapse:separate;border:1px solid #e5e7eb;border-radius:6px">
+            <tr><td style="padding:12px 13px">
+              <div style="font-size:12px;color:#6b7280;padding-bottom:5px">
+                {_esc(pick['label'])} &middot; {_esc(pick['round_name'])}
+              </div>
+              <div style="font-size:15px;font-weight:700;color:#111">
+                {_esc(pick['winner'])} <span style="font-weight:400;color:#6b7280">def.</span> {_esc(pick['loser'])}
+              </div>
+              {score}
+              <div style="font-size:13px;font-weight:700;color:#1b4332;padding-top:7px">
+                {pick['correct_count']} of {pick['participant_count']} competitors called it &middot; {pct}%
+              </div>
+            </td></tr>
+          </table>
+        </td>
+      </tr>"""
+
+
+async def send_standout_pick_digest(
+    email: str,
+    picks: list[dict],
+    unsubscribe_url: str = "",
+) -> None:
+    """
+    The calls this reader got right that most of the field did not.
+
+    picks is this recipient's own, rarest first — the caller sorts, so the
+    subject line and the first card are always the best call of the batch.
+    """
+    if not picks:
+        return
+
+    n = len(picks)
+    top = picks[0]
+    if n == 1:
+        subject = f"You called it: {top['winner']} def. {top['loser']}"
+        heading = "You saw that coming"
+        intro = (
+            f"Only {top['correct_count']} of {top['participant_count']} competitors "
+            f"picked {_esc(top['winner'])} — you were one of them."
+        )
+    else:
+        subject = f"{n} picks the field missed"
+        heading = f"{n} calls most competitors missed"
+        intro = ("Fewer than half the field picked these right. You did.")
+
+    rows = "".join(_standout_row(p, i == n - 1) for i, p in enumerate(picks))
+    cta_url = f"{BASE_URL}/tournaments/{top['draw_id']}"
+    unsubscribe = (
+        f'<p style="max-width:560px;margin:16px auto 0;text-align:center;font-size:12px;color:#9ca3af;'
+        f'font-family:sans-serif">'
+        f'<a href="{unsubscribe_url}" style="color:#9ca3af;text-decoration:underline">'
+        f'Unsubscribe from standout-pick emails</a></p>'
+        if unsubscribe_url else ""
+    )
+
+    await send_async({
+        "from": FROM,
+        "to": [email],
+        "subject": subject,
+        "html": f"""{_WRAP_OPEN}{_LOGO_HEADER}
+          <div style="padding:28px 24px 22px;background:#ffffff;color:#111111">
+            <h1 style="font-size:22px;margin:0 0 8px">{heading}</h1>
+            <p style="color:#444;line-height:1.6;margin:0 0 18px;font-size:14px">{intro}</p>
+            <a href="{cta_url}" style="display:inline-block;padding:12px 24px;
+               background:#1b4332;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
+              View Draw
+            </a>
+          </div>
+          {_section_banner("Your calls", f"{n} pick{'' if n == 1 else 's'} the field missed")}
+          <div style="padding:10px 10px 20px;background:#ffffff">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0">{rows}</table>
+          </div>
+        {_WRAP_CLOSE}{unsubscribe}""",
+    })
+
+
 _ALERT_STYLES = {
     "error":   {"label": "Error",   "fg": "#b91c1c", "bg": "#fee2e2", "bar": "#dc2626"},
     "warning": {"label": "Warning", "fg": "#92400e", "bg": "#fef3c7", "bar": "#f59e0b"},

@@ -18,6 +18,14 @@ from typing import Optional
 # is only a guard against an absurd payload, not a display budget.
 MAX_BODY = 900
 
+# Item caps for the two list-shaped notifications. MAX_BODY alone is not enough:
+# it slices mid-word, so a long batch ended "... — 2 of 6 got" with no way for
+# the reader to tell whether that was the end. These cap the item COUNT and say
+# how many were left out, which is both honest and readable. A round of 64
+# finishing can genuinely produce a dozen minority-correct picks for one user.
+MAX_LISTED_CHANGES = 8
+MAX_LISTED_PICKS = 5
+
 
 def tier_label(category: Optional[str], gender: str) -> str:
     """'ATP 1000', 'WTA 500', 'ATP Grand Slam'.
@@ -98,6 +106,101 @@ def round_complete(
     }
 
 
+def draw_change(draws: list[dict], affects_your_picks: bool, event_seq: int = 0) -> dict:
+    """
+    draws: [{name, gender, category, id, changes: [...]}, ...] — this ONE user's
+    slice of the batch, with each change carrying affects_you.
+
+    The body is the list of swaps, because that is the only thing a reader can
+    act on: knowing "the draw changed" without knowing who left tells them
+    nothing, and sends them to the site to find out. Expanded, they see every
+    swap; collapsed, they see the two lines that matter most, which is why the
+    warning about their own picks is first when there is one.
+
+    event_seq is the highest change id in the batch, and only exists to keep the
+    tag unique. A tag that repeated would have the second swap of a tournament
+    REPLACE the first on the lock screen — two separate events, one of them
+    silently gone.
+    """
+    from app.services.draw_changes import change_line
+
+    total = sum(len(d["changes"]) for d in draws)
+    if len(draws) == 1:
+        d = draws[0]
+        where = f"{d['name']} ({d['gender']})"
+        title = f"Draw change — {where}" if total == 1 else f"{total} draw changes — {where}"
+    else:
+        title = f"{total} draw changes — {len(draws)} draws"
+
+    lines = []
+    if affects_your_picks:
+        lines.append("⚠️ One of your picks was replaced.")
+    shown = 0
+    for d in draws:
+        if shown >= MAX_LISTED_CHANGES:
+            break
+        if len(draws) > 1:
+            lines.append(f"{d['name']} · {tier_label(d.get('category'), d['gender'])}")
+        for c in d["changes"][:MAX_LISTED_CHANGES - shown]:
+            lines.append(("• " if len(draws) > 1 else "") + change_line(c))
+            shown += 1
+    if total > shown:
+        lines.append(f"…and {total - shown} more change{'' if total - shown == 1 else 's'}")
+
+    url = f"/tournaments/{draws[0]['id']}" if len(draws) == 1 else "/"
+    return {
+        "title": title,
+        "body": "\n".join(lines)[:MAX_BODY],
+        "url": url,
+        "tag": f"draw-change-{event_seq}",
+        "actions": [{"action": "open", "title": "Check your picks", "url": url}],
+    }
+
+
+def standout_pick(picks: list[dict]) -> dict:
+    """
+    picks: [{draw_name, gender, category, draw_id, winner, loser, score,
+             correct_count, participant_count}, ...] rarest call first.
+
+    One user's correct calls that most of the field missed. The body names the
+    draw, both players and who won — the three things needed to remember the
+    pick without opening anything — and the tap goes to that draw, which is
+    where the bracket showing it lives.
+
+    Ordered rarest-first by the caller, so the single line a collapsed
+    notification shows is the best call of the batch, and the link points at its
+    draw when the batch spans several.
+    """
+    n = len(picks)
+    top = picks[0]
+    if n == 1:
+        title = f"You called it — {top['winner']} def. {top['loser']}"
+    else:
+        title = f"{n} picks the field missed"
+
+    lines = []
+    for p in picks[:MAX_LISTED_PICKS]:
+        head = f"{p['draw_name']} · {tier_label(p.get('category'), p['gender'])} · {p['round_name']}"
+        result = f"{p['winner']} def. {p['loser']}"
+        if p.get("score"):
+            result += f" {p['score']}"
+        lines.append(f"{head}\n{result} — {p['correct_count']} of "
+                     f"{p['participant_count']} got it")
+    if n > MAX_LISTED_PICKS:
+        lines.append(f"…and {n - MAX_LISTED_PICKS} more")
+
+    url = f"/tournaments/{top['draw_id']}"
+    return {
+        "title": title,
+        "body": "\n\n".join(lines)[:MAX_BODY],
+        "url": url,
+        # Keyed on the matches themselves: two different batches must never
+        # collapse into one another on the lock screen.
+        "tag": "standout-" + "-".join(str(p["match_id"]) for p in picks[:4]),
+        "actions": [{"action": "open", "title": "View draw", "url": url}],
+    }
+
+
 def league_join(new_username: str, league_name: str, league_id: int) -> dict:
     return {
         "title": f"{new_username} joined {league_name}",
@@ -142,6 +245,22 @@ def sample(pref_key: str) -> dict:
             "url": "/leagues",
             "tag": "sample-league-join",
             "actions": [{"action": "open", "title": "View league", "url": "/leagues"}],
+        },
+        "draw_changed": {
+            "title": "2 draw changes — Cincinnati Open (M)",
+            "body": "⚠️ One of your picks was replaced.\n"
+                    "Arthur Fils → Zizou Bergs (LL)\nQualifier → Flavio Cobolli (Q)",
+            "url": "/",
+            "tag": "sample-draw-change",
+            "actions": [{"action": "open", "title": "Check your picks", "url": "/"}],
+        },
+        "standout_pick": {
+            "title": "You called it — Bergs def. Fritz",
+            "body": "Cincinnati Open · ATP 1000 · R32\n"
+                    "Bergs def. Fritz 7-6, 4-6, 6-3 — 2 of 11 got it",
+            "url": "/",
+            "tag": "sample-standout",
+            "actions": [{"action": "open", "title": "View draw", "url": "/"}],
         },
     }.get(pref_key, {
         "title": "Upset Alert test",

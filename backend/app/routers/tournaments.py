@@ -15,6 +15,7 @@ from app.models.user import User
 from app.schemas.league import LeaderboardEntry, LeagueTournamentOut
 from app.schemas.tournament import DrawEntryOut, DrawOut, MatchOut, TournamentCreate, TournamentOut
 from app.schemas.user import UserPublicOut
+from app.services.draw_changes import classify_change
 from app.services.rankings import assign_rankings
 from app.services.scraper import scrape_tournament, snap_to_monday
 from app.services.scoring import UserScore, _points_table, rank_users
@@ -1152,6 +1153,23 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
         )
     )
 
+    # Once a draw has been ANNOUNCED, a name changing at a bracket position is
+    # news: somebody withdrew and a lucky loser took the slot, or a qualifier was
+    # finally placed. People have picked from that bracket and their picks follow
+    # the slot silently, so they are told (see _notify_pending_draw_changes).
+    #
+    # The gate is draw_release_notified_at, not draw_released_direct_at. A draw
+    # is stamped released at 50% of its slots and the release email waits out a
+    # stability cooldown after that — in between, editors are still transcribing
+    # the bracket, and every name they type would otherwise look like a swap.
+    # After the announcement there is no such churn: the page is complete, and a
+    # change to it is a change to the real draw.
+    track_changes = (
+        tournament.draw_release_notified_at is not None
+        and tournament.status != "completed"
+    )
+    pending_changes: list[dict] = []
+
     # Upsert players — update in place to preserve any FK references
     pos_to_player_id: dict[int, int] = {}
     seen_positions: set[int] = set()
@@ -1161,6 +1179,21 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
         if pe.bracket_position in existing_players:
             player = existing_players[pe.bracket_position]
             if player.name != pe.name:
+                if track_changes:
+                    # Captured BEFORE the overwrite — one line later the old name
+                    # is gone and there is nothing left to diff against.
+                    kind = classify_change(player.name, pe.name)
+                    if kind:
+                        pending_changes.append({
+                            "entry_id": player.id,
+                            "bracket_position": pe.bracket_position,
+                            "kind": kind,
+                            "old_name": player.name or None,
+                            "new_name": pe.name,
+                            "old_entry_type": player.entry_type,
+                            "new_entry_type": pe.entry_type,
+                            "old_seed": player.seed,
+                        })
                 # Name changed (withdrawal/replacement) — re-match on next
                 # assign_rankings. The slug has to go with the id: left behind,
                 # it points the H2H panel at the player who was replaced.
@@ -1211,6 +1244,27 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
         if pos not in seen_positions:
             await db.delete(old_player)
     await db.flush()
+
+    # Queue the swaps for notification. Written in the same transaction as the
+    # entry rows they describe, so a scrape that rolls back cannot leave an
+    # event announcing a change the draw never took.
+    #
+    # A vacated position is deliberately NOT recorded: a bracket_position
+    # vanishing means the draw was restructured (a size correction, a bad
+    # parse), not that a player was replaced, and the player who eventually
+    # takes that slot arrives as an ordinary change on a later scrape.
+    if pending_changes:
+        from app.models.notification import DrawChangeEvent
+        for c in pending_changes:
+            db.add(DrawChangeEvent(draw_id=tournament.id, **c))
+        from app.services.system_log import app_log
+        await app_log(
+            "info", "scraper",
+            f"{len(pending_changes)} draw change(s) detected in "
+            f"{tournament.year} {tournament.name} ({tournament.gender})",
+            {"draw_id": tournament.id,
+             "changes": [f"{c['old_name'] or '(empty)'} → {c['new_name']}" for c in pending_changes]},
+        )
 
     # Upsert matches — update in place to preserve prediction foreign keys
     seen_match_keys: set[tuple] = set()

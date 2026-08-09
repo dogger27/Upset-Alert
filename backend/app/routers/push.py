@@ -112,7 +112,7 @@ async def unsubscribe(
     await db.commit()
 
 
-async def _latest_content(db: AsyncSession, pref_key: str) -> dict:
+async def _latest_content(db: AsyncSession, pref_key: str, user_id: int) -> dict:
     """
     Rebuild the most recent real notification of this type.
 
@@ -120,10 +120,17 @@ async def _latest_content(db: AsyncSession, pref_key: str) -> dict:
     but says nothing about what a draw-release notification will look like on a
     six-draw week. Falls back to a representative sample when the type has
     never fired, so the button still shows the shape rather than erroring.
+
+    user_id scopes the types that are personal by construction. A draw release
+    or a round digest is the same message for everyone, so the newest one is the
+    honest replay; a standout pick is a statement about the caller's own bracket
+    and replaying somebody else's would describe the type wrongly.
     """
     from datetime import timedelta
-    from app.models.tournament import Draw
+    from app.models.prediction import UserPrediction
+    from app.models.tournament import Draw, DrawEntry
     from app.services import push_content
+    from app.services.email import _tournament_label
 
     if pref_key == "draw_released":
         # The most recent SEND, not the most recent week. Week 30 went out as
@@ -190,6 +197,106 @@ async def _latest_content(db: AsyncSession, pref_key: str) -> dict:
                     pref_key == "tournament_end",
                 )
 
+    if pref_key == "draw_changed":
+        from app.models.notification import DrawChangeEvent
+
+        # Every event in a batch is stamped by one UPDATE, so the batch is
+        # exactly the rows sharing the newest notified_at.
+        newest = (await db.execute(
+            select(func.max(DrawChangeEvent.notified_at))
+            .where(DrawChangeEvent.notified_at.isnot(None))
+        )).scalar()
+        if newest:
+            events = (await db.execute(
+                select(DrawChangeEvent)
+                .where(DrawChangeEvent.notified_at == newest)
+                .order_by(DrawChangeEvent.draw_id, DrawChangeEvent.bracket_position)
+            )).scalars().all()
+            sections: dict[int, dict] = {}
+            for e in events:
+                d = await db.get(Draw, e.draw_id)
+                if not d:
+                    continue
+                sec = sections.setdefault(d.id, {
+                    "id": d.id, "name": d.name, "gender": d.gender,
+                    "category": d.category, "changes": [],
+                })
+                sec["changes"].append({
+                    "kind": e.kind, "old_name": e.old_name, "new_name": e.new_name,
+                    "old_entry_type": e.old_entry_type, "new_entry_type": e.new_entry_type,
+                    "bracket_position": e.bracket_position,
+                })
+            if sections:
+                # Replayed with the "affects your picks" line on: the caller is
+                # looking at this to see what the real thing looks like, and the
+                # warning line is the part of it worth checking renders.
+                return push_content.draw_change(
+                    list(sections.values()), True, max(e.id for e in events),
+                )
+
+    if pref_key == "standout_pick":
+        from app.models.notification import StandoutPickNotification
+        from app.models.tournament import Match
+        from app.services.notifications import (
+            STANDOUT_MAX_SHARE, STANDOUT_MIN_PARTICIPANTS, _email_round_label,
+        )
+        from app.services.email import _tier_badge
+
+        # The caller's OWN most recent standout, not the site's: this replays a
+        # notification that is personal by construction, and showing someone
+        # another competitor's minority call would misrepresent the type
+        # entirely. Falls through to the sample when they have never had one.
+        #
+        # The share conditions are not decoration. Every match that had already
+        # finished when this feature shipped carries a placeholder row —
+        # notified, zero counts, never actually sent (see the ledger-guarded
+        # backfill in database.py). Matching on notified_at alone replayed one of
+        # those as "You called it — Sinner def. Kecmanović … 0 of 0 got it",
+        # which is neither true nor a standout. Only a row that genuinely
+        # qualified can stand in for a real notification.
+        row = (await db.execute(
+            select(StandoutPickNotification, Match)
+            .join(Match, Match.id == StandoutPickNotification.match_id)
+            .join(
+                UserPrediction,
+                (UserPrediction.match_id == StandoutPickNotification.match_id)
+                & (UserPrediction.predicted_winner_id == Match.winner_id)
+                & (UserPrediction.user_id == user_id),
+            )
+            .where(
+                StandoutPickNotification.notified_at.isnot(None),
+                StandoutPickNotification.correct_count > 0,
+                StandoutPickNotification.participant_count >= STANDOUT_MIN_PARTICIPANTS,
+                StandoutPickNotification.correct_count
+                < StandoutPickNotification.participant_count * STANDOUT_MAX_SHARE,
+            )
+            .order_by(StandoutPickNotification.notified_at.desc())
+            .limit(1)
+        )).first()
+        if row:
+            spn, match = row
+            draw = await db.get(Draw, spn.draw_id)
+            winner = await db.get(DrawEntry, match.winner_id)
+            loser_id = match.player2_id if match.winner_id == match.player1_id else match.player1_id
+            loser = await db.get(DrawEntry, loser_id) if loser_id else None
+            if draw and winner and loser:
+                from app.services.notifications import _match_score_str
+                return push_content.standout_pick([{
+                    "match_id": match.id,
+                    "draw_id": draw.id,
+                    "draw_name": draw.name,
+                    "gender": draw.gender,
+                    "category": draw.category,
+                    "label": _tournament_label(draw.name, draw.category or "", draw.gender or "M"),
+                    "tier": _tier_badge(draw.category or "", draw.gender),
+                    "round_name": _email_round_label(draw.round_name(match.round_number)),
+                    "winner": winner.name,
+                    "loser": loser.name,
+                    "score": _match_score_str(match),
+                    "correct_count": spn.correct_count,
+                    "participant_count": spn.participant_count,
+                }])
+
     return push_content.sample(pref_key)
 
 
@@ -215,7 +322,7 @@ async def send_typed_test_push(
             detail="No devices registered — turn a Push notification on first",
         )
 
-    content = await _latest_content(db, pref_key)
+    content = await _latest_content(db, pref_key, current_user.id)
     # A distinct tag so a replay never collapses into, or replaces, the real
     # notification it is imitating.
     content = {**content, "tag": f"test-{pref_key}"}

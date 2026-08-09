@@ -81,6 +81,90 @@ class DrawReleaseNotification(Base):
     )
 
 
+class DrawChangeEvent(Base):
+    """
+    One player swap in a draw people are already competing in: a withdrawal
+    filled by a lucky loser, or a qualifier finally placed into its slot.
+
+    Recorded by _do_scrape at the moment the swap is applied, because that is
+    the only place the OLD name still exists — the upsert overwrites DrawEntry
+    in place (deliberately, so picks follow the slot; see
+    [[reference_qualifier_pick_persistence]]), and one commit later there is
+    nothing left to diff against.
+
+    entry_id is the DrawEntry that was rewritten, and it is what makes the
+    notification personal: a user whose prediction points at that same entry id
+    picked the player who has just been replaced. Stored as a plain integer
+    rather than a foreign key — a draw restructure can delete the row it names,
+    and a dangling reference here should not block that delete or lose the
+    audit record of a change that genuinely happened.
+
+    notified_at is both the audit stamp and the claim: a batch is claimed with
+    a conditional UPDATE ... WHERE notified_at IS NULL before anything is sent,
+    so two overlapping dispatch runs cannot both send it.
+    """
+
+    __tablename__ = "draw_change_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    draw_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("draws.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    entry_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    bracket_position: Mapped[int] = mapped_column(Integer, nullable=False)
+    # "replaced" — a named player gave way to another; "filled" — an empty
+    # placeholder slot (almost always a Q) got its player.
+    kind: Mapped[str] = mapped_column(String, nullable=False)
+    old_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    new_name: Mapped[str] = mapped_column(String, nullable=False)
+    old_entry_type: Mapped[Optional[str]] = mapped_column(String(4), nullable=True)
+    new_entry_type: Mapped[Optional[str]] = mapped_column(String(4), nullable=True)
+    old_seed: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    detected_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True
+    )
+    notified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    recipient_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class StandoutPickNotification(Base):
+    """
+    Idempotency + audit record: one row per completed match once it has been
+    measured against the field, i.e. "how many of this draw's competitors called
+    it right".
+
+    match_id is the primary key (not autoincrement) so recording the
+    measurement IS the claim — the sweep that finds finished matches runs every
+    few minutes and must never re-measure, or a match would notify twice.
+
+    The counts are frozen here rather than recomputed at send time. A draw's
+    participant pool grows while picks are open and can grow again through the
+    admin pick-for-others path, so "fewer than half the field saw this coming"
+    has to mean the field as it stood when the match finished. It also makes the
+    row self-explaining months later, when the picks behind it have scrolled out
+    of anyone's memory.
+    """
+
+    __tablename__ = "standout_pick_notifications"
+
+    match_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("matches.id", ondelete="CASCADE"), primary_key=True
+    )
+    draw_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("draws.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    correct_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    participant_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    detected_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True
+    )
+    # Null until the batch goes out. Set on EVERY measured match, including the
+    # ones the field mostly got right — those are recorded so they are never
+    # re-measured, and stamped so the pending sweep stays small.
+    notified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    recipient_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
 class TournamentCompleteNotification(Base):
     """
     Idempotency + audit record: one row per draw once "final standings" emails
