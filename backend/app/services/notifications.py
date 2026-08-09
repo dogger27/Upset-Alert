@@ -25,7 +25,7 @@ from app.models.notification import NotificationPreference
 from app.models.prediction import UserPrediction
 from app.models.tournament import Draw, DrawEntry, Match
 from app.models.user import User
-from app.services.draw_changes import change_line
+from app.services.draw_changes import change_line, last_name as _last_name
 from app.services.scoring import rank_users, score_user
 
 logger = logging.getLogger(__name__)
@@ -78,14 +78,6 @@ def _entry_status(entry) -> str:
         return str(entry.seed)
     raw = re.sub(r"<[^>]+>", "", entry.entry_type or "")
     return html.unescape(raw).replace("\xa0", " ").strip()
-
-
-def _last_name(full: str) -> str:
-    """Everything after the first token — mirrors the app-wide 'last name'
-    convention (CombinedView.jsx's lastNameOf) so multi-word surnames like
-    'Carreño Busta' stay together."""
-    parts = full.strip().split()
-    return " ".join(parts[1:]) if len(parts) > 1 else parts[0]
 
 
 def _strip_tiebreak(val: str) -> str:

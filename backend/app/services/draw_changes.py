@@ -23,6 +23,19 @@ from typing import Optional
 _NOTABLE_ENTRY_TYPES = {"Q", "LL", "WC", "Alt", "SE", "PR"}
 
 
+def last_name(full: str) -> str:
+    """Everything after the first token.
+
+    The app-wide convention (CombinedView.jsx's lastNameOf, and the round
+    emails), so multi-word surnames like 'Carreño Busta' and 'Jiménez
+    Kasintseva' stay whole. Push notifications use it for every player name:
+    with two names on a line, full names wrapped every single row on a phone,
+    which is what a lock screen has least room for.
+    """
+    parts = (full or "").strip().split()
+    return " ".join(parts[1:]) if len(parts) > 1 else (parts[0] if parts else "")
+
+
 def normalize_name(name: str) -> str:
     """Casefolded, accent-stripped, punctuation-flattened form of a name.
 
@@ -132,8 +145,11 @@ def change_line(change: dict) -> str:
     notifications._gather_draw_change_payload.
     """
     src = (
-        change["old_name"]
+        last_name(change["old_name"])
         if change["kind"] == "replaced"
+        # Not last_name()'d: the placeholder is not a person, and "Slot 12"
+        # would reduce to "12".
         else slot_label(change.get("old_entry_type"), change["bracket_position"])
     )
-    return f"{src} → {change['new_name']}{entry_suffix(change.get('new_entry_type'))}"
+    new = last_name(change["new_name"])
+    return f"{src} → {new}{entry_suffix(change.get('new_entry_type'))}"
