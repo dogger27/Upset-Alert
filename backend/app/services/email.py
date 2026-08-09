@@ -196,6 +196,15 @@ async def send_new_user_notification(new_email: str, new_username: str) -> None:
     })
 
 
+_NUMBER_WORDS = {
+    1: "One", 2: "Two", 3: "Three", 4: "Four", 5: "Five",
+    6: "Six", 7: "Seven", 8: "Eight", 9: "Nine", 10: "Ten",
+}
+
+# Row accent per tour, matching the blue/pink banding of the draws table on site.
+_TOUR_COLOURS = {"M": ("#1e3a8a", "#e0e7ff"), "F": ("#9d174d", "#fce7f3")}
+
+
 def _tier_badge(category: str, gender: str) -> str:
     """Short tier label for the badge on each digest row: 'ATP 250', 'Grand Slam'."""
     cat = (category or "").upper()

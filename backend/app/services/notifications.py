@@ -586,6 +586,14 @@ async def notify_round_complete(
 # Match-start notification
 # ---------------------------------------------------------------------------
 
+# Draw-release emails are a single on/off. They were once selectable per tier
+# ('draw_open:ATP 250', …), which stopped making sense when the email became a
+# weekly digest: one message covers every draw released that week, so a per-tier
+# opt-in could only ever have filtered rows out of a mail the user was getting
+# regardless. The old keys are migrated into this one (see database.py).
+DRAW_RELEASED_PREF = "draw_released"
+
+
 async def notify_draw_release_batch(draw_ids: list[int], is_followup: bool = False) -> None:
     """
     Email every user with draw-release notifications on — one message covering
