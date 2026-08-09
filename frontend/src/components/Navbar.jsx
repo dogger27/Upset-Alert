@@ -248,30 +248,46 @@ export default function Navbar() {
   // Descriptions are kept to roughly one line at panel width: with a bold
   // label above each, a two-line description made every row three lines tall
   // and four rows filled the whole dropdown.
-  const NOTIF_ROWS = [
-    { key: 'draw_released', label: 'Draw released',
-      desc: 'Once a week, when all draws are out' },
-    { key: 'draw_changed', label: 'Draw change',
-      desc: 'A player is replaced in a draw you entered' },
-    { key: 'qualifiers_added', label: 'Qualifiers added',
-      desc: 'Qualifying slots are filled, with their first matches' },
-    { key: 'standout_pick', label: 'Standout pick',
-      desc: 'You called a result most competitors missed' },
-    { key: 'round_standings', label: 'Round completion',
-      // Wrapped rather than referenced directly: NOTIF_ROWS is built above
-      // toggleRoundStandings' const declaration, so naming it here would read
-      // it in the temporal dead zone and throw on every render.
-      desc: 'After every round', onEmail: () => toggleRoundStandings() },
-    { key: 'tournament_end', label: 'Draw completion',
-      desc: 'Final standings only',
-      // Round completion already reports every round, the Final included, so
-      // while that is on this row is covered by it: shown ticked and greyed
-      // rather than removed. Hiding it made the panel's rows move under the
-      // finger that had just tapped the row above.
-      coveredBy: 'round_standings' },
-    { key: 'league_member_joined', label: 'New league member',
-      desc: 'Someone joins a league you own' },
+  // Two groups, because the rows answer two different questions. The first two
+  // reach you whether or not you have entered anything; the rest only ever fire
+  // about a draw you are already competing in, which is the single fact that
+  // decides whether a row is worth switching on.
+  const NOTIF_GROUPS = [
+    {
+      title: 'General',
+      rows: [
+        { key: 'draw_released', label: 'New draw released',
+          desc: 'Once a week, when all draws are out' },
+        { key: 'league_member_joined', label: 'New league member',
+          desc: 'Someone joins a league you own' },
+      ],
+    },
+    {
+      title: "Draws I'm Competing In",
+      rows: [
+        { key: 'draw_changed', label: 'Draw change',
+          desc: 'A player is replaced in a draw you entered' },
+        { key: 'qualifiers_added', label: 'Qualifiers added',
+          desc: 'Qualifying slots are filled, with their first matches' },
+        { key: 'standout_pick', label: 'Standout pick',
+          desc: 'You called a result most competitors missed' },
+        { key: 'round_standings', label: 'Round completion',
+          // Wrapped rather than referenced directly: this is built above
+          // toggleRoundStandings' const declaration, so naming it here would
+          // read it in the temporal dead zone and throw on every render.
+          desc: 'After every round', onEmail: () => toggleRoundStandings() },
+        { key: 'tournament_end', label: 'Draw completion',
+          desc: 'Final standings only',
+          // Round completion already reports every round, the Final included,
+          // so while that is on this row is covered by it: shown ticked and
+          // greyed rather than removed. Hiding it made the panel's rows move
+          // under the finger that had just tapped the row above.
+          coveredBy: 'round_standings' },
+      ],
+    },
   ]
+  // Flat view for cross-row lookups (coveredBy), which do not care about groups.
+  const NOTIF_ROWS = NOTIF_GROUPS.flatMap(g => g.rows)
 
   const toggleNotif = (key) => {
     setNotifSelected(prev => {
@@ -479,7 +495,11 @@ export default function Navbar() {
                               </tr>
                             </thead>
                             <tbody>
-                              {NOTIF_ROWS.map(r => {
+                              {NOTIF_GROUPS.flatMap(g => [
+                                <tr key={`h-${g.title}`} className="notif-group-row">
+                                  <td colSpan={pushSupported !== false ? 3 : 2}>{g.title}</td>
+                                </tr>,
+                                ...g.rows.map(r => {
                                 // Each channel locks independently: round-completion
                                 // email covers draw-completion email, and the same
                                 // for push, but one being on says nothing about the
@@ -540,7 +560,8 @@ export default function Navbar() {
                                   )}
                                 </tr>
                                 )
-                              })}
+                              }),
+                              ])}
                             </tbody>
                           </table>
                           <p className={`notif-device-state${pushOn ? ' is-on' : ''}`}>

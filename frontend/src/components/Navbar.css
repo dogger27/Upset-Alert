@@ -440,6 +440,26 @@ a.profile-dropdown-item:visited {
   border-bottom: 1px solid var(--border-subtle, #f1f2f4);
 }
 .notif-grid tr:last-child td { border-bottom: none; }
+
+/* Section heading inside the grid. A full-width <tr> rather than a separate
+   table per group, so every group's Email and Push ticks stay on the same two
+   column positions — split into sibling tables they would each size their own
+   columns and the ticks would no longer line up down the panel.
+   See the border-collapse note: a background on a spanning row is how a divider
+   gets drawn in a collapsed table. */
+.notif-grid .notif-group-row td {
+  padding: 0.55rem 1rem 0.35rem;
+  background: #f9fafb;
+  border-bottom: 1px solid var(--border, #e5e7eb);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6b7280;
+}
+/* The first heading sits directly under the column headers, which already
+   carry a bottom border. */
+.notif-grid .notif-group-row:first-child td { border-top: none; }
 .notif-grid input[type='checkbox'] {
   width: 1.05rem;
   height: 1.05rem;
