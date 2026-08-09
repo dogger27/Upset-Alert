@@ -238,7 +238,7 @@ async def _latest_content(db: AsyncSession, pref_key: str, user_id: int) -> dict
         from app.models.notification import StandoutPickNotification
         from app.models.tournament import Match
         from app.services.notifications import (
-            STANDOUT_MAX_SHARE, STANDOUT_MIN_PARTICIPANTS, _email_round_label,
+            STANDOUT_MAX_SHARE, STANDOUT_MIN_PREDICTIONS, _email_round_label,
         )
         from app.services.email import _tier_badge
 
@@ -266,7 +266,7 @@ async def _latest_content(db: AsyncSession, pref_key: str, user_id: int) -> dict
             .where(
                 StandoutPickNotification.notified_at.isnot(None),
                 StandoutPickNotification.correct_count > 0,
-                StandoutPickNotification.participant_count >= STANDOUT_MIN_PARTICIPANTS,
+                StandoutPickNotification.prediction_count >= STANDOUT_MIN_PREDICTIONS,
                 StandoutPickNotification.correct_count
                 < StandoutPickNotification.participant_count * STANDOUT_MAX_SHARE,
             )

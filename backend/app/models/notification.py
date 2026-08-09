@@ -155,6 +155,14 @@ class StandoutPickNotification(Base):
     )
     correct_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     participant_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # How many competitors actually had a pick on THIS match — a different
+    # number from participant_count, which counts everyone entered in the draw
+    # whether or not they got as far as this fixture. It exists to gate the
+    # notification: "you saw what the field missed" is not a claim worth making
+    # when the field that expressed a view was a handful of people. The
+    # displayed denominator stays participant_count, matching what
+    # match_predictors means by "correct".
+    prediction_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     detected_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True
     )
