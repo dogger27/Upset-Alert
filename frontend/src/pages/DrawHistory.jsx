@@ -118,19 +118,19 @@ function TournamentRow({ entry, userId }) {
 
   return (
     <tr className="dh-row">
-      <td className="dh-cell dh-cell-tournament" data-label="Tournament">
+      <td className="dh-cell dh-cell-tournament">
         <Link to={drawUrl} className="dh-tourn-link" title="View draw">
           <BracketIcon />
           <span className="dh-tourn-name">{entry.name}</span>
         </Link>
       </td>
-      <td className="dh-cell dh-cell-category" data-label="Category">
+      <td className="dh-cell dh-cell-category">
         <span className={`dh-category ${isATP ? 'dh-category--atp' : 'dh-category--wta'}`}>{catLabel}</span>
       </td>
-      <td className="dh-cell" data-label="Date">{dateRange}</td>
-      <td className="dh-cell" data-label="Points"><strong>{entry.points}</strong></td>
-      <td className="dh-cell" data-label="Correct">{entry.correct_count} / {entry.total_matches}{pct}</td>
-      <td className="dh-cell" data-label="Rank (Global)">
+      <td className="dh-cell">{dateRange}</td>
+      <td className="dh-cell"><strong>{entry.points}</strong></td>
+      <td className="dh-cell">{entry.correct_count} / {entry.total_matches}{pct}</td>
+      <td className="dh-cell">
         <span className={`dh-rank ${rankBadge(entry.rank)}`}>#{entry.rank} / {entry.total_participants}</span>
       </td>
     </tr>

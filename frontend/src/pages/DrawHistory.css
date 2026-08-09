@@ -164,50 +164,33 @@
 .dh-rank--silver { color: #666; }
 .dh-rank--bronze { color: #a0522d; }
 
-/* ── Mobile: collapse the table into stacked cards ──
-   Standard responsive-table pattern — hide the header row, turn each <tr>
-   into a bordered block, and label each cell via its data-label attribute
-   instead of a shared column header. Avoids maintaining a second template. */
+/* ── Mobile: still a table, scrolled sideways ── */
 @media (max-width: 640px) {
   .dh-page { padding: 24px 14px 56px; }
-  .dh-table-wrap { border: none; box-shadow: none; background: none; overflow-x: visible; }
-  .dh-table, .dh-table tbody, .dh-table tr, .dh-table td { display: block; width: 100%; }
-  .dh-table thead { display: none; }
 
-  .dh-row {
-    background: #fff;
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-xs);
-    margin-bottom: 10px;
-    overflow: hidden;
-  }
-  .dh-row:not(:last-child) .dh-cell { border-bottom: none; }
+  /* The table stays a table. It used to reflow into one card per draw — six
+     labelled rows each — which turned a season's history into a very long page
+     and threw away the thing a results table is for: reading one column down
+     the page and comparing draws at a glance. Scrolling sideways is the
+     accepted cost of keeping that.
 
-  .dh-cell {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 8px 14px;
-    border-bottom: 1px solid #f0f0f0;
-    white-space: normal;
-  }
-  .dh-cell:last-child { border-bottom: none; }
+     The wrapper already scrolls (it is the desktop fallback for narrow
+     viewports); the card rules were switching that off along with everything
+     else, so most of this is simply not overriding them any more. */
+  .dh-table-wrap { -webkit-overflow-scrolling: touch; }
 
-  .dh-cell::before {
-    content: attr(data-label);
-    font-size: 0.65rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: #888;
-    flex-shrink: 0;
-  }
+  /* Size to content, not to the viewport. At width:100% the table compresses
+     its columns to fit and the wrapper never has anything to scroll — the
+     overflow container only helps once the table is allowed to be wider than
+     it. min-width keeps it filling the card on a short history. */
+  .dh-table { width: max-content; min-width: 100%; }
 
-  .dh-cell-tournament {
-    background: rgba(45,106,79,0.04);
-    padding: 10px 14px;
-  }
-  .dh-cell-tournament::before { content: none; }
+  .dh-table thead th { padding: 8px 10px; }
+  .dh-cell { padding: 8px 10px; font-size: 0.8rem; }
+
+  /* Nowrap here too, unlike desktop: allowed to wrap, a long tournament name
+     is what the table shrinks first, so every row grows three lines tall to
+     avoid the horizontal scroll we are deliberately accepting. */
+  .dh-cell-tournament { white-space: nowrap; }
+  .dh-tourn-name { font-size: 0.82rem; }
 }
