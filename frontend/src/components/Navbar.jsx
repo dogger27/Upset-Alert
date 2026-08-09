@@ -555,7 +555,10 @@ export default function Navbar() {
                           {pushNote && <p className="notif-push-note">{pushNote}</p>}
 
                           {notifError && <p className="profile-edit-error" style={{ padding: '0 1rem' }}>{notifError}</p>}
-                          <div className="profile-edit-actions" style={{ padding: '0.5rem 1rem 0.85rem' }}>
+                          {/* Sticky to the panel's bottom edge — see .notif-actions.
+                              The error sits above it deliberately: pinned, it would
+                              eat the room the buttons need on a short screen. */}
+                          <div className="profile-edit-actions notif-actions">
                             <button className="btn-secondary profile-edit-btn" onClick={cancelNotif} disabled={notifSaving}>
                               Cancel
                             </button>

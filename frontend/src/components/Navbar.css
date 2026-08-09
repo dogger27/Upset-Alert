@@ -327,8 +327,35 @@ a.profile-dropdown-item:visited {
 
 /* ── Notification panel ── */
 .notif-form {
-  max-height: 480px;
+  /* Bounded by the VIEWPORT, not a fixed 480px. The flat cap was set when the
+     grid had four rows; every row added since pushed the actions further past
+     it, and on a phone the panel simply ran off the bottom of the screen with
+     Save below the fold. dvh (not vh) because mobile browser chrome retracts on
+     scroll — vh measures the tall state and overflows the short one. The
+     subtraction clears the navbar the dropdown hangs from, plus its 10px gap. */
+  max-height: min(560px, calc(100dvh - 8.5rem));
   overflow-y: auto;
+  /* The sticky footer is painted over content that scrolls beneath it; without
+     a stacking context of its own the checkbox cells' own painting can win. */
+  position: relative;
+}
+
+/* Save/Cancel ride along the bottom edge the way the title rides the top, so
+   the panel can hold any number of rows and the actions are always one tap
+   away. Sticky rather than fixed: it stays inside the scroller and cannot
+   escape the dropdown when the panel is short enough not to scroll at all. */
+.notif-actions {
+  position: sticky;
+  bottom: 0;
+  background: #fff;
+  border-top: 1px solid var(--border, #e5e7eb);
+  padding: 0.6rem 1rem;
+  /* Above the rows it overlaps while they scroll under it. */
+  z-index: 1;
+  /* .profile-edit-actions sets margin-top for the inline profile form; pinned to
+     an edge that gap just shows a strip of scrolling content above the bar.
+     Declared after it, so the plain class order settles this. */
+  margin-top: 0;
 }
 
 .notif-form-header {
