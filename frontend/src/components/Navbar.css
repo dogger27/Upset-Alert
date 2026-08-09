@@ -512,12 +512,33 @@ a.profile-dropdown-item:visited {
 /* Paper-plane test trigger, sitting beside each row's Push checkbox. Icon only
    — the column header already says Push, and a word per row would double the
    height of the grid on a phone. */
+/* The Push column holds a checkbox AND a "send me a test" button. Laying them
+   out as one centred inline-flex row centred the PAIR, which pushed the
+   checkbox left of the column heading while Email's sat dead centre — the two
+   ticks no longer lined up with each other or with their labels.
+
+   So the checkbox alone is centred in the cell, exactly like Email's, and the
+   test button is taken out of flow and pinned to the cell's right edge. Out of
+   flow means it no longer contributes to the column's intrinsic width, so that
+   width is reserved explicitly below — otherwise the column shrinks to the
+   checkbox and the button hangs outside the card. */
 .notif-push-cell {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
+}
+.notif-grid th.notif-grid-push,
+.notif-grid td.notif-grid-push {
+  /* Wide enough that the pinned button clears the centred checkbox: the cell's
+     0.5rem padding plus a 1.05rem box in the middle and a 1.35rem button at the
+     edge leaves a few px of gap either side of 5rem, under either box model. */
+  width: 5rem;
+  position: relative;
 }
 .notif-test-icon {
+  position: absolute;
+  right: 0.25rem;
+  top: 50%;
+  transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
   justify-content: center;
