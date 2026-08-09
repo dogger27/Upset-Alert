@@ -354,6 +354,25 @@ async def _latest_content(db: AsyncSession, pref_key: str, user_id: int) -> dict
                     "participant_count": spn.participant_count,
                 }])
 
+    if pref_key == "league_member_joined":
+        from app.models.league import League, LeagueMember
+
+        # The caller's own most recent joiner, in one of THEIR leagues — this
+        # notification only ever goes to an owner about their own league, so
+        # replaying anyone else's would describe the type wrongly. Excludes the
+        # owner's own membership row, which every league has from creation.
+        row = (await db.execute(
+            select(User.username, League.name, League.id)
+            .join(LeagueMember, LeagueMember.user_id == User.id)
+            .join(League, League.id == LeagueMember.league_id)
+            .where(League.owner_id == user_id, LeagueMember.user_id != user_id)
+            .order_by(LeagueMember.joined_at.desc())
+            .limit(1)
+        )).first()
+        if row:
+            username, league_name, league_id = row
+            return push_content.league_join(username, league_name, league_id)
+
     return push_content.sample(pref_key)
 
 

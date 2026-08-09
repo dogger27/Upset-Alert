@@ -320,9 +320,16 @@ def standout_pick(picks: list[dict]) -> dict:
 
 
 def league_join(new_username: str, league_name: str, league_id: int) -> dict:
+    """
+    Fixed title, names in the body — the same shape as every other type.
+
+    Both names are variable length, so a title carrying them truncated exactly
+    as the tournament ones did. The body says it once, plainly, instead of the
+    old title/body pair that said the same thing twice in different words.
+    """
     return {
-        "title": f"{new_username} joined {league_name}",
-        "body": f"{new_username} is now competing in {league_name}.",
+        "title": "New League Member",
+        "body": f"@{new_username} joined {league_name}",
         "url": f"/leagues/{league_id}",
         "tag": f"league-join-{league_id}",
         "actions": [{"action": "open", "title": "View league", "url": f"/leagues/{league_id}"}],
@@ -357,8 +364,8 @@ def sample(pref_key: str) -> dict:
             "actions": [{"action": "open", "title": "View standings", "url": "/leagues"}],
         },
         "league_member_joined": {
-            "title": "someone joined your league",
-            "body": "A new competitor is now in one of your leagues.",
+            "title": "New League Member",
+            "body": "@dwightcharles joined BetaTesters",
             "url": "/leagues",
             "tag": "sample-league-join",
             "actions": [{"action": "open", "title": "View league", "url": "/leagues"}],
