@@ -243,12 +243,16 @@ async def join_league_by_code(
         try:
             from app.services.push import send_push_to_users, users_with_push
             if league.owner_id in await users_with_push("league_member_joined"):
+                # Built by push_content, not inline. This call site had its own
+                # copy of the wording, which made push_content.league_join dead
+                # code and left the "send me a test" button unable to reproduce
+                # the notification it claims to preview.
+                from app.services import push_content
                 await send_push_to_users(
                     [league.owner_id],
-                    title=f"{current_user.username} joined {league.name}",
-                    body="Tap to see your league standings",
-                    url=f"/leagues/{league.id}",
-                    tag=f"league-join-{league.id}",
+                    **push_content.league_join(
+                        current_user.username, league.name, league.id
+                    ),
                 )
         except Exception:
             import logging
