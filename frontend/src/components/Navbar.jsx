@@ -491,7 +491,7 @@ export default function Navbar() {
                               <tr>
                                 <th className="notif-grid-type">Notification</th>
                                 <th>Email</th>
-                                {pushSupported !== false && <th>Push</th>}
+                                {pushSupported !== false && <th className="notif-grid-push">Push</th>}
                               </tr>
                             </thead>
                             <tbody>
@@ -526,7 +526,7 @@ export default function Navbar() {
                                     />
                                   </td>
                                   {pushSupported !== false && (
-                                    <td>
+                                    <td className="notif-grid-push">
                                       <span className="notif-push-cell">
                                         <input
                                           type="checkbox"
