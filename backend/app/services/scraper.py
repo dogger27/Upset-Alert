@@ -985,6 +985,41 @@ import logging as _logging
 _scraper_logger = _logging.getLogger(__name__)
 
 
+async def fetch_event_dates(
+    wiki_page_title: str, year: int, gender: str = ""
+) -> tuple[Optional[date], Optional[date]]:
+    """
+    (start, end) from the general event page alone — no singles draw required.
+
+    scrape_tournament reads the same infobox, but only after it has successfully
+    fetched the SINGLES page, and that page does not exist until roughly the day
+    the draw is published. So for the whole time a tournament is upcoming, the
+    one authoritative statement of when it runs is sitting on a page we already
+    know how to reach and never look at.
+
+    That gap is not cosmetic. Discovery seeds start_date with the Monday of the
+    tournament's week, which is right for an ordinary Mon–Sun event and wrong for
+    every extended-format 1000 and Slam: 2026 Cincinnati runs 13–23 August and
+    was seeded 10 August. A draw whose start_date has already passed reads as
+    "active" the instant it is released (Draw.computed_status), which locks picks
+    — so the release that should have opened a Masters 1000 for picking would
+    have closed it instead, with nothing logged.
+
+    Returns (None, None) rather than raising: this is a best-effort refinement of
+    a date we already have, and a Wikipedia blip must never be worse than not
+    having called it.
+    """
+    if not year:
+        return None, None
+    general_title = _general_page_title(wiki_page_title) or wiki_page_title
+    try:
+        wikitext, _ = await fetch_wikitext(general_title)
+    except Exception as exc:
+        _scraper_logger.debug("Event-date refresh: could not fetch %r: %s", general_title, exc)
+        return None, None
+    return _parse_infobox_date(wikitext, year, gender)
+
+
 async def scrape_tournament(
     wiki_page_title: str,
     year: int = 0,

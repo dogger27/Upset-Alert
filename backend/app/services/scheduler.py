@@ -177,6 +177,16 @@ async def _refresh_active_tournaments(force_refresh: bool = False) -> None:
                 await db.rollback()
                 if t_page_id is None:
                     logger.debug("Draw page not up yet for %s: %s", t_wiki, exc)
+                    # The singles page is missing, but the EVENT page is up and
+                    # states when the tournament runs. Take the dates from it
+                    # now rather than waiting for the draw: discovery seeded
+                    # start_date with the Monday of the tournament's week, and
+                    # for an extended-format 1000 or Slam that Monday is days
+                    # early. A start_date already in the past makes the draw read
+                    # as "active" the moment it is released, which LOCKS picks —
+                    # the release that should open a Masters 1000 would close it.
+                    # See fetch_event_dates; 2026 Cincinnati was the live case.
+                    await _refresh_dates_from_event_page(t_id)
                 else:
                     logger.warning("Resolved wiki page %s vanished for %s: %s",
                                    t_page_id, t_wiki, exc)
@@ -207,6 +217,64 @@ async def _refresh_active_tournaments(force_refresh: bool = False) -> None:
                                "wiki_title": t_wiki, "error": err,
                                "traceback": tb},
                               dedup_key=f"refresh_fail_{t_id}_{type(exc).__name__}", dedup_hours=1.0)
+
+
+async def _refresh_dates_from_event_page(draw_id: int) -> None:
+    """
+    Correct an upcoming draw's dates from its general event page.
+
+    Runs only on the WikiPageNotFound path — i.e. exactly while a draw is
+    upcoming and carrying discovery's week-Monday placeholder. Once the singles
+    page exists, _do_scrape reads the same infobox and this stops being reached.
+
+    Deliberately narrow about what it will overwrite:
+      * never touches an active or completed draw — past start, Wikipedia lags
+        real play and the scraper's own date logic already owns this;
+      * never touches a draw whose release has been stamped, so a date cannot
+        move under picks that are already open;
+      * writes only on an actual change, so an unchanged date is not a write on
+        every poll of every upcoming draw.
+
+    Own session, and never raises: this is a best-effort side errand hanging off
+    an exception handler, and it must not turn a handled "page isn't up yet" into
+    an unhandled failure that skips the rest of the sweep.
+    """
+    from app.services.scraper import fetch_event_dates
+
+    try:
+        async with AsyncSessionLocal() as db:
+            d = await db.get(Draw, draw_id)
+            if d is None or d.status in ("active", "completed"):
+                return
+            if d.draw_released_direct_at is not None:
+                return
+
+            start, end = await fetch_event_dates(d.wiki_page_title, d.year, d.gender)
+            if not start:
+                return
+
+            old_start, old_end = d.start_date, d.end_date
+            if start == old_start and (end or old_end) == old_end:
+                return
+
+            d.start_date = start
+            if end:
+                d.end_date = end
+            await db.commit()
+
+            from app.services.system_log import app_log
+            await app_log(
+                "info", "scraper",
+                f"Corrected dates for {d.year} {d.name} ({d.gender}) from the event page: "
+                f"{old_start} → {start}, {old_end} → {d.end_date}",
+                {"draw_id": d.id, "old_start": str(old_start), "new_start": str(start),
+                 "old_end": str(old_end), "new_end": str(d.end_date),
+                 "wiki_page_title": d.wiki_page_title},
+            )
+            logger.info("Corrected dates for draw %d (%s): %s → %s",
+                        d.id, d.name, old_start, start)
+    except Exception as exc:
+        logger.debug("Event-page date refresh failed for draw %d: %s", draw_id, exc)
 
 
 def _season_pages() -> set[str]:
