@@ -297,9 +297,18 @@ async def send_draw_release_digest(
         return
     count_word = _NUMBER_WORDS.get(n, str(n))
 
+    # A Slam or a 1000 opens its men's and women's draws together, so the whole
+    # batch is one tournament. "2 draws are live" then says the least useful
+    # true thing about it — the event's name is what a reader recognises in an
+    # inbox, and counting draws is only informative when they are different
+    # tournaments.
+    names = {d["name"] for d in draws}
+    event = draws[0]["name"] if len(names) == 1 else None
+
     if is_followup:
         # The week's digest already went out; these arrived late.
         subject = (f"One more draw is live — {draws[0]['name']}" if n == 1
+                   else f"{event}: {n} more draws are live" if event
                    else f"{n} more draws are live — week of {week_label}")
         heading = (f"One more draw for the week of {week_label}" if n == 1
                    else f"{count_word} more draws for the week of {week_label}")
@@ -307,7 +316,7 @@ async def send_draw_release_digest(
                  if n == 1 else
                  "They weren't out when we sent the rest of this week's draws. They're live now.")
     else:
-        subject = (f"Draw released: {draws[0]['name']}" if n == 1
+        subject = (f"{event} is live — week of {week_label}" if event
                    else f"{n} draws are live — week of {week_label}")
         heading = "The draw is live!" if n == 1 else "This week's draws are live"
         intro = (f"The draw for <strong>{draws[0]['name']}</strong> has been released."
