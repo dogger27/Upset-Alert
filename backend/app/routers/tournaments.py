@@ -1164,11 +1164,74 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
     # the bracket, and every name they type would otherwise look like a swap.
     # After the announcement there is no such churn: the page is complete, and a
     # change to it is a change to the real draw.
+    # Play having started closes the window entirely. A field is settled once the
+    # first main-draw ball is struck: withdrawals become walkovers and
+    # retirements, which change a RESULT, never who is in the bracket. So an
+    # active draw whose parse disagrees about a player is not reporting a
+    # transfer, it is a bad parse — and is handled as one below rather than
+    # written in and announced.
+    play_started = (
+        tournament.picks_locked_at is not None
+        or tournament.status in ("active", "completed")
+    )
+
+    # Once a draw has been ANNOUNCED and before play begins, a name changing at a
+    # bracket position is news: somebody withdrew and a lucky loser took the
+    # slot, or a qualifier was finally placed. People have picked from that
+    # bracket and their picks follow the slot silently, so they are told (see
+    # _notify_pending_draw_changes).
+    #
+    # The gate is draw_release_notified_at, not draw_released_direct_at. A draw
+    # is stamped released at 50% of its slots and the release email waits out a
+    # stability cooldown after that — in between, editors are still transcribing
+    # the bracket, and every name they type would otherwise look like a swap.
+    # After the announcement there is no such churn: the page is complete, and a
+    # change to it is a change to the real draw.
     track_changes = (
         tournament.draw_release_notified_at is not None
-        and tournament.status != "completed"
+        and not play_started
     )
     pending_changes: list[dict] = []
+
+    # --- Reject a shifted parse before it is written -------------------------
+    #
+    # 2026 Canadian Open, mid-quarter-finals: one scrape parsed the page with one
+    # fewer 16-team section than the next, so section_index shifted and every
+    # slot from 49 up received the player 16 positions below it. Sixteen entries
+    # were rewritten, then rewritten back five minutes later, and everyone
+    # competing was told their picks had changed — twice, in opposite directions.
+    #
+    # The notification was the visible half. The damage is that this rewrites
+    # DrawEntry rows that predictions point at AND the player ids on every match,
+    # so a shifted parse silently re-points picks and mis-pairs matches in a
+    # tournament that is already being scored.
+    #
+    # A correct parse of a draw in play agrees with the stored field exactly, so
+    # any real disagreement condemns the whole parse: nothing from it is applied,
+    # and the next scrape (30 min, or sooner via EventStreams) retries. Judged
+    # with classify_change so a restored diacritic or an expanded initial — the
+    # same tidying draw_changes already knows how to ignore — is not mistaken for
+    # a shift and does not block a legitimate scrape forever.
+    if play_started:
+        misparsed = [
+            (pe.bracket_position, existing_players[pe.bracket_position].name, pe.name)
+            for pe in parsed.players
+            if pe.bracket_position in existing_players
+            and classify_change(existing_players[pe.bracket_position].name, pe.name) == "replaced"
+        ]
+        if misparsed:
+            from app.services.system_log import app_log
+            await app_log(
+                "error", "scraper",
+                f"Discarded a scrape of {tournament.year} {tournament.name} "
+                f"({'ATP' if tournament.gender == 'M' else 'WTA'}): {len(misparsed)} player(s) "
+                f"disagree with the field of a draw already in play — treating as a bad parse",
+                {"draw_id": tournament.id, "count": len(misparsed),
+                 "sample": [f"pos {p}: {old} → {new}" for p, old, new in misparsed[:6]],
+                 "wiki_page_title": tournament.wiki_page_title},
+                dedup_key=f"misparse_{tournament.id}", dedup_hours=6.0,
+            )
+            return
 
     # Upsert players — update in place to preserve any FK references
     pos_to_player_id: dict[int, int] = {}
