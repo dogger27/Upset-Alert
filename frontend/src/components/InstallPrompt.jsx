@@ -60,6 +60,19 @@ const platform = () => {
 const isInAppBrowser = () =>
   /FBAN|FBAV|Instagram|Line\/|Twitter/.test(navigator.userAgent)
 
+// iOS share glyph: a box with an arrow leaving the top. Shown inline in the
+// steps because "the square with an arrow pointing up" is a description someone
+// has to translate before they can look for it.
+const ShareIcon = () => (
+  <svg className="install-inline-icon" viewBox="0 0 24 24" width="15" height="15"
+       fill="none" stroke="currentColor" strokeWidth="2"
+       strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M12 15V3" />
+    <polyline points="8,7 12,3 16,7" />
+    <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" />
+  </svg>
+)
+
 export default function InstallPrompt() {
   const [visible, setVisible] = useState(false)
   const [showSteps, setShowSteps] = useState(false)
@@ -151,9 +164,18 @@ export default function InstallPrompt() {
         ]
       : os === 'ios'
       ? [
-          'Already added it? Open Upset Alert from your Home Screen — iPhone can’t switch you there automatically.',
-          'Not yet? Tap the Share button — the square with an arrow pointing up.',
-          'Scroll down and tap “Add to Home Screen”, then “Add”.',
+          // Where the button is, not just what it looks like. The old wording
+          // named the icon and stopped, and the one report we have from a real
+          // iPhone user was "can't find the share button" — it sits in Safari's
+          // bottom toolbar, which hides itself as soon as you scroll.
+          <>
+            Tap the Share button <ShareIcon /> at the <strong>bottom</strong> of the
+            screen. Don’t see it? Scroll up, or tap the very bottom once to bring
+            the bar back.
+          </>,
+          <>Scroll down that list and tap <strong>“Add to Home Screen”</strong>.</>,
+          <>Tap <strong>“Add”</strong>, top right. Upset Alert is now an icon on your
+          Home Screen — open it from there.</>,
         ]
       : [
           'Tap the ⋮ menu in the top right.',
@@ -166,7 +188,13 @@ export default function InstallPrompt() {
       <div className="install-banner" role="dialog" aria-label="Open Upset Alert in the app">
         <img className="install-banner-icon" src="/favicon-192x192.png" alt="" />
         <div className="install-banner-text">
-          <strong>Open in app</strong>
+          {/* "Open in app" with a button saying "Open" promises an app that is
+              already there. iPhone can never tell us whether it is
+              (getInstalledRelatedApps is Chromium-only), so iOS always got that
+              wording — and a real user read it as "download your app", then went
+              looking for a download that does not exist. On iOS the honest offer
+              is to ADD it; only Android can claim to open one. */}
+          <strong>{installed ? 'Open in app' : os === 'ios' ? 'Add to Home Screen' : 'Install app'}</strong>
           <span>
             {installed
               ? 'You already have Upset Alert installed.'
@@ -174,7 +202,7 @@ export default function InstallPrompt() {
           </span>
         </div>
         <button className="install-banner-cta" onClick={onInstallClick}>
-          {installed ? 'How' : 'Open'}
+          {installed ? 'How' : os === 'ios' ? 'Show me' : 'Install'}
         </button>
         <button className="install-banner-x" onClick={dismiss} aria-label="Dismiss">×</button>
       </div>
@@ -188,17 +216,33 @@ export default function InstallPrompt() {
                 : installed
                 ? 'Open the Upset Alert app'
                 : os === 'ios'
-                ? 'Open or add to your Home Screen'
+                ? 'Add Upset Alert to your Home Screen'
                 : 'Install on Android'}
             </h3>
             <ol>
               {steps.map((s, i) => <li key={i}>{s}</li>)}
             </ol>
             {os === 'ios' && !isInAppBrowser() && (
-              <p className="install-steps-note">
-                Notifications on iPhone only work once the app is on your Home Screen —
-                Safari can’t send them from a tab.
-              </p>
+              <>
+                {/* Opened from Messages, WhatsApp, Gmail, LinkedIn and the rest,
+                    iOS uses a built-in browser whose share sheet has no "Add to
+                    Home Screen". Its user-agent is identical to Safari's, so it
+                    cannot be detected the way the named social apps are — only
+                    mentioned. This is the likeliest reason someone following the
+                    steps exactly still finds nothing. */}
+                <p className="install-steps-note">
+                  Opened this from a text or email? Tap the compass icon to open it
+                  in Safari first — built-in browsers can’t add to the Home Screen.
+                </p>
+                <p className="install-steps-note">
+                  Already added it? Just open Upset Alert from your Home Screen —
+                  iPhone can’t switch you there automatically.
+                </p>
+                <p className="install-steps-note">
+                  Notifications on iPhone only work once the app is on your Home Screen —
+                  Safari can’t send them from a tab.
+                </p>
+              </>
             )}
             <button className="install-steps-done" onClick={() => setShowSteps(false)}>Got it</button>
           </div>
