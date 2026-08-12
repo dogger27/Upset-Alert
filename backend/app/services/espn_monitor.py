@@ -65,6 +65,11 @@ _FILLER = {"open", "the", "powered", "by", "cup", "championships", "masters",
 _LOCK_LEAD_DAYS  = LOCK_LEAD_DAYS  # accept a lock at most N days BEFORE start_date
 _LOCK_TRAIL_DAYS = 1    # keep watching N days AFTER start_date
 _RESULT_AFTER_DAYS = 16  # keep syncing results up to N days after start_date
+# How far ahead to start reading the published order of play. The deadline only
+# matters until the first ball, and ESPN publishes day 1's times the evening
+# before, so three days is comfortably early without widening the picks-lock
+# window (_LOCK_LEAD_DAYS), which is deliberately tight for a different reason.
+_SCHEDULE_LEAD_DAYS = 3
 
 # Minimum player-set Jaccard for a name/city-independent event match. Our field
 # and the ESPN event's singles field must be largely the SAME set of players.
@@ -519,11 +524,26 @@ class ESPNMonitor:
             )
             result_list = result_res.scalars().all()
 
+            # Job 4 watchlist: draws about to start, whose pick deadline is still
+            # only an assumption from the schedule lookup table.
+            sched_res = await db.execute(
+                select(Draw).where(
+                    Draw.picks_locked_at.is_(None),
+                    Draw.draw_released_direct_at.isnot(None),
+                    Draw.status != "completed",
+                    Draw.start_date.isnot(None),
+                    Draw.start_date >= today,
+                    Draw.start_date <= today + timedelta(days=_SCHEDULE_LEAD_DAYS),
+                )
+            )
+            sched_list = sched_res.scalars().all()
+
         # Unique set of tournaments needing attention
-        all_ids   = {t.id for t in lock_list} | {t.id for t in result_list}
-        by_id     = {t.id: t for t in lock_list + result_list}
+        all_ids   = {t.id for t in lock_list} | {t.id for t in result_list} | {t.id for t in sched_list}
+        by_id     = {t.id: t for t in lock_list + result_list + sched_list}
         lock_ids  = {t.id for t in lock_list}
         result_ids = {t.id for t in result_list}
+        sched_ids = {t.id for t in sched_list}
 
         if not all_ids:
             return
@@ -623,6 +643,11 @@ class ESPNMonitor:
                                   dedup_key=f"espn_no_match_{tournament.id}", dedup_hours=6)
                 continue
 
+            # Job 4 runs before the entry check: reading the order of play needs
+            # only the event, not a matched roster.
+            if tid in sched_ids:
+                await self._refine_closing_time(tournament, espn_event)
+
             if not entries:
                 continue
 
@@ -644,6 +669,111 @@ class ESPNMonitor:
                         "ESPN: updated %d match result(s) for %d %s",
                         n, tournament.year, tournament.name,
                     )
+
+    # ------------------------------------------------------------------
+    # Job 4: pick deadline from the published order of play
+    # ------------------------------------------------------------------
+
+    async def _refine_closing_time(self, tournament: Draw, espn_event: dict) -> None:
+        """
+        Replace the assumed pick deadline with the real first ball of day 1.
+
+        closing_time is otherwise derived from tournament_schedule's lookup
+        table, which stores one nominal start hour per venue — an assumption,
+        and every tournament schedules differently. 2026 Cincinnati starts its
+        main draw at 10:00 local where the table assumes 11:00, so picks would
+        have stayed open an hour into play.
+
+        The order of play is the authority, and ESPN publishes it the evening
+        before. Until then it reports every day-1 match at MIDNIGHT venue-local,
+        which is a placeholder and not a schedule — taking it at face value
+        would close picks ten hours early, a far worse failure than the hour
+        this exists to fix. Verified against live data: unscheduled Cincinnati
+        showed all 32 day-1 matches at exactly 00:00 local, while the Canadian
+        Open's published day read 22:00 and 23:30. So midnight local is the
+        signal for "not published yet", and a real session never starts there.
+
+        Qualifying is excluded by _singles_comps, which matters more here than
+        anywhere: qualifying starts days earlier, and its first match would drag
+        the deadline back before the draw was even released.
+        """
+        from datetime import datetime as _dt
+        from zoneinfo import ZoneInfo
+
+        if tournament.picks_locked_at is not None or tournament.status in ("active", "completed"):
+            return
+        # Without the venue zone there is no way to tell a midnight placeholder
+        # from a real time, and a wrong deadline is worse than a rough one.
+        if not tournament.venue_timezone or not tournament.start_date:
+            return
+        try:
+            venue_tz = ZoneInfo(tournament.venue_timezone)
+        except Exception:
+            return
+
+        starts = []
+        for comp in _singles_comps(espn_event, tournament.gender, "STATUS_SCHEDULED"):
+            raw = comp.get("date")
+            if not raw:
+                continue
+            try:
+                starts.append(
+                    _dt.strptime(raw, "%Y-%m-%dT%H:%MZ").replace(tzinfo=timezone.utc)
+                )
+            except ValueError:
+                continue
+        if not starts:
+            return
+
+        # Day 1 is the earliest LOCAL date on the board — a UTC date would split
+        # an evening session across two days for any venue west of Greenwich.
+        local = sorted((u, u.astimezone(venue_tz)) for u in starts)
+        day1 = local[0][1].date()
+        day1_starts = [(u, l) for u, l in local if l.date() == day1]
+
+        first_utc, first_local = day1_starts[0]
+        if first_local.hour == 0 and first_local.minute == 0:
+            logger.debug("ESPN: order of play not published yet for %s %s (all day-1 "
+                         "matches at midnight local)", tournament.year, tournament.name)
+            return
+
+        # A schedule that lands days from the draw's own start date belongs to
+        # something else — a stale event, or a match that survived the exclusivity
+        # check. Never move a deadline on that evidence.
+        if abs((day1 - tournament.start_date).days) > 1:
+            logger.debug("ESPN: ignoring day-1 %s for %s (start_date %s)",
+                         day1, tournament.name, tournament.start_date)
+            return
+
+        new_close = first_utc.replace(tzinfo=None)
+        old_close = tournament.closing_time
+        if old_close is not None and abs((new_close - old_close).total_seconds()) < 300:
+            return
+
+        async with AsyncSessionLocal() as db:
+            fresh = await db.get(Draw, tournament.id)
+            if fresh is None or fresh.picks_locked_at is not None \
+                    or fresh.status in ("active", "completed"):
+                return
+            fresh.closing_time = new_close
+            await db.commit()
+        tournament.closing_time = new_close
+
+        from app.services.system_log import app_log
+        await app_log(
+            "info", "espn",
+            f"Pick deadline for {tournament.year} {tournament.name} "
+            f"({'ATP' if tournament.gender == 'M' else 'WTA'}) set from the published "
+            f"order of play: {first_local:%a %d %b %H:%M} local "
+            f"(was {old_close} UTC, now {new_close} UTC)",
+            {"draw_id": tournament.id, "old_closing_time": str(old_close),
+             "new_closing_time": str(new_close),
+             "first_match_local": first_local.isoformat(),
+             "day1_matches": len(day1_starts)},
+            dedup_key=f"espn_schedule_close_{tournament.id}", dedup_hours=6,
+        )
+        logger.info("ESPN: pick deadline for %s %s -> %s UTC (first ball %s local)",
+                    tournament.year, tournament.name, new_close, first_local)
 
     # ------------------------------------------------------------------
     # Job 1: picks locking
