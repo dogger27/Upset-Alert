@@ -336,6 +336,14 @@ async def _migrate(conn):
         # they are the pre-stamped historical backfill plus anything measured in
         # the few hours between the two deploys, none of which should notify.
         "ALTER TABLE standout_pick_notifications ADD COLUMN prediction_count INTEGER NOT NULL DEFAULT 0",
+        # Day 1's real first ball, from ESPN's order of play — the evidence that
+        # will replace tournament_schedule's hand-researched start hours. Not
+        # backfilled: no past draw has a published schedule to read any more, and
+        # inventing one from the table's own guess would teach the estimator
+        # exactly the assumption it exists to replace.
+        "ALTER TABLE draws ADD COLUMN first_match_at DATETIME",
+        "ALTER TABLE draws ADD COLUMN first_match_local_hour INTEGER",
+        "ALTER TABLE draws ADD COLUMN first_match_local_minute INTEGER",
     ]
     for sql in migrations:
         try:

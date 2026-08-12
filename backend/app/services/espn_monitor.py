@@ -747,16 +747,33 @@ class ESPNMonitor:
 
         new_close = first_utc.replace(tzinfo=None)
         old_close = tournament.closing_time
-        if old_close is not None and abs((new_close - old_close).total_seconds()) < 300:
-            return
+        # Recorded BEFORE the "deadline already agrees" exit. A published
+        # schedule that merely confirms the assumption is still the observation
+        # this column exists for — and it is the common case, so skipping it
+        # would leave the estimator learning only from the times we got wrong.
+        observation_new = tournament.first_match_at is None
 
         async with AsyncSessionLocal() as db:
             fresh = await db.get(Draw, tournament.id)
             if fresh is None or fresh.picks_locked_at is not None \
                     or fresh.status in ("active", "completed"):
                 return
-            fresh.closing_time = new_close
+            fresh.first_match_at = new_close
+            fresh.first_match_local_hour = first_local.hour
+            fresh.first_match_local_minute = first_local.minute
+            moved = old_close is None or abs((new_close - old_close).total_seconds()) >= 300
+            if moved:
+                fresh.closing_time = new_close
             await db.commit()
+
+        tournament.first_match_at = new_close
+        tournament.first_match_local_hour = first_local.hour
+        tournament.first_match_local_minute = first_local.minute
+        if not moved:
+            if observation_new:
+                logger.info("ESPN: %s %s first ball confirmed at %s local — deadline already correct",
+                            tournament.year, tournament.name, first_local.strftime("%H:%M"))
+            return
         tournament.closing_time = new_close
 
         from app.services.system_log import app_log

@@ -140,8 +140,26 @@ class Draw(Base):
     wiki_page_title: Mapped[str] = mapped_column(String, nullable=False)
     wiki_page_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, unique=True)
     venue_timezone: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    # The venue's assumed day-1 start, from tournament_schedule's curated lookup
+    # table. An assumption until first_match_* below observes the real thing.
     day1_start_hour: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     day1_start_minute: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # When day 1's first MAIN-DRAW match was scheduled to start, taken from
+    # ESPN's published order of play (espn_monitor._refine_closing_time, which
+    # is also where the placeholder/qualifying/wrong-week refusals live). UTC.
+    #
+    # Recorded so the curated table stops being the only source of a start hour.
+    # The table holds one hand-researched guess per venue; this is what the
+    # tournament actually did, and a season of it lets next year's edition — and
+    # eventually a category — be estimated from evidence instead.
+    first_match_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The same instant as VENUE-LOCAL time of day, split into its parts. Stored
+    # rather than derived because that is the form the estimate needs ("this
+    # event starts at 11:00 local"), and deriving it later would need the
+    # venue's timezone as it was then — the one field most likely to have been
+    # corrected in between.
+    first_match_local_hour: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    first_match_local_minute: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     closing_time: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     picks_locked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     completion_notified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

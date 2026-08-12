@@ -323,3 +323,109 @@ def apply_closing_time(tournament) -> bool:
 
     tournament.closing_time = ct
     return True
+
+
+# ── Learned start times ───────────────────────────────────────────────────────
+#
+# _LOOKUP above is hand-researched: one guess per venue, correct when it was
+# written and silently wrong the year a tournament moves its first ball. Once
+# ESPN's order of play has been observed (draws.first_match_at, written by
+# espn_monitor._refine_closing_time) there is evidence to prefer instead.
+#
+# Deliberately narrow about what counts as evidence, in the order it is trusted:
+#
+#   1. THIS tournament in a previous year. A venue keeps its start time far more
+#      reliably than a category shares one, so one prior edition of the same
+#      event beats any amount of category data.
+#   2. The same category and tour, if enough editions agree. Used only as a
+#      fallback for an event never seen before.
+#
+# There is deliberately no third tier. Below this the curated table is the
+# better answer, and a wide average across mixed categories would be worse than
+# the guess it replaced — the trap the bracket_first_seen_at comment in
+# models/tournament.py records paying for once already.
+
+# How many observed editions a CATEGORY needs before its consensus is trusted.
+# One event's quirk should not set the default for a whole tier.
+_CATEGORY_MIN_SAMPLES = 3
+
+
+async def learned_day1_start(db, draw) -> Optional[tuple[int, int, str]]:
+    """
+    (hour, minute, why) in venue-local time, learned from observed editions.
+
+    Returns None when there is nothing better than the curated table, which is
+    the expected answer for a whole season after this ships — no past draw has a
+    published order of play left to read, so the record starts empty and fills
+    one tournament at a time.
+    """
+    from sqlalchemy import select
+    from app.models.tournament import Draw
+
+    rows = (await db.execute(
+        select(Draw.year, Draw.first_match_local_hour, Draw.first_match_local_minute)
+        .where(
+            Draw.name == draw.name,
+            Draw.gender == draw.gender,
+            Draw.id != draw.id,
+            Draw.first_match_local_hour.isnot(None),
+        )
+        .order_by(Draw.year.desc())
+        .limit(1)
+    )).first()
+    if rows:
+        year, hour, minute = rows
+        return hour, minute or 0, f"{draw.name} started at this time in {year}"
+
+    if not draw.category:
+        return None
+    cat_rows = (await db.execute(
+        select(Draw.first_match_local_hour, Draw.first_match_local_minute)
+        .where(
+            Draw.category == draw.category,
+            Draw.gender == draw.gender,
+            Draw.id != draw.id,
+            Draw.first_match_local_hour.isnot(None),
+        )
+    )).all()
+    if len(cat_rows) < _CATEGORY_MIN_SAMPLES:
+        return None
+
+    # The mode, not the mean: start times are a handful of discrete clock values
+    # and averaging 11:00 with 13:00 invents a 12:00 nobody plays at.
+    from collections import Counter
+    common = Counter((h, m or 0) for h, m in cat_rows).most_common(1)[0]
+    (hour, minute), hits = common
+    return hour, minute, f"{hits} of {len(cat_rows)} {draw.category} draws start at this time"
+
+
+async def apply_learned_start(db, draw) -> bool:
+    """
+    Override the curated start hour with an observed one, before the deadline is
+    derived from it. Returns True if anything changed.
+
+    Only ever runs ahead of play: past that the deadline has done its job, and
+    sync_closing_time refuses to move it anyway.
+    """
+    if draw.picks_locked_at is not None or draw.status in ("active", "completed"):
+        return False
+    # Its own observation always wins over anything inferred — once ESPN has
+    # published this draw's schedule there is nothing left to estimate.
+    if draw.first_match_local_hour is not None:
+        if (draw.day1_start_hour, draw.day1_start_minute or 0) == (
+            draw.first_match_local_hour, draw.first_match_local_minute or 0
+        ):
+            return False
+        draw.day1_start_hour = draw.first_match_local_hour
+        draw.day1_start_minute = draw.first_match_local_minute or 0
+        return True
+
+    learned = await learned_day1_start(db, draw)
+    if not learned:
+        return False
+    hour, minute, _why = learned
+    if (draw.day1_start_hour, draw.day1_start_minute or 0) == (hour, minute):
+        return False
+    draw.day1_start_hour = hour
+    draw.day1_start_minute = minute
+    return True

@@ -1001,8 +1001,18 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
     # below. The deadline itself is NOT derived here: it is a function of
     # start_date, and start_date is corrected a few lines further down — doing
     # it here computed every deadline from the date we were about to replace.
-    from app.services.tournament_schedule import apply_schedule, sync_closing_time
+    from app.services.tournament_schedule import (
+        apply_learned_start, apply_schedule, sync_closing_time,
+    )
     apply_schedule(tournament)
+    # Prefer an observed start hour over the curated table's guess — this draw's
+    # own, if ESPN has published its order of play, else a previous edition of
+    # the same event. Runs BEFORE the deadline is derived below, because that
+    # derivation is what consumes the hour.
+    if await apply_learned_start(db, tournament):
+        logger.info("Learned day-1 start for %s %s: %02d:%02d local",
+                    tournament.year, tournament.name,
+                    tournament.day1_start_hour or 0, tournament.day1_start_minute or 0)
 
     # Authoritative dates from the tournament's own infobox (general Wikipedia page).
     # If the general page parse failed, snap whatever date we have to Monday —
