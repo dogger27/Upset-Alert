@@ -54,11 +54,27 @@ const platform = () => {
   return 'other'
 }
 
-// In-app browsers (Facebook, Instagram, X) can't add to the Home Screen at all,
-// so telling an iOS user to look for a Share option they don't have would just
-// waste their time — they have to open in Safari first.
-const isInAppBrowser = () =>
-  /FBAN|FBAV|Instagram|Line\/|Twitter/.test(navigator.userAgent)
+/*
+ * In-app browsers cannot add to the Home Screen: they are WKWebViews, and "Add
+ * to Home Screen" is a Safari-only action, so their share sheet does not offer
+ * it. Sending someone there to hunt for it wastes their time and ends with them
+ * concluding the site is broken.
+ *
+ * This list is a net, not a diagnosis. Each entry costs nothing when the app in
+ * question hands links to the real browser instead — the branch simply never
+ * fires, because it only matches a user-agent that names the app. Apps using
+ * SFSafariViewController (iOS Messages and Mail among them) are invisible here
+ * for the same reason: their user-agent is byte-identical to Safari's while
+ * still lacking Add to Home Screen, so they can only be mentioned in the steps.
+ *
+ * So this is worth having, but it is NOT the thing to lean on. The instructions
+ * for plain Safari have to be good enough on their own, because that is where
+ * most people are and where we cannot tell that they are stuck.
+ */
+const IN_APP_BROWSERS =
+  /WhatsApp|FBAN|FBAV|FB_IAB|Messenger|Instagram|Line\/|Twitter|LinkedInApp|Snapchat|BytedanceWebview|musical_ly|TikTok|Discord|Slack|Pinterest|Reddit/i
+
+const isInAppBrowser = () => IN_APP_BROWSERS.test(navigator.userAgent)
 
 // iOS share glyph: a box with an arrow leaving the top. Shown inline in the
 // steps because "the square with an arrow pointing up" is a description someone
@@ -72,6 +88,20 @@ const ShareIcon = () => (
     <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" />
   </svg>
 )
+
+// Named in the steps so the sentence matches the app the reader is holding —
+// "WhatsApp's own browser" lands where "this in-app browser" does not.
+const appName = () => {
+  const ua = navigator.userAgent
+  for (const [re, name] of [
+    [/WhatsApp/i, 'WhatsApp'], [/Instagram/i, 'Instagram'],
+    [/Messenger|FB_IAB|FBAN|FBAV/i, 'Facebook'], [/LinkedInApp/i, 'LinkedIn'],
+    [/Snapchat/i, 'Snapchat'], [/TikTok|BytedanceWebview|musical_ly/i, 'TikTok'],
+    [/Discord/i, 'Discord'], [/Slack/i, 'Slack'], [/Reddit/i, 'Reddit'],
+    [/Pinterest/i, 'Pinterest'], [/Twitter/i, 'X'], [/Line\//i, 'LINE'],
+  ]) if (re.test(ua)) return name
+  return 'this app'
+}
 
 export default function InstallPrompt() {
   const [visible, setVisible] = useState(false)
@@ -151,11 +181,20 @@ export default function InstallPrompt() {
    */
   const steps =
     isInAppBrowser()
-      ? [
-          'Tap the ⋯ menu in this app’s browser bar.',
-          'Choose “Open in browser” (Safari on iPhone, Chrome on Android).',
-          'Then follow the steps there — this in-app browser can’t open or add apps.',
-        ]
+      ? os === 'ios'
+        ? [
+            <>This is {appName()}’s own browser, and it can’t add apps to your
+            Home Screen — only Safari can.</>,
+            <>Tap the <ShareIcon /> or <strong>⋯</strong> button (usually
+            bottom-right), then choose <strong>“Open in Safari”</strong>.</>,
+            <>Once Safari opens, come back here and this tip will show you the
+            two taps to add it.</>,
+          ]
+        : [
+            'Tap the ⋯ menu in this app’s browser bar.',
+            'Choose “Open in browser” (Chrome).',
+            'Then follow the steps there — this in-app browser can’t add apps.',
+          ]
       : installed
       ? [
           'Tap the ⋮ menu in the top right.',
@@ -194,7 +233,12 @@ export default function InstallPrompt() {
               wording — and a real user read it as "download your app", then went
               looking for a download that does not exist. On iOS the honest offer
               is to ADD it; only Android can claim to open one. */}
-          <strong>{installed ? 'Open in app' : os === 'ios' ? 'Add to Home Screen' : 'Install app'}</strong>
+          <strong>
+            {isInAppBrowser() ? 'Open in your browser'
+              : installed ? 'Open in app'
+              : os === 'ios' ? 'Add to Home Screen'
+              : 'Install app'}
+          </strong>
           <span>
             {installed
               ? 'You already have Upset Alert installed.'
@@ -202,7 +246,7 @@ export default function InstallPrompt() {
           </span>
         </div>
         <button className="install-banner-cta" onClick={onInstallClick}>
-          {installed ? 'How' : os === 'ios' ? 'Show me' : 'Install'}
+          {isInAppBrowser() || installed ? 'How' : os === 'ios' ? 'Show me' : 'Install'}
         </button>
         <button className="install-banner-x" onClick={dismiss} aria-label="Dismiss">×</button>
       </div>
@@ -212,7 +256,7 @@ export default function InstallPrompt() {
           <div className="install-steps" onClick={(e) => e.stopPropagation()}>
             <h3>
               {isInAppBrowser()
-                ? 'Open in your browser first'
+                ? (os === 'ios' ? 'Open this in Safari first' : 'Open in your browser first')
                 : installed
                 ? 'Open the Upset Alert app'
                 : os === 'ios'
