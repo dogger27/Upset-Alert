@@ -997,16 +997,12 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
     if parsed.country and not tournament.country:
         tournament.country = parsed.country
 
-    # Auto-populate schedule fields and closing_time from lookup table
-    from app.services.tournament_schedule import apply_schedule, apply_closing_time
+    # Venue timezone and day-1 start hour, which closing_time is computed from
+    # below. The deadline itself is NOT derived here: it is a function of
+    # start_date, and start_date is corrected a few lines further down — doing
+    # it here computed every deadline from the date we were about to replace.
+    from app.services.tournament_schedule import apply_schedule, sync_closing_time
     apply_schedule(tournament)
-    if apply_closing_time(tournament):
-        logger.info(
-            "Auto-set closing_time for %s %s: %s (tz=%s %02d:%02d local)",
-            tournament.year, tournament.name, tournament.closing_time,
-            tournament.venue_timezone, tournament.day1_start_hour or 0,
-            tournament.day1_start_minute or 0,
-        )
 
     # Authoritative dates from the tournament's own infobox (general Wikipedia page).
     # If the general page parse failed, snap whatever date we have to Monday —
@@ -1020,6 +1016,17 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
             tournament.start_date = snap_to_monday(tournament.start_date)
         if parsed.end_date:
             tournament.end_date = parsed.end_date
+
+    # Now that start_date is settled, derive the deadline from it. Re-derived on
+    # every scrape rather than filled once, so a date correction carries the
+    # deadline with it instead of leaving one pinned to the date it replaced.
+    if sync_closing_time(tournament):
+        logger.info(
+            "Set closing_time for %s %s: %s (start %s, tz=%s %02d:%02d local)",
+            tournament.year, tournament.name, tournament.closing_time,
+            tournament.start_date, tournament.venue_timezone,
+            tournament.day1_start_hour or 0, tournament.day1_start_minute or 0,
+        )
 
     # Record actual draw release dates when detected.
     # Only stamp draw_released_direct_at once the draw is substantially complete
