@@ -91,3 +91,11 @@
   border-radius: 8px;
   cursor: pointer;
 }
+
+/* The share glyph sits inline in a sentence, so it rides the text baseline
+   rather than the line box — otherwise it sits high and reads as a bullet. */
+.install-inline-icon {
+  display: inline-block;
+  vertical-align: -2px;
+  margin: 0 1px;
+}
