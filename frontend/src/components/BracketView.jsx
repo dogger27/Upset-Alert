@@ -324,9 +324,16 @@ function MatchBox({ match, resolvedPlayers, h2hPair, playerById, drawRanks, pick
         showTypeSlot={playerNeedsTypeSlot(p1)} isWinner locked showScores={false} />,
       <div key="b" className="player-row bye-slot"><span className="muted">BYE</span></div>,
     ]
+    // Wrapped in .match-box-main like every other match. .match-box is a flex
+    // ROW — that wrapper is what stacks the two lines — so returning the rows
+    // as direct children laid the player and the BYE side by side in a box half
+    // the height of its neighbours, which read as a missing slot rather than a
+    // bye.
     return (
       <div className="match-box bye" style={style}>
-        {match.match_number % 2 === 0 ? [rows[1], rows[0]] : rows}
+        <div className="match-box-main">
+          {match.match_number % 2 === 0 ? [rows[1], rows[0]] : rows}
+        </div>
       </div>
     )
   }
