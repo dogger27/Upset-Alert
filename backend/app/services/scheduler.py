@@ -247,29 +247,68 @@ async def _refresh_dates_from_event_page(draw_id: int) -> None:
             d = await db.get(Draw, draw_id)
             if d is None or d.status in ("active", "completed"):
                 return
-            if d.draw_released_direct_at is not None:
-                return
 
             start, end = await fetch_event_dates(d.wiki_page_title, d.year, d.gender)
             if not start:
                 return
 
-            old_start, old_end = d.start_date, d.end_date
-            if start == old_start and (end or old_end) == old_end:
-                return
+            # A released draw's DATES are left alone — people are picking from it
+            # and the schedule is settled. Its DEADLINE is not: that is derived
+            # from the start date, and a draw released after a date correction
+            # can be carrying one computed from the date that was replaced. 2026
+            # Cincinnati was released the day after its dates were fixed and sat
+            # advertising a deadline three days in the past, which this guard,
+            # applied to both, would have made permanent.
+            allow_date_change = d.draw_released_direct_at is None
 
-            d.start_date = start
-            if end:
-                d.end_date = end
+            # The deadline is day 1's first ball, so it is a function of
+            # start_date and moves with it. Correcting one without the other is
+            # what left 2026 Cincinnati open for picks while advertising a
+            # deadline three days in the past.
+            #
+            # Deliberately NOT behind the "did the dates change" test: a
+            # deadline can be stale while the dates are already right — which is
+            # exactly the state that bug left behind, and returning early on
+            # matching dates would have made it permanent. Re-derived every
+            # pass, and sync_closing_time is a no-op when it already agrees.
+            from app.services.tournament_schedule import apply_schedule, sync_closing_time
+
+            old_start, old_end = d.start_date, d.end_date
+            dates_moved = allow_date_change and (
+                start != old_start or (end and end != old_end)
+            )
+            if dates_moved:
+                d.start_date = start
+                if end:
+                    d.end_date = end
+
+            apply_schedule(d)
+            closing_moved = sync_closing_time(d)
+            if not dates_moved and not closing_moved:
+                return
             await db.commit()
+
+            if not dates_moved:
+                from app.services.system_log import app_log
+                await app_log(
+                    "info", "scraper",
+                    f"Corrected the pick deadline for {d.year} {d.name} "
+                    f"({tour_label(d.gender)}): now {d.closing_time} UTC, from a "
+                    f"start date of {d.start_date}",
+                    {"draw_id": d.id, "closing_time": str(d.closing_time),
+                     "start_date": str(d.start_date)},
+                )
+                return
 
             from app.services.system_log import app_log
             await app_log(
                 "info", "scraper",
                 f"Corrected dates for {d.year} {d.name} ({tour_label(d.gender)}) from the event page: "
-                f"{old_start} → {start}, {old_end} → {d.end_date}",
+                f"{old_start} → {start}, {old_end} → {d.end_date}"
+                + (f"; pick deadline moved to {d.closing_time} UTC" if closing_moved else ""),
                 {"draw_id": d.id, "old_start": str(old_start), "new_start": str(start),
                  "old_end": str(old_end), "new_end": str(d.end_date),
+                 "closing_time": str(d.closing_time), "closing_moved": closing_moved,
                  "wiki_page_title": d.wiki_page_title},
             )
             logger.info("Corrected dates for draw %d (%s): %s → %s",

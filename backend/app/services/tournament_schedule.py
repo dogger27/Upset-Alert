@@ -269,10 +269,45 @@ def apply_schedule(tournament) -> bool:
     return True
 
 
+def sync_closing_time(tournament) -> bool:
+    """
+    Re-derive closing_time from the CURRENT start_date, replacing a stale value.
+
+    closing_time is day 1's first ball, so it is a function of start_date — and
+    start_date moves. 2026 Cincinnati was seeded with the Monday of its week and
+    later corrected to its real Thursday start, but the deadline had already
+    been written from the Monday and apply_closing_time() will not touch a value
+    that exists. The draw sat open advertising a deadline three days in the past.
+
+    Refuses to move a deadline once play has started: past that point the
+    deadline has already done its job, picks are locked on evidence
+    (picks_locked_at), and rewriting it could only rewrite history.
+
+    Returns True if closing_time changed.
+    """
+    if tournament.picks_locked_at is not None or tournament.status in ("active", "completed"):
+        return False
+
+    ct = closing_time_utc(
+        tournament.start_date,
+        tournament.venue_timezone,
+        tournament.day1_start_hour,
+        tournament.day1_start_minute or 0,
+    )
+    if ct is None or ct == tournament.closing_time:
+        return False
+
+    tournament.closing_time = ct
+    return True
+
+
 def apply_closing_time(tournament) -> bool:
     """
     Set closing_time on *tournament* from its schedule fields if not already set.
     Returns True if closing_time was written.
+
+    Prefer sync_closing_time() anywhere start_date may have changed; this one
+    only ever fills a blank.
     """
     if tournament.closing_time:
         return False
