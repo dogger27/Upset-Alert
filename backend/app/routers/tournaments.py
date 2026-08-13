@@ -1228,10 +1228,20 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
     # the bracket, and every name they type would otherwise look like a swap.
     # After the announcement there is no such churn: the page is complete, and a
     # change to it is a change to the real draw.
-    track_changes = (
-        tournament.draw_release_notified_at is not None
-        and not play_started
-    )
+    # Split by kind, because the two answer to different facts.
+    #
+    # A REPLACEMENT after the first ball is not a transfer — a withdrawal
+    # becomes a walkover once play starts — so it stays suppressed, and the
+    # misparse guard above treats it as a bad parse.
+    #
+    # A qualifier LANDING after the first ball is completely normal, and was
+    # being suppressed with it. Q/LL slots are reserved for "a qualifier or a
+    # lucky loser" and resolve match by match, hours into day 1: 2026 Cincinnati
+    # filled all twelve that way. Gating both on play_started meant the one
+    # notification people had switched on for precisely this never fired.
+    announced = tournament.draw_release_notified_at is not None
+    track_replacements = announced and not play_started
+    track_fills = announced and tournament.status != "completed"
     pending_changes: list[dict] = []
 
     # --- Reject a shifted parse before it is written -------------------------
@@ -1296,21 +1306,20 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
         if pe.bracket_position in existing_players:
             player = existing_players[pe.bracket_position]
             if player.name != pe.name:
-                if track_changes:
-                    # Captured BEFORE the overwrite — one line later the old name
-                    # is gone and there is nothing left to diff against.
-                    kind = classify_change(player.name, pe.name)
-                    if kind:
-                        pending_changes.append({
-                            "entry_id": player.id,
-                            "bracket_position": pe.bracket_position,
-                            "kind": kind,
-                            "old_name": player.name or None,
-                            "new_name": pe.name,
-                            "old_entry_type": player.entry_type,
-                            "new_entry_type": pe.entry_type,
-                            "old_seed": player.seed,
-                        })
+                # Captured BEFORE the overwrite — one line later the old name
+                # is gone and there is nothing left to diff against.
+                kind = classify_change(player.name, pe.name)
+                if kind and (track_fills if kind == "filled" else track_replacements):
+                    pending_changes.append({
+                        "entry_id": player.id,
+                        "bracket_position": pe.bracket_position,
+                        "kind": kind,
+                        "old_name": player.name or None,
+                        "new_name": pe.name,
+                        "old_entry_type": player.entry_type,
+                        "new_entry_type": pe.entry_type,
+                        "old_seed": player.seed,
+                    })
                 # Name changed (withdrawal/replacement) — re-match on next
                 # assign_rankings. The slug has to go with the id: left behind,
                 # it points the H2H panel at the player who was replaced.
