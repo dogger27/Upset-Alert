@@ -836,14 +836,3 @@
   justify-content: flex-end;
 }
 
-/* Admin-only per-draw locking rule, sat with the other lock controls. */
-.lock-mode-select {
-  font-size: 0.72rem;
-  padding: 0.25rem 0.4rem;
-  border: 1px solid var(--border, #e5e7eb);
-  border-radius: 6px;
-  background: #fff;
-  color: #4b5563;
-  cursor: pointer;
-  max-width: 11rem;
-}
