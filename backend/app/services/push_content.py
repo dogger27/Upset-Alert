@@ -233,7 +233,15 @@ def qualifiers_added(draws: list[dict], affects_your_picks: bool, event_seq: int
     # tournament name does not — that is the part that got cut. It leads the
     # body instead, the same shape as every other type.
     total = sum(len(d["changes"]) for d in draws)
-    title = "Qualifier Added" if total == 1 else f"{total} Qualifiers Added"
+    # A Q/LL slot can resolve either way, so the batch is usually qualifiers with
+    # a lucky loser or two among them — "Qualifiers Added" covers that. A batch
+    # of nothing BUT lucky losers would not, so it says so.
+    only_ll = total > 0 and all(
+        (c.get("new_entry_type") or "").upper() == "LL"
+        for d in draws for c in d["changes"]
+    )
+    noun = "Lucky Loser" if only_ll else "Qualifier"
+    title = f"{noun} Added" if total == 1 else f"{total} {noun}s Added"
 
     matches = {id(d): dedupe_matchups(d["changes"]) for d in draws}
     total_matches = sum(len(m) for m in matches.values())
