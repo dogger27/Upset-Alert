@@ -333,7 +333,7 @@ function Connectors({ leftCenters, rightCenters, totalH }) {
 // compact: phone-width mode — country flags are dropped to buy name space.
 // zoom:    scales the whole rendered draw (layout included, via CSS zoom) so
 //          the parent can shrink it until the target number of rounds fits.
-export default function CombinedView({ tournament, matches, players, picks, onPick, locked = true, windowStart = 0, windowSize = 4, labelsHidden = false, insetLeft = 0, compact = false, zoom = 1, leagueId = null }) {
+export default function CombinedView({ tournament, matches, players, picks, onPick, locked = true, windowStart = 0, windowSize = 4, labelsHidden = false, insetLeft = 0, compact = false, zoom = 1, leagueId = null, lockedMatchIds = new Set() }) {
   const [h2h, setH2H] = useState(null)
   // Completed match whose predictors popup is open (the group chip's target).
   const [predictorsMatch, setPredictorsMatch] = useState(null)
@@ -507,6 +507,9 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
     if (locked || !onPick || playerId == null || c >= N) return null
     const nextMatch = R[c][Math.floor(i / 2)]
     if (!nextMatch) return null
+    // Clicking a player picks them in the NEXT match, so it is that match's
+    // lock that decides — not the one they are standing in.
+    if (lockedMatchIds.has(nextMatch.id)) return null
     return () => onPick(nextMatch.id, playerId)
   }
 

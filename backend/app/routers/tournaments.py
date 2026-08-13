@@ -523,6 +523,14 @@ async def match_predictors(
     if match.is_bye or match.winner_id is None:
         return {"correct": [], "incorrect": [], "league_name": None}
 
+    # Naming who called a match right names their pick. Held back until the
+    # first round is complete for the same reason the brackets are: under
+    # progressive locking the rest of the round is still being predicted.
+    from app.services.locking import predictions_visible
+    _draw = await db.get(Draw, tournament_id)
+    if _draw is not None and not await predictions_visible(db, _draw):
+        return {"correct": [], "incorrect": [], "league_name": None, "hidden": True}
+
     # Everyone with a pick in this draw — the participant pool.
     participants_res = await db.execute(
         select(UserPrediction.user_id)
@@ -770,13 +778,21 @@ async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get
          for m in completed_matches],
         key=lambda x: (x["completed_at"] is not None, x["completed_at"] or "", x["id"])
     )
+    # Everyone's per-match picks travel in this payload, so it is held back with
+    # the rest until the first round is complete. The scores and timeline stay:
+    # they say how people are DOING, which the standings show anyway, not what
+    # they picked.
+    from app.services.locking import predictions_visible
+    picks_visible = await predictions_visible(db, tournament)
+
     return {
         "entries": entries,
         "completed_matches_count": len(completed_matches),
         "rounds_with_matches": rounds_with_matches,
         "completed_round_nums": completed_round_nums,
         "matches_timeline": timeline,
-        "user_predictions": user_predictions,
+        "user_predictions": user_predictions if picks_visible else {},
+        "predictions_hidden": not picks_visible,
     }
 
 
@@ -852,6 +868,9 @@ async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
         out.elo_rank = te_elo_rank_map.get(p.te_player_id) if p.te_player_id else None
         return out
 
+    from app.services.locking import draw_lock_state, predictions_visible
+    lock = await draw_lock_state(db, t)
+
     match_outs = []
     for m in matches:
         match_outs.append(MatchOut(
@@ -866,6 +885,7 @@ async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
             round_name=t.round_name(m.round_number),
             scores=m.scores_json,
             live_scores=m.live_scores_json,
+            locked=m.id in lock.locked_match_ids,
         ))
 
     t.latest_result_at = max((m.completed_at for m in matches if m.completed_at), default=None)
@@ -873,6 +893,10 @@ async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
         tournament=TournamentOut.model_validate(t),
         draw_entries=[_player_out(p) for p in players],
         matches=match_outs,
+        lock_mode=lock.mode,
+        draw_locked=lock.draw_locked,
+        lock_reason=lock.reason,
+        predictions_hidden=not await predictions_visible(db, t),
     )
 
 

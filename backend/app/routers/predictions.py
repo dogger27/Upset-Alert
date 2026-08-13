@@ -56,6 +56,18 @@ async def get_predictions(
     uid = user_id if user_id is not None else (current_user.id if current_user else None)
     if uid is None:
         raise HTTPException(401, "Not authenticated")
+
+    # Someone else's bracket is not readable until the first round is done —
+    # while picks are still changeable it is a bracket to copy. Your own is
+    # always yours, and an admin can see any (they can already edit them).
+    if current_user is None or (uid != current_user.id and not current_user.is_admin):
+        from app.services.locking import predictions_visible
+        draw = await db.get(Draw, tournament_id)
+        if draw is not None and not await predictions_visible(db, draw):
+            raise HTTPException(
+                403, "Other players' picks are hidden until the first round is complete"
+            )
+
     result = await db.execute(
         select(UserPrediction).where(
             UserPrediction.user_id == uid,
@@ -81,8 +93,14 @@ async def save_predictions(
     tournament = await db.get(Draw, tournament_id)
     if not tournament:
         raise HTTPException(404, "Tournament not found")
-    if tournament.is_locked:
-        raise HTTPException(403, "Predictions are locked — the tournament has started")
+    # Locking is resolved in one place for all three consumers — this write, the
+    # draw endpoint that tells the client what to grey out, and the client
+    # itself. They disagreeing is the failure that matters: a bracket that looks
+    # editable and 403s, or one that looks locked while the server takes it.
+    from app.services.locking import draw_lock_state, rejected_changes
+    lock = await draw_lock_state(db, tournament)
+    if lock.draw_locked:
+        raise HTTPException(403, f"Predictions are locked — {lock.reason}")
 
     # Validate that all match IDs belong to this tournament
     match_ids = list(body.picks.keys())
@@ -97,6 +115,28 @@ async def save_predictions(
         invalid = set(match_ids) - valid_ids
         if invalid:
             raise HTTPException(400, f"Unknown match IDs: {invalid}")
+
+    # Under progressive locking the bracket is open but individual matches are
+    # not. Compared against what is stored, so an unchanged pick on a match now
+    # in play still saves — the client posts its whole set every time, and
+    # refusing the request outright would make the bracket unsavable the moment
+    # any one match started.
+    if lock.locked_match_ids:
+        stored = {
+            p.match_id: p.predicted_winner_id
+            for p in (await db.execute(
+                select(UserPrediction).where(
+                    UserPrediction.user_id == uid,
+                    UserPrediction.draw_id == tournament_id,
+                )
+            )).scalars().all()
+        }
+        refused = rejected_changes(lock, body.picks, stored)
+        if refused:
+            raise HTTPException(
+                403,
+                f"{len(refused)} pick(s) could not be changed — those matches are under way",
+            )
 
     # Upsert predictions; null winner_id means the pick was cleared
     for match_id, winner_id in body.picks.items():

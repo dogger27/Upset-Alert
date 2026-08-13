@@ -507,7 +507,7 @@ function ConnectorLines({ leftCenters, rightCenters, totalH }) {
 // Main component
 // ---------------------------------------------------------------------------
 
-export default function BracketView({ tournament, matches, players, picks, onPick, locked, mode = 'picks', picksOwner = null, windowStart = 0, windowSize = 4, labelsHidden = false, insetLeft = 0 }) {
+export default function BracketView({ tournament, matches, players, picks, onPick, locked, mode = 'picks', picksOwner = null, windowStart = 0, windowSize = 4, labelsHidden = false, insetLeft = 0 , lockedMatchIds = new Set() }) {
   const [h2hPlayers, setH2HPlayers] = useState(null) // { p1, p2, match }
   const [hoveredPlayerId, setHoveredPlayerId] = useState(null)
 
@@ -653,7 +653,9 @@ export default function BracketView({ tournament, matches, players, picks, onPic
                       drawRanks={drawRanks}
                       picks={picks}
                       onPick={onPick}
-                      locked={locked}
+                      /* Progressive locking: the bracket is open but this
+                         match is under way, so its pick is frozen. */
+                      locked={locked || lockedMatchIds.has(m.id)}
                       mode={mode}
                       lossRound={lossRound}
                       onH2H={(p1, p2, match) => setH2HPlayers({ p1, p2, match })}

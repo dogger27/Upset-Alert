@@ -197,3 +197,95 @@ async def get_rankings(
         }
         for snap, player in rows
     ]
+
+
+# ---------------------------------------------------------------------------
+# Site settings
+# ---------------------------------------------------------------------------
+
+@router.get("/settings")
+async def get_settings(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Every site-wide setting, with the counts an admin needs to change one
+    safely — how many draws currently use each locking rule."""
+    if not current_user.is_admin:
+        raise HTTPException(403, "Admin only")
+    from sqlalchemy import func as _func
+    from app.models.tournament import Draw
+    from app.services.settings import LOCK_MODES, global_lock_mode
+
+    counts = dict((await db.execute(
+        select(Draw.pick_lock_mode, _func.count()).group_by(Draw.pick_lock_mode)
+    )).all())
+    return {
+        "pick_lock_mode": await global_lock_mode(db),
+        "lock_modes": list(LOCK_MODES),
+        "draws_by_mode": {k or "unset": v for k, v in counts.items()},
+    }
+
+
+@router.put("/settings/pick-lock-mode", status_code=204)
+async def set_pick_lock_mode(
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Change the site-wide default.
+
+    Only ever the DEFAULT for draws not yet stamped. Draws already carrying a
+    mode keep it, which is the point: a tournament that finished under one rule
+    must not start claiming it used the other. Switching the site over therefore
+    takes effect on draws that have not started, and an admin who wants an
+    in-flight draw moved changes that draw directly.
+    """
+    if not current_user.is_admin:
+        raise HTTPException(403, "Admin only")
+    from app.services.settings import LOCK_MODES, PICK_LOCK_MODE, set_setting
+    from app.services.system_log import app_log
+
+    mode = (body or {}).get("mode")
+    if mode not in LOCK_MODES:
+        raise HTTPException(400, f"mode must be one of {list(LOCK_MODES)}")
+    await set_setting(db, PICK_LOCK_MODE, mode)
+    await db.commit()
+    await app_log("info", "admin",
+                  f"Site-wide pick-lock mode set to {mode!r} by {current_user.username}",
+                  {"mode": mode, "user_id": current_user.id})
+
+
+@router.put("/draws/{draw_id}/pick-lock-mode", status_code=204)
+async def set_draw_pick_lock_mode(
+    draw_id: int,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Override one draw's locking rule, or clear it back to the site default."""
+    if not current_user.is_admin:
+        raise HTTPException(403, "Admin only")
+    from app.models.tournament import Draw
+    from app.services.settings import LOCK_MODES, resolve_draw_lock_mode
+    from app.services.system_log import app_log
+
+    draw = await db.get(Draw, draw_id)
+    if draw is None:
+        raise HTTPException(404, "Draw not found")
+
+    mode = (body or {}).get("mode")
+    if mode is not None and mode not in LOCK_MODES:
+        raise HTTPException(400, f"mode must be one of {list(LOCK_MODES)} or null")
+
+    was = draw.pick_lock_mode
+    draw.pick_lock_mode = mode
+    await db.commit()
+    if mode is None:
+        # Cleared, so it re-stamps from the current site default immediately —
+        # a draw is never left without a recorded rule.
+        mode = await resolve_draw_lock_mode(db, draw)
+    await app_log("info", "admin",
+                  f"Pick-lock mode for draw {draw_id} ({draw.year} {draw.name} "
+                  f"{draw.gender}): {was!r} -> {mode!r} by {current_user.username}",
+                  {"draw_id": draw_id, "from": was, "to": mode, "user_id": current_user.id})
