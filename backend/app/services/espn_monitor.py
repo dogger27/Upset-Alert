@@ -154,6 +154,19 @@ def _player_in_draw(espn_name: str, pairs: list, tok_index: dict) -> bool:
 # Tournament name matching
 # ---------------------------------------------------------------------------
 
+def _player_names_equal(a: str, b: str) -> bool:
+    """Same player, allowing for spelling. ESPN writes 'Dino Prizmic' where
+    Wikipedia writes 'Dino Prizmic\u0107'; _norm already strips accents and
+    punctuation, so surname plus first initial is enough to identify one player
+    inside a single 128-slot draw, and is far safer than exact equality."""
+    ta, tb = _norm(a).split(), _norm(b).split()
+    if not ta or not tb:
+        return False
+    if ta == tb:
+        return True
+    return ta[-1] == tb[-1] and ta[0][:1] == tb[0][:1]
+
+
 def _names_match(our_name: str, espn_name: str) -> bool:
     """
     True if our tournament name's significant tokens substantially overlap
@@ -657,6 +670,12 @@ class ESPNMonitor:
             if tid in lock_ids:
                 await self._check_lock(tournament, espn_event, pairs, tok_index)
 
+            # Job 5: name the blank qualifier slots BEFORE results are synced,
+            # so the matches they belong to can be matched this same pass rather
+            # than waiting another minute.
+            if tid in result_ids and any(not (e.name or "").strip() for e in entries):
+                await self._fill_unnamed_slots(tournament, espn_event, pairs, tok_index)
+
             # Job 2: live scores
             if tid in result_ids:
                 await self._sync_live(tournament, espn_event, pairs, tok_index)
@@ -669,6 +688,121 @@ class ESPNMonitor:
                         "ESPN: updated %d match result(s) for %d %s",
                         n, tournament.year, tournament.name,
                     )
+
+    # ------------------------------------------------------------------
+    # Job 5: name the qualifier slots Wikipedia has left blank
+    # ------------------------------------------------------------------
+
+    async def _fill_unnamed_slots(
+        self,
+        tournament: Draw,
+        espn_event: dict,
+        pairs: list,
+        tok_index: dict,
+    ) -> int:
+        """
+        Give a name to a bracket slot that is still an empty qualifier.
+
+        Wikipedia publishes the main draw with "Q/LL" placeholders and fills in
+        who actually qualified as a separate editing pass, which can lag the
+        first ball by a day. 2026 Cincinnati started with all 13 qualifier slots
+        blank in both draws.
+
+        The cost is not only cosmetic. An unnamed slot cannot be matched to an
+        ESPN competitor, so those 13 matches get no live score, no result and no
+        winner — a quarter of the first round simply stops working.
+
+        ESPN has the pairings from the moment the order of play exists, so the
+        gap is filled by ANCHORING on the opponent: our own bracket already says
+        this blank slot plays a known player, so the ESPN Round-1 competition
+        containing that known player names the other side. No fuzzy matching of
+        the missing player is needed — the player we already know does the work.
+
+        Deliberately narrow:
+          * round 1 only, and only a match with exactly one blank side;
+          * the anchor must appear in exactly ONE main-draw Round-1 competition,
+            so an ambiguous name fills nothing;
+          * the incoming name must not already sit in this draw, which would
+            mean the pairing disagrees with ours and one of us is wrong;
+          * never overwrites a name — only blanks are eligible.
+
+        Wikipedia overwrites these later with its own spelling, which
+        classify_change reads as the same person (a restored diacritic), so the
+        correction lands without tripping the in-play roster guard.
+        """
+        from sqlalchemy import select as _select
+
+        r1_comps = [
+            c for c in _singles_comps(
+                espn_event, tournament.gender,
+                ("STATUS_SCHEDULED", "STATUS_IN_PROGRESS", "STATUS_SUSPENDED") + _FINAL_STATUSES,
+            )
+            if (c.get("round", {}).get("displayName", "") or "").strip().lower() == "round 1"
+        ]
+        if not r1_comps:
+            return 0
+
+        async with AsyncSessionLocal() as db:
+            matches = (await db.execute(
+                _select(Match).where(Match.draw_id == tournament.id,
+                                     Match.round_number == 1,
+                                     Match.is_bye == False)  # noqa: E712
+            )).scalars().all()
+            entries = (await db.execute(
+                _select(DrawEntry).where(DrawEntry.draw_id == tournament.id)
+            )).scalars().all()
+            by_id = {e.id: e for e in entries}
+            taken = {_norm(e.name) for e in entries if (e.name or "").strip()}
+
+            filled = 0
+            for m in matches:
+                sides = [by_id.get(m.player1_id), by_id.get(m.player2_id)]
+                if any(x is None for x in sides):
+                    continue
+                blanks = [e for e in sides if not (e.name or "").strip()]
+                known = [e for e in sides if (e.name or "").strip()]
+                if len(blanks) != 1 or len(known) != 1:
+                    continue
+
+                anchor_name = known[0].name
+                hits = []
+                for comp in r1_comps:
+                    names = _comp_live_players(comp)
+                    if len(names) != 2:
+                        continue
+                    if any(_player_names_equal(anchor_name, n) for n in names):
+                        hits.append(names)
+                if len(hits) != 1:
+                    continue
+
+                names = hits[0]
+                opponent = next(
+                    (n for n in names if not _player_names_equal(anchor_name, n)), None
+                )
+                if not opponent or _norm(opponent) in taken:
+                    continue
+
+                blanks[0].name = opponent
+                taken.add(_norm(opponent))
+                filled += 1
+                logger.info("ESPN: named %s slot %d in %s %s as %r (opponent of %s)",
+                            blanks[0].entry_type or "empty", blanks[0].bracket_position,
+                            tournament.year, tournament.name, opponent, anchor_name)
+
+            if filled:
+                await db.commit()
+
+        if filled:
+            from app.services.system_log import app_log
+            await app_log(
+                "info", "espn",
+                f"Filled {filled} unnamed slot(s) in {tournament.year} {tournament.name} "
+                f"({'ATP' if tournament.gender == 'M' else 'WTA'}) from ESPN's Round-1 "
+                f"pairings — Wikipedia still shows them as Q/LL placeholders",
+                {"draw_id": tournament.id, "filled": filled},
+                dedup_key=f"espn_fill_slots_{tournament.id}", dedup_hours=6,
+            )
+        return filled
 
     # ------------------------------------------------------------------
     # Job 4: pick deadline from the published order of play

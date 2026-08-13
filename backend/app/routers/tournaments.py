@@ -1230,10 +1230,23 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
     # same tidying draw_changes already knows how to ignore — is not mistaken for
     # a shift and does not block a legitimate scrape forever.
     if play_started:
+        # Qualifier slots are exempt. They are the one part of the field that
+        # legitimately changes late — a lucky loser stepping in, or Wikipedia
+        # replacing a name espn_monitor filled from the order of play while the
+        # bracket still said "Q/LL". Treating one of those as corruption would
+        # discard every scrape of that draw for the rest of the tournament,
+        # taking the results with it.
+        #
+        # It costs the guard nothing: the failure it exists for is a whole
+        # section shifting by sixteen positions, which moves seeds and direct
+        # entrants in bulk. A shift that touched only qualifier slots is not a
+        # shift.
         misparsed = [
             (pe.bracket_position, existing_players[pe.bracket_position].name, pe.name)
             for pe in parsed.players
             if pe.bracket_position in existing_players
+            and (existing_players[pe.bracket_position].entry_type or "").upper() not in ("Q", "LL")
+            and (pe.entry_type or "").upper() not in ("Q", "LL")
             and classify_change(existing_players[pe.bracket_position].name, pe.name) == "replaced"
         ]
         if misparsed:
