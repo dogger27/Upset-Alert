@@ -375,7 +375,17 @@ function TournamentsPanel({ user }) {
                               <select
                                 className="admin-lock-select"
                                 value={t.pick_lock_mode || 'draw_start'}
-                                title="How predictions lock for this draw"
+                                /* Only before a ball is struck. Once a draw is
+                                   Active the rule is no longer a setting but a
+                                   record of how it is being played, and changing
+                                   it mid-tournament would move the goalposts for
+                                   everyone already picking under it. The server
+                                   refuses the same cases; this only stops the
+                                   click. */
+                                disabled={!['upcoming', 'open'].includes(ds)}
+                                title={['upcoming', 'open'].includes(ds)
+                                  ? 'How predictions lock for this draw'
+                                  : `Locked in — this draw is ${DISPLAY_STATUS_LABELS[ds]?.toLowerCase() || ds}`}
                                 onChange={async (e) => {
                                   const mode = e.target.value
                                   const { default: client } = await import('../api/client')
