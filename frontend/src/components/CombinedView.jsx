@@ -175,6 +175,13 @@ function scoreNodes(scores) {
   if (!scores || scores.length < 2) return null
   const a = scores[0]
   const b = scores[1]
+  // A walkover has no games to format: the withdrawing side's only cell is the
+  // literal "w/o". parseSet below matches on ^(\d+), so both cells reduced to
+  // empty, every set was skipped and this returned null — a completed match
+  // showing no score at all, with nothing to say why.
+  if ([a, b].some(arr => arr?.some(v => /^w\/?o$/i.test(String(v ?? '').trim())))) {
+    return <span className="cv-ret">walkover</span>
+  }
   const n = Math.max(a?.length ?? 0, b?.length ?? 0)
   const sets = []
   let retired = false

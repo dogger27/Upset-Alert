@@ -85,12 +85,30 @@ def _strip_tiebreak(val: str) -> str:
     return val[:idx] if idx != -1 else val
 
 
+_WALKOVER_RE = re.compile(r"^w/?o$", re.I)
+
+
 def _match_score_str(match: Match) -> str:
     """Set-by-set score with tiebreak points stripped, e.g. '6-4, 3-6, 7-6'
-    (never '7-6(12)') — kept compact for the round-complete email widget."""
+    (never '7-6(12)') — kept compact for the round-complete email widget.
+
+    Two markers travel inside the score cells rather than beside them, and both
+    used to leak out raw. A walkover is stored the way Wikipedia writes it — the
+    withdrawing side's only cell is the literal "w/o" — which rendered as the
+    bare "-w/o"; and a retirement appends "r" to the last game count, which
+    rendered as "1r-0". Neither is a score, so both are read out and said in
+    words instead."""
     if not match.scores_json or len(match.scores_json) < 2:
         return ""
     p1_sets, p2_sets = match.scores_json[0], match.scores_json[1]
+
+    # No games were played, so there is nothing to format — only to name.
+    if any(_WALKOVER_RE.match(str(v or "").strip())
+           for side in (p1_sets, p2_sets) for v in (side or [])):
+        return "w/o"
+
+    retired = any(str(v or "").strip().lower().endswith("r")
+                  for side in (p1_sets, p2_sets) for v in (side or []))
     own, opp = (p1_sets, p2_sets) if match.winner_id == match.player1_id else (p2_sets, p1_sets)
     parts = []
     for i in range(max(len(own), len(opp))):
@@ -98,8 +116,11 @@ def _match_score_str(match: Match) -> str:
         b = _strip_tiebreak(opp[i]) if i < len(opp) else ""
         if not a and not b:
             continue
-        parts.append(f"{a}-{b}")
-    return ", ".join(parts)
+        # The "r" marks WHICH player retired, which the winner's name already
+        # says; kept in the cell it would read as part of the game count.
+        parts.append(f"{a.rstrip('rR')}-{b.rstrip('rR')}")
+    score = ", ".join(parts)
+    return f"{score} (ret.)" if score and retired else score
 
 
 def _ordinal(n: int) -> str:
