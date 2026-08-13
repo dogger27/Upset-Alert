@@ -742,6 +742,11 @@ class ESPNMonitor:
         if not r1_comps:
             return 0
 
+        from app.models.notification import DrawChangeEvent
+        # Same gate the scraper uses: nothing is announced for a draw whose own
+        # release has not been.
+        draw_announced = tournament.draw_release_notified_at is not None
+
         async with AsyncSessionLocal() as db:
             matches = (await db.execute(
                 _select(Match).where(Match.draw_id == tournament.id,
@@ -785,6 +790,22 @@ class ESPNMonitor:
                 blanks[0].name = opponent
                 taken.add(_norm(opponent))
                 filled += 1
+                # Recorded like a scraper fill would be, or this path names the
+                # slot and nobody is told. It is now the path that usually gets
+                # there first — ESPN publishes a pairing hours before Wikipedia
+                # transcribes it — so leaving it silent meant the qualifier
+                # notification simply never fired for a draw already under way.
+                if draw_announced:
+                    db.add(DrawChangeEvent(
+                        draw_id=tournament.id,
+                        entry_id=blanks[0].id,
+                        bracket_position=blanks[0].bracket_position,
+                        kind="filled",
+                        old_name=None,
+                        new_name=opponent,
+                        old_entry_type=blanks[0].entry_type,
+                        new_entry_type=blanks[0].entry_type,
+                    ))
                 logger.info("ESPN: named %s slot %d in %s %s as %r (opponent of %s)",
                             blanks[0].entry_type or "empty", blanks[0].bracket_position,
                             tournament.year, tournament.name, opponent, anchor_name)
