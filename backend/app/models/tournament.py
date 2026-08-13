@@ -169,6 +169,11 @@ class Draw(Base):
         Integer, ForeignKey("draw_category_variants.id"), nullable=True
     )
     status: Mapped[str] = mapped_column(String, default="upcoming")
+    # Which locking rule this draw uses — and, once it is over, USED. Stamped
+    # from the site-wide default rather than read through to it, so a finished
+    # tournament keeps reporting the rules it was actually played under when the
+    # default later changes. See services/settings.resolve_draw_lock_mode.
+    pick_lock_mode: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     selections_unlocked: Mapped[bool] = mapped_column(Boolean, default=False)
     last_scraped_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(

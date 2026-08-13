@@ -67,6 +67,7 @@ async def init_db():
     import app.models.prediction  # noqa: F401
     import app.models.push  # noqa: F401
     import app.models.rankings   # noqa: F401
+    import app.models.setting  # noqa: F401
     import app.models.system_log  # noqa: F401
     import app.models.tournament  # noqa: F401
     import app.models.user  # noqa: F401
@@ -341,6 +342,16 @@ async def _migrate(conn):
         # backfilled: no past draw has a published schedule to read any more, and
         # inventing one from the table's own guess would teach the estimator
         # exactly the assumption it exists to replace.
+        (
+            "CREATE TABLE IF NOT EXISTS app_settings "
+            "(key VARCHAR PRIMARY KEY, value VARCHAR NOT NULL, updated_at DATETIME NOT NULL)"
+        ),
+        "ALTER TABLE draws ADD COLUMN pick_lock_mode VARCHAR",
+        # Every draw that already exists was played under the original rule, so
+        # that is what it records. Stamping them is what lets the site-wide
+        # default change later without rewriting the history of draws that
+        # finished under the old one.
+        "UPDATE draws SET pick_lock_mode = 'draw_start' WHERE pick_lock_mode IS NULL",
         "ALTER TABLE draws ADD COLUMN first_match_at DATETIME",
         "ALTER TABLE draws ADD COLUMN first_match_local_hour INTEGER",
         "ALTER TABLE draws ADD COLUMN first_match_local_minute INTEGER",

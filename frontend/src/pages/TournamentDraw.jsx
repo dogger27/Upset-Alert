@@ -642,7 +642,15 @@ function TournamentDraw() {
   if (error) return <div className="page-error">Failed to load draw.</div>
 
   const { tournament, matches, draw_entries: players } = data
-  const locked = tournament.is_locked && !tournament.selections_unlocked
+  // Server truth, not a second derivation. draw_lock_state() decides this once
+  // for the write path, this endpoint and the client — the three disagreeing is
+  // the failure that matters (a bracket that looks editable and 403s).
+  const locked = data.draw_locked ?? (tournament.is_locked && !tournament.selections_unlocked)
+  // Matches under way while the bracket as a whole is still open.
+  const lockedMatchIds = useMemo(
+    () => new Set((data.matches || []).filter(m => m.locked).map(m => m.id)),
+    [data.matches]
+  )
   const nonByeMatchIds = new Set(matches.filter(m => !m.is_bye).map(m => m.id))
   const pickedCount = Object.entries(picks).filter(([k, v]) => v != null && nonByeMatchIds.has(Number(k))).length
   const userHasPicks = savedPreds ? savedPreds.some(p => p.predicted_winner_id != null) : pickedCount > 0
@@ -1096,6 +1104,25 @@ function TournamentDraw() {
         {headerStage === 'full' && (
         <div className="draw-header-right">
           <div className="draw-header-actions">
+          {/* Per-draw override of the site-wide locking rule. Admin-only, and
+              sited here rather than in the admin area because this is where the
+              consequence is visible — you can see immediately which matches the
+              change freezes. */}
+          {user?.is_admin && (
+            <select
+              className="lock-mode-select"
+              title="How predictions lock for this draw"
+              value={data.lock_mode || 'draw_start'}
+              onChange={async (e) => {
+                const { default: client } = await import('../api/client')
+                await client.put(`/admin/draws/${tournament.id}/pick-lock-mode`, { mode: e.target.value })
+                qc.invalidateQueries({ queryKey: ['draw', id] })
+              }}
+            >
+              <option value="draw_start">🔒 Locks at first ball</option>
+              <option value="r1_progressive">🔒 Locks match by match</option>
+            </select>
+          )}
           {tournament.selections_unlocked ? (
             <span
               className={`lock-badge lock-badge--unlocked${user?.is_admin ? ' lock-badge--admin' : ''}`}
@@ -1276,6 +1303,7 @@ function TournamentDraw() {
               picks={user ? activePicks : {}}
               onPick={viewingOther ? (canEditOther ? handlePickForOther : () => {}) : handlePick}
               locked={!user || locked || (viewingOther && !canEditOther)}
+              lockedMatchIds={lockedMatchIds}
               windowStart={windowPos}
               windowSize={DRAW_WINDOW}
               labelsHidden={headerHidden}
@@ -1292,6 +1320,7 @@ function TournamentDraw() {
               picks={user ? activePicks : {}}
               onPick={viewingOther ? (canEditOther ? handlePickForOther : () => {}) : handlePick}
               locked={!user || locked || (viewingOther && !canEditOther)}
+              lockedMatchIds={lockedMatchIds}
               mode={viewMode}
               picksOwner={picksOwner}
               windowStart={windowPos}

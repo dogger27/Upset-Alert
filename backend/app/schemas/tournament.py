@@ -110,6 +110,9 @@ class MatchOut(BaseModel):
     round_name: Optional[str] = None
     scores: Optional[list] = None
     live_scores: Optional[list] = None
+    # Under progressive locking this match is under way or over, so its pick can
+    # no longer be changed even though the bracket as a whole is still open.
+    locked: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -118,3 +121,10 @@ class DrawOut(BaseModel):
     tournament: TournamentOut
     draw_entries: list[DrawEntryOut]
     matches: list[MatchOut]
+    # How this draw locks, and whether it is shut. Sent so the client greys out
+    # exactly what the server would refuse, rather than deriving it a second
+    # time from status and dates and drifting.
+    lock_mode: str = "draw_start"
+    draw_locked: bool = False
+    lock_reason: str = ""
+    predictions_hidden: bool = True

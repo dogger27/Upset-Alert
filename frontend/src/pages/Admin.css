@@ -541,3 +541,21 @@
   .scraping-schedule { margin-left: 0; }
   .scraping-explainer { max-width: 100%; }
 }
+
+/* ── Settings tab ── */
+.admin-settings { max-width: 640px; }
+.admin-settings h2 { font-size: 1.1rem; margin: 0 0 0.4rem; }
+.admin-settings h3 { font-size: 0.85rem; margin: 1.4rem 0 0.4rem; color: #6b7280;
+  text-transform: uppercase; letter-spacing: 0.05em; }
+.admin-settings-note { font-size: 0.82rem; color: #4b5563; line-height: 1.5; margin: 0 0 1rem; }
+.admin-radio {
+  display: flex; gap: 0.6rem; align-items: flex-start;
+  padding: 0.7rem 0.8rem; margin-bottom: 0.5rem;
+  border: 1px solid var(--border, #e5e7eb); border-radius: 8px; cursor: pointer;
+}
+.admin-radio.is-on { border-color: #1b4332; background: #f2f7f4; }
+.admin-radio input { margin-top: 0.2rem; flex: 0 0 auto; }
+.admin-radio span { display: flex; flex-direction: column; gap: 0.15rem; }
+.admin-radio strong { font-size: 0.9rem; color: #111; }
+.admin-radio em { font-size: 0.78rem; color: #4b5563; font-style: normal; line-height: 1.45; }
+.admin-settings-counts { margin: 0; padding-left: 1.1rem; font-size: 0.82rem; color: #4b5563; }

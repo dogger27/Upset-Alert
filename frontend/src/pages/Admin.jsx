@@ -20,7 +20,7 @@ const CATEGORIES = [
   'highest_rank_bot', 'leagues', 'notifications', 'rankings', 'scheduler', 'scraper',
 ]
 
-const TABS = ['Users', 'Tournaments', 'Logs', 'Info', 'Players', 'Rankings']
+const TABS = ['Users', 'Tournaments', 'Logs', 'Info', 'Players', 'Rankings', 'Settings']
 
 const CATEGORY_ORDER = { 'Grand Slam': 0, 'ATP 1000': 1, 'WTA 1000': 1, 'ATP 500': 2, 'WTA 500': 2, 'ATP 250': 3, 'WTA 250': 3 }
 const GENDER_COLORS = { M: '#edf3ff', F: '#fff0f5' }
@@ -929,7 +929,83 @@ export default function Admin() {
         {activeTab === 'Info'        && <InfoPanel />}
         {activeTab === 'Players'     && <PlayersPanel user={user} />}
         {activeTab === 'Rankings'    && <RankingsPanel user={user} />}
+        {activeTab === 'Settings'    && <SettingsPanel />}
       </div>
+    </div>
+  )
+}
+
+const LOCK_MODE_LABELS = {
+  draw_start: 'Lock at first ball',
+  r1_progressive: 'Lock match by match',
+}
+const LOCK_MODE_BLURB = {
+  draw_start:
+    'The whole bracket closes the moment the draw starts — the original rule.',
+  r1_progressive:
+    'A match freezes when it goes on court; the rest of the bracket stays editable '
+    + 'until every first-round match is complete, then it all closes.',
+}
+
+function SettingsPanel() {
+  const [data, setData] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  const load = async () => {
+    try {
+      const { default: client } = await import('../api/client')
+      const res = await client.get('/admin/settings')
+      setData(res.data)
+    } catch { setErr('Could not load settings') }
+  }
+  useEffect(() => { load() }, [])
+
+  const setMode = async (mode) => {
+    setBusy(true); setErr('')
+    try {
+      const { default: client } = await import('../api/client')
+      await client.put('/admin/settings/pick-lock-mode', { mode })
+      await load()
+    } catch { setErr('Could not save') } finally { setBusy(false) }
+  }
+
+  if (err) return <p className="admin-error">{err}</p>
+  if (!data) return <p>Loading…</p>
+
+  return (
+    <div className="admin-settings">
+      <h2>Pick locking</h2>
+      <p className="admin-settings-note">
+        This is the <strong>default for new draws</strong>. Every draw records the rule
+        it was played under, so changing this never rewrites a tournament that has
+        already run — draws already stamped keep their own setting.
+      </p>
+      {data.lock_modes.map(mode => (
+        <label key={mode} className={`admin-radio${data.pick_lock_mode === mode ? ' is-on' : ''}`}>
+          <input
+            type="radio"
+            name="pick_lock_mode"
+            checked={data.pick_lock_mode === mode}
+            disabled={busy}
+            onChange={() => setMode(mode)}
+          />
+          <span>
+            <strong>{LOCK_MODE_LABELS[mode] || mode}</strong>
+            <em>{LOCK_MODE_BLURB[mode] || ''}</em>
+          </span>
+        </label>
+      ))}
+      <h3>Draws using each rule</h3>
+      <ul className="admin-settings-counts">
+        {Object.entries(data.draws_by_mode).map(([mode, n]) => (
+          <li key={mode}><strong>{n}</strong> {LOCK_MODE_LABELS[mode] || mode}</li>
+        ))}
+      </ul>
+      <p className="admin-settings-note">
+        Other players' picks stay hidden until a draw's first round is complete, under
+        either rule.
+      </p>
     </div>
   )
 }
