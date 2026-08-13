@@ -151,6 +151,7 @@ function UsersPanel({ user }) {
 
 function TournamentsPanel({ user }) {
   const navigate = useNavigate()
+  const qc = useQueryClient()
   const [filterStatus, setFilterStatus] = useState(new Set(['upcoming', 'open', 'active', 'lastweek']))
   const [filterGender, setFilterGender] = useState(new Set(['M', 'F']))
   const [filterCategory, setFilterCategory] = useState(new Set(['250', '500', '1000', 'Grand Slam']))
@@ -286,6 +287,7 @@ function TournamentsPanel({ user }) {
                   <th rowSpan={2}>Closes{localTzAbbr ? ` (${localTzAbbr})` : ''}</th>
                   <th rowSpan={2}>Draw</th>
                   <th rowSpan={2}>Surface</th>
+                  <th rowSpan={2} title="When predictions stop being editable for this draw">Locks</th>
                   <th rowSpan={2}></th>
                 </tr>
                 <tr>
@@ -300,13 +302,13 @@ function TournamentsPanel({ user }) {
                     const inGroup = filtered.filter(t => displayStatus(t) === status)
                     rows.push(
                       <tr key={`group-${status}`} className="status-group-header">
-                        <td colSpan={12}>{DISPLAY_STATUS_LABELS[status]}</td>
+                        <td colSpan={13}>{DISPLAY_STATUS_LABELS[status]}</td>
                       </tr>
                     )
                     if (inGroup.length === 0) {
                       rows.push(
                         <tr key={`empty-${status}`} className="status-group-empty-row">
-                          <td colSpan={12}>No {DISPLAY_STATUS_LABELS[status].toLowerCase()} tournaments at this time</td>
+                          <td colSpan={13}>No {DISPLAY_STATUS_LABELS[status].toLowerCase()} tournaments at this time</td>
                         </tr>
                       )
                     } else {
@@ -365,6 +367,26 @@ function TournamentsPanel({ user }) {
                             </td>
                             <td>{t.draw_size > 0 ? t.draw_size : '—'}</td>
                             <td>{surface}</td>
+                            {/* Per-draw override of the site-wide rule. The row
+                                navigates on click, so the cell has to swallow
+                                its own events or choosing a mode would also
+                                open the draw. */}
+                            <td onClick={e => e.stopPropagation()} style={{ padding: '0 0.35rem' }}>
+                              <select
+                                className="admin-lock-select"
+                                value={t.pick_lock_mode || 'draw_start'}
+                                title="How predictions lock for this draw"
+                                onChange={async (e) => {
+                                  const mode = e.target.value
+                                  const { default: client } = await import('../api/client')
+                                  await client.put(`/admin/draws/${t.id}/pick-lock-mode`, { mode })
+                                  qc.invalidateQueries({ queryKey: ['tournaments'] })
+                                }}
+                              >
+                                <option value="draw_start">First ball</option>
+                                <option value="r1_progressive">Match by match</option>
+                              </select>
+                            </td>
                             <td onClick={e => e.stopPropagation()} style={{ padding: '0 0.5rem' }}>
                               {t.wiki_page_id && (
                                 <a
@@ -381,7 +403,7 @@ function TournamentsPanel({ user }) {
                         const next = inGroup[i + 1]
                         if (next && (next.week ?? next.start_date ?? '') !== (t.week ?? t.start_date ?? '')) {
                           rows.push(
-                            <tr key={`sep-${t.id}`}><td colSpan={12} style={{ padding: 0, border: 'none' }}><div style={{ height: '2px', background: '#333' }} /></td></tr>
+                            <tr key={`sep-${t.id}`}><td colSpan={13} style={{ padding: 0, border: 'none' }}><div style={{ height: '2px', background: '#333' }} /></td></tr>
                           )
                         }
                       })

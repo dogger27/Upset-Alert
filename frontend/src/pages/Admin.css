@@ -559,3 +559,16 @@
 .admin-radio strong { font-size: 0.9rem; color: #111; }
 .admin-radio em { font-size: 0.78rem; color: #4b5563; font-style: normal; line-height: 1.45; }
 .admin-settings-counts { margin: 0; padding-left: 1.1rem; font-size: 0.82rem; color: #4b5563; }
+
+/* Per-draw locking rule in the tournaments table. Sized to the column rather
+   than the text so a long option can't widen an already dense row. */
+.admin-lock-select {
+  font-size: 0.68rem;
+  padding: 0.15rem 0.2rem;
+  max-width: 7.5rem;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 4px;
+  background: #fff;
+  color: #374151;
+  cursor: pointer;
+}
