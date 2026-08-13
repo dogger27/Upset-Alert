@@ -1110,25 +1110,6 @@ function TournamentDraw() {
         {headerStage === 'full' && (
         <div className="draw-header-right">
           <div className="draw-header-actions">
-          {/* Per-draw override of the site-wide locking rule. Admin-only, and
-              sited here rather than in the admin area because this is where the
-              consequence is visible — you can see immediately which matches the
-              change freezes. */}
-          {user?.is_admin && (
-            <select
-              className="lock-mode-select"
-              title="How predictions lock for this draw"
-              value={data.lock_mode || 'draw_start'}
-              onChange={async (e) => {
-                const { default: client } = await import('../api/client')
-                await client.put(`/admin/draws/${tournament.id}/pick-lock-mode`, { mode: e.target.value })
-                qc.invalidateQueries({ queryKey: ['draw', id] })
-              }}
-            >
-              <option value="draw_start">🔒 Locks at first ball</option>
-              <option value="r1_progressive">🔒 Locks match by match</option>
-            </select>
-          )}
           {tournament.selections_unlocked ? (
             <span
               className={`lock-badge lock-badge--unlocked${user?.is_admin ? ' lock-badge--admin' : ''}`}
