@@ -892,9 +892,14 @@ async def _gather_qualifier_payload(db, draw: Draw) -> Optional[dict]:
     if not picked_entries:
         return None
 
+    # Q and LL both, because they are the same slot. Wikipedia reserves it as
+    # "Q/LL" — a qualifier OR a lucky loser — and which one arrives is not known
+    # until allocation completes. Selecting only Q dropped the lucky loser from
+    # the announcement of the very field it belongs to: 2026 Cincinnati had one
+    # in each draw, at a slot whose seed cell literally reads "Q/LL".
     quals = (await db.execute(
         select(DrawEntry)
-        .where(DrawEntry.draw_id == draw.id, DrawEntry.entry_type == "Q")
+        .where(DrawEntry.draw_id == draw.id, DrawEntry.entry_type.in_(("Q", "LL")))
         .order_by(DrawEntry.bracket_position)
     )).scalars().all()
     quals = [q for q in quals if (q.name or "").strip()]
