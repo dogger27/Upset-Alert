@@ -278,6 +278,21 @@ async def set_draw_pick_lock_mode(
     if mode is not None and mode not in LOCK_MODES:
         raise HTTPException(400, f"mode must be one of {list(LOCK_MODES)} or null")
 
+    # Only before a ball is struck. Once play begins the mode stops being a
+    # setting and becomes the record of how the draw is being played: people
+    # have already picked under one rule, and switching would move the
+    # goalposts under them — a draw locked match-by-match would suddenly be
+    # wholly locked, or a locked one would reopen mid-tournament.
+    #
+    # computed_status, not the stored status column: 'open' means released and
+    # not yet started, which is exactly the last moment this is still a choice.
+    if draw.computed_status not in ("upcoming", "open"):
+        raise HTTPException(
+            409,
+            f"This draw is {draw.computed_status} — its locking rule can only be "
+            f"changed before it starts",
+        )
+
     was = draw.pick_lock_mode
     draw.pick_lock_mode = mode
     await db.commit()
