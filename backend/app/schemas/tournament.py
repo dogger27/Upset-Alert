@@ -51,6 +51,8 @@ class TournamentOut(BaseModel):
     num_byes: int = 0
     scoring_tier: str = "250"
     status: str
+    # Which locking rule this draw uses / used — see models/tournament.py.
+    pick_lock_mode: Optional[str] = None
     selections_unlocked: bool = False
     last_scraped_at: Optional[datetime]
     latest_result_at: Optional[datetime] = None
