@@ -465,3 +465,10 @@
                                   :before content can't nudge baseline alignment */
   opacity: 0.9;
 }
+
+/* Walkover, alongside ret. — same shape, different word, so a match that was
+   never played reads as deliberately empty rather than as missing data. */
+.wo-badge {
+  font-style: normal;
+  letter-spacing: 0.02em;
+}

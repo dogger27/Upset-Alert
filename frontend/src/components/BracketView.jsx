@@ -150,10 +150,25 @@ function hasRetirement(scores) {
   return { p1: check(scores[0]), p2: check(scores[1]) }
 }
 
+/* A walkover — the loser withdrew before a ball was struck — is stored the way
+   Wikipedia writes it: the withdrawing side's only score cell is the literal
+   "w/o", the winner's is empty. So there are no games to render, and a match
+   that was never played still has to say what happened to it.
+
+   Marked on the side that carries the "w/o", which is the player who withdrew,
+   matching where the retirement badge sits. */
+const WALKOVER_RE = /^w\/?o$/i
+
+function hasWalkover(scores) {
+  if (!scores) return { p1: false, p2: false }
+  const check = (arr) => arr?.some(v => WALKOVER_RE.test(String(v ?? '').trim())) ?? false
+  return { p1: check(scores[0]), p2: check(scores[1]) }
+}
+
 function PlayerRow({
   playerId, playerById, drawRanks,
   isPicked, isWinner, isEliminated, isProjected, isDeadPick,
-  scores, retired, onClick, locked,
+  scores, retired, walkover, onClick, locked,
   showTypeSlot, showScores, markWinner, showRowBg, showFlag,
   qualifierNum, isServing, boldScores,
   isHighlighted, onHover,
@@ -227,6 +242,7 @@ function PlayerRow({
       <span className="pname">{player.name}</span>
       {isServing && <TennisBall />}
       {retired && <span className="ret-badge">ret.</span>}
+      {walkover && <span className="ret-badge wo-badge">w/o</span>}
       {showTick && <span className="pick-result correct" title={correctPick ? 'Correct pick' : 'Winner'}>✓</span>}
       {wrongPick && <span className="pick-result wrong" title="Wrong pick">✗</span>}
       {showFlag && player.nationality && (() => {
@@ -271,6 +287,8 @@ function MatchBox({ match, resolvedPlayers, h2hPair, playerById, drawRanks, pick
   const p1Scores = scores?.[0] ?? null
   const p2Scores = scores?.[1] ?? null
   const ret = hasRetirement(match.scores)  // retirement markers only on final scores
+  const wo = hasWalkover(match.scores)
+  const isWalkover = wo.p1 || wo.p2
 
   // Serving ball: live_scores[2] is 1 (p1 serving) or 2 (p2) or null
   // Suppress during tiebreaks: both players' last game count is "6" → 6-6 in current set
@@ -401,7 +419,8 @@ function MatchBox({ match, resolvedPlayers, h2hPair, playerById, drawRanks, pick
           isEliminated={actualWinnerId != null && actualWinnerId !== p1id && p1id != null}
           isDeadPick={p1DeadPick}
           isProjected={p1IsProjected}
-          scores={p1Scores}
+          scores={isWalkover ? null : p1Scores}
+          walkover={wo.p1}
           retired={ret.p1}
           onClick={mode === 'picks' && p1id != null ? () => onPick(match.id, p1id) : undefined}
           locked={locked}
@@ -422,7 +441,8 @@ function MatchBox({ match, resolvedPlayers, h2hPair, playerById, drawRanks, pick
           isEliminated={actualWinnerId != null && actualWinnerId !== p2id && p2id != null}
           isDeadPick={p2DeadPick}
           isProjected={p2IsProjected}
-          scores={p2Scores}
+          scores={isWalkover ? null : p2Scores}
+          walkover={wo.p2}
           retired={ret.p2}
           onClick={mode === 'picks' && p2id != null ? () => onPick(match.id, p2id) : undefined}
           locked={locked}
