@@ -638,6 +638,17 @@ function TournamentDraw() {
     ? `${d.name} — ${d.gender === 'M' ? 'ATP' : 'WTA'}${categoryShort(d.category) ? ' ' + categoryShort(d.category) : ''}`
     : 'No other draws of this type'
 
+  // Matches under way while the bracket as a whole is still open.
+  //
+  // ABOVE the loading guards, and null-safe, because it is a hook: placed after
+  // an early return it is skipped on the loading render and called on the next
+  // one, which is React #310 — "rendered more hooks than during the previous
+  // render". Every hook in this component has to sit above the returns below.
+  const lockedMatchIds = useMemo(
+    () => new Set((data?.matches || []).filter(m => m.locked).map(m => m.id)),
+    [data?.matches]
+  )
+
   if (isLoading) return <div className="page-loading">Loading draw…</div>
   if (error) return <div className="page-error">Failed to load draw.</div>
 
@@ -646,11 +657,6 @@ function TournamentDraw() {
   // for the write path, this endpoint and the client — the three disagreeing is
   // the failure that matters (a bracket that looks editable and 403s).
   const locked = data.draw_locked ?? (tournament.is_locked && !tournament.selections_unlocked)
-  // Matches under way while the bracket as a whole is still open.
-  const lockedMatchIds = useMemo(
-    () => new Set((data.matches || []).filter(m => m.locked).map(m => m.id)),
-    [data.matches]
-  )
   const nonByeMatchIds = new Set(matches.filter(m => !m.is_bye).map(m => m.id))
   const pickedCount = Object.entries(picks).filter(([k, v]) => v != null && nonByeMatchIds.has(Number(k))).length
   const userHasPicks = savedPreds ? savedPreds.some(p => p.predicted_winner_id != null) : pickedCount > 0
