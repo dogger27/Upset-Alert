@@ -1228,20 +1228,25 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
     # the bracket, and every name they type would otherwise look like a swap.
     # After the announcement there is no such churn: the page is complete, and a
     # change to it is a change to the real draw.
-    # Split by kind, because the two answer to different facts.
+    # The test is per MATCH, not per draw.
     #
-    # A REPLACEMENT after the first ball is not a transfer — a withdrawal
-    # becomes a walkover once play starts — so it stays suppressed, and the
-    # misparse guard above treats it as a bad parse.
+    # "A pick cannot be replaced after a first-round match occurs" is a fact
+    # about THAT match, not about the tournament: a draw is in play from its
+    # first ball, but most of its first round has not started yet, and both
+    # withdrawals and qualifier placements go on landing for hours afterwards.
+    # Gating on the draw silenced every one of them — 2026 Cincinnati filled all
+    # twelve qualifier slots after its first ball and nobody was told.
     #
-    # A qualifier LANDING after the first ball is completely normal, and was
-    # being suppressed with it. Q/LL slots are reserved for "a qualifier or a
-    # lucky loser" and resolve match by match, hours into day 1: 2026 Cincinnati
-    # filled all twelve that way. Gating both on play_started meant the one
-    # notification people had switched on for precisely this never fired.
+    # So a change is news while the slot's own match is still to come, and is
+    # ignored once that match is under way or over, where it can only be a
+    # correction to something already played.
     announced = tournament.draw_release_notified_at is not None
-    track_replacements = announced and not play_started
-    track_fills = announced and tournament.status != "completed"
+    started_entry_ids: set[int] = set()
+    for (rnd, _num), em in existing_matches.items():
+        if rnd != 1:
+            continue
+        if em.winner_id is not None or em.live_scores_json is not None or em.status == "completed":
+            started_entry_ids.update(x for x in (em.player1_id, em.player2_id) if x)
     pending_changes: list[dict] = []
 
     # --- Reject a shifted parse before it is written -------------------------
@@ -1275,15 +1280,21 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
         # section shifting by sixteen positions, which moves seeds and direct
         # entrants in bulk. A shift that touched only qualifier slots is not a
         # shift.
+        LATE_ENTRY_TYPES = ("Q", "LL", "ALT", "SE", "PR")
         misparsed = [
             (pe.bracket_position, existing_players[pe.bracket_position].name, pe.name)
             for pe in parsed.players
             if pe.bracket_position in existing_players
-            and (existing_players[pe.bracket_position].entry_type or "").upper() not in ("Q", "LL")
-            and (pe.entry_type or "").upper() not in ("Q", "LL")
+            and (existing_players[pe.bracket_position].entry_type or "").upper() not in LATE_ENTRY_TYPES
+            and (pe.entry_type or "").upper() not in LATE_ENTRY_TYPES
             and classify_change(existing_players[pe.bracket_position].name, pe.name) == "replaced"
         ]
-        if misparsed:
+        # A COUNT, not a presence test. The fault this guards against is a whole
+        # 16-slot section shifting, which rewrites entrants in bulk; one player
+        # changing is a withdrawal, which is a real thing that happens mid-draw
+        # and must be applied and announced, not discarded as corruption. Three
+        # is comfortably above any single legitimate swap and far below a shift.
+        if len(misparsed) >= 3:
             from app.services.system_log import app_log
             await app_log(
                 "error", "scraper",
@@ -1309,7 +1320,8 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
                 # Captured BEFORE the overwrite — one line later the old name
                 # is gone and there is nothing left to diff against.
                 kind = classify_change(player.name, pe.name)
-                if kind and (track_fills if kind == "filled" else track_replacements):
+                if kind and announced and tournament.status != "completed" \
+                        and player.id not in started_entry_ids:
                     pending_changes.append({
                         "entry_id": player.id,
                         "bracket_position": pe.bracket_position,
