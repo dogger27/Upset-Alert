@@ -1418,8 +1418,8 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
              "count": len(missing_positions)},
             dedup_key=f"refused_entry_delete_{tournament.id}", dedup_hours=6.0,
         ))
-        logger.error("Refused to delete %d entrant(s) missing from a parse of %s %s",
-                     len(missing_positions), tournament.year, tournament.name)
+        logger.warning("Ignored a parse of %s %s that dropped %d entrant(s)",
+                     tournament.year, tournament.name, len(missing_positions))
     else:
         for pos in missing_positions:
             await db.delete(existing_players[pos])
@@ -1515,8 +1515,8 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
              "rounds": sorted({r for r, _ in missing_matches})},
             dedup_key=f"refused_match_delete_{tournament.id}", dedup_hours=6.0,
         ))
-        logger.error("Refused to delete %d match(es) missing from a parse of %s %s",
-                     len(missing_matches), tournament.year, tournament.name)
+        logger.warning("Ignored a parse of %s %s that dropped %d match(es)",
+                     tournament.year, tournament.name, len(missing_matches))
     else:
         for key in missing_matches:
             old_match = existing_matches[key]
