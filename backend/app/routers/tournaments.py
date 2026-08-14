@@ -1400,11 +1400,20 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
         import asyncio as _asyncio
         from app.services.system_log import app_log
         _asyncio.create_task(app_log(
-            "error", "scraper",
-            f"Refused to delete {len(missing_positions)} entrant(s) missing from a parse of "
+            # A refusal is the guard WORKING, and Wikipedia is edited live, so a
+            # momentary partial parse is an expected state rather than a fault:
+            # the next scrape restores it and nothing was lost. Raised as a
+            # warning so it stays visible without implying there is something to
+            # do — an error here paged for a draw that had already healed.
+            # Persistence is the real signal, and a repeat every 6 hours reads as
+            # exactly that.
+            "warning", "scraper",
+            f"Ignored a parse of "
             f"{tournament.year} {tournament.name} "
-            f"({'ATP' if tournament.gender == 'M' else 'WTA'}) — the draw is in play, so "
-            f"an absent position is a bad parse, not a withdrawal",
+            f"({'ATP' if tournament.gender == 'M' else 'WTA'}) that dropped "
+            f"{len(missing_positions)} entrant(s): the draw is in play, so an absent "
+            f"position is a bad parse and not a withdrawal. Nothing was deleted and "
+            f"the next scrape restores it",
             {"draw_id": tournament.id, "positions": sorted(missing_positions)[:20],
              "count": len(missing_positions)},
             dedup_key=f"refused_entry_delete_{tournament.id}", dedup_hours=6.0,
@@ -1496,11 +1505,12 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
         import asyncio as _asyncio
         from app.services.system_log import app_log
         _asyncio.create_task(app_log(
-            "error", "scraper",
-            f"Refused to delete {len(missing_matches)} match(es) missing from a parse of "
+            "warning", "scraper",
+            f"Ignored a parse of "
             f"{tournament.year} {tournament.name} "
-            f"({'ATP' if tournament.gender == 'M' else 'WTA'}) — the draw is in play, and "
-            f"deleting them would delete the predictions on them",
+            f"({'ATP' if tournament.gender == 'M' else 'WTA'}) that dropped "
+            f"{len(missing_matches)} match(es): the draw is in play, and deleting them "
+            f"would have deleted the predictions on them. Nothing was deleted",
             {"draw_id": tournament.id, "count": len(missing_matches),
              "rounds": sorted({r for r, _ in missing_matches})},
             dedup_key=f"refused_match_delete_{tournament.id}", dedup_hours=6.0,
