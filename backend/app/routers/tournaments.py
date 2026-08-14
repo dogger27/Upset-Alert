@@ -1377,10 +1377,43 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
         except Exception as exc:
             logger.warning("Could not assign rankings for %s: %s", tournament.name, exc)
 
-    # Delete players no longer in draw
-    for pos, old_player in existing_players.items():
-        if pos not in seen_positions:
-            await db.delete(old_player)
+    # Delete players no longer in the draw — but NEVER once it is in play.
+    #
+    # A position vanishing from a parse is not a player leaving the draw. Nobody
+    # leaves a draw that has started; they withdraw and it becomes a walkover,
+    # and the slot keeps its name. So an absent position is a partial parse, and
+    # deleting on it destroys a row that predictions point at.
+    #
+    # That is what happened to 2026 Cincinnati (WTA): positions 81-95 dropped out
+    # of one parse, ten entries were deleted and recreated with new ids on the
+    # next, and 57 picks across five players were left pointing at ids that no
+    # longer existed — brackets that rendered blank. The misparse guard above did
+    # not catch it because it compares NAMES, and these positions had no name to
+    # compare; they were simply absent.
+    missing_positions = [pos for pos in existing_players if pos not in seen_positions]
+    if missing_positions and play_started:
+        # Deferred, not awaited. This sits inside _do_scrape's write transaction
+        # — entries have already been flushed — and app_log opens its own
+        # session, so awaiting it here deadlocks on SQLite's write lock and the
+        # refusal is swallowed as "database is locked". The scheduler commits
+        # immediately after this returns, so the task lands a moment later.
+        import asyncio as _asyncio
+        from app.services.system_log import app_log
+        _asyncio.create_task(app_log(
+            "error", "scraper",
+            f"Refused to delete {len(missing_positions)} entrant(s) missing from a parse of "
+            f"{tournament.year} {tournament.name} "
+            f"({'ATP' if tournament.gender == 'M' else 'WTA'}) — the draw is in play, so "
+            f"an absent position is a bad parse, not a withdrawal",
+            {"draw_id": tournament.id, "positions": sorted(missing_positions)[:20],
+             "count": len(missing_positions)},
+            dedup_key=f"refused_entry_delete_{tournament.id}", dedup_hours=6.0,
+        ))
+        logger.error("Refused to delete %d entrant(s) missing from a parse of %s %s",
+                     len(missing_positions), tournament.year, tournament.name)
+    else:
+        for pos in missing_positions:
+            await db.delete(existing_players[pos])
     await db.flush()
 
     # Queue the swaps for notification. Written in the same transaction as the
@@ -1448,10 +1481,35 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
             )
             db.add(match)
 
-    # Delete matches no longer in draw (and their orphaned predictions)
+    # Delete matches no longer in the draw, and the predictions on them — again,
+    # never once the draw is in play. This one deletes PICKS outright rather than
+    # merely orphaning them, so a partial parse here is unrecoverable without a
+    # backup. A bracket does not lose matches after it starts.
     from app.models.prediction import UserPrediction
-    for key, old_match in existing_matches.items():
-        if key not in seen_match_keys:
+    missing_matches = [k for k in existing_matches if k not in seen_match_keys]
+    if missing_matches and play_started:
+        # Deferred, not awaited. This sits inside _do_scrape's write transaction
+        # — entries have already been flushed — and app_log opens its own
+        # session, so awaiting it here deadlocks on SQLite's write lock and the
+        # refusal is swallowed as "database is locked". The scheduler commits
+        # immediately after this returns, so the task lands a moment later.
+        import asyncio as _asyncio
+        from app.services.system_log import app_log
+        _asyncio.create_task(app_log(
+            "error", "scraper",
+            f"Refused to delete {len(missing_matches)} match(es) missing from a parse of "
+            f"{tournament.year} {tournament.name} "
+            f"({'ATP' if tournament.gender == 'M' else 'WTA'}) — the draw is in play, and "
+            f"deleting them would delete the predictions on them",
+            {"draw_id": tournament.id, "count": len(missing_matches),
+             "rounds": sorted({r for r, _ in missing_matches})},
+            dedup_key=f"refused_match_delete_{tournament.id}", dedup_hours=6.0,
+        ))
+        logger.error("Refused to delete %d match(es) missing from a parse of %s %s",
+                     len(missing_matches), tournament.year, tournament.name)
+    else:
+        for key in missing_matches:
+            old_match = existing_matches[key]
             orphaned = await db.execute(
                 select(UserPrediction).where(UserPrediction.match_id == old_match.id)
             )
