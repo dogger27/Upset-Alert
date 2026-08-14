@@ -178,6 +178,21 @@ _DATE_SAME_MONTH_RE = re.compile(
     r"(\d{1,2})\s*[-–]\s*(\d{1,2})\s+([A-Za-z]+)(?:\s+(\d{4}))?",
     re.IGNORECASE,
 )
+# Month-FIRST, the US convention, which every pattern above misses because they
+# all lead with the day. North American events are written this way, so the
+# whole date-correction path silently returned nothing for them: 2026 Canadian
+# Open reads "August 2–13, 2026" and kept a stale end date of 10 August while
+# its men's final was still to be played on the 13th.
+# "August 2–13, 2026" / "August 2–13"
+_DATE_US_SAME_MONTH_RE = re.compile(
+    r"([A-Za-z]+)\s+(\d{1,2})\s*[-–]\s*(\d{1,2})(?:,?\s*(\d{4}))?",
+    re.IGNORECASE,
+)
+# "August 24 – September 7, 2026"
+_DATE_US_DIFF_MONTH_RE = re.compile(
+    r"([A-Za-z]+)\s+(\d{1,2})\s*[-–]\s*([A-Za-z]+)\s+(\d{1,2})(?:,?\s*(\d{4}))?",
+    re.IGNORECASE,
+)
 
 
 def _try_parse_date_range(raw: str, year: int) -> tuple[Optional[date], Optional[date]]:
@@ -205,6 +220,32 @@ def _try_parse_date_range(raw: str, year: int) -> tuple[Optional[date], Optional
                 cross_year = mon2 < mon1
                 start = date(yr - 1 if cross_year else yr, mon1, int(d1))
                 return start, date(yr, mon2, int(d2))
+            except ValueError:
+                pass
+
+    # Month-first is tried BEFORE the day-first same-month pattern: "August
+    # 2–13, 2026" would otherwise fall through to it and match nothing, which is
+    # how this format went unnoticed.
+    m4 = _DATE_US_DIFF_MONTH_RE.match(raw)
+    if m4:
+        mon1_s, d1, mon2_s, d2, yr_s = m4.groups()
+        mon1, mon2 = _MONTHS.get(mon1_s.lower()), _MONTHS.get(mon2_s.lower())
+        if mon1 and mon2:
+            yr = int(yr_s) if yr_s else year
+            try:
+                cross_year = mon2 < mon1
+                return date(yr - 1 if cross_year else yr, mon1, int(d1)), date(yr, mon2, int(d2))
+            except ValueError:
+                pass
+
+    m5 = _DATE_US_SAME_MONTH_RE.match(raw)
+    if m5:
+        mon_s, d1, d2, yr_s = m5.groups()
+        mon = _MONTHS.get(mon_s.lower())
+        if mon:
+            yr = int(yr_s) if yr_s else year
+            try:
+                return date(yr, mon, int(d1)), date(yr, mon, int(d2))
             except ValueError:
                 pass
 

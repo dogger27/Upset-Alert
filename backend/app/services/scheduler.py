@@ -1082,8 +1082,46 @@ async def _notify_pending_round_digests() -> None:
                 # already, so the wait has stopped being normal lag and become a
                 # recording failure. Raise it instead of shortening the wait.
                 cutoff = date.today() - timedelta(days=DIGEST_STALL_DAYS)
-                stalled = [s for s in outstanding if s.end_date and s.end_date < cutoff]
+                overdue = [s for s in outstanding if s.end_date and s.end_date < cutoff]
+
+                # Past its end date is not the same as finished. end_date is a
+                # scheduled date and it goes stale — 2026 Canadian Open carried
+                # 2026-08-10 while its men's final was still to be played on the
+                # 13th — so a draw with matches left to play is not stalled, it
+                # is running, and holding the digest for it is exactly right.
+                #
+                # A genuine stall has nothing left to play AND no recorded round:
+                # that is the recording failure this alert exists for. Anything
+                # else is a wrong date, which is worth saying but is not an error
+                # in the digest.
+                stalled, still_playing = [], []
+                for sd in overdue:
+                    undecided = (await db.execute(
+                        select(func.count()).select_from(Match).where(
+                            Match.draw_id == sd.id,
+                            Match.is_bye == False,  # noqa: E712
+                            Match.winner_id.is_(None),
+                        )
+                    )).scalar() or 0
+                    (still_playing if undecided else stalled).append((sd, undecided))
+
+                if still_playing:
+                    from app.services.system_log import app_log
+                    names = ", ".join(f"{sd.name} ({tour_label(sd.gender)}), "
+                                      f"{n} match(es) left" for sd, n in still_playing)
+                    await app_log(
+                        "warning", "scraper",
+                        f"{bucket_desc} is still being played past its recorded end date "
+                        f"({max(sd.end_date for sd, _ in still_playing)}): {names}. The "
+                        f"{label} digest is correctly waiting; the end date is what is wrong",
+                        {"bucket": bucket_desc, "round_name": label,
+                         "draw_ids": [sd.id for sd, _ in still_playing]},
+                        dedup_key=f"stale_end_date_{bucket_desc}",
+                        dedup_hours=DRAW_HEALTH_REALERT_HOURS,
+                    )
+
                 if stalled:
+                    stalled = [sd for sd, _ in stalled]
                     from app.services.system_log import app_log
                     await app_log(
                         "error", "notifications",
