@@ -79,7 +79,7 @@ async def draw_lock_state(db, draw) -> LockState:
     return LockState(
         mode=mode,
         draw_locked=False,
-        locked_match_ids={m.id for m in rows if match_in_play(m)},
+        locked_match_ids=_locked_with_downstream(rows, draw.num_rounds),
         reason="",
     )
 
@@ -100,6 +100,39 @@ def rejected_changes(state: LockState, submitted: dict, existing: dict) -> list:
         mid for mid, winner_id in submitted.items()
         if mid in state.locked_match_ids and existing.get(mid) != winner_id
     ]
+
+
+def _locked_with_downstream(matches, num_rounds: int) -> set:
+    """
+    Matches in play, plus everything DOWNSTREAM of them.
+
+    A match starting does not only settle itself — it leaks into every match its
+    winner could still reach. Watching the top seed go down 0-6, 0-5 tells you
+    plenty about who wins the quarter-final, so leaving that quarter-final
+    editable hands an advantage to whoever happens to be watching. The whole path
+    from a started match to the final therefore locks with it.
+
+    Byes seed nothing. A bye carries a winner from the moment the draw is
+    released, so propagating from it would lock most of the bracket before a ball
+    was struck — the bye's own row is locked (there is nothing to predict) but it
+    starts no chain.
+
+    The parent of match n in round r is match (n+1)//2 in round r+1, which is the
+    same relation the bracket views use to resolve feeders.
+    """
+    locked_keys = set()
+    for m in matches:
+        if m.is_bye or not match_in_play(m):
+            continue
+        r, n = m.round_number, m.match_number
+        while r <= num_rounds:
+            locked_keys.add((r, n))
+            r, n = r + 1, (n + 1) // 2
+
+    return {
+        m.id for m in matches
+        if (m.round_number, m.match_number) in locked_keys or m.is_bye or match_in_play(m)
+    }
 
 
 def _r1_complete(matches) -> bool:
