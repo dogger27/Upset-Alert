@@ -550,11 +550,24 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   width: 100%; cursor: pointer;
   -webkit-appearance: none; appearance: none;
   height: 4px; border-radius: 2px;
+  /* The slider owns its touches. Without this the browser is also free to read
+     a drag on it as a pan or a zoom gesture, and an installed PWA interprets
+     those far more aggressively than a Safari tab — dragging the scrubber made
+     the whole screen pop in and out of zoom, while the same page in a mobile
+     browser was fine.
+
+     Scoped to the control rather than fixed with user-scalable=no on the
+     viewport: disabling pinch-zoom site-wide would take zooming away from
+     anyone who needs it, to fix one slider. */
+  touch-action: none;
   background: linear-gradient(to right, var(--green-500) var(--fill-pct, 100%), var(--border, #e5e7eb) var(--fill-pct, 100%));
   outline: none; margin: 0; padding: 0;
 }
 .lt-scrubber-range::-webkit-slider-thumb {
   -webkit-appearance: none;
+  /* A 10px target is small enough that iOS may read a drag starting on it as a
+     double-tap candidate; the thumb declares its own handling too. */
+  touch-action: none;
   width: 10px; height: 10px; border-radius: 50%;
   background: var(--green-dark);
   cursor: pointer;
