@@ -553,7 +553,10 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
      4px, drawn as a centred background band rather than by the element's own
      height. A 4px-tall input is a 4px-tall touch target, which on a phone means
      the drag starts on the page instead of the slider. */
-  height: 24px; border-radius: 0;
+  height: 32px; border-radius: 0;
+  /* The input's own border was invisible while the element was 4px tall and
+     became a rectangle around the track the moment it grew to 24px. */
+  border: none;
   /* The slider owns its touches. Without this the browser is also free to read
      a drag on it as a pan or a zoom gesture, and an installed PWA interprets
      those far more aggressively than a Safari tab — dragging the scrubber made
@@ -571,17 +574,17 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 .lt-scrubber-range::-webkit-slider-thumb {
   -webkit-appearance: none;
   touch-action: none;
-  width: 20px; height: 20px; border-radius: 50%;
+  width: 28px; height: 28px; border-radius: 50%;
   background: var(--green-dark);
-  border: 2px solid #fff;
+  border: 3px solid #fff;
   box-shadow: 0 1px 3px rgba(0,0,0,0.3);
   cursor: pointer;
 }
 .lt-scrubber-range::-moz-range-thumb {
-  width: 20px; height: 20px; border-radius: 50%;
+  width: 28px; height: 28px; border-radius: 50%;
   background: var(--green-dark);
   box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-  cursor: pointer; border: 2px solid #fff;
+  cursor: pointer; border: 3px solid #fff;
 }
 /* Stacked, not side by side. The match line is as long as two player names and
    was sharing one row with the counter under white-space: nowrap, so it ran off
@@ -597,6 +600,12 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   0%   { opacity: 1; }
   60%  { opacity: 1; }
   100% { opacity: 0; }
+}
+.lt-scrubber-when {
+  display: block;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  opacity: 0.85;
 }
 .lt-scrubber-flash {
   font-size: 0.72rem; color: var(--text-muted);

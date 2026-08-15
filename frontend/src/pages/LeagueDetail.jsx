@@ -634,7 +634,9 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                     {': '}
                     {flashMatch.winner_name ?? '?'} def. {flashMatch.loser_name ?? '?'}
                     {flashMatch.completed_at && (
-                      <>, {new Date(flashMatch.completed_at).toLocaleString('en-US', { month: 'short', day: '2-digit', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })}</>
+                      <span className="lt-scrubber-when">
+                        {new Date(flashMatch.completed_at).toLocaleString('en-US', { month: 'short', day: '2-digit', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })}
+                      </span>
                     )}
                   </span>
                 )}
