@@ -333,7 +333,7 @@ function Connectors({ leftCenters, rightCenters, totalH }) {
 // compact: phone-width mode — country flags are dropped to buy name space.
 // zoom:    scales the whole rendered draw (layout included, via CSS zoom) so
 //          the parent can shrink it until the target number of rounds fits.
-export default function CombinedView({ tournament, matches, players, picks, onPick, locked = true, windowStart = 0, windowSize = 4, labelsHidden = false, insetLeft = 0, compact = false, zoom = 1, leagueId = null, lockedMatchIds = new Set() }) {
+export default function CombinedView({ tournament, matches, players, picks, onPick, locked = true, windowStart = 0, windowSize = 4, labelsHidden = false, insetLeft = 0, compact = false, zoom = 1, leagueId = null, lockedMatchIds = new Set(), predictionsHidden = false }) {
   const [h2h, setH2H] = useState(null)
   // Completed match whose predictors popup is open (the group chip's target).
   const [predictorsMatch, setPredictorsMatch] = useState(null)
@@ -824,7 +824,12 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                         its column by 8px each side, which is what H2H_X
                         centres on). Completed matches only — an undecided
                         match has no outcome to have been right about. */}
-                    {m.winner?.id != null && !m.is_bye && (
+                    {/* Hidden entirely while other players' picks are withheld
+                        (a draw whose picks stay editable after the first ball).
+                        The popup would open onto "0 / 0 / Nobody", which reads
+                        as "nobody predicted this" rather than "not shown yet" —
+                        a wrong answer is worse than no button. */}
+                    {m.winner?.id != null && !m.is_bye && !predictionsHidden && (
                       <button
                         className="cv-group"
                         style={{ top: y, left: colIdx * (colW + COL_GAP) - H2H_X, pointerEvents: 'auto' }}

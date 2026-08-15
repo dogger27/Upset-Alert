@@ -152,19 +152,22 @@ async def predictions_visible(db, draw) -> bool:
     """
     Whether one user may see ANOTHER user's picks for this draw.
 
-    Held back until the first round is complete, in both modes. Under
-    progressive locking it is the difference between a game and a copying
-    exercise: picks stay editable through round 1, so a visible bracket is a
-    bracket to crib from. Under the original mode nothing can change after the
-    first ball, so this is only a fairness nicety — but the rule is the same in
-    both, because "when can I see everyone else's picks" should not have a
-    different answer per draw.
+    Only withheld where it protects something. Under progressive locking picks
+    stay editable through round 1, so a visible bracket is a bracket to crib
+    from — that is the difference between a game and a copying exercise.
 
-    A completed draw is always visible: the round-complete emails, standings and
-    draw history all report on brackets after the fact, and a finished
-    tournament has nothing left to protect.
+    Under the original rule nothing can change after the first ball, so there is
+    nothing to protect and hiding is pure loss: it took the "who predicted this"
+    panel away from every draw on the site, which is a feature people use to
+    follow a match, not a leak.
+
+    A completed draw is always visible in either mode: the round-complete
+    emails, standings and draw history all report on brackets after the fact,
+    and a finished tournament has nothing left to protect.
     """
     if draw.status == "completed":
+        return True
+    if await resolve_draw_lock_mode(db, draw) != LOCK_PROGRESSIVE_R1:
         return True
     matches = (await db.execute(
         select(Match.round_number, Match.is_bye, Match.winner_id)

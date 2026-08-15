@@ -1298,6 +1298,7 @@ function TournamentDraw() {
               compact={compactDraw}
               zoom={drawZoom}
               leagueId={activeLeagueId}
+              predictionsHidden={!!data.predictions_hidden}
             />
           ) : (
             <BracketView
