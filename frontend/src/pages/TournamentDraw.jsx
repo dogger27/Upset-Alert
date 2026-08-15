@@ -44,7 +44,7 @@ function TournamentDraw() {
   const { id } = useParams()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const qc = useQueryClient()
 
   // All state declared first
@@ -1175,7 +1175,10 @@ function TournamentDraw() {
               )}
             </div>
           )}
-          {!user && (
+          {/* Same rule as the dashboard hero: only once auth has RESOLVED. On
+              first paint user is null for everyone, so a signed-in visitor was
+              told to log in. */}
+          {!authLoading && !user && (
             <Link to="/login" className="btn-primary">Log in to make picks</Link>
           )}
           </div>

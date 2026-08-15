@@ -289,7 +289,7 @@ function LeagueStrip({ memberLeagues, globalCount, onCreateLeague, onJoinLeague 
 }
 
 export default function Home() {
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const [modal, setModal] = useState(null)
   const { data: tournaments } = useQuery({ queryKey: ['tournaments'], queryFn: listTournaments })
   const { data: leagues } = useQuery({ queryKey: ['leagues'], queryFn: listLeagues, enabled: !!user })
@@ -316,7 +316,12 @@ export default function Home() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
-      {!user && (
+      {/* Not merely "no user" — "we have LOOKED and there is no user". The store
+          starts at user: null, loading: true and only resolves once init() has
+          checked the stored token, so !user alone is true for everyone on first
+          paint and a signed-in visitor was greeted with Create Account / Log in
+          until that call came back. */}
+      {!authLoading && !user && (
         <div className="hero">
           <div className="hero-cta">
             <Link to="/register" className="btn-clay">Create Account</Link>
