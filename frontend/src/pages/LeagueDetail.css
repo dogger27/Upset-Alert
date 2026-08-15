@@ -549,7 +549,11 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 .lt-scrubber-range {
   width: 100%; cursor: pointer;
   -webkit-appearance: none; appearance: none;
-  height: 4px; border-radius: 2px;
+  /* The CONTROL is 24px so there is something to grab; the visible track stays
+     4px, drawn as a centred background band rather than by the element's own
+     height. A 4px-tall input is a 4px-tall touch target, which on a phone means
+     the drag starts on the page instead of the slider. */
+  height: 24px; border-radius: 0;
   /* The slider owns its touches. Without this the browser is also free to read
      a drag on it as a pan or a zoom gesture, and an installed PWA interprets
      those far more aggressively than a Safari tab — dragging the scrubber made
@@ -560,25 +564,30 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
      viewport: disabling pinch-zoom site-wide would take zooming away from
      anyone who needs it, to fix one slider. */
   touch-action: none;
-  background: linear-gradient(to right, var(--green-500) var(--fill-pct, 100%), var(--border, #e5e7eb) var(--fill-pct, 100%));
+  background: linear-gradient(to right, var(--green-500) var(--fill-pct, 100%), var(--border, #e5e7eb) var(--fill-pct, 100%))
+              center / 100% 4px no-repeat;
   outline: none; margin: 0; padding: 0;
 }
 .lt-scrubber-range::-webkit-slider-thumb {
   -webkit-appearance: none;
-  /* A 10px target is small enough that iOS may read a drag starting on it as a
-     double-tap candidate; the thumb declares its own handling too. */
   touch-action: none;
-  width: 10px; height: 10px; border-radius: 50%;
+  width: 20px; height: 20px; border-radius: 50%;
   background: var(--green-dark);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
   cursor: pointer;
 }
 .lt-scrubber-range::-moz-range-thumb {
-  width: 10px; height: 10px; border-radius: 50%;
+  width: 20px; height: 20px; border-radius: 50%;
   background: var(--green-dark);
-  cursor: pointer; border: none;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  cursor: pointer; border: 2px solid #fff;
 }
+/* Stacked, not side by side. The match line is as long as two player names and
+   was sharing one row with the counter under white-space: nowrap, so it ran off
+   the card and got cut mid-name — "Karen Kha…". Its own line fits it. */
 .lt-scrubber-bottom {
-  display: flex; justify-content: space-between; align-items: baseline;
+  display: flex; flex-direction: column; gap: 0.15rem;
 }
 .lt-scrubber-label {
   font-size: 0.72rem; color: var(--text-muted); white-space: nowrap;
@@ -590,7 +599,10 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   100% { opacity: 0; }
 }
 .lt-scrubber-flash {
-  font-size: 0.72rem; color: var(--text-muted); white-space: nowrap;
+  font-size: 0.72rem; color: var(--text-muted);
+  /* Allowed to wrap now that it owns the row — a long pair of names is better
+     on two lines than cut off. */
+  white-space: normal; line-height: 1.35;
   animation: lt-flash-fade 2.5s ease-out forwards;
 }
 
