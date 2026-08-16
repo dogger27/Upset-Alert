@@ -328,7 +328,10 @@
   --text-body: #c8d6d0;
   --text-soft: #a8b8b2;
   --text-faint: #8a9a94;
-  --text-disabled: #6f817a;
+  /* The one pair that sat under 4.5:1 on a card. Disabled text is meant to
+     recede, but it still has to be readable — light mode's own 2.32:1 is the
+     bar being cleared here, not matched. */
+  --text-disabled: #7d8f88;
 
   --n-950: #f2f6f4;
   --n-700: #b8c6c0;
