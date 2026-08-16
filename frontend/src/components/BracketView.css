@@ -263,7 +263,7 @@
 .player-row.picked.highlight,
 .player-row.picked.highlight.clickable:hover {
   background: var(--row-highlight);
-  box-shadow: inset 2px 0 0 #2563eb;
+  box-shadow: inset 2px 0 0 var(--row-highlight-bar);
 }
 
 .player-row.picked {

@@ -1,0 +1,20 @@
+# A missing /assets/* path must 404, NOT fall back to index.html.
+#
+# Cloudflare Pages answers an unknown path with index.html at 200. Combined with
+# the "immutable, max-age=31536000" rule _headers puts on /assets/*, one request
+# for an asset that has not finished uploading caches an HTML body against a
+# CSS/JS URL for a year — the browser then reports "Refused to apply style ...
+# MIME type ('text/html')" and the site renders unstyled until the hash changes.
+#
+# That window opens on every deploy: index.html goes live first, and the
+# stylesheet is the very next thing a browser asks for, so it loses the race far
+# more often than the JS bundle does. A 404 here keeps the failure honest and
+# short-lived instead of caching a wrong-typed 200 for a year.
+#
+# Static files are matched BEFORE these rules, so this never affects an asset
+# that actually exists — the same reason the SPA rule below does not swallow
+# every request.
+/assets/*  /404  404
+
+# SPA routing: any other unmatched path is a client-side route.
+/*  /index.html  200

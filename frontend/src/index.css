@@ -261,6 +261,9 @@
   --row-picked: rgba(21, 128, 61, 0.08);
   --row-picked-hover: rgba(21, 128, 61, 0.16);
   --row-highlight: rgba(37, 99, 235, 0.14);
+  /* The inset marker down the left edge of a highlighted row. Lives in a
+     box-shadow, which the colour sweep skipped, so it stayed literal. */
+  --row-highlight-bar: #2563eb;
 
   /* Court surfaces carry their own ink, which the pale -bg fills above expect. */
   --surface-grass-fg: #1b6b2c;
@@ -419,6 +422,7 @@
   --row-picked: rgba(69, 201, 119, 0.30);
   --row-picked-hover: rgba(69, 201, 119, 0.44);
   --row-highlight: rgba(96, 150, 255, 0.28);
+  --row-highlight-bar: #8fb6ff;
 
   --surface-grass-bg: #102b18;
   --surface-clay-bg: #33200f;
