@@ -80,7 +80,7 @@
 .cv-box--wrong.cv-box--highlight,
 .cv-box--clickable.cv-box--highlight:hover {
   background: var(--row-highlight);
-  box-shadow: inset 2px 0 0 #2563eb;
+  box-shadow: inset 2px 0 0 var(--row-highlight-bar);
   border-color: var(--atp-500);
 }
 
