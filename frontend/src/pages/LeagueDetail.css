@@ -1,11 +1,11 @@
 .league-detail { padding: 0 0 2rem; }
 
 .invite-modal-overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+  position: fixed; inset: 0; background: var(--overlay);
   display: flex; align-items: center; justify-content: center; z-index: 1000;
 }
 .invite-modal {
-  background: white; border-radius: 12px; padding: 1.5rem;
+  background: var(--surface-card); border-radius: 12px; padding: 1.5rem;
   width: 100%; max-width: 380px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.18);
 }
@@ -17,10 +17,10 @@
   background: none; border: none; font-size: 1rem; cursor: pointer;
   color: var(--text-muted); padding: 0.2rem 0.4rem; border-radius: 4px;
 }
-.invite-modal-close:hover { background: #f0f0f0; }
+.invite-modal-close:hover { background: var(--n-150); }
 .invite-modal-msg { font-size: 0.86rem; color: var(--text-muted); margin: 0 0 1.25rem; line-height: 1.5; }
 .invite-code-block {
-  background: #f4f6f9; border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1rem;
+  background: var(--surface-sunken); border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1rem;
 }
 .invite-code-label { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
 .invite-code-value { font-size: 1.6rem; font-weight: 700; letter-spacing: 0.12em; color: var(--text); font-family: monospace; }
@@ -30,7 +30,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  color: var(--ink-700);
+  color: var(--text-body);
   border-bottom: 1px solid var(--border-strong);
   padding-bottom: 6px;
   margin-bottom: 0.75rem;
@@ -70,17 +70,17 @@
 }
 .invite-email-input:focus { outline: none; border-color: var(--green-600); }
 
-.invite-email-error { font-size: 0.82rem; color: #dc2626; margin: 0 0 0.5rem; }
+.invite-email-error { font-size: 0.82rem; color: var(--danger); margin: 0 0 0.5rem; }
 
 .invite-email-results { display: flex; flex-direction: column; gap: 8px; margin-bottom: 1rem; }
 .invite-email-result { font-size: 0.86rem; padding: 6px 10px; border-radius: 6px; }
-.invite-email-result--added   { background: #f0fdf4; color: #166534; }
-.invite-email-result--invited { background: #eff6ff; color: #1e40af; }
-.invite-email-result--already_member { background: #f9fafb; color: var(--text-muted); }
+.invite-email-result--added   { background: var(--success-tint); color: var(--success); }
+.invite-email-result--invited { background: var(--atp-tint); color: var(--atp-text-strong); }
+.invite-email-result--already_member { background: var(--n-50); color: var(--text-muted); }
 
 .invite-email-again {
   font-size: 0.82rem;
-  color: var(--green-600);
+  color: var(--brand-text);
   background: none;
   border: none;
   cursor: pointer;
@@ -152,7 +152,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--green-dark);
+  color: var(--brand-text-strong);
   border: 1px solid var(--green-dark);
   border-radius: 3px;
   padding: 0 3px;
@@ -184,7 +184,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 }
 .league-member-chip {
   display: inline-block; padding: 0.3rem 0.75rem;
-  background: var(--bg-subtle, #f3f4f6); border: 1px solid var(--border);
+  background: var(--bg-subtle, var(--n-100)); border: 1px solid var(--border);
   border-radius: 999px; font-size: 0.85rem;
 }
 
@@ -195,42 +195,42 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 .settings-member-row:last-child { border-bottom: none; }
 .settings-member-name { font-size: 0.88rem; display: flex; align-items: center; gap: 0.4rem; }
 .settings-member-badge { font-size: 0.68rem; font-weight: 700; padding: 1px 6px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.04em; }
-.settings-member-badge.owner { background: #fef3c7; color: #92400e; }
-.settings-member-badge.admin { background: #dbeafe; color: #1e40af; }
+.settings-member-badge.owner { background: var(--warning-bg); color: var(--warning); }
+.settings-member-badge.admin { background: var(--atp-tint-strong); color: var(--atp-text-strong); }
 .settings-member-actions { display: flex; gap: 0.4rem; flex-shrink: 0; }
-.settings-admin-btn { font-size: 0.75rem; padding: 0.2rem 0.55rem; border-radius: 5px; border: 1px solid #93c5fd; color: #1d4ed8; background: #eff6ff; cursor: pointer; font-family: inherit; }
-.settings-admin-btn.active { background: #dbeafe; border-color: #60a5fa; }
-.settings-admin-btn:hover { background: #dbeafe; }
-.settings-remove-btn { font-size: 0.75rem; padding: 0.2rem 0.55rem; border-radius: 5px; border: 1px solid #fca5a5; color: #dc2626; background: #fff; cursor: pointer; font-family: inherit; }
-.settings-remove-btn:hover { background: #fee2e2; }
+.settings-admin-btn { font-size: 0.75rem; padding: 0.2rem 0.55rem; border-radius: 5px; border: 1px solid var(--atp-line); color: var(--info); background: var(--atp-tint); cursor: pointer; font-family: inherit; }
+.settings-admin-btn.active { background: var(--atp-tint-strong); border-color: var(--atp-line-strong); }
+.settings-admin-btn:hover { background: var(--atp-tint-strong); }
+.settings-remove-btn { font-size: 0.75rem; padding: 0.2rem 0.55rem; border-radius: 5px; border: 1px solid var(--danger-line); color: var(--danger); background: var(--surface-card); cursor: pointer; font-family: inherit; }
+.settings-remove-btn:hover { background: var(--danger-bg); }
 
 /* Danger zone */
 .settings-danger-zone {
-  margin-top: 1.5rem; border-top: 1px solid #fca5a5;
+  margin-top: 1.5rem; border-top: 1px solid var(--danger-line);
   padding-top: 1rem;
 }
 .settings-danger-title {
   font-size: 0.8rem; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.04em; color: #dc2626; margin: 0 0 0.75rem;
+  letter-spacing: 0.04em; color: var(--danger); margin: 0 0 0.75rem;
 }
 .btn-danger {
-  background: #dc2626; color: white; border: none; border-radius: 6px;
+  background: var(--danger-fill); color: var(--on-brand); border: none; border-radius: 6px;
   padding: 0.45rem 1rem; font-size: 0.88rem; font-weight: 600;
   cursor: pointer; font-family: inherit; transition: background 0.15s;
 }
-.btn-danger:hover:not(:disabled) { background: #b91c1c; }
+.btn-danger:hover:not(:disabled) { background: var(--danger-fill-hover); }
 .btn-danger:disabled { opacity: 0.45; cursor: not-allowed; }
 .settings-delete-confirm { display: flex; flex-direction: column; gap: 0.6rem; }
 .settings-delete-warning {
-  background: #fff1f1; border: 1px solid #fca5a5; border-radius: 6px;
-  padding: 0.65rem 0.85rem; font-size: 0.85rem; color: #7f1d1d; margin: 0; line-height: 1.5;
+  background: var(--danger-tint); border: 1px solid var(--danger-line); border-radius: 6px;
+  padding: 0.65rem 0.85rem; font-size: 0.85rem; color: var(--danger-strong); margin: 0; line-height: 1.5;
 }
 .settings-delete-prompt { font-size: 0.85rem; margin: 0; }
 .settings-delete-input {
-  padding: 0.4rem 0.65rem; border: 1.5px solid #fca5a5; border-radius: 6px;
+  padding: 0.4rem 0.65rem; border: 1.5px solid var(--danger-line); border-radius: 6px;
   font-size: 0.9rem; font-family: inherit; width: 100%; box-sizing: border-box;
 }
-.settings-delete-input:focus { outline: 2px solid #dc2626; border-color: transparent; }
+.settings-delete-input:focus { outline: 2px solid var(--danger); border-color: transparent; }
 .settings-delete-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
 
 /* Tournament cards */
@@ -274,7 +274,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   background: transparent;
   font-size: 0.95rem;
   font-weight: 600;
-  color: var(--green-dark);
+  color: var(--brand-text-strong);
   cursor: pointer;
   white-space: nowrap;
   transition: background 0.15s, color 0.15s;
@@ -284,7 +284,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 }
 .lt-members-btn--active {
   background: var(--green-dark);
-  color: #fff;
+  color: var(--on-brand);
 }
 
 .league-members-heading {
@@ -302,7 +302,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   border-radius: 0;
   background: transparent;
   font-size: 0.95rem; font-weight: 600;
-  color: var(--green-dark);
+  color: var(--brand-text-strong);
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
   white-space: nowrap;
@@ -321,7 +321,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 }
 .lt-status-tab--active {
   background: var(--green-dark);
-  color: #fff;
+  color: var(--on-brand);
   z-index: 1;
 }
 .lt-status-tab--empty {
@@ -336,7 +336,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 .league-tournament-card {
   display: flex; flex-direction: column; gap: 0.25rem;
   padding: 0.75rem 1rem; min-width: 140px;
-  border: 2px solid #ddd; border-radius: var(--radius);
+  border: 2px solid var(--n-200); border-radius: var(--radius);
   cursor: pointer; text-align: left;
   transition: border-color 0.15s, box-shadow 0.15s;
   font-family: inherit;
@@ -345,7 +345,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 .league-tournament-card.selected {
-  border-color: #3b82f6 !important;
+  border-color: var(--atp-400) !important;
   box-shadow: 0 0 0 3px rgba(59,130,246,0.18), 0 2px 8px rgba(0,0,0,0.08);
 }
 
@@ -360,7 +360,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   margin: 0.5rem 0 0.75rem;
   padding: 10px 14px;
   background: #1e3a5f;
-  color: #fff;
+  color: var(--on-brand);
   border-radius: 8px;
   font-size: 0.83rem;
   line-height: 1.4;
@@ -424,10 +424,10 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   cursor: pointer;
   transition: background 0.1s;
 }
-.lt-completed-row:hover td { background: var(--bg-subtle, #f9fafb); }
-.lt-completed-row--selected td { background: #eff6ff; }
+.lt-completed-row:hover td { background: var(--bg-subtle, var(--n-50)); }
+.lt-completed-row--selected td { background: var(--atp-tint); }
 
-.lt-td-name { font-weight: 600; color: var(--ink-900); }
+.lt-td-name { font-weight: 600; color: var(--text); }
 .lt-td-year { font-weight: 400; color: var(--text-muted); font-size: 0.82rem; }
 
 .lt-gender-badge {
@@ -438,14 +438,14 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   padding: 2px 6px;
   border-radius: 4px;
 }
-.lt-gender-badge--m { background: #edf3ff; color: #2b4ea8; }
-.lt-gender-badge--f { background: #fff0f5; color: #a83270; }
+.lt-gender-badge--m { background: var(--atp-tint); color: var(--atp-text-strong); }
+.lt-gender-badge--f { background: var(--wta-tint); color: var(--wta-text); }
 
 .lt-td-tier { color: var(--text-muted); font-size: 0.82rem; white-space: nowrap; }
 .lt-td-date { color: var(--text-muted); font-size: 0.82rem; white-space: nowrap; }
 
 .lt-td-members { white-space: nowrap; }
-.lt-members-num { font-weight: 700; font-size: 0.95rem; color: var(--ink-900); }
+.lt-members-num { font-weight: 700; font-size: 0.95rem; color: var(--text); }
 .lt-members-label { font-size: 0.78rem; color: var(--text-muted); }
 
 .lt-status-badge {
@@ -453,14 +453,14 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   padding: 2px 7px; border-radius: 999px; white-space: nowrap;
   text-transform: uppercase; letter-spacing: 0.04em;
 }
-.lt-status-badge--active { background: #dcfce7; color: #15803d; }
-.lt-status-badge--completed { background: #f3f4f6; color: #6b7280; }
-.lt-status-badge--upcoming { background: #fef9c3; color: #854d0e; }
+.lt-status-badge--active { background: var(--success-bg); color: var(--success); }
+.lt-status-badge--completed { background: var(--n-100); color: var(--n-600); }
+.lt-status-badge--upcoming { background: var(--warning-bg); color: var(--warning); }
 
 /* ── Round progress bar chart ── */
 .lt-progress-block {
   padding: 0.9rem 0.75rem;
-  border: 2.5px solid #888f95;
+  border: 2.5px solid var(--n-500);
   border-radius: 8px;
   margin-bottom: 2.5rem;
   container-type: inline-size;
@@ -517,7 +517,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 .lt-open-notice-main {
   font-size: 0.85rem;
   font-weight: 400;
-  color: var(--ink-800);
+  color: var(--text);
   margin: 0 0 3px;
 }
 .lt-open-notice-lock {
@@ -525,7 +525,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   color: var(--text-muted);
   margin: 0;
 }
-.lt-open-notice-lock strong { color: #dc2626; }
+.lt-open-notice-lock strong { color: var(--danger); }
 /* Extra specificity (.lt-progress-row + this modifier) so this always
    overrides the base .lt-progress-row's 6-column template below, regardless
    of source order — the open-row layout only ever has 2 real columns
@@ -567,7 +567,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
      viewport: disabling pinch-zoom site-wide would take zooming away from
      anyone who needs it, to fix one slider. */
   touch-action: none;
-  background: linear-gradient(to right, var(--green-500) var(--fill-pct, 100%), var(--border, #e5e7eb) var(--fill-pct, 100%))
+  background: linear-gradient(to right, var(--green-500) var(--fill-pct, 100%), var(--border, var(--n-200)) var(--fill-pct, 100%))
               center / 100% 4px no-repeat;
   outline: none; margin: 0; padding: 0;
 }
@@ -576,7 +576,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   touch-action: none;
   width: 28px; height: 28px; border-radius: 50%;
   background: var(--green-dark);
-  border: 3px solid #fff;
+  border: 3px solid var(--on-brand);
   box-shadow: 0 1px 3px rgba(0,0,0,0.3);
   cursor: pointer;
 }
@@ -584,7 +584,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   width: 28px; height: 28px; border-radius: 50%;
   background: var(--green-dark);
   box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-  cursor: pointer; border: 3px solid #fff;
+  cursor: pointer; border: 3px solid var(--on-brand);
 }
 /* Stacked, not side by side. The match line is as long as two player names and
    was sharing one row with the counter under white-space: nowrap, so it ran off
@@ -595,7 +595,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 .lt-scrubber-label {
   font-size: 0.72rem; color: var(--text-muted); white-space: nowrap;
 }
-.lt-scrubber-label--active { color: var(--green-dark); font-weight: 600; }
+.lt-scrubber-label--active { color: var(--brand-text-strong); font-weight: 600; }
 @keyframes lt-flash-fade {
   0%   { opacity: 1; }
   60%  { opacity: 1; }
@@ -632,7 +632,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .lt-progress-row--me {
-  background: #e9f1fb;
+  background: var(--atp-tint);
   border-radius: 5px;
 }
 .lt-pos-num {
@@ -646,7 +646,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   color: var(--text-muted); opacity: 0.55;
   transition: opacity 0.15s, color 0.15s;
 }
-.lt-bracket-btn:hover { opacity: 1; color: var(--green-dark); }
+.lt-bracket-btn:hover { opacity: 1; color: var(--brand-text-strong); }
 .lt-history-btn {
   background: none; border: 1.5px solid currentColor; border-radius: 4px;
   cursor: pointer; padding: 3px 4px;
@@ -655,7 +655,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   transition: opacity 0.15s, color 0.15s;
   text-decoration: none; flex-shrink: 0;
 }
-.lt-history-btn:hover { opacity: 1; color: var(--green-dark); }
+.lt-history-btn:hover { opacity: 1; color: var(--brand-text-strong); }
 .lt-progress-name {
   font-size: 0.85rem; font-weight: 600;
   min-width: 0; display: flex; align-items: center; gap: 4px;
@@ -672,7 +672,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   gap: 3px;
 }
 .lt-bar-col {
-  background: var(--bg-subtle, #f3f4f6);
+  background: var(--bg-subtle, var(--n-100));
   border-radius: 3px;
   overflow: hidden;
   min-width: 0;
@@ -701,7 +701,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
     2px 0 0 #fff, -2px 0 0 #fff, 0 2px 0 #fff, 0 -2px 0 #fff,
     0 0 8px #fff, 0 0 16px rgba(255,255,255,0.9), 0 0 28px rgba(255,255,255,0.7);
 }
-.lt-progress-total { font-size: 0.8rem; color: var(--ink, #111); font-weight: 700; text-align: center; white-space: nowrap; }
+.lt-progress-total { font-size: 0.8rem; color: var(--ink, var(--n-950)); font-weight: 700; text-align: center; white-space: nowrap; }
 .lt-progress-col-header { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
 .lt-progress-header-row { margin-bottom: 0.2rem; }
 .lt-progress-header-row .lt-bar-track { height: 24px; background: none; }
@@ -712,7 +712,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   margin-bottom: 1rem;
 }
 .leaderboard-header h2 { font-size: 1.1rem; margin: 0; }
-.leaderboard-upsets { font-size: 0.85rem; color: var(--muted); margin: 0 auto 0 1rem; }
+.leaderboard-upsets { font-size: 0.85rem; color: var(--text-muted); margin: 0 auto 0 1rem; }
 
 .leaderboard-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
 .leaderboard-table th {
@@ -725,8 +725,8 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 .leaderboard-table th:nth-child(4),
 .leaderboard-table td:nth-child(3),
 .leaderboard-table td:nth-child(4) { text-align: center; }
-.leaderboard-table .pts { font-weight: 700; color: var(--green-dark); }
-.leaderboard-table .my-row { background: #f0fdf4; font-weight: 600; }
+.leaderboard-table .pts { font-weight: 700; color: var(--brand-text-strong); }
+.leaderboard-table .my-row { background: var(--success-tint); font-weight: 600; }
 .leaderboard-table tr:last-child td { border-bottom: none; }
 
 .form-row { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.75rem; }

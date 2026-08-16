@@ -498,7 +498,7 @@ function ConnectorLines({ leftCenters, rightCenters, totalH }) {
 
   return (
     <svg className="connector-svg" width={COL_GAP} height={totalH} style={{ flexShrink: 0 }}>
-      <g stroke="#c8e6c9" strokeWidth="1.5" fill="none">{lines}</g>
+      <g stroke="var(--bracket-line)" strokeWidth="1.5" fill="none">{lines}</g>
     </svg>
   )
 }

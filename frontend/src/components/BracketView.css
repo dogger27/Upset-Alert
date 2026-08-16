@@ -15,13 +15,13 @@
 }
 
 .bracket-scroll::-webkit-scrollbar-track {
-  background: var(--bg-alt, #eee);
+  background: var(--bg-alt, var(--n-150));
 }
 
 .bracket-scroll::-webkit-scrollbar-thumb {
   background: var(--green);
   border-radius: 7px;
-  border: 3px solid var(--bg-alt, #eee);
+  border: 3px solid var(--bg-alt, var(--n-150));
 }
 
 
@@ -50,7 +50,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  color: white;
+  color: var(--on-brand);
   background: var(--green);
   text-align: center;
   padding: 0.35rem 0.5rem;
@@ -80,10 +80,10 @@
 /* ── Match box ── */
 .match-box {
   position: relative;
-  border: 1px solid #d0d0d0;
+  border: 1px solid var(--n-300);
   border-radius: 5px;
   overflow: visible;
-  background: white;
+  background: var(--surface-card);
   box-shadow: 0 1px 3px rgba(0,0,0,0.08);
   display: flex;
 }
@@ -109,7 +109,7 @@
 }
 
 .upset-tooltip {
-  background: #1b4332;
+  background: var(--green-800);
   border-radius: 5px;
   padding: 5px 12px 5px 9px;
   display: flex;
@@ -139,17 +139,17 @@
   line-height: 1;
 }
 
-.upset-tooltip-upset  { color: #fff; }
+.upset-tooltip-upset  { color: var(--on-brand); }
 .upset-tooltip-alert  { color: var(--clay-300); }
-.upset-tooltip-exclaim { color: #fff; }
+.upset-tooltip-exclaim { color: var(--on-brand); }
 
 /* ── H2H strip ── */
 .h2h-strip {
   width: 14px;
   flex-shrink: 0;
-  background: #eff6ff;
+  background: var(--atp-tint);
   border: none;
-  border-left: 1px solid #d0d0d0;
+  border-left: 1px solid var(--n-300);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -157,7 +157,7 @@
   padding: 0;
   transition: background 0.12s;
 }
-.h2h-strip:hover { background: #dbeafe; }
+.h2h-strip:hover { background: var(--atp-tint-strong); }
 
 .h2h-strip-label {
   writing-mode: vertical-rl;
@@ -166,13 +166,13 @@
   font-size: 0.52rem;
   font-weight: 800;
   letter-spacing: 0.1em;
-  color: #2563eb;
+  color: var(--atp-text);
   text-transform: uppercase;
   user-select: none;
 }
 
 .match-box--live {
-  border-color: #2563eb;
+  border-color: var(--atp-500);
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18), 0 1px 3px rgba(0,0,0,0.08);
 }
 
@@ -185,9 +185,9 @@
   align-items: center;
   justify-content: center;
   height: 15px;
-  background: #eff6ff;
-  border: 1px solid #2563eb;
-  color: #1d4ed8;
+  background: var(--atp-tint);
+  border: 1px solid var(--atp-500);
+  color: var(--info);
   font-size: 0.58rem;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -200,9 +200,9 @@
 }
 
 .in-progress-badge--suspended {
-  background: #fffbeb;
-  border-color: #d97706;
-  color: #b45309;
+  background: var(--warning-tint);
+  border-color: var(--warning);
+  color: var(--warning);
 }
 
 .match-box.bye {
@@ -210,23 +210,23 @@
 }
 
 .match-box.needs-pick {
-  border-color: #f59e0b;
+  border-color: var(--pick-needs);
   box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2), 0 1px 3px rgba(0,0,0,0.08);
 }
 
 .match-box.missing-pick {
-  border-color: #dc2626;
+  border-color: var(--danger);
   box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.25), 0 1px 3px rgba(0,0,0,0.08);
 }
 
 .match-box.correct-pick {
-  background: #dcfce7;
-  border-color: #16a34a;
+  background: var(--success-bg);
+  border-color: var(--pick-correct);
 }
 
 .match-box.wrong-pick {
-  background: #fee2e2;
-  border-color: #dc2626;
+  background: var(--danger-bg);
+  border-color: var(--danger);
 }
 
 /* ── Player row ── */
@@ -236,7 +236,7 @@
   gap: 4px;
   padding: 3px 6px 3px 4px;
   min-height: 28px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--n-150);
   transition: background 0.1s;
   user-select: none;
   cursor: default;
@@ -255,7 +255,7 @@
 .player-row.empty .pname { color: var(--text-muted); font-style: italic; }
 
 .player-row.clickable { cursor: pointer; }
-.player-row.clickable:hover { background: #f5f5f5; }
+.player-row.clickable:hover { background: var(--n-100); }
 
 /* Highlight every row for the hovered player across all rounds */
 .player-row.highlight,
@@ -281,7 +281,7 @@
 
 .player-row.eliminated {
   opacity: 0.55;
-  color: #666;
+  color: var(--n-600);
 }
 
 .player-row.wrong-pick {
@@ -295,8 +295,8 @@
   margin-left: 0.3rem;
   line-height: 1;
 }
-.pick-result.correct { color: #15803d; }
-.pick-result.wrong   { color: #dc2626; }
+.pick-result.correct { color: var(--success); }
+.pick-result.wrong   { color: var(--danger); }
 
 .player-row.dead-pick .pname {
   text-decoration: line-through;
@@ -305,7 +305,7 @@
 
 .player-row.projected {
   font-style: italic;
-  color: #555;
+  color: var(--n-700);
 }
 
 .player-row.projected.picked {
@@ -316,7 +316,7 @@
    or in live mode (where `picked`'s other styling is intentionally suppressed). */
 .player-row.picked .pname,
 .player-row.pick-choice .pname {
-  color: #000;
+  color: var(--n-950);
 }
 
 .player-row.picked.eliminated,
@@ -360,7 +360,7 @@
   flex-shrink: 0;
 }
 
-.pos-badge.seeded  { background: #fff3cd; color: #7d5a00; border: 1px solid #a8841f; }
+.pos-badge.seeded  { background: var(--badge-seed-bg); color: var(--badge-seed-fg); border: 1px solid var(--badge-seed-line); }
 .pos-badge.unseeded {
   /* Fixed footprint (matches the base class's auto-computed 26x17) so a
      larger, darker font doesn't grow the badge — same trick as .cv-h2h. */
@@ -370,27 +370,27 @@
   width: 26px;
   height: 17px;
   padding: 0;
-  background: #e9ecef;
-  color: #4a4f54;
+  background: var(--n-200);
+  color: var(--n-700);
   font-size: 0.78rem;
   font-weight: 600;
-  border: 1px solid #6b7278;
+  border: 1px solid var(--n-600);
 }
-.pos-badge.nr       { background: #f8f9fa; color: #adb5bd; font-style: italic; cursor: default; }
-.pos-badge.ghost   { background: #f0f0f0; color: #aaa; font-style: italic; }
+.pos-badge.nr       { background: var(--n-50); color: var(--n-400); font-style: italic; cursor: default; }
+.pos-badge.ghost   { background: var(--n-150); color: var(--n-400); font-style: italic; }
 
 .pos-badge.entry { }
-.pos-badge.entry-wc { background: #cfe2ff; color: #084298; border: 1px solid #7aa3e0; }
-.pos-badge.entry-q  { background: #d1e7dd; color: #0a3622; border: 1px solid #6fb890; }
-.pos-badge.entry-ll { background: #f8d7da; color: #58151c; border: 1px solid #e28a92; }
-.pos-badge.entry-pr { background: #e2d9f3; color: #432874; border: 1px solid #a68fd9; }
-.pos-badge.entry-se { background: #cdeef1; color: #0e4f57; border: 1px solid #6bc0cc; }
+.pos-badge.entry-wc { background: var(--badge-wc-bg); color: var(--badge-wc-fg); border: 1px solid var(--badge-wc-line); }
+.pos-badge.entry-q  { background: var(--badge-q-bg); color: var(--badge-q-fg); border: 1px solid var(--badge-q-line); }
+.pos-badge.entry-ll { background: var(--badge-ll-bg); color: var(--badge-ll-fg); border: 1px solid var(--badge-ll-line); }
+.pos-badge.entry-pr { background: var(--badge-pr-bg); color: var(--badge-pr-fg); border: 1px solid var(--badge-pr-line); }
+.pos-badge.entry-se { background: var(--badge-se-bg); color: var(--badge-se-fg); border: 1px solid var(--badge-se-line); }
 /* Alt (alternate) and NG (next-gen wildcard) — the scraper only started
    producing these once ENTRY_TYPES stopped dropping them, so they had no style
    and would have fallen back to the plain grey .pos-badge. Hues kept clear of
    WC blue, Q green, LL red, PR purple and SE cyan. */
-.pos-badge.entry-alt { background: #fde9d0; color: #7a4100; border: 1px solid #dda86a; }
-.pos-badge.entry-ng  { background: #fdf3c8; color: #6b5200; border: 1px solid #d9c05a; }
+.pos-badge.entry-alt { background: var(--badge-alt-bg); color: var(--badge-alt-fg); border: 1px solid var(--badge-alt-line); }
+.pos-badge.entry-ng  { background: var(--badge-ng-bg); color: var(--badge-ng-fg); border: 1px solid var(--badge-ng-line); }
 
 /* ── Player name ── */
 .pname {
@@ -416,7 +416,7 @@
   text-align: center;
   font-size: 0.68rem;
   font-variant-numeric: tabular-nums;
-  color: #555;
+  color: var(--n-700);
   line-height: 1;
   vertical-align: bottom;
   white-space: nowrap;
@@ -426,16 +426,16 @@
   font-size: 0.48rem;
   vertical-align: super;
   line-height: 0;
-  color: #888;
+  color: var(--n-500);
 }
 
-.score-cell.empty { color: #ccc; }
+.score-cell.empty { color: var(--n-300); }
 
 .ret-badge {
   font-size: 0.6rem;
   font-style: italic;
-  color: #b45309;
-  background: #fef3c7;
+  color: var(--warning);
+  background: var(--warning-bg);
   border-radius: 3px;
   padding: 0 3px;
   flex-shrink: 0;
@@ -457,7 +457,7 @@
   margin-left: auto;
   margin-right: 2px;
   border-radius: 1px;
-  border: 1px solid #000;     /* 1px is the practical CSS minimum for a crisp
+  border: 1px solid var(--n-950);     /* 1px is the practical CSS minimum for a crisp
                                   border; a smaller box makes this SAME 1px
                                   look thicker relative to the flag, not thinner */
   align-self: center;

@@ -23,7 +23,7 @@ const CATEGORIES = [
 const TABS = ['Users', 'Tournaments', 'Logs', 'Info', 'Players', 'Rankings', 'Settings']
 
 const CATEGORY_ORDER = { 'Grand Slam': 0, 'ATP 1000': 1, 'WTA 1000': 1, 'ATP 500': 2, 'WTA 500': 2, 'ATP 250': 3, 'WTA 250': 3 }
-const GENDER_COLORS = { M: '#edf3ff', F: '#fff0f5' }
+const GENDER_COLORS = { M: 'var(--atp-tint)', F: 'var(--wta-tint)' }
 const CATEGORY_GROUPS = { '250': ['ATP 250', 'WTA 250'], '500': ['ATP 500', 'WTA 500'], '1000': ['ATP 1000', 'WTA 1000'], 'Grand Slam': ['Grand Slam'] }
 const STATUS_GROUP_ORDER = ['active', 'open', 'lastweek', 'upcoming', 'previous']
 
@@ -258,7 +258,7 @@ function TournamentsPanel({ user }) {
           </div>
           <div className="t-filter-legend">
             <h3 className="filter-label">Legend</h3>
-            {[{ label: "Men's", color: GENDER_COLORS.M, border: '#93b8ff' }, { label: "Women's", color: GENDER_COLORS.F, border: '#ffb3c6' }].map(({ label, color, border }) => (
+            {[{ label: "Men's", color: GENDER_COLORS.M, border: 'var(--atp-line)' }, { label: "Women's", color: GENDER_COLORS.F, border: 'var(--wta-line)' }].map(({ label, color, border }) => (
               <div key={label} className="t-legend-item">
                 <span style={{ display: 'inline-block', width: 14, height: 14, borderRadius: 3, background: color, border: `1.5px solid ${border}`, flexShrink: 0 }} />
                 {label}
@@ -335,7 +335,7 @@ function TournamentsPanel({ user }) {
                           <tr
                             key={t.id}
                             className={hasDrawData ? 'clickable-row' : undefined}
-                            style={{ background: GENDER_COLORS[t.gender] || '#fff', cursor: hasDrawData ? 'pointer' : 'default' }}
+                            style={{ background: GENDER_COLORS[t.gender] || 'var(--surface-card)', cursor: hasDrawData ? 'pointer' : 'default' }}
                             onClick={hasDrawData ? () => navigate(`/tournaments/${t.id}`) : undefined}
                           >
                             {isFirstInWeek && (
@@ -350,13 +350,13 @@ function TournamentsPanel({ user }) {
                             <td>{t.category || '—'}</td>
                             <td className="td-left">
                               {t.draw_release_direct
-                                ? <><span className="muted">{fmtDate(t.draw_release_direct)}</span>{(isCompleted || t.draw_released_direct_at) && <span style={{ marginLeft: '0.4rem', color: '#4CAF50' }}>✓</span>}</>
-                                : isCompleted ? <span style={{ color: '#4CAF50' }}>✓</span> : '—'}
+                                ? <><span className="muted">{fmtDate(t.draw_release_direct)}</span>{(isCompleted || t.draw_released_direct_at) && <span style={{ marginLeft: '0.4rem', color: 'var(--success)' }}>✓</span>}</>
+                                : isCompleted ? <span style={{ color: 'var(--success)' }}>✓</span> : '—'}
                             </td>
                             <td className="td-left">
                               {t.draw_release_qualifiers
-                                ? <><span className="muted">{fmtDate(t.draw_release_qualifiers)}</span>{(isCompleted || t.draw_released_qualifiers_at) && <span style={{ marginLeft: '0.4rem', color: '#4CAF50' }}>✓</span>}</>
-                                : isCompleted ? <span style={{ color: '#4CAF50' }}>✓</span> : '—'}
+                                ? <><span className="muted">{fmtDate(t.draw_release_qualifiers)}</span>{(isCompleted || t.draw_released_qualifiers_at) && <span style={{ marginLeft: '0.4rem', color: 'var(--success)' }}>✓</span>}</>
+                                : isCompleted ? <span style={{ color: 'var(--success)' }}>✓</span> : '—'}
                             </td>
                             <td className="td-left td-name" style={{ fontWeight: 700 }}>{t.name}</td>
                             <td className="muted">{t.city && t.country ? `${t.city}, ${t.country}` : t.city || t.country || '—'}</td>
@@ -413,7 +413,7 @@ function TournamentsPanel({ user }) {
                         const next = inGroup[i + 1]
                         if (next && (next.week ?? next.start_date ?? '') !== (t.week ?? t.start_date ?? '')) {
                           rows.push(
-                            <tr key={`sep-${t.id}`}><td colSpan={13} style={{ padding: 0, border: 'none' }}><div style={{ height: '2px', background: '#333' }} /></td></tr>
+                            <tr key={`sep-${t.id}`}><td colSpan={13} style={{ padding: 0, border: 'none' }}><div style={{ height: '2px', background: 'var(--border-strong)' }} /></td></tr>
                           )
                         }
                       })

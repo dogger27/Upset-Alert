@@ -20,7 +20,7 @@
   font-size: 2.75rem;
   letter-spacing: 0.01em;
   line-height: 1;
-  color: var(--ink-900);
+  color: var(--text);
   text-transform: uppercase;
 }
 
@@ -36,7 +36,7 @@
   font-size: 0.95rem;
   padding: 2rem 0;
 }
-.hof-state--error { color: #dc2626; }
+.hof-state--error { color: var(--danger); }
 
 .hof-empty {
   color: var(--text-muted);
@@ -59,10 +59,10 @@
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--ink-900);
+  color: var(--text);
   margin-bottom: 12px;
   padding-bottom: 8px;
-  border-bottom: 2px solid var(--green-600, #2d6a4f);
+  border-bottom: 2px solid var(--green-600, var(--brand-line));
   display: inline-block;
 }
 
@@ -87,12 +87,12 @@
   margin-bottom: 8px;
 }
 
-.hof-gender-label--atp { color: var(--atp-600); }
-.hof-gender-label--wta { color: var(--wta-600); }
+.hof-gender-label--atp { color: var(--atp-text); }
+.hof-gender-label--wta { color: var(--wta-text); }
 
 /* ── Card ── */
 .hof-card {
-  background: #fff;
+  background: var(--surface-card);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-xs);
@@ -113,7 +113,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: #888;
+  color: var(--n-500);
   border-bottom: 1px solid var(--border-strong);
   background: rgba(45,106,79,0.03);
 }
@@ -123,7 +123,7 @@
 
 .hof-table td {
   padding: 10px 13px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--n-150);
   vertical-align: middle;
 }
 
@@ -134,8 +134,8 @@
 .hof-row--top3 td { background: rgba(160,82,45,0.07); }
 
 /* The caller's own rows — declared after the medal tints so they win the cascade */
-.hof-row--me td { background: #e9f1fb; }
-.hof-row--me .hof-username { font-weight: 800; color: var(--ink-900); }
+.hof-row--me td { background: var(--atp-tint); }
+.hof-row--me .hof-username { font-weight: 800; color: var(--text); }
 
 /* Caller's best result appended below the top 5 — 2px beats the collapsed 1px divider */
 .hof-row--extra td { border-top: 2px solid var(--border-strong); }
@@ -147,11 +147,11 @@
 
 .hof-username {
   font-weight: 700;
-  color: var(--ink-900);
+  color: var(--text);
 }
 
 .hof-tourn {
-  color: var(--ink-700);
+  color: var(--text-body);
   white-space: nowrap;
 }
 
@@ -162,7 +162,7 @@
 
 .hof-correct {
   text-align: right;
-  color: var(--ink-700);
+  color: var(--text-body);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
@@ -174,7 +174,7 @@
 
 .hof-points {
   font-weight: 700;
-  color: var(--ink-800);
+  color: var(--text);
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
@@ -199,7 +199,7 @@
   text-decoration: none;
   transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
-.hof-view-link:hover { color: var(--green-600); background: var(--bg-subtle); border-color: var(--green-400); }
+.hof-view-link:hover { color: var(--brand-text); background: var(--n-100); border-color: var(--green-400); }
 
 /* ── Mobile: ATP table stacked above WTA, both full width ── */
 @media (max-width: 900px) {

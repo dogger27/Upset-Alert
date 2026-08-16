@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import clsx from 'clsx'
 import { useAuth } from '../store/auth'
+import { useTheme } from '../store/theme'
 import './Navbar.css'
 
 // Below this navbar width the primary nav links collapse into a hamburger menu.
@@ -9,6 +10,7 @@ const NAV_BREAKPOINT = 900
 
 export default function Navbar() {
   const { user, logout, updateProfile } = useAuth()
+  const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
   const location = useLocation()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -473,6 +475,20 @@ export default function Navbar() {
                       </Link>
                       <button className="profile-dropdown-item" onClick={openNotifications}>
                         Notifications
+                      </button>
+                      {/* Stays open on click: the whole point is watching the
+                          site change colour behind the menu. */}
+                      <button
+                        className="profile-dropdown-item profile-dropdown-switch"
+                        role="switch"
+                        aria-checked={theme === 'dark'}
+                        onClick={toggleTheme}
+                      >
+                        <span>Dark mode</span>
+                        <span
+                          className={clsx('ua-switch', { 'ua-switch--on': theme === 'dark' })}
+                          aria-hidden="true"
+                        />
                       </button>
                       <div className="profile-dropdown-divider" />
                       <button className="profile-dropdown-item profile-dropdown-item--danger" onClick={handleLogout}>

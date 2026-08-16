@@ -30,7 +30,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  color: #fff;
+  color: var(--on-brand);
   background: var(--green);
   text-align: center;
   padding: 0.35rem 0.5rem;
@@ -59,18 +59,18 @@
   align-items: center;
   gap: 0;
   padding: 0 8px 0 3px;
-  border: 1px solid #aab3ba;
+  border: 1px solid var(--n-400);
   border-radius: 5px;
-  background: #dde2e5;
+  background: var(--n-200);
   font-size: 0.8rem;
   overflow: hidden;
 }
-.cv-box--correct { background: #e7f6ea; border-color: #a5d6b0; }
-.cv-box--wrong   { background: #fdeaea; border-color: #e8b4b4; }
+.cv-box--correct { background: var(--success-tint); border-color: var(--success-line); }
+.cv-box--wrong   { background: var(--danger-bg); border-color: var(--danger-line); }
 .cv-box--clickable { cursor: pointer; }
-.cv-box--clickable:hover { filter: brightness(0.96); border-color: #9aa4ab; }
-.cv-box--bye     { background: #f4f5f6; border-style: dashed; }
-.cv-box--tbd     { border-color: #f59e0b; box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2); }
+.cv-box--clickable:hover { filter: brightness(0.96); border-color: var(--n-400); }
+.cv-box--bye     { background: var(--n-100); border-style: dashed; }
+.cv-box--tbd     { border-color: var(--pick-needs); box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2); }
 
 /* Highlight every box of the hovered player across all rounds (mirrors
    BracketView's .player-row.highlight). Placed after --correct/--wrong so
@@ -81,7 +81,7 @@
 .cv-box--clickable.cv-box--highlight:hover {
   background: rgba(37, 99, 235, 0.14);
   box-shadow: inset 2px 0 0 #2563eb;
-  border-color: #2563eb;
+  border-color: var(--atp-500);
 }
 
 /* Light grey box grouping every match's two feeder boxes together; switches to
@@ -90,14 +90,14 @@
   position: absolute;
   left: -8px;
   right: -8px;
-  border: 2px solid #d1d5d8;
+  border: 2px solid var(--n-300);
   border-radius: 10px;
-  background: #ebeef0;
+  background: var(--n-150);
   pointer-events: none;
   z-index: 0;
 }
 .cv-match-outline--missing {
-  border-color: #dc2626;
+  border-color: var(--danger);
   box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.15);
 }
 
@@ -141,7 +141,7 @@
      order, silently shrinking the width back down (looks square). */
   width: 23px !important; height: 18px !important;
   border-radius: 2px;
-  border: 1px solid #000;     /* 1px is the practical CSS minimum for a crisp
+  border: 1px solid var(--n-950);     /* 1px is the practical CSS minimum for a crisp
                                   border; shrinking the box further (as tried
                                   previously) makes this SAME 1px look thicker
                                   relative to the smaller flag, not thinner */
@@ -157,7 +157,7 @@
   flex: 1 1 auto;
   min-width: 0;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--n-950);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -181,7 +181,7 @@
 .cv-ret {
   font-style: italic;
   font-weight: 500;
-  color: #b02a2a;
+  color: var(--danger-strong);
 }
 
 /* Running score of an in-progress match, centred in the gap between that
@@ -206,7 +206,7 @@
   font-size: 1.2rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: #1d4ed8;
+  color: var(--info);
   white-space: nowrap;
   pointer-events: none;
 }
@@ -238,7 +238,7 @@
   position: relative;
   top: -0.42em;
 }
-.cv-live-score--suspended { color: #b45309; }
+.cv-live-score--suspended { color: var(--warning); }
 .cv-real-winner {
   position: absolute;
   left: 7px;
@@ -256,7 +256,7 @@
   overflow: hidden;
   display: flex;
   align-items: center;
-  background: #fdeaea;         /* matches .cv-box--wrong fill — masks only the
+  background: var(--danger-bg);         /* matches .cv-box--wrong fill — masks only the
                                    border segment directly under the text,
                                    not the whole top edge (painted above the
                                    box, see JSX order) */
@@ -264,7 +264,7 @@
   line-height: 1;
   font-size: 0.72rem;
   font-weight: 600;
-  color: #b02a2a;
+  color: var(--danger-strong);
   white-space: nowrap;
   text-transform: uppercase;
 }
@@ -282,8 +282,8 @@
   width: 34px;                 /* fixed footprint so a larger font doesn't grow the box */
   height: 18px;                /* visual on-screen WIDTH, since the chip is rotated -90deg */
   border: 1px solid var(--green-500, #4a9d6a);
-  background: #fff;
-  color: var(--green-600, #2f7a4d);
+  background: var(--surface-card);
+  color: var(--brand-text, var(--brand-text));
   font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -293,7 +293,7 @@
   cursor: pointer;
   z-index: 2;
 }
-.cv-h2h:hover { background: var(--green-600, #2f7a4d); color: #fff; }
+.cv-h2h:hover { background: var(--green-600); color: var(--on-brand); }
 
 /* Predictors chip — the H2H pill mirrored onto the match outline's LEFT
    border. Deliberately identical in footprint, border, colour and rotation:
@@ -308,15 +308,15 @@
   width: 34px;                 /* same fixed footprint as .cv-h2h */
   height: 18px;                /* visual on-screen WIDTH, since it's rotated */
   border: 1px solid var(--green-500, #4a9d6a);
-  background: #fff;
-  color: var(--green-600, #2f7a4d);
+  background: var(--surface-card);
+  color: var(--brand-text, var(--brand-text));
   border-radius: 4px;
   padding: 0;
   line-height: 1;
   cursor: pointer;
   z-index: 2;
 }
-.cv-group:hover { background: var(--green-600, #2f7a4d); color: #fff; }
+.cv-group:hover { background: var(--green-600, var(--green-600)); color: var(--on-brand); }
 
 /* Undo the pill's rotation so the glyph itself sits upright. */
 .cv-group-icon {

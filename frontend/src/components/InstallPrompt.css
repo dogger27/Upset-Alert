@@ -11,8 +11,8 @@
   align-items: center;
   gap: 0.65rem;
   padding: 0.7rem 0.75rem;
-  background: #ffffff;
-  border: 1px solid #d7dade;
+  background: var(--surface-card);
+  border: 1px solid var(--n-300);
   border-radius: 12px;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
   animation: install-rise 0.22s ease-out;
@@ -27,16 +27,16 @@
 
 .install-banner-icon { width: 34px; height: 34px; border-radius: 8px; flex: 0 0 auto; }
 .install-banner-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
-.install-banner-text strong { font-size: 0.88rem; color: #1f2328; }
-.install-banner-text span { font-size: 0.74rem; color: #4b5563; line-height: 1.25; }
+.install-banner-text strong { font-size: 0.88rem; color: var(--n-950); }
+.install-banner-text span { font-size: 0.74rem; color: var(--n-700); line-height: 1.25; }
 
 .install-banner-cta {
   flex: 0 0 auto;
   padding: 0.45rem 0.85rem;
   font-size: 0.82rem;
   font-weight: 700;
-  color: #fff;
-  background: #1b4332;
+  color: var(--on-brand);
+  background: var(--green-800);
   border: none;
   border-radius: 6px;
   cursor: pointer;
@@ -47,7 +47,7 @@
   height: 1.6rem;
   font-size: 1.15rem;
   line-height: 1;
-  color: #9ca3af;
+  color: var(--n-500);
   background: transparent;
   border: none;
   cursor: pointer;
@@ -58,7 +58,7 @@
   position: fixed;
   inset: 0;
   z-index: 950;
-  background: rgba(0, 0, 0, 0.45);
+  background: var(--overlay);
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -66,18 +66,18 @@
 .install-steps {
   width: 100%;
   max-width: 460px;
-  background: #fff;
+  background: var(--surface-card);
   border-radius: 14px 14px 0 0;
   padding: 1.1rem 1.15rem calc(1.1rem + env(safe-area-inset-bottom, 0px));
 }
-.install-steps h3 { margin: 0 0 0.75rem; font-size: 1rem; color: #1f2328; }
+.install-steps h3 { margin: 0 0 0.75rem; font-size: 1rem; color: var(--n-950); }
 .install-steps ol { margin: 0; padding-left: 1.15rem; }
-.install-steps li { font-size: 0.88rem; line-height: 1.5; color: #374151; margin-bottom: 0.5rem; }
+.install-steps li { font-size: 0.88rem; line-height: 1.5; color: var(--n-700); margin-bottom: 0.5rem; }
 .install-steps-note {
   margin: 0.35rem 0 0;
   font-size: 0.78rem;
   line-height: 1.4;
-  color: #b45309;
+  color: var(--warning);
 }
 .install-steps-done {
   width: 100%;
@@ -85,8 +85,8 @@
   padding: 0.6rem;
   font-size: 0.9rem;
   font-weight: 600;
-  color: #fff;
-  background: #1b4332;
+  color: var(--on-brand);
+  background: var(--green-800);
   border: none;
   border-radius: 8px;
   cursor: pointer;

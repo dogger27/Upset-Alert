@@ -38,7 +38,7 @@
   font-size: 2.75rem;
   letter-spacing: 0.01em;
   line-height: 1;
-  color: var(--ink-900);
+  color: var(--text);
   text-transform: uppercase;
 }
 
@@ -57,8 +57,8 @@
   font-size: 0.95rem;
   padding: 2rem 0;
 }
-.dh-state a { color: var(--green-600); text-decoration: underline; }
-.dh-state--error { color: #dc2626; }
+.dh-state a { color: var(--brand-text); text-decoration: underline; }
+.dh-state--error { color: var(--danger); }
 
 /* Horizontal-scroll fallback for anything narrower than the table's natural
    width — keeps the table itself intact rather than squeezing columns, while
@@ -66,7 +66,7 @@
 .dh-table-wrap {
   width: 100%;
   overflow-x: auto;
-  background: #fff;
+  background: var(--surface-card);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-xs);
@@ -83,7 +83,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: #888;
+  color: var(--n-500);
   padding: 10px 16px;
   border-bottom: 1px solid var(--border-strong);
   background: rgba(45,106,79,0.04);
@@ -94,7 +94,7 @@
   cursor: pointer;
   user-select: none;
 }
-.dh-th-sortable:hover { color: var(--green-600); }
+.dh-th-sortable:hover { color: var(--brand-text); }
 .dh-th-sortable:focus-visible { outline: 2px solid var(--green-600); outline-offset: -2px; }
 
 .dh-th-inner {
@@ -106,21 +106,21 @@
 .dh-sort-icon {
   font-size: 0.6rem;
   line-height: 1;
-  color: var(--green-600);
+  color: var(--brand-text);
 }
 .dh-sort-icon--idle {
-  color: #bbb;
+  color: var(--n-400);
   opacity: 0.8;
 }
 
 .dh-row:not(:last-child) .dh-cell {
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--n-150);
 }
 
 .dh-cell {
   padding: 10px 16px;
   font-size: 0.85rem;
-  color: var(--ink-800);
+  color: var(--text);
   white-space: nowrap;
 }
 
@@ -133,13 +133,13 @@
   color: inherit;
   text-decoration: none;
 }
-.dh-tourn-link:hover .dh-tourn-name { color: var(--green-600); text-decoration: underline; }
+.dh-tourn-link:hover .dh-tourn-name { color: var(--brand-text); text-decoration: underline; }
 .dh-tourn-link svg { color: var(--text-muted); flex-shrink: 0; }
 
 .dh-tourn-name {
   font-weight: 700;
   font-size: 0.88rem;
-  color: var(--ink-900);
+  color: var(--text);
 }
 
 /* Category badge */
@@ -153,16 +153,16 @@
   white-space: nowrap;
   flex-shrink: 0;
 }
-.dh-category--atp { background: #dbeafe; color: #1d4ed8; }
-.dh-category--wta { background: #fce7f3; color: #be185d; }
+.dh-category--atp { background: var(--atp-tint-strong); color: var(--info); }
+.dh-category--wta { background: var(--wta-tint); color: var(--wta-text); }
 
 .dh-rank {
   font-weight: 400;
   white-space: nowrap;
 }
-.dh-rank--gold   { color: #b8860b; font-weight: 600; }
-.dh-rank--silver { color: #666; }
-.dh-rank--bronze { color: #a0522d; }
+.dh-rank--gold   { color: var(--gold-ink); font-weight: 600; }
+.dh-rank--silver { color: var(--n-600); }
+.dh-rank--bronze { color: var(--clay-text); }
 
 /* ── Mobile: still a table, scrolled sideways ── */
 @media (max-width: 640px) {

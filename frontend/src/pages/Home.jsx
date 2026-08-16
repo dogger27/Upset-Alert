@@ -100,9 +100,9 @@ function GenderCol({ label, tour, tournaments, section, pickStatus, onLoginRequi
 }
 
 const SECTION_BG = {
-  open:    'rgba(201,120,58,0.07)',   // faint clay tint
-  active:  'rgba(45,106,79,0.07)',    // faint green tint
-  muted:   'rgba(147,163,156,0.10)',  // neutral gray tint
+  open:    'var(--section-tint-open)',    // faint clay tint
+  active:  'var(--section-tint-active)',  // faint green tint
+  muted:   'var(--section-tint-muted)',   // neutral gray tint
 }
 
 function Section({ title, description, accent, live, items, section, pickStatus, emptyMessage, onLoginRequired, keepWhenEmpty }) {

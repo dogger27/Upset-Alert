@@ -9,7 +9,7 @@
   right: 0;
   height: 100vh;
   height: 100dvh;
-  background: rgba(0, 0, 0, 0.45);
+  background: var(--overlay);
   z-index: 400;
   display: flex;
   align-items: center;
@@ -19,7 +19,7 @@
 }
 
 .pp-popup {
-  background: #fff;
+  background: var(--surface-card);
   border-radius: 12px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
   width: min(420px, 100%);
@@ -43,34 +43,34 @@
   color: var(--text);
 }
 .pp-winner { font-weight: 800; }
-.pp-def    { color: var(--text-muted, #777); font-weight: 600; }
-.pp-loser  { font-weight: 600; color: var(--text-muted, #777); }
+.pp-def    { color: var(--text-muted, var(--n-600)); font-weight: 600; }
+.pp-loser  { font-weight: 600; color: var(--text-muted, var(--n-600)); }
 
 .pp-close {
   background: none;
   border: none;
   font-size: 0.85rem;
-  color: #aaa;
+  color: var(--n-400);
   cursor: pointer;
   padding: 0.1rem 0.3rem;
   border-radius: 4px;
   line-height: 1;
   flex-shrink: 0;
 }
-.pp-close:hover { background: #f0f0f0; color: #555; }
+.pp-close:hover { background: var(--n-150); color: var(--n-700); }
 
 .pp-scope {
   font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--text-muted, #777);
+  color: var(--text-muted, var(--n-600));
   margin: 0.15rem 0 0.7rem;
 }
 
 .pp-state {
   font-size: 0.82rem;
-  color: var(--text-muted, #777);
+  color: var(--text-muted, var(--n-600));
   padding: 0.9rem 0;
   text-align: center;
 }
@@ -94,10 +94,10 @@
   gap: 0.4rem;
   padding-bottom: 0.4rem;
   margin-bottom: 0.4rem;
-  border-bottom: 2px solid #eceff1;
+  border-bottom: 2px solid var(--n-150);
   position: sticky;
   top: 0;
-  background: #fff;
+  background: var(--surface-card);
 }
 
 .pp-badge {
@@ -108,9 +108,9 @@
   height: 20px;
   flex-shrink: 0;
 }
-.pp-badge--check { color: #16a34a; }
+.pp-badge--check { color: var(--pick-correct); }
 .pp-badge--square {
-  background: #dc2626;
+  background: var(--danger-fill);
   border-radius: 3px;
 }
 .pp-icon { width: 100%; height: 100%; }
@@ -118,7 +118,7 @@
 .pp-count {
   font-size: 0.8rem;
   font-weight: 800;
-  color: var(--text-muted, #777);
+  color: var(--text-muted, var(--n-600));
   font-variant-numeric: tabular-nums;
 }
 
@@ -133,6 +133,6 @@
   overflow-wrap: anywhere;
 }
 .pp-none {
-  color: var(--text-muted, #999);
+  color: var(--text-muted, var(--n-500));
   font-style: italic;
 }

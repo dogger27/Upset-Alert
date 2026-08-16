@@ -1,7 +1,7 @@
 const SURFACES = {
-  grass: { label: 'Grass', dot: 'var(--surface-grass)', bg: 'var(--surface-grass-bg)', fg: '#1b6b2c' },
-  clay:  { label: 'Clay',  dot: 'var(--surface-clay)',  bg: 'var(--surface-clay-bg)',  fg: '#9a521f' },
-  hard:  { label: 'Hard',  dot: 'var(--surface-hard)',  bg: 'var(--surface-hard-bg)',  fg: 'var(--atp-700)' },
+  grass: { label: 'Grass', dot: 'var(--surface-grass)', bg: 'var(--surface-grass-bg)', fg: 'var(--surface-grass-fg)' },
+  clay:  { label: 'Clay',  dot: 'var(--surface-clay)',  bg: 'var(--surface-clay-bg)',  fg: 'var(--surface-clay-fg)' },
+  hard:  { label: 'Hard',  dot: 'var(--surface-hard)',  bg: 'var(--surface-hard-bg)',  fg: 'var(--surface-hard-fg)' },
 }
 
 export function SurfacePill({ surface = 'grass', style = {} }) {

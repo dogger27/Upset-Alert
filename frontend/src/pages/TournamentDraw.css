@@ -119,7 +119,7 @@
   font-weight: 800;
   line-height: 1;
   font-variant-numeric: tabular-nums;
-  color: #fff;
+  color: var(--on-brand);
   background: rgba(220, 38, 38, 0.92);
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
   animation: pick-nav-pulse 1.8s ease-in-out infinite;
@@ -187,9 +187,9 @@
   font-size: 0.85rem;
   font-weight: 600;
   font-family: inherit;
-  border: 2px solid var(--green-dark, #2d5a3d);
-  background: white;
-  color: var(--green-dark, #2d5a3d);
+  border: 2px solid var(--green-dark, var(--brand-line-strong));
+  background: var(--surface-card);
+  color: var(--brand-text-strong, var(--brand-text));
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
   letter-spacing: 0.01em;
@@ -206,12 +206,12 @@
 }
 
 .draw-mode-btn.active {
-  background: var(--green-dark, #2d5a3d);
-  color: white;
+  background: var(--green-dark, var(--green-700));
+  color: var(--on-brand);
 }
 
 .draw-mode-btn:not(.active):hover {
-  background: #f0f7f2;
+  background: var(--n-100);
 }
 
 .draw-mode-btn:disabled {
@@ -219,7 +219,7 @@
   cursor: not-allowed;
 }
 .draw-mode-btn:disabled:hover {
-  background: white;
+  background: var(--surface-card);
 }
 
 .draw-header {
@@ -230,7 +230,7 @@
   justify-content: space-between;
   gap: 1rem;
   padding: 0.35rem 1.5rem;
-  background: white;
+  background: var(--surface-card);
   border-bottom: 2px solid var(--border);
   /* Collapsible on scroll (see .draw-header--collapsed). max-height is well
      above any real header height so it never clips when shown. */
@@ -297,16 +297,16 @@
   font-family: inherit;
   font-size: 2rem;
   line-height: 1;
-  color: var(--green-dark, #2d5a3d);
-  background: var(--bg-subtle, #f4f6f5);
+  color: var(--brand-text-strong, var(--brand-text));
+  background: var(--bg-subtle, var(--n-100));
   border: 1px solid var(--border-strong);
   border-radius: 8px;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 .draw-sibling-nav:hover:not(.draw-sibling-nav--off) {
-  background: #e8f0eb;
-  border-color: var(--green-400, #52b788);
+  background: var(--n-200);
+  border-color: var(--green-400, var(--brand-line));
 }
 /* aria-disabled, not the disabled ATTRIBUTE: a natively disabled control
    swallows pointer events in some browsers, and its title tooltip — the one
@@ -344,7 +344,7 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  background: #d7e3db;
+  background: var(--n-300);
   border-radius: 999px;
   transition: left 0.18s ease;
   z-index: 0;
@@ -359,8 +359,8 @@
   border-radius: 50%;
   border: none;
   padding: 0;
-  background: #cbd5e1;
-  color: #334155;
+  background: var(--n-300);
+  color: var(--n-700);
   font-family: inherit;
   font-size: 0.72rem;
   font-weight: 700;
@@ -369,11 +369,11 @@
   transition: background 0.15s, color 0.15s;
 }
 
-.bracket-dot:hover { background: #94a3b8; }
+.bracket-dot:hover { background: var(--n-400); }
 
 .bracket-dot.in-window {
-  background: var(--green-dark, #2d5a3d);
-  color: #fff;
+  background: var(--green-dark, var(--green-700));
+  color: var(--on-brand);
 }
 
 .bracket-pager-arrow {
@@ -381,13 +381,13 @@
   background: transparent;
   font-size: 3rem;
   line-height: 1;
-  color: var(--green-dark, #2d5a3d);
+  color: var(--brand-text-strong, var(--brand-text));
   cursor: pointer;
   padding: 0 0.5rem;
   border-radius: 4px;
 }
 
-.bracket-pager-arrow:hover:not(:disabled) { background: #e8f0eb; }
+.bracket-pager-arrow:hover:not(:disabled) { background: var(--n-200); }
 .bracket-pager-arrow.hidden { visibility: hidden; }
 .bracket-pager-arrow:disabled { opacity: 0.3; cursor: default; }
 
@@ -432,11 +432,11 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #cbd5e1;
+  background: var(--n-300);
   transition: background 0.15s ease, transform 0.15s ease;
 }
 .bracket-page-dot.active::after {
-  background: var(--green-dark, #2d5a3d);
+  background: var(--green-dark, var(--green-700));
   transform: scale(1.45);
 }
 
@@ -457,7 +457,7 @@
   align-items: center;
   gap: 8px;
   padding: 0 8px;
-  background: white;
+  background: var(--surface-card);
   border-bottom: 1px solid var(--border);
 }
 
@@ -465,7 +465,7 @@
   min-width: 0;
   font-size: 0.8rem;
   font-weight: 700;
-  color: var(--ink-900);
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -482,8 +482,8 @@
   padding: 2px 6px;
   white-space: nowrap;
 }
-.draw-dots-bar-cat--atp { background: #dbeafe; color: #1d4ed8; }
-.draw-dots-bar-cat--wta { background: #fce7f3; color: #be185d; }
+.draw-dots-bar-cat--atp { background: var(--atp-tint-strong); color: var(--info); }
+.draw-dots-bar-cat--wta { background: var(--wta-tint); color: var(--wta-text); }
 
 /* Phones: tighten arrows + dots so the switch, arrows and up to ~7 dots
    (a Grand Slam draw's worth of pages) still share one line. Must stay
@@ -592,17 +592,17 @@
   font-size: 0.82rem;
   font-weight: 600;
   font-family: inherit;
-  color: #1e40af;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
+  color: var(--atp-text-strong);
+  background: var(--atp-tint);
+  border: 1px solid var(--atp-line);
   padding: 0.3em 0.8em;
   border-radius: 20px;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
 }
 .btn-admin-refresh:hover:not(:disabled) {
-  background: #dbeafe;
-  border-color: #93c5fd;
+  background: var(--atp-tint-strong);
+  border-color: var(--atp-line);
 }
 .btn-admin-refresh:disabled { opacity: 0.6; cursor: default; }
 
@@ -616,28 +616,28 @@
   width: 100%;
   text-align: center;
   transition: background 0.15s, border-color 0.15s;
-  color: #991b1b;
-  background: #fff1f2;
-  border: 1px solid #fecaca;
+  color: var(--danger-strong);
+  background: var(--danger-tint);
+  border: 1px solid var(--danger-line);
 }
 .btn-reset-selections:hover {
-  background: #fee2e2;
-  border-color: #fca5a5;
+  background: var(--danger-bg);
+  border-color: var(--danger-line);
 }
 
 .btn-danger {
   font-size: 0.88rem;
   font-weight: 600;
   font-family: inherit;
-  color: #fff;
-  background: #dc2626;
+  color: var(--on-brand);
+  background: var(--danger-fill);
   border: none;
   padding: 0.45em 1.1em;
   border-radius: 8px;
   cursor: pointer;
   transition: background 0.15s;
 }
-.btn-danger:hover { background: #b91c1c; }
+.btn-danger:hover { background: var(--danger-fill-hover); }
 
 @keyframes toast-show {
   0%   { opacity: 0; transform: translateX(-50%) translateY(10px); }
@@ -651,8 +651,8 @@
   bottom: 2rem;
   left: 50%;
   transform: translateX(-50%);
-  background: #1f2937;
-  color: #fff;
+  background: var(--ink-800);
+  color: var(--on-brand);
   padding: 0.65rem 1.4rem;
   border-radius: 999px;
   font-size: 0.88rem;
@@ -670,7 +670,7 @@
 .default-picks-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -683,7 +683,7 @@
   flex-direction: column;
   align-items: center;
   text-align: center;
-  background: #fff;
+  background: var(--surface-card);
   border-radius: var(--radius-md, 12px);
   padding: 2rem 2.25rem;
   max-width: 400px;
@@ -699,8 +699,8 @@
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: var(--green-600, #2d6a4f);
-  color: #fff;
+  background: var(--green-600, var(--green-600));
+  color: var(--on-brand);
   font-size: 1.5rem;
   font-weight: 700;
   line-height: 1;
@@ -711,13 +711,13 @@
   margin: 0 0 1.5rem;
   font-size: 1rem;
   line-height: 1.55;
-  color: var(--green-800, #1b4332);
+  color: var(--brand-text-strong, var(--brand-text));
 }
 
 .lock-badge {
   font-size: 0.82rem;
-  color: #92400e;
-  background: #fef3c7;
+  color: var(--warning);
+  background: var(--warning-bg);
   padding: 0.3em 0.75em;
   border-radius: 20px;
   font-weight: 600;
@@ -727,24 +727,24 @@
   cursor: pointer;
 }
 .lock-badge--admin:hover {
-  background: #fde68a;
+  background: var(--warning-line);
 }
 
 .lock-badge--unlocked {
-  color: #fff;
-  background: #dc2626;
+  color: var(--on-brand);
+  background: var(--danger-fill);
   letter-spacing: 0.02em;
 }
 .lock-badge--unlocked.lock-badge--admin:hover {
-  background: #b91c1c;
+  background: var(--danger-fill-hover);
 }
 
 .unlock-confirm {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--surface-card);
+  border: 1px solid var(--n-200);
   border-radius: 10px;
   box-shadow: 0 4px 16px rgba(0,0,0,0.12);
   padding: 1rem 1.25rem;
@@ -758,16 +758,16 @@
 
 .saved-badge {
   font-size: 0.82rem;
-  color: #065f46;
-  background: #d1fae5;
+  color: var(--success);
+  background: var(--success-bg);
   padding: 0.3em 0.75em;
   border-radius: 20px;
   font-weight: 600;
 }
 
 .saved-badge--incomplete {
-  color: #fff;
-  background: #dc2626;
+  color: var(--on-brand);
+  background: var(--danger-fill);
   font-size: 0.88rem;
   border-radius: 5px;
   animation: badge-pulse 1.8s ease-in-out infinite;
@@ -788,7 +788,7 @@
 .auto-populate-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.45);
+  background: var(--overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -802,7 +802,7 @@
 }
 
 .auto-populate-modal {
-  background: #fff;
+  background: var(--surface-card);
   border-radius: 14px;
   padding: 1.75rem 2rem;
   max-width: 360px;

@@ -4,7 +4,7 @@
   min-width: 180px;
   flex-shrink: 0;
   border-right: 1px solid var(--border);
-  background: #fafafa;
+  background: var(--n-50);
   display: flex;
   flex-direction: column;
   overflow-y: auto;
@@ -36,7 +36,7 @@
 .draw-sidebar--overlay.draw-sidebar--collapsed { pointer-events: none; }
 .draw-sidebar--overlay.draw-sidebar--collapsed .sidebar-collapse-btn { pointer-events: auto; }
 .draw-sidebar--overlay:not(.draw-sidebar--collapsed) {
-  background: #fafafa;
+  background: var(--n-50);
   border-right: 1px solid var(--border);
   box-shadow: 2px 0 12px rgba(0, 0, 0, 0.18);
 }
@@ -87,7 +87,7 @@
   height: auto;
   font-size: 1.4rem;
   border: 2px solid var(--text);
-  background: rgba(255, 255, 255, 0.5);
+  background: var(--scrim);
   color: var(--text);
 }
 .sidebar-collapse-glyph { grid-area: 1 / 1; }
@@ -98,8 +98,8 @@
   bottom: 1rem;
   left: 0.75rem;
   right: 0.75rem;
-  background: #1e293b;
-  color: #fff;
+  background: var(--ink-800);
+  color: var(--on-brand);
   font-size: 0.78rem;
   line-height: 1.4;
   padding: 0.6rem 0.8rem;
@@ -146,15 +146,15 @@
   padding: 0;
   border: 1px solid var(--border);
   border-radius: 5px;
-  background: white;
+  background: var(--surface-card);
   color: var(--text-muted);
   cursor: pointer;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 .sidebar-league-goto-btn:hover {
-  background: #f5f5f5;
+  background: var(--n-100);
   color: var(--text);
-  border-color: var(--green-mid, #4a7c59);
+  border-color: var(--green-mid, var(--brand-line));
 }
 
 /* Per-user "Draw History" button — same style as .sidebar-league-goto-btn
@@ -172,15 +172,15 @@
   padding: 0;
   border: 1px solid var(--border);
   border-radius: 4px;
-  background: white;
+  background: var(--surface-card);
   color: var(--text-muted);
   cursor: pointer;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 .sidebar-user-history-btn:hover {
-  background: #f5f5f5;
+  background: var(--n-100);
   color: var(--text);
-  border-color: var(--green-mid, #4a7c59);
+  border-color: var(--green-mid, var(--brand-line));
 }
 
 .sidebar-select {
@@ -191,7 +191,7 @@
   font-family: inherit;
   border: 1px solid var(--border);
   border-radius: 5px;
-  background: white;
+  background: var(--surface-card);
   color: var(--text);
   appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
@@ -203,7 +203,7 @@
 }
 .sidebar-select:focus {
   outline: none;
-  border-color: var(--green-mid, #4a7c59);
+  border-color: var(--green-mid, var(--brand-line));
   box-shadow: 0 0 0 2px rgba(74,124,89,0.15);
 }
 
@@ -243,7 +243,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #aaa;
+  color: var(--n-400);
   border-bottom: 1px solid var(--border);
   margin-bottom: 0.15rem;
 }
@@ -278,7 +278,7 @@
   cursor: pointer;
   transition: background 0.12s;
 }
-.sidebar-member:hover { background: #f0f3f1; }
+.sidebar-member:hover { background: var(--n-100); }
 
 /* Standing row layout */
 .sidebar-member--standing {
@@ -307,28 +307,28 @@
 .sidebar-member--no-upset .sidebar-rank,
 .sidebar-member--no-upset .sidebar-points,
 .sidebar-member--no-upset .sidebar-member-name {
-  color: #aaa;
+  color: var(--n-400);
   text-decoration: line-through;
 }
 
 /* ── Active (currently viewed) row ── */
 .sidebar-member--selected {
-  background: var(--green-dark, #2d5a3d) !important;
+  background: var(--green-dark, var(--green-700)) !important;
   box-shadow: inset 3px 0 0 #5cb87a;
 }
-.sidebar-member--selected:hover { background: var(--green-dark, #2d5a3d) !important; }
+.sidebar-member--selected:hover { background: var(--green-dark, var(--green-700)) !important; }
 .sidebar-member--selected .sidebar-member-name,
 .sidebar-member--selected .sidebar-rank,
-.sidebar-member--selected .sidebar-points { color: white; }
+.sidebar-member--selected .sidebar-points { color: var(--on-brand); }
 .sidebar-member--selected .sidebar-member-username { color: rgba(255,255,255,0.65); }
 .sidebar-member--selected .sidebar-user-history-btn {
   background: rgba(255,255,255,0.12);
   border-color: rgba(255,255,255,0.4);
-  color: white;
+  color: var(--on-brand);
 }
 .sidebar-member--selected .sidebar-user-history-btn:hover {
   background: rgba(255,255,255,0.25);
-  border-color: white;
+  border-color: var(--on-brand);
 }
 
 /* ── Cell styles ── */
@@ -336,7 +336,7 @@
   font-size: 0.72rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  color: #aaa;
+  color: var(--n-400);
   text-align: center;
 }
 

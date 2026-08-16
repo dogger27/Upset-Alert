@@ -1,6 +1,6 @@
 .hero {
   background: linear-gradient(135deg, var(--green-dark), var(--green));
-  color: white;
+  color: var(--on-brand);
   padding: 1.25rem 1.5rem;
   text-align: center;
 }
@@ -11,7 +11,7 @@
 .home-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(12,42,31,0.5);
+  background: var(--overlay);
   backdrop-filter: blur(2px);
   display: flex;
   align-items: center;
@@ -19,7 +19,7 @@
   z-index: 1000;
 }
 .home-modal {
-  background: #fff;
+  background: var(--surface-card);
   border-radius: var(--radius-lg);
   padding: 24px;
   width: 100%;
@@ -50,7 +50,7 @@
   padding: 0.2rem 0.4rem;
   border-radius: 4px;
 }
-.home-modal-close:hover { background: #f0f0f0; }
+.home-modal-close:hover { background: var(--n-150); }
 .home-modal-form {
   display: flex;
   flex-direction: column;
@@ -60,7 +60,7 @@
   font-family: var(--font-body);
   font-size: 0.78rem;
   font-weight: 700;
-  color: var(--ink-600);
+  color: var(--text-soft);
 }
 .home-modal-input {
   width: 100%;
@@ -70,7 +70,7 @@
   font-size: 0.9rem;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
-  background: #fff;
+  background: var(--surface-card);
 }
 .home-modal-input:focus { outline: 2px solid var(--green-500); border-color: transparent; }
 .home-modal-input--mono {
@@ -100,14 +100,14 @@
   padding: 7px 10px;
   border-radius: var(--radius-sm);
   border: 1.5px solid var(--green-500);
-  color: var(--green-600);
+  color: var(--brand-text);
   background: none;
   cursor: pointer;
   transition: background var(--dur) var(--ease-out), color var(--dur) var(--ease-out);
 }
 .league-sidebar-btn:hover {
   background: var(--green-600);
-  color: #fff;
+  color: var(--on-brand);
 }
 
 /* ── Dashboard league strip ── */
@@ -139,7 +139,7 @@
   font-size: 1.55rem;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--ink-700);
+  color: var(--text-body);
   line-height: 1;
 }
 .dash-league-actions-btns {
@@ -195,12 +195,12 @@
 }
 .dash-league-arrow--left  { left: 0; }
 .dash-league-arrow--right { right: 0; }
-.dash-league-arrow:hover { background: var(--bg-subtle); }
+.dash-league-arrow:hover { background: var(--n-100); }
 
 /* ── Status badges (used on other pages too) ── */
 .status-badge { display: inline-block; padding: 0.2em 0.6em; border-radius: 12px; font-size: 0.72rem; font-weight: 600; text-transform: capitalize; }
-.status-active    { background: #d1fae5; color: #065f46; }
-.status-upcoming  { background: #dbeafe; color: #1e40af; }
-.status-completed { background: #f3f4f6; color: #6b7280; }
-.status-public    { background: #d1fae5; color: #065f46; }
-.status-private   { background: #fef3c7; color: #92400e; }
+.status-active    { background: var(--success-bg); color: var(--success); }
+.status-upcoming  { background: var(--atp-tint-strong); color: var(--atp-text-strong); }
+.status-completed { background: var(--n-100); color: var(--n-600); }
+.status-public    { background: var(--success-bg); color: var(--success); }
+.status-private   { background: var(--warning-bg); color: var(--warning); }

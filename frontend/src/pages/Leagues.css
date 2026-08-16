@@ -54,7 +54,7 @@
   font-size: clamp(1rem, 5.2vw, 2.1rem);
   letter-spacing: 0.01em;
   line-height: 1;
-  color: var(--ink-900);
+  color: var(--text);
   text-transform: uppercase;
   white-space: nowrap;
   margin: 0;
@@ -75,7 +75,7 @@
   font-family: var(--font-display);
   font-weight: 900;
   font-size: clamp(1rem, 5.2vw, 2.7rem);
-  color: var(--clay-600);
+  color: var(--clay-text);
   line-height: 1;
   text-transform: none;
   white-space: nowrap;
@@ -99,7 +99,7 @@
   height: 34px;
   border: 1.5px solid var(--border);
   border-radius: 8px;
-  background: white;
+  background: var(--surface-card);
   color: transparent;
   cursor: pointer;
 }
@@ -111,9 +111,9 @@
    color so the list is legible on both. */
 .leagues-selector-select option {
   color: var(--text);
-  background: white;
+  background: var(--surface-card);
 }
-.leagues-selector-select:hover { background: #f5f5f5; }
+.leagues-selector-select:hover { background: var(--n-100); }
 .leagues-selector-select:focus {
   outline: 2px solid var(--green-dark);
   outline-offset: 1px;
@@ -139,13 +139,13 @@
   padding: 0;
   border: 1.5px solid var(--border);
   border-radius: 8px;
-  background: white;
+  background: var(--surface-card);
   color: var(--text);
   cursor: pointer;
   align-self: center;
   flex-shrink: 0;
 }
-.leagues-icon-btn:hover { background: #f5f5f5; }
+.leagues-icon-btn:hover { background: var(--n-100); }
 .leagues-icon-btn svg { width: 24px; height: 24px; flex-shrink: 0; }
 
 .leagues-icon-btn--labeled {
@@ -181,14 +181,14 @@
   padding: 7px 10px;
   border-radius: var(--radius-sm);
   border: 1.5px solid var(--green-500);
-  color: var(--green-600);
+  color: var(--brand-text);
   background: none;
   cursor: pointer;
   transition: background var(--dur) var(--ease-out), color var(--dur) var(--ease-out);
 }
 .leagues-stack-btn:hover {
   background: var(--green-600);
-  color: #fff;
+  color: var(--on-brand);
 }
 
 /* Mobile: KEEP the 3-column grid rather than switching to a flex row.
