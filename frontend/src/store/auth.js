@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { getMe, login as apiLogin, register as apiRegister, updateMe as apiUpdateMe } from '../api/auth'
+import { AUTH_EXPIRED } from '../api/client'
 import { queryClient } from '../main'
 import { useTheme } from './theme'
 
@@ -71,3 +72,35 @@ export const useAuth = create((set) => ({
     set({ user: null })
   },
 }))
+
+/*
+ * Never let the app be half signed in.
+ *
+ * `user` lives in memory and the token lives in localStorage, and the two can
+ * come apart: the 401 interceptor drops the token, and iOS can evict storage
+ * while an installed app is merely suspended rather than closed — the JS heap
+ * survives, the token does not. Either way the store still says "signed in", so
+ * the profile menu and every gated view agree, while requests go out bare and
+ * quietly return nothing. It presents as a bracket full of TBD, not as a login
+ * screen, which is why it took so long to name.
+ *
+ * The token is the only real evidence of a session, so it decides.
+ */
+window.addEventListener(AUTH_EXPIRED, () => {
+  useAuth.setState({ user: null, loading: false })
+})
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return
+  let token = null
+  try { token = localStorage.getItem('token') } catch { /* private mode */ }
+  const { user, init } = useAuth.getState()
+  if (user && !token) {
+    // Storage went away underneath a session that is still on screen.
+    useAuth.setState({ user: null, loading: false })
+    queryClient.clear()
+  } else if (token && !user) {
+    // Resumed holding a token the store has not resolved yet.
+    init()
+  }
+})
