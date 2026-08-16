@@ -109,7 +109,7 @@
 }
 
 .upset-tooltip {
-  background: var(--green-800);
+  background: var(--brand-active);
   border-radius: 5px;
   padding: 5px 12px 5px 9px;
   display: flex;

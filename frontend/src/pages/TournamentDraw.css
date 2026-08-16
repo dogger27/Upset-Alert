@@ -206,7 +206,7 @@
 }
 
 .draw-mode-btn.active {
-  background: var(--green-dark, var(--green-700));
+  background: var(--brand-active);
   color: var(--on-brand);
 }
 
@@ -372,7 +372,7 @@
 .bracket-dot:hover { background: var(--n-400); }
 
 .bracket-dot.in-window {
-  background: var(--green-dark, var(--green-700));
+  background: var(--brand-active);
   color: var(--on-brand);
 }
 
@@ -436,7 +436,7 @@
   transition: background 0.15s ease, transform 0.15s ease;
 }
 .bracket-page-dot.active::after {
-  background: var(--green-dark, var(--green-700));
+  background: var(--brand-active);
   transform: scale(1.45);
 }
 
@@ -651,7 +651,7 @@
   bottom: 2rem;
   left: 50%;
   transform: translateX(-50%);
-  background: var(--ink-800);
+  background: var(--tooltip-bg);
   color: var(--on-brand);
   padding: 0.65rem 1.4rem;
   border-radius: 999px;

@@ -280,10 +280,10 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   transition: background 0.15s, color 0.15s;
 }
 .lt-members-btn:hover:not(.lt-members-btn--active) {
-  background: color-mix(in srgb, var(--green-dark) 10%, transparent);
+  background: color-mix(in srgb, var(--brand-active) 10%, transparent);
 }
 .lt-members-btn--active {
-  background: var(--green-dark);
+  background: var(--brand-active);
   color: var(--on-brand);
 }
 
@@ -317,10 +317,10 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   border-radius: 0 7px 7px 0;
 }
 .lt-status-tab:hover:not(:disabled):not(.lt-status-tab--active) {
-  background: color-mix(in srgb, var(--green-dark) 10%, transparent);
+  background: color-mix(in srgb, var(--brand-active) 10%, transparent);
 }
 .lt-status-tab--active {
-  background: var(--green-dark);
+  background: var(--brand-active);
   color: var(--on-brand);
   z-index: 1;
 }
@@ -575,14 +575,14 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   -webkit-appearance: none;
   touch-action: none;
   width: 28px; height: 28px; border-radius: 50%;
-  background: var(--green-dark);
+  background: var(--brand-active);
   border: 3px solid var(--on-brand);
   box-shadow: 0 1px 3px rgba(0,0,0,0.3);
   cursor: pointer;
 }
 .lt-scrubber-range::-moz-range-thumb {
   width: 28px; height: 28px; border-radius: 50%;
-  background: var(--green-dark);
+  background: var(--brand-active);
   box-shadow: 0 1px 3px rgba(0,0,0,0.3);
   cursor: pointer; border: 3px solid var(--on-brand);
 }
