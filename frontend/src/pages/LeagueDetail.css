@@ -432,7 +432,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 
 .lt-gender-badge {
   display: inline-block;
-  font-size: 0.68rem;
+  font-size: 0.8rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   padding: 2px 6px;
@@ -471,18 +471,18 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   display: flex; align-items: center;
   gap: 0.75rem;
   margin-bottom: 0.6rem;
-  min-height: 1.6rem;
+  min-height: 1.9rem;
 }
 .lt-header-left { display: flex; align-items: center; gap: 0.5rem; flex: 0 0 auto; white-space: nowrap; }
-.lt-progress-date { font-size: 0.78rem; color: var(--text-muted); white-space: nowrap; }
+.lt-progress-date { font-size: 0.9rem; color: var(--text-muted); white-space: nowrap; }
 .lt-progress-title {
   flex: 1 1 auto;
   min-width: 0;
   text-align: center;
-  font-weight: 700; font-size: 0.95rem;
+  font-weight: 700; font-size: 1.15rem;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.lt-progress-meta { font-size: 0.78rem; color: var(--text-muted); flex: 0 0 auto; white-space: nowrap; }
+.lt-progress-meta { font-size: 0.9rem; color: var(--text-muted); flex: 0 0 auto; white-space: nowrap; }
 .lt-progress-empty { font-size: 0.85rem; color: var(--text-muted); margin: 0; }
 .lt-competitors-label {
   font-size: 0.68rem;
@@ -743,8 +743,11 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
     grid-template-columns: 28px 22px 22px var(--name-col-width, 120px) 52px;
   }
 }
-@container (max-width: 470px) {
-  /* Drop surface; right-justify the draw name */
+@container (max-width: 530px) {
+  /* Drop surface; right-justify the draw name.
+     Raised from 470 when the header type grew: the row needs roughly 480px of
+     content now, so the old threshold fired after the name had already started
+     to ellipsize. Surface is the least useful thing here, so it goes first. */
   .lt-progress-meta { display: none; }
   .lt-progress-title { text-align: right; }
 }
