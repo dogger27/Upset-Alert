@@ -341,8 +341,11 @@ export default function LeagueDetail() {
 }
 
 // R1=Red R2=Orange R3=Yellow R4=Green R5=Blue R6=Purple R7=Violet
-const ROUND_COLORS      = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#d946ef']
-const ROUND_DARK_COLORS = ['#7f1d1d', '#7c2d12', '#713f12', '#14532d', '#1e3a8a', '#3b0764', '#4a044e']
+// Resolved from the theme rather than held as literals: the bar fill reads the
+// same on either background, but its label ink has to flip. See --round-* in
+// index.css.
+const ROUND_COLORS      = [1, 2, 3, 4, 5, 6, 7].map(i => `var(--round-${i})`)
+const ROUND_DARK_COLORS = [1, 2, 3, 4, 5, 6, 7].map(i => `var(--round-${i}-ink)`)
 function getRoundLabel(index, numRounds) {
   const fromEnd = numRounds - 1 - index
   if (fromEnd === 0) return 'F'

@@ -325,7 +325,7 @@ function Connectors({ leftCenters, rightCenters, totalH }) {
   }
   return (
     <svg className="cv-conn" width={COL_GAP} height={totalH} style={{ flexShrink: 0 }}>
-      <g stroke="#7fbf8f" strokeWidth="1.5" fill="none">{lines}</g>
+      <g stroke="var(--connector-line)" strokeWidth="1.5" fill="none">{lines}</g>
     </svg>
   )
 }

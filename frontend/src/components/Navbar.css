@@ -5,7 +5,7 @@
   padding: 0 24px;
   height: 60px;
   background: var(--green-800);
-  color: #fff;
+  color: var(--on-brand);
   position: sticky;
   top: 0;
   z-index: 100;
@@ -22,7 +22,7 @@
   justify-content: center;
   background: none;
   border: none;
-  color: #fff;
+  color: var(--on-brand);
   cursor: pointer;
   padding: 6px;
   border-radius: 6px;
@@ -51,8 +51,8 @@
   text-decoration: none;
   white-space: nowrap;
 }
-.hamburger-item:hover { background: rgba(255,255,255,0.1); color: #fff; text-decoration: none; }
-.hamburger-item--active { color: #fff; font-weight: 700; }
+.hamburger-item:hover { background: rgba(255,255,255,0.1); color: var(--on-brand); text-decoration: none; }
+.hamburger-item--active { color: var(--on-brand); font-weight: 700; }
 
 /* ── Wordmark ── */
 .navbar-brand {
@@ -116,9 +116,9 @@
   text-align: center;
   width: 100%;
 }
-.navbar-brand-upset { color: #fff; }
+.navbar-brand-upset { color: var(--on-brand); }
 .navbar-brand-alert { color: var(--clay-300); }
-.navbar-brand-exclaim { color: #fff; }
+.navbar-brand-exclaim { color: var(--on-brand); }
 
 /* ── Right-side nav ── */
 .navbar-links {
@@ -142,11 +142,11 @@
   white-space: nowrap;
   transition: color 0.15s, border-color 0.15s;
 }
-.navbar-links a:hover { color: #fff; text-decoration: none; }
+.navbar-links a:hover { color: var(--on-brand); text-decoration: none; }
 .navbar-links a.navbar-active,
 .navbar-links .navbar-label.navbar-active {
   font-weight: 700;
-  color: #fff;
+  color: var(--on-brand);
   border-bottom-color: var(--green-300);
 }
 
@@ -163,7 +163,7 @@
   transition: border-color 0.15s, background 0.15s;
 }
 .navbar-admin-btn:hover {
-  border-color: white !important;
+  border-color: var(--on-brand) !important;
   background: rgba(255,255,255,0.1);
 }
 
@@ -202,8 +202,8 @@
   top: calc(100% + 10px);
   right: 0;
   min-width: 320px;
-  background: #fff;
-  border: 1px solid var(--border, #e5e7eb);
+  background: var(--surface-card);
+  border: 1px solid var(--border, var(--n-200));
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.12);
   z-index: 200;
@@ -220,17 +220,17 @@
 .profile-dropdown-name {
   font-size: 0.9rem;
   font-weight: 600;
-  color: var(--text, #111);
+  color: var(--text, var(--n-950));
 }
 
 .profile-dropdown-email {
   font-size: 0.78rem;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted, var(--n-600));
 }
 
 .profile-dropdown-divider {
   height: 1px;
-  background: var(--border, #e5e7eb);
+  background: var(--border, var(--n-200));
 }
 
 .profile-dropdown-item {
@@ -239,7 +239,7 @@
   text-align: left;
   padding: 0.65rem 1rem;
   font-size: 0.88rem;
-  color: var(--text, #111);
+  color: var(--text, var(--n-950));
   background: none;
   border: none;
   cursor: pointer;
@@ -249,18 +249,62 @@
   box-sizing: border-box;
 }
 .profile-dropdown-item:hover {
-  background: var(--bg-subtle, #f3f4f6);
+  background: var(--bg-subtle, var(--n-100));
+}
+
+/* Dark-mode row: label left, switch right, on the same baseline as the
+   plain items above it so the menu still reads as one column. */
+.profile-dropdown-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.ua-switch {
+  flex: 0 0 auto;
+  position: relative;
+  width: 34px;
+  height: 20px;
+  border-radius: var(--radius-pill);
+  background: var(--n-300);
+  transition: background var(--dur) var(--ease-out);
+}
+.ua-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  /* The knob stays white in both themes — it reads as the moving part against
+     the track, and a surface-coloured knob disappears into the dark one. */
+  background: var(--on-brand);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  transition: transform var(--dur) var(--ease-out);
+}
+.ua-switch--on { background: var(--brand-fill); }
+.ua-switch--on::after { transform: translateX(14px); }
+
+.profile-dropdown-switch:focus-visible {
+  outline: 2px solid var(--brand-line);
+  outline-offset: -2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ua-switch, .ua-switch::after { transition: none; }
 }
 a.profile-dropdown-item,
 a.profile-dropdown-item:visited {
-  color: var(--text, #111);
+  color: var(--text, var(--n-950));
   font-size: 0.88rem;
   font-weight: 400;
   padding-bottom: 0.65rem;
   border-bottom: none;
 }
 .profile-dropdown-item--danger {
-  color: #dc2626;
+  color: var(--danger);
 }
 
 /* Inline edit form */
@@ -274,13 +318,13 @@ a.profile-dropdown-item:visited {
 .profile-edit-title {
   font-size: 0.88rem;
   font-weight: 600;
-  color: var(--text, #111);
+  color: var(--text, var(--n-950));
   margin-bottom: 0.25rem;
 }
 
 .profile-edit-label {
   font-size: 0.75rem;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted, var(--n-600));
   margin-top: 0.25rem;
 }
 
@@ -288,20 +332,20 @@ a.profile-dropdown-item:visited {
   width: 100%;
   padding: 0.4rem 0.6rem;
   font-size: 0.85rem;
-  border: 1px solid var(--border, #d1d5db);
+  border: 1px solid var(--border, var(--n-300));
   border-radius: 5px;
   font-family: inherit;
   box-sizing: border-box;
 }
 .profile-edit-input:focus {
   outline: none;
-  border-color: var(--green-mid, #4a7c59);
+  border-color: var(--green-mid, var(--brand-line));
   box-shadow: 0 0 0 2px rgba(74,124,89,0.15);
 }
 
 .profile-edit-error {
   font-size: 0.78rem;
-  color: #dc2626;
+  color: var(--danger);
   margin: 0.1rem 0;
 }
 
@@ -321,7 +365,7 @@ a.profile-dropdown-item:visited {
   padding: 0.35rem 0.8rem;
   font-size: 0.82rem;
   background: rgba(255,255,255,0.1);
-  color: white;
+  color: var(--on-brand);
   border-color: rgba(255,255,255,0.3);
 }
 
@@ -347,8 +391,8 @@ a.profile-dropdown-item:visited {
 .notif-actions {
   position: sticky;
   bottom: 0;
-  background: #fff;
-  border-top: 1px solid var(--border, #e5e7eb);
+  background: var(--surface-card);
+  border-top: 1px solid var(--border, var(--n-200));
   padding: 0.6rem 1rem;
   /* Above the rows it overlaps while they scroll under it. */
   z-index: 1;
@@ -365,8 +409,8 @@ a.profile-dropdown-item:visited {
   padding: 0.75rem 1rem 0.5rem;
   position: sticky;
   top: 0;
-  background: #fff;
-  border-bottom: 1px solid var(--border, #e5e7eb);
+  background: var(--surface-card);
+  border-bottom: 1px solid var(--border, var(--n-200));
 }
 
 .notif-back-btn {
@@ -374,23 +418,23 @@ a.profile-dropdown-item:visited {
   border: none;
   cursor: pointer;
   font-size: 1rem;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted, var(--n-600));
   padding: 0 0.25rem;
   line-height: 1;
   flex-shrink: 0;
 }
-.notif-back-btn:hover { color: var(--text, #111); }
+.notif-back-btn:hover { color: var(--text, var(--n-950)); }
 
 .notif-loading {
   padding: 1rem;
   font-size: 0.82rem;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted, var(--n-600));
   text-align: center;
 }
 
 .notif-section {
   padding: 0.75rem 1rem 0.5rem;
-  border-bottom: 1px solid var(--border, #e5e7eb);
+  border-bottom: 1px solid var(--border, var(--n-200));
 }
 .notif-section:last-of-type { border-bottom: none; }
 
@@ -399,13 +443,13 @@ a.profile-dropdown-item:visited {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted, var(--n-600));
   margin-bottom: 0.2rem;
 }
 
 .notif-section-desc {
   font-size: 0.75rem;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted, var(--n-600));
   margin-bottom: 0.5rem;
   font-style: italic;
 }
@@ -421,8 +465,8 @@ a.profile-dropdown-item:visited {
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--text-muted, #6b7280);
-  border-bottom: 1px solid var(--border, #e5e7eb);
+  color: var(--text-muted, var(--n-600));
+  border-bottom: 1px solid var(--border, var(--n-200));
   text-align: center;
   /* Channel columns only need to fit their header; the type column takes the
      rest, so long descriptions wrap instead of squeezing the checkboxes. */
@@ -437,7 +481,7 @@ a.profile-dropdown-item:visited {
   padding: 0.5rem;
   text-align: center;
   vertical-align: middle;
-  border-bottom: 1px solid var(--border-subtle, #f1f2f4);
+  border-bottom: 1px solid var(--border-subtle, var(--n-100));
 }
 .notif-grid tr:last-child td { border-bottom: none; }
 
@@ -449,13 +493,13 @@ a.profile-dropdown-item:visited {
    gets drawn in a collapsed table. */
 .notif-grid .notif-group-row td {
   padding: 0.55rem 1rem 0.35rem;
-  background: #f9fafb;
-  border-bottom: 1px solid var(--border, #e5e7eb);
+  background: var(--n-50);
+  border-bottom: 1px solid var(--border, var(--n-200));
   font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: #6b7280;
+  color: var(--n-600);
 }
 /* The first heading sits directly under the column headers, which already
    carry a bottom border. */
@@ -474,7 +518,7 @@ a.profile-dropdown-item:visited {
   display: block;
   font-size: 0.9rem;
   font-weight: 700;
-  color: var(--text, #1f2328);
+  color: var(--text, var(--n-950));
   line-height: 1.25;
 }
 /* Was 0.72rem grey italic, which was unreadable on a phone. Italic is the
@@ -485,7 +529,7 @@ a.profile-dropdown-item:visited {
   display: block;
   font-size: 0.78rem;
   line-height: 1.35;
-  color: #4b5563;
+  color: var(--n-700);
   margin-top: 0.15rem;
 }
 
@@ -498,15 +542,15 @@ a.profile-dropdown-item:visited {
   padding: 0.5rem 0.6rem;
   font-size: 0.76rem;
   line-height: 1.4;
-  color: #92400e;
-  background: #fffbeb;
-  border: 1px solid #fde68a;
+  color: var(--warning);
+  background: var(--warning-tint);
+  border: 1px solid var(--warning-line);
   border-radius: 6px;
 }
 .notif-device-state.is-on {
-  color: #14532d;
-  background: #f0fdf4;
-  border-color: #bbf7d0;
+  color: var(--success);
+  background: var(--success-tint);
+  border-color: var(--success-line);
 }
 
 /* Paper-plane test trigger, sitting beside each row's Push checkbox. Icon only
@@ -545,13 +589,13 @@ a.profile-dropdown-item:visited {
   width: 1.35rem;
   height: 1.35rem;
   padding: 0;
-  color: #6b7280;
+  color: var(--n-600);
   background: transparent;
   border: 1px solid transparent;
   border-radius: 4px;
   cursor: pointer;
 }
-.notif-test-icon:hover:not(:disabled) { color: #1b4332; border-color: #d7dade; }
+.notif-test-icon:hover:not(:disabled) { color: var(--brand-text); border-color: var(--n-300); }
 .notif-test-icon:disabled { opacity: 0.4; cursor: progress; }
 
 /* Push errors and the iOS "install first" hint. Sits under the grid rather
@@ -560,7 +604,7 @@ a.profile-dropdown-item:visited {
 .notif-push-note {
   margin: 0.4rem 0 0;
   font-style: normal;
-  color: #b45309;
+  color: var(--warning);
 }
 
 .notif-check-row {
@@ -568,7 +612,7 @@ a.profile-dropdown-item:visited {
   align-items: center;
   gap: 0.5rem;
   font-size: 0.85rem;
-  color: var(--text, #111);
+  color: var(--text, var(--n-950));
   padding: 0.25rem 0;
   cursor: pointer;
   user-select: none;
@@ -578,6 +622,6 @@ a.profile-dropdown-item:visited {
   width: 14px;
   height: 14px;
   cursor: pointer;
-  accent-color: var(--green-mid, #4a7c59);
+  accent-color: var(--green-mid, var(--brand-fill));
 }
 

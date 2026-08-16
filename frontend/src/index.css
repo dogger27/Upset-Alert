@@ -1,6 +1,10 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
+  /* Tells the browser which way to paint the things CSS cannot reach:
+     scrollbars, form control chrome, the spellcheck underline. */
+  color-scheme: light;
+
   /* ── Fonts ── */
   --font-display: 'Saira Condensed', 'Arial Narrow', sans-serif;
   --font-body: 'Archivo', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -152,7 +156,287 @@
   --dur-fast: 0.12s;
   --dur: 0.18s;
   --dur-slow: 0.32s;
+
+  /* ── Neutral ramp ──
+     Cool greys that predate the ink scale and are still all over the pages.
+     Kept as their own ramp rather than folded into ink/* because ink is
+     green-cast: merging them would tint every divider on the site. Named by
+     lightness, 950 darkest, so a dark theme can invert the ramp wholesale. */
+  --n-950: #111111;
+  --n-700: #4b5563;
+  --n-600: #6b7280;
+  --n-500: #888888;
+  --n-400: #aaaaaa;
+  --n-300: #d0d0d0;
+  --n-200: #e5e7eb;
+  --n-150: #f0f0f0;
+  --n-100: #f3f4f6;
+  --n-50:  #f9fafb;
+
+  /* ── Role tokens ──
+     What a colour is FOR, so the dark theme can answer each question
+     separately. A raw ramp step cannot flip: --green-600 is legible as body
+     text on white and invisible on charcoal, so anything contextual has to
+     resolve through a role. */
+  --text-secondary: #4b5563;
+  --text-faint: #888888;
+  --text-disabled: #aaaaaa;
+
+  /* The green-cast ink tiers, as roles. Same values the ink ramp already had,
+     but reachable by what they are for — headings, body, supporting copy. */
+  --text-body: var(--ink-700);
+  --text-soft: var(--ink-600);
+
+  --brand-text: var(--green-600);
+  --brand-text-strong: var(--green-800);
+  --brand-fill: var(--green-600);
+  --brand-fill-hover: var(--green-800);
+  --brand-line: var(--green-500);
+  --on-brand: #ffffff;
+
+  --nav-bg: var(--green-800);
+  --input-bg: #ffffff;
+  --overlay: rgba(0, 0, 0, 0.45);
+
+  /* Veils that sit ON the page rather than over it — a busy-state wash, a
+     translucent control, a zebra stripe. They have to invert with the surface:
+     a half-white wash reads as "dimmed" on paper and as "glare" at night. */
+  --scrim: rgba(255, 255, 255, 0.5);
+  --scrim-strong: rgba(255, 255, 255, 0.72);
+  --stripe: rgba(0, 0, 0, 0.025);
+
+  --atp-text: var(--atp-600);
+  --atp-tint: #eff6ff;
+  --atp-tint-strong: #dbeafe;
+  --atp-line: #93c5fd;
+
+  --wta-text: var(--wta-600);
+  --wta-tint: #fce7f3;
+  --wta-tint-strong: var(--wta-100);
+  --wta-line: var(--wta-300);
+
+  --clay-text: var(--clay-600);
+
+  /* Pale fill / mid rule to sit under the status text colours above. */
+  /* Status colours split the same way the brand green does: the -text value
+     has to be legible ON the page, the -fill value has to carry white type.
+     On a dark theme those are opposite ends of the ramp. */
+  --danger-fill: #dc2626;
+  --danger-fill-hover: #b91c1c;
+  --warning-fill: #b45309;
+
+  /* Deeper counterparts, for ink that sits on a pale tint of its own hue and
+     would be shouty at full strength. */
+  --danger-strong: #991b1b;
+  --atp-line-strong: #60a5fa;
+  --atp-text-strong: var(--atp-700);
+  --brand-line-strong: var(--green-800);
+  --gold-ink: #b8860b;
+
+  --success-tint: #f0fdf4;
+  --success-line: #bbf7d0;
+  --warning-tint: #fffbeb;
+  --warning-line: #fde68a;
+  --danger-tint: #fff1f1;
+  --danger-line: #fca5a5;
+  --info-line: #93c5fd;
+
+  /* Bracket plumbing, drawn as SVG on the page rather than on a card — so it
+     tracks the page, not the surface. */
+  --bracket-line: #c8e6c9;
+  --connector-line: #7fbf8f;
+
+  /* Court surfaces carry their own ink, which the pale -bg fills above expect. */
+  --surface-grass-fg: #1b6b2c;
+  --surface-clay-fg: #9a521f;
+  --surface-hard-fg: var(--atp-700);
+
+  /* Section washes on the dashboard — a hint of hue, not a panel. */
+  --section-tint-open: rgba(201, 120, 58, 0.07);
+  --section-tint-active: rgba(45, 106, 79, 0.07);
+  --section-tint-muted: rgba(147, 163, 156, 0.10);
+
+  /* Round colours for the points bars, one hue per round. The bar keeps its
+     saturated fill in both themes; only the label ink has to flip. Declared
+     here rather than in JS so the theme owns them. */
+  --round-1: #ef4444;  --round-1-ink: #7f1d1d;
+  --round-2: #f97316;  --round-2-ink: #7c2d12;
+  --round-3: #eab308;  --round-3-ink: #713f12;
+  --round-4: #22c55e;  --round-4-ink: #14532d;
+  --round-5: #3b82f6;  --round-5-ink: #1e3a8a;
+  --round-6: #8b5cf6;  --round-6-ink: #3b0764;
+  --round-7: #d946ef;  --round-7-ink: #4a044e;
+
+  /* Entry-type badges: pale fill, dark ink, mid rule. The hue IS the
+     information (wildcard vs qualifier vs lucky loser), so each keeps its own
+     triad in both themes rather than collapsing to one accent. */
+  --badge-seed-bg: #fff3cd;  --badge-seed-fg: #7d5a00;  --badge-seed-line: #a8841f;
+  --badge-wc-bg:   #cfe2ff;  --badge-wc-fg:   #084298;  --badge-wc-line:   #7aa3e0;
+  --badge-q-bg:    #d1e7dd;  --badge-q-fg:    #0a3622;  --badge-q-line:    #6fb890;
+  --badge-ll-bg:   #f8d7da;  --badge-ll-fg:   #58151c;  --badge-ll-line:   #e28a92;
+  --badge-pr-bg:   #e2d9f3;  --badge-pr-fg:   #432874;  --badge-pr-line:   #a68fd9;
+  --badge-se-bg:   #cdeef1;  --badge-se-fg:   #0e4f57;  --badge-se-line:   #6bc0cc;
+  --badge-alt-bg:  #fde9d0;  --badge-alt-fg:  #7a4100;  --badge-alt-line:  #dda86a;
+  --badge-ng-bg:   #fdf3c8;  --badge-ng-fg:   #6b5200;  --badge-ng-line:   #d9c05a;
 }
+
+/* ══ Dark theme ══════════════════════════════════════════════════════════
+   Night session: the stadium falls away into deep green-black, the cards sit
+   up like a lit court, and the tour colours glow instead of sitting flat.
+
+   The neutral is green-cast rather than a true black — it comes off the same
+   hue as --ink-900 (#0f1b16), so the dark theme reads as this brand at night
+   rather than as a generic dark mode dropped on top of it.
+
+   Only roles are redefined here. The raw ramps above are literal colours and
+   stay put: --green-600 means one specific green in both themes, and it is
+   the ROLE that decides which step of the ramp a surface should reach for. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  /* Surfaces. Each step lifts toward the light: sunken < page < card < raised.
+     Kept close together so elevation reads through the border, not a glare. */
+  --bg: #0b1512;
+  --surface-card: #14201c;
+  --surface-raised: #1c2a25;
+  --surface-sunken: #0a120f;
+  --surface: var(--surface-card);
+  --border: #253430;
+  --border-strong: #3a4b45;
+
+  /* Off-white, not #fff — pure white on a dark field haloes badly at text
+     sizes. 13:1 on a card, so it clears AAA with room to spare. */
+  --text: #e6eeea;
+  --text-muted: #9fb0a9;
+  --text-secondary: #b8c6c0;
+  --text-body: #c8d6d0;
+  --text-soft: #a8b8b2;
+  --text-faint: #8a9a94;
+  --text-disabled: #6f817a;
+
+  --n-950: #f2f6f4;
+  --n-700: #b8c6c0;
+  --n-600: #9fb0a9;
+  --n-500: #8a9a94;
+  --n-400: #6f817a;
+  --n-300: #3f524b;
+  --n-200: #2b3a35;
+  --n-150: #212e29;
+  --n-100: #18241f;
+  --n-50:  #131e1a;
+
+  /* The brand green splits in two: --green-600 is a legible body colour on
+     white but 2.5:1 on charcoal, so text climbs the ramp while fills stay
+     dark enough to carry white type. */
+  --brand-text: #5fbf8f;
+  --brand-text-strong: #7fd4a6;
+  --brand-fill: #2f7d5c;
+  --brand-fill-hover: #3a9670;
+  --brand-line: #35785a;
+
+  /* --green / --green-dark / --clay are deliberately NOT redefined here. Each
+     is used as both a fill and a text colour, and those want opposite ends of
+     the ramp on a dark field — flipping the alias would fix the links and put
+     white type on a pale green button. Those call sites resolve through
+     --brand-* / --clay-text instead. */
+
+  --nav-bg: #123126;
+  --input-bg: #101a16;
+  --overlay: rgba(0, 0, 0, 0.7);
+
+  --scrim: rgba(11, 21, 18, 0.5);
+  --scrim-strong: rgba(11, 21, 18, 0.78);
+  --stripe: rgba(255, 255, 255, 0.035);
+
+  --success: #46c67d;      --success-bg: #12301f;
+  --warning: #e0a340;      --warning-bg: #33270d;
+  --danger:  #f2726a;      --danger-bg:  #3a1e1c;
+  --info:    #7aa9ff;      --info-bg:    #142743;
+
+  --pick-correct: #45c977; --pick-correct-bg: #12301f;
+  --pick-wrong:   #f2726a; --pick-wrong-bg:   #3a1e1c;
+  --pick-needs:   #f0b03f;
+
+  --atp-text: #8fb6ff;
+  --atp-tint: #14243d;
+  --atp-tint-strong: #1a2f4f;
+  --atp-line: #3b5a8f;
+
+  --wta-text: #ff8ab5;
+  --wta-tint: #3a1526;
+  --wta-tint-strong: #4a1c31;
+  --wta-line: #8a3a5c;
+
+  --clay-text: #e09463;
+
+  --danger-fill: #b3392f;
+  --danger-fill-hover: #c94a3f;
+  --warning-fill: #8f5411;
+
+  --danger-strong: #ffb0a8;
+  --atp-line-strong: #5a86c9;
+  --atp-text-strong: #a8c8ff;
+  --brand-line-strong: #4a8f6c;
+  --gold-ink: #e0b34a;
+
+  --success-tint: #0e2417;
+  --success-line: #2c5c3f;
+  --warning-tint: #2a2010;
+  --warning-line: #6b5518;
+  --danger-tint: #2e1717;
+  --danger-line: #7d3b41;
+  --info-line: #3b5a8f;
+
+  --bracket-line: #2e5443;
+  --connector-line: #47876a;
+
+  --surface-grass-bg: #102b18;
+  --surface-clay-bg: #33200f;
+  --surface-hard-bg: #142743;
+  --surface-grass-fg: #6fd18a;
+  --surface-clay-fg: #e0a06a;
+  --surface-hard-fg: #8fb6ff;
+
+  --section-tint-open: rgba(201, 120, 58, 0.13);
+  --section-tint-active: rgba(64, 145, 108, 0.13);
+  --section-tint-muted: rgba(147, 163, 156, 0.07);
+
+  --round-1-ink: #fca5a5;
+  --round-2-ink: #fdba74;
+  --round-3-ink: #fde047;
+  --round-4-ink: #86efac;
+  --round-5-ink: #93c5fd;
+  --round-6-ink: #c4b5fd;
+  --round-7-ink: #f0abfc;
+
+  --badge-seed-bg: #3a2f10;  --badge-seed-fg: #e8c766;  --badge-seed-line: #6b5518;
+  --badge-wc-bg:   #16294a;  --badge-wc-fg:   #9dc0ff;  --badge-wc-line:   #3a5c93;
+  --badge-q-bg:    #142e24;  --badge-q-fg:    #8fd8b0;  --badge-q-line:    #35664d;
+  --badge-ll-bg:   #3a1d20;  --badge-ll-fg:   #f2a3a8;  --badge-ll-line:   #7d3b41;
+  --badge-pr-bg:   #2a2340;  --badge-pr-fg:   #c3aef0;  --badge-pr-line:   #5b4a8c;
+  --badge-se-bg:   #113035;  --badge-se-fg:   #8fd9e2;  --badge-se-line:   #35707a;
+  --badge-alt-bg:  #3a2716;  --badge-alt-fg:  #f0b478;  --badge-alt-line:  #7d5730;
+  --badge-ng-bg:   #35300f;  --badge-ng-fg:   #e0cf72;  --badge-ng-line:   #6b5f22;
+
+  /* Ambient light does not exist at night: separation comes from a near-black
+     cast shadow plus the border, not from the soft ink wash light mode uses. */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.40);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.50);
+  --shadow:    0 1px 3px rgba(0, 0, 0, 0.50);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.50);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.60);
+  --shadow-xl: 0 24px 56px rgba(0, 0, 0, 0.70);
+
+  --glow-atp: 0 8px 22px rgba(37, 99, 235, 0.38);
+  --glow-wta: 0 8px 22px rgba(219, 39, 119, 0.34);
+  --glow-green: 0 8px 22px rgba(45, 106, 79, 0.42);
+}
+
+/* The page can be over-scrolled past <body> — iOS rubber-banding, a short page
+   on a tall window — and whatever is behind it shows through. Unstyled that is
+   canvas white, which reads as a flash of light mode at the top of every
+   bounce. */
+html { background: var(--bg); }
 
 body {
   font-family: var(--font-body);
@@ -180,7 +464,7 @@ h1, h2, h3, h4 {
   to   { opacity: 1; transform: translateY(0); }
 }
 
-a { color: var(--green); text-decoration: none; }
+a { color: var(--brand-text); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
 button, a.btn-primary, a.btn-secondary, a.btn-clay {
@@ -196,14 +480,14 @@ button, a.btn-primary, a.btn-secondary, a.btn-clay {
 button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .btn-primary {
-  background: var(--green);
-  color: white;
-  border-color: var(--green-dark);
+  background: var(--brand-fill);
+  color: var(--on-brand);
+  border-color: var(--brand-fill-hover);
 }
-.btn-primary:hover:not(:disabled) { background: var(--green-dark); }
+.btn-primary:hover:not(:disabled) { background: var(--brand-fill-hover); }
 
 .btn-secondary {
-  background: white;
+  background: var(--surface-card);
   color: var(--text);
   border-color: var(--border);
   text-decoration: none;
@@ -214,10 +498,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .btn-clay {
   background: var(--clay);
-  color: white;
-  border-color: #a0522d;
+  color: var(--on-brand);
+  border-color: var(--clay-600);
 }
-.btn-clay:hover:not(:disabled) { background: #a0522d; }
+.btn-clay:hover:not(:disabled) { background: var(--clay-600); }
 
 input[type="checkbox"], input[type="radio"] { width: auto; cursor: pointer; }
 
@@ -228,10 +512,14 @@ input, select, textarea {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   width: 100%;
-  background: white;
+  background: var(--input-bg);
+  /* Fields never set a colour before, so they inherited the UA's black. That
+     is invisible on a dark field — the value has to be stated. */
+  color: var(--text);
   transition: border-color 0.15s;
 }
-input:focus, select:focus { outline: none; border-color: var(--green-light); }
+input::placeholder, textarea::placeholder { color: var(--text-faint); }
+input:focus, select:focus { outline: none; border-color: var(--brand-line); }
 
 .card {
   background: var(--surface);
@@ -241,7 +529,7 @@ input:focus, select:focus { outline: none; border-color: var(--green-light); }
   padding: 1.5rem;
 }
 
-.error { color: #dc3545; font-size: 0.85rem; }
+.error { color: var(--danger); font-size: 0.85rem; }
 .muted { color: var(--text-muted); font-size: 0.85rem; }
 
 .badge {
@@ -251,7 +539,7 @@ input:focus, select:focus { outline: none; border-color: var(--green-light); }
   font-size: 0.75rem;
   font-weight: 600;
 }
-.badge-seed { background: #fff3cd; color: #856404; }
-.badge-wc   { background: #cfe2ff; color: #084298; }
-.badge-q    { background: #d1e7dd; color: #0a3622; }
-.badge-ll   { background: #f8d7da; color: #58151c; }
+.badge-seed { background: var(--badge-seed-bg); color: var(--badge-seed-fg); }
+.badge-wc   { background: var(--badge-wc-bg);   color: var(--badge-wc-fg); }
+.badge-q    { background: var(--badge-q-bg);    color: var(--badge-q-fg); }
+.badge-ll   { background: var(--badge-ll-bg);   color: var(--badge-ll-fg); }

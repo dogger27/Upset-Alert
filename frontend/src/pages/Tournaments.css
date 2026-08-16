@@ -26,7 +26,7 @@
 .t-table td.td-left { text-align: left; }
 .t-table td.td-star { padding: 0 2px; width: 20px; }
 .competing-star {
-  color: #16a34a;
+  color: var(--pick-correct);
   font-size: 0.95rem;
   line-height: 1;
   position: relative;
@@ -39,8 +39,8 @@
   left: 50%;
   bottom: calc(100% + 6px);
   transform: translateX(-50%);
-  background: #1f2937;
-  color: #fff;
+  background: var(--ink-800);
+  color: var(--on-brand);
   font-size: 0.75rem;
   font-weight: 500;
   white-space: nowrap;
@@ -57,16 +57,16 @@
 }
 .t-table tr:last-child td { border-bottom: none; }
 .t-table tr.week-separator td {
-  padding: 0; height: 1px; background: #999; border: none !important;
+  padding: 0; height: 1px; background: var(--n-500); border: none !important;
 }
 .t-table tr.clickable-row:hover .td-name { text-decoration: underline; }
 .t-table tr.clickable-row:hover td:not(.week-label-cell) {
-  border-top: 1px solid #aaa;
-  border-bottom: 1px solid #aaa;
+  border-top: 1px solid var(--n-400);
+  border-bottom: 1px solid var(--n-400);
 }
-.t-table tr.clickable-row:hover td.td-star   { border-left: 1px solid #aaa; }
-.t-table tr.clickable-row:hover td:last-child { border-right: 1px solid #aaa; }
-.t-table tr:has(+ tr.clickable-row:hover) td:not(.week-label-cell) { border-bottom: 1px solid #aaa; }
+.t-table tr.clickable-row:hover td.td-star   { border-left: 1px solid var(--n-400); }
+.t-table tr.clickable-row:hover td:last-child { border-right: 1px solid var(--n-400); }
+.t-table tr:has(+ tr.clickable-row:hover) td:not(.week-label-cell) { border-bottom: 1px solid var(--n-400); }
 .t-table tr.status-group-header td {
   padding: 0.5rem 0.4rem 0.25rem;
   font-size: 0.9rem; font-weight: 800; text-transform: uppercase;

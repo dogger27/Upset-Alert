@@ -9,8 +9,8 @@
   bottom: calc(100% + 6px);
   left: 50%;
   transform: translateX(-50%);
-  background: #1f2937;
-  color: #fff;
+  background: var(--ink-800);
+  color: var(--on-brand);
   font-size: 0.78rem;
   font-weight: 400;
   white-space: pre-line;
@@ -32,7 +32,7 @@
   left: 50%;
   transform: translateX(-50%);
   border: 5px solid transparent;
-  border-top-color: #1f2937;
+  border-top-color: var(--ink-800);
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.15s ease;

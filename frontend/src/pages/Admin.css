@@ -4,7 +4,7 @@
   width: 42px;
   padding: 0;
   border-right: 1px solid var(--border);
-  background: #f9fafb;
+  background: var(--n-50);
   position: relative;
   overflow: hidden;
 }
@@ -139,12 +139,12 @@
 .admin-table td.td-nowrap { white-space: nowrap; }
 .admin-table tr:last-child td { border-bottom: none; }
 .admin-table tr.clickable-row:hover td {
-  border-top: 1px solid #aaa;
-  border-bottom: 1px solid #aaa;
+  border-top: 1px solid var(--n-400);
+  border-bottom: 1px solid var(--n-400);
 }
-.admin-table tr.clickable-row:hover td:first-child { border-left: 1px solid #aaa; }
-.admin-table tr.clickable-row:hover td:last-child  { border-right: 1px solid #aaa; }
-.admin-table tr:has(+ tr.clickable-row:hover) td   { border-bottom: 1px solid #aaa; }
+.admin-table tr.clickable-row:hover td:first-child { border-left: 1px solid var(--n-400); }
+.admin-table tr.clickable-row:hover td:last-child  { border-right: 1px solid var(--n-400); }
+.admin-table tr:has(+ tr.clickable-row:hover) td   { border-bottom: 1px solid var(--n-400); }
 .admin-table tr.status-group-header td {
   padding: 0.5rem 1rem 0.25rem;
   font-size: 0.9rem; font-weight: 800; text-transform: uppercase;
@@ -202,7 +202,7 @@
 .scraping-step-num {
   display: inline-flex; align-items: center; justify-content: center;
   width: 1.4rem; height: 1.4rem; border-radius: 50%;
-  background: var(--clay); color: #fff;
+  background: var(--clay); color: var(--on-brand);
   font-size: 0.75rem; font-weight: 700; flex-shrink: 0;
 }
 .scraping-step-header strong { font-size: 0.95rem; }
@@ -271,8 +271,8 @@
   border-color: var(--danger);
 }
 .btn-danger-sm:hover:not(:disabled) {
-  background: var(--danger);
-  color: #fff;
+  background: var(--danger-fill);
+  color: var(--on-brand);
 }
 
 .logs-empty {
@@ -284,12 +284,12 @@
 
 /* Count badges */
 .log-count-error {
-  color: #fff;
-  background: var(--danger);
+  color: var(--on-brand);
+  background: var(--danger-fill);
 }
 .log-count-warn {
-  color: #fff;
-  background: #b45309;
+  color: var(--on-brand);
+  background: var(--warning-fill);
 }
 
 /* Logs table */
@@ -311,8 +311,8 @@
   padding: 0.15rem 0.45rem;
   border-radius: var(--radius-pill);
 }
-.log-badge-error   { background: rgba(220, 38, 38, 0.12); color: #b91c1c; }
-.log-badge-warning { background: rgba(180, 83, 9, 0.12);  color: #92400e; }
+.log-badge-error   { background: rgba(220, 38, 38, 0.12); color: var(--danger-strong); }
+.log-badge-warning { background: rgba(180, 83, 9, 0.12);  color: var(--warning); }
 
 .log-cat {
   font-size: 0.75rem;
@@ -545,20 +545,20 @@
 /* ── Settings tab ── */
 .admin-settings { max-width: 640px; }
 .admin-settings h2 { font-size: 1.1rem; margin: 0 0 0.4rem; }
-.admin-settings h3 { font-size: 0.85rem; margin: 1.4rem 0 0.4rem; color: #6b7280;
+.admin-settings h3 { font-size: 0.85rem; margin: 1.4rem 0 0.4rem; color: var(--n-600);
   text-transform: uppercase; letter-spacing: 0.05em; }
-.admin-settings-note { font-size: 0.82rem; color: #4b5563; line-height: 1.5; margin: 0 0 1rem; }
+.admin-settings-note { font-size: 0.82rem; color: var(--n-700); line-height: 1.5; margin: 0 0 1rem; }
 .admin-radio {
   display: flex; gap: 0.6rem; align-items: flex-start;
   padding: 0.7rem 0.8rem; margin-bottom: 0.5rem;
-  border: 1px solid var(--border, #e5e7eb); border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--border, var(--n-200)); border-radius: 8px; cursor: pointer;
 }
-.admin-radio.is-on { border-color: #1b4332; background: #f2f7f4; }
+.admin-radio.is-on { border-color: var(--brand-line-strong); background: var(--n-100); }
 .admin-radio input { margin-top: 0.2rem; flex: 0 0 auto; }
 .admin-radio span { display: flex; flex-direction: column; gap: 0.15rem; }
-.admin-radio strong { font-size: 0.9rem; color: #111; }
-.admin-radio em { font-size: 0.78rem; color: #4b5563; font-style: normal; line-height: 1.45; }
-.admin-settings-counts { margin: 0; padding-left: 1.1rem; font-size: 0.82rem; color: #4b5563; }
+.admin-radio strong { font-size: 0.9rem; color: var(--n-950); }
+.admin-radio em { font-size: 0.78rem; color: var(--n-700); font-style: normal; line-height: 1.45; }
+.admin-settings-counts { margin: 0; padding-left: 1.1rem; font-size: 0.82rem; color: var(--n-700); }
 
 /* Per-draw locking rule in the tournaments table. Sized to the column rather
    than the text so a long option can't widen an already dense row. */
@@ -566,9 +566,9 @@
   font-size: 0.68rem;
   padding: 0.15rem 0.2rem;
   max-width: 7.5rem;
-  border: 1px solid var(--border, #e5e7eb);
+  border: 1px solid var(--border, var(--n-200));
   border-radius: 4px;
-  background: #fff;
-  color: #374151;
+  background: var(--surface-card);
+  color: var(--n-700);
   cursor: pointer;
 }
