@@ -98,7 +98,7 @@
   bottom: 1rem;
   left: 0.75rem;
   right: 0.75rem;
-  background: var(--ink-800);
+  background: var(--tooltip-bg);
   color: var(--on-brand);
   font-size: 0.78rem;
   line-height: 1.4;
@@ -313,10 +313,10 @@
 
 /* ── Active (currently viewed) row ── */
 .sidebar-member--selected {
-  background: var(--green-dark, var(--green-700)) !important;
+  background: var(--brand-active) !important;
   box-shadow: inset 3px 0 0 #5cb87a;
 }
-.sidebar-member--selected:hover { background: var(--green-dark, var(--green-700)) !important; }
+.sidebar-member--selected:hover { background: var(--brand-active) !important; }
 .sidebar-member--selected .sidebar-member-name,
 .sidebar-member--selected .sidebar-rank,
 .sidebar-member--selected .sidebar-points { color: var(--on-brand); }

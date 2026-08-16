@@ -195,6 +195,19 @@
   --on-brand: #ffffff;
 
   --nav-bg: var(--green-800);
+
+  /* A fill that has to READ AS FILLED against whatever is behind it — the
+     selected row, an active tab, a primary CTA. Distinct from --brand-fill
+     because it is dark green in light mode, where it sits on pale surfaces.
+     On a dark theme the surfaces darken too, so a fixed dark green stops
+     separating: --green-800 goes from 11:1 on a pale sidebar to 1.5:1 on a
+     dark one, which is why "selected" looked like nothing was selected. */
+  --brand-active: var(--green-800);
+
+  /* Floating panels — toasts, hover cards, tooltips. Same problem: they read
+     as a layer above the page only if they contrast with it. */
+  --tooltip-bg: var(--ink-800);
+
   --input-bg: #ffffff;
   --overlay: rgba(0, 0, 0, 0.45);
 
@@ -363,6 +376,8 @@
      --brand-* / --clay-text instead. */
 
   --nav-bg: #123126;
+  --brand-active: #2f7d5c;
+  --tooltip-bg: #3a4b44;
   --input-bg: #101a16;
   --overlay: rgba(0, 0, 0, 0.7);
 

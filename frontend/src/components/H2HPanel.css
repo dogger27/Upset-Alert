@@ -323,7 +323,7 @@ html.h2h-modal-open body {
 
 /* Best-value highlight pill */
 .h2h-best {
-  background: var(--green-dark, var(--green-800));
+  background: var(--brand-active);
   color: var(--on-brand);
   border-radius: 6px;
   padding: 1px 7px;
