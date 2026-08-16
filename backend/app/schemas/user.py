@@ -25,6 +25,8 @@ class UserOut(BaseModel):
     # Echoed back so the client can tell whether the browser's zone already
     # matches what we hold, and skip the write when it does.
     timezone: Optional[str] = None
+    # Drives which palette the client paints on load. NULL = light.
+    theme: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -41,6 +43,7 @@ class UserUpdate(BaseModel):
     username: Optional[str] = None
     full_name: Optional[str] = None
     timezone: Optional[str] = None
+    theme: Optional[str] = None
 
 
 class UserAdminOut(BaseModel):

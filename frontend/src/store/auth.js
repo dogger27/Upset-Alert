@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { getMe, login as apiLogin, register as apiRegister, updateMe as apiUpdateMe } from '../api/auth'
 import { queryClient } from '../main'
+import { useTheme } from './theme'
 
 // The server needs the reader's zone only to render deadlines in outgoing
 // email, where no browser is present to do it. Take it from the browser rather
@@ -28,6 +29,10 @@ export const useAuth = create((set) => ({
     if (!token) { set({ loading: false }); return }
     try {
       const user = await getMe()
+      // The account's theme outranks whatever this device had cached — that is
+      // the point of storing it server-side. Applied before paint-sensitive
+      // work so a device that disagrees corrects itself in one step.
+      useTheme.getState().adoptAccountTheme(user.theme)
       set({ user, loading: false })
       set({ user: await syncTimezone(user) })
     } catch {
@@ -40,6 +45,7 @@ export const useAuth = create((set) => ({
     const { access_token } = await apiLogin(email, password)
     localStorage.setItem('token', access_token)
     const user = await getMe()
+    useTheme.getState().adoptAccountTheme(user.theme)
     queryClient.clear()
     set({ user: await syncTimezone(user) })
   },

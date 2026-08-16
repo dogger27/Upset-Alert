@@ -200,6 +200,13 @@ async def update_me(
         except (ZoneInfoNotFoundError, ValueError):
             raise HTTPException(status_code=400, detail="Unknown timezone")
         current_user.timezone = body.timezone
+    if body.theme is not None and body.theme != current_user.theme:
+        # Validated rather than stored as sent: this value is written straight
+        # into a data-theme attribute by the client, so only the two themes the
+        # stylesheet actually defines are allowed through.
+        if body.theme not in ("light", "dark"):
+            raise HTTPException(status_code=400, detail="Unknown theme")
+        current_user.theme = body.theme
     await db.commit()
     await db.refresh(current_user)
     return current_user

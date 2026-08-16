@@ -223,6 +223,9 @@ async def _migrate(conn):
         # never return — every read falls back to UTC.
         "ALTER TABLE users ADD COLUMN timezone VARCHAR",
         "ALTER TABLE users ADD COLUMN mobile_app_seen_at DATETIME",
+        # Theme preference, on the account so it follows the user between
+        # devices. NULL = never chosen = light.
+        "ALTER TABLE users ADD COLUMN theme VARCHAR",
         # Round-completion emails became a weekly digest: a completed round is
         # now claimed on detection and emailed later, once the week's other
         # draws have reached the same round. digest_sent_at marks "actually
