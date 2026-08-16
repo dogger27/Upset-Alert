@@ -9,7 +9,7 @@ export function LeagueCard({ name, sublabel, global: isGlobal = false, icon = nu
         {icon && <span style={{ fontSize: '0.95rem', lineHeight: 1 }}>{icon}</span>}
         <span style={{
           fontFamily: 'var(--font-display)', fontWeight: 'var(--fw-bold)', fontSize: '1rem',
-          letterSpacing: '0.01em', color: 'var(--ink-900)',
+          letterSpacing: '0.01em', color: 'var(--text)',
         }}>{name}</span>
       </div>
       {sublabel && <div style={{

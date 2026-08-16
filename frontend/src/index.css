@@ -235,6 +235,9 @@
 
   --success-tint: #f0fdf4;
   --success-line: #bbf7d0;
+  /* The Live view's correct box. Same state as .match-box.correct-pick but a
+     paler fill in light, so it keeps its own token rather than sharing one. */
+  --pick-correct-soft: #f0fdf4;
   --warning-tint: #fffbeb;
   --warning-line: #fde68a;
   --danger-tint: #fff1f1;
@@ -245,6 +248,13 @@
      tracks the page, not the surface. */
   --bracket-line: #c8e6c9;
   --connector-line: #7fbf8f;
+
+  /* Player-row states. A low-alpha wash reads clearly over white and vanishes
+     over charcoal, so these carry their own weight per theme rather than being
+     one alpha applied to both. */
+  --row-picked: rgba(21, 128, 61, 0.08);
+  --row-picked-hover: rgba(21, 128, 61, 0.16);
+  --row-highlight: rgba(37, 99, 235, 0.14);
 
   /* Court surfaces carry their own ink, which the pale -bg fills above expect. */
   --surface-grass-fg: #1b6b2c;
@@ -353,8 +363,10 @@
   --danger:  #f2726a;      --danger-bg:  #3a1e1c;
   --info:    #7aa9ff;      --info-bg:    #142743;
 
-  --pick-correct: #45c977; --pick-correct-bg: #12301f;
-  --pick-wrong:   #f2726a; --pick-wrong-bg:   #3a1e1c;
+  /* The correct-pick box is the single most important state in the bracket, so
+     it is lifted well clear of the card rather than sitting at tint strength. */
+  --pick-correct: #45c977; --pick-correct-bg: #1c4a33;
+  --pick-wrong:   #f2726a; --pick-wrong-bg:   #4a2320;
   --pick-needs:   #f0b03f;
 
   --atp-text: #8fb6ff;
@@ -379,8 +391,9 @@
   --brand-line-strong: #4a8f6c;
   --gold-ink: #e0b34a;
 
-  --success-tint: #0e2417;
+  --success-tint: #16301f;
   --success-line: #2c5c3f;
+  --pick-correct-soft: #1c4a33;
   --warning-tint: #2a2010;
   --warning-line: #6b5518;
   --danger-tint: #2e1717;
@@ -389,6 +402,12 @@
 
   --bracket-line: #2e5443;
   --connector-line: #47876a;
+
+  /* Carried much further than the light wash: at 8% over a dark card the green
+     was invisible, so a correct pick did not read as correct at all. */
+  --row-picked: rgba(69, 201, 119, 0.30);
+  --row-picked-hover: rgba(69, 201, 119, 0.44);
+  --row-highlight: rgba(96, 150, 255, 0.28);
 
   --surface-grass-bg: #102b18;
   --surface-clay-bg: #33200f;

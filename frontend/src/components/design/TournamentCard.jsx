@@ -27,7 +27,7 @@ function renderFooter({ section, pickState, drawDates }) {
       <span style={map[state]}>{label[state]}</span>,
       <span style={{
         fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '0.8rem',
-        letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--green-600)',
+        letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--brand-text)',
       }}>Make picks →</span>
     )
   }
@@ -35,7 +35,7 @@ function renderFooter({ section, pickState, drawDates }) {
   if (section === 'active') {
     const competing = pickState === 'complete'
     return row(
-      <span style={{ ...pillBase, background: 'var(--ink-100)', color: 'var(--ink-600)' }}>🔒 Selection closed</span>,
+      <span style={{ ...pillBase, background: 'var(--n-150)', color: 'var(--text-soft)' }}>🔒 Selection closed</span>,
       competing
         ? <span style={{ ...pillBase, background: 'var(--green-600)', color: '#fff', boxShadow: 'var(--glow-green)', letterSpacing: '0.03em' }}>★ Competing</span>
         : null
@@ -45,7 +45,7 @@ function renderFooter({ section, pickState, drawDates }) {
   if (section === 'upcoming' && drawDates) {
     const item = (k, v) => (
       <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-        <span style={{ fontWeight: 700, color: 'var(--ink-600)' }}>{k}:</span> {v}
+        <span style={{ fontWeight: 700, color: 'var(--text-soft)' }}>{k}:</span> {v}
       </span>
     )
     return (
@@ -59,9 +59,9 @@ function renderFooter({ section, pickState, drawDates }) {
   if (section === 'lastweek') {
     const competed = pickState === 'complete'
     return row(
-      <span style={{ ...pillBase, background: 'var(--ink-100)', color: 'var(--ink-500)' }}>Completed</span>,
+      <span style={{ ...pillBase, background: 'var(--n-150)', color: 'var(--text-muted)' }}>Completed</span>,
       competed
-        ? <span style={{ ...pillBase, background: 'var(--green-100)', color: 'var(--green-700)' }}>★ Competed</span>
+        ? <span style={{ ...pillBase, background: 'var(--success-bg)', color: 'var(--success)' }}>★ Competed</span>
         : null
     )
   }
@@ -116,12 +116,12 @@ export function TournamentCard({ tour = 'ATP', name, city, surface = 'grass', ti
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
           <span style={{
             fontFamily: 'var(--font-display)', fontWeight: 'var(--fw-bold)',
-            fontSize: '1.18rem', letterSpacing: '0.01em', lineHeight: 1.05, color: 'var(--ink-900)',
+            fontSize: '1.18rem', letterSpacing: '0.01em', lineHeight: 1.05, color: 'var(--text)',
           }}>{name}</span>
           <TierBadge tour={tour} tier={tier} name={name} size="sm" style={{ flexShrink: 0 }} />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          {city && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', fontWeight: 600, color: 'var(--ink-600)' }}>{city}</span>}
+          {city && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-soft)' }}>{city}</span>}
           <SurfacePill surface={surface} />
           {dateRange && <span style={{
             marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: '0.72rem',

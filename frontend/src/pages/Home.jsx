@@ -192,7 +192,7 @@ export function CreateLeagueModal({ onClose }) {
 function LoginRequiredModal({ onClose }) {
   return (
     <Modal title="Login Required" onClose={onClose}>
-      <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.92rem', color: 'var(--ink-700)', margin: '0 0 20px' }}>
+      <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.92rem', color: 'var(--text-body)', margin: '0 0 20px' }}>
         Please log in to view the draw and make match predictions!
       </p>
       <div style={{ display: 'flex', gap: 10 }}>

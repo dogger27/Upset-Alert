@@ -220,12 +220,12 @@
 }
 
 .match-box.correct-pick {
-  background: var(--success-bg);
+  background: var(--pick-correct-bg);
   border-color: var(--pick-correct);
 }
 
 .match-box.wrong-pick {
-  background: var(--danger-bg);
+  background: var(--pick-wrong-bg);
   border-color: var(--danger);
 }
 
@@ -262,17 +262,17 @@
 .player-row.highlight.clickable:hover,
 .player-row.picked.highlight,
 .player-row.picked.highlight.clickable:hover {
-  background: rgba(37, 99, 235, 0.14);
+  background: var(--row-highlight);
   box-shadow: inset 2px 0 0 #2563eb;
 }
 
 .player-row.picked {
   font-weight: 600;
-  background: rgba(21, 128, 61, 0.08);
+  background: var(--row-picked);
 }
 
 .player-row.picked.clickable:hover {
-  background: rgba(21, 128, 61, 0.16);
+  background: var(--row-picked-hover);
 }
 
 .player-row.winner {
