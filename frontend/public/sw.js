@@ -12,8 +12,39 @@
  * abrupt handover to break.
  */
 
+// Bump to force every installed app onto the current build. See below.
+const SW_VERSION = '2026-08-16.1'
+
 self.addEventListener('install', () => self.skipWaiting())
-self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()))
+
+/*
+ * On update, re-navigate every open window.
+ *
+ * An installed PWA launches from a home-screen snapshot rather than a fresh
+ * navigation, so it can keep serving an index.html — and therefore a JS bundle —
+ * from days ago, straight through any number of deploys. The app works; it is
+ * simply not the app that shipped, and every fix looks like it never landed.
+ *
+ * The page cannot fix this by itself: any check we ship lives in the new bundle,
+ * which the stale client is precisely the one never to load. This worker is the
+ * only piece that updates independently — /sw.js is not content-hashed and
+ * revalidates on every launch — so it is the one thing that can reach a client
+ * already stuck, and WindowClient.navigate() needs no cooperation from the page.
+ *
+ * Only on an UPDATE, never a first install: clients controlled by the previous
+ * worker are collected before claim(), which returns nothing on a first run, so
+ * a new visitor is not bounced immediately after loading. Activation happens
+ * once per worker version, so this cannot loop — it fires only when the bytes of
+ * this file change.
+ */
+self.addEventListener('activate', (event) => event.waitUntil((async () => {
+  const previouslyControlled = await self.clients.matchAll({ type: 'window' })
+  await self.clients.claim()
+  if (previouslyControlled.length === 0) return   // first install, nothing stale
+  for (const client of previouslyControlled) {
+    try { await client.navigate(client.url) } catch { /* client went away */ }
+  }
+})()))
 
 self.addEventListener('push', (event) => {
   // A push with no/undecodable payload still has to show something: browsers
