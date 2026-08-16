@@ -21,3 +21,8 @@
 # The service worker decides when the app updates; a cached one pins it.
 /sw.js
   Cache-Control: public, max-age=0, must-revalidate
+# Paints the theme before first paint. Not content-hashed (index.html refers to
+# it by a fixed name), so it has to revalidate like index.html or a stale copy
+# pins the boot logic.
+/theme.js
+  Cache-Control: public, max-age=0, must-revalidate
