@@ -139,10 +139,31 @@ function TournamentDraw() {
     },
   })
 
+  /*
+   * Gated on the TOKEN, not on the resolved user.
+   *
+   * `enabled: !!user` made this wait for /auth/me before it would even start,
+   * so opening a draw cost two round trips end to end: identify the user, then
+   * fetch their picks. The server resolves the account from the bearer token
+   * anyway — it never needed the client to know who it was — so the only thing
+   * that dependency bought was latency.
+   *
+   * That delay is the whole complaint. Until the picks land, every undecided
+   * match renders TBD, which looks exactly like a bracket with nothing picked;
+   * on a cold PWA start over mobile data it is long enough to read as broken,
+   * and long enough to go fiddle with the sidebar and credit that with the fix.
+   * Now both requests fly at once.
+   *
+   * No token means signed out, which correctly leaves this disabled. A stale
+   * token 401s and yields no data — the same end state as before.
+   */
+  const hasToken = (() => {
+    try { return !!localStorage.getItem('token') } catch { return false }
+  })()
   const { data: savedPreds } = useQuery({
     queryKey: ['predictions', id],
     queryFn: () => getPredictions(Number(id)),
-    enabled: !!user,
+    enabled: hasToken,
   })
 
   const viewingOther = viewedUserId != null && viewedUserId !== user?.id
@@ -1316,7 +1337,7 @@ function TournamentDraw() {
               tournament={tournament}
               matches={matches}
               players={players}
-              picks={user ? activePicks : {}}
+              picks={activePicks}
               onPick={viewingOther ? (canEditOther ? handlePickForOther : () => {}) : handlePick}
               locked={!user || locked || (viewingOther && !canEditOther)}
               lockedMatchIds={lockedMatchIds}
@@ -1334,7 +1355,7 @@ function TournamentDraw() {
               tournament={tournament}
               matches={matches}
               players={players}
-              picks={user ? activePicks : {}}
+              picks={activePicks}
               onPick={viewingOther ? (canEditOther ? handlePickForOther : () => {}) : handlePick}
               locked={!user || locked || (viewingOther && !canEditOther)}
               lockedMatchIds={lockedMatchIds}
