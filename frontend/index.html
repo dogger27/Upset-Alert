@@ -35,18 +35,13 @@
     <!-- Paint the theme before the first frame.
          Doing this from React would mean the light palette renders once and is
          repainted dark a beat later — the white flash every dark-mode site is
-         judged by. It has to be inline and synchronous in <head>, ahead of the
-         stylesheet, so the attribute is already on <html> when styles resolve.
-         Light is the default, so a missing or unreadable value means light and
-         prefers-color-scheme is deliberately not consulted. Keep the key in
-         step with THEME_KEY in src/store/theme.js. -->
-    <script>
-      (function () {
-        var t = 'light'
-        try { if (localStorage.getItem('ua-theme') === 'dark') t = 'dark' } catch (e) {}
-        document.documentElement.setAttribute('data-theme', t)
-      })()
-    </script>
+         judged by. It must run synchronously in <head>, ahead of the stylesheet,
+         so the attribute is on <html> when styles resolve.
+         A FILE, not an inline block: our CSP sets script-src 'self' with no
+         'unsafe-inline', so an inline script is blocked and silently does
+         nothing. No defer/async/type=module — those all postpone it past the
+         first paint, which is the whole thing we are avoiding. -->
+    <script src="/theme.js"></script>
   </head>
   <body>
     <div id="root"></div>

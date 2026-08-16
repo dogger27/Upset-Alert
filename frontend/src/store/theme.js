@@ -32,6 +32,14 @@ function paint(theme) {
   document.documentElement.setAttribute('data-theme', theme)
 }
 
+// Belt and braces. public/theme.js normally does this before the first paint,
+// and when it works this line changes nothing. But it is a separate network
+// request referenced by a fixed path, so it can 404 after a bad deploy or be
+// blocked outright — which is precisely how this shipped broken once, with the
+// toggle reporting dark over a light page. Re-asserting it here means the worst
+// case is a brief flash rather than a theme that silently does not apply.
+paint(storedTheme())
+
 export const useTheme = create((set, get) => ({
   theme: storedTheme(),
 
