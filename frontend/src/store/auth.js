@@ -27,18 +27,24 @@ export const useAuth = create((set) => ({
   init: async () => {
     const token = localStorage.getItem('token')
     if (!token) { set({ loading: false }); return }
+    let user
     try {
-      const user = await getMe()
-      // The account's theme outranks whatever this device had cached — that is
-      // the point of storing it server-side. Applied before paint-sensitive
-      // work so a device that disagrees corrects itself in one step.
-      useTheme.getState().adoptAccountTheme(user.theme)
-      set({ user, loading: false })
-      set({ user: await syncTimezone(user) })
+      user = await getMe()
     } catch {
+      // ONLY getMe() belongs in here. This catch deletes the token, so anything
+      // else inside it can silently sign the user out over an unrelated error —
+      // and a signed-out session on a page that still looks signed in fails in
+      // confusing ways (empty picks, nothing selected) rather than obviously.
       localStorage.removeItem('token')
       set({ loading: false })
+      return
     }
+    set({ user, loading: false })
+    // The account's theme outranks whatever this device had cached — that is the
+    // point of storing it server-side. Deliberately after the session is
+    // established, so a bad theme value costs the wrong palette, not the login.
+    try { useTheme.getState().adoptAccountTheme(user.theme) } catch { /* cosmetic */ }
+    set({ user: await syncTimezone(user) })
   },
 
   login: async (email, password) => {

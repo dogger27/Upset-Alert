@@ -52,9 +52,13 @@ export const useTheme = create((set, get) => ({
     paint(theme)
     cache(theme)
     set({ theme })
-    // Fire-and-forget: a signed-out or offline user still gets the theme they
-    // asked for from the cache above, so a failure here is not worth surfacing.
-    updateMe({ theme }).catch(() => {})
+    // Only when signed in. The API client turns ANY 401 into "clear the token
+    // and go to /login", so firing this as a guest would throw a visitor off
+    // the page they were reading for toggling dark mode. The catch cannot stop
+    // that — the interceptor runs first — so the request must not be made.
+    let signedIn = false
+    try { signedIn = !!localStorage.getItem('token') } catch { /* private mode */ }
+    if (signedIn) updateMe({ theme }).catch(() => {})
   },
 
   toggleTheme: () => get().setTheme(get().theme === 'dark' ? 'light' : 'dark'),
