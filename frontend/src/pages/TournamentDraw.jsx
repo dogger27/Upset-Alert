@@ -191,6 +191,32 @@ function TournamentDraw() {
     }
   }, [viewingOther, viewedPreds, data])
 
+  /*
+   * Select the signed-in user once auth resolves, so the draw opens on THEIR
+   * picks.
+   *
+   * viewedUserId starts null, and null already means "me" everywhere downstream
+   * (viewingOther is false, activePicks is your own). What null does NOT do is
+   * tell the sidebar who to highlight: it falls back to user?.id, which is
+   * undefined until the auth request comes back. On a phone that gap is long
+   * enough to see — the draw renders with nobody selected and, because the
+   * predictions query is gated on !!user, no picks either. Naming the user
+   * explicitly closes it.
+   *
+   * Runs once, guarded by a ref rather than by "is viewedUserId null", because
+   * clicking your own row in the sidebar toggles back to null on purpose.
+   * Re-asserting on every null would make deselecting yourself impossible.
+   *
+   * A ?user= deep link is already in the initial state and outranks this.
+   */
+  const initialUserSet = useRef(false)
+  useEffect(() => {
+    if (initialUserSet.current || authLoading) return
+    initialUserSet.current = true
+    if (searchParams.get('user') || !user) return
+    setViewedUserId(user.id)
+  }, [authLoading, user, searchParams])
+
   // Set initial view mode once: always 'picks' for open tournaments, or if user has picks, or if ?user= param present
   // DISABLED — Combined is the only view shown; kept for when Picks/Live Draw are re-enabled.
   // useEffect(() => {
