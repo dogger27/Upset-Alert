@@ -21,8 +21,10 @@ export function LeagueCard({ name, sublabel, global: isGlobal = false, icon = nu
 
   const cardStyle = {
     display: 'block', textDecoration: 'none', color: 'inherit',
-    background: isGlobal ? 'var(--atp-50)' : 'var(--surface-card)',
-    border: `1px solid ${isGlobal ? 'var(--atp-100)' : (hover ? 'var(--green-500)' : 'var(--border)')}`,
+    // --atp-tint rather than the raw --atp-50: the Global card is permanently
+    // tinted, so a literal near-white made it the one bright slab on a dark page.
+    background: isGlobal ? 'var(--atp-tint)' : 'var(--surface-card)',
+    border: `1px solid ${isGlobal ? 'var(--atp-tint-strong)' : (hover ? 'var(--green-500)' : 'var(--border)')}`,
     borderRadius: 'var(--radius)',
     padding: '11px 14px',
     boxShadow: hover ? 'var(--shadow-md)' : 'none',

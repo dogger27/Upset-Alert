@@ -65,8 +65,8 @@
   font-size: 0.8rem;
   overflow: hidden;
 }
-.cv-box--correct { background: var(--pick-correct-soft); border-color: var(--success-line); }
-.cv-box--wrong   { background: var(--pick-wrong-bg); border-color: var(--danger-line); }
+.cv-box--correct { background: var(--pick-correct-soft); border-color: var(--pick-correct-line); }
+.cv-box--wrong   { background: var(--pick-wrong-bg); border-color: var(--pick-wrong-line); }
 .cv-box--clickable { cursor: pointer; }
 .cv-box--clickable:hover { filter: brightness(0.96); border-color: var(--n-400); }
 .cv-box--bye     { background: var(--n-100); border-style: dashed; }

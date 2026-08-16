@@ -87,7 +87,10 @@ export function TournamentCard({ tour = 'ATP', name, city, surface = 'grass', ti
   const isATP = String(tour).toUpperCase() === 'ATP'
   const accent = isATP ? 'var(--atp-500)' : 'var(--wta-500)'
   const accentDeep = isATP ? 'var(--atp-700)' : 'var(--wta-700)'
-  const tint = isATP ? 'var(--atp-50)' : 'var(--wta-50)'
+  // Role tokens, not the raw --atp-50/--wta-50 ramp steps: those are literal
+  // near-whites, so on a dark theme hovering a card turned it into a white
+  // slab with near-white text on it.
+  const tint = isATP ? 'var(--atp-tint)' : 'var(--wta-tint)'
   const glow = isATP ? 'var(--glow-atp)' : 'var(--glow-wta)'
   const interactive = section !== 'upcoming'
 
