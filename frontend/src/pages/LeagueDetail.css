@@ -590,10 +590,10 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
    was sharing one row with the counter under white-space: nowrap, so it ran off
    the card and got cut mid-name — "Karen Kha…". Its own line fits it. */
 .lt-scrubber-bottom {
-  display: flex; flex-direction: column; gap: 0.15rem;
+  display: flex; flex-direction: column; gap: 0.2rem;
 }
 .lt-scrubber-label {
-  font-size: 0.72rem; color: var(--text-muted); white-space: nowrap;
+  font-size: 0.9rem; color: var(--text-muted); white-space: nowrap;
 }
 .lt-scrubber-label--active { color: var(--brand-text-strong); font-weight: 600; }
 @keyframes lt-flash-fade {
@@ -603,12 +603,12 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 }
 .lt-scrubber-when {
   display: block;
-  font-size: 0.68rem;
+  font-size: 0.82rem;
   color: var(--text-muted);
   opacity: 0.85;
 }
 .lt-scrubber-flash {
-  font-size: 0.72rem; color: var(--text-muted);
+  font-size: 0.9rem; color: var(--text-muted);
   /* Allowed to wrap now that it owns the row — a long pair of names is better
      on two lines than cut off. */
   white-space: normal; line-height: 1.35;
