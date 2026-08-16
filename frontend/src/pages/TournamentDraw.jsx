@@ -164,6 +164,13 @@ function TournamentDraw() {
     queryKey: ['predictions', id],
     queryFn: () => getPredictions(Number(id)),
     enabled: hasToken,
+    // Your own bracket is the one thing on this page that must never be served
+    // stale or skipped. The global staleTime would let a cached result stand for
+    // 30s, and an empty one reads as "you picked nothing" — indistinguishable
+    // from a bracket of TBDs. Always refetch on entering a draw.
+    staleTime: 0,
+    refetchOnMount: 'always',
+    retry: 2,
   })
 
   const viewingOther = viewedUserId != null && viewedUserId !== user?.id
