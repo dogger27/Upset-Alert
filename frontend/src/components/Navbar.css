@@ -307,6 +307,14 @@ a.profile-dropdown-item:visited {
   color: var(--danger);
 }
 
+.profile-dropdown-build {
+  padding: 0.4rem 1rem 0.5rem;
+  font-size: 0.68rem;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  border-top: 1px solid var(--border);
+}
+
 /* Inline edit form */
 .profile-edit-form {
   padding: 0.85rem 1rem;

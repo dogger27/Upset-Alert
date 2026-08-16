@@ -494,6 +494,16 @@ export default function Navbar() {
                       <button className="profile-dropdown-item profile-dropdown-item--danger" onClick={handleLogout}>
                         Log out
                       </button>
+                      {/* When a bug report and the code disagree, the first
+                          thing worth knowing is whether this device is even
+                          running the current build — an installed PWA can sit
+                          on a cached one for a long time. Stamped at build
+                          time by vite.config.js. */}
+                      <div className="profile-dropdown-build">
+                        Build {new Date(__BUILD_TIME__).toLocaleString(undefined, {
+                          month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                        })}
+                      </div>
                     </>
                   ) : notifying ? (
                     <div className="notif-form">
