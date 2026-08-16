@@ -238,6 +238,12 @@
   /* The Live view's correct box. Same state as .match-box.correct-pick but a
      paler fill in light, so it keeps its own token rather than sharing one. */
   --pick-correct-soft: #f0fdf4;
+
+  /* Outlines for those boxes. On paper a pale rule is enough to read as green
+     against white; on a dark card it needs to be the accent itself, or the box
+     loses the one cue that says whether the pick came off. */
+  --pick-correct-line: #bbf7d0;
+  --pick-wrong-line: #fca5a5;
   --warning-tint: #fffbeb;
   --warning-line: #fde68a;
   --danger-tint: #fff1f1;
@@ -394,6 +400,8 @@
   --success-tint: #16301f;
   --success-line: #2c5c3f;
   --pick-correct-soft: #1c4a33;
+  --pick-correct-line: #45c977;
+  --pick-wrong-line: #f2726a;
   --warning-tint: #2a2010;
   --warning-line: #6b5518;
   --danger-tint: #2e1717;

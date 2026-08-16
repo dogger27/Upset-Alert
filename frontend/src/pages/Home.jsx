@@ -77,7 +77,7 @@ function TCard({ t, section, pickStatus, onLoginRequired }) {
 
 function GenderCol({ label, tour, tournaments, section, pickStatus, onLoginRequired }) {
   const accent = tour === 'ATP' ? 'var(--atp-600)' : 'var(--wta-600)'
-  const borderColor = tour === 'ATP' ? 'var(--atp-100)' : 'var(--wta-100)'
+  const borderColor = tour === 'ATP' ? 'var(--atp-tint-strong)' : 'var(--wta-tint-strong)'
 
   if (!tournaments.length) return <div style={{ width: 400, maxWidth: '100%' }} />
 
