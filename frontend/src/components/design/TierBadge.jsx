@@ -1,3 +1,5 @@
+import { useTheme } from '../../store/theme'
+
 function slamLogo(name) {
   const n = (name || '').toLowerCase()
   if (n.includes('australian')) return '/logos/slams/slam_Australian.png'
@@ -8,6 +10,7 @@ function slamLogo(name) {
 }
 
 export function TierBadge({ tour = 'ATP', tier = '500', name = '', size = 'md', style = {} }) {
+  const { theme } = useTheme()
   const isATP = String(tour).toUpperCase() === 'ATP'
   const isSlam = /slam|gs|grand/i.test(String(tier))
 
@@ -24,8 +27,14 @@ export function TierBadge({ tour = 'ATP', tier = '500', name = '', size = 'md', 
     src = slamLogo(name) || (isATP ? '/logos/slams/slam_atp.png' : '/logos/slams/slam_wta.svg')
   } else {
     const tierNum = String(tier).replace(/\D/g, '') || '250'
+    // The 250 stamp is a flat navy (#050053) — 1.1:1 on a dark card, i.e.
+    // invisible. It is the only one that needs a variant: 500 is silver and
+    // 1000 is gold, both of which read fine either way. The variant is the
+    // same artwork with the navy replaced by --atp-text, so alpha and shape
+    // are untouched and it lands at 8.2:1.
+    const darkStamp = theme === 'dark' && tierNum === '250' ? '-dark' : ''
     src = isATP
-      ? `/logos/categorystamps_${tierNum}.png`
+      ? `/logos/categorystamps_${tierNum}${darkStamp}.png`
       : `/logos/${tierNum}k-tag.svg`
   }
 

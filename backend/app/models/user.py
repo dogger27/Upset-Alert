@@ -37,6 +37,10 @@ class User(Base):
     # DST resolves itself. Null until a user next opens the site, so every
     # consumer must fall back to UTC.
     timezone: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    # 'light' or 'dark'. On the account rather than the device so the choice
+    # follows the person across desktop, mobile browser and the installed app.
+    # NULL means never chosen, which reads as light — the site's default.
+    theme: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     # Last time this account was seen running the INSTALLED app on a phone or
     # tablet — reported by the client, because nothing about a PWA install is
     # visible to the server otherwise. A push subscription used to be the only
