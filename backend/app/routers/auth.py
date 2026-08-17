@@ -257,7 +257,9 @@ async def _mark_verified(user: User, db: AsyncSession) -> bool:
         db.add(NotificationPreference(user_id=user.id, pref_key=key))
     await db.commit()
     await email_service.send_welcome(user.email, user.username)
-    await email_service.send_new_user_notification(user.email, user.username)
+    await email_service.send_new_user_notification(
+        user.email, user.username, user.full_name or user.display_name
+    )
     return True
 
 

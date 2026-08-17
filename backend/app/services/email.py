@@ -215,14 +215,36 @@ async def send_member_joined(
     })
 
 
-async def send_new_user_notification(new_email: str, new_username: str) -> None:
+async def send_new_user_notification(
+    new_email: str, new_username: str, full_name: Optional[str] = None
+) -> None:
+    """Admin ping when someone finishes verifying.
+
+    Named "Full Name (username)". The username alone is often no help in
+    working out who has actually signed up.
+
+    The body is escaped, unlike the rest of this module: all three values are
+    typed by the person registering, and a name containing < or & would
+    otherwise land as markup. The SUBJECT takes the raw form — a subject line is
+    plain text, so an escaped apostrophe would arrive as a literal &#x27;.
+    """
+    from html import escape
+
+    uname = (new_username or "").strip()
+    real = (full_name or "").strip()
+    # Fall back to the username alone rather than printing "None (bob)" or the
+    # same string twice — some accounts have no name, and some set it to their
+    # username.
+    who = f"{real} ({uname})" if real and real.casefold() != uname.casefold() else uname
+
     await send_async({
         "from": FROM,
         "to": ["pdwiens@gmail.com"],
-        "subject": f"New user: {new_username}",
+        "subject": f"New user: {who}",
         "html": f"""
         <div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:32px 24px">
-          <p><strong>{new_username}</strong> ({new_email}) just verified their account on Upset Alert.</p>
+          <p><strong>{escape(who)}</strong> ({escape(new_email or "")}) just verified their
+             account on Upset Alert.</p>
         </div>
         """,
     })
