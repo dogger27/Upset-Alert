@@ -328,8 +328,13 @@
   /* Surfaces. Each step lifts toward the light: sunken < page < card < raised.
      Kept close together so elevation reads through the border, not a glare. */
   --bg: #0b1512;
-  --surface-card: #14201c;
-  --surface-raised: #1c2a25;
+  /* Lifted off near-black so a card reads as an object rather than a hole in
+     the page. Chosen against the section tint it sits on, not in isolation: any
+     lighter and the card closes the gap with its own container (1.22:1 here,
+     the same relationship light mode has between a white card and its fill).
+     --surface-raised moves with it to keep dropdowns and modals a step above. */
+  --surface-card: #182521;
+  --surface-raised: #20302a;
   --surface-sunken: #0a120f;
   --surface: var(--surface-card);
   --border: #253430;
