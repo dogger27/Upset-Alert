@@ -11,9 +11,9 @@ import { updateMe } from '../api/auth'
  * value cannot be known until /auth/me comes back. Server wins on load, and
  * every change writes through to both.
  *
- * Light is the default, deliberately, so prefers-color-scheme is NOT consulted.
- * A visitor whose laptop is set to dark still gets the light site until they
- * ask for otherwise.
+ * Dark is the default, deliberately, so prefers-color-scheme is NOT consulted.
+ * A visitor whose laptop is set to light still gets the dark site until they
+ * ask for otherwise — only an explicit choice of light wins.
  *
  * THEME_KEY has to stay in step with public/theme.js.
  */
@@ -22,10 +22,10 @@ export const THEME_KEY = 'ua-theme'
 
 export function storedTheme() {
   try {
-    return localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light'
+    return localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark'
   } catch {
     // Safari in private mode throws on localStorage rather than returning null.
-    return 'light'
+    return 'dark'
   }
 }
 

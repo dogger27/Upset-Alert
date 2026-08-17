@@ -11,14 +11,15 @@
  * module script would be deferred to after parsing and the light palette would
  * paint first.
  *
- * Light is the default, so an unreadable or missing value means light, and
- * prefers-color-scheme is deliberately not consulted. Keep the storage key in
- * step with THEME_KEY in src/store/theme.js.
+ * Dark is the default, so an unreadable or missing value means dark, and
+ * prefers-color-scheme is deliberately not consulted — only an explicit choice
+ * of light wins. Keep the storage key in step with THEME_KEY in
+ * src/store/theme.js.
  */
 (function () {
-  var theme = 'light'
+  var theme = 'dark'
   try {
-    if (localStorage.getItem('ua-theme') === 'dark') theme = 'dark'
+    if (localStorage.getItem('ua-theme') === 'light') theme = 'light'
   } catch (e) {
     /* Safari in private mode throws rather than returning null. */
   }
