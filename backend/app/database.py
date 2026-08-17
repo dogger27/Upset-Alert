@@ -78,6 +78,39 @@ async def init_db():
         await _migrate(conn)
 
 
+def _enrol_all_notifications_sql() -> str:
+    """
+    Put every real account on every notification type it has not declined.
+
+    Deliberately NOT ledger-guarded, unlike the seeds around it. This one is
+    meant to run on every boot: it is what makes "on by default" true for types
+    added after an account was created, which a one-shot pass cannot do — the
+    type does not exist yet the day it runs.
+
+    Re-running is safe only because refusals are recorded. The NOT EXISTS
+    against notification_opt_outs is the whole safety property: without it this
+    would be a standing INSERT that re-subscribes anyone who unticks a box or
+    clicks unsubscribe, the moment the process next restarts. Any new way to
+    switch a notification off MUST write an opt-out row, or it will not stick.
+
+    Bots are excluded — their addresses are not real — and unverified accounts
+    are left alone, since _mark_verified enrols them when they verify.
+    """
+    from app.services.notification_keys import ALL_KEYS
+
+    keys = " UNION ALL ".join(
+        f"SELECT '{k}' AS pref_key" if i == 0 else f"SELECT '{k}'"
+        for i, k in enumerate(ALL_KEYS)
+    )
+    return (
+        "INSERT OR IGNORE INTO notification_preferences (user_id, pref_key) "
+        f"SELECT u.id, k.pref_key FROM users u CROSS JOIN ({keys}) k "
+        "WHERE u.email_verified = 1 AND COALESCE(u.is_bot, 0) = 0 "
+        "AND NOT EXISTS (SELECT 1 FROM notification_opt_outs o "
+        "                WHERE o.user_id = u.id AND o.pref_key = k.pref_key)"
+    )
+
+
 async def _migrate(conn):
     """Apply additive schema migrations that create_all won't handle."""
     migrations = [
@@ -358,6 +391,12 @@ async def _migrate(conn):
         "ALTER TABLE draws ADD COLUMN first_match_at DATETIME",
         "ALTER TABLE draws ADD COLUMN first_match_local_hour INTEGER",
         "ALTER TABLE draws ADD COLUMN first_match_local_minute INTEGER",
+        (
+            "CREATE TABLE IF NOT EXISTS notification_opt_outs "
+            "(user_id INTEGER NOT NULL, pref_key VARCHAR NOT NULL, "
+            " opted_out_at DATETIME NOT NULL, PRIMARY KEY (user_id, pref_key))"
+        ),
+        _enrol_all_notifications_sql(),
     ]
     for sql in migrations:
         try:

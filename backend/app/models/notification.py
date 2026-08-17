@@ -8,7 +8,7 @@ from app.database import Base
 
 
 class NotificationPreference(Base):
-    """One row per enabled notification preference per user. Absence = disabled (opt-in)."""
+    """One row per enabled notification preference per user. Absence = disabled."""
 
     __tablename__ = "notification_preferences"
 
@@ -16,6 +16,38 @@ class NotificationPreference(Base):
         Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
     pref_key: Mapped[str] = mapped_column(String, primary_key=True)
+
+
+class NotificationOptOut(Base):
+    """
+    One row per notification type a user has explicitly switched OFF.
+
+    Notifications default to ON, so an absent preference row is ambiguous on its
+    own: it means either "never chosen" or "deliberately declined", and the
+    enrolment pass in database.py has to tell those apart. Recording the refusal
+    is what lets it enrol everyone into every type — including types added later
+    — without ever re-subscribing someone who said no.
+
+    A separate table rather than a flag on NotificationPreference: every query
+    that decides who receives something reads "a row exists for this key", and
+    keeping that true means none of the delivery paths had to change to support
+    this.
+
+    Written by BOTH ways of declining — the settings grid and the one-click
+    unsubscribe link in an email footer. The unsubscribe case is the one that
+    matters most: without a record, the next enrolment pass would quietly put
+    them back on the list they just left.
+    """
+
+    __tablename__ = "notification_opt_outs"
+
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    pref_key: Mapped[str] = mapped_column(String, primary_key=True)
+    opted_out_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
 
 
 class RoundCompleteNotification(Base):
