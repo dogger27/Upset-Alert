@@ -187,10 +187,10 @@ def _unsubscribe_page(message: str, ok: bool = True) -> str:
 
 @app.get("/unsubscribe", response_class=HTMLResponse)
 async def unsubscribe(token: str = ""):
-    from sqlalchemy import delete
+    from sqlalchemy import delete, select
     from app.core.security import verify_unsubscribe_token
     from app.database import AsyncSessionLocal
-    from app.models.notification import NotificationPreference
+    from app.models.notification import NotificationOptOut, NotificationPreference
 
     result = verify_unsubscribe_token(token)
     if not result:
@@ -206,6 +206,18 @@ async def unsubscribe(token: str = ""):
                 NotificationPreference.pref_key == pref_key,
             )
         )
+        # Record the refusal, not just the removal. Notifications are on by
+        # default, so deleting the preference alone would be undone by the next
+        # enrolment pass — an unsubscribe link that quietly re-subscribes, which
+        # is the one failure this page must never have.
+        exists = (await db.execute(
+            select(NotificationOptOut).where(
+                NotificationOptOut.user_id == user_id,
+                NotificationOptOut.pref_key == pref_key,
+            )
+        )).scalar_one_or_none()
+        if exists is None:
+            db.add(NotificationOptOut(user_id=user_id, pref_key=pref_key))
         await db.commit()
     label = _UNSUB_PREF_LABELS.get(pref_key, "the selected email type")
     return HTMLResponse(_unsubscribe_page(f"You have been unsubscribed from {label}."))

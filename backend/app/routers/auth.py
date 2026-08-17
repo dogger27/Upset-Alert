@@ -7,6 +7,7 @@ from sqlalchemy import delete, func, or_, select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import get_current_user
+from app.services.notification_keys import ALL_KEYS
 from app.core.security import (
     create_access_token,
     create_email_verification_token,
@@ -212,20 +213,17 @@ async def update_me(
     return current_user
 
 
-_DEFAULT_NOTIF_PREFS = [
-    # Draw-release emails are one weekly digest covering every draw released
-    # that week — a single on/off, not a per-tier selection.
-    "draw_released",
-    # No "draw_changed" or "standout_pick": both are opt-in only. They are
-    # deliberately absent rather than missing — see the un-seeding migration in
-    # database.py, which reverses a defaults pass that briefly shipped.
-    "round_standings",
-    # No "tournament_end": Draw Completion is only offered once round emails are
-    # switched off (the settings UI hides it otherwise, and enables it the moment
-    # rounds go off). Seeding both would start every account in a state the UI
-    # says cannot exist — and would silently suppress their final-round email.
-    "league_member_joined",
-]
+# Every type, both channels: notifications are on by default and stay on until
+# the account says otherwise. A new account is enrolled here; existing accounts
+# by the enrolment pass in database.py, which skips anything they have declined.
+#
+# That includes tournament_end alongside round_standings. The settings grid
+# greys Draw completion out while Round completion is on, so holding both looks
+# like a state the UI does not offer — but it is the correct one to hold. Email
+# unions the two audiences (end_only subtracts the overlap) and push collects
+# them into a set, so nobody is mailed or pushed twice, and holding only
+# round_standings used to mean no push at all for the Final.
+_DEFAULT_NOTIF_PREFS = list(ALL_KEYS)
 
 
 async def _mark_verified(user: User, db: AsyncSession) -> bool:
@@ -355,17 +353,37 @@ async def put_notification_prefs(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    from app.models.notification import NotificationPreference
+    from app.models.notification import NotificationOptOut, NotificationPreference
 
-    enabled_keys: list[str] = body.get("enabled_keys", [])
+    enabled_keys = set(body.get("enabled_keys", []))
 
     await db.execute(
         delete(NotificationPreference).where(
             NotificationPreference.user_id == current_user.id
         )
     )
-    for key in set(enabled_keys):
+    for key in enabled_keys:
         db.add(NotificationPreference(user_id=current_user.id, pref_key=key))
+
+    # Everything known and NOT ticked is a refusal, and has to be recorded as
+    # one. Notifications are on by default, so an absent preference row no
+    # longer means "off" — the enrolment pass would hand it straight back on the
+    # next restart. Only keys we know about: an unrecognised one is not a
+    # decision about anything.
+    await db.execute(
+        delete(NotificationOptOut).where(
+            NotificationOptOut.user_id == current_user.id,
+            NotificationOptOut.pref_key.in_(enabled_keys or {""}),
+        )
+    )
+    declined = set(ALL_KEYS) - enabled_keys
+    existing = set((await db.execute(
+        select(NotificationOptOut.pref_key).where(
+            NotificationOptOut.user_id == current_user.id
+        )
+    )).scalars().all())
+    for key in declined - existing:
+        db.add(NotificationOptOut(user_id=current_user.id, pref_key=key))
     await db.commit()
 
 
