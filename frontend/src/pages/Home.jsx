@@ -102,7 +102,12 @@ function GenderCol({ label, tour, tournaments, section, pickStatus, onLoginRequi
 const SECTION_BG = {
   open:    'var(--section-tint-open)',    // faint clay tint
   active:  'var(--section-tint-active)',  // faint green tint
-  muted:   'var(--section-tint-muted)',   // neutral gray tint
+  // Next Week and Last Week deliberately share Active's fill. The tint's job is
+  // to bracket a group against the page, not to colour-code it — three different
+  // ones made the dashboard read as unrelated panels. Their HEADINGS still
+  // differ (SectionHeader's accent is a separate prop), which is what actually
+  // distinguishes them.
+  muted:   'var(--section-tint-active)',
 }
 
 function Section({ title, description, accent, live, items, section, pickStatus, emptyMessage, onLoginRequired, keepWhenEmpty }) {
