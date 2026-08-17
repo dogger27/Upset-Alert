@@ -219,11 +219,16 @@
   --stripe: rgba(0, 0, 0, 0.025);
 
   --atp-text: var(--atp-600);
+  /* The 2px rule under the ATP/WTA column headings. Its own token because it is
+     the one place these hues are drawn ON the section fill rather than on a
+     card, and it has to stay a rule — visible, not competing with the label. */
+  --atp-rule: #dbeafe;
   --atp-tint: #eff6ff;
   --atp-tint-strong: #dbeafe;
   --atp-line: #93c5fd;
 
   --wta-text: var(--wta-600);
+  --wta-rule: #fbd2e1;
   --wta-tint: #fce7f3;
   --wta-tint-strong: var(--wta-100);
   --wta-line: var(--wta-300);
@@ -401,11 +406,13 @@
   --pick-needs:   #f0b03f;
 
   --atp-text: #8fb6ff;
+  --atp-rule: #4d7ab5;
   --atp-tint: #14243d;
   --atp-tint-strong: #1a2f4f;
   --atp-line: #3b5a8f;
 
   --wta-text: #ff8ab5;
+  --wta-rule: #b8567d;
   --wta-tint: #3a1526;
   --wta-tint-strong: #4a1c31;
   --wta-line: #8a3a5c;
