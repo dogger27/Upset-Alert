@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re as _re
 from typing import Optional
 
 import resend
@@ -53,6 +54,33 @@ def _tournament_label(tournament_name: str, category: str, gender: str) -> str:
         return f"{tournament_name} {tour}"
     tier = "1000" if "1000" in cat else "500" if "500" in cat else "250"
     return f"{tournament_name} {tour}{tier}"
+
+
+# Tour ink for the trailing "ATP1000" / "WTA 250" / "ATP" in a draw label.
+# Two per tour because the same label is drawn in two places: dark ink on the
+# white summary table, and a light tint on the green section banner, where the
+# dark blue would be 1.65:1 and effectively black.
+_TOUR_INK = {
+    "ATP": {"light_bg": "#1d4ed8", "dark_bg": "#93b8ff"},
+    "WTA": {"light_bg": "#be185d", "dark_bg": "#ffb3c6"},
+}
+_TOUR_SUFFIX_RE = _re.compile(r"(ATP|WTA)\s?(\d{3,4})?$")
+
+
+def _tour_coloured(label: str, on_dark: bool = False) -> str:
+    """'Cincinnati Open ATP1000' -> the tour AND its tier number in tour colour.
+
+    Applied at render time, never baked into the label itself: the same label
+    goes into the subject line, and a subject cannot carry a <span>.
+
+    The tier is inside the match on purpose — "ATP 1000" reads as one badge, so
+    coluring the letters and leaving the number black splits it in half.
+    """
+    m = _TOUR_SUFFIX_RE.search(label)
+    if not m:
+        return label
+    ink = _TOUR_INK[m.group(1)]["dark_bg" if on_dark else "light_bg"]
+    return f'{label[:m.start()]}<span style="color:{ink}">{m.group(0)}</span>'
 
 
 def _setup():
@@ -568,7 +596,7 @@ def _week_summary(rows: list[tuple], round_name: str) -> str:
     """
     body = "".join(
         f'<tr style="background:{"#ffffff" if i % 2 == 0 else "#f9fafb"}">'
-        f'<td style="padding:8px 12px 8px 14px;font-size:14px;color:#111">{label}</td>'
+        f'<td style="padding:8px 12px 8px 14px;font-size:14px;color:#111">{_tour_coloured(label)}</td>'
         f'<td align="center" width="86" style="padding:8px 6px;font-size:14px;text-align:center;'
         f'width:86px;color:#111;font-weight:700">{hits}</td>'
         f'<td align="right" width="90" style="padding:8px 14px 8px 6px;font-size:14px;'
@@ -604,7 +632,7 @@ def _draw_section(draw: dict, is_last: bool) -> str:
     )
     city = f"{draw['city']} &middot; " if draw.get("city") else ""
     banner = _section_banner(
-        draw["label"],
+        _tour_coloured(draw["label"], on_dark=True),
         f"{city}{draw['round_name']} complete",
         f"{BASE_URL}/tournaments/{draw['id']}",
         "View draw",
@@ -774,7 +802,7 @@ def _change_row(change: dict, is_last: bool) -> str:
 def _draw_change_section(draw: dict, is_last: bool) -> str:
     n = len(draw["changes"])
     banner = _section_banner(
-        draw["label"],
+        _tour_coloured(draw["label"], on_dark=True),
         f"{n} change{'' if n == 1 else 's'} &middot; "
         + ("picks are locked" if draw.get("locked") else "picks still open"),
         f"{BASE_URL}/tournaments/{draw['id']}",
@@ -929,7 +957,7 @@ def _qualifiers_section(draw: dict, is_last: bool) -> str:
     # a duplicate.
     rows_data = dedupe_matchups(draw["changes"])
     banner = _section_banner(
-        draw["label"],
+        _tour_coloured(draw["label"], on_dark=True),
         f"{n} qualifier{'' if n == 1 else 's'} placed &middot; "
         + ("picks are locked" if draw.get("locked") else "picks still open"),
         f"{BASE_URL}/tournaments/{draw['id']}",
