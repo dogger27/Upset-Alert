@@ -397,6 +397,10 @@ async def _migrate(conn):
             " opted_out_at DATETIME NOT NULL, PRIMARY KEY (user_id, pref_key))"
         ),
         _enrol_all_notifications_sql(),
+        # Dark is the default now. Safe to leave unguarded and re-run: it only
+        # ever matches accounts that have never chosen, so someone who picks
+        # light keeps light — their row is 'light', not NULL.
+        "UPDATE users SET theme = 'dark' WHERE theme IS NULL",
     ]
     for sql in migrations:
         try:
