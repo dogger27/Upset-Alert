@@ -76,8 +76,11 @@ function TCard({ t, section, pickStatus, onLoginRequired }) {
 }
 
 function GenderCol({ label, tour, tournaments, section, pickStatus, onLoginRequired }) {
-  const accent = tour === 'ATP' ? 'var(--atp-600)' : 'var(--wta-600)'
-  const borderColor = tour === 'ATP' ? 'var(--atp-tint-strong)' : 'var(--wta-tint-strong)'
+  // Role tokens, not raw ramp steps. --atp-600 is a fixed mid blue: legible on
+  // white, 1.9:1 on the dark section fill this heading actually sits on. The
+  // rule under it was worse still at 1.05:1 — the same colour as its background.
+  const accent = tour === 'ATP' ? 'var(--atp-text)' : 'var(--wta-text)'
+  const borderColor = tour === 'ATP' ? 'var(--atp-rule)' : 'var(--wta-rule)'
 
   if (!tournaments.length) return <div style={{ width: 400, maxWidth: '100%' }} />
 
