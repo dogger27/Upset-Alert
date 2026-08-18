@@ -1350,6 +1350,7 @@ function TournamentDraw() {
           onLeagueChange={setActiveLeagueId}
           collapsed={sidebarCollapsed}
           overlay={compactDraw}
+          showOop={headerStage !== 'full'}
           onToggleCollapsed={() => { setSidebarManual(true); setSidebarCollapsed(c => !c) }}
           onSelectUser={(uid, uname) => {
             setViewedUserId(uid)

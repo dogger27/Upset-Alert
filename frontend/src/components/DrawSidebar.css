@@ -68,6 +68,44 @@
   color: var(--text);
 }
 
+/* ── Order of play ──
+   Top-left of the open sidebar, mirroring the collapse button across the same
+   band. Matches its height and border-radius so the two read as a pair rather
+   than as one control and one stray link. Phone-only in practice: the draw
+   page passes showOop just when its own header is too narrow to carry one. */
+.sidebar-oop-btn {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.6rem;
+  height: 30px;
+  padding: 0 0.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  border: 1.5px solid transparent;
+  background: var(--brand-fill);
+  color: var(--on-brand);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  z-index: 1;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.sidebar-oop-btn:hover { background: var(--brand-fill-hover); }
+
+.sidebar-oop-btn--none {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text-muted);
+  opacity: 0.55;
+  cursor: default;
+}
+
 /* Collapsed state: a larger edge button with the chevron filling it, a dark
    border to make it obvious, and a 50%-transparent background. Matches the
    round-nav pager button's exact footprint — same width/height (via the
