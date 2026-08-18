@@ -27,7 +27,10 @@ function Toast({ message, onDone }) {
 
 // overlay: compact (phone) draw mode — the sidebar floats over the draw
 // instead of taking flex-row space, so the bracket can use the full width.
-export default function DrawSidebar({ tournamentId, tournament, selectedUserId, defaultLeagueId, onSelectUser, onLeagueChange, collapsed = false, onToggleCollapsed, overlay = false }) {
+// showOop: render the order-of-play button in this sidebar. Set by the draw
+// page when its own header is too narrow to carry one — i.e. on a phone, where
+// the header never reaches its 'full' stage. Exactly one of the two shows.
+export default function DrawSidebar({ tournamentId, tournament, selectedUserId, defaultLeagueId, onSelectUser, onLeagueChange, collapsed = false, onToggleCollapsed, overlay = false, showOop = false }) {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [selectedLeagueId, setSelectedLeagueId] = useState(defaultLeagueId ?? 'global')
@@ -130,6 +133,31 @@ export default function DrawSidebar({ tournamentId, tournament, selectedUserId, 
         )}
         <span className="sidebar-collapse-glyph">{collapsed ? '›' : '‹'}</span>
       </button>
+
+      {/* Mirrors the collapse button across the top of the open sidebar. Only
+          while expanded — collapsed it is a narrow strip with no room. A
+          non-null oop_url is always today's; the server owns that test. */}
+      {showOop && !collapsed && (
+        tournament?.oop_url ? (
+          <a
+            href={tournament.oop_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="sidebar-oop-btn"
+            title="Today's order of play (PDF, opens in a new tab)"
+          >
+            OOP
+          </a>
+        ) : (
+          <span
+            className="sidebar-oop-btn sidebar-oop-btn--none"
+            title="No order of play published for today yet"
+            aria-disabled="true"
+          >
+            OOP
+          </span>
+        )
+      )}
 
       {!collapsed && toast && (
         <Toast
