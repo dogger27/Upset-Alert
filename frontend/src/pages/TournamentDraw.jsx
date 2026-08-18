@@ -1061,6 +1061,27 @@ function TournamentDraw() {
               <span className="draw-meta-left">
                 {[tournament.city, surface, tournament.start_date ? fmtDateRange(tournament.start_date, tournament.end_date) : null].filter(Boolean).join(' · ')}
               </span>
+              {/* The server only ever sends oop_url when the PDF is today's, so
+                  presence is the whole test — no date comparison here. */}
+              {tournament.oop_url ? (
+                <a
+                  href={tournament.oop_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="draw-oop-link"
+                  title="Today's order of play (PDF, opens in a new tab)"
+                >
+                  Order of play
+                </a>
+              ) : (
+                <span
+                  className="draw-oop-link draw-oop-link--none"
+                  title="No order of play published for today yet"
+                  aria-disabled="true"
+                >
+                  Order of play
+                </span>
+              )}
             </div>
           </div>
         </div>

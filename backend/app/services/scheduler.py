@@ -1451,6 +1451,29 @@ async def _sync_highest_rank_bot() -> None:
                       {"error": err}, dedup_key="highest_rank_bot_fail", dedup_hours=6)
 
 
+async def _refresh_order_of_play() -> None:
+    """Keep each draw's order-of-play link pointing at today's PDF, or at
+    nothing. Both halves run every tick: the id lookup is cheap and a newly
+    discovered tournament should not wait a day for its first link, and the
+    link refresh must run even when no new ids were stamped — clearing a link
+    that has gone stale is the half that protects users from opening a PDF
+    frozen on a finished tournament's last day. See order_of_play.py."""
+    from app.services import order_of_play
+
+    try:
+        stamped = await order_of_play.refresh_wta_ids()
+        if stamped:
+            logger.info("Order of play: matched %d tournament(s) to WTA ids", stamped)
+        updated = await order_of_play.refresh_order_of_play()
+        if updated:
+            logger.info("Order of play: updated %d draw link(s)", updated)
+    except Exception as exc:
+        logger.error("Order of play refresh failed: %s", exc, exc_info=True)
+        err = describe_exception(exc)
+        await app_log("error", "order_of_play", f"Refresh job failed: {err}",
+                      {"error": err}, dedup_key="oop_refresh_fail", dedup_hours=6)
+
+
 async def _scan_system_alerts() -> None:
     """Email digest of new errors/warnings in system_logs — see alerts.py for
     the recurrence gate and daily cap. Wrapped because a failure here must not
@@ -1563,6 +1586,18 @@ def start_scheduler() -> None:
         "interval",
         minutes=15,
         id="scan_system_alerts",
+        misfire_grace_time=600,
+    )
+    # Order-of-play links. 15 min: the tours revise the schedule a handful of
+    # times a day, so a tighter tick buys nothing, and this is the one job that
+    # fetches a multi-megabyte file per active tournament. protennislive rate
+    # limited a burst of ~12 requests in two minutes during development, which
+    # is a useful reminder that these endpoints are not built for polling.
+    scheduler.add_job(
+        _refresh_order_of_play,
+        "interval",
+        minutes=15,
+        id="refresh_order_of_play",
         misfire_grace_time=600,
     )
     scheduler.add_job(

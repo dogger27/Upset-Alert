@@ -565,6 +565,28 @@
 .draw-meta-left { font-variant-numeric: lining-nums; }
 .draw-meta-sep { opacity: 0.4; }
 
+/* Order-of-play link. Kept in the flow at the same size and position whether or
+   not there is a PDF today, so the header does not reflow when one appears —
+   the disabled state is the same box, greyed. */
+.draw-oop-link {
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+  color: var(--brand-text);
+  border-bottom: 1px solid currentColor;
+  transition: opacity 0.15s;
+}
+
+.draw-oop-link:hover { opacity: 0.75; }
+
+.draw-oop-link--none {
+  color: var(--text-muted);
+  opacity: 0.5;
+  border-bottom-color: transparent;
+  cursor: default;
+}
+
 .draw-header-actions {
   display: flex;
   flex-direction: column;

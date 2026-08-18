@@ -1,0 +1,292 @@
+"""
+Order of Play (OOP) links.
+
+Both tours publish the day's schedule as a PDF at a URL that never changes —
+they overwrite the same path each time it is revised — so there is nothing to
+"discover" per day. The whole job is deciding whether the file currently sitting
+at that path is TODAY's, and which of our draws it actually covers.
+
+    WTA:  https://wtafiles.wtatennis.com/pdf/draws/{year}/{liveScoringId}/OP.pdf
+    ATP:  https://www.protennislive.com/posting/{year}/{atpId}/op.pdf   (phase 2)
+
+Phase 1 is WTA-sourced only, because the WTA hands us tournament ids through a
+public JSON API while the ATP has no equivalent — an ATP-only event needs a
+hand-maintained id map, which is deliberately left to phase 2. That costs less
+coverage than it sounds: at a combined event held on ONE site the WTA file is
+the venue's order of play and lists the men's matches too (Cincinnati 2026:
+17 ATP labels alongside 14 WTA), so both our draws can point at it.
+
+Three traps, each verified against the live files on 2026-08-18:
+
+1. **HTTP 200 does not mean current.** A finished tournament keeps serving its
+   final day's PDF indefinitely — 2026 ATP id 424 still returns 200 with a
+   Last-Modified of 15 February. Freshness has to be asserted, never assumed.
+2. **The filename is case-sensitive on the WTA side.** `OP.pdf` is 200 and
+   `op.pdf` is 404. The ATP path is lowercase. They do not match each other.
+3. **Coverage follows the venue, not the tour.** Canada 2026 ran the women in
+   Toronto and the men in Montreal, and its WTA file contains zero ATP matches,
+   whereas Cincinnati's covers both. Guessing from "is this a combined event"
+   gets Canada wrong every year, so we read the PDF and let it tell us.
+
+Freshness is decided by the date printed INSIDE the PDF, not by Last-Modified.
+A revision published at 23:50 local for the following day would look stale by
+header alone, and a file frozen since February looks fresh to anything that
+only checks "did this change recently".
+"""
+
+import re
+from datetime import date, datetime, timezone
+from io import BytesIO
+from typing import Optional
+
+import httpx
+from sqlalchemy import select
+
+from app.database import AsyncSessionLocal
+from app.models.tournament import Draw, Tournament
+from app.services.http_errors import is_transient_http_error, describe_exception
+from app.services.rankings import _norm
+from app.services.system_log import app_log
+
+_WTA_API = "https://api.wtatennis.com/tennis/tournaments/"
+_WTA_PDF = "https://wtafiles.wtatennis.com/pdf/draws/{year}/{lsid}/OP.pdf"
+
+_UA = "TennisFantasyLeague/1.0 (https://upsetalert.ca; pdwiens@gmail.com)"
+_HEADERS = {"User-Agent": _UA}
+
+# The API ignores a `year` filter and returns all ~18.7k tournaments back to
+# 1960 in ascending date order, so the only way to reach the current season is
+# to ask for the last page. pageSize caps at 100.
+_PAGE_SIZE = 100
+
+# "ORDER OF PLAY - TUESDAY, 18 AUGUST 2026"  (WTA)
+# "ORDER OF PLAY - TUESDAY, AUGUST 18, 2026" (ATP)
+_OOP_DATE_RE = re.compile(
+    r"ORDER\s+OF\s+PLAY\s*[-–]\s*[A-Z]+,\s*"
+    r"(?:(?P<d1>\d{1,2})\s+(?P<m1>[A-Z]+)|(?P<m2>[A-Z]+)\s+(?P<d2>\d{1,2}),?)"
+    r"\s*(?P<y>\d{4})",
+    re.I,
+)
+
+_MONTHS = {m: i for i, m in enumerate(
+    ["january", "february", "march", "april", "may", "june", "july",
+     "august", "september", "october", "november", "december"], start=1)}
+
+# A tour label appears next to every match only when the file has to
+# disambiguate, i.e. when both tours play the same site. A WTA-only order of
+# play carries at most an incidental mention in a header, so requiring two
+# keeps a stray word from claiming coverage we do not have.
+_MIN_TOUR_LABELS = 2
+
+
+async def _fetch_wta_events() -> list[dict]:
+    """
+    Current-season WTA events that have a liveScoringId (ITF rows do not).
+
+    Reads the last TWO pages, not one. The archive is append-ish and numEntries
+    genuinely moves while you are reading it — it went 18761 -> 18776 between
+    two calls a few minutes apart during development, which shifted the page
+    boundary and pushed that week's Washington and Memphis events off the last
+    page onto the previous one. A single-page read silently loses whichever
+    current events happen to be sitting near the boundary, and "silently loses
+    some tournaments" is the worst possible failure here because everything
+    downstream just looks like a tournament with no order of play.
+    """
+    events: dict[int, dict] = {}
+    async with httpx.AsyncClient(timeout=20, headers=_HEADERS) as client:
+        head = await client.get(_WTA_API, params={"page": 0, "pageSize": 1})
+        head.raise_for_status()
+        total = (head.json().get("pageInfo") or {}).get("numEntries") or 0
+        if not total:
+            return []
+
+        last_page = max((total - 1) // _PAGE_SIZE, 0)
+        for page in {max(last_page - 1, 0), last_page}:
+            resp = await client.get(_WTA_API, params={"page": page, "pageSize": _PAGE_SIZE})
+            resp.raise_for_status()
+            for t in (resp.json().get("content") or []):
+                if t.get("liveScoringId"):
+                    events[int(t["liveScoringId"])] = t
+
+    return list(events.values())
+
+
+def _match_wta_event(
+    name: str, city: Optional[str], start: date, events: list[dict]
+) -> Optional[dict]:
+    """
+    Best WTA event for one of our tournaments, or None.
+
+    Neither name nor city works alone, which is the whole reason this is scored
+    rather than looked up. Sponsor titles break the name ("Canadian Open" vs
+    "National Bank Open presented by Rogers", "Washington Open" vs "Mubadala DC
+    Open") and venue suburbs break the city (we hold Cincinnati as Mason, they
+    hold it as CINCINNATI). Either signal alone is enough when the dates line
+    up; both is better. Start dates disagree by a day often enough — their
+    Monterrey is the 23rd and ours the 24th — that an exact match would drop
+    real events on the floor.
+    """
+    ours_name = set(_norm(name).split())
+    ours_city = set(_norm(city).split()) if city else set()
+
+    best, best_score = None, 0.0
+    for ev in events:
+        try:
+            ev_start = date.fromisoformat((ev.get("startDate") or "")[:10])
+        except ValueError:
+            continue
+        day_gap = abs((ev_start - start).days)
+        if day_gap > 3:
+            continue
+
+        title = (ev.get("title") or "").split(" - ")[0]
+        their_name = set(_norm(title).split())
+        their_city = set(_norm(ev.get("city") or "").split())
+
+        name_hit = bool(ours_name & their_name)
+        city_hit = bool(ours_city & their_city)
+        if not (name_hit or city_hit):
+            continue
+
+        # City is the stronger signal: a sponsor can rename an event but the
+        # town it is played in is the same fact on both sides.
+        score = (1.5 if city_hit else 0) + (1.0 if name_hit else 0) - (day_gap * 0.1)
+        if score > best_score:
+            best, best_score = ev, score
+
+    return best
+
+
+def _parse_oop(pdf: bytes) -> tuple[Optional[date], int, int]:
+    """(date the OOP is for, ATP label count, WTA label count) from page 1."""
+    try:
+        import pdfplumber
+        with pdfplumber.open(BytesIO(pdf)) as doc:
+            text = doc.pages[0].extract_text() or ""
+    except Exception:
+        return None, 0, 0
+
+    when = None
+    m = _OOP_DATE_RE.search(text)
+    if m:
+        month = _MONTHS.get((m.group("m1") or m.group("m2") or "").lower())
+        day = m.group("d1") or m.group("d2")
+        if month and day:
+            try:
+                when = date(int(m.group("y")), month, int(day))
+            except ValueError:
+                when = None
+
+    return when, len(re.findall(r"\bATP\b", text)), len(re.findall(r"\bWTA\b", text))
+
+
+async def refresh_wta_ids() -> int:
+    """Stamp tournaments.wta_live_scoring_id for anything running soon."""
+    try:
+        events = await _fetch_wta_events()
+    except Exception as exc:
+        if not is_transient_http_error(exc):
+            await app_log("error", "order_of_play",
+                          f"WTA tournament list failed: {describe_exception(exc)}",
+                          dedup_key="oop_wta_list", dedup_hours=6)
+        return 0
+    if not events:
+        return 0
+
+    stamped = 0
+    async with AsyncSessionLocal() as db:
+        rows = (await db.execute(
+            select(Tournament, Draw)
+            .join(Draw, Draw.tournament_id == Tournament.id)
+            .where(
+                Tournament.wta_live_scoring_id.is_(None),
+                Draw.gender == "F",
+                Draw.start_date.isnot(None),
+            )
+        )).all()
+
+        for tournament, draw in rows:
+            start = draw.start_date
+            if isinstance(start, datetime):
+                start = start.date()
+            # A WTA id is only useful while the event is close enough to have a
+            # published order of play; back-filling the whole archive would
+            # match thousands of rows against one page of current events.
+            if abs((start - date.today()).days) > 30:
+                continue
+
+            ev = _match_wta_event(tournament.name, draw.city or tournament.city, start, events)
+            if not ev:
+                continue
+            tournament.wta_live_scoring_id = int(ev["liveScoringId"])
+            stamped += 1
+
+        if stamped:
+            await db.commit()
+    return stamped
+
+
+async def refresh_order_of_play() -> int:
+    """
+    Point every eligible draw at today's OOP, or at nothing.
+
+    Clearing matters as much as setting: a draw that had a link yesterday must
+    lose it the moment the file stops being current, or the tournament ends and
+    the page keeps offering a PDF that is frozen on the final day's play.
+    """
+    today = date.today()
+    updated = 0
+
+    async with AsyncSessionLocal() as db:
+        rows = (await db.execute(
+            select(Tournament, Draw)
+            .join(Draw, Draw.tournament_id == Tournament.id)
+            .where(
+                Tournament.wta_live_scoring_id.isnot(None),
+                Draw.status != "completed",
+                Draw.start_date.isnot(None),
+            )
+        )).all()
+
+        by_tournament: dict[int, list] = {}
+        for tournament, draw in rows:
+            by_tournament.setdefault(tournament.id, []).append((tournament, draw))
+
+        for group in by_tournament.values():
+            tournament = group[0][0]
+            draws = [d for _, d in group]
+            url = _WTA_PDF.format(year=today.year, lsid=tournament.wta_live_scoring_id)
+
+            oop_date, atp_labels, wta_labels = None, 0, 0
+            try:
+                async with httpx.AsyncClient(timeout=30, headers=_HEADERS) as client:
+                    resp = await client.get(url)
+                if resp.status_code == 200:
+                    oop_date, atp_labels, wta_labels = _parse_oop(resp.content)
+                elif resp.status_code != 404:
+                    resp.raise_for_status()
+            except Exception as exc:
+                if not is_transient_http_error(exc):
+                    await app_log("warning", "order_of_play",
+                                  f"OOP fetch failed for '{tournament.name}': "
+                                  f"{describe_exception(exc)}",
+                                  dedup_key=f"oop_fetch_{tournament.id}", dedup_hours=6)
+                continue  # leave yesterday's value; the next tick re-checks
+
+            fresh = oop_date == today
+            covers_atp = atp_labels >= _MIN_TOUR_LABELS
+
+            for draw in draws:
+                # The men's draw only gets the WTA file when that file actually
+                # lists ATP matches — true at a shared site, false when the
+                # tours are in different cities the same week.
+                covered = fresh and (draw.gender == "F" or covers_atp)
+                new_url = url if covered else None
+                if draw.oop_url != new_url or draw.oop_date != (oop_date if covered else None):
+                    draw.oop_url = new_url
+                    draw.oop_date = oop_date if covered else None
+                    updated += 1
+                draw.oop_checked_at = datetime.now(timezone.utc)
+
+        await db.commit()
+    return updated

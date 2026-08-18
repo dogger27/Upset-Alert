@@ -87,6 +87,10 @@ class Tournament(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
+    # WTA's own event id, which is also the path segment for their order-of-play
+    # PDF. Sits on the tournament rather than the draw because one event id
+    # covers both draws when the tours share a site — see order_of_play.py.
+    wta_live_scoring_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     draws: Mapped[list["Draw"]] = relationship("Draw", back_populates="tournament")
 
@@ -175,6 +179,15 @@ class Draw(Base):
     # default later changes. See services/settings.resolve_draw_lock_mode.
     pick_lock_mode: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     selections_unlocked: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Today's order-of-play PDF, or NULL when there isn't a current one. Held
+    # per draw rather than per tournament because at a split-venue event the
+    # men's and women's schedules are genuinely different documents.
+    # oop_date is the day the PDF is FOR, read out of the file itself — the
+    # only trustworthy freshness signal, since a finished event serves its last
+    # day's PDF forever at HTTP 200. See services/order_of_play.py.
+    oop_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    oop_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    oop_checked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     last_scraped_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
