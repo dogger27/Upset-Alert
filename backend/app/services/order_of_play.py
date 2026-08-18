@@ -35,7 +35,7 @@ only checks "did this change recently".
 """
 
 import re
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from io import BytesIO
 from typing import Optional
 
@@ -77,6 +77,10 @@ _MONTHS = {m: i for i, m in enumerate(
 # play carries at most an incidental mention in a header, so requiring two
 # keeps a stray word from claiming coverage we do not have.
 _MIN_TOUR_LABELS = 2
+
+# Qualifying is played before the main draw's start_date and has its own order
+# of play, so the link is useful a few days early.
+_QUALIFYING_LEAD_DAYS = 3
 
 
 async def _fetch_wta_events() -> list[dict]:
@@ -180,6 +184,24 @@ def _parse_oop(pdf: bytes) -> tuple[Optional[date], int, int]:
     return when, len(re.findall(r"\bATP\b", text)), len(re.findall(r"\bWTA\b", text))
 
 
+def _as_date(value) -> Optional[date]:
+    """SQLite hands these back as date or datetime depending on the column."""
+    if isinstance(value, datetime):
+        return value.date()
+    return value if isinstance(value, date) else None
+
+
+def _running(draw, today: date) -> bool:
+    """Is this specific draw being played today? Qualifying starts before the
+    main draw's start_date, so allow a few days of lead-in; the end is taken
+    from end_date when we have one."""
+    start = _as_date(draw.start_date)
+    if start is None or today < start - timedelta(days=_QUALIFYING_LEAD_DAYS):
+        return False
+    end = _as_date(draw.end_date)
+    return end is None or today <= end
+
+
 async def refresh_wta_ids() -> int:
     """Stamp tournaments.wta_live_scoring_id for anything running soon."""
     try:
@@ -280,7 +302,15 @@ async def refresh_order_of_play() -> int:
                 # The men's draw only gets the WTA file when that file actually
                 # lists ATP matches — true at a shared site, false when the
                 # tours are in different cities the same week.
-                covered = fresh and (draw.gender == "F" or covers_atp)
+                #
+                # ...and the draw has to be running today in its own right. One
+                # tournament row can hold draws that are not the same event at
+                # all: Hamburg 2026 carries the men from 18 May and the women
+                # from 20 July, so "this tournament's PDF" is meaningless
+                # without asking which draw. Without this, the only thing
+                # standing between the May men's draw and a July women's
+                # schedule is the ATP-label count happening to come back zero.
+                covered = fresh and (draw.gender == "F" or covers_atp) and _running(draw, today)
                 new_url = url if covered else None
                 if draw.oop_url != new_url or draw.oop_date != (oop_date if covered else None):
                     draw.oop_url = new_url
