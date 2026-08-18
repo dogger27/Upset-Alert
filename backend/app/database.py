@@ -401,6 +401,13 @@ async def _migrate(conn):
         # ever matches accounts that have never chosen, so someone who picks
         # light keeps light — their row is 'light', not NULL.
         "UPDATE users SET theme = 'dark' WHERE theme IS NULL",
+        # Order of play. wta_live_scoring_id is the WTA's own event id and also
+        # the path segment of their OOP PDF; oop_date is the day the PDF is FOR,
+        # which is the only reliable freshness test. See order_of_play.py.
+        "ALTER TABLE tournaments ADD COLUMN wta_live_scoring_id INTEGER",
+        "ALTER TABLE draws ADD COLUMN oop_url VARCHAR",
+        "ALTER TABLE draws ADD COLUMN oop_date DATE",
+        "ALTER TABLE draws ADD COLUMN oop_checked_at DATETIME",
     ]
     for sql in migrations:
         try:

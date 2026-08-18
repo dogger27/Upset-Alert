@@ -54,6 +54,11 @@ class TournamentOut(BaseModel):
     # Which locking rule this draw uses / used — see models/tournament.py.
     pick_lock_mode: Optional[str] = None
     selections_unlocked: bool = False
+    # Today's order of play, or None when there is no current one. The server
+    # decides currency (see order_of_play.py) precisely so the client never has
+    # to reason about it — a non-null url is always today's.
+    oop_url: Optional[str] = None
+    oop_date: Optional[date] = None
     last_scraped_at: Optional[datetime]
     latest_result_at: Optional[datetime] = None
     is_locked: bool
