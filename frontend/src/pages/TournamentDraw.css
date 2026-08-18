@@ -565,25 +565,36 @@
 .draw-meta-left { font-variant-numeric: lining-nums; }
 .draw-meta-sep { opacity: 0.4; }
 
-/* Order-of-play link. Kept in the flow at the same size and position whether or
-   not there is a PDF today, so the header does not reflow when one appears —
-   the disabled state is the same box, greyed. */
-.draw-oop-link {
-  font-size: 0.85rem;
-  font-weight: 600;
+/* Order-of-play button, directly under the lock badge in .draw-header-actions.
+   That column is align-items:flex-end, so align-self:stretch is what widens
+   this to the column (i.e. to the lock badge above it) and lets text-align
+   centre the label under it rather than hanging off the right edge.
+
+   Rendered in both states at identical size so publishing a schedule mid-session
+   doesn't shift the column — the unavailable state is the same box, greyed. */
+.draw-oop-btn {
+  align-self: stretch;
+  text-align: center;
+  padding: 0.28rem 0.7rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
   white-space: nowrap;
   text-decoration: none;
-  color: var(--brand-text);
-  border-bottom: 1px solid currentColor;
-  transition: opacity 0.15s;
+  color: var(--on-brand);
+  background: var(--brand-fill);
+  border: 1px solid transparent;
+  transition: background 0.15s, opacity 0.15s;
 }
 
-.draw-oop-link:hover { opacity: 0.75; }
+.draw-oop-btn:hover { background: var(--brand-fill-hover); }
 
-.draw-oop-link--none {
+.draw-oop-btn--none {
   color: var(--text-muted);
-  opacity: 0.5;
-  border-bottom-color: transparent;
+  background: transparent;
+  border-color: var(--border);
+  opacity: 0.55;
   cursor: default;
 }
 
