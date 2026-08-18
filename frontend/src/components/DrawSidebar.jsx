@@ -119,7 +119,7 @@ export default function DrawSidebar({ tournamentId, tournament, selectedUserId, 
   }
 
   return (
-    <aside className={`draw-sidebar${collapsed ? ' draw-sidebar--collapsed' : ''}${overlay ? ' draw-sidebar--overlay' : ''}`}>
+    <aside className={`draw-sidebar${collapsed ? ' draw-sidebar--collapsed' : ''}${overlay ? ' draw-sidebar--overlay' : ''}${showOop && !collapsed ? ' draw-sidebar--with-oop' : ''}`}>
       <button
         className="sidebar-collapse-btn"
         onClick={() => onToggleCollapsed?.()}
