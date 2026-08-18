@@ -106,6 +106,16 @@
   cursor: default;
 }
 
+/* The 2.4rem top padding below clears the collapse button, which sits on the
+   RIGHT and so never shares a line with the League label. The OOP button sits
+   on the left, directly above that label, so when it is present the content
+   has to start below the whole button band instead: 0.75rem offset + 30px
+   button + breathing room. Scoped to the modifier so the desktop sidebar,
+   which has no OOP button, keeps its tighter spacing. */
+.draw-sidebar--with-oop .sidebar-league-select {
+  padding-top: 3.9rem;
+}
+
 /* Collapsed state: a larger edge button with the chevron filling it, a dark
    border to make it obvious, and a 50%-transparent background. Matches the
    round-nav pager button's exact footprint — same width/height (via the
