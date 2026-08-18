@@ -19,7 +19,11 @@ services:
     environment:
       - DATABASE_URL=sqlite+aiosqlite:////data/tennis_fantasy.db
       - LOG_FILE=/logs/backend.log
-      - SECRET_KEY=${SECRET_KEY:-change-me-to-a-long-random-string}
+      # `:?` not `:-`. A default here is what let production run for weeks on
+      # the placeholder key that is committed in this public repo — compose
+      # substituted it silently and nothing downstream could tell the
+      # difference. Now compose itself refuses to start without a real value.
+      - SECRET_KEY=${SECRET_KEY:?set SECRET_KEY in the .env beside this file — it signs every session token}
       - RESEND_API_KEY=${RESEND_API_KEY}
       # Web Push signing keys. Absent -> push is skipped rather than erroring,
       # so a machine without them configured still boots normally.
