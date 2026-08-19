@@ -28,7 +28,7 @@ import re
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, delete, or_, select
 
 from app.models.schedule import (ScheduleChange, ScheduleDocument,
                                  ScheduleEntry, ScheduleEntryPlayer)
@@ -143,6 +143,27 @@ async def _resolve_players(db, draws: list, tour: Optional[str], names: list) ->
     return out
 
 
+def _candidates(draws, names) -> set:
+    """Every draw entry any of these printed names could refer to.
+
+    Unlike _resolve_players this keeps all possibilities rather than the first.
+    An unresolved slot lists the players of the match feeding it — abbreviated,
+    so "J. M. Cerundolo" matches both Cerundolos — and the ambiguity resolves
+    itself once we look for a bracket match pairing one candidate from each
+    side.
+    """
+    out = set()
+    for raw in names:
+        tokens = {t for t in _norm(_clean_name(raw)).split() if len(t) > 2}
+        if not tokens:
+            continue
+        for draw in draws:
+            for eid, ent_tokens in draw['entries']:
+                if tokens <= ent_tokens:
+                    out.add(eid)
+    return out
+
+
 async def ingest_document(db, tournament, play_date: date, url: str,
                           pdf_bytes: bytes, tour: Optional[str] = None) -> dict:
     """Parse one PDF revision and reconcile it into schedule_entries."""
@@ -175,14 +196,18 @@ async def ingest_document(db, tournament, play_date: date, url: str,
     for d in draw_rows:
         ents = (await db.execute(
             select(DrawEntry.id, DrawEntry.name).where(DrawEntry.draw_id == d.id))).all()
-        draws.append({'draw': d, 'entries': [(e[0], set(_norm(e[1] or '').split())) for e in ents]})
+        draws.append({'draw': d,
+                      'entries': [(e[0], set(_norm(e[1] or '').split())) for e in ents],
+                      'names': {e[0]: e[1] for e in ents}})
 
     # entry id -> draw id, so a resolved player also tells us which draw the
     # slot belongs to.
     entry_draw = {}
     draw_by_id = {}
+    entry_name = {}
     for d in draws:
         draw_by_id[d['draw'].id] = d['draw']
+        entry_name.update(d['names'])
         for eid, _tokens in d['entries']:
             entry_draw[eid] = d['draw'].id
 
@@ -250,51 +275,58 @@ async def ingest_document(db, tournament, play_date: date, url: str,
             # doubles has no draw at all.
             side_a_ids = [i for i in ids[:len(na)] if i]
             side_b_ids = [i for i in ids[len(na):] if i]
-            if len(side_a_ids) == 1 and len(side_b_ids) == 1 and discipline == 'singles':
-                a_id, b_id = side_a_ids[0], side_b_ids[0]
-                d_id = entry_draw.get(a_id) or entry_draw.get(b_id)
-                if d_id and entry_draw.get(a_id) == entry_draw.get(b_id):
-                    entry.draw_id = d_id
-                    found = (await db.execute(
-                        select(Match).where(
-                            Match.draw_id == d_id,
-                            or_(and_(Match.player1_id == a_id, Match.player2_id == b_id),
-                                and_(Match.player1_id == b_id, Match.player2_id == a_id)),
-                        ))).scalars().first()
-                    if found is not None:
-                        entry.match_id = found.id
-                        # The sheet prints a round on only a minority of slots;
-                        # the bracket knows it for all of them.
-                        derived = _round_label(found.round_number,
-                                               draw_by_id[d_id].num_rounds)
-                        if derived:
-                            entry.round_label = derived
+
+            # Candidate sets, which handles a settled slot and an unresolved one
+            # with the same code: a settled side has one candidate, an "X OR Y"
+            # side has the players of the match feeding it.
+            cand_a = _candidates(draws, na)
+            cand_b = _candidates(draws, nb)
+            found = None
+            if discipline == 'singles' and cand_a and cand_b:
+                found = (await db.execute(
+                    select(Match).where(
+                        Match.player1_id.isnot(None), Match.player2_id.isnot(None),
+                        or_(and_(Match.player1_id.in_(cand_a), Match.player2_id.in_(cand_b)),
+                            and_(Match.player1_id.in_(cand_b), Match.player2_id.in_(cand_a))),
+                    ))).scalars().first()
+
+            if found is not None:
+                entry.match_id = found.id
+                entry.draw_id = found.draw_id
+                derived = _round_label(found.round_number,
+                                       draw_by_id[found.draw_id].num_rounds
+                                       if found.draw_id in draw_by_id else None)
+                if derived:
+                    entry.round_label = derived
+
+                # A sheet printed before the feeding matches finished still says
+                # "Tien OR Tiafoe". The bracket knows who actually came through,
+                # so replace the alternatives with the real pair rather than
+                # showing a choice whose answer we already hold.
+                if m.tbd:
+                    na = [entry_name.get(found.player1_id) or na[0]]
+                    nb = [entry_name.get(found.player2_id) or nb[0]]
+                    ids = [found.player1_id, found.player2_id]
+                    entry.is_tbd = False
+                    entry.tbd_side = None
+                    await db.execute(
+                        delete(ScheduleEntryPlayer).where(
+                            ScheduleEntryPlayer.schedule_entry_id == entry.id))
+                    for side, nm, eid in (('a', na[0], ids[0]), ('b', nb[0], ids[1])):
+                        db.add(ScheduleEntryPlayer(
+                            schedule_entry_id=entry.id, side=side, position=1,
+                            raw_name=nm, draw_entry_id=eid))
             elif side_a_ids or side_b_ids:
-                # Doubles at a tournament we do track: no bracket match, but the
-                # draw link still lets the row point somewhere useful.
                 any_id = (side_a_ids + side_b_ids)[0]
                 entry.draw_id = entry_draw.get(any_id)
-
-            # The tour a match belongs to is a property of the DRAW, not of the
-            # site the PDF was downloaded from. Stamping it from the source made
-            # every men's match at a combined event read "WTA", because the
-            # combined file is hosted by the WTA.
-            # Confidence order: the mapped draw's gender knows for certain; the
-            # sheet's own per-match label is next; otherwise leave it blank. No
-            # badge is better than a wrong one — doubles specialists appear in no
-            # singles draw, so their tour is genuinely undetermined here.
-            if entry.draw_id and entry.draw_id in draw_by_id:
-                g = draw_by_id[entry.draw_id].gender
-                entry.tour = 'ATP' if g == 'M' else 'WTA' if g == 'F' else m.tour
-            else:
-                entry.tour = m.tour
 
             entry.court = court
             entry.court_order = order
             entry.start_type = start_type
             entry.start_time_local = m.time
-            entry.is_tbd = bool(m.tbd)
-            entry.tbd_side = getattr(m, 'tbd_side', None)
+            if found is None or not m.tbd:
+                entry.is_tbd = bool(m.tbd)
+                entry.tbd_side = getattr(m, 'tbd_side', None)
             entry.round_label = (m.round or entry.round_label
                                  or unanimous.get((stage, discipline)))
             entry.printed_score = getattr(m, 'printed_score', None)
