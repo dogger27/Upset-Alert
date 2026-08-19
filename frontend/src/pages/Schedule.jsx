@@ -151,7 +151,6 @@ export default function Schedule() {
   const [params, setParams] = useSearchParams()
   const [view, setView] = useState(storedView)
   const [hideDone, setHideDone] = useState(false)
-  const [court, setCourt] = useState('')
 
   const day = params.get('date') || isoDay(new Date())
   const tournamentId = params.get('tournament') ? Number(params.get('tournament')) : undefined
@@ -179,10 +178,9 @@ export default function Schedule() {
       // running", where doubles is noise around the draws people play.
       if (view === 'court' && e.discipline !== 'singles') return false
       if (hideDone && e.status === 'completed') return false
-      if (court && e.court !== court) return false
       return true
     })
-  }, [data, view, hideDone, court])
+  }, [data, view, hideDone])
 
   const byCourt = useMemo(() => {
     const m = new Map()
@@ -227,12 +225,6 @@ export default function Schedule() {
       <div className="sched-filters">
         <button className={clsx('sched-chip', { 'sched-chip--on': hideDone })}
                 onClick={() => setHideDone(v => !v)}>Hide completed</button>
-        {(data?.courts?.length ?? 0) > 1 && (
-          <select className="sched-select" value={court} onChange={e => setCourt(e.target.value)}>
-            <option value="">All courts</option>
-            {data.courts.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-        )}
       </div>
 
       {isLoading && <div className="sched-empty">Loading…</div>}
