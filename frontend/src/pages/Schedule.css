@@ -152,9 +152,9 @@
 .sched-row--live { border-left: 3px solid var(--pick-correct-line); }
 .sched-row--done {
   border-left: 3px solid var(--n-600);
-  /* A light touch only. Fully dimmed, a finished match looked disabled — it
-     still carries the result, which is the most useful thing on the row. */
-  opacity: 0.82;
+  /* Enough to recede behind the live rows, short of the 0.55 that made a
+     finished match look disabled — it still carries the result. */
+  opacity: 0.68;
 }
 
 /* Muted score on a finished match: the number matters, but the live ones should
