@@ -495,10 +495,20 @@ async def recompute_expected_starts(db, tournament_id: int, play_date: date,
             else:
                 expected, source = printed_dt, ('printed' if printed_dt else None)
 
-            # A start that has already passed, for a match nobody has called on,
-            # is the most obviously wrong thing this page can say.
-            if expected and expected < now:
-                expected, source = now, 'estimated'
+            # Clamp only a CHAINED estimate, never a printed start.
+            #
+            # A time the tournament printed is a fact about the schedule: the
+            # first match on a court began when the sheet said it would,
+            # whether or not we can see it. We often cannot — ESPN does not
+            # cover doubles or qualifying, so those slots have no match row, no
+            # live score and no completed_at, and clamping on that silence
+            # reported an 11:00 AM doubles match as starting at 4:27 PM purely
+            # because the hour had passed.
+            #
+            # A chained estimate is different: it is our own guess, and a guess
+            # that has already expired cannot be right.
+            if expected and expected < now and source == 'estimated':
+                expected = now
 
             s.expected_start_at = expected
             s.expected_source = source
