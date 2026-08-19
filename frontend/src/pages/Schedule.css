@@ -359,10 +359,15 @@
    chips — the parsed page is the destination now, but the source stays one tap
    away. Which tournament it belongs to lives in the tooltip, so the control
    stays the same width when a day spans several events. */
+/* Explicit height, shared with the time-zone switch below it. Both were sized
+   by their own padding and different font sizes, so they could only ever match
+   by coincidence — and did not. */
 .sched-pdf {
   display: inline-flex;
   align-items: center;
-  padding: 0.3rem 0.7rem;
+  justify-content: center;
+  height: 1.85rem;
+  padding: 0 0.85rem;
   border-radius: 999px;
   border: 1.5px solid var(--border);
   background: transparent;
@@ -554,8 +559,11 @@
   border-radius: 999px;
   overflow: hidden;
 }
+.sched-tzswitch { height: 1.85rem; }
 .sched-tzbtn {
-  padding: 0.16rem 0.6rem;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 0.6rem;
   border: 0;
   background: transparent;
   color: var(--text-muted);
