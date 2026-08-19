@@ -168,8 +168,17 @@ function MatchRow({ e, showCourt }) {
       'sched-row--live': e.status === 'live',
     })}>
       <div className="sched-row-when">
-        <span className="sched-time">{showCourt ? expectedStart(e) : printedStart(e)}</span>
+        <span className={clsx('sched-time', {
+          'sched-time--est': showCourt && e.expected_source === 'estimated',
+        })}>{showCourt ? expectedStart(e) : printedStart(e)}</span>
         {showCourt && e.court && <span className="sched-court">{e.court}</span>}
+        {/* Court view keeps the sheet's wording, but "Followed by" alone does
+            not tell you when to turn up. The chained estimate goes underneath.
+            Only when it ADDS something: a slot whose expected time is simply
+            the printed one would just repeat the line above it. */}
+        {!showCourt && e.expected_source === 'estimated' && e.expected_start_at && (
+          <span className="sched-est">{expectedStart(e)}</span>
+        )}
       </div>
       <div className="sched-row-main">
         <div className="sched-tags">

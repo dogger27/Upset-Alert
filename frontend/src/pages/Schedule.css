@@ -116,6 +116,19 @@
 
 .sched-row-when { display: flex; flex-direction: column; gap: 0.15rem; }
 .sched-time { font-size: 0.9rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+/* Estimated times are italic and faded, so a chained guess never reads with the
+   same authority as a time the sheet actually printed. */
+.sched-est,
+.sched-time--est {
+  font-style: italic;
+  opacity: 0.7;
+}
+.sched-est {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
 .sched-court { font-size: 0.68rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
 
 .sched-row-main { min-width: 0; }
