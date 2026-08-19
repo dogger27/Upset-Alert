@@ -198,6 +198,18 @@ async def ingest_document(db, tournament, play_date: date, url: str,
             (m, stage, discipline, names_a, names_b, ids, key))
         seen_keys.append(key)
 
+    # Doubles has no bracket row to derive a round from, and the sheet prints
+    # one on only some slots — today's Cincinnati file labels four of eleven.
+    # Fill the blanks from the labelled ones, but ONLY when every printed round
+    # for that discipline agrees: a day that spans two doubles rounds shows both
+    # labels, and guessing there would be wrong rather than merely missing.
+    printed_rounds: dict[tuple, set] = {}
+    for slots in per_court.values():
+        for (m, stage, discipline, _na, _nb, _ids, _key) in slots:
+            if m.round:
+                printed_rounds.setdefault((stage, discipline), set()).add(m.round.upper())
+    unanimous = {k: next(iter(v)) for k, v in printed_rounds.items() if len(v) == 1}
+
     written = 0
     for court, slots in per_court.items():
         for order, (m, stage, discipline, na, nb, ids, key) in enumerate(slots, 1):
@@ -273,7 +285,8 @@ async def ingest_document(db, tournament, play_date: date, url: str,
             entry.start_type = start_type
             entry.start_time_local = m.time
             entry.is_tbd = bool(m.tbd)
-            entry.round_label = m.round or entry.round_label
+            entry.round_label = (m.round or entry.round_label
+                                 or unanimous.get((stage, discipline)))
             entry.printed_score = getattr(m, 'printed_score', None)
             entry.last_seen_at = datetime.now(timezone.utc)
             entry.last_document_id = doc.id
