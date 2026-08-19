@@ -95,7 +95,22 @@ class Match:
     def is_doubles(self):
         if self.discipline:
             return self.discipline == 'doubles'
-        return len(self.side_a) > 1 or len(self.side_b) > 1
+        return self._side_size('a') > 1 or self._side_size('b') > 1
+
+    def _side_size(self, side):
+        """How many PLAYERS a side holds.
+
+        Not the same as how many entries: once "X OR Y" is regrouped, a side
+        holds one entry per candidate, so a singles match with both opponents
+        still undecided ("L. Tien OR F. Tiafoe" against "J. M. Cerundolo OR
+        F. Auger-Aliassime") looked like two partners a side and was labelled
+        doubles. A doubles candidate names its pair with a slash, which is what
+        distinguishes the two cases.
+        """
+        names = self.side_a if side == 'a' else self.side_b
+        if side not in (self.tbd_side or ''):
+            return len(names)
+        return 2 if any('/' in n for n in names) else 1
 
     @property
     def complete(self):
