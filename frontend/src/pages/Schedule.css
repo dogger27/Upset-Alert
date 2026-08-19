@@ -215,17 +215,25 @@
   }
 }
 
-/* Link out to the tournament's own PDF. Deliberately quiet — the parsed page is
-   the destination now, but the source stays reachable. */
+/* The tournament's own PDF. Styled as an outline button matching the filter
+   chips — the parsed page is the destination now, but the source stays one tap
+   away. Which tournament it belongs to lives in the tooltip, so the control
+   stays the same width when a day spans several events. */
 .sched-pdf {
-  font-size: 0.78rem;
-  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  border: 1.5px solid var(--border);
+  background: transparent;
   color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
   text-decoration: none;
-  border-bottom: 1px dotted currentColor;
   white-space: nowrap;
 }
-.sched-pdf:hover { color: var(--brand-text); }
+.sched-pdf:hover { color: var(--brand-text); border-color: var(--brand-text); }
 
 /* ── Players ── */
 .sched-side { display: flex; flex-wrap: wrap; align-items: center; gap: 0.15rem 0.5rem; font-weight: 600; }

@@ -209,8 +209,8 @@ export default function Schedule() {
         {(data?.tournaments ?? []).filter(t => t.oop_url).map(t => (
           <a key={t.id} className="sched-pdf" href={t.oop_url}
              target="_blank" rel="noopener noreferrer"
-             title="The tournament's own PDF">
-            Official PDF{(data.tournaments.length > 1) ? ` · ${t.name}` : ''}
+             title={`${t.name} — official order of play (PDF)`}>
+            PDF
           </a>
         ))}
 
