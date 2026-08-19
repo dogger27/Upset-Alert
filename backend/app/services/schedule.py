@@ -324,6 +324,7 @@ async def ingest_document(db, tournament, play_date: date, url: str,
             entry.court_order = order
             entry.start_type = start_type
             entry.start_time_local = m.time
+            entry.start_note = getattr(m, 'start_raw', None)
             if found is None or not m.tbd:
                 entry.is_tbd = bool(m.tbd)
                 entry.tbd_side = getattr(m, 'tbd_side', None)

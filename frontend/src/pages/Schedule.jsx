@@ -35,11 +35,17 @@ function prettyDay(iso) {
   })
 }
 
-/** The sheet's own wording, verbatim — the whole point of the court view. */
+/** The sheet's own wording, verbatim — the whole point of the court view.
+ *
+ * Prefer what was actually printed. Deriving a label from start_type meant
+ * inventing phrasing the sheet never used — "After preceding" where it plainly
+ * said "After suitable rest" — and every new wording needed another branch. The
+ * fallbacks below only apply to rows stored before start_note existed. */
 function printedStart(e) {
+  if (e.start_note) return e.start_note
   if (e.start_type === 'followed_by') return 'Followed by'
   if (e.start_type === 'not_before') return `Not before ${e.start_time_local ?? ''}`.trim()
-  if (e.start_type === 'after_event') return 'After preceding'
+  if (e.start_type === 'after_event') return 'After suitable rest'
   if (e.start_time_local) return e.start_time_local
   return 'TBA'
 }

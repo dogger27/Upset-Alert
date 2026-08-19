@@ -48,6 +48,8 @@ class ScheduleEntryOut(BaseModel):
     # As printed — the court view renders this verbatim rather than a time.
     start_type: str
     start_time_local: Optional[str] = None
+    # Verbatim from the sheet; the court view prints this as-is.
+    start_note: Optional[str] = None
     # Computed chain — the sort key for the time view. `expected_source` tells
     # the client whether to render it firmly ("3:00 PM") or hedged ("~4:15 PM").
     expected_start_at: Optional[datetime] = None
@@ -124,6 +126,7 @@ async def schedule_day(
             tour=e.tour, stage=e.stage, discipline=e.discipline,
             round_label=e.round_label, court=e.court, court_order=e.court_order,
             start_type=e.start_type, start_time_local=e.start_time_local,
+            start_note=e.start_note,
             expected_start_at=e.expected_start_at, expected_source=e.expected_source,
             is_tbd=e.is_tbd, tbd_side=e.tbd_side, status=e.status, players=players,
             live_scores=(m.live_scores_json if m else None),

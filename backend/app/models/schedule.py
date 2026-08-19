@@ -93,6 +93,12 @@ class ScheduleEntry(Base):
     start_type: Mapped[str] = mapped_column(String, default="tba")
     # fixed | not_before | followed_by | after_event | tba
     start_time_local: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    # The slot line EXACTLY as printed: "After suitable rest", "Followed by",
+    # "30 mins after ceremony". The court view renders this verbatim rather than
+    # a label derived from start_type — deriving one meant inventing wording the
+    # sheet never used ("After preceding" for "After suitable rest"), and every
+    # new phrasing needed another mapping.
+    start_note: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     # Computed chain (see services/schedule.py). The sort key for the time view,
     # and the only field both views and any future notification agree on.
     expected_start_at: Mapped[Optional[datetime]] = mapped_column(
