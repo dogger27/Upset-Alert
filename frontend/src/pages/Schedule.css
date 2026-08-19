@@ -300,6 +300,30 @@
   }
   .sched-players { font-size: 0.86rem; }
   .sched-day { min-width: 7rem; }
+
+  /* Keep "vs" beside the name it follows. On a phone the row is narrow enough
+     that it wrapped onto a line of its own, which reads as a third element of
+     the match rather than a separator. */
+  .sched-teamline { flex-wrap: nowrap; }
+
+  /* A name must not break inside itself either — "Rafael" over "JODAR" reads as
+     two people. */
+  .sched-pname { white-space: nowrap; }
+
+  /* The score gives way first when something has to. It stays legible several
+     steps smaller, whereas a wrapped name changes what the row appears to say.
+     Shrinkable for the same reason, so a long three-set score cannot squeeze
+     the players out. */
+  .sched-score {
+    font-size: 0.95rem;
+    flex-shrink: 1;
+    min-width: 0;
+  }
+
+  /* The pill is narrower here, so the tags need less clearance and the names
+     get the difference. */
+  .sched-tags { padding-right: 6.4rem; }
+  .sched-status { min-width: 6rem; font-size: 0.55rem; }
 }
 
 /* Only where there is real room do courts sit side by side, the way the sheet
