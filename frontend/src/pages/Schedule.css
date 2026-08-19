@@ -612,6 +612,12 @@
   .sched-center,
   .sched-topright { display: contents; }
   .sched-pdf { display: none; }
+  /* Both switches need an explicit cell AND justify-self. A grid item defaults
+     to stretch, which is what made them span the full width when the page
+     narrowed — the pill grew while its two labels stayed put, so the control
+     read as a wide empty bar with a chip at one end. */
+  .sched-viewswitch { grid-area: modes; justify-self: start; }
+  .sched-tzswitch { grid-area: tz; justify-self: end; }
     
   /* A long tournament name gives way before the date does — the date is the
      one thing on this row you cannot infer from context. */
