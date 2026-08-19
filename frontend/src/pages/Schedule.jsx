@@ -74,16 +74,18 @@ function liveLine(e) {
  * one row does not fit a phone, and the surname is what identifies a pair
  * anyway.
  */
-function PlayerName({ raw, surnameOnly }) {
+function PlayerName({ raw, surnameOnly, hideSeed }) {
   const { seed, first, last, nat } = splitPlayerName(raw)
   const iso2 = nationalityIso2(nat)
   return (
     <span className="sched-player">
+      {/* The placeholder keeps names aligned when a nationality is missing, but
+          it must be invisible — as a filled box it reads as a broken image. */}
       {iso2
         ? <span className={`fi fi-${iso2.toLowerCase()} sched-flag`} title={nat} />
-        : <span className="sched-flag sched-flag--none" />}
+        : <span className="sched-flag sched-flag--none" aria-hidden="true" />}
       <span className="sched-pname">
-        {seed && <span className="sched-seed">{seed}</span>}
+        {!hideSeed && seed && <span className="sched-seed">{seed}</span>}
         {surnameOnly ? last : [first, last].filter(Boolean).join(' ')}
       </span>
     </span>
@@ -92,10 +94,17 @@ function PlayerName({ raw, surnameOnly }) {
 
 function Side({ players, doubles }) {
   if (!players.length) return <span className="sched-side">TBD</span>
+  // A doubles seed belongs to the TEAM. The sheet repeats it against both
+  // partners, which reads as two separately-seeded players.
+  const teamSeed = doubles
+    ? players.map(p => splitPlayerName(p.name).seed).find(Boolean) ?? null
+    : null
   return (
     <span className="sched-side">
+      {teamSeed && <span className="sched-seed sched-seed--team">{teamSeed}</span>}
       {players.map((p, i) => (
-        <PlayerName key={`${p.side}${p.position}${i}`} raw={p.name} surnameOnly={doubles} />
+        <PlayerName key={`${p.side}${p.position}${i}`} raw={p.name}
+                    surnameOnly={doubles} hideSeed={doubles} />
       ))}
     </span>
   )
@@ -123,7 +132,7 @@ function MatchRow({ e, showCourt }) {
           {e.stage === 'qualifying' && <span className="sched-tag sched-tag--quali">Q</span>}
           {e.discipline !== 'singles' && <span className="sched-tag">{e.discipline === 'mixed' ? 'Mixed' : 'Doubles'}</span>}
         </div>
-        <div className="sched-players">
+        <div className={clsx('sched-players', { 'sched-players--pairs': e.discipline !== 'singles' })}>
           <Side players={a} doubles={e.discipline !== 'singles'} />
           <span className="sched-vs">v</span>
           <Side players={b} doubles={e.discipline !== 'singles'} />

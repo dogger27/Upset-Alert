@@ -243,3 +243,19 @@
   background-position: center !important;
 }
 .sched-flag--none { background: var(--surface-raised); opacity: 0.5; }
+
+/* Missing nationality: hold the space so names stay aligned, but show nothing.
+   A filled box here reads as a broken flag image. */
+.sched-flag--none { background: transparent !important; opacity: 0; }
+
+/* Doubles stacks team over team. Inline wrapping stranded the "v" at the end of
+   the first team's line, so it read as "PANOVA v" rather than as a separator. */
+.sched-players--pairs { flex-direction: column; align-items: flex-start; gap: 0.1rem; }
+.sched-players--pairs .sched-vs {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.65;
+  padding-left: 0.1rem;
+}
+.sched-seed--team { margin-right: 0.1rem; }
