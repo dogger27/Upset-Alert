@@ -105,7 +105,10 @@
   padding: 0.55rem 0.6rem;
   border-radius: 9px;
   background: var(--surface-card);
-  border: 1px solid var(--border);
+  /* The brand outline on every row, not just some. It began life marking the
+     viewer's picks, which turned out to mean nothing useful — but it reads
+     well, so it stays as the card's ordinary edge. */
+  border: 1px solid var(--brand-text);
 }
 
 .sched-row--live { border-left: 3px solid var(--pick-correct-line); }
