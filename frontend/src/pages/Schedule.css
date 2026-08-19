@@ -14,21 +14,25 @@
 /* ── Header ──
    Three zones: identity top-left, the PDF top-right, and the day/view controls
    centred beneath them. */
+/* One row, three zones. A grid rather than space-between: with flex the middle
+   block sits wherever the left and right happen to leave it, so the date would
+   drift sideways as the title changed length. 1fr | auto | 1fr centres it
+   against the PAGE, independent of either neighbour. */
 .sched-topbar {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: start;
   gap: 1rem;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.7rem;
 }
+.sched-topbar .sched-pdf { justify-self: end; }
 .sched-titleblock { min-width: 0; }
 
 .sched-center {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.9rem;
+  gap: 0.4rem;
 }
 
 .sched-daynav {
@@ -237,6 +241,13 @@
 /* ── Narrow screens ── */
 @media (max-width: 560px) {
   .sched-page { padding: 0.6rem 0.5rem 3rem; }
+  /* Three zones will not fit across a phone; stack them and let the centre
+     block keep its own centring. */
+  .sched-topbar {
+    grid-template-columns: 1fr auto;
+    gap: 0.5rem 0.75rem;
+  }
+  .sched-center { grid-column: 1 / -1; }
   .sched-row {
     grid-template-columns: 4.4rem 1fr;
     gap: 0.45rem;
@@ -293,7 +304,12 @@
   text-decoration: none;
   white-space: nowrap;
 }
-.sched-pdf:hover { color: var(--brand-text); border-color: var(--brand-text); }
+.sched-pdf:hover {
+  color: var(--brand-text);
+  border-color: var(--brand-text);
+  /* index.css underlines links on hover; these read as buttons, not links. */
+  text-decoration: none;
+}
 
 /* ── Players ── */
 .sched-side { display: flex; flex-wrap: wrap; align-items: center; gap: 0.15rem 0.5rem; font-weight: 600; }
@@ -378,7 +394,11 @@
   text-decoration: none;
   white-space: nowrap;
 }
-.sched-back:hover { color: var(--brand-text); border-color: var(--brand-text); }
+.sched-back:hover {
+  color: var(--brand-text);
+  border-color: var(--brand-text);
+  text-decoration: none;
+}
 
 /* Tour chips carry their tour's colour when active, so the filter reads the
    same way the row badges do. */

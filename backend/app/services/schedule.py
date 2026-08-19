@@ -358,17 +358,78 @@ def _start_type_of(m) -> str:
     return 'tba'
 
 
+def _aware(dt):
+    """SQLite hands datetimes back naive; treat them as the UTC they were stored as."""
+    if dt is None:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def _remaining_minutes(live, discipline: str) -> int:
+    """Roughly how much longer a match in progress has to run.
+
+    live_scores_json carries games per set for both players, so we know how far
+    through it is rather than only that it started. Sets already decided plus
+    progress through the current one give a fraction of the whole; the rest is
+    what is left. Crude, but far better than assuming every live match has a
+    full match still to go, and it tightens on its own every 60 seconds as ESPN
+    updates.
+    """
+    total = _duration_for(discipline)
+    per_set = total / 2.5          # a best-of-3 averages about two and a half sets
+    try:
+        a_sets, b_sets = live[0] or [], live[1] or []
+        decided = max(len(a_sets), len(b_sets)) - 1      # last entry is in play
+        decided = max(decided, 0)
+        games = int(a_sets[-1] or 0) + int(b_sets[-1] or 0) if a_sets or b_sets else 0
+        # A set is 12 games at its longest before a breaker; cap so a long set
+        # cannot report the match as more than finished.
+        part = min(games / 12.0, 1.0)
+        sets_to_win = 2
+        leader = max(decided - (decided // 2), 1)
+        remaining_sets = max(sets_to_win - leader, 0) + (1 - part)
+    except Exception:
+        remaining_sets = 1.0
+    return max(int(remaining_sets * per_set), 10)
+
+
 async def recompute_expected_starts(db, tournament_id: int, play_date: date,
                                     venue_tz: Optional[str] = None) -> int:
-    """Chain expected starts per court. Cheap, idempotent, run after every
-    ingest and whenever live results land."""
+    """Chain expected starts per court, anchored on what has actually happened.
+
+    Three things decide a slot, in order of how much they are trusted:
+
+    * a FINISHED match ends the guesswork for everything behind it — the next
+      slot starts at its recorded completed_at, not at a constant added to a
+      constant;
+    * a LIVE match has not finished, so everything after it is at least now plus
+      whatever that match has left to run;
+    * a slot whose estimate has already passed, while nothing on that court has
+      started it, is wrong on its face — it cannot be in the past, so it is
+      clamped to now.
+
+    Without these the chain re-ran every 15 minutes from unchanged inputs and
+    produced the same numbers all day: a static projection wearing the clothes
+    of a live one.
+    """
     from zoneinfo import ZoneInfo
+
+    now = datetime.now(timezone.utc)
 
     rows = (await db.execute(
         select(ScheduleEntry).where(
             ScheduleEntry.tournament_id == tournament_id,
             ScheduleEntry.play_date == play_date,
         ).order_by(ScheduleEntry.court, ScheduleEntry.court_order))).scalars().all()
+    if not rows:
+        return 0
+
+    match_ids = {r.match_id for r in rows if r.match_id}
+    matches = {}
+    if match_ids:
+        found = (await db.execute(
+            select(Match).where(Match.id.in_(match_ids)))).scalars().all()
+        matches = {m.id: m for m in found}
 
     tz = None
     if venue_tz:
@@ -386,6 +447,35 @@ async def recompute_expected_starts(db, tournament_id: int, play_date: date,
     for court, slots in by_court.items():
         prev_end: Optional[datetime] = None
         for s in sorted(slots, key=lambda x: x.court_order):
+            m = matches.get(s.match_id) if s.match_id else None
+            dur = _duration_for(s.discipline)
+            before = (s.expected_start_at, s.expected_source)
+
+            finished_at = _aware(getattr(m, 'completed_at', None)) if m else None
+            is_live = bool(m and getattr(m, 'live_scores_json', None)
+                           and not getattr(m, 'winner_id', None))
+
+            if finished_at:
+                # Played and done. Its own start is history; what matters is that
+                # the court is free from here.
+                s.expected_source = 'actual'
+                prev_end = finished_at
+                if before != (s.expected_start_at, s.expected_source):
+                    touched += 1
+                s.estimated_duration_min = dur
+                continue
+
+            if is_live:
+                # On court now. Do not move its start — it already happened —
+                # but everything behind it waits for it to finish.
+                s.expected_source = 'live'
+                prev_end = now + timedelta(minutes=_remaining_minutes(
+                    getattr(m, 'live_scores_json', None), s.discipline))
+                if before != (s.expected_start_at, s.expected_source):
+                    touched += 1
+                s.estimated_duration_min = dur
+                continue
+
             printed = _parse_clock(s.start_time_local)
             printed_dt = (datetime.combine(play_date, printed, tzinfo=tz)
                           if printed else None)
@@ -393,8 +483,6 @@ async def recompute_expected_starts(db, tournament_id: int, play_date: date,
             if s.start_type == 'fixed' and printed_dt:
                 expected, source = printed_dt, 'printed'
             elif s.start_type == 'not_before' and printed_dt:
-                # Lower bound, not a time: if the court is running late the
-                # printed value is simply wrong.
                 expected = max(printed_dt, prev_end) if prev_end else printed_dt
                 source = 'printed' if expected == printed_dt else 'estimated'
             elif prev_end:
@@ -402,15 +490,16 @@ async def recompute_expected_starts(db, tournament_id: int, play_date: date,
             else:
                 expected, source = printed_dt, ('printed' if printed_dt else None)
 
-            dur = _duration_for(s.discipline)
-            if s.expected_start_at != expected or s.expected_source != source:
-                touched += 1
+            # A start that has already passed, for a match nobody has called on,
+            # is the most obviously wrong thing this page can say.
+            if expected and expected < now:
+                expected, source = now, 'estimated'
+
             s.expected_start_at = expected
             s.expected_source = source
             s.estimated_duration_min = dur
-            # A printed score proves the court has moved on even where ESPN is
-            # silent (it skips doubles and qualifying entirely), which is the
-            # only reason that internal field is kept.
+            if before != (expected, source):
+                touched += 1
             if expected:
                 prev_end = expected + timedelta(minutes=dur)
 

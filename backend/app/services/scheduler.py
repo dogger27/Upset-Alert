@@ -1474,6 +1474,42 @@ async def _refresh_order_of_play() -> None:
                       {"error": err}, dedup_key="oop_refresh_fail", dedup_hours=6)
 
 
+async def _refresh_schedule_estimates() -> None:
+    """Re-chain today's expected start times against live results.
+
+    Separate from the order-of-play job on purpose. That one re-fetches the PDF
+    every 15 minutes, and the PDF does not change when a match finishes — so
+    running the chain on its cadence recomputed the same numbers all day. What
+    moves an estimate is ESPN, which updates every 60 seconds, so this runs
+    close to that instead. It reads only what is already in the database and
+    writes nothing but the estimates.
+    """
+    from datetime import date as _date
+    from sqlalchemy import select as _select
+    from app.models.schedule import ScheduleEntry
+    from app.models.tournament import Draw
+    from app.services import schedule as schedule_svc
+
+    try:
+        today = _date.today()
+        async with AsyncSessionLocal() as db:
+            t_ids = [r[0] for r in (await db.execute(
+                _select(ScheduleEntry.tournament_id).where(
+                    ScheduleEntry.play_date == today).distinct())).all()]
+        for tid in t_ids:
+            async with AsyncSessionLocal() as db:
+                tz = (await db.execute(
+                    _select(Draw.venue_timezone).where(
+                        Draw.tournament_id == tid,
+                        Draw.venue_timezone.isnot(None)))).scalars().first()
+                await schedule_svc.recompute_expected_starts(db, tid, today, venue_tz=tz)
+    except Exception as exc:
+        logger.error("Schedule estimate refresh failed: %s", exc, exc_info=True)
+        err = describe_exception(exc)
+        await app_log("error", "order_of_play", f"Estimate refresh failed: {err}",
+                      {"error": err}, dedup_key="sched_estimates_fail", dedup_hours=6)
+
+
 async def _scan_system_alerts() -> None:
     """Email digest of new errors/warnings in system_logs — see alerts.py for
     the recurrence gate and daily cap. Wrapped because a failure here must not
@@ -1599,6 +1635,17 @@ def start_scheduler() -> None:
         minutes=15,
         id="refresh_order_of_play",
         misfire_grace_time=600,
+    )
+    # Expected start times, re-chained against live results. 2 min rather than
+    # the 15 the PDF job uses: a finishing match is what moves an estimate, and
+    # that arrives from ESPN every 60 seconds. Touches no network at all — it
+    # only re-reads matches and rewrites the estimates.
+    scheduler.add_job(
+        _refresh_schedule_estimates,
+        "interval",
+        minutes=2,
+        id="refresh_schedule_estimates",
+        misfire_grace_time=120,
     )
     scheduler.add_job(
         _refresh_weekly_rankings,
