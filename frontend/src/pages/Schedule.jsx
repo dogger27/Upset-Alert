@@ -213,11 +213,25 @@ function Side({ players, doubles, tbd }) {
    nothing else, and only from the point we began recording it. Everything else
    keeps the printed line. */
 function startedLine(e, zone) {
-  if (!e.started_at) return null
   if (e.status !== 'live' && e.status !== 'completed') return null
   const opts = { hour: 'numeric', minute: '2-digit' }
   if (zone) opts.timeZone = zone
-  return `Started ${new Date(e.started_at).toLocaleTimeString([], opts)}`
+
+  // The observed start, when we have one.
+  if (e.started_at) {
+    return `Started at ${new Date(e.started_at).toLocaleTimeString([], opts)}`
+  }
+  // We often do not. started_at comes from ESPN, which covers only main-draw
+  // singles and only since we began recording it, so doubles, qualifying and
+  // anything already under way beforehand have none. The match has still
+  // demonstrably started, though, so keep the printed time and fix the TENSE —
+  // "Starting at 11:00 AM" on a finished match reads as if it were still to
+  // come, which is the one thing the row must not say.
+  if (e.printed_start_at && e.start_type === 'fixed') {
+    return `Started at ${new Date(e.printed_start_at).toLocaleTimeString([], opts)}`
+  }
+  // No time to show at all — "Followed by" and friends. Say only what is known.
+  return 'Started'
 }
 
 function MatchRow({ e, showCourt, zone, venueMode }) {
