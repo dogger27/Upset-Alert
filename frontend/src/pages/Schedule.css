@@ -146,7 +146,6 @@
 .sched-row--wta { background: color-mix(in srgb, var(--wta-text) 12%, var(--surface-card)); }
 
 .sched-row--live { border-left: 3px solid var(--pick-correct-line); }
-.sched-row--done { opacity: 0.55; }
 
 .sched-row-when { display: flex; flex-direction: column; gap: 0.15rem; }
 .sched-time { font-size: 0.9rem; font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -203,9 +202,22 @@
 }
 .sched-side { font-weight: 600; }
 .sched-vs { color: var(--text-muted); font-size: 0.8rem; }
+.sched-slash { color: var(--text-muted); font-weight: 600; }
+.sched-slash { color: var(--text-muted); font-weight: 600; }
 .sched-tbd { font-size: 0.7rem; color: var(--text-muted); font-style: italic; }
+/* Players and score share a line; the score is pushed right and centred against
+   however many lines the names take. */
+.sched-playrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.sched-playrow .sched-players { flex: 1 1 auto; min-width: 0; }
+
 .sched-score {
-  margin-top: 0.15rem;
+  flex: 0 0 auto;
+  margin-left: auto;
   font-size: 0.82rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -382,10 +394,16 @@
   text-transform: uppercase;
   color: var(--text-muted);
 }
+/* Sits with the filters but is not one — it navigates away rather than
+   narrowing the list, so it is filled rather than outlined and separated by a
+   wide gap. */
 .sched-back {
   display: inline-block;
-  margin-bottom: 0.35rem;
   flex: 0 0 auto;
+  margin-right: 1.5rem;
+  background: var(--surface-raised);
+  border-color: var(--surface-raised) !important;
+  color: var(--text) !important;
   padding: 0.3rem 0.7rem;
   border-radius: 999px;
   border: 1.5px solid var(--border);
@@ -414,6 +432,10 @@
   position: absolute;
   top: 0.4rem;
   right: 0.5rem;
+  /* in-progress-badge sets left:50% for its use on the draw page. Setting
+     `right` without clearing `left` stretches an absolutely positioned element
+     between the two, which is why this rendered full width. */
+  left: auto;
   z-index: 1;
   transform: none;
   font-size: 0.6rem;

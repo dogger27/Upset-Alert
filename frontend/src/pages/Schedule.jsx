@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams, Link } from 'react-router-dom'
 import clsx from 'clsx'
@@ -169,9 +169,14 @@ function Side({ players, doubles, tbd }) {
     <span className="sched-side">
       {teamSeed && <span className="sched-seed sched-seed--team">{teamSeed}</span>}
       {players.map((p, i) => (
-        <PlayerName key={`${p.side}${p.position}${i}`} raw={p.name}
-                    surnameOnly={doubles} hideSeed={doubles}
-                    nationality={p.nationality} />
+        <Fragment key={`${p.side}${p.position}${i}`}>
+          {/* Partners are separated by a slash, the way every draw sheet writes
+              a pair. A bare space read as two unrelated names once the flags
+              sat between them. */}
+          {i > 0 && <span className="sched-slash">/</span>}
+          <PlayerName raw={p.name} surnameOnly={doubles} hideSeed={doubles}
+                      nationality={p.nationality} />
+        </Fragment>
       ))}
     </span>
   )
@@ -219,6 +224,7 @@ function MatchRow({ e, showCourt, zone, venueMode }) {
           {e.stage === 'qualifying' && <span className="sched-tag sched-tag--quali">Q</span>}
           {e.discipline !== 'singles' && <span className="sched-tag">{e.discipline === 'mixed' ? 'Mixed' : 'Doubles'}</span>}
         </div>
+        <div className="sched-playrow">
         <div className={clsx('sched-players', { 'sched-players--pairs': e.discipline !== 'singles' })}>
           {/* "vs" rides with the FIRST team rather than sitting on its own
               line. Stacked pairs otherwise put it alone between them, which
@@ -231,6 +237,7 @@ function MatchRow({ e, showCourt, zone, venueMode }) {
           <Side players={b} doubles={e.discipline !== 'singles'} tbd={!!e.tbd_side?.includes('b')} />
         </div>
         {score && <div className="sched-score">{score}</div>}
+        </div>
       </div>
     </div>
   )
@@ -344,9 +351,6 @@ export default function Schedule() {
     <div className="sched-page">
       <div className="sched-topbar">
         <div className="sched-titleblock">
-          {fromDraw && (
-            <Link className="sched-back" to={`/tournaments/${fromDraw}`}>‹ Back to draw</Link>
-          )}
           <h1 className="sched-title">
             {data?.tournaments?.length === 1
               ? data.tournaments[0].name
@@ -398,6 +402,9 @@ export default function Schedule() {
       </div>
 
       <div className="sched-filters">
+        {fromDraw && (
+          <Link className="sched-back" to={`/tournaments/${fromDraw}`}>‹ Back to draw</Link>
+        )}
         {view === 'time' && tours.length > 1 && (
           <>
             {tours.map(t => (
