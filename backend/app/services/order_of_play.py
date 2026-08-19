@@ -66,6 +66,7 @@ _OOP_LEAD_DAYS = {
 }
 _DEFAULT_OOP_LEAD_DAYS = 6
 
+_WIKI_API = "https://en.wikipedia.org/w/api.php"
 _WTA_API = "https://api.wtatennis.com/tennis/tournaments/"
 _WTA_PDF = "https://wtafiles.wtatennis.com/pdf/draws/{year}/{lsid}/OP.pdf"
 
@@ -221,6 +222,118 @@ def _running(draw, today: date) -> bool:
         return False
     end = _as_date(draw.end_date)
     return end is None or today <= end
+
+
+_ATP_ID_RE = re.compile(r'atptour\.com/en/tournaments/[a-z0-9\-]+/(\d+)')
+
+
+async def refresh_atp_ids() -> int:
+    """Learn ATP tournament ids from Wikipedia, not from atptour.com.
+
+    The id is the path segment of a tournament's order-of-play PDF on
+    protennislive, and it is visible in its atptour.com URL — but atptour.com
+    answers 403 to anything that is not a browser, bot protection we are not
+    going to fight and would not want to depend on. Wikipedia carries the same
+    URL in the article's external links, and it is a source we already use with
+    a proper User-Agent and rate-limit handling.
+
+    Coverage is partial: some articles carry the link, some do not. That is
+    acceptable because a missing id is now ALERTED rather than silent — see
+    _alert_missing_oop — so the gap is visible and can be filled by hand.
+    """
+    async with AsyncSessionLocal() as db:
+        rows = (await db.execute(
+            select(Tournament, Draw)
+            .join(Draw, Draw.tournament_id == Tournament.id)
+            .where(
+                Tournament.atp_tournament_id.is_(None),
+                Tournament.wta_live_scoring_id.is_(None),
+                Draw.gender == "M",
+                Draw.start_date.isnot(None),
+            ))).all()
+
+    # Only tournaments near enough to matter; the archive is not worth the calls.
+    horizon = date.today() + timedelta(days=45)
+    wanted, seen = [], set()
+    for tournament, draw in rows:
+        start = _as_date(draw.start_date)
+        if not start or start > horizon or start < date.today() - timedelta(days=7):
+            continue
+        if tournament.id in seen:
+            continue
+        seen.add(tournament.id)
+        wanted.append(tournament)
+    if not wanted:
+        return 0
+
+    stamped = 0
+    async with httpx.AsyncClient(timeout=20, headers=_HEADERS) as client:
+        for tournament in wanted:
+            try:
+                resp = await client.get(_WIKI_API, params={
+                    "action": "parse", "page": tournament.name,
+                    "prop": "externallinks", "format": "json", "redirects": 1,
+                })
+                resp.raise_for_status()
+                links = ((resp.json().get("parse") or {}).get("externallinks") or [])
+            except Exception as exc:
+                if not is_transient_http_error(exc):
+                    await app_log("warning", "order_of_play",
+                                  f"ATP id lookup failed for '{tournament.name}': "
+                                  f"{describe_exception(exc)}",
+                                  dedup_key=f"atp_id_{tournament.id}", dedup_hours=24)
+                continue
+
+            found = _ATP_ID_RE.search(" ".join(links))
+            if not found:
+                continue
+            async with AsyncSessionLocal() as db:
+                t = await db.get(Tournament, tournament.id)
+                if t and t.atp_tournament_id is None:
+                    t.atp_tournament_id = int(found.group(1))
+                    await db.commit()
+                    stamped += 1
+    return stamped
+
+
+async def _alert_missing_oop() -> None:
+    """Say so when a tournament is under way and we still have no order of play.
+
+    Silence is the failure mode worth guarding against here: an unknown ATP id,
+    a renamed file, a changed URL scheme all present identically — as a
+    tournament that simply never shows a schedule. Once play has started, that
+    is unambiguous enough to be worth an email.
+    """
+    today = date.today()
+    async with AsyncSessionLocal() as db:
+        rows = (await db.execute(
+            select(Tournament, Draw)
+            .join(Draw, Draw.tournament_id == Tournament.id)
+            .where(
+                Draw.oop_first_seen_at.is_(None),
+                Draw.status != "completed",
+                Draw.start_date.isnot(None),
+            ))).all()
+
+    for tournament, draw in rows:
+        start = _as_date(draw.start_date)
+        end = _as_date(draw.end_date)
+        if not start or start > today:
+            continue                      # not started; nothing is wrong yet
+        if end and today > end:
+            continue                      # over, and it never had one — too late to matter
+        why = ("no ATP tournament id on record"
+               if not tournament.wta_live_scoring_id and not tournament.atp_tournament_id
+               else "the published file never appeared")
+        await app_log(
+            "error", "order_of_play",
+            f"No order of play for '{tournament.name}' ({draw.gender}) — "
+            f"play started {start} and {why}.",
+            {"tournament_id": tournament.id, "draw_id": draw.id,
+             "wta_id": tournament.wta_live_scoring_id,
+             "atp_id": tournament.atp_tournament_id},
+            dedup_key=f"oop_missing_{draw.id}", dedup_hours=24,
+        )
 
 
 async def refresh_wta_ids() -> int:

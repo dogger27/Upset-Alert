@@ -255,11 +255,16 @@ function MatchRow({ e, showCourt, zone, venueMode }) {
   const b = e.players.filter(p => p.side === 'b')
   const score = liveLine(e)
   const done = e.status === 'completed'
+  // Same flag the draw page reads — ESPN parks a suspended match at the fifth
+  // slot of live_scores. Reusing the draw's own badge so rain reads the same
+  // on both screens rather than looking like ordinary play here.
+  const suspended = e.live_scores?.[4] === 'suspended'
   const started = startedLine(e, zone)
   return (
     <div className={clsx('sched-row', {
       'sched-row--done': done,
-      'sched-row--live': e.status === 'live',
+      'sched-row--live': e.status === 'live' && !suspended,
+      'sched-row--suspended': e.status === 'live' && suspended,
       // Tour tint on SINGLES only — doubles keeps the plain card, so the draws
       // people actually play stand out from the ones they don't.
       'sched-row--atp': e.discipline === 'singles' && e.tour === 'ATP',

@@ -1461,12 +1461,19 @@ async def _refresh_order_of_play() -> None:
     from app.services import order_of_play
 
     try:
+        atp = await order_of_play.refresh_atp_ids()
+        if atp:
+            logger.info("Order of play: learned %d ATP tournament id(s)", atp)
         stamped = await order_of_play.refresh_wta_ids()
         if stamped:
             logger.info("Order of play: matched %d tournament(s) to WTA ids", stamped)
         updated = await order_of_play.refresh_order_of_play()
         if updated:
             logger.info("Order of play: updated %d draw link(s)", updated)
+        # Say so when a tournament is under way with no schedule at all. Silence
+        # is the failure mode here — a wrong id, a moved file and a changed URL
+        # scheme all look identical from the outside.
+        await order_of_play._alert_missing_oop()
     except Exception as exc:
         logger.error("Order of play refresh failed: %s", exc, exc_info=True)
         err = describe_exception(exc)
