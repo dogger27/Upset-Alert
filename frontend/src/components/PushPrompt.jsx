@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../store/auth'
 import { ALL_NOTIFICATION_KEYS, pushKey } from '../constants/notifications'
 import './PushPrompt.css'
+import { lazyImport } from '../utils/chunk'
 
 /*
  * Offers push to a signed-in phone that hasn't been asked yet.
@@ -52,7 +53,7 @@ export default function PushPrompt() {
     let cancelled = false
     const t = setTimeout(async () => {
       try {
-        const push = await import('../api/push')
+        const push = await lazyImport(() => import('../api/push'))
         if (!push.isPushSupported()) return
         // 'denied' can never be re-asked from a page, and 'granted' means some
         // device already holds permission — neither is an offer worth making.
@@ -80,7 +81,7 @@ export default function PushPrompt() {
     setBusy(true)
     setNote('')
     try {
-      const push = await import('../api/push')
+      const push = await lazyImport(() => import('../api/push'))
       await push.enablePush()
 
       // Permission alone delivers nothing: every type is opt-in, and push is a

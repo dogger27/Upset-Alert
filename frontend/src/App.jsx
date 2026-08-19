@@ -20,6 +20,7 @@ import Rules from './pages/Rules'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
 import VerifyEmail from './pages/VerifyEmail'
+import { lazyImport } from './utils/chunk'
 
 function RequireAuth({ children }) {
   const { user, loading } = useAuth()
@@ -56,7 +57,7 @@ export default function App() {
     if (!standalone) return
     if (sessionStorage.getItem('ua-app-open-sent')) return
     sessionStorage.setItem('ua-app-open-sent', '1')
-    import('./api/client').then(({ default: client }) => {
+    lazyImport(() => import('./api/client')).then(({ default: client }) => {
       client.post('/auth/me/app-open').catch(() => {})
     })
   }, [user])
