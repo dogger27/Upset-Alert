@@ -182,11 +182,27 @@ function Side({ players, doubles, tbd }) {
   )
 }
 
+/* Once a match is actually on court, when it BEGAN beats any prediction about
+   when it might. Both the printed line and the chained estimate are replaced by
+   the real thing, in the same weight as the printed time — it is a fact now, not
+   a guess, so it should not read as one.
+   Only main-draw singles carry started_at: ESPN is the source and it covers
+   nothing else, and only from the point we began recording it. Everything else
+   keeps the printed line. */
+function startedLine(e, zone) {
+  if (!e.started_at) return null
+  if (e.status !== 'live' && e.status !== 'completed') return null
+  const opts = { hour: 'numeric', minute: '2-digit' }
+  if (zone) opts.timeZone = zone
+  return `Started ${new Date(e.started_at).toLocaleTimeString([], opts)}`
+}
+
 function MatchRow({ e, showCourt, zone, venueMode }) {
   const a = e.players.filter(p => p.side === 'a')
   const b = e.players.filter(p => p.side === 'b')
   const score = liveLine(e)
   const done = e.status === 'completed'
+  const started = startedLine(e, zone)
   return (
     <div className={clsx('sched-row', {
       'sched-row--done': done,
@@ -206,14 +222,15 @@ function MatchRow({ e, showCourt, zone, venueMode }) {
 
       <div className="sched-row-when">
         <span className={clsx('sched-time', {
-          'sched-time--est': showCourt && e.expected_source === 'estimated',
-        })}>{showCourt ? expectedStart(e, zone, venueMode) : printedStart(e, zone, venueMode)}</span>
+          'sched-time--est': !started && showCourt && e.expected_source === 'estimated',
+        })}>{started ?? (showCourt ? expectedStart(e, zone, venueMode)
+                                   : printedStart(e, zone, venueMode))}</span>
         {showCourt && e.court && <span className="sched-court">{e.court}</span>}
         {/* Court view keeps the sheet's wording, but "Followed by" alone does
             not tell you when to turn up. The chained estimate goes underneath.
             Only when it ADDS something: a slot whose expected time is simply
             the printed one would just repeat the line above it. */}
-        {!showCourt && e.expected_source === 'estimated' && e.expected_start_at && (
+        {!started && !showCourt && e.expected_source === 'estimated' && e.expected_start_at && (
           <span className="sched-est">{expectedStart(e, zone, venueMode)}</span>
         )}
       </div>

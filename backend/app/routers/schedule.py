@@ -66,6 +66,10 @@ class ScheduleEntryOut(BaseModel):
     # the client whether to render it firmly ("3:00 PM") or hedged ("~4:15 PM").
     expected_start_at: Optional[datetime] = None
     expected_source: Optional[str] = None
+    # When the match was actually first seen on court. Only main-draw singles
+    # carry this — ESPN is the source and it covers nothing else — and only from
+    # the moment we started recording it, so the client must fall back.
+    started_at: Optional[datetime] = None
     is_tbd: bool = False
     tbd_side: Optional[str] = None
     status: str = "scheduled"
@@ -230,6 +234,7 @@ async def schedule_day(
             start_note=e.start_note,
             printed_start_at=_printed_instant(e, tzs.get(e.tournament_id)),
             expected_start_at=_utc(e.expected_start_at), expected_source=e.expected_source,
+            started_at=_utc(getattr(m, "started_at", None)) if m else None,
             is_tbd=e.is_tbd, tbd_side=e.tbd_side, status=statuses[e.id], players=players,
             live_scores=(m.live_scores_json if m else None),
             scores=(m.scores_json if m else None),
