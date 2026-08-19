@@ -262,7 +262,14 @@
 /* Unresolved opponent: two candidate teams, stacked with "or" between them so
    the pairing is legible. Previously rendered as a flat run of names, which
    said nothing about who partners whom. */
-.sched-side--alt { flex-direction: column; align-items: flex-start; gap: 0.05rem; }
+/* Candidates sit on one line where they fit and wrap only when they do not,
+   rather than always stacking. */
+.sched-side--alt {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.1rem 0.45rem;
+}
 .sched-altteam { display: flex; align-items: baseline; gap: 0.35rem; }
 .sched-or {
   font-size: 0.62rem;
