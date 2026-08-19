@@ -1214,11 +1214,11 @@ function TournamentDraw() {
               so the column does not reflow when a schedule is published. */}
           {tournament.oop_url ? (
             <Link
-              to={`/schedule?tournament=${tournament.tournament_id}${tournament.oop_date ? `&date=${tournament.oop_date}` : ''}`}
+              to={`/schedule?tournament=${tournament.tournament_id}&draw=${tournament.id}${tournament.oop_date ? `&date=${tournament.oop_date}` : ''}`}
               className="draw-oop-btn"
               title="Today's order of play"
             >
-              OOP
+              Order of Play
             </Link>
           ) : (
             <span
@@ -1226,7 +1226,7 @@ function TournamentDraw() {
               title="No order of play published for today yet"
               aria-disabled="true"
             >
-              OOP
+              Order of Play
             </span>
           )}
           {/* Saved-picks pill sits directly on top of Reset Selections, both

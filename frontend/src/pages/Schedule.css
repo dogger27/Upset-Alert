@@ -321,3 +321,47 @@
   color: var(--text-muted);
   opacity: 0.8;
 }
+
+/* ── Title row ── */
+.sched-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.6rem;
+}
+.sched-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.sched-subtitle {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.sched-back {
+  flex: 0 0 auto;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  border: 1.5px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.sched-back:hover { color: var(--brand-text); border-color: var(--brand-text); }
+
+/* Tour chips carry their tour's colour when active, so the filter reads the
+   same way the row badges do. */
+.sched-chip--atp.sched-chip--on { background: var(--atp-rule); border-color: var(--atp-rule); color: var(--on-brand); }
+.sched-chip--wta.sched-chip--on { background: var(--wta-rule); border-color: var(--wta-rule); color: var(--on-brand); }
+
+/* Status. "Final" sits with the tags; the in-progress badge is the draw page's
+   own, re-used so the two screens read identically. */
+.sched-tag--final { background: var(--brand-fill); color: var(--on-brand); }
+.sched-badge { position: static; transform: none; margin-left: 0.1rem; }

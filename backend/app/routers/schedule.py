@@ -76,6 +76,21 @@ class ScheduleDayOut(BaseModel):
     tournaments: list[dict]
 
 
+def _status_of(entry, match) -> str:
+    """Live state comes from the MATCH, not from the schedule row.
+
+    schedule_entries.status was only ever written as "scheduled" — the ingest
+    has no idea what is happening on court. ESPN does, and it already writes
+    both of these onto the match every 60 seconds.
+    """
+    if match is not None:
+        if getattr(match, "winner_id", None):
+            return "completed"
+        if getattr(match, "live_scores_json", None):
+            return "live"
+    return entry.status or "scheduled"
+
+
 @router.get("/day", response_model=ScheduleDayOut)
 async def schedule_day(
     play_date: Optional[date] = Query(None),
@@ -143,7 +158,7 @@ async def schedule_day(
             start_type=e.start_type, start_time_local=e.start_time_local,
             start_note=e.start_note,
             expected_start_at=e.expected_start_at, expected_source=e.expected_source,
-            is_tbd=e.is_tbd, tbd_side=e.tbd_side, status=e.status, players=players,
+            is_tbd=e.is_tbd, tbd_side=e.tbd_side, status=_status_of(e, m), players=players,
             live_scores=(m.live_scores_json if m else None),
             scores=(m.scores_json if m else None),
         ))

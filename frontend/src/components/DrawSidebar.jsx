@@ -140,11 +140,11 @@ export default function DrawSidebar({ tournamentId, tournament, selectedUserId, 
       {showOop && !collapsed && (
         tournament?.oop_url ? (
           <Link
-            to={`/schedule?tournament=${tournament.tournament_id}${tournament.oop_date ? `&date=${tournament.oop_date}` : ''}`}
+            to={`/schedule?tournament=${tournament.tournament_id}&draw=${tournament.id}${tournament.oop_date ? `&date=${tournament.oop_date}` : ''}`}
             className="sidebar-oop-btn"
             title="Today's order of play"
           >
-            OOP
+            Order of Play
           </Link>
         ) : (
           <span
@@ -152,7 +152,7 @@ export default function DrawSidebar({ tournamentId, tournament, selectedUserId, 
             title="No order of play published for today yet"
             aria-disabled="true"
           >
-            OOP
+            Order of Play
           </span>
         )
       )}

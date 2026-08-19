@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, Link } from 'react-router-dom'
 import clsx from 'clsx'
 import { getScheduleDay } from '../api/schedule'
 import { nationalityIso2, splitPlayerName } from '../utils/flags'
+import { scoreNodes, liveScoreNodes } from '../utils/score'
 import './Schedule.css'
 
 const VIEW_KEY = 'ua-schedule-view'
@@ -77,19 +78,11 @@ function seedNumber(raw) {
   return nums ? Math.min(...nums.map(Number)) : null
 }
 
+/* ESPN only, and formatted the way the draw page formats it — "6-4, 7-6³"
+   rather than the raw game counts this first rendered as "5 | 4". */
 function liveLine(e) {
-  // ESPN only. Doubles and qualifying carry no score by design — the sheet's
-  // own score is a stale snapshot and is never shown.
-  const ls = e.live_scores
-  if (Array.isArray(ls) && ls.length >= 2 && Array.isArray(ls[0])) {
-    const a = ls[0].join(' ')
-    const b = ls[1].join(' ')
-    if (a.trim() || b.trim()) return `${a}  |  ${b}`
-  }
-  const s = e.scores
-  if (Array.isArray(s) && s.length) {
-    try { return s.map(x => Array.isArray(x) ? x.join('-') : String(x)).join('  ') } catch { return null }
-  }
+  if (e.status === 'live' && e.live_scores) return liveScoreNodes(e.live_scores)
+  if (e.scores) return scoreNodes(e.scores)
   return null
 }
 
@@ -190,6 +183,11 @@ function MatchRow({ e, showCourt }) {
           {e.round_label && <span className="sched-tag sched-tag--round">{e.round_label}</span>}
           {e.stage === 'qualifying' && <span className="sched-tag sched-tag--quali">Q</span>}
           {e.discipline !== 'singles' && <span className="sched-tag">{e.discipline === 'mixed' ? 'Mixed' : 'Doubles'}</span>}
+          {/* Where a court has got to is the point of this page, so state it
+              outright rather than leaving it to a dimmed row. Reuses the draw
+              page's own in-progress badge so the two read identically. */}
+          {e.status === 'live' && <span className="in-progress-badge sched-badge">In progress</span>}
+          {e.status === 'completed' && <span className="sched-tag sched-tag--final">Final</span>}
         </div>
         <div className={clsx('sched-players', { 'sched-players--pairs': e.discipline !== 'singles' })}>
           {/* "vs" rides with the FIRST team rather than sitting on its own
@@ -215,6 +213,10 @@ export default function Schedule() {
 
   const day = params.get('date') || isoDay(new Date())
   const tournamentId = params.get('tournament') ? Number(params.get('tournament')) : undefined
+  // The draw we arrived from, if any. Drives both the back link and which tour
+  // the time view opens on.
+  const fromDraw = params.get('draw') ? Number(params.get('draw')) : undefined
+  const [tour, setTour] = useState(null)      // null = not yet defaulted
 
   useEffect(() => { try { localStorage.setItem(VIEW_KEY, view) } catch {} }, [view])
 
@@ -223,6 +225,23 @@ export default function Schedule() {
     queryFn: () => getScheduleDay({ date: day, tournamentId }),
     staleTime: 30_000,
   })
+
+  // Open on the tour of the draw we came from — someone who clicked OOP on the
+  // men's draw wants the men's matches first. Only defaulted once, so a manual
+  // choice is not overwritten when the day's data refreshes.
+  const defaulted = useRef(false)
+  useEffect(() => {
+    if (defaulted.current || !data?.entries?.length) return
+    defaulted.current = true
+    if (!fromDraw) return
+    const origin = data.entries.find(e => e.draw_id === fromDraw)
+    if (origin?.tour) setTour(origin.tour)
+  }, [data, fromDraw])
+
+  const tours = useMemo(() => {
+    const t = new Set((data?.entries ?? []).filter(e => e.tour).map(e => e.tour))
+    return [...t].sort()
+  }, [data])
 
   const setDay = (iso) => {
     const next = new URLSearchParams(params)
@@ -239,10 +258,13 @@ export default function Schedule() {
       // it. Time view is the curated list of what people are playing for, so
       // singles only.
       if (view === 'time' && e.discipline !== 'singles') return false
+      // Tour filter is a TIME-view control. The court view reproduces the sheet,
+      // and a court running both tours would read as if matches were missing.
+      if (view === 'time' && tour && e.tour !== tour) return false
       if (hideDone && e.status === 'completed') return false
       return true
     })
-  }, [data, view, hideDone])
+  }, [data, view, hideDone, tour])
 
   const byCourt = useMemo(() => {
     const m = new Map()
@@ -283,6 +305,20 @@ export default function Schedule() {
 
   return (
     <div className="sched-page">
+      <div className="sched-title-row">
+        <div>
+          <h1 className="sched-title">
+            {data?.tournaments?.length === 1
+              ? data.tournaments[0].name
+              : data?.tournaments?.length ? 'Order of play' : 'Schedule'}
+          </h1>
+          <div className="sched-subtitle">Order of play</div>
+        </div>
+        {fromDraw && (
+          <Link className="sched-back" to={`/tournaments/${fromDraw}`}>‹ Back to draw</Link>
+        )}
+      </div>
+
       <div className="sched-head">
         <div className="sched-daynav">
           <button className="sched-nav-btn" onClick={() => setDay(shiftDay(day, -1))} aria-label="Previous day">‹</button>
@@ -311,6 +347,16 @@ export default function Schedule() {
       </div>
 
       <div className="sched-filters">
+        {view === 'time' && tours.length > 1 && (
+          <>
+            {tours.map(t => (
+              <button key={t}
+                      className={clsx('sched-chip', `sched-chip--${t.toLowerCase()}`,
+                                      { 'sched-chip--on': tour === t })}
+                      onClick={() => setTour(tour === t ? null : t)}>{t}</button>
+            ))}
+          </>
+        )}
         <button className={clsx('sched-chip', { 'sched-chip--on': hideDone })}
                 onClick={() => setHideDone(v => !v)}>Hide completed</button>
       </div>
