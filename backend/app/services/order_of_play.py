@@ -332,6 +332,8 @@ async def refresh_order_of_play() -> int:
                 # schedule is the ATP-label count happening to come back zero.
                 covered = fresh and (draw.gender == "F" or covers_atp) and _running(draw, today)
                 new_url = url if covered else None
+                if covered and draw.oop_first_seen_at is None:
+                    draw.oop_first_seen_at = datetime.now(timezone.utc)
                 if draw.oop_url != new_url or draw.oop_date != (oop_date if covered else None):
                     draw.oop_url = new_url
                     draw.oop_date = oop_date if covered else None

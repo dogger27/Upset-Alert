@@ -188,6 +188,11 @@ class Draw(Base):
     oop_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     oop_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     oop_checked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Set the first time an order of play covers this draw, and never cleared.
+    # oop_url cannot answer "does this tournament publish a schedule yet" — it
+    # holds only TODAY's file and goes null overnight and between rounds, so a
+    # link keyed to it would blink in and out. This is the durable signal.
+    oop_first_seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     last_scraped_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)

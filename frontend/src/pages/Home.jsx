@@ -57,6 +57,13 @@ function TCard({ t, section, pickStatus, onLoginRequired }) {
 
   const toLink = hasDrawData ? `/tournaments/${t.id}` : undefined
 
+  // Keyed on oop_first_seen_at, not oop_url: the latter holds only today's file
+  // and goes null overnight and between rounds, so the link would blink in and
+  // out. Once a tournament has published an order of play it has one.
+  const oopTo = t.oop_first_seen_at && t.tournament_id
+    ? `/schedule?tournament=${t.tournament_id}&draw=${t.id}`
+    : undefined
+
   return (
     <TournamentCard
       tour={tour}
@@ -71,6 +78,7 @@ function TCard({ t, section, pickStatus, onLoginRequired }) {
       to={user ? toLink : undefined}
       onGuestClick={!user && toLink ? onLoginRequired : undefined}
       wikiUrl={wikiUrl}
+      oopTo={oopTo}
     />
   )
 }

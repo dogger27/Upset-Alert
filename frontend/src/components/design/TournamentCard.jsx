@@ -14,6 +14,21 @@ function renderFooter({ section, pickState, drawDates }) {
       <span>{left}</span>{right}
     </div>
   )
+  /* Three tracks rather than space-between: the middle pill is centred against
+     the CARD, not against whatever the left cell happens to be wide. The right
+     track is left empty on purpose — the OOP button is positioned into that
+     corner, and without the reserved track the centre pill would drift under
+     it. */
+  const centredRow = (left, centre) => (
+    <div style={{
+      display: 'grid', gridTemplateColumns: '1fr auto 1fr',
+      alignItems: 'center', gap: 8,
+    }}>
+      <span>{left}</span>
+      <span style={{ justifySelf: 'center' }}>{centre}</span>
+      <span />
+    </div>
+  )
 
   if (section === 'open') {
     const map = {
@@ -34,8 +49,8 @@ function renderFooter({ section, pickState, drawDates }) {
 
   if (section === 'active') {
     const competing = pickState === 'complete'
-    return row(
-      <span style={{ ...pillBase, background: 'var(--n-150)', color: 'var(--text-soft)' }}>🔒 Selection closed</span>,
+    return centredRow(
+      <span style={{ ...pillBase, background: 'var(--n-150)', color: 'var(--text-soft)' }}>🔒 Closed</span>,
       competing
         ? <span style={{ ...pillBase, background: 'var(--green-600)', color: '#fff', boxShadow: 'var(--glow-green)', letterSpacing: '0.03em' }}>★ Competing</span>
         : null
@@ -82,7 +97,7 @@ function GlobeIcon() {
   )
 }
 
-export function TournamentCard({ tour = 'ATP', name, city, surface = 'grass', tier = '500', dateRange, section = 'open', pickState = null, drawDates = null, to, wikiUrl, onGuestClick }) {
+export function TournamentCard({ tour = 'ATP', name, city, surface = 'grass', tier = '500', dateRange, section = 'open', pickState = null, drawDates = null, to, wikiUrl, oopTo, onGuestClick }) {
   const [hover, setHover] = useState(false)
   const isATP = String(tour).toUpperCase() === 'ATP'
   const accent = isATP ? 'var(--atp-500)' : 'var(--wta-500)'
@@ -137,6 +152,26 @@ export function TournamentCard({ tour = 'ATP', name, city, surface = 'grass', ti
           </div>
         )}
       </div>
+      {oopTo && (
+        <Link
+          to={oopTo}
+          onClick={e => e.stopPropagation()}
+          title="Order of play"
+          style={{
+            position: 'absolute', bottom: 10, right: wikiUrl ? 40 : 12,
+            display: 'inline-flex', alignItems: 'center',
+            height: 20, padding: '0 8px', borderRadius: 'var(--radius-pill)',
+            border: '1px solid var(--border)',
+            fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: '0.62rem',
+            letterSpacing: '0.05em', textDecoration: 'none',
+            color: 'var(--text-muted)', background: 'var(--surface-card)',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.color = 'var(--brand-text)'; e.currentTarget.style.borderColor = 'var(--brand-text)' }}
+          onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border)' }}
+        >
+          OOP
+        </Link>
+      )}
       {wikiUrl && (
         <a
           href={wikiUrl}

@@ -409,6 +409,10 @@ async def _migrate(conn):
         "ALTER TABLE draws ADD COLUMN oop_url VARCHAR",
         "ALTER TABLE draws ADD COLUMN oop_date DATE",
         "ALTER TABLE draws ADD COLUMN oop_checked_at DATETIME",
+        "ALTER TABLE draws ADD COLUMN oop_first_seen_at DATETIME",
+        # Anything already carrying a link has plainly published one.
+        ("UPDATE draws SET oop_first_seen_at = COALESCE(oop_first_seen_at, oop_checked_at) "
+         "WHERE oop_url IS NOT NULL AND oop_first_seen_at IS NULL"),
         "ALTER TABLE schedule_entries ADD COLUMN tbd_side VARCHAR",
         "ALTER TABLE schedule_entries ADD COLUMN start_note VARCHAR",
         "ALTER TABLE matches ADD COLUMN started_at DATETIME",

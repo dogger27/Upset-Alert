@@ -59,6 +59,9 @@ class TournamentOut(BaseModel):
     # to reason about it — a non-null url is always today's.
     oop_url: Optional[str] = None
     oop_date: Optional[date] = None
+    # True once an order of play has EVER been published for this draw. Distinct
+    # from oop_url, which is only today's and goes null between days.
+    oop_first_seen_at: Optional[datetime] = None
     last_scraped_at: Optional[datetime]
     latest_result_at: Optional[datetime] = None
     is_locked: bool
