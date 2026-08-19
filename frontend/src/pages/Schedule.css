@@ -108,15 +108,8 @@
   border: 1px solid var(--border);
 }
 
-/* Marks a draw the viewer is competing in. Deliberately faint: inside a draw
-   you have filled, EVERY singles match involves a pick of yours, so a strong
-   accent here would fire on every row and mean nothing. It earns its keep only
-   across a multi-tournament day, separating draws you are in from ones you are
-   not. */
-.sched-row--mine { border-color: var(--brand-text); }
 .sched-row--live { border-left: 3px solid var(--pick-correct-line); }
 .sched-row--done { opacity: 0.55; }
-.sched-row--done.sched-row--mine { opacity: 0.75; }
 
 .sched-row-when { display: flex; flex-direction: column; gap: 0.15rem; }
 .sched-time { font-size: 0.9rem; font-weight: 700; font-variant-numeric: tabular-nums; }

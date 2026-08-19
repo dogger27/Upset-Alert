@@ -19,7 +19,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import get_optional_user
 from app.database import get_db
-from app.models.prediction import UserPrediction
 from app.models.schedule import ScheduleEntry
 from app.models.tournament import Draw, Match, Tournament
 
@@ -60,8 +59,6 @@ class ScheduleEntryOut(BaseModel):
     # ESPN only. Absent for doubles and qualifying, which it does not cover.
     live_scores: Optional[list] = None
     scores: Optional[list] = None
-    # Whether this slot involves one of the viewer's picks.
-    is_my_pick: bool = False
 
 
 class ScheduleDayOut(BaseModel):
@@ -109,17 +106,6 @@ async def schedule_day(
             select(Match).where(Match.id.in_(match_ids)))).scalars().all()
         matches = {m.id: m for m in rows}
 
-    # Which draw_entries the viewer picked, so the page can highlight them.
-    picked: set[int] = set()
-    if user is not None:
-        draw_ids = {e.draw_id for e in entries if e.draw_id}
-        if draw_ids:
-            preds = (await db.execute(
-                select(UserPrediction.predicted_winner_id).where(
-                    UserPrediction.user_id == user.id,
-                    UserPrediction.draw_id.in_(draw_ids)))).all()
-            picked = {r[0] for r in preds if r[0]}
-
     out: list[ScheduleEntryOut] = []
     courts: list[str] = []
     for e in entries:
@@ -142,7 +128,6 @@ async def schedule_day(
             is_tbd=e.is_tbd, tbd_side=e.tbd_side, status=e.status, players=players,
             live_scores=(m.live_scores_json if m else None),
             scores=(m.scores_json if m else None),
-            is_my_pick=any(p.draw_entry_id in picked for p in e.players if p.draw_entry_id),
         ))
 
     # The official PDF stays one tap away — the page replaces it as the primary

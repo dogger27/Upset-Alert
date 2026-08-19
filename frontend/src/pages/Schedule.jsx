@@ -152,7 +152,6 @@ function MatchRow({ e, showCourt }) {
   const done = e.status === 'completed'
   return (
     <div className={clsx('sched-row', {
-      'sched-row--mine': e.is_my_pick,
       'sched-row--done': done,
       'sched-row--live': e.status === 'live',
     })}>
