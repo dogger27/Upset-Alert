@@ -67,22 +67,38 @@
   font-variant-numeric: tabular-nums;
 }
 
-.sched-viewswitch {
+
+/* ── Segmented switches ──
+   ONE definition for both Time|Court and Venue|My time. They were written
+   separately and drifted on four properties at once — radius, height, padding
+   and font size — which is plain to see when they sit one above the other.
+   Grouped so they cannot diverge again; a change to one is a change to both. */
+.sched-viewswitch,
+.sched-tzswitch {
   display: inline-flex;
+  align-items: stretch;
+  height: 1.85rem;
   border: 1.5px solid var(--border);
-  border-radius: 8px;
+  border-radius: 999px;
   overflow: hidden;
 }
-.sched-viewbtn {
-  padding: 0.35rem 0.9rem;
+
+.sched-viewbtn,
+.sched-tzbtn {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 0.85rem;
   border: 0;
   background: transparent;
   color: var(--text-muted);
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 700;
+  white-space: nowrap;
   cursor: pointer;
 }
-.sched-viewbtn--on { background: var(--brand-fill); color: var(--on-brand); }
+
+.sched-viewbtn--on,
+.sched-tzbtn--on { background: var(--brand-fill); color: var(--on-brand); }
 
 /* ── Filters ── */
 .sched-filters {
@@ -537,26 +553,6 @@
 /* Venue time is the default, because the sheet prints venue local — showing
    anything else puts our estimates on a different clock from the printed times
    sitting beside them. */
-.sched-tzswitch {
-  display: inline-flex;
-  border: 1.5px solid var(--border);
-  border-radius: 999px;
-  overflow: hidden;
-}
-.sched-tzswitch { height: 1.85rem; }
-.sched-tzbtn {
-  display: inline-flex;
-  align-items: center;
-  padding: 0 0.6rem;
-  border: 0;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 0.72rem;
-  font-weight: 700;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.sched-tzbtn--on { background: var(--brand-fill); color: var(--on-brand); }
 
 /* NOTE: the phone layout for the header lives in the max-width:560px block
    above, where .sched-topright becomes display:contents. Do not add a
@@ -616,9 +612,7 @@
   .sched-center,
   .sched-topright { display: contents; }
   .sched-pdf { display: none; }
-  .sched-tzswitch { grid-area: tz; justify-self: end; }
-  .sched-viewswitch { grid-area: modes; justify-self: start; }
-
+    
   /* A long tournament name gives way before the date does — the date is the
      one thing on this row you cannot infer from context. */
   .sched-title {
