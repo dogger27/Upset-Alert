@@ -8,6 +8,14 @@ import { scoreNodes, liveScoreNodes } from '../utils/score'
 import './Schedule.css'
 
 const VIEW_KEY = 'ua-schedule-view'
+const TZ_KEY = 'ua-schedule-tz'
+
+// Venue time by default: the sheet prints venue local, so showing anything else
+// puts our estimates on a different clock from the times beside them.
+function storedTz() {
+  try { return localStorage.getItem(TZ_KEY) === 'user' ? 'user' : 'venue' }
+  catch { return 'venue' }
+}
 
 // Time view is the default: a flat list needs no horizontal space, which is
 // what makes it the workable one on a phone. Whichever view is used last wins
@@ -52,11 +60,11 @@ function printedStart(e) {
 }
 
 /** Estimated starts are hedged with a tilde so they never read as announced. */
-function expectedStart(e) {
+function expectedStart(e, zone) {
   if (!e.expected_start_at) return printedStart(e)
-  const t = new Date(e.expected_start_at).toLocaleTimeString([], {
-    hour: 'numeric', minute: '2-digit',
-  })
+  const opts = { hour: 'numeric', minute: '2-digit' }
+  if (zone) opts.timeZone = zone
+  const t = new Date(e.expected_start_at).toLocaleTimeString([], opts)
   return e.expected_source === 'printed' ? t : `~${t}`
 }
 
@@ -150,7 +158,7 @@ function Side({ players, doubles, tbd }) {
   )
 }
 
-function MatchRow({ e, showCourt }) {
+function MatchRow({ e, showCourt, zone }) {
   const a = e.players.filter(p => p.side === 'a')
   const b = e.players.filter(p => p.side === 'b')
   const score = liveLine(e)
@@ -167,14 +175,14 @@ function MatchRow({ e, showCourt }) {
       <div className="sched-row-when">
         <span className={clsx('sched-time', {
           'sched-time--est': showCourt && e.expected_source === 'estimated',
-        })}>{showCourt ? expectedStart(e) : printedStart(e)}</span>
+        })}>{showCourt ? expectedStart(e, zone) : printedStart(e)}</span>
         {showCourt && e.court && <span className="sched-court">{e.court}</span>}
         {/* Court view keeps the sheet's wording, but "Followed by" alone does
             not tell you when to turn up. The chained estimate goes underneath.
             Only when it ADDS something: a slot whose expected time is simply
             the printed one would just repeat the line above it. */}
         {!showCourt && e.expected_source === 'estimated' && e.expected_start_at && (
-          <span className="sched-est">{expectedStart(e)}</span>
+          <span className="sched-est">{expectedStart(e, zone)}</span>
         )}
       </div>
       <div className="sched-row-main">
@@ -210,6 +218,7 @@ export default function Schedule() {
   const [params, setParams] = useSearchParams()
   const [view, setView] = useState(storedView)
   const [hideDone, setHideDone] = useState(false)
+  const [tzMode, setTzMode] = useState(storedTz)
 
   const day = params.get('date') || isoDay(new Date())
   const tournamentId = params.get('tournament') ? Number(params.get('tournament')) : undefined
@@ -219,6 +228,7 @@ export default function Schedule() {
   const [tour, setTour] = useState(null)      // null = not yet defaulted
 
   useEffect(() => { try { localStorage.setItem(VIEW_KEY, view) } catch {} }, [view])
+  useEffect(() => { try { localStorage.setItem(TZ_KEY, tzMode) } catch {} }, [tzMode])
 
   const { data, isLoading } = useQuery({
     queryKey: ['schedule', day, tournamentId ?? 'all'],
@@ -237,6 +247,11 @@ export default function Schedule() {
     const origin = data.entries.find(e => e.draw_id === fromDraw)
     if (origin?.tour) setTour(origin.tour)
   }, [data, fromDraw])
+
+  // undefined => render in the reader's own zone, which is what toLocaleTimeString
+  // does with no timeZone option.
+  const venueTz = data?.tournaments?.find(t => t.venue_timezone)?.venue_timezone
+  const zone = tzMode === 'venue' ? venueTz : undefined
 
   const tours = useMemo(() => {
     const t = new Set((data?.entries ?? []).filter(e => e.tour).map(e => e.tour))
@@ -338,13 +353,26 @@ export default function Schedule() {
           </div>
         </div>
 
-        {(data?.tournaments ?? []).filter(t => t.oop_url).slice(0, 1).map(t => (
-          <a key={t.id} className="sched-pdf" href={t.oop_url}
-             target="_blank" rel="noopener noreferrer"
-             title={`${t.name} — official order of play (PDF)`}>
-            PDF
-          </a>
-        ))}
+        <div className="sched-topright">
+          {(data?.tournaments ?? []).filter(t => t.oop_url).slice(0, 1).map(t => (
+            <a key={t.id} className="sched-pdf" href={t.oop_url}
+               target="_blank" rel="noopener noreferrer"
+               title={`${t.name} — official order of play (PDF)`}>
+              PDF
+            </a>
+          ))}
+
+          {venueTz && (
+            <div className="sched-tzswitch" role="tablist" aria-label="Time zone">
+              <button role="tab" aria-selected={tzMode === 'venue'}
+                      className={clsx('sched-tzbtn', { 'sched-tzbtn--on': tzMode === 'venue' })}
+                      onClick={() => setTzMode('venue')}>Venue</button>
+              <button role="tab" aria-selected={tzMode === 'user'}
+                      className={clsx('sched-tzbtn', { 'sched-tzbtn--on': tzMode === 'user' })}
+                      onClick={() => setTzMode('user')}>My time</button>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="sched-filters">
@@ -375,7 +403,7 @@ export default function Schedule() {
 
       {!isLoading && entries.length > 0 && view === 'time' && (
         <div className="sched-list">
-          {entries.map(e => <MatchRow key={e.id} e={e} showCourt />)}
+          {entries.map(e => <MatchRow key={e.id} e={e} showCourt zone={zone} />)}
         </div>
       )}
 
@@ -385,7 +413,7 @@ export default function Schedule() {
             <section className="sched-courtblock" key={name}>
               <h2 className="sched-courthead">{name}</h2>
               <div className="sched-list">
-                {list.map(e => <MatchRow key={e.id} e={e} showCourt={false} />)}
+                {list.map(e => <MatchRow key={e.id} e={e} showCourt={false} zone={zone} />)}
               </div>
             </section>
           ))}

@@ -477,8 +477,13 @@ async def recompute_expected_starts(db, tournament_id: int, play_date: date,
                 continue
 
             printed = _parse_clock(s.start_time_local)
+            # Normalise to UTC before it is ever stored. The column is naive on
+            # SQLite, so an aware venue-local value loses its offset on the way
+            # in and lands on a different clock from anything derived from
+            # now() — which is how a 7:00 PM slot came to read EARLIER than the
+            # 3:00 PM one above it.
             printed_dt = (datetime.combine(play_date, printed, tzinfo=tz)
-                          if printed else None)
+                          .astimezone(timezone.utc) if printed else None)
 
             if s.start_type == 'fixed' and printed_dt:
                 expected, source = printed_dt, 'printed'

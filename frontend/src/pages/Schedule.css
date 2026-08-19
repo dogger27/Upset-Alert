@@ -409,3 +409,38 @@
    own, re-used so the two screens read identically. */
 .sched-tag--final { background: var(--brand-fill); color: var(--on-brand); }
 .sched-badge { position: static; transform: none; margin-left: 0.1rem; }
+
+/* Right-hand zone of the top bar: PDF, with the time-zone switch beneath it. */
+.sched-topright {
+  grid-column: 3;
+  justify-self: end;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.4rem;
+}
+
+/* Venue time is the default, because the sheet prints venue local — showing
+   anything else puts our estimates on a different clock from the printed times
+   sitting beside them. */
+.sched-tzswitch {
+  display: inline-flex;
+  border: 1.5px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.sched-tzbtn {
+  padding: 0.16rem 0.6rem;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.sched-tzbtn--on { background: var(--brand-fill); color: var(--on-brand); }
+
+@media (max-width: 560px) {
+  .sched-topright { grid-column: 2; }
+}

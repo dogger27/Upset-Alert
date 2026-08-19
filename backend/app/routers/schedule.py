@@ -9,7 +9,7 @@ does not cover. Leaving them out of the response model, rather than filtering
 them at render time, is what keeps that true when someone later adds a field.
 """
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
@@ -74,6 +74,18 @@ class ScheduleDayOut(BaseModel):
     entries: list[ScheduleEntryOut]
     courts: list[str]
     tournaments: list[dict]
+
+
+def _utc(dt):
+    """Stamp UTC on a naive datetime before it is serialised.
+
+    SQLite hands these back without an offset, and an ISO string with no zone
+    is parsed by the browser as LOCAL time — so an 18:00 UTC start renders as
+    18:00 wherever the reader happens to be. Everything stored here is UTC.
+    """
+    if dt is None:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
 def _status_of(entry, match) -> str:
@@ -157,7 +169,7 @@ async def schedule_day(
             round_label=e.round_label, court=e.court, court_order=e.court_order,
             start_type=e.start_type, start_time_local=e.start_time_local,
             start_note=e.start_note,
-            expected_start_at=e.expected_start_at, expected_source=e.expected_source,
+            expected_start_at=_utc(e.expected_start_at), expected_source=e.expected_source,
             is_tbd=e.is_tbd, tbd_side=e.tbd_side, status=_status_of(e, m), players=players,
             live_scores=(m.live_scores_json if m else None),
             scores=(m.scores_json if m else None),
@@ -170,9 +182,17 @@ async def schedule_day(
             Draw.tournament_id.in_(t_ids), Draw.oop_url.isnot(None)))).all()
     pdfs = {r[0]: r[1] for r in pdf_rows}
 
+    # The venue's zone, so the client can render the times the way the sheet
+    # prints them as well as the way the reader lives.
+    tz_rows = (await db.execute(
+        select(Draw.tournament_id, Draw.venue_timezone).where(
+            Draw.tournament_id.in_(t_ids), Draw.venue_timezone.isnot(None)))).all()
+    tzs = {r[0]: r[1] for r in tz_rows}
+
     return ScheduleDayOut(
         play_date=day, entries=out, courts=courts,
-        tournaments=[{"id": i, "name": t_names.get(i), "oop_url": pdfs.get(i)}
+        tournaments=[{"id": i, "name": t_names.get(i), "oop_url": pdfs.get(i),
+                      "venue_timezone": tzs.get(i)}
                      for i in sorted(t_ids)],
     )
 
