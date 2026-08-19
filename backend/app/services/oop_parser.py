@@ -68,7 +68,8 @@ RESULTS_RE = re.compile(r'COMPLETE\s+TOURNAMENT\s+RESULTS|ORDER\s+OF\s+PLAY\s+TO
 SLAM_RE = re.compile(
     r"Gentlemen's\s+Singles|Ladies'\s+Singles|"      # Wimbledon
     r'PROGRAMME\s+OFFICIEL|Pas\s+avant|'             # Roland Garros (French)
-    r'\b[WM]S\d{3}\b', re.I)                        # Australian Open codes
+    r'\b[WM][SQD]\d{2,4}\b|'                        # AO/US Open match codes
+    r'Official\s+Order\s+of\s+Play', re.I)           # US Open
 
 
 @dataclass
