@@ -1481,6 +1481,25 @@ async def _refresh_order_of_play() -> None:
                       {"error": err}, dedup_key="oop_refresh_fail", dedup_hours=6)
 
 
+async def _refresh_atp_tournament_ids() -> None:
+    """Learn ATP tournament ids from atptour.com. Weekly is generous — the ids
+    are tournament-level rather than per-edition, so they barely change — but it
+    costs one page load and means a newly added tournament is covered within a
+    week rather than at the next season rollover."""
+    from app.services import atp_ids
+
+    try:
+        result = await atp_ids.refresh_atp_tournament_ids()
+        if result.get("stamped"):
+            logger.info("ATP ids: stamped %d tournament(s) from %d found",
+                        result["stamped"], result.get("found", 0))
+    except Exception as exc:
+        logger.error("ATP id refresh failed: %s", exc, exc_info=True)
+        err = describe_exception(exc)
+        await app_log("error", "order_of_play", f"ATP id refresh failed: {err}",
+                      {"error": err}, dedup_key="atp_id_job_fail", dedup_hours=24)
+
+
 async def _refresh_schedule_estimates() -> None:
     """Re-chain today's expected start times against live results.
 
@@ -1647,6 +1666,18 @@ def start_scheduler() -> None:
     # the 15 the PDF job uses: a finishing match is what moves an estimate, and
     # that arrives from ESPN every 60 seconds. Touches no network at all — it
     # only re-reads matches and rewrites the estimates.
+    # Browser-driven, so deliberately infrequent: one page load a week, at a
+    # quiet hour. New tournaments are picked up within a week; existing ids are
+    # never overwritten, so a failed run changes nothing.
+    scheduler.add_job(
+        _refresh_atp_tournament_ids,
+        "cron",
+        day_of_week="mon",
+        hour=4,
+        minute=20,
+        id="refresh_atp_tournament_ids",
+        misfire_grace_time=3600,
+    )
     scheduler.add_job(
         _refresh_schedule_estimates,
         "interval",
