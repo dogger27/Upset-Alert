@@ -216,13 +216,24 @@
     gap: 1.1rem 1.4rem;
   }
 
-  /* One height for every row, so the Nth match on one court sits level with the
-     Nth on the next. Each court is its own section, so the columns are separate
-     subtrees and no grid can align them for us — matching heights is what makes
-     the rows line up. Sized for the tallest case, a doubles pair on two lines;
-     content may still exceed it and simply grows. Desktop only: on a phone the
-     courts stack, nothing needs aligning, and the padding would be waste. */
-  .sched-courts .sched-row { min-height: 4.9rem; }
+  /* Line the columns up WITHOUT guessing a height.
+     A fixed min-height does not work: it is only a floor, and the rows that
+     break alignment are exactly the ones that exceed it — doubles carrying two
+     lines of players, or a slot printing three lines of timing. Whatever number
+     is chosen, the tallest row escapes it.
+     Instead each court block stretches to the tallest in its row of the grid
+     (grid items stretch by default), its list takes the leftover height, and
+     grid-auto-rows: 1fr divides that evenly. Two courts side by side with the
+     same number of matches then line up exactly, and adapt on their own when
+     content grows. Desktop only — on a phone the courts stack and there is
+     nothing to align. */
+  .sched-courtblock { display: flex; flex-direction: column; }
+  .sched-courts .sched-list {
+    flex: 1;
+    display: grid;
+    grid-auto-rows: 1fr;
+    gap: 0.4rem;
+  }
 }
 
 /* The tournament's own PDF. Styled as an outline button matching the filter
