@@ -108,9 +108,12 @@
   border: 1px solid var(--border);
 }
 
-/* Your picks are the reason this page exists — they get the accent, and it has
-   to survive the dimming applied to finished matches. */
-.sched-row--mine { border-color: var(--brand-text); background: var(--row-picked, var(--surface-raised)); }
+/* Marks a draw the viewer is competing in. Deliberately faint: inside a draw
+   you have filled, EVERY singles match involves a pick of yours, so a strong
+   accent here would fire on every row and mean nothing. It earns its keep only
+   across a multi-tournament day, separating draws you are in from ones you are
+   not. */
+.sched-row--mine { border-color: var(--brand-text); }
 .sched-row--live { border-left: 3px solid var(--pick-correct-line); }
 .sched-row--done { opacity: 0.55; }
 .sched-row--done.sched-row--mine { opacity: 0.75; }
@@ -134,7 +137,6 @@
 }
 .sched-tag--atp { background: var(--atp-rule, var(--surface-raised)); color: var(--on-brand); }
 .sched-tag--wta { background: var(--wta-rule, var(--surface-raised)); color: var(--on-brand); }
-.sched-tag--mine { background: var(--brand-fill); color: var(--on-brand); }
 .sched-tag--quali { background: var(--badge-q-bg, var(--surface-raised)); color: var(--badge-q-fg, var(--text-muted)); }
 
 .sched-players {

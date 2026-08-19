@@ -89,7 +89,6 @@ function MatchRow({ e, showCourt }) {
           {e.round_label && <span className="sched-tag sched-tag--round">{e.round_label}</span>}
           {e.stage === 'qualifying' && <span className="sched-tag sched-tag--quali">Q</span>}
           {e.discipline !== 'singles' && <span className="sched-tag">{e.discipline === 'mixed' ? 'Mixed' : 'Doubles'}</span>}
-          {e.is_my_pick && <span className="sched-tag sched-tag--mine">My pick</span>}
         </div>
         <div className="sched-players">
           <span className="sched-side">{a.map(p => p.name).join(' / ') || 'TBD'}</span>
