@@ -226,3 +226,20 @@
   white-space: nowrap;
 }
 .sched-pdf:hover { color: var(--brand-text); }
+
+/* ── Players ── */
+.sched-side { display: flex; flex-wrap: wrap; align-items: center; gap: 0.15rem 0.5rem; font-weight: 600; }
+.sched-player { display: inline-flex; align-items: center; gap: 0.3rem; }
+.sched-pname { min-width: 0; }
+.sched-seed { color: var(--text-muted); font-weight: 700; margin-right: 0.2rem; font-size: 0.85em; }
+
+/* flag-icons needs an explicit box or it collapses; 4:3 matches the artwork. */
+.sched-flag {
+  width: 1.05rem;
+  height: 0.79rem;
+  flex: 0 0 auto;
+  border-radius: 2px;
+  background-size: cover !important;
+  background-position: center !important;
+}
+.sched-flag--none { background: var(--surface-raised); opacity: 0.5; }

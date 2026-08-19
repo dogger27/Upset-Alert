@@ -93,6 +93,26 @@ def _classify(match) -> tuple[str, str]:
     return stage, discipline
 
 
+def _round_label(round_number: Optional[int], num_rounds: Optional[int]) -> Optional[str]:
+    """R128 / R64 / ... / QF / SF / F from a match's position in the bracket.
+
+    The sheet only prints a round on a minority of slots, so deriving it from
+    the mapped match is what makes it present on all of them. Mirrors the
+    frontend's own labelling (TournamentDraw.jsx navLabel) so a schedule row and
+    the bracket never disagree about what round something is.
+    """
+    if not round_number or not num_rounds or round_number > num_rounds:
+        return None
+    remaining = 2 ** (num_rounds - round_number)   # matches left in this round
+    if remaining == 1:
+        return 'F'
+    if remaining == 2:
+        return 'SF'
+    if remaining == 4:
+        return 'QF'
+    return f'R{remaining * 2}'
+
+
 def _pairing_key(tournament_id: int, play_date: date, discipline: str,
                  side_a: list, side_b: list, entry_ids: list) -> str:
     """Stable across court, time and order changes — those are what we detect."""
@@ -160,7 +180,9 @@ async def ingest_document(db, tournament, play_date: date, url: str,
     # entry id -> draw id, so a resolved player also tells us which draw the
     # slot belongs to.
     entry_draw = {}
+    draw_by_id = {}
     for d in draws:
+        draw_by_id[d['draw'].id] = d['draw']
         for eid, _tokens in d['entries']:
             entry_draw[eid] = d['draw'].id
 
@@ -226,11 +248,25 @@ async def ingest_document(db, tournament, play_date: date, url: str,
                         ))).scalars().first()
                     if found is not None:
                         entry.match_id = found.id
+                        # The sheet prints a round on only a minority of slots;
+                        # the bracket knows it for all of them.
+                        derived = _round_label(found.round_number,
+                                               draw_by_id[d_id].num_rounds)
+                        if derived:
+                            entry.round_label = derived
             elif side_a_ids or side_b_ids:
                 # Doubles at a tournament we do track: no bracket match, but the
                 # draw link still lets the row point somewhere useful.
                 any_id = (side_a_ids + side_b_ids)[0]
                 entry.draw_id = entry_draw.get(any_id)
+
+            # The tour a match belongs to is a property of the DRAW, not of the
+            # site the PDF was downloaded from. Stamping it from the source made
+            # every men's match at a combined event read "WTA", because the
+            # combined file is hosted by the WTA.
+            if entry.draw_id and entry.draw_id in draw_by_id:
+                g = draw_by_id[entry.draw_id].gender
+                entry.tour = 'ATP' if g == 'M' else 'WTA' if g == 'F' else entry.tour
 
             entry.court = court
             entry.court_order = order

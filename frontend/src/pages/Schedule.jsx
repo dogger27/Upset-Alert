@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useSearchParams, Link } from 'react-router-dom'
 import clsx from 'clsx'
 import { getScheduleDay } from '../api/schedule'
+import { nationalityIso2, splitPlayerName } from '../utils/flags'
 import './Schedule.css'
 
 const VIEW_KEY = 'ua-schedule-view'
@@ -68,6 +69,38 @@ function liveLine(e) {
   return null
 }
 
+/**
+ * One player: flag, then name. Doubles shows surnames only — four full names on
+ * one row does not fit a phone, and the surname is what identifies a pair
+ * anyway.
+ */
+function PlayerName({ raw, surnameOnly }) {
+  const { seed, first, last, nat } = splitPlayerName(raw)
+  const iso2 = nationalityIso2(nat)
+  return (
+    <span className="sched-player">
+      {iso2
+        ? <span className={`fi fi-${iso2.toLowerCase()} sched-flag`} title={nat} />
+        : <span className="sched-flag sched-flag--none" />}
+      <span className="sched-pname">
+        {seed && <span className="sched-seed">{seed}</span>}
+        {surnameOnly ? last : [first, last].filter(Boolean).join(' ')}
+      </span>
+    </span>
+  )
+}
+
+function Side({ players, doubles }) {
+  if (!players.length) return <span className="sched-side">TBD</span>
+  return (
+    <span className="sched-side">
+      {players.map((p, i) => (
+        <PlayerName key={`${p.side}${p.position}${i}`} raw={p.name} surnameOnly={doubles} />
+      ))}
+    </span>
+  )
+}
+
 function MatchRow({ e, showCourt }) {
   const a = e.players.filter(p => p.side === 'a')
   const b = e.players.filter(p => p.side === 'b')
@@ -91,9 +124,9 @@ function MatchRow({ e, showCourt }) {
           {e.discipline !== 'singles' && <span className="sched-tag">{e.discipline === 'mixed' ? 'Mixed' : 'Doubles'}</span>}
         </div>
         <div className="sched-players">
-          <span className="sched-side">{a.map(p => p.name).join(' / ') || 'TBD'}</span>
+          <Side players={a} doubles={e.discipline !== 'singles'} />
           <span className="sched-vs">v</span>
-          <span className="sched-side">{b.map(p => p.name).join(' / ') || 'TBD'}</span>
+          <Side players={b} doubles={e.discipline !== 'singles'} />
           {e.is_tbd && <span className="sched-tbd">opponent not settled</span>}
         </div>
         {score && <div className="sched-score">{score}</div>}
