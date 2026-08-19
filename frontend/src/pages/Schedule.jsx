@@ -167,8 +167,14 @@ function MatchRow({ e, showCourt }) {
           {e.discipline !== 'singles' && <span className="sched-tag">{e.discipline === 'mixed' ? 'Mixed' : 'Doubles'}</span>}
         </div>
         <div className={clsx('sched-players', { 'sched-players--pairs': e.discipline !== 'singles' })}>
-          <Side players={a} doubles={e.discipline !== 'singles'} tbd={!!e.tbd_side?.includes('a')} />
-          <span className="sched-vs">vs</span>
+          {/* "vs" rides with the FIRST team rather than sitting on its own
+              line. Stacked pairs otherwise put it alone between them, which
+              reads as a third row of the match. Singles are unaffected: the
+              wrapper is inline, so "A vs B" still flows on one line. */}
+          <span className="sched-teamline">
+            <Side players={a} doubles={e.discipline !== 'singles'} tbd={!!e.tbd_side?.includes('a')} />
+            <span className="sched-vs">vs</span>
+          </span>
           <Side players={b} doubles={e.discipline !== 'singles'} tbd={!!e.tbd_side?.includes('b')} />
         </div>
         {score && <div className="sched-score">{score}</div>}
