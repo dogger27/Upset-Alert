@@ -387,6 +387,23 @@ export default function Schedule() {
     })
   }, [data, view, hideDone, tour])
 
+  /* Order the time view by when a match ACTUALLY began, falling back to the
+     estimate for anything still to come.
+     The API sorts on expected_start_at, which for a match already under way is
+     the time the sheet PRINTED — so a match that went on late sat among the
+     slots it was scheduled beside rather than where it belongs, while its own
+     row said "Started at" some quite different time. Sorting on the same value
+     the row displays is what makes the list read as a chronology. */
+  const timeEntries = useMemo(() => {
+    const key = e => e.started_at || e.expected_start_at || ''
+    return [...entries].sort((a, b) => {
+      const ka = key(a), kb = key(b)
+      if (ka !== kb) return ka < kb ? -1 : 1
+      // Same instant: keep a court's own running order intact.
+      return (a.court || '').localeCompare(b.court || '') || a.court_order - b.court_order
+    })
+  }, [entries])
+
   const byCourt = useMemo(() => {
     const m = new Map()
     for (const e of entries) {
@@ -514,7 +531,7 @@ export default function Schedule() {
 
       {!isLoading && entries.length > 0 && view === 'time' && (
         <div className="sched-list sched-list--time">
-          {entries.map(e => <MatchRow key={e.id} e={e} showCourt zone={zone} venueMode={tzMode === 'venue'} />)}
+          {timeEntries.map(e => <MatchRow key={e.id} e={e} showCourt zone={zone} venueMode={tzMode === 'venue'} />)}
         </div>
       )}
 
