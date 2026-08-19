@@ -75,7 +75,7 @@ class Match:
     # real information, not a parse error — but the slot cannot be mapped to one
     # fixture until it settles.
     tbd: bool = False
-    # Which side is the unresolved one ('a'|'b'). Only that side lists
+    # Which side(s) are unresolved — 'a', 'b' or 'ab'. Only those sides list
     # alternatives; the other holds real partners and must not be shown as a
     # choice between them.
     tbd_side: Optional[str] = None
@@ -334,7 +334,11 @@ def _regroup_alternatives(match):
         if len(parts) >= 2:
             setattr(match, attr, parts)
             match.tbd = True
-            match.tbd_side = 'a' if attr == 'side_a' else 'b'
+            # Accumulate: BOTH sides can be unresolved at once, as when two
+            # preceding matches are still in progress. Overwriting here left
+            # the first side rendering as if it were settled.
+            side = 'a' if attr == 'side_a' else 'b'
+            match.tbd_side = ''.join(sorted(set((match.tbd_side or '') + side)))
 
 
 def _parse_column(lines, pno):

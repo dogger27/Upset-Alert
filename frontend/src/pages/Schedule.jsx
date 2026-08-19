@@ -168,9 +168,9 @@ function MatchRow({ e, showCourt }) {
           {e.discipline !== 'singles' && <span className="sched-tag">{e.discipline === 'mixed' ? 'Mixed' : 'Doubles'}</span>}
         </div>
         <div className={clsx('sched-players', { 'sched-players--pairs': e.discipline !== 'singles' })}>
-          <Side players={a} doubles={e.discipline !== 'singles'} tbd={e.tbd_side === 'a'} />
+          <Side players={a} doubles={e.discipline !== 'singles'} tbd={!!e.tbd_side?.includes('a')} />
           <span className="sched-vs">vs</span>
-          <Side players={b} doubles={e.discipline !== 'singles'} tbd={e.tbd_side === 'b'} />
+          <Side players={b} doubles={e.discipline !== 'singles'} tbd={!!e.tbd_side?.includes('b')} />
         </div>
         {score && <div className="sched-score">{score}</div>}
       </div>
