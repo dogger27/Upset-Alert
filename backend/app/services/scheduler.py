@@ -1463,7 +1463,7 @@ async def _refresh_order_of_play() -> None:
     try:
         atp = await order_of_play.refresh_atp_ids()
         if atp:
-            logger.info("Order of play: learned %d ATP tournament id(s)", atp)
+            logger.info("Order of play: learned %d ATP tournament id(s) from Wikipedia", atp)
         stamped = await order_of_play.refresh_wta_ids()
         if stamped:
             logger.info("Order of play: matched %d tournament(s) to WTA ids", stamped)
