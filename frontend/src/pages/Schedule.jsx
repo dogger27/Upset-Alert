@@ -191,6 +191,14 @@ function MatchRow({ e, showCourt, zone, venueMode }) {
       'sched-row--atp': e.discipline === 'singles' && e.tour === 'ATP',
       'sched-row--wta': e.discipline === 'singles' && e.tour === 'WTA',
     })}>
+      {/* Status sits in the row's top-right corner rather than inline with the
+          tags: where a court has got to is the thing you scan a column for, and
+          in the tag row it queued up behind ATP/R16/DOUBLES and moved around as
+          those changed. The in-progress badge is the draw page's own, so both
+          screens read identically. */}
+      {e.status === 'live' && <span className="in-progress-badge sched-status">In progress</span>}
+      {e.status === 'completed' && <span className="sched-status sched-status--done">Completed</span>}
+
       <div className="sched-row-when">
         <span className={clsx('sched-time', {
           'sched-time--est': showCourt && e.expected_source === 'estimated',
@@ -210,11 +218,6 @@ function MatchRow({ e, showCourt, zone, venueMode }) {
           {e.round_label && <span className="sched-tag sched-tag--round">{e.round_label}</span>}
           {e.stage === 'qualifying' && <span className="sched-tag sched-tag--quali">Q</span>}
           {e.discipline !== 'singles' && <span className="sched-tag">{e.discipline === 'mixed' ? 'Mixed' : 'Doubles'}</span>}
-          {/* Where a court has got to is the point of this page, so state it
-              outright rather than leaving it to a dimmed row. Reuses the draw
-              page's own in-progress badge so the two read identically. */}
-          {e.status === 'live' && <span className="in-progress-badge sched-badge">In progress</span>}
-          {e.status === 'completed' && <span className="sched-tag sched-tag--final">Final</span>}
         </div>
         <div className={clsx('sched-players', { 'sched-players--pairs': e.discipline !== 'singles' })}>
           {/* "vs" rides with the FIRST team rather than sitting on its own

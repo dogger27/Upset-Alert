@@ -128,6 +128,7 @@
   padding: 0.55rem 0.6rem;
   border-radius: 9px;
   background: var(--surface-card);
+  position: relative;
   /* The brand outline on every row, not just some. It began life marking the
      viewer's picks, which turned out to mean nothing useful — but it reads
      well, so it stays as the card's ordinary edge.
@@ -407,8 +408,29 @@
 
 /* Status. "Final" sits with the tags; the in-progress badge is the draw page's
    own, re-used so the two screens read identically. */
-.sched-tag--final { background: var(--brand-fill); color: var(--on-brand); }
-.sched-badge { position: static; transform: none; margin-left: 0.1rem; }
+/* Pinned to the row's top-right corner. Absolute so it never competes with the
+   tags for horizontal space, which is tight on a phone. */
+.sched-status {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.5rem;
+  z-index: 1;
+  transform: none;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.sched-status--done {
+  background: transparent;
+  border: 1.5px solid var(--border);
+  color: var(--text-muted);
+}
+/* Keep the tags clear of the badge. */
+.sched-row-main { padding-right: 5.5rem; }
 
 /* Right-hand zone of the top bar: PDF, with the time-zone switch beneath it. */
 .sched-topright {
