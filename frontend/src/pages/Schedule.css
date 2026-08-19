@@ -215,6 +215,14 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 1.1rem 1.4rem;
   }
+
+  /* One height for every row, so the Nth match on one court sits level with the
+     Nth on the next. Each court is its own section, so the columns are separate
+     subtrees and no grid can align them for us — matching heights is what makes
+     the rows line up. Sized for the tallest case, a doubles pair on two lines;
+     content may still exceed it and simply grows. Desktop only: on a phone the
+     courts stack, nothing needs aligning, and the padding would be waste. */
+  .sched-courts .sched-row { min-height: 4.9rem; }
 }
 
 /* The tournament's own PDF. Styled as an outline button matching the filter
