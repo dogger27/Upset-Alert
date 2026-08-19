@@ -188,6 +188,26 @@ async def schedule_day(
             select(Match).where(Match.id.in_(match_ids)))).scalars().all()
         matches = {m.id: m for m in rows}
 
+    # Status from the match where we have one, then filled in from ORDERING.
+    #
+    # ESPN covers neither doubles nor qualifying, so those slots have no match
+    # and would sit at "scheduled" all day. But a court runs in order: if a
+    # later slot is under way, everything above it on that court has finished.
+    # That is a fact about the running order rather than a guess, which is the
+    # only basis on which a status is worth showing for a match we cannot see.
+    statuses = {e.id: _status_of(e, matches.get(e.match_id) if e.match_id else None)
+                for e in entries}
+    court_groups: dict[str, list] = {}
+    for e in entries:
+        court_groups.setdefault(e.court or '', []).append(e)
+    for slots in court_groups.values():
+        started_later = False
+        for e in sorted(slots, key=lambda x: x.court_order, reverse=True):
+            if started_later and statuses[e.id] == "scheduled":
+                statuses[e.id] = "completed"
+            if statuses[e.id] in ("live", "completed"):
+                started_later = True
+
     out: list[ScheduleEntryOut] = []
     courts: list[str] = []
     for e in entries:
@@ -210,7 +230,7 @@ async def schedule_day(
             start_note=e.start_note,
             printed_start_at=_printed_instant(e, tzs.get(e.tournament_id)),
             expected_start_at=_utc(e.expected_start_at), expected_source=e.expected_source,
-            is_tbd=e.is_tbd, tbd_side=e.tbd_side, status=_status_of(e, m), players=players,
+            is_tbd=e.is_tbd, tbd_side=e.tbd_side, status=statuses[e.id], players=players,
             live_scores=(m.live_scores_json if m else None),
             scores=(m.scores_json if m else None),
         ))
