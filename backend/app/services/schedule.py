@@ -44,6 +44,21 @@ from app.services.rankings import _norm
 _DURATION_MIN = {("singles", 3): 105, ("singles", 5): 170, ("doubles", 3): 80}
 _DEFAULT_DURATION = 105
 
+# Minutes between one match finishing on a court and the next starting: warm-up,
+# the players walking on, the court being swept.
+#
+# 21 is measured, not assumed — from the first four changeovers we could time at
+# Cincinnati 2026 (20, 21, 21, 23). Without it the chain had every match
+# starting the instant the previous one ended, so a court's estimates ran
+# progressively early through the day.
+#
+# Superseded per tournament by _observed_changeover() once enough real gaps have
+# been recorded there; this is only the starting point.
+_DEFAULT_CHANGEOVER_MIN = 21
+
+# Below this many observations a median says more about luck than the venue.
+_MIN_CHANGEOVER_SAMPLES = 4
+
 _SEED_RE = re.compile(r'^\s*(?:\[[^\]]*\]\s*)+')
 _NAT_RE = re.compile(r'\b[A-Z]{3}\b')
 _CLOCK_RE = re.compile(r'^(\d{1,2})[:.](\d{2})\s*(am|pm)?$', re.I)
@@ -398,6 +413,56 @@ def _remaining_minutes(live, discipline: str, sets_to_win: int = 2) -> int:
     return max(int(remaining_sets * per_set), 5)
 
 
+async def _observed_changeover(db, tournament_id: int) -> tuple[int, int]:
+    """(minutes, sample count) — the real changeover at this tournament.
+
+    Measured from what actually happened: for consecutive slots on the same
+    court, the gap between the earlier match finishing and the later one
+    starting. Only pairs where BOTH timestamps exist can be used, which means
+    main-draw singles that ESPN reported, so the sample builds slowly.
+
+    The median rather than the mean: one suspended match, or a slot the crowd
+    was cleared for, would otherwise drag the figure for the whole day.
+
+    Both sides of the pair are returned by tour as well, because a cross-tour
+    changeover plausibly runs longer — banners and signage change over. The
+    first measurement showed no difference (21.3 cross against 21.2 same), but
+    on a single cross-tour observation that is not evidence either way, so the
+    two are still treated alike. The query keeps the dimension so the question
+    can be settled once the data exists.
+    """
+    rows = (await db.execute(
+        select(ScheduleEntry.court, ScheduleEntry.court_order, ScheduleEntry.play_date,
+               Match.started_at, Match.completed_at)
+        .join(Match, Match.id == ScheduleEntry.match_id)
+        .where(ScheduleEntry.tournament_id == tournament_id)
+        .order_by(ScheduleEntry.play_date, ScheduleEntry.court,
+                  ScheduleEntry.court_order))).all()
+
+    by_court: dict[tuple, list] = {}
+    for court, order, day, started, completed in rows:
+        by_court.setdefault((day, court), []).append((order, started, completed))
+
+    gaps = []
+    for slots in by_court.values():
+        slots.sort(key=lambda x: x[0])
+        for (o1, _s1, c1), (o2, s2, _c2) in zip(slots, slots[1:]):
+            if o2 != o1 + 1 or not c1 or not s2:
+                continue
+            mins = (_aware(s2) - _aware(c1)).total_seconds() / 60
+            # A negative gap means overlapping courts or a clock problem; a huge
+            # one means rain, a curfew or a suspension. Neither is a changeover.
+            if 0 <= mins <= 90:
+                gaps.append(mins)
+
+    if len(gaps) < _MIN_CHANGEOVER_SAMPLES:
+        return _DEFAULT_CHANGEOVER_MIN, len(gaps)
+    gaps.sort()
+    mid = len(gaps) // 2
+    median = gaps[mid] if len(gaps) % 2 else (gaps[mid - 1] + gaps[mid]) / 2
+    return int(round(median)), len(gaps)
+
+
 async def recompute_expected_starts(db, tournament_id: int, play_date: date,
                                     venue_tz: Optional[str] = None) -> int:
     """Chain expected starts per court, anchored on what has actually happened.
@@ -435,6 +500,9 @@ async def recompute_expected_starts(db, tournament_id: int, play_date: date,
         found = (await db.execute(
             select(Match).where(Match.id.in_(match_ids)))).scalars().all()
         matches = {m.id: m for m in found}
+
+    changeover, samples = await _observed_changeover(db, tournament_id)
+    gap = timedelta(minutes=changeover)
 
     tz = None
     if venue_tz:
@@ -484,9 +552,10 @@ async def recompute_expected_starts(db, tournament_id: int, play_date: date,
                 elif prev_end:
                     s.expected_start_at = s.expected_start_at or prev_end
                     s.expected_source = s.expected_source or 'estimated'
-                prev_end = finished_at if finished_at else now + timedelta(
+                # The court is not free the instant a match ends.
+                prev_end = (finished_at if finished_at else now + timedelta(
                     minutes=_remaining_minutes(
-                        getattr(m, 'live_scores_json', None), s.discipline))
+                        getattr(m, 'live_scores_json', None), s.discipline))) + gap
                 s.estimated_duration_min = dur
                 if before != (s.expected_start_at, s.expected_source):
                     touched += 1
@@ -523,7 +592,7 @@ async def recompute_expected_starts(db, tournament_id: int, play_date: date,
             if before != (expected, source):
                 touched += 1
             if expected:
-                prev_end = expected + timedelta(minutes=dur)
+                prev_end = expected + timedelta(minutes=dur) + gap
 
     await db.commit()
     return touched
