@@ -166,6 +166,10 @@ function MatchRow({ e, showCourt }) {
     <div className={clsx('sched-row', {
       'sched-row--done': done,
       'sched-row--live': e.status === 'live',
+      // Tour tint on SINGLES only — doubles keeps the plain card, so the draws
+      // people actually play stand out from the ones they don't.
+      'sched-row--atp': e.discipline === 'singles' && e.tour === 'ATP',
+      'sched-row--wta': e.discipline === 'singles' && e.tour === 'WTA',
     })}>
       <div className="sched-row-when">
         <span className={clsx('sched-time', {
