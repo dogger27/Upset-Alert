@@ -205,12 +205,21 @@ async def schedule_day(
     for e in entries:
         court_groups.setdefault(e.court or '', []).append(e)
     for slots in court_groups.values():
-        started_later = False
-        for e in sorted(slots, key=lambda x: x.court_order, reverse=True):
-            if started_later and statuses[e.id] == "scheduled":
-                statuses[e.id] = "completed"
+        # Only a STRICTLY later slot proves an earlier one finished. Positions
+        # can collide — a sheet revised during the day renumbers only the
+        # matches it still lists, so an entry carried over from an earlier
+        # revision can share a position with a current one. Treating equal
+        # positions as "later" marked a match that had not started as
+        # completed, because the match beside it had.
+        highest_started = None
+        for e in sorted(slots, key=lambda x: x.court_order):
             if statuses[e.id] in ("live", "completed"):
-                started_later = True
+                highest_started = e.court_order
+        if highest_started is None:
+            continue
+        for e in slots:
+            if e.court_order < highest_started and statuses[e.id] == "scheduled":
+                statuses[e.id] = "completed"
 
     out: list[ScheduleEntryOut] = []
     courts: list[str] = []

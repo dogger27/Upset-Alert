@@ -350,8 +350,40 @@ async def ingest_document(db, tournament, play_date: date, url: str,
             entry.last_document_id = doc.id
             written += 1
 
+    await db.flush()
+    await _renumber_courts(db, tournament.id, play_date)
     await db.commit()
     return {'document_id': doc.id, 'entries': written, 'kind': meta.get('kind')}
+
+
+async def _renumber_courts(db, tournament_id: int, play_date: date) -> None:
+    """Give every slot on a court a distinct position, in running order.
+
+    A sheet revised mid-day lists only what is still to come, so enumerating
+    within one document renumbers those matches from 1 while entries carried
+    over from an earlier revision keep their original positions — and the two
+    sets collide. Two matches at position 2 on the same court then make "which
+    came first" unanswerable, which is what let a match that had not started be
+    reported as completed because its position-mate had finished.
+
+    Existing order is preserved where it is unambiguous; first_seen_at breaks
+    ties, since a slot recorded earlier was printed earlier.
+    """
+    rows = (await db.execute(
+        select(ScheduleEntry).where(
+            ScheduleEntry.tournament_id == tournament_id,
+            ScheduleEntry.play_date == play_date,
+        ))).scalars().all()
+
+    by_court: dict[str, list] = {}
+    for r in rows:
+        by_court.setdefault(r.court or '', []).append(r)
+
+    for slots in by_court.values():
+        slots.sort(key=lambda r: (r.court_order, r.first_seen_at or datetime.min.replace(tzinfo=timezone.utc)))
+        for position, entry in enumerate(slots, 1):
+            if entry.court_order != position:
+                entry.court_order = position
 
 
 def _start_type_of(m) -> str:
