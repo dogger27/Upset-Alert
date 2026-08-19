@@ -286,20 +286,57 @@
 /* ── Narrow screens ── */
 @media (max-width: 560px) {
   .sched-page { padding: 0.6rem 0.5rem 3rem; }
-  /* Three zones will not fit across a phone; stack them and let the centre
-     block keep its own centring. */
+
+  /* Seven stacked rows of controls filled the viewport before a single match
+     appeared. Regrouped into four, each row answering one question:
+     WHERE am I / WHICH day / HOW am I reading it / WHAT is shown.
+     The grouping carries meaning, rather than being whatever happened to fit.
+
+        title ................ PDF
+        [‹]   Wed, Aug 19   [›]
+        Time|Court ..... Venue|My time
+        ‹ Back   ATP  WTA   Hide completed
+
+     display:contents on the two wrappers lets their children join this grid
+     directly, so the phone layout is a genuine regrouping rather than the
+     desktop arrangement squeezed narrower. */
   .sched-topbar {
     grid-template-columns: 1fr auto;
-    gap: 0.5rem 0.75rem;
+    grid-template-areas:
+      "title pdf"
+      "date  date"
+      "modes tz";
+    gap: 0.45rem 0.6rem;
+    margin-bottom: 0.5rem;
   }
-  .sched-center { grid-column: 1 / -1; }
+  .sched-titleblock { grid-area: title; }
+  .sched-center,
+  .sched-topright { display: contents; }
+  .sched-pdf { grid-area: pdf; justify-self: end; }
+  .sched-tzswitch { grid-area: tz; justify-self: end; }
+  .sched-viewswitch { grid-area: modes; justify-self: start; }
+
+  /* The day is the axis of this page and paging it is the most repeated action
+     here, so it gets a row to itself with the arrows on the screen edges —
+     reachable with either thumb rather than clustered mid-screen. */
+  .sched-daynav {
+    grid-area: date;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  .sched-day-label { flex: 1; min-width: 0; }
+  .sched-nav-btn { width: 38px; height: 38px; }
+
+  .sched-title { font-size: 1.1rem; }
+  .sched-filters { gap: 0.35rem; margin-bottom: 0.7rem; }
+  .sched-back { margin-right: 0.6rem; }
+
   .sched-row {
     grid-template-columns: 4.4rem 1fr;
     gap: 0.45rem;
     padding: 0.5rem 0.45rem;
   }
   .sched-players { font-size: 0.86rem; }
-  .sched-day { min-width: 7rem; }
 
   /* Keep "vs" beside the name it follows. On a phone the row is narrow enough
      that it wrapped onto a line of its own, which reads as a third element of
@@ -311,17 +348,13 @@
   .sched-pname { white-space: nowrap; }
 
   /* The score gives way first when something has to. It stays legible several
-     steps smaller, whereas a wrapped name changes what the row appears to say.
-     Shrinkable for the same reason, so a long three-set score cannot squeeze
-     the players out. */
+     steps smaller, whereas a wrapped name changes what the row appears to say. */
   .sched-score {
     font-size: 0.95rem;
     flex-shrink: 1;
     min-width: 0;
   }
 
-  /* The pill is narrower here, so the tags need less clearance and the names
-     get the difference. */
   .sched-tags { padding-right: 6.4rem; }
   .sched-status { min-width: 6rem; font-size: 0.55rem; }
 }
@@ -574,6 +607,7 @@
 }
 .sched-tzbtn--on { background: var(--brand-fill); color: var(--on-brand); }
 
-@media (max-width: 560px) {
-  .sched-topright { grid-column: 2; }
-}
+/* NOTE: the phone layout for the header lives in the max-width:560px block
+   above, where .sched-topright becomes display:contents. Do not add a
+   grid-column here — it would be dead, and it reads as if it were doing
+   something. */
