@@ -576,46 +576,61 @@
   .sched-page { padding: 0.6rem 0.5rem 3rem; }
 
   /* Seven stacked rows of controls filled the viewport before a single match
-     appeared. Regrouped into four, each row answering one question:
-     WHERE am I / WHICH day / HOW am I reading it / WHAT is shown.
-     The grouping carries meaning, rather than being whatever happened to fit.
+     appeared. Three now, each answering one question:
+     WHERE and WHEN am I / HOW am I reading it / WHAT is shown.
 
-        title ................ PDF
-        [‹]   Wed, Aug 19   [›]
-        Time|Court ..... Venue|My time
-        ‹ Back   ATP  WTA   Hide completed
+        Cincinnati Open ..... [‹] Wed, Aug 19 [›]
+        Time|Court .............. Venue|My time
+        ‹ Back ....... ATP  WTA  Hide completed
+
+     No PDF here. The page now renders the whole order of play, so on a phone
+     the link to the source document is a spare escape hatch paying for itself
+     in the scarcest thing on the screen. It stays on desktop, where the room
+     is free.
 
      display:contents on the two wrappers lets their children join this grid
      directly, so the phone layout is a genuine regrouping rather than the
      desktop arrangement squeezed narrower. */
   .sched-topbar {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
-      "title pdf"
-      "date  date"
+      "title date"
       "modes tz";
+    align-items: center;
     gap: 0.45rem 0.6rem;
     margin-bottom: 0.5rem;
   }
-  .sched-titleblock { grid-area: title; }
+  .sched-titleblock { grid-area: title; min-width: 0; }
   .sched-center,
   .sched-topright { display: contents; }
-  .sched-pdf { grid-area: pdf; justify-self: end; }
+  .sched-pdf { display: none; }
   .sched-tzswitch { grid-area: tz; justify-self: end; }
   .sched-viewswitch { grid-area: modes; justify-self: start; }
 
-  /* The day is the axis of this page and paging it is the most repeated action
-     here, so it gets a row to itself with the arrows on the screen edges —
-     reachable with either thumb rather than clustered mid-screen. */
+  /* A long tournament name gives way before the date does — the date is the
+     one thing on this row you cannot infer from context. */
+  .sched-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Sharing the top row now, so the day nav is sized to its content rather
+     than spread across the screen. Still comfortably tappable at 32px. */
   .sched-daynav {
     grid-area: date;
-    justify-content: space-between;
-    gap: 0.5rem;
+    justify-self: end;
+    gap: 0.3rem;
   }
-  .sched-day-label { flex: 1; min-width: 0; }
-  .sched-nav-btn { width: 38px; height: 38px; }
+  .sched-day-label {
+    flex: 0 0 auto;
+    min-width: 0;
+    font-size: 0.95rem;
+    white-space: nowrap;
+  }
+  .sched-nav-btn { width: 32px; height: 32px; font-size: 1.15rem; }
 
-  .sched-title { font-size: 1.1rem; }
+  .sched-title { font-size: 1rem; }
   /* All four controls on ONE line at 375px. Measured, not guessed: at
      0.72rem with 0.5rem side padding the row totals ~320px inside a 359px
      content width, so nothing wraps and nothing is hidden. */
