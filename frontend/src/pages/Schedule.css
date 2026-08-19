@@ -107,8 +107,11 @@
   background: var(--surface-card);
   /* The brand outline on every row, not just some. It began life marking the
      viewer's picks, which turned out to mean nothing useful — but it reads
-     well, so it stays as the card's ordinary edge. */
-  border: 1px solid var(--brand-text);
+     well, so it stays as the card's ordinary edge.
+     Mixed down rather than swapped for a grey: at full strength it competed
+     with the content for attention across a whole day of rows, but the hue is
+     what makes the card feel like part of the app. */
+  border: 1px solid color-mix(in srgb, var(--brand-text) 38%, transparent);
 }
 
 .sched-row--live { border-left: 3px solid var(--pick-correct-line); }
