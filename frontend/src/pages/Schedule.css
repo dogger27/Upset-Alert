@@ -88,6 +88,7 @@
 .sched-filters {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 0.4rem;
   margin-bottom: 0.85rem;
 }
@@ -119,6 +120,12 @@
 
 /* ── Rows ── */
 .sched-list { display: flex; flex-direction: column; gap: 0.4rem; }
+
+/* The time view is one column of rows, so the page's full width just stretched
+   them: the score ended up marooned an inch from the names it belongs to. Left
+   aligned rather than centred, so the filters above keep the same left edge.
+   The court view is untouched — it genuinely uses the width for two columns. */
+.sched-list--time { max-width: 46rem; }
 
 .sched-row {
   display: grid;

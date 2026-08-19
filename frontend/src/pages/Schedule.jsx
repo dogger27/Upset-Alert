@@ -487,7 +487,7 @@ export default function Schedule() {
       )}
 
       {!isLoading && entries.length > 0 && view === 'time' && (
-        <div className="sched-list">
+        <div className="sched-list sched-list--time">
           {entries.map(e => <MatchRow key={e.id} e={e} showCourt zone={zone} venueMode={tzMode === 'venue'} />)}
         </div>
       )}
