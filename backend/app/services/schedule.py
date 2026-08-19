@@ -533,6 +533,12 @@ async def recompute_expected_starts(db, tournament_id: int, play_date: date,
             select(Match).where(Match.id.in_(match_ids)))).scalars().all()
         matches = {m.id: m for m in found}
 
+    # Before anything is chained: positions must be distinct or "which came
+    # first" has no answer. Done here rather than only at ingest, because ingest
+    # returns early when the PDF has not changed — so a collision introduced by
+    # an earlier revision would never be cleaned up.
+    await _renumber_courts(db, tournament_id, play_date)
+
     changeover, samples = await _observed_changeover(db, tournament_id)
     gap = timedelta(minutes=changeover)
 
