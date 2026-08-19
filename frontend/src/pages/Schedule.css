@@ -265,7 +265,19 @@
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
+  /* Baseline, not the default stretch. A set carrying a tiebreak superscript
+     has a taller line box than one without, so stretched items put "6³-7"
+     lower than "6-4" beside it — the digits stopped sharing a baseline. */
+  align-items: baseline;
   gap: 0.05rem 0.45rem;
+}
+
+/* line-height:0 stops the superscript inflating the line box in the first
+   place, which is what made the heights differ. Sized to match the draw
+   page's own tiebreak treatment. */
+.sched-score sup {
+  font-size: 0.72em;
+  line-height: 0;
 }
 
 
