@@ -305,8 +305,11 @@ export default function Schedule() {
 
   return (
     <div className="sched-page">
-      <div className="sched-title-row">
-        <div>
+      <div className="sched-topbar">
+        <div className="sched-titleblock">
+          {fromDraw && (
+            <Link className="sched-back" to={`/tournaments/${fromDraw}`}>‹ Back to draw</Link>
+          )}
           <h1 className="sched-title">
             {data?.tournaments?.length === 1
               ? data.tournaments[0].name
@@ -314,27 +317,25 @@ export default function Schedule() {
           </h1>
           <div className="sched-subtitle">Order of play</div>
         </div>
-        {fromDraw && (
-          <Link className="sched-back" to={`/tournaments/${fromDraw}`}>‹ Back to draw</Link>
-        )}
-      </div>
 
-      <div className="sched-head">
-        <div className="sched-daynav">
-          <button className="sched-nav-btn" onClick={() => setDay(shiftDay(day, -1))} aria-label="Previous day">‹</button>
-          <div className="sched-day">
-            <span className="sched-day-label">{prettyDay(day)}</span>
-          </div>
-          <button className="sched-nav-btn" onClick={() => setDay(shiftDay(day, 1))} aria-label="Next day">›</button>
-        </div>
-
-        {(data?.tournaments ?? []).filter(t => t.oop_url).map(t => (
+        {(data?.tournaments ?? []).filter(t => t.oop_url).slice(0, 1).map(t => (
           <a key={t.id} className="sched-pdf" href={t.oop_url}
              target="_blank" rel="noopener noreferrer"
              title={`${t.name} — official order of play (PDF)`}>
             PDF
           </a>
         ))}
+      </div>
+
+      <div className="sched-center">
+        <div className="sched-daynav">
+          <button className="sched-nav-btn" onClick={() => setDay(shiftDay(day, -1))} aria-label="Previous day">‹</button>
+          {/* Fixed width, so the arrows hold their position as the date
+              changes — "Wed, Aug 19" and "Thu, Sep 3" are different widths and
+              the buttons would otherwise shuffle under the cursor. */}
+          <span className="sched-day-label">{prettyDay(day)}</span>
+          <button className="sched-nav-btn" onClick={() => setDay(shiftDay(day, 1))} aria-label="Next day">›</button>
+        </div>
 
         <div className="sched-viewswitch" role="tablist">
           <button role="tab" aria-selected={view === 'time'}

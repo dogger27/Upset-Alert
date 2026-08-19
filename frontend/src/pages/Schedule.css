@@ -11,14 +11,24 @@
   padding: 0.75rem 0.75rem 3rem;
 }
 
-/* ── Header ── */
-.sched-head {
+/* ── Header ──
+   Three zones: identity top-left, the PDF top-right, and the day/view controls
+   centred beneath them. */
+.sched-topbar {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 0.6rem;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+.sched-titleblock { min-width: 0; }
+
+.sched-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.9rem;
 }
 
 .sched-daynav {
@@ -28,6 +38,7 @@
 }
 
 .sched-nav-btn {
+  flex: 0 0 auto;
   width: 34px;
   height: 34px;
   border-radius: 8px;
@@ -40,9 +51,17 @@
 }
 .sched-nav-btn:hover { background: var(--surface-raised); }
 
-.sched-day { display: flex; flex-direction: column; min-width: 9rem; }
-.sched-day-label { font-size: 1.05rem; font-weight: 700; }
-.sched-day-sub { font-size: 0.78rem; color: var(--brand-text); font-weight: 600; }
+/* Fixed width so the arrows never move. The label is the only thing that
+   changes size between days, and letting it size to its content drags the
+   buttons sideways under the cursor. */
+.sched-day-label {
+  display: inline-block;
+  min-width: 9.5rem;
+  text-align: center;
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
 
 .sched-viewswitch {
   display: inline-flex;
@@ -154,6 +173,17 @@
   color: var(--text-muted);
   text-transform: uppercase;
 }
+/* The round is the tag people actually scan for, and it was falling through to
+   the base style — muted ink on a raised surface — which disappears against
+   both tour tints. Outlined in full-strength text colour instead, so it holds
+   up on the plain card and on either tint. */
+.sched-tag--round {
+  background: transparent;
+  color: var(--text);
+  border: 1.5px solid currentColor;
+  padding: 0.02rem 0.34rem;
+}
+
 .sched-tag--atp { background: var(--atp-rule, var(--surface-raised)); color: var(--on-brand); }
 .sched-tag--wta { background: var(--wta-rule, var(--surface-raised)); color: var(--on-brand); }
 .sched-tag--quali { background: var(--badge-q-bg, var(--surface-raised)); color: var(--badge-q-fg, var(--text-muted)); }
@@ -213,7 +243,6 @@
     padding: 0.5rem 0.45rem;
   }
   .sched-players { font-size: 0.86rem; }
-  .sched-head { gap: 0.5rem; }
   .sched-day { min-width: 7rem; }
 }
 
@@ -322,14 +351,7 @@
   opacity: 0.8;
 }
 
-/* ── Title row ── */
-.sched-title-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 0.6rem;
-}
+/* ── Title block ── */
 .sched-title {
   margin: 0;
   font-size: 1.25rem;
@@ -344,6 +366,8 @@
   color: var(--text-muted);
 }
 .sched-back {
+  display: inline-block;
+  margin-bottom: 0.35rem;
   flex: 0 0 auto;
   padding: 0.3rem 0.7rem;
   border-radius: 999px;
