@@ -98,6 +98,11 @@
   --warning-bg: #fef3c7;
   --danger: #dc2626;
   --danger-bg: #fee2e2;
+  /* Indigo, for a match's expected start. Deliberately neither green nor red:
+     those read as correct and wrong everywhere else in the bracket, and a time
+     is neither — it is not a result at all. Distinct from the muted grey the
+     scores use, so the two never blur together. */
+  --eta-text: #4f46e5;
   --info: #1d4ed8;
   --info-bg: #dbeafe;
 
@@ -397,6 +402,9 @@
   --success: #46c67d;      --success-bg: #12301f;
   --warning: #e0a340;      --warning-bg: #33270d;
   --danger:  #f2726a;      --danger-bg:  #3a1e1c;
+  /* Lifted for the dark card it sits on: 7.08:1 there, against 5.52:1 for the
+     light value on its own surface. */
+  --eta-text: #a5b4fc;
   --info:    #7aa9ff;      --info-bg:    #142743;
 
   /* The correct-pick box is the single most important state in the bracket, so

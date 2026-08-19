@@ -349,7 +349,7 @@
   line-height: 1;
   font-size: 0.72rem;
   font-weight: 600;
-  color: var(--text-muted);
+  color: var(--eta-text);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
   pointer-events: none;
