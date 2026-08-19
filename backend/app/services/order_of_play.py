@@ -415,11 +415,17 @@ async def refresh_order_of_play() -> int:
             # WTA file where there is one — at a shared venue it covers both
             # draws. Otherwise the ATP's own, which is the only source for an
             # event with no WTA counterpart.
+            # The SEASON's year, not today's. A season opener straddles New
+            # Year — Brisbane 2027 begins in December 2026 — and the tours file
+            # its sheets under the season, so on 30 December today.year would
+            # ask for the wrong directory entirely. For every tournament that
+            # does not straddle, the two are the same.
+            season_year = getattr(draws[0], "year", None) or today.year
             if tournament.wta_live_scoring_id:
-                url = _WTA_PDF.format(year=today.year, lsid=tournament.wta_live_scoring_id)
+                url = _WTA_PDF.format(year=season_year, lsid=tournament.wta_live_scoring_id)
                 src_tour = "WTA"
             else:
-                url = _ATP_PDF.format(year=today.year, atp_id=tournament.atp_tournament_id)
+                url = _ATP_PDF.format(year=season_year, atp_id=tournament.atp_tournament_id)
                 src_tour = "ATP"
 
             oop_date, atp_labels, wta_labels = None, 0, 0
