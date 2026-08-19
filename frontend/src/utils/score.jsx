@@ -152,12 +152,17 @@ export function expectedStartLabel(iso, source, zone) {
       : when.toLocaleDateString([], { weekday: 'short', ...(zone ? { timeZone: zone } : {}) })
   }
 
-  // The zone abbreviation earns its place only when the time is not the
-  // reader's own — otherwise it is noise on every row.
+  // Always name the zone, including the reader's own. A bare time forces the
+  // question "whose clock is that?" on anyone who has ever switched the
+  // setting, and the answer is only obvious to someone who has not.
+  //
+  // Resolved by Intl rather than stored, so it tracks daylight saving on its
+  // own: the same venue is EDT in August and EST in November, and a fixed
+  // abbreviation would be wrong for half the season.
   let suffix = ''
-  if (zone) {
+  {
     const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: zone, timeZoneName: 'short',
+      timeZoneName: 'short', ...(zone ? { timeZone: zone } : {}),
     }).formatToParts(when)
     const tzName = parts.find(p => p.type === 'timeZoneName')?.value
     if (tzName) suffix = ` ${tzName}`
