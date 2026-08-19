@@ -40,13 +40,31 @@ from io import BytesIO
 from typing import Optional
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from app.database import AsyncSessionLocal
 from app.models.tournament import Draw, Tournament
 from app.services.http_errors import is_transient_http_error, describe_exception
 from app.services.rankings import _norm
 from app.services.system_log import app_log
+
+_ATP_PDF = "https://www.protennislive.com/posting/{year}/{atp_id}/op.pdf"
+
+# How early to start looking for an order of play, per tier. Deliberately
+# generous: a miss costs one request against a static file host, while being a
+# day short means missing a whole qualifying round.
+#
+# The existing default_qual_days columns are NOT this — they say when the
+# qualifying DRAW is released (3 for a Slam), which has nothing to do with when
+# qualifying play begins. US Open qualifying starts six days before the main
+# draw, so a three-day window would have missed half of it.
+_OOP_LEAD_DAYS = {
+    "Grand Slam": 12,
+    "ATP 1000": 8, "WTA 1000": 8,
+    "ATP 500": 6, "WTA 500": 6,
+    "ATP 250": 6, "WTA 250": 6,
+}
+_DEFAULT_OOP_LEAD_DAYS = 6
 
 _WTA_API = "https://api.wtatennis.com/tennis/tournaments/"
 _WTA_PDF = "https://wtafiles.wtatennis.com/pdf/draws/{year}/{lsid}/OP.pdf"
@@ -78,9 +96,11 @@ _MONTHS = {m: i for i, m in enumerate(
 # keeps a stray word from claiming coverage we do not have.
 _MIN_TOUR_LABELS = 2
 
-# Qualifying is played before the main draw's start_date and has its own order
-# of play, so the link is useful a few days early.
-_QUALIFYING_LEAD_DAYS = 3
+def _lead_days(draw) -> int:
+    """Days before start_date to begin polling, from the draw's tier."""
+    variant = getattr(draw, "variant", None)
+    name = getattr(variant, "category_name", None) if variant else None
+    return _OOP_LEAD_DAYS.get(name, _DEFAULT_OOP_LEAD_DAYS)
 
 
 async def _fetch_wta_events() -> list[dict]:
@@ -192,11 +212,12 @@ def _as_date(value) -> Optional[date]:
 
 
 def _running(draw, today: date) -> bool:
-    """Is this specific draw being played today? Qualifying starts before the
-    main draw's start_date, so allow a few days of lead-in; the end is taken
-    from end_date when we have one."""
+    """Is this draw close enough to be playing today?
+
+    Qualifying runs before the main draw's start_date — a week or more at a
+    Slam — so the lead-in comes from the tier rather than one constant."""
     start = _as_date(draw.start_date)
-    if start is None or today < start - timedelta(days=_QUALIFYING_LEAD_DAYS):
+    if start is None or today < start - timedelta(days=_lead_days(draw)):
         return False
     end = _as_date(draw.end_date)
     return end is None or today <= end
@@ -264,7 +285,8 @@ async def refresh_order_of_play() -> int:
             select(Tournament, Draw)
             .join(Draw, Draw.tournament_id == Tournament.id)
             .where(
-                Tournament.wta_live_scoring_id.isnot(None),
+                or_(Tournament.wta_live_scoring_id.isnot(None),
+                    Tournament.atp_tournament_id.isnot(None)),
                 Draw.status != "completed",
                 Draw.start_date.isnot(None),
             )
@@ -277,7 +299,15 @@ async def refresh_order_of_play() -> int:
         for group in by_tournament.values():
             tournament = group[0][0]
             draws = [d for _, d in group]
-            url = _WTA_PDF.format(year=today.year, lsid=tournament.wta_live_scoring_id)
+            # WTA file where there is one — at a shared venue it covers both
+            # draws. Otherwise the ATP's own, which is the only source for an
+            # event with no WTA counterpart.
+            if tournament.wta_live_scoring_id:
+                url = _WTA_PDF.format(year=today.year, lsid=tournament.wta_live_scoring_id)
+                src_tour = "WTA"
+            else:
+                url = _ATP_PDF.format(year=today.year, atp_id=tournament.atp_tournament_id)
+                src_tour = "ATP"
 
             oop_date, atp_labels, wta_labels = None, 0, 0
             try:
@@ -307,7 +337,7 @@ async def refresh_order_of_play() -> int:
                     async with AsyncSessionLocal() as sdb:
                         t = await sdb.get(type(tournament), tournament.id)
                         await schedule_svc.ingest_document(
-                            sdb, t, oop_date, url, resp.content, tour="WTA")
+                            sdb, t, oop_date, url, resp.content, tour=src_tour)
                         await schedule_svc.recompute_expected_starts(
                             sdb, tournament.id, oop_date,
                             venue_tz=next((d.venue_timezone for d in draws
@@ -330,7 +360,22 @@ async def refresh_order_of_play() -> int:
                 # without asking which draw. Without this, the only thing
                 # standing between the May men's draw and a July women's
                 # schedule is the ATP-label count happening to come back zero.
-                covered = fresh and (draw.gender == "F" or covers_atp) and _running(draw, today)
+                # Which draws this file actually covers.
+                #
+                # From the ATP's own file, the men's draw is covered outright —
+                # a single-tour sheet has no reason to label anything "ATP", so
+                # the label count is zero and testing it would exclude the very
+                # draw the file is for.
+                #
+                # From a WTA file, the women's draw is covered outright, and the
+                # men's only when the sheet really does list ATP matches: true
+                # at a shared venue, false when the tours are in different
+                # cities the same week.
+                if src_tour == "ATP":
+                    gender_ok = draw.gender == "M" or wta_labels >= _MIN_TOUR_LABELS
+                else:
+                    gender_ok = draw.gender == "F" or covers_atp
+                covered = fresh and gender_ok and _running(draw, today)
                 new_url = url if covered else None
                 if covered and draw.oop_first_seen_at is None:
                     draw.oop_first_seen_at = datetime.now(timezone.utc)

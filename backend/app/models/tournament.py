@@ -91,6 +91,11 @@ class Tournament(Base):
     # PDF. Sits on the tournament rather than the draw because one event id
     # covers both draws when the tours share a site — see order_of_play.py.
     wta_live_scoring_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # The ATP's own tournament id — the number in an atptour.com URL, and the
+    # path segment of its order-of-play PDF on protennislive. Needed only for
+    # events with no WTA counterpart; at a shared-venue combined event the WTA
+    # file already covers both draws.
+    atp_tournament_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     draws: Mapped[list["Draw"]] = relationship("Draw", back_populates="tournament")
 

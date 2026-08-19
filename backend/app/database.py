@@ -406,6 +406,13 @@ async def _migrate(conn):
         # the path segment of their OOP PDF; oop_date is the day the PDF is FOR,
         # which is the only reliable freshness test. See order_of_play.py.
         "ALTER TABLE tournaments ADD COLUMN wta_live_scoring_id INTEGER",
+        "ALTER TABLE tournaments ADD COLUMN atp_tournament_id INTEGER",
+        # ATP ids, read from the tournament's own atptour.com URL. Matched on
+        # name so a re-run is harmless, and only filled where still empty.
+        ("UPDATE tournaments SET atp_tournament_id = 422 "
+         "WHERE atp_tournament_id IS NULL AND name LIKE '%Cincinnati%'"),
+        ("UPDATE tournaments SET atp_tournament_id = 6242 "
+         "WHERE atp_tournament_id IS NULL AND name LIKE '%Winston-Salem%'"),
         "ALTER TABLE draws ADD COLUMN oop_url VARCHAR",
         "ALTER TABLE draws ADD COLUMN oop_date DATE",
         "ALTER TABLE draws ADD COLUMN oop_checked_at DATETIME",
