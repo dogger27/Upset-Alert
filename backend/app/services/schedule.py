@@ -218,7 +218,10 @@ async def ingest_document(db, tournament, play_date: date, url: str,
             start_type = _start_type_of(m)
             if entry is None:
                 entry = ScheduleEntry(
-                    tournament_id=tournament.id, play_date=play_date, tour=m.tour or tour,
+                    # NOT `or tour`: the source is where the file is hosted, not
+                    # whose match it is. A combined event's file lives on the WTA
+                    # site, so that fallback stamped men's doubles as WTA.
+                    tournament_id=tournament.id, play_date=play_date, tour=m.tour,
                     stage=stage, discipline=discipline, round_label=m.round,
                     pairing_key=key,
                 )
@@ -276,9 +279,15 @@ async def ingest_document(db, tournament, play_date: date, url: str,
             # site the PDF was downloaded from. Stamping it from the source made
             # every men's match at a combined event read "WTA", because the
             # combined file is hosted by the WTA.
+            # Confidence order: the mapped draw's gender knows for certain; the
+            # sheet's own per-match label is next; otherwise leave it blank. No
+            # badge is better than a wrong one — doubles specialists appear in no
+            # singles draw, so their tour is genuinely undetermined here.
             if entry.draw_id and entry.draw_id in draw_by_id:
                 g = draw_by_id[entry.draw_id].gender
-                entry.tour = 'ATP' if g == 'M' else 'WTA' if g == 'F' else entry.tour
+                entry.tour = 'ATP' if g == 'M' else 'WTA' if g == 'F' else m.tour
+            else:
+                entry.tour = m.tour
 
             entry.court = court
             entry.court_order = order
