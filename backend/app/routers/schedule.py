@@ -9,7 +9,9 @@ does not cover. Leaving them out of the response model, rather than filtering
 them at render time, is what keeps that true when someone later adds a field.
 """
 
-from datetime import date, datetime, timezone
+import re as _re
+from datetime import date, datetime, time, timezone
+from zoneinfo import ZoneInfo
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
@@ -56,6 +58,10 @@ class ScheduleEntryOut(BaseModel):
     start_time_local: Optional[str] = None
     # Verbatim from the sheet; the court view prints this as-is.
     start_note: Optional[str] = None
+    # The printed clock as a real instant, so the client can show "Not before
+    # 3:00 PM" in the reader's own zone as well as the venue's. Without it the
+    # note is just text and a time-zone switch cannot touch it.
+    printed_start_at: Optional[datetime] = None
     # Computed chain — the sort key for the time view. `expected_source` tells
     # the client whether to render it firmly ("3:00 PM") or hedged ("~4:15 PM").
     expected_start_at: Optional[datetime] = None
@@ -74,6 +80,34 @@ class ScheduleDayOut(BaseModel):
     entries: list[ScheduleEntryOut]
     courts: list[str]
     tournaments: list[dict]
+
+
+_CLOCK_RE = _re.compile(r'^(\d{1,2})[:.](\d{2})\s*(am|pm)?$', _re.I)
+
+
+def _printed_instant(entry, tz_name: Optional[str]) -> Optional[datetime]:
+    """The slot's printed clock as a UTC instant, or None.
+
+    The sheet prints venue-local wall time. Turning it into an instant is what
+    lets the client render the same moment in whichever zone the reader picks.
+    """
+    if not entry.start_time_local or not tz_name:
+        return None
+    m = _CLOCK_RE.match(entry.start_time_local.strip())
+    if not m:
+        return None
+    hour, minute, ampm = int(m.group(1)), int(m.group(2)), (m.group(3) or "").lower()
+    if ampm == "pm" and hour != 12:
+        hour += 12
+    elif ampm == "am" and hour == 12:
+        hour = 0
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return None
+    try:
+        tz = ZoneInfo(tz_name)
+    except Exception:
+        return None
+    return datetime.combine(entry.play_date, time(hour, minute), tzinfo=tz).astimezone(timezone.utc)
 
 
 def _utc(dt):
@@ -142,6 +176,11 @@ async def schedule_day(
                 DrawEntry.id.in_(ent_ids)))).all()
         nats = {r[0]: r[1] for r in rows if r[1]}
 
+    tz_rows = (await db.execute(
+        select(Draw.tournament_id, Draw.venue_timezone).where(
+            Draw.tournament_id.in_(t_ids), Draw.venue_timezone.isnot(None)))).all()
+    tzs = {r[0]: r[1] for r in tz_rows}
+
     match_ids = {e.match_id for e in entries if e.match_id}
     matches = {}
     if match_ids:
@@ -169,6 +208,7 @@ async def schedule_day(
             round_label=e.round_label, court=e.court, court_order=e.court_order,
             start_type=e.start_type, start_time_local=e.start_time_local,
             start_note=e.start_note,
+            printed_start_at=_printed_instant(e, tzs.get(e.tournament_id)),
             expected_start_at=_utc(e.expected_start_at), expected_source=e.expected_source,
             is_tbd=e.is_tbd, tbd_side=e.tbd_side, status=_status_of(e, m), players=players,
             live_scores=(m.live_scores_json if m else None),
@@ -182,12 +222,6 @@ async def schedule_day(
             Draw.tournament_id.in_(t_ids), Draw.oop_url.isnot(None)))).all()
     pdfs = {r[0]: r[1] for r in pdf_rows}
 
-    # The venue's zone, so the client can render the times the way the sheet
-    # prints them as well as the way the reader lives.
-    tz_rows = (await db.execute(
-        select(Draw.tournament_id, Draw.venue_timezone).where(
-            Draw.tournament_id.in_(t_ids), Draw.venue_timezone.isnot(None)))).all()
-    tzs = {r[0]: r[1] for r in tz_rows}
 
     return ScheduleDayOut(
         play_date=day, entries=out, courts=courts,

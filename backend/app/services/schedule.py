@@ -451,39 +451,41 @@ async def recompute_expected_starts(db, tournament_id: int, play_date: date,
             dur = _duration_for(s.discipline)
             before = (s.expected_start_at, s.expected_source)
 
+            # Resolve the printed clock FIRST, so every branch below can write a
+            # start rather than leaving whatever was there before. The live and
+            # finished branches used to skip this, which meant a value stored
+            # under an older, buggier version was never corrected — a match that
+            # began at 11:00 kept a stale naive-local 11:00 and, once read as
+            # UTC, displayed as 7:00 AM.
+            #
+            # Normalised to UTC on the way in: the column is naive on SQLite, so
+            # an aware venue-local value loses its offset and lands on a
+            # different clock from anything derived from now().
+            printed = _parse_clock(s.start_time_local)
+            printed_dt = (datetime.combine(play_date, printed, tzinfo=tz)
+                          .astimezone(timezone.utc) if printed else None)
+
             finished_at = _aware(getattr(m, 'completed_at', None)) if m else None
             is_live = bool(m and getattr(m, 'live_scores_json', None)
                            and not getattr(m, 'winner_id', None))
 
-            if finished_at:
-                # Played and done. Its own start is history; what matters is that
-                # the court is free from here.
-                s.expected_source = 'actual'
-                prev_end = finished_at
+            if finished_at or is_live:
+                # Already under way or done. Its start is history — the printed
+                # time is the best record of it — so do not re-estimate it. What
+                # the chain needs from here is when the court frees up.
+                if printed_dt:
+                    s.expected_start_at = printed_dt
+                    s.expected_source = 'printed'
+                elif prev_end:
+                    s.expected_start_at = s.expected_start_at or prev_end
+                    s.expected_source = s.expected_source or 'estimated'
+                prev_end = finished_at if finished_at else now + timedelta(
+                    minutes=_remaining_minutes(
+                        getattr(m, 'live_scores_json', None), s.discipline))
+                s.estimated_duration_min = dur
                 if before != (s.expected_start_at, s.expected_source):
                     touched += 1
-                s.estimated_duration_min = dur
                 continue
-
-            if is_live:
-                # On court now. Do not move its start — it already happened —
-                # but everything behind it waits for it to finish.
-                s.expected_source = 'live'
-                prev_end = now + timedelta(minutes=_remaining_minutes(
-                    getattr(m, 'live_scores_json', None), s.discipline))
-                if before != (s.expected_start_at, s.expected_source):
-                    touched += 1
-                s.estimated_duration_min = dur
-                continue
-
-            printed = _parse_clock(s.start_time_local)
-            # Normalise to UTC before it is ever stored. The column is naive on
-            # SQLite, so an aware venue-local value loses its offset on the way
-            # in and lands on a different clock from anything derived from
-            # now() — which is how a 7:00 PM slot came to read EARLIER than the
-            # 3:00 PM one above it.
-            printed_dt = (datetime.combine(play_date, printed, tzinfo=tz)
-                          .astimezone(timezone.utc) if printed else None)
 
             if s.start_type == 'fixed' and printed_dt:
                 expected, source = printed_dt, 'printed'

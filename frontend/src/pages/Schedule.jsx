@@ -50,7 +50,17 @@ function prettyDay(iso) {
  * inventing phrasing the sheet never used — "After preceding" where it plainly
  * said "After suitable rest" — and every new wording needed another branch. The
  * fallbacks below only apply to rows stored before start_note existed. */
-function printedStart(e) {
+function printedStart(e, zone, venueMode) {
+  // Venue mode shows the sheet's line untouched — it is already venue-local.
+  // In "my time" the wording stays but the clock inside it is rewritten, or the
+  // switch would move the estimates and leave "Not before 3:00 PM" behind on a
+  // different clock.
+  if (e.start_note && !venueMode && e.printed_start_at && e.start_time_local) {
+    const t = new Date(e.printed_start_at).toLocaleTimeString([], {
+      hour: 'numeric', minute: '2-digit', ...(zone ? { timeZone: zone } : {}),
+    })
+    return e.start_note.replace(e.start_time_local, t)
+  }
   if (e.start_note) return e.start_note
   if (e.start_type === 'followed_by') return 'Followed by'
   if (e.start_type === 'not_before') return `Not before ${e.start_time_local ?? ''}`.trim()
@@ -60,12 +70,21 @@ function printedStart(e) {
 }
 
 /** Estimated starts are hedged with a tilde so they never read as announced. */
-function expectedStart(e, zone) {
-  if (!e.expected_start_at) return printedStart(e)
+const FIVE_MIN = 5 * 60 * 1000
+
+function expectedStart(e, zone, venueMode) {
+  if (!e.expected_start_at) return printedStart(e, zone, venueMode)
+  const printed = e.expected_source === 'printed'
+  let d = new Date(e.expected_start_at)
+  // Round estimates to five minutes. A chained guess built from constant match
+  // lengths has no business reporting "4:27" — the precision is invented, and
+  // showing it invites the number to be trusted more than it deserves. Printed
+  // times are left exactly as the tournament stated them.
+  if (!printed) d = new Date(Math.round(d.getTime() / FIVE_MIN) * FIVE_MIN)
   const opts = { hour: 'numeric', minute: '2-digit' }
   if (zone) opts.timeZone = zone
-  const t = new Date(e.expected_start_at).toLocaleTimeString([], opts)
-  return e.expected_source === 'printed' ? t : `~${t}`
+  const t = d.toLocaleTimeString([], opts)
+  return printed ? t : `~${t}`
 }
 
 // A finite sentinel rather than Infinity: two unseeded courts would otherwise
@@ -158,7 +177,7 @@ function Side({ players, doubles, tbd }) {
   )
 }
 
-function MatchRow({ e, showCourt, zone }) {
+function MatchRow({ e, showCourt, zone, venueMode }) {
   const a = e.players.filter(p => p.side === 'a')
   const b = e.players.filter(p => p.side === 'b')
   const score = liveLine(e)
@@ -175,14 +194,14 @@ function MatchRow({ e, showCourt, zone }) {
       <div className="sched-row-when">
         <span className={clsx('sched-time', {
           'sched-time--est': showCourt && e.expected_source === 'estimated',
-        })}>{showCourt ? expectedStart(e, zone) : printedStart(e)}</span>
+        })}>{showCourt ? expectedStart(e, zone, venueMode) : printedStart(e, zone, venueMode)}</span>
         {showCourt && e.court && <span className="sched-court">{e.court}</span>}
         {/* Court view keeps the sheet's wording, but "Followed by" alone does
             not tell you when to turn up. The chained estimate goes underneath.
             Only when it ADDS something: a slot whose expected time is simply
             the printed one would just repeat the line above it. */}
         {!showCourt && e.expected_source === 'estimated' && e.expected_start_at && (
-          <span className="sched-est">{expectedStart(e, zone)}</span>
+          <span className="sched-est">{expectedStart(e, zone, venueMode)}</span>
         )}
       </div>
       <div className="sched-row-main">
@@ -403,7 +422,7 @@ export default function Schedule() {
 
       {!isLoading && entries.length > 0 && view === 'time' && (
         <div className="sched-list">
-          {entries.map(e => <MatchRow key={e.id} e={e} showCourt zone={zone} />)}
+          {entries.map(e => <MatchRow key={e.id} e={e} showCourt zone={zone} venueMode={tzMode === 'venue'} />)}
         </div>
       )}
 
@@ -413,7 +432,7 @@ export default function Schedule() {
             <section className="sched-courtblock" key={name}>
               <h2 className="sched-courthead">{name}</h2>
               <div className="sched-list">
-                {list.map(e => <MatchRow key={e.id} e={e} showCourt={false} zone={zone} />)}
+                {list.map(e => <MatchRow key={e.id} e={e} showCourt={false} zone={zone} venueMode={tzMode === 'venue'} />)}
               </div>
             </section>
           ))}
