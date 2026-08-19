@@ -448,7 +448,15 @@
   font-weight: 800;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  padding: 0.1rem 0.45rem;
+  /* Doubled class for specificity: .in-progress-badge carries height:15px for
+     how the draw page uses it, and a single-class rule here would not reliably
+     win depending on stylesheet order. One height keeps the two states the same
+     size, so a row does not shift as a match progresses. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 1.4rem;
+  padding: 0 0.55rem;
   border-radius: 999px;
   white-space: nowrap;
   /* One width for both states, so a row does not reflow when a match goes from
@@ -461,6 +469,8 @@
 /* --border is nearly invisible against the row; --n-600 is a mid grey the
    ramp flips per theme, so it stays a defined outline in both rather than
    disappearing into whichever background it sits on. */
+.sched-status.sched-status { height: 1.4rem; }
+
 .sched-status--done {
   background: transparent;
   border: 1.5px solid var(--n-600);
