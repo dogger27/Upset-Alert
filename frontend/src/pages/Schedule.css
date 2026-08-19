@@ -431,7 +431,9 @@
 .sched-status {
   position: absolute;
   top: 0.4rem;
-  right: 0.5rem;
+  /* Matches .sched-row's own horizontal padding, so the score below lines up
+     with this pill's right edge rather than nearly doing so. */
+  right: 0.6rem;
   /* in-progress-badge sets left:50% for its use on the draw page. Setting
      `right` without clearing `left` stretches an absolutely positioned element
      between the two, which is why this rendered full width. */
@@ -445,14 +447,24 @@
   padding: 0.1rem 0.45rem;
   border-radius: 999px;
   white-space: nowrap;
+  /* One width for both states, so a row does not reflow when a match goes from
+     in progress to completed, and a column of them lines up. Sized to the
+     longer label. */
+  min-width: 7.2rem;
+  text-align: center;
+  justify-content: center;
 }
+/* --border is nearly invisible against the row; --n-600 is a mid grey the
+   ramp flips per theme, so it stays a defined outline in both rather than
+   disappearing into whichever background it sits on. */
 .sched-status--done {
   background: transparent;
-  border: 1.5px solid var(--border);
+  border: 1.5px solid var(--n-600);
   color: var(--text-muted);
 }
-/* Keep the tags clear of the badge. */
-.sched-row-main { padding-right: 5.5rem; }
+/* Only the TAGS need to clear the badge. Padding the whole column stopped the
+   score short of the right edge, so it never lined up with the pill above it. */
+.sched-tags { padding-right: 7.8rem; }
 
 /* Right-hand zone of the top bar: PDF, with the time-zone switch beneath it. */
 .sched-topright {
