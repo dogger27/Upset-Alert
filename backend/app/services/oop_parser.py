@@ -118,12 +118,25 @@ def _cells(words, run_gap=14):
         run = [ws[0]]
         for w in ws[1:]:
             if w['x0'] - run[-1]['x1'] > run_gap:
-                cells.append((y, run[0]['x0'], ' '.join(a['text'] for a in run)))
+                cells.append(_cell(y, run))
                 run = [w]
             else:
                 run.append(w)
-        cells.append((y, run[0]['x0'], ' '.join(a['text'] for a in run)))
+        cells.append(_cell(y, run))
     return cells
+
+
+def _cell(y, run):
+    """A cell is located by its CENTRE, not its left edge.
+
+    Portrait sheets centre each court's column, so a cell's x0 depends on how
+    long its text is — a full name starts further left than a short one. Bucketing
+    on x0 therefore pushed wide names into the previous court's column and merged
+    unrelated matches together (2026-08-19 Cincinnati: Zverev, Cirstea, Tirante
+    and Kostyuk arrived in one slot). The centre is stable regardless of width.
+    """
+    return (y, (run[0]['x0'] + run[-1]['x1']) / 2,
+            ' '.join(a['text'] for a in run))
 
 
 def _column_origins(cells, tol=60):
@@ -249,17 +262,30 @@ def parse_pdf(pdf_bytes):
             if foot:
                 cutoff = min(foot)
                 cells = [c for c in cells if c[0] < cutoff]
+                words = [w for w in words if w['top'] < cutoff]
             origins = _column_origins(cells)
             if not origins:
                 continue
-            # Assign each cell to its nearest column origin.
-            buckets = {i: [] for i in range(len(origins))}
+
+            # Assign WORDS to columns, then group each column into lines —
+            # never the other way round. Grouping first merged words across
+            # column boundaries whenever centred names nearly touched, which
+            # put four players from four courts into one slot (2026-08-19
+            # Cincinnati: Zverev, Cirstea, Tirante, Kostyuk). Columns are found
+            # from the slot markers, which are short and always well separated.
             bounds = [(origins[k] + origins[k + 1]) / 2 for k in range(len(origins) - 1)]
-            for y, x, text in cells:
+            wbuckets = {i: [] for i in range(len(origins))}
+            for w in words:
+                mid = (w['x0'] + w['x1']) / 2
                 i = 0
-                while i < len(bounds) and x >= bounds[i]:
+                while i < len(bounds) and mid >= bounds[i]:
                     i += 1
-                buckets[i].append((y, text))
+                wbuckets[i].append(w)
+
+            buckets = {}
+            for i, ws in wbuckets.items():
+                buckets[i] = [(y, text) for y, _mid, text in _cells(ws)]
+
             for i in sorted(buckets):
                 rows = [(y, t) for y, t in sorted(buckets[i])]
                 matches += _parse_column(rows, pno)

@@ -134,7 +134,7 @@ function MatchRow({ e, showCourt }) {
         </div>
         <div className={clsx('sched-players', { 'sched-players--pairs': e.discipline !== 'singles' })}>
           <Side players={a} doubles={e.discipline !== 'singles'} />
-          <span className="sched-vs">v</span>
+          <span className="sched-vs">vs</span>
           <Side players={b} doubles={e.discipline !== 'singles'} />
           {e.is_tbd && <span className="sched-tbd">opponent not settled</span>}
         </div>
@@ -195,8 +195,6 @@ export default function Schedule() {
     return [...m.entries()]
   }, [entries])
 
-  const mineCount = (data?.entries ?? []).filter(e => e.is_my_pick).length
-
   return (
     <div className="sched-page">
       <div className="sched-head">
@@ -204,7 +202,6 @@ export default function Schedule() {
           <button className="sched-nav-btn" onClick={() => setDay(shiftDay(day, -1))} aria-label="Previous day">‹</button>
           <div className="sched-day">
             <span className="sched-day-label">{prettyDay(day)}</span>
-            {mineCount > 0 && <span className="sched-day-sub">{mineCount} of your picks</span>}
           </div>
           <button className="sched-nav-btn" onClick={() => setDay(shiftDay(day, 1))} aria-label="Next day">›</button>
         </div>
