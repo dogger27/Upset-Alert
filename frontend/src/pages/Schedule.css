@@ -145,7 +145,12 @@
 .sched-row--atp { background: color-mix(in srgb, var(--atp-text) 12%, var(--surface-card)); }
 .sched-row--wta { background: color-mix(in srgb, var(--wta-text) 12%, var(--surface-card)); }
 
+/* A coloured left edge marks a row's state at a glance down a column — green
+   for live, grey for done. Same weight for both so the rows stay aligned; only
+   the colour differs. --n-600 flips with the theme, matching the Completed
+   pill's outline rather than introducing a second grey. */
 .sched-row--live { border-left: 3px solid var(--pick-correct-line); }
+.sched-row--done { border-left: 3px solid var(--n-600); }
 
 .sched-row-when { display: flex; flex-direction: column; gap: 0.15rem; }
 .sched-time { font-size: 0.9rem; font-weight: 700; font-variant-numeric: tabular-nums; }
