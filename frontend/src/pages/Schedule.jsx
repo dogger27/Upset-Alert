@@ -50,6 +50,29 @@ function prettyDay(iso) {
  * inventing phrasing the sheet never used — "After preceding" where it plainly
  * said "After suitable rest" — and every new wording needed another branch. The
  * fallbacks below only apply to rows stored before start_note existed. */
+/* Split a slot line into its wording and its clock time.
+ *
+ * "Started 9:44 AM" wrapped as "Started 9:44" / "AM" in a narrow column — the
+ * time itself broken in half. Rendering the label and the time as separate
+ * lines, with the time kept whole, means a wrap can only ever happen where it
+ * makes sense.
+ */
+function splitTimeLine(text) {
+  if (!text) return { label: '', time: '' }
+  const m = text.match(/^(.*?)\s*(~?\d{1,2}[:.]\d{2}\s*(?:[AP]M)?)$/i)
+  return m ? { label: m[1].trim(), time: m[2].trim() } : { label: text, time: '' }
+}
+
+function TimeLine({ text, className }) {
+  const { label, time } = splitTimeLine(text)
+  return (
+    <span className={className}>
+      {label && <span className="sched-time-label">{label}</span>}
+      {time && <span className="sched-time-clock">{time}</span>}
+    </span>
+  )
+}
+
 function printedStart(e, zone, venueMode) {
   // Venue mode shows the sheet's line untouched — it is already venue-local.
   // In "my time" the wording stays but the clock inside it is rewritten, or the
@@ -221,17 +244,19 @@ function MatchRow({ e, showCourt, zone, venueMode }) {
       {e.status === 'completed' && <span className="sched-status sched-status--done">Completed</span>}
 
       <div className="sched-row-when">
-        <span className={clsx('sched-time', {
-          'sched-time--est': !started && showCourt && e.expected_source === 'estimated',
-        })}>{started ?? (showCourt ? expectedStart(e, zone, venueMode)
-                                   : printedStart(e, zone, venueMode))}</span>
+        <TimeLine
+          className={clsx('sched-time', {
+            'sched-time--est': !started && showCourt && e.expected_source === 'estimated',
+          })}
+          text={started ?? (showCourt ? expectedStart(e, zone, venueMode)
+                                      : printedStart(e, zone, venueMode))} />
         {showCourt && e.court && <span className="sched-court">{e.court}</span>}
         {/* Court view keeps the sheet's wording, but "Followed by" alone does
             not tell you when to turn up. The chained estimate goes underneath.
             Only when it ADDS something: a slot whose expected time is simply
             the printed one would just repeat the line above it. */}
         {!started && !showCourt && e.expected_source === 'estimated' && e.expected_start_at && (
-          <span className="sched-est">{expectedStart(e, zone, venueMode)}</span>
+          <TimeLine className="sched-est" text={expectedStart(e, zone, venueMode)} />
         )}
       </div>
       <div className="sched-row-main">

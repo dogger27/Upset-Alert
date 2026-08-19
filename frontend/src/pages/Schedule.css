@@ -163,6 +163,13 @@
 
 .sched-row-when { display: flex; flex-direction: column; gap: 0.15rem; }
 .sched-time { font-size: 0.9rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* Wording on one line, clock on the next, and the clock never broken — "9:44"
+   and "AM" belong together. */
+.sched-time,
+.sched-est { display: flex; flex-direction: column; }
+.sched-time-label,
+.sched-time-clock { white-space: nowrap; }
 /* Estimated times are italic and faded, so a chained guess never reads with the
    same authority as a time the sheet actually printed. */
 .sched-est,
