@@ -150,7 +150,6 @@ function MatchRow({ e, showCourt }) {
 export default function Schedule() {
   const [params, setParams] = useSearchParams()
   const [view, setView] = useState(storedView)
-  const [showDoubles, setShowDoubles] = useState(false)   // your call: doubles off by default
   const [hideDone, setHideDone] = useState(false)
   const [minePicks, setMinePicks] = useState(false)
   const [court, setCourt] = useState('')
@@ -175,14 +174,17 @@ export default function Schedule() {
   const entries = useMemo(() => {
     const all = data?.entries ?? []
     return all.filter(e => {
-      // Singles qualifying is always on; only doubles hides behind the toggle.
-      if (!showDoubles && e.discipline !== 'singles') return false
+      // Discipline follows the VIEW rather than a toggle. Time view answers
+      // "what is on today", so it carries everything — doubles, mixed and
+      // qualifying included. Court view answers "what order is this court
+      // running", where doubles is noise around the draws people play.
+      if (view === 'court' && e.discipline !== 'singles') return false
       if (hideDone && e.status === 'completed') return false
       if (minePicks && !e.is_my_pick) return false
       if (court && e.court !== court) return false
       return true
     })
-  }, [data, showDoubles, hideDone, minePicks, court])
+  }, [data, view, hideDone, minePicks, court])
 
   const byCourt = useMemo(() => {
     const m = new Map()
@@ -227,8 +229,6 @@ export default function Schedule() {
       <div className="sched-filters">
         <button className={clsx('sched-chip', { 'sched-chip--on': minePicks })}
                 onClick={() => setMinePicks(v => !v)}>My picks</button>
-        <button className={clsx('sched-chip', { 'sched-chip--on': showDoubles })}
-                onClick={() => setShowDoubles(v => !v)}>Doubles</button>
         <button className={clsx('sched-chip', { 'sched-chip--on': hideDone })}
                 onClick={() => setHideDone(v => !v)}>Hide completed</button>
         {(data?.courts?.length ?? 0) > 1 && (
