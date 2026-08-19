@@ -150,7 +150,16 @@
    the colour differs. --n-600 flips with the theme, matching the Completed
    pill's outline rather than introducing a second grey. */
 .sched-row--live { border-left: 3px solid var(--pick-correct-line); }
-.sched-row--done { border-left: 3px solid var(--n-600); }
+.sched-row--done {
+  border-left: 3px solid var(--n-600);
+  /* A light touch only. Fully dimmed, a finished match looked disabled — it
+     still carries the result, which is the most useful thing on the row. */
+  opacity: 0.82;
+}
+
+/* Muted score on a finished match: the number matters, but the live ones should
+   read first down a column. */
+.sched-row--done .sched-score { color: var(--text-muted); }
 
 .sched-row-when { display: flex; flex-direction: column; gap: 0.15rem; }
 .sched-time { font-size: 0.9rem; font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -476,8 +485,11 @@
    disappearing into whichever background it sits on. */
 .sched-status.sched-status { height: 1.4rem; }
 
+/* Filled grey rather than an outline, so a completed row is legible as such at
+   a glance. --n-300 is a light grey in the light theme and a dark one in dark,
+   since the ramp inverts, so it reads as a grey chip in both. */
 .sched-status--done {
-  background: transparent;
+  background: var(--n-300);
   border: 1.5px solid var(--n-600);
   color: var(--text-muted);
 }
