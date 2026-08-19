@@ -294,6 +294,7 @@ async def ingest_document(db, tournament, play_date: date, url: str,
             entry.start_type = start_type
             entry.start_time_local = m.time
             entry.is_tbd = bool(m.tbd)
+            entry.tbd_side = getattr(m, 'tbd_side', None)
             entry.round_label = (m.round or entry.round_label
                                  or unanimous.get((stage, discipline)))
             entry.printed_score = getattr(m, 'printed_score', None)

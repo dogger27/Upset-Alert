@@ -54,6 +54,7 @@ class ScheduleEntryOut(BaseModel):
     expected_start_at: Optional[datetime] = None
     expected_source: Optional[str] = None
     is_tbd: bool = False
+    tbd_side: Optional[str] = None
     status: str = "scheduled"
     players: list[SchedulePlayerOut] = []
     # ESPN only. Absent for doubles and qualifying, which it does not cover.
@@ -138,7 +139,7 @@ async def schedule_day(
             round_label=e.round_label, court=e.court, court_order=e.court_order,
             start_type=e.start_type, start_time_local=e.start_time_local,
             expected_start_at=e.expected_start_at, expected_source=e.expected_source,
-            is_tbd=e.is_tbd, status=e.status, players=players,
+            is_tbd=e.is_tbd, tbd_side=e.tbd_side, status=e.status, players=players,
             live_scores=(m.live_scores_json if m else None),
             scores=(m.scores_json if m else None),
             is_my_pick=any(p.draw_entry_id in picked for p in e.players if p.draw_entry_id),

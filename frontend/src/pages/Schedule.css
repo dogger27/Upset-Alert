@@ -267,3 +267,17 @@
   padding-left: 0.1rem;
 }
 .sched-seed--team { margin-right: 0.1rem; }
+
+/* Unresolved opponent: two candidate teams, stacked with "or" between them so
+   the pairing is legible. Previously rendered as a flat run of names, which
+   said nothing about who partners whom. */
+.sched-side--alt { flex-direction: column; align-items: flex-start; gap: 0.05rem; }
+.sched-altteam { display: flex; align-items: baseline; gap: 0.35rem; }
+.sched-or {
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  opacity: 0.8;
+}

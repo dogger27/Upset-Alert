@@ -110,8 +110,25 @@ function PlayerName({ raw, surnameOnly, hideSeed }) {
   )
 }
 
-function Side({ players, doubles }) {
+function Side({ players, doubles, tbd }) {
   if (!players.length) return <span className="sched-side">TBD</span>
+
+  // An unresolved side is a choice between two whole teams, not a list of
+  // players — "O. Luz / R. Matos OR C. Harrison / N. Skupski". Rendering it as
+  // four names in a row says nothing about who partners whom. Each alternative
+  // is already one entry, so they only need separating.
+  if (tbd && players.length > 1) {
+    return (
+      <span className="sched-side sched-side--alt">
+        {players.map((p, i) => (
+          <span key={i} className="sched-altteam">
+            {i > 0 && <span className="sched-or">or</span>}
+            <span className="sched-pname">{p.name}</span>
+          </span>
+        ))}
+      </span>
+    )
+  }
   // A doubles seed belongs to the TEAM. The sheet repeats it against both
   // partners, which reads as two separately-seeded players.
   const teamSeed = doubles
@@ -151,10 +168,9 @@ function MatchRow({ e, showCourt }) {
           {e.discipline !== 'singles' && <span className="sched-tag">{e.discipline === 'mixed' ? 'Mixed' : 'Doubles'}</span>}
         </div>
         <div className={clsx('sched-players', { 'sched-players--pairs': e.discipline !== 'singles' })}>
-          <Side players={a} doubles={e.discipline !== 'singles'} />
+          <Side players={a} doubles={e.discipline !== 'singles'} tbd={e.tbd_side === 'a'} />
           <span className="sched-vs">vs</span>
-          <Side players={b} doubles={e.discipline !== 'singles'} />
-          {e.is_tbd && <span className="sched-tbd">opponent not settled</span>}
+          <Side players={b} doubles={e.discipline !== 'singles'} tbd={e.tbd_side === 'b'} />
         </div>
         {score && <div className="sched-score">{score}</div>}
       </div>

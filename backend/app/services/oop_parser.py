@@ -75,6 +75,10 @@ class Match:
     # real information, not a parse error — but the slot cannot be mapped to one
     # fixture until it settles.
     tbd: bool = False
+    # Which side is the unresolved one ('a'|'b'). Only that side lists
+    # alternatives; the other holds real partners and must not be shown as a
+    # choice between them.
+    tbd_side: Optional[str] = None
     # The slot line exactly as printed ("Not before 3:00 PM"), so the caller can
     # tell a hard time from a lower bound from a pure ordering constraint.
     start_raw: Optional[str] = None
@@ -295,6 +299,44 @@ def parse_pdf(pdf_bytes):
     return matches, meta
 
 
+def _regroup_alternatives(match):
+    """Rebuild "A / B OR C / D" into the two teams it names.
+
+    An unresolved opponent is printed as one logical line and wraps mid-name:
+
+        O. Luz / R. Matos OR C.
+        Harrison / N. Skupski
+
+    Split line by line that yields "O. Luz", "R. Matos OR C.", "Harrison",
+    "N. Skupski" — four jumbled names, with "C. Harrison" torn in half. Joining
+    the side back up before splitting on OR recovers the pairing. Only done when
+    an OR is actually present: joining unconditionally would run two ordinary
+    doubles partners printed on separate lines into one string.
+
+    Each alternative is kept as a single entry, so a side reads "team or team".
+    A TBD side cannot be resolved to draw entries anyway — that is what makes it
+    TBD — so nothing is lost by not splitting it into individual players.
+    """
+    for attr in ('side_a', 'side_b'):
+        names = getattr(match, attr)
+        if not any(re.search(r'\bOR\b', n) for n in names):
+            continue
+        joined = ' '.join(names)
+        parts = [p.strip(' /') for p in re.split(r'\s+OR\s+', joined) if p.strip(' /')]
+        # The "/" between partners was consumed when the side was first split,
+        # so put it back. In this abbreviated form every player begins with an
+        # initial, and any initial after the first starts the next partner.
+        # Split only where a SURNAME is followed by an initial. Keying on the
+        # following initial alone tore "J. M. Cerundolo" — one player with two
+        # initials — into two people.
+        parts = [re.sub(r'(?<=[a-z])\s+(?=[A-Z]\.)', ' / ', p) for p in parts]
+        parts = [re.sub(r'-\s+', '-', p) for p in parts]   # "Auger- Aliassime"
+        if len(parts) >= 2:
+            setattr(match, attr, parts)
+            match.tbd = True
+            match.tbd_side = 'a' if attr == 'side_a' else 'b'
+
+
 def _parse_column(lines, pno):
     """One column, top to bottom: court header, then time-delimited match slots."""
     out, court, cur, after_vs = [], '', None, False
@@ -302,6 +344,7 @@ def _parse_column(lines, pno):
     def flush():
         nonlocal cur
         if cur and cur.complete:
+            _regroup_alternatives(cur)
             out.append(cur)
         cur = None
 

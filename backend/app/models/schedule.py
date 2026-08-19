@@ -104,6 +104,8 @@ class ScheduleEntry(Base):
     # "BOUZKOVA or JOVIC" — a qualifier or preceding match has not resolved. The
     # extra name is real information, not a parse error.
     is_tbd: Mapped[bool] = mapped_column(Boolean, default=False)
+    # 'a' | 'b' — only this side lists alternatives.
+    tbd_side: Mapped[Optional[str]] = mapped_column(String, nullable=True)
 
     # INTERNAL ONLY — never serialise these to a client. The sheet's score is a
     # snapshot from whenever that revision was published and can be hours stale;
