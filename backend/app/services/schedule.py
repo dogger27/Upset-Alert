@@ -28,11 +28,11 @@ import re
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 
 from app.models.schedule import (ScheduleChange, ScheduleDocument,
                                  ScheduleEntry, ScheduleEntryPlayer)
-from app.models.tournament import Draw, DrawEntry
+from app.models.tournament import Draw, DrawEntry, Match
 from app.services.oop_parser import parse_pdf
 from app.services.rankings import _norm
 
@@ -157,6 +157,13 @@ async def ingest_document(db, tournament, play_date: date, url: str,
             select(DrawEntry.id, DrawEntry.name).where(DrawEntry.draw_id == d.id))).all()
         draws.append({'draw': d, 'entries': [(e[0], set(_norm(e[1] or '').split())) for e in ents]})
 
+    # entry id -> draw id, so a resolved player also tells us which draw the
+    # slot belongs to.
+    entry_draw = {}
+    for d in draws:
+        for eid, _tokens in d['entries']:
+            entry_draw[eid] = d['draw'].id
+
     seen_keys = []
     per_court: dict[str, list] = {}
     for m in matches:
@@ -198,6 +205,32 @@ async def ingest_document(db, tournament, play_date: date, url: str,
                         db.add(ScheduleChange(
                             schedule_entry_id=entry.id, document_id=doc.id,
                             field=field, old_value=str(old), new_value=str(new)))
+
+            # Link the slot to the draw and the bracket match. This is what the
+            # whole feature turns on: without match_id there are no live scores
+            # and no completed scores, and the page is just a nicer PDF. Only
+            # singles can resolve — qualifying has no rows in `matches` and
+            # doubles has no draw at all.
+            side_a_ids = [i for i in ids[:len(na)] if i]
+            side_b_ids = [i for i in ids[len(na):] if i]
+            if len(side_a_ids) == 1 and len(side_b_ids) == 1 and discipline == 'singles':
+                a_id, b_id = side_a_ids[0], side_b_ids[0]
+                d_id = entry_draw.get(a_id) or entry_draw.get(b_id)
+                if d_id and entry_draw.get(a_id) == entry_draw.get(b_id):
+                    entry.draw_id = d_id
+                    found = (await db.execute(
+                        select(Match).where(
+                            Match.draw_id == d_id,
+                            or_(and_(Match.player1_id == a_id, Match.player2_id == b_id),
+                                and_(Match.player1_id == b_id, Match.player2_id == a_id)),
+                        ))).scalars().first()
+                    if found is not None:
+                        entry.match_id = found.id
+            elif side_a_ids or side_b_ids:
+                # Doubles at a tournament we do track: no bracket match, but the
+                # draw link still lets the row point somewhere useful.
+                any_id = (side_a_ids + side_b_ids)[0]
+                entry.draw_id = entry_draw.get(any_id)
 
             entry.court = court
             entry.court_order = order
