@@ -67,6 +67,7 @@ async def init_db():
     import app.models.prediction  # noqa: F401
     import app.models.push  # noqa: F401
     import app.models.rankings   # noqa: F401
+    import app.models.schedule  # noqa: F401
     import app.models.setting  # noqa: F401
     import app.models.system_log  # noqa: F401
     import app.models.tournament  # noqa: F401
@@ -408,6 +409,12 @@ async def _migrate(conn):
         "ALTER TABLE draws ADD COLUMN oop_url VARCHAR",
         "ALTER TABLE draws ADD COLUMN oop_date DATE",
         "ALTER TABLE draws ADD COLUMN oop_checked_at DATETIME",
+        # Schedule tables are created by create_all; these indexes are not, and
+        # every page load filters on exactly this pair.
+        ("CREATE INDEX IF NOT EXISTS ix_sched_tournament_date "
+         "ON schedule_entries (tournament_id, play_date)"),
+        ("CREATE INDEX IF NOT EXISTS ix_sched_expected "
+         "ON schedule_entries (play_date, expected_start_at)"),
     ]
     for sql in migrations:
         try:

@@ -298,6 +298,26 @@ async def refresh_order_of_play() -> int:
             fresh = oop_date == today
             covers_atp = atp_labels >= _MIN_TOUR_LABELS
 
+            # Store the schedule itself, not just the link. Only when the file
+            # is current: an out-of-date PDF would otherwise write a finished
+            # tournament's last day over and over on every tick.
+            if fresh and resp.status_code == 200:
+                try:
+                    from app.services import schedule as schedule_svc
+                    async with AsyncSessionLocal() as sdb:
+                        t = await sdb.get(type(tournament), tournament.id)
+                        await schedule_svc.ingest_document(
+                            sdb, t, oop_date, url, resp.content, tour="WTA")
+                        await schedule_svc.recompute_expected_starts(
+                            sdb, tournament.id, oop_date,
+                            venue_tz=next((d.venue_timezone for d in draws
+                                           if d.venue_timezone), None))
+                except Exception as exc:
+                    await app_log("warning", "order_of_play",
+                                  f"Schedule ingest failed for '{tournament.name}': "
+                                  f"{describe_exception(exc)}",
+                                  dedup_key=f"sched_ingest_{tournament.id}", dedup_hours=6)
+
             for draw in draws:
                 # The men's draw only gets the WTA file when that file actually
                 # lists ATP matches — true at a shared site, false when the

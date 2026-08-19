@@ -15,6 +15,7 @@ import Admin from './pages/Admin'
 import About from './pages/About'
 import DrawHistory from './pages/DrawHistory'
 import HallOfFame from './pages/HallOfFame'
+import Schedule from './pages/Schedule'
 import Rules from './pages/Rules'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
@@ -79,6 +80,7 @@ export default function App() {
         <Route path="/about" element={<About />} />
         <Route path="/draw-history" element={<DrawHistory />} />
         <Route path="/hall-of-fame" element={<HallOfFame />} />
+        <Route path="/schedule" element={<Schedule />} />
         <Route path="/rules" element={<Rules />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />

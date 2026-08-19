@@ -1213,15 +1213,13 @@ function TournamentDraw() {
               test — the client does no date comparison. Rendered in both states
               so the column does not reflow when a schedule is published. */}
           {tournament.oop_url ? (
-            <a
-              href={tournament.oop_url}
-              target="_blank"
-              rel="noopener noreferrer"
+            <Link
+              to={`/schedule?tournament=${tournament.tournament_id}${tournament.oop_date ? `&date=${tournament.oop_date}` : ''}`}
               className="draw-oop-btn"
-              title="Today's order of play (PDF, opens in a new tab)"
+              title="Today's order of play"
             >
               OOP
-            </a>
+            </Link>
           ) : (
             <span
               className="draw-oop-btn draw-oop-btn--none"

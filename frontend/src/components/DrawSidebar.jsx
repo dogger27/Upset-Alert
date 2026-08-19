@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { useQuery, useQueries } from '@tanstack/react-query'
 import { listLeagues, getLeaderboard } from '../api/leagues'
 import { getGlobalStandings } from '../api/tournaments'
@@ -139,15 +139,13 @@ export default function DrawSidebar({ tournamentId, tournament, selectedUserId, 
           non-null oop_url is always today's; the server owns that test. */}
       {showOop && !collapsed && (
         tournament?.oop_url ? (
-          <a
-            href={tournament.oop_url}
-            target="_blank"
-            rel="noopener noreferrer"
+          <Link
+            to={`/schedule?tournament=${tournament.tournament_id}${tournament.oop_date ? `&date=${tournament.oop_date}` : ''}`}
             className="sidebar-oop-btn"
-            title="Today's order of play (PDF, opens in a new tab)"
+            title="Today's order of play"
           >
             OOP
-          </a>
+          </Link>
         ) : (
           <span
             className="sidebar-oop-btn sidebar-oop-btn--none"

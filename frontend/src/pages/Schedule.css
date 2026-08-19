@@ -1,0 +1,226 @@
+/* Order-of-play schedule.
+
+   Mobile-first on purpose: the court view must NOT reproduce the PDF's
+   side-by-side columns on a phone — six courts across is unreadable at 390px.
+   Courts stack as sections with sticky headers instead, and only widen into
+   columns where there is genuine room. */
+
+.sched-page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0.75rem 0.75rem 3rem;
+}
+
+/* ── Header ── */
+.sched-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.6rem;
+}
+
+.sched-daynav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sched-nav-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.sched-nav-btn:hover { background: var(--surface-raised); }
+
+.sched-day { display: flex; flex-direction: column; min-width: 9rem; }
+.sched-day-label { font-size: 1.05rem; font-weight: 700; }
+.sched-day-sub { font-size: 0.78rem; color: var(--brand-text); font-weight: 600; }
+
+.sched-viewswitch {
+  display: inline-flex;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.sched-viewbtn {
+  padding: 0.35rem 0.9rem;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.sched-viewbtn--on { background: var(--brand-fill); color: var(--on-brand); }
+
+/* ── Filters ── */
+.sched-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.85rem;
+}
+
+.sched-chip {
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  border: 1.5px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sched-chip--on {
+  background: var(--brand-fill);
+  border-color: var(--brand-fill);
+  color: var(--on-brand);
+}
+
+.sched-select {
+  padding: 0.3rem 0.5rem;
+  border-radius: 999px;
+  border: 1.5px solid var(--border);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+/* ── Rows ── */
+.sched-list { display: flex; flex-direction: column; gap: 0.4rem; }
+
+.sched-row {
+  display: grid;
+  grid-template-columns: 5.6rem 1fr auto;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.6rem;
+  border-radius: 9px;
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+}
+
+/* Your picks are the reason this page exists — they get the accent, and it has
+   to survive the dimming applied to finished matches. */
+.sched-row--mine { border-color: var(--brand-text); background: var(--row-picked, var(--surface-raised)); }
+.sched-row--live { border-left: 3px solid var(--pick-correct-line); }
+.sched-row--done { opacity: 0.55; }
+.sched-row--done.sched-row--mine { opacity: 0.75; }
+
+.sched-row-when { display: flex; flex-direction: column; gap: 0.15rem; }
+.sched-time { font-size: 0.9rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.sched-court { font-size: 0.68rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
+
+.sched-row-main { min-width: 0; }
+
+.sched-tags { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.2rem; }
+.sched-tag {
+  font-size: 0.63rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 0.08rem 0.34rem;
+  border-radius: 4px;
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+.sched-tag--atp { background: var(--atp-rule, var(--surface-raised)); color: var(--on-brand); }
+.sched-tag--wta { background: var(--wta-rule, var(--surface-raised)); color: var(--on-brand); }
+.sched-tag--mine { background: var(--brand-fill); color: var(--on-brand); }
+.sched-tag--quali { background: var(--badge-q-bg, var(--surface-raised)); color: var(--badge-q-fg, var(--text-muted)); }
+
+.sched-players {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem;
+  font-size: 0.92rem;
+  line-height: 1.35;
+}
+.sched-side { font-weight: 600; }
+.sched-vs { color: var(--text-muted); font-size: 0.8rem; }
+.sched-tbd { font-size: 0.7rem; color: var(--text-muted); font-style: italic; }
+.sched-score {
+  margin-top: 0.15rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--brand-text);
+}
+
+.sched-jump {
+  text-decoration: none;
+  color: var(--text-muted);
+  font-size: 1.3rem;
+  padding: 0 0.3rem;
+}
+.sched-jump:hover { color: var(--brand-text); }
+
+/* ── Court view ── */
+.sched-courts { display: flex; flex-direction: column; gap: 1.1rem; }
+
+.sched-courthead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: 0 0 0.4rem;
+  padding: 0.3rem 0.1rem;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: var(--bg);
+}
+
+/* ── Empty ── */
+.sched-empty {
+  padding: 2.5rem 1rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+.sched-empty-sub { margin-top: 0.4rem; font-size: 0.82rem; opacity: 0.8; }
+
+/* ── Narrow screens ── */
+@media (max-width: 560px) {
+  .sched-page { padding: 0.6rem 0.5rem 3rem; }
+  .sched-row {
+    grid-template-columns: 4.4rem 1fr auto;
+    gap: 0.45rem;
+    padding: 0.5rem 0.45rem;
+  }
+  .sched-players { font-size: 0.86rem; }
+  .sched-head { gap: 0.5rem; }
+  .sched-day { min-width: 7rem; }
+}
+
+/* Only where there is real room do courts sit side by side, the way the sheet
+   prints them. */
+@media (min-width: 900px) {
+  .sched-courts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.1rem 1.4rem;
+  }
+}
+
+/* Link out to the tournament's own PDF. Deliberately quiet — the parsed page is
+   the destination now, but the source stays reachable. */
+.sched-pdf {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-decoration: none;
+  border-bottom: 1px dotted currentColor;
+  white-space: nowrap;
+}
+.sched-pdf:hover { color: var(--brand-text); }
