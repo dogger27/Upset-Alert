@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth import get_optional_user
 from app.database import get_db
 from app.models.schedule import ScheduleEntry
-from app.models.tournament import Draw, Match, Tournament
+from app.models.tournament import Draw, DrawEntry, Match, Tournament
 
 router = APIRouter(prefix="/schedule", tags=["schedule"])
 
@@ -30,6 +30,12 @@ class SchedulePlayerOut(BaseModel):
     position: int
     name: str
     draw_entry_id: Optional[int] = None
+    # From our own draw_entries, not from the printed name. The sheet drops the
+    # country whenever space is tight — abbreviated "OR" slots especially — and
+    # a resolved slot carries the bracket's name, which never had one inline.
+    # Stays null for players we genuinely hold no country for, which is how
+    # neutral athletes keep no flag.
+    nationality: Optional[str] = None
 
 
 class ScheduleEntryOut(BaseModel):
@@ -101,6 +107,14 @@ async def schedule_day(
         select(Tournament.id, Tournament.name).where(Tournament.id.in_(t_ids)))).all()
     t_names = {r[0]: r[1] for r in t_rows}
 
+    ent_ids = {p.draw_entry_id for e in entries for p in e.players if p.draw_entry_id}
+    nats = {}
+    if ent_ids:
+        rows = (await db.execute(
+            select(DrawEntry.id, DrawEntry.nationality).where(
+                DrawEntry.id.in_(ent_ids)))).all()
+        nats = {r[0]: r[1] for r in rows if r[1]}
+
     match_ids = {e.match_id for e in entries if e.match_id}
     matches = {}
     if match_ids:
@@ -116,7 +130,8 @@ async def schedule_day(
         m = matches.get(e.match_id) if e.match_id else None
         players = [
             SchedulePlayerOut(side=p.side, position=p.position,
-                              name=p.raw_name, draw_entry_id=p.draw_entry_id)
+                              name=p.raw_name, draw_entry_id=p.draw_entry_id,
+                              nationality=nats.get(p.draw_entry_id))
             for p in sorted(e.players, key=lambda x: (x.side, x.position))
         ]
         out.append(ScheduleEntryOut(

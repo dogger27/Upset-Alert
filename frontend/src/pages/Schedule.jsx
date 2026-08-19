@@ -98,9 +98,12 @@ function liveLine(e) {
  * one row does not fit a phone, and the surname is what identifies a pair
  * anyway.
  */
-function PlayerName({ raw, surnameOnly, hideSeed }) {
+function PlayerName({ raw, surnameOnly, hideSeed, nationality }) {
   const { seed, first, last, nat } = splitPlayerName(raw)
-  const iso2 = nationalityIso2(nat)
+  // Our own record wins over whatever the sheet printed: it drops the country
+  // when space is tight, and a slot resolved from an "OR" carries the bracket's
+  // name, which never had one inline.
+  const iso2 = nationalityIso2(nationality || nat)
   return (
     <span className="sched-player">
       {/* No placeholder when there is no flag. A missing nationality here is
@@ -147,7 +150,8 @@ function Side({ players, doubles, tbd }) {
       {teamSeed && <span className="sched-seed sched-seed--team">{teamSeed}</span>}
       {players.map((p, i) => (
         <PlayerName key={`${p.side}${p.position}${i}`} raw={p.name}
-                    surnameOnly={doubles} hideSeed={doubles} />
+                    surnameOnly={doubles} hideSeed={doubles}
+                    nationality={p.nationality} />
       ))}
     </span>
   )
