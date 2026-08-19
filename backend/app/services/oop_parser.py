@@ -47,7 +47,8 @@ NOISE_RE = re.compile(
     r'^(?:singles|doubles|mixed)\s+(?:final|semi|quarter|qf|sf|f)\b|'
     r'^(?:MS|MD|WS|WD|XD|BS|BD|GS|GD|QS|QD)\s+(?:final|sf|qf|f|r\d+|tbf)\b|'
     r'locker-?room|director|^any match|'
-    r'revised|released|any match|matches will|prize money|^\d+$|^page\b', re.I)
+    r'revised|released|any match|matches will|prize money|^\d+$|^page\b|'
+    r'last match on any court|may be moved|order of play is subject', re.I)
 
 # Everything below the last match: officials rosters, physio lists, the
 # generation timestamp. The final slot on a court has no terminator after it, so
@@ -57,6 +58,13 @@ FOOTER_RE = re.compile(
     r'released|matches may be moved|\d{1,2}\s+\w{3}\s+\d{4}\s+\d{1,2}:\d{2}', re.I)
 OOP_HDR_RE = re.compile(r'ORDER\s+OF\s+PLAY', re.I)
 REJECT_RE = re.compile(r'MATCH\s+SCHEDULE\s+PLAN|ELC\s+SYSTEM|Not\s+Yet\s+Available', re.I)
+# The Finals publish a whole-event summary titled "COMPLETE TOURNAMENT RESULTS
+# / ORDER OF PLAY TO DATE" — every match played so far, with scores, rather than
+# one day's schedule. It contains the words "ORDER OF PLAY", so it passes the
+# header test and then parses as nonsense: result lines like "C. Alcaraz d
+# A. de Minaur 76(5) 62" become player names. One file produced 26 of the 29
+# defects in the entire 75-file ATP set.
+RESULTS_RE = re.compile(r'COMPLETE\s+TOURNAMENT\s+RESULTS|ORDER\s+OF\s+PLAY\s+TO\s+DATE', re.I)
 SLAM_RE = re.compile(
     r"Gentlemen's\s+Singles|Ladies'\s+Singles|"      # Wimbledon
     r'PROGRAMME\s+OFFICIEL|Pas\s+avant|'             # Roland Garros (French)
@@ -264,6 +272,10 @@ def parse_pdf(pdf_bytes):
             return [], meta
         if REJECT_RE.search(head):
             meta.update(kind='not-an-oop', reason='admin/placeholder document')
+            return [], meta
+        if RESULTS_RE.search(head):
+            meta.update(kind='results-summary',
+                        reason='whole-event results, not a day\'s order of play')
             return [], meta
         if SLAM_RE.search(head):
             meta.update(kind='slam', reason='Grand Slam format — not yet supported')
