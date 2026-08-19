@@ -73,6 +73,22 @@ function TimeLine({ text, className }) {
   )
 }
 
+/* Wordings the sheets use that are longer than the column can carry. Shortened
+   at render only — start_note keeps whatever the tournament actually printed,
+   so the stored record stays faithful and this stays a display decision. */
+const SHORTEN = [
+  [/after\s+suitable\s+rest/i, 'After rest'],
+  [/after\s+the\s+(?:conclusion|completion)\s+of[^,]*/i, 'After previous'],
+]
+
+function shorten(text) {
+  if (!text) return text
+  for (const [re, short] of SHORTEN) {
+    if (re.test(text)) return text.replace(re, short)
+  }
+  return text
+}
+
 function printedStart(e, zone, venueMode) {
   // Venue mode shows the sheet's line untouched — it is already venue-local.
   // In "my time" the wording stays but the clock inside it is rewritten, or the
@@ -82,12 +98,12 @@ function printedStart(e, zone, venueMode) {
     const t = new Date(e.printed_start_at).toLocaleTimeString([], {
       hour: 'numeric', minute: '2-digit', ...(zone ? { timeZone: zone } : {}),
     })
-    return e.start_note.replace(e.start_time_local, t)
+    return shorten(e.start_note.replace(e.start_time_local, t))
   }
-  if (e.start_note) return e.start_note
+  if (e.start_note) return shorten(e.start_note)
   if (e.start_type === 'followed_by') return 'Followed by'
   if (e.start_type === 'not_before') return `Not before ${e.start_time_local ?? ''}`.trim()
-  if (e.start_type === 'after_event') return 'After suitable rest'
+  if (e.start_type === 'after_event') return 'After rest'
   if (e.start_time_local) return e.start_time_local
   return 'TBA'
 }
