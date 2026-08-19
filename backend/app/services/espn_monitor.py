@@ -1167,6 +1167,13 @@ class ESPNMonitor:
                     if m.live_scores_json != new_val:
                         m.live_scores_json = new_val
                         changed += 1
+                    # First sighting on court. Only ever written once, so a
+                    # suspension and resumption does not restart the clock —
+                    # the elapsed time is what the schedule needs, not time
+                    # actually in play.
+                    if m.started_at is None:
+                        m.started_at = datetime.now(timezone.utc)
+                        changed += 1
                 elif m.live_scores_json is not None:
                     # Match was live but no longer in ESPN's in-progress/suspended list
                     m.live_scores_json = None
@@ -1271,6 +1278,17 @@ class ESPNMonitor:
                 match.winner_id = w_entry.id
                 match.status = "completed"
                 match.completed_at = datetime.now(timezone.utc)
+                # Measured length, for main-draw singles — the only matches
+                # ESPN reports, so the only ones we can time. Recorded only when
+                # we saw the start: a match already under way when the monitor
+                # first polled would otherwise report an implausibly short one.
+                if match.started_at is not None:
+                    started = match.started_at
+                    if started.tzinfo is None:
+                        started = started.replace(tzinfo=timezone.utc)
+                    mins = int((match.completed_at - started).total_seconds() // 60)
+                    if 10 <= mins <= 420:      # sanity: a real match, not a clock error
+                        match.duration_min = mins
                 match.live_scores_json = None  # clear live indicator
                 updated += 1
                 rounds_updated.add(match.round_number)

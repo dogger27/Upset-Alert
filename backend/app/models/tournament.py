@@ -367,6 +367,13 @@ class Match(Base):
     served_first: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     status: Mapped[str] = mapped_column(String, default="pending")
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # First moment ESPN reported this match in progress, and the minutes between
+    # that and completion. completed_at alone gives no duration — there was
+    # nothing to subtract from it — so the schedule's expected-start chain had
+    # to guess every match length from a constant. Measured lengths accumulate
+    # from here and can replace those constants once a season exists.
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    duration_min: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     draw: Mapped["Draw"] = relationship("Draw", back_populates="matches")
     player1: Mapped[Optional["DrawEntry"]] = relationship("DrawEntry", foreign_keys=[player1_id])
