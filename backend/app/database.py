@@ -424,6 +424,7 @@ async def _migrate(conn):
         "ALTER TABLE schedule_entries ADD COLUMN start_note VARCHAR",
         "ALTER TABLE matches ADD COLUMN started_at DATETIME",
         "ALTER TABLE matches ADD COLUMN duration_min INTEGER",
+        "ALTER TABLE users ADD COLUMN schedule_tz VARCHAR",
         # Schedule tables are created by create_all; these indexes are not, and
         # every page load filters on exactly this pair.
         ("CREATE INDEX IF NOT EXISTS ix_sched_tournament_date "

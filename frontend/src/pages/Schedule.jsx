@@ -3,6 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 import { useSearchParams, Link } from 'react-router-dom'
 import clsx from 'clsx'
 import { getScheduleDay } from '../api/schedule'
+import { updateMe } from '../api/auth'
+import { useAuth } from '../store/auth'
 import { nationalityIso2, splitPlayerName } from '../utils/flags'
 import { scoreNodes, liveScoreNodes } from '../utils/score'
 import './Schedule.css'
@@ -12,6 +14,11 @@ const TZ_KEY = 'ua-schedule-tz'
 
 // Venue time by default: the sheet prints venue local, so showing anything else
 // puts our estimates on a different clock from the times beside them.
+//
+// localStorage is a CACHE, not the record. The preference lives on the account
+// (users.schedule_tz) so it follows a reader from phone to desktop — same
+// arrangement as the theme — but the account value is unknown until /auth/me
+// returns, and the page must render before then without flipping clocks.
 function storedTz() {
   try { return localStorage.getItem(TZ_KEY) === 'user' ? 'user' : 'venue' }
   catch { return 'venue' }
@@ -324,7 +331,25 @@ export default function Schedule() {
   const [params, setParams] = useSearchParams()
   const [view, setView] = useState(storedView)
   const [hideDone, setHideDone] = useState(false)
-  const [tzMode, setTzMode] = useState(storedTz)
+  const [tzMode, setTzModeState] = useState(storedTz)
+  const user = useAuth(s => s.user)
+
+  // Adopt the account's choice once it arrives, unless this session has already
+  // changed it — a write in flight must not be undone by the value it replaces.
+  const tzTouched = useRef(false)
+  useEffect(() => {
+    if (tzTouched.current) return
+    const saved = user?.schedule_tz
+    if (saved === 'venue' || saved === 'user') setTzModeState(saved)
+  }, [user])
+
+  const setTzMode = (mode) => {
+    tzTouched.current = true
+    setTzModeState(mode)
+    // Fire and forget: a signed-out reader still gets the local cache, and a
+    // failed write costs a preference rather than the page.
+    if (user) updateMe({ schedule_tz: mode }).catch(() => {})
+  }
 
   const day = params.get('date') || isoDay(new Date())
   const tournamentId = params.get('tournament') ? Number(params.get('tournament')) : undefined

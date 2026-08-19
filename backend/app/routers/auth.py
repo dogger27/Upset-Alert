@@ -208,6 +208,12 @@ async def update_me(
         if body.theme not in ("light", "dark"):
             raise HTTPException(status_code=400, detail="Unknown theme")
         current_user.theme = body.theme
+    if body.schedule_tz is not None and body.schedule_tz != current_user.schedule_tz:
+        # Same reasoning as theme: validated rather than stored as sent, since
+        # the client turns it into a rendering mode.
+        if body.schedule_tz not in ("venue", "user"):
+            raise HTTPException(status_code=400, detail="Unknown schedule timezone mode")
+        current_user.schedule_tz = body.schedule_tz
     await db.commit()
     await db.refresh(current_user)
     return current_user

@@ -27,6 +27,7 @@ class UserOut(BaseModel):
     timezone: Optional[str] = None
     # Drives which palette the client paints on load. NULL = light.
     theme: Optional[str] = None
+    schedule_tz: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -44,6 +45,7 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     timezone: Optional[str] = None
     theme: Optional[str] = None
+    schedule_tz: Optional[str] = None
 
 
 class UserAdminOut(BaseModel):

@@ -41,6 +41,10 @@ class User(Base):
     # follows the person across desktop, mobile browser and the installed app.
     # NULL means never chosen, which reads as light — the site's default.
     theme: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    # 'venue' or 'user' — which clock the order of play renders in. On the
+    # account rather than the device so it follows a reader between phone and
+    # desktop, the same reasoning as theme.
+    schedule_tz: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     # Last time this account was seen running the INSTALLED app on a phone or
     # tablet — reported by the client, because nothing about a PWA install is
     # visible to the server otherwise. A push subscription used to be the only
