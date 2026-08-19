@@ -190,11 +190,12 @@ export default function Schedule() {
   const entries = useMemo(() => {
     const all = data?.entries ?? []
     return all.filter(e => {
-      // Discipline follows the VIEW rather than a toggle. Time view answers
-      // "what is on today", so it carries everything — doubles, mixed and
-      // qualifying included. Court view answers "what order is this court
-      // running", where doubles is noise around the draws people play.
-      if (view === 'court' && e.discipline !== 'singles') return false
+      // Discipline follows the VIEW rather than a toggle. Court view reproduces
+      // the sheet — every match on it, doubles and mixed included — because the
+      // running order of a court only makes sense if nothing is missing from
+      // it. Time view is the curated list of what people are playing for, so
+      // singles only.
+      if (view === 'time' && e.discipline !== 'singles') return false
       if (hideDone && e.status === 'completed') return false
       return true
     })
@@ -214,15 +215,23 @@ export default function Schedule() {
     // tournament calls its main court something different. Falls back to how
     // many matches a court is hosting, which is the next best proxy for
     // importance when nobody seeded is out there.
+    // Ranked on SINGLES only, even though the view now lists everything: a
+    // doubles bracket is seeded separately, so its [1] says nothing about how
+    // big the match is next to a singles [1]. A court hosting only doubles
+    // scores nothing on either measure and settles at the bottom, which is
+    // where it belongs without being hidden.
     const ranked = [...m.entries()].map(([name, list]) => {
       let best = NO_SEED
+      let count = 0
       for (const e of list) {
+        if (e.discipline !== 'singles') continue
+        count += 1
         for (const p of e.players) {
           const n = seedNumber(p.name)
           if (n != null && n < best) best = n
         }
       }
-      return { name, list, best, count: list.length }
+      return { name, list, best, count }
     })
     ranked.sort((a, b) =>
       a.best - b.best || b.count - a.count || a.name.localeCompare(b.name))
