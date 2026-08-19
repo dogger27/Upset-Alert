@@ -97,11 +97,13 @@ function PlayerName({ raw, surnameOnly, hideSeed }) {
   const iso2 = nationalityIso2(nat)
   return (
     <span className="sched-player">
-      {/* The placeholder keeps names aligned when a nationality is missing, but
-          it must be invisible — as a filled box it reads as a broken image. */}
-      {iso2
-        ? <span className={`fi fi-${iso2.toLowerCase()} sched-flag`} title={nat} />
-        : <span className="sched-flag sched-flag--none" aria-hidden="true" />}
+      {/* No placeholder when there is no flag. A missing nationality here is
+          not missing DATA — the tours list Russian and Belarusian players as
+          neutral athletes with no flag, and the sheet omits it deliberately, so
+          reserving the space just indents those names forever. Tennis Explorer
+          does hold a country for them, and we deliberately do not use it: the
+          official order of play withholds it on purpose. */}
+      {iso2 && <span className={`fi fi-${iso2.toLowerCase()} sched-flag`} title={nat} />}
       <span className="sched-pname">
         {!hideSeed && seed && <span className="sched-seed">{seed}</span>}
         {surnameOnly ? last : [first, last].filter(Boolean).join(' ')}
