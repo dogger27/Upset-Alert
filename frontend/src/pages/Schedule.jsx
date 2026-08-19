@@ -151,7 +151,6 @@ export default function Schedule() {
   const [params, setParams] = useSearchParams()
   const [view, setView] = useState(storedView)
   const [hideDone, setHideDone] = useState(false)
-  const [minePicks, setMinePicks] = useState(false)
   const [court, setCourt] = useState('')
 
   const day = params.get('date') || isoDay(new Date())
@@ -180,11 +179,10 @@ export default function Schedule() {
       // running", where doubles is noise around the draws people play.
       if (view === 'court' && e.discipline !== 'singles') return false
       if (hideDone && e.status === 'completed') return false
-      if (minePicks && !e.is_my_pick) return false
       if (court && e.court !== court) return false
       return true
     })
-  }, [data, view, hideDone, minePicks, court])
+  }, [data, view, hideDone, court])
 
   const byCourt = useMemo(() => {
     const m = new Map()
@@ -227,8 +225,6 @@ export default function Schedule() {
       </div>
 
       <div className="sched-filters">
-        <button className={clsx('sched-chip', { 'sched-chip--on': minePicks })}
-                onClick={() => setMinePicks(v => !v)}>My picks</button>
         <button className={clsx('sched-chip', { 'sched-chip--on': hideDone })}
                 onClick={() => setHideDone(v => !v)}>Hide completed</button>
         {(data?.courts?.length ?? 0) > 1 && (
