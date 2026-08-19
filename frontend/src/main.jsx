@@ -29,12 +29,41 @@ export const queryClient = new QueryClient({
  * recovery and far too short to loop.
  */
 const RELOAD_KEY = 'ua-chunk-reload-at'
-window.addEventListener('vite:preloadError', (event) => {
+
+function recoverStaleChunk(event) {
   const last = Number(sessionStorage.getItem(RELOAD_KEY) || 0)
-  if (Date.now() - last < 10_000) return   // already tried; let the error surface
-  event.preventDefault()
+  if (Date.now() - last < 10_000) return false   // already tried; let it surface
+  event?.preventDefault?.()
   sessionStorage.setItem(RELOAD_KEY, String(Date.now()))
   window.location.reload()
+  return true
+}
+
+window.addEventListener('vite:preloadError', recoverStaleChunk)
+
+/*
+ * vite:preloadError is not enough on Cloudflare Pages.
+ *
+ * That event fires when a chunk FAILS to fetch. Pages does not fail: a missing
+ * path is answered with index.html at HTTP 200, so the preload succeeds and the
+ * browser only objects later, when it tries to parse HTML as a module —
+ * "Expected a JavaScript-or-Wasm module script but the server responded with a
+ * MIME type of text/html". No fetch failed, so no preload error is raised and
+ * the tab sits broken.
+ *
+ * Match that message instead. It arrives either as a window error event (the
+ * module script element failing) or as a rejected import() promise, depending
+ * on the browser, so both are watched.
+ */
+const MIME_FAILURE = /module script|MIME type|Failed to fetch dynamically imported/i
+
+window.addEventListener('error', (event) => {
+  if (MIME_FAILURE.test(event?.message || '')) recoverStaleChunk(event)
+}, true)
+
+window.addEventListener('unhandledrejection', (event) => {
+  const msg = event?.reason?.message || String(event?.reason || '')
+  if (MIME_FAILURE.test(msg)) recoverStaleChunk(event)
 })
 
 // Keep an already-granted subscriber's worker up to date, but don't install one
