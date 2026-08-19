@@ -246,14 +246,15 @@
 .sched-score {
   flex: 0 0 auto;
   margin-left: auto;
-  /* Deliberately larger than the names beside it (0.92rem): on a finished row
-     the score is what the eye is looking for. */
-  font-size: 1.25rem;
+  /* Same size as the names beside it. Wrapping is allowed between sets and
+     forbidden inside one — see .score-set — so a three-set score can take a
+     second line rather than forcing the whole row wider. */
+  font-size: 0.92rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
   color: var(--brand-text);
-  white-space: nowrap;
+  text-align: right;
 }
 
 
@@ -619,7 +620,7 @@
   /* The score gives way first when something has to. It stays legible several
      steps smaller, whereas a wrapped name changes what the row appears to say. */
   .sched-score {
-    font-size: 0.95rem;
+    font-size: 0.86rem;
     flex-shrink: 1;
     min-width: 0;
   }

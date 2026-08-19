@@ -7,6 +7,23 @@
  * between two copies, and the schedule's first attempt printed "5 | 4" because
  * it invented its own.
  */
+import { Fragment } from 'react'
+
+/*
+ * Sets are emitted as individual nowrap spans with the comma TRAILING, and an
+ * ordinary space between them. That is what lets a long score wrap between
+ * sets while keeping each set whole — "6-7(3)" must never break across lines,
+ * and a leading comma would strand ", 3-6" at the start of the next one.
+ */
+function joinSets(sets) {
+  return sets.map((s, i) => (
+    <Fragment key={i}>
+      {i > 0 && ' '}
+      <span className="score-set">{s}{i < sets.length - 1 ? ',' : ''}</span>
+    </Fragment>
+  ))
+}
+
 // One set cell → { g: games, tb: tiebreak points | null }
 export function parseSet(cell) {
   const m = cell != null ? String(cell).replace(/r$/i, '').match(/^(\d+)(?:\((\d+)\))?/) : null
@@ -50,7 +67,7 @@ export function scoreNodes(scores) {
   if (sets.length === 0) return null
   return (
     <>
-      {sets.map((s, i) => <span key={i}>{i > 0 ? ', ' : ''}{s}</span>)}
+      {joinSets(sets)}
       {retired && <span className="cv-ret"> (ret.)</span>}
     </>
   )
@@ -82,5 +99,5 @@ export function liveScoreNodes(live) {
     else sets.push(<>{A.g}-{B.g}</>)
   }
   if (sets.length === 0) return null
-  return sets.map((s, i) => <span key={i}>{i > 0 ? ', ' : ''}{s}</span>)
+  return joinSets(sets)
 }
