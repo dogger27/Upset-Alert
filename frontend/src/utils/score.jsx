@@ -10,16 +10,21 @@
 import { Fragment } from 'react'
 
 /*
- * Sets are emitted as individual nowrap spans with the comma TRAILING, and an
- * ordinary space between them. That is what lets a long score wrap between
- * sets while keeping each set whole — "6-7(3)" must never break across lines,
- * and a leading comma would strand ", 3-6" at the start of the next one.
+ * Sets are emitted as individual nowrap spans separated by an ordinary space,
+ * so a long score can wrap BETWEEN sets while each set stays whole — "6-7(3)"
+ * must never break across lines.
+ *
+ * The comma is added in CSS, not here, because whether one belongs depends on
+ * where the line happens to break — and that is only knowable after layout.
+ * The draw page has the width to keep commas; the schedule's narrow
+ * right-aligned column drops them rather than stranding one at the end of a
+ * line. See .score-set in Schedule.css.
  */
 function joinSets(sets) {
   return sets.map((s, i) => (
     <Fragment key={i}>
       {i > 0 && ' '}
-      <span className="score-set">{s}{i < sets.length - 1 ? ',' : ''}</span>
+      <span className="score-set">{s}</span>
     </Fragment>
   ))
 }

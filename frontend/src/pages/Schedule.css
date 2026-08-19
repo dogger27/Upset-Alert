@@ -93,6 +93,11 @@
   margin-bottom: 0.85rem;
 }
 
+/* Back to draw leaves the row; the filters collect on the right. The auto
+   margin does the splitting, so the two groups keep their own alignment
+   whatever the row width — no fixed spacer to fall out of step. */
+.sched-filters .sched-back { margin-right: auto; }
+
 .sched-chip {
   padding: 0.3rem 0.7rem;
   border-radius: 999px;
@@ -254,7 +259,13 @@
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
   color: var(--brand-text);
-  text-align: right;
+  /* Flex so wrapped sets stay right-aligned and the gap does the separating
+     that the comma used to. Whitespace-only text between items is not rendered
+     as a flex item, so the spaces in the markup cost nothing here. */
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.05rem 0.45rem;
 }
 
 
@@ -540,6 +551,21 @@
    grid-column here — it would be dead, and it reads as if it were doing
    something. */
 
+/* ── Score sets ──
+   A set never breaks in half: "6-7(3)" is one token to the reader.
+
+   The comma lives in CSS rather than in the markup, because whether one belongs
+   depends on where the line happens to break — knowable only after layout.
+   Anywhere with room keeps them. */
+.score-set { white-space: nowrap; }
+.score-set:not(:last-child)::after { content: ','; }
+
+/* The schedule's score column is narrow and right-aligned, so a three-set score
+   routinely wraps, and every wrapped line would otherwise end on a comma
+   dangling at the edge. Dropped here and the sets spaced instead, which is how
+   the tours' own scoreboards print them. */
+.sched-score .score-set::after { content: none; }
+
 /* ── Phone ──
    LAST in the file on purpose. A media query adds no specificity, so these
    rules only win by coming after the ones they override — and they did not:
@@ -599,7 +625,8 @@
     font-size: 0.72rem;
     padding: 0.25rem 0.5rem;
   }
-  .sched-back { margin-right: 0.55rem; }
+  /* Still split left/right on a phone — the row fits, so the grouping holds. */
+  .sched-back { margin-right: auto; }
 
   .sched-row {
     grid-template-columns: 4.4rem 1fr;
