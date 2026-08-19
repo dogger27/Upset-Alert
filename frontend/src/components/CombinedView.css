@@ -337,14 +337,20 @@
   z-index: 3;
 }
 
-/* When an upcoming match is due on court. Quiet by design: it sits under a
-   pick the reader has already made, and it is an estimate, not a fixture. */
+/* When an upcoming match is due, centred in the same gap the live score uses —
+   horizontally across the box, vertically between the two opponents. Quiet by
+   design: it is an estimate, not a fixture, and it must not compete with the
+   names it sits between. */
 .cv-eta {
-  font-size: 0.62rem;
+  position: absolute;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  line-height: 1;
+  font-size: 0.72rem;
   font-weight: 600;
   color: var(--text-muted);
   white-space: nowrap;
-  text-align: center;
-  margin-top: 1px;
   font-variant-numeric: tabular-nums;
+  pointer-events: none;
 }

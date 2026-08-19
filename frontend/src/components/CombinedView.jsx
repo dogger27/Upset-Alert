@@ -500,16 +500,11 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
     // its two opponents), not under the box holding its eventual winner — so
     // nothing is shown here until the match is decided and match.scores lands.
     const score = match.is_bye || isLiveMatch(match) ? null : scoreNodes(match.scores)
-    // Only for a match still to come: once it is live or done, when it was
-    // due says nothing the score does not say better.
-    const eta = (!match.is_bye && !match.winner && !isLiveMatch(match))
-      ? expectedStartLabel(match.expected_start_at, match.expected_source, scheduleZone)
-      : null
 
     const onClick = nextMatchOnClick(c, i, displayId)
 
     return {
-      key: `w${match.id}`, player, correct, wrong, score, eta, serving: isServing(c, i),
+      key: `w${match.id}`, player, correct, wrong, score, serving: isServing(c, i),
       realName: wrong && realPlayer ? abbrevName(realPlayer.name) : null,
       realFullName: wrong && realPlayer ? realPlayer.name : null,
       match, abbrev: true, kind: 'winner', clickable: !!onClick, onClick,
@@ -651,6 +646,22 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                             the column's width (see CombinedView.css — 2 and 3
                             sets share a size, since 3 sets fits at full size
                             everywhere but compact). */}
+                        {/* When this match is due, in the same gap the live
+                            score uses — that space belongs to the MATCH, not to
+                            either player, which is what makes it read as "these
+                            two, at this time". Shown only while it is still to
+                            come: once it is under way or over, when it was due
+                            says nothing the score does not say better. */}
+                        {!isLive && !m.winner && !m.is_bye && (() => {
+                          const label = expectedStartLabel(
+                            m.expected_start_at, m.expected_source, scheduleZone)
+                          if (!label) return null
+                          return (
+                            <span className="cv-eta" style={{ top: (yTop + yBot) / 2 }}>
+                              {label}
+                            </span>
+                          )
+                        })()}
                         {isLive && (() => {
                           const nodes = liveScoreNodes(m.live_scores)
                           if (!nodes) return null
@@ -697,7 +708,6 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                             so it never shows through underneath this label. */}
                         {box.realName && <div className="cv-real-winner" title={box.realFullName || undefined}>{box.realName}</div>}
                         {colIdx > 0 && box.score && <div className="cv-score">{box.score}</div>}
-                        {box.eta && <div className="cv-eta">{box.eta}</div>}
                       </div>
                     )
                   })}
