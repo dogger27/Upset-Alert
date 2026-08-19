@@ -99,7 +99,7 @@
 
 .sched-row {
   display: grid;
-  grid-template-columns: 5.6rem 1fr auto;
+  grid-template-columns: 5.6rem 1fr;
   align-items: center;
   gap: 0.6rem;
   padding: 0.55rem 0.6rem;
@@ -154,13 +154,6 @@
   color: var(--brand-text);
 }
 
-.sched-jump {
-  text-decoration: none;
-  color: var(--text-muted);
-  font-size: 1.3rem;
-  padding: 0 0.3rem;
-}
-.sched-jump:hover { color: var(--brand-text); }
 
 /* ── Court view ── */
 .sched-courts { display: flex; flex-direction: column; gap: 1.1rem; }
@@ -192,7 +185,7 @@
 @media (max-width: 560px) {
   .sched-page { padding: 0.6rem 0.5rem 3rem; }
   .sched-row {
-    grid-template-columns: 4.4rem 1fr auto;
+    grid-template-columns: 4.4rem 1fr;
     gap: 0.45rem;
     padding: 0.5rem 0.45rem;
   }

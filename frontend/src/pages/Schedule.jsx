@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useSearchParams, Link } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import clsx from 'clsx'
 import { getScheduleDay } from '../api/schedule'
 import { nationalityIso2, splitPlayerName } from '../utils/flags'
@@ -191,9 +191,6 @@ function MatchRow({ e, showCourt }) {
         </div>
         {score && <div className="sched-score">{score}</div>}
       </div>
-      {e.draw_id && (
-        <Link className="sched-jump" to={`/tournaments/${e.draw_id}`} title="Open this draw">›</Link>
-      )}
     </div>
   )
 }
