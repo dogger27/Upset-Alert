@@ -871,8 +871,25 @@ async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
     from app.services.locking import draw_lock_state, predictions_visible
     lock = await draw_lock_state(db, t)
 
+    # Expected start times, where the order of play has named the match. One
+    # query for the draw rather than one per match.
+    sched = {}
+    try:
+        from app.models.schedule import ScheduleEntry
+        srows = (await db.execute(
+            select(ScheduleEntry.match_id, ScheduleEntry.expected_start_at,
+                   ScheduleEntry.expected_source, ScheduleEntry.court)
+            .where(ScheduleEntry.draw_id == t.id,
+                   ScheduleEntry.match_id.isnot(None)))).all()
+        sched = {r[0]: r for r in srows}
+    except Exception:
+        # A schedule is a bonus on this page, never a reason for the draw to
+        # fail to load.
+        sched = {}
+
     match_outs = []
     for m in matches:
+        sm = sched.get(m.id)
         match_outs.append(MatchOut(
             id=m.id,
             round_number=m.round_number,
@@ -886,6 +903,13 @@ async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
             scores=m.scores_json,
             live_scores=m.live_scores_json,
             locked=m.id in lock.locked_match_ids,
+            # Stamped UTC: SQLite returns these naive, and an ISO string with
+            # no zone is parsed by the browser as LOCAL time.
+            expected_start_at=(
+                (sm[1] if sm[1] is None or sm[1].tzinfo else sm[1].replace(tzinfo=timezone.utc))
+                if sm else None),
+            expected_source=(sm[2] if sm else None),
+            court=(sm[3] if sm else None),
         ))
 
     t.latest_result_at = max((m.completed_at for m in matches if m.completed_at), default=None)

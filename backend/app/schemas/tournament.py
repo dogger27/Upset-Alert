@@ -123,6 +123,12 @@ class MatchOut(BaseModel):
     # Under progressive locking this match is under way or over, so its pick can
     # no longer be changed even though the bracket as a whole is still open.
     locked: bool = False
+    # When this match is expected on court, from the order-of-play chain. Only
+    # present once a schedule naming it has been published, so most of a bracket
+    # carries nothing — a match three rounds out has no court and no time.
+    expected_start_at: Optional[datetime] = None
+    expected_source: Optional[str] = None
+    court: Optional[str] = None
 
     model_config = {"from_attributes": True}
 

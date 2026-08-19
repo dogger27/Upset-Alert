@@ -106,3 +106,53 @@ export function liveScoreNodes(live) {
   if (sets.length === 0) return null
   return joinSets(sets)
 }
+
+
+/* ── Expected start ──
+ *
+ * "Today at ~4:35 PM" / "Tomorrow at 12:40 PM EDT". The tilde marks an
+ * estimate, exactly as it does on the schedule page, so a chained guess never
+ * reads as an announced time.
+ *
+ * zone: an IANA name to render in, or undefined for the reader's own.
+ */
+export function expectedStartLabel(iso, source, zone) {
+  if (!iso) return null
+  const when = new Date(iso)
+  if (Number.isNaN(when.getTime())) return null
+
+  const opts = { hour: 'numeric', minute: '2-digit', ...(zone ? { timeZone: zone } : {}) }
+  const time = when.toLocaleTimeString([], opts)
+
+  // Compare calendar days in the SAME zone the time is being shown in —
+  // otherwise a late match reads "Today" to one reader and "Tomorrow" to
+  // another looking at the identical row.
+  const dayOf = (d) => d.toLocaleDateString('en-CA', zone ? { timeZone: zone } : {})
+  const today = dayOf(new Date())
+  const thatDay = dayOf(when)
+
+  let prefix
+  if (thatDay === today) {
+    prefix = 'Today'
+  } else {
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    prefix = thatDay === dayOf(tomorrow)
+      ? 'Tomorrow'
+      : when.toLocaleDateString([], { weekday: 'short', ...(zone ? { timeZone: zone } : {}) })
+  }
+
+  // The zone abbreviation earns its place only when the time is not the
+  // reader's own — otherwise it is noise on every row.
+  let suffix = ''
+  if (zone) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: zone, timeZoneName: 'short',
+    }).formatToParts(when)
+    const tzName = parts.find(p => p.type === 'timeZoneName')?.value
+    if (tzName) suffix = ` ${tzName}`
+  }
+
+  const hedge = source === 'printed' ? '' : '~'
+  return `${prefix} at ${hedge}${time}${suffix}`
+}

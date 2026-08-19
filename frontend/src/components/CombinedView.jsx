@@ -21,7 +21,8 @@ import H2HPanel from './H2HPanel'
 import PredictorsPopup from './PredictorsPopup'
 import { buildH2HSequence, buildMatchIndex, h2hNeighbours, resolveRealFirst } from '../utils/h2hSequence'
 import './CombinedView.css'
-import { parseSet, scoreNodes, liveScoreNodes } from '../utils/score'
+import { parseSet, scoreNodes, liveScoreNodes, expectedStartLabel } from '../utils/score'
+import { useAuth } from '../store/auth'
 
 // Upset bell with the same hover tooltip as BracketView's (portal-rendered,
 // "Upset Alert!" pill) — pulled into its own component so each bell instance
@@ -257,6 +258,13 @@ function Connectors({ leftCenters, rightCenters, totalH }) {
 // zoom:    scales the whole rendered draw (layout included, via CSS zoom) so
 //          the parent can shrink it until the target number of rounds fits.
 export default function CombinedView({ tournament, matches, players, picks, onPick, locked = true, windowStart = 0, windowSize = 4, labelsHidden = false, insetLeft = 0, compact = false, zoom = 1, leagueId = null, lockedMatchIds = new Set(), predictionsHidden = false }) {
+  /* Which clock upcoming times are shown in. The account's choice where there
+     is one; otherwise the reader's own, which needs no explanation when they
+     have never expressed a preference. undefined means "this device". */
+  const tzUser = useAuth(s => s.user)
+  const scheduleZone = tzUser?.schedule_tz === 'venue'
+    ? (tournament?.venue_timezone || undefined)
+    : undefined
   const [h2h, setH2H] = useState(null)
   // Completed match whose predictors popup is open (the group chip's target).
   const [predictorsMatch, setPredictorsMatch] = useState(null)
@@ -492,11 +500,16 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
     // its two opponents), not under the box holding its eventual winner — so
     // nothing is shown here until the match is decided and match.scores lands.
     const score = match.is_bye || isLiveMatch(match) ? null : scoreNodes(match.scores)
+    // Only for a match still to come: once it is live or done, when it was
+    // due says nothing the score does not say better.
+    const eta = (!match.is_bye && !match.winner && !isLiveMatch(match))
+      ? expectedStartLabel(match.expected_start_at, match.expected_source, scheduleZone)
+      : null
 
     const onClick = nextMatchOnClick(c, i, displayId)
 
     return {
-      key: `w${match.id}`, player, correct, wrong, score, serving: isServing(c, i),
+      key: `w${match.id}`, player, correct, wrong, score, eta, serving: isServing(c, i),
       realName: wrong && realPlayer ? abbrevName(realPlayer.name) : null,
       realFullName: wrong && realPlayer ? realPlayer.name : null,
       match, abbrev: true, kind: 'winner', clickable: !!onClick, onClick,
@@ -684,6 +697,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                             so it never shows through underneath this label. */}
                         {box.realName && <div className="cv-real-winner" title={box.realFullName || undefined}>{box.realName}</div>}
                         {colIdx > 0 && box.score && <div className="cv-score">{box.score}</div>}
+                        {box.eta && <div className="cv-eta">{box.eta}</div>}
                       </div>
                     )
                   })}

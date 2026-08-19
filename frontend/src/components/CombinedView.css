@@ -336,3 +336,15 @@
   cursor: default;
   z-index: 3;
 }
+
+/* When an upcoming match is due on court. Quiet by design: it sits under a
+   pick the reader has already made, and it is an estimate, not a fixture. */
+.cv-eta {
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+  text-align: center;
+  margin-top: 1px;
+  font-variant-numeric: tabular-nums;
+}
