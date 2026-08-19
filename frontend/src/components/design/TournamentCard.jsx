@@ -3,12 +3,15 @@ import { Link } from 'react-router-dom'
 import { TierBadge } from './TierBadge.jsx'
 import { SurfacePill } from './SurfacePill.jsx'
 
-function renderFooter({ section, pickState, drawDates }) {
-  const pillBase = {
-    display: 'inline-flex', alignItems: 'center', gap: 5,
-    fontFamily: 'var(--font-body)', fontWeight: 'var(--fw-bold)', fontSize: '0.72rem',
-    padding: '4px 10px', borderRadius: 'var(--radius-pill)', whiteSpace: 'nowrap',
-  }
+/* Module scope so the OOP link is the same pill as the status ones rather than
+   a lookalike — one definition, so they cannot drift apart. */
+const pillBase = {
+  display: 'inline-flex', alignItems: 'center', gap: 5,
+  fontFamily: 'var(--font-body)', fontWeight: 'var(--fw-bold)', fontSize: '0.72rem',
+  padding: '4px 10px', borderRadius: 'var(--radius-pill)', whiteSpace: 'nowrap',
+}
+
+function renderFooter({ section, pickState, drawDates, oopPill }) {
   const row = (left, right) => (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
       <span>{left}</span>{right}
@@ -26,7 +29,7 @@ function renderFooter({ section, pickState, drawDates }) {
     }}>
       <span>{left}</span>
       <span style={{ justifySelf: 'center' }}>{centre}</span>
-      <span />
+      <span style={{ justifySelf: 'end' }}>{oopPill}</span>
     </div>
   )
 
@@ -73,7 +76,7 @@ function renderFooter({ section, pickState, drawDates }) {
 
   if (section === 'lastweek') {
     const competed = pickState === 'complete'
-    return row(
+    return centredRow(
       <span style={{ ...pillBase, background: 'var(--n-150)', color: 'var(--text-muted)' }}>Completed</span>,
       competed
         ? <span style={{ ...pillBase, background: 'var(--success-bg)', color: 'var(--success)' }}>★ Competed</span>
@@ -109,7 +112,21 @@ export function TournamentCard({ tour = 'ATP', name, city, surface = 'grass', ti
   const glow = isATP ? 'var(--glow-atp)' : 'var(--glow-wta)'
   const interactive = section !== 'upcoming'
 
-  const footer = renderFooter({ section, pickState, drawDates })
+  /* Same pill as the ones beside it — only the ink differs, so it reads as an
+     action rather than another status. */
+  const oopPill = oopTo ? (
+    <Link
+      to={oopTo}
+      onClick={e => e.stopPropagation()}
+      title="Order of play"
+      style={{ ...pillBase, background: 'var(--n-150)', color: 'var(--brand-text)',
+               textDecoration: 'none', letterSpacing: '0.04em' }}
+    >
+      OOP
+    </Link>
+  ) : null
+
+  const footer = renderFooter({ section, pickState, drawDates, oopPill })
 
   const cardStyle = {
     position: 'relative', display: 'block', textDecoration: 'none', color: 'inherit',
@@ -152,26 +169,6 @@ export function TournamentCard({ tour = 'ATP', name, city, surface = 'grass', ti
           </div>
         )}
       </div>
-      {oopTo && (
-        <Link
-          to={oopTo}
-          onClick={e => e.stopPropagation()}
-          title="Order of play"
-          style={{
-            position: 'absolute', bottom: 10, right: wikiUrl ? 40 : 12,
-            display: 'inline-flex', alignItems: 'center',
-            height: 20, padding: '0 8px', borderRadius: 'var(--radius-pill)',
-            border: '1px solid var(--border)',
-            fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: '0.62rem',
-            letterSpacing: '0.05em', textDecoration: 'none',
-            color: 'var(--text-muted)', background: 'var(--surface-card)',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.color = 'var(--brand-text)'; e.currentTarget.style.borderColor = 'var(--brand-text)' }}
-          onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border)' }}
-        >
-          OOP
-        </Link>
-      )}
       {wikiUrl && (
         <a
           href={wikiUrl}

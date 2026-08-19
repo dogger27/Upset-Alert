@@ -457,6 +457,11 @@ export default function Schedule() {
         </div>
       </div>
 
+      {/* Filters and the list share one wrapper so they keep a common left and
+          right edge. In time view that wrapper sizes to the widest row, so
+          centring the boxes centres the controls above them too rather than
+          leaving them stranded at the page edges. */}
+      <div className={clsx('sched-body', { 'sched-body--fit': view === 'time' })}>
       <div className="sched-filters">
         {fromDraw && (
           <Link className="sched-back" to={`/tournaments/${fromDraw}`}>‹ Back to draw</Link>
@@ -504,6 +509,7 @@ export default function Schedule() {
           ))}
         </div>
       )}
+      </div>
     </div>
   )
 }

@@ -365,32 +365,37 @@ def _aware(dt):
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
-def _remaining_minutes(live, discipline: str) -> int:
+def _remaining_minutes(live, discipline: str, sets_to_win: int = 2) -> int:
     """Roughly how much longer a match in progress has to run.
 
     live_scores_json carries games per set for both players, so we know how far
-    through it is rather than only that it started. Sets already decided plus
-    progress through the current one give a fraction of the whole; the rest is
-    what is left. Crude, but far better than assuming every live match has a
-    full match still to go, and it tightens on its own every 60 seconds as ESPN
-    updates.
+    through it is rather than only that it started.
+
+    The count that matters is how many COMPLETE sets can still follow the one
+    being played. Getting that wrong is what made a match at 4-3 in the third
+    report an hour left: with two sets decided the score is one-all, the third
+    set decides it and nothing follows — but the formula added a whole further
+    set anyway, and the next match on court inherited the error.
+
+        additional = sets_to_win - 1 - decided/2
+
+    which is 0 once the deciding set is under way, and a half-set where either
+    outcome is still possible (one-nil, where the current set may or may not
+    end it). Progress through the current set comes from its game count, a set
+    being about twelve games at its longest before a breaker.
     """
     total = _duration_for(discipline)
     per_set = total / 2.5          # a best-of-3 averages about two and a half sets
     try:
         a_sets, b_sets = live[0] or [], live[1] or []
-        decided = max(len(a_sets), len(b_sets)) - 1      # last entry is in play
-        decided = max(decided, 0)
+        decided = max(max(len(a_sets), len(b_sets)) - 1, 0)   # last entry is in play
         games = int(a_sets[-1] or 0) + int(b_sets[-1] or 0) if a_sets or b_sets else 0
-        # A set is 12 games at its longest before a breaker; cap so a long set
-        # cannot report the match as more than finished.
         part = min(games / 12.0, 1.0)
-        sets_to_win = 2
-        leader = max(decided - (decided // 2), 1)
-        remaining_sets = max(sets_to_win - leader, 0) + (1 - part)
+        additional = max(sets_to_win - 1 - decided / 2.0, 0.0)
+        remaining_sets = additional + (1.0 - part)
     except Exception:
         remaining_sets = 1.0
-    return max(int(remaining_sets * per_set), 10)
+    return max(int(remaining_sets * per_set), 5)
 
 
 async def recompute_expected_starts(db, tournament_id: int, play_date: date,
