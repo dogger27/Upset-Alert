@@ -657,7 +657,10 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                             m.expected_start_at, m.expected_source, scheduleZone)
                           if (!label) return null
                           return (
-                            <span className="cv-eta" style={{ top: (yTop + yBot) / 2 }}>
+                            <span
+                              className={`cv-eta${colIdx > 0 ? ' cv-eta--roomy' : ''}`}
+                              style={{ top: (yTop + yBot) / 2 }}
+                            >
                               {label}
                             </span>
                           )

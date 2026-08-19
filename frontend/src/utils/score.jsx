@@ -116,10 +116,20 @@ export function liveScoreNodes(live) {
  *
  * zone: an IANA name to render in, or undefined for the reader's own.
  */
+const FIVE_MIN = 5 * 60 * 1000
+
 export function expectedStartLabel(iso, source, zone) {
   if (!iso) return null
-  const when = new Date(iso)
+  let when = new Date(iso)
   if (Number.isNaN(when.getTime())) return null
+
+  // Round estimates to five minutes, as the schedule does. A guess chained from
+  // constant match lengths has no business claiming "8:12" — the precision is
+  // invented, and showing it invites more trust than it has earned. A printed
+  // time keeps whatever the tournament stated.
+  if (source !== 'printed') {
+    when = new Date(Math.round(when.getTime() / FIVE_MIN) * FIVE_MIN)
+  }
 
   const opts = { hour: 'numeric', minute: '2-digit', ...(zone ? { timeZone: zone } : {}) }
   const time = when.toLocaleTimeString([], opts)

@@ -354,3 +354,9 @@
   font-variant-numeric: tabular-nums;
   pointer-events: none;
 }
+
+/* Later rounds space their pairs much further apart — the gap between two
+   opponents grows with every column — so the time can take the room rather
+   than sit lost in the middle of it. The leftmost column keeps the small size,
+   where the two boxes are close together. */
+.cv-eta--roomy { font-size: 1.05rem; font-weight: 700; }
