@@ -53,6 +53,24 @@ function expectedStart(e) {
   return e.expected_source === 'printed' ? t : `~${t}`
 }
 
+// A finite sentinel rather than Infinity: two unseeded courts would otherwise
+// compare as Infinity - Infinity = NaN, and a NaN comparator silently leaves
+// the array in whatever order it started in.
+const NO_SEED = 9999
+
+/**
+ * The seed number in a printed name, or null.
+ *
+ * Only digits count. The same brackets carry [Q], [WC], [LL], [PR] and [Alt],
+ * which say how a player entered rather than how highly they are ranked — and a
+ * name can carry both, as in "[WC] [2]".
+ */
+function seedNumber(raw) {
+  const { seed } = splitPlayerName(raw)
+  const nums = seed && seed.match(/\d+/g)
+  return nums ? Math.min(...nums.map(Number)) : null
+}
+
 function liveLine(e) {
   // ESPN only. Doubles and qualifying carry no score by design — the sheet's
   // own score is a stale snapshot and is never shown.
@@ -190,7 +208,25 @@ export default function Schedule() {
       m.get(k).push(e)
     }
     for (const list of m.values()) list.sort((x, y) => x.court_order - y.court_order)
-    return [...m.entries()]
+
+    // Courts are ordered by the best seed playing on them, so the show courts
+    // rise to the top without hardcoding venue-specific names — every
+    // tournament calls its main court something different. Falls back to how
+    // many matches a court is hosting, which is the next best proxy for
+    // importance when nobody seeded is out there.
+    const ranked = [...m.entries()].map(([name, list]) => {
+      let best = NO_SEED
+      for (const e of list) {
+        for (const p of e.players) {
+          const n = seedNumber(p.name)
+          if (n != null && n < best) best = n
+        }
+      }
+      return { name, list, best, count: list.length }
+    })
+    ranked.sort((a, b) =>
+      a.best - b.best || b.count - a.count || a.name.localeCompare(b.name))
+    return ranked.map(r => [r.name, r.list])
   }, [entries])
 
   return (
