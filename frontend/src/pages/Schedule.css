@@ -510,9 +510,10 @@
 .sched-status {
   position: absolute;
   top: 0.4rem;
-  /* Matches .sched-row's own horizontal padding, so the score below lines up
-     with this pill's right edge rather than nearly doing so. */
-  right: 0.6rem;
+  /* Clear of the H2H strip, which now occupies the row's right edge — the pill
+     was rendering on top of it. 16px strip + 1px border + the row's own 0.6rem
+     padding, so the pill still lines up with the scores beneath it. */
+  right: calc(0.6rem + 17px);
   /* in-progress-badge sets left:50% for its use on the draw page. Setting
      `right` without clearing `left` stretches an absolutely positioned element
      between the two, which is why this rendered full width. */
@@ -765,7 +766,18 @@
 .sched-competitor--won  { font-weight: 700; }
 .sched-competitor--lost { opacity: 0.62; }
 
-.sched-ball { flex: 0 0 auto; display: block; }
+.sched-ball { display: block; }
+
+/* Reserved width whether or not the ball is there. Without it the serving
+   player's scores sat one ball-width left of their opponent's, and the two
+   lines stopped forming a column — the whole point of this layout. */
+.sched-ball-slot {
+  flex: 0 0 auto;
+  width: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 
 .sched-mark { flex: 0 0 auto; font-size: 0.85rem; line-height: 1; }
 .sched-mark--win  { color: var(--ok-fg, #4ade80); }
@@ -839,6 +851,9 @@
    rather than floating inside it. */
 .sched-h2h {
   align-self: stretch;
+  /* Full card height including the status pill's band — it is a sibling of the
+     row content, not of the badge, so it must not be overlapped by it. */
+  z-index: 2;
   width: 16px;
   margin: -0.55rem -0.6rem -0.55rem 0;
   border-radius: 0 9px 9px 0;

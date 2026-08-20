@@ -341,7 +341,12 @@ function CompetitorRows({ e, a, b }) {
           <span className="sched-competitor-name">
             <Side players={players} doubles={doubles} tbd={tbd} />
           </span>
-          {serving === side + 1 && <ServeBall />}
+          {/* A SLOT, always present, not a conditional element. The ball
+              appears on one line only, so rendering it inline shifted that
+              line's scores left of the other's and broke the column. */}
+          <span className="sched-ball-slot">
+            {serving === side + 1 && <ServeBall />}
+          </span>
           {winnerSide != null && (
             <span className={clsx('sched-mark', winnerSide === side ? 'sched-mark--win' : 'sched-mark--loss')}>
               {winnerSide === side ? '\u2713' : '\u2717'}
