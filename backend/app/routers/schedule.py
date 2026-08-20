@@ -174,11 +174,17 @@ async def schedule_day(
 
     ent_ids = {p.draw_entry_id for e in entries for p in e.players if p.draw_entry_id}
     nats = {}
+    ent_names = {}
     if ent_ids:
         rows = (await db.execute(
-            select(DrawEntry.id, DrawEntry.nationality).where(
+            select(DrawEntry.id, DrawEntry.nationality, DrawEntry.name).where(
                 DrawEntry.id.in_(ent_ids)))).all()
         nats = {r[0]: r[1] for r in rows if r[1]}
+        # The bracket's name in preference to the printed one wherever the
+        # player resolved. The sheet wraps names in the seeding and country it
+        # is also laying out in columns — "[17] Frances TIAFOE USA" — and none
+        # of that belongs in a row that already shows a flag of its own.
+        ent_names = {r[0]: r[2] for r in rows if r[2]}
 
     tz_rows = (await db.execute(
         select(Draw.tournament_id, Draw.venue_timezone).where(
@@ -229,7 +235,8 @@ async def schedule_day(
         m = matches.get(e.match_id) if e.match_id else None
         players = [
             SchedulePlayerOut(side=p.side, position=p.position,
-                              name=p.raw_name, draw_entry_id=p.draw_entry_id,
+                              name=ent_names.get(p.draw_entry_id) or p.raw_name,
+                              draw_entry_id=p.draw_entry_id,
                               nationality=nats.get(p.draw_entry_id))
             for p in sorted(e.players, key=lambda x: (x.side, x.position))
         ]

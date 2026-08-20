@@ -28,7 +28,7 @@ import re
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
 
-from sqlalchemy import and_, delete, or_, select
+from sqlalchemy import and_, delete, or_, select, update
 
 from app.models.schedule import (ScheduleChange, ScheduleDocument,
                                  ScheduleEntry, ScheduleEntryPlayer)
@@ -59,9 +59,37 @@ _DEFAULT_CHANGEOVER_MIN = 21
 # Below this many observations a median says more about luck than the venue.
 _MIN_CHANGEOVER_SAMPLES = 4
 
-_SEED_RE = re.compile(r'^\s*(?:\[[^\]]*\]\s*)+')
-_NAT_RE = re.compile(r'\b[A-Z]{3}\b')
+# Seeding and entry status — [1], [WC], [Q], [LL]. Removed wherever they sit,
+# not just at the front: the tours disagree about where they go, and the ATP
+# puts them AFTER the country ("Tristan MCCORMICK USA [1]"), which leaves the
+# country no longer final and so no longer strippable. A player's name never
+# contains brackets, so there is nothing else here to lose.
+_SEED_RE = re.compile(r'\[[^\]]*\]')
+_TRAILING_CODE_RE = re.compile(r'\s+([A-Z]{3})\s*$')
 _CLOCK_RE = re.compile(r'^(\d{1,2})[:.](\d{2})\s*(am|pm)?$', re.I)
+
+# Country codes are recognised from a list, not from their shape. The previous
+# test was `\b[A-Z]{3}\b`, and the sheets print surnames in capitals — so it
+# deleted the surname from "Orlando LUZ BRA" and left a player identified only
+# as "Orlando", which then matched every other Orlando in the draw. Any
+# three-letter surname hits this: LUZ, KIM, LEE, WOO, ONS.
+#
+# IOC codes as the tours print them, plus the ISO variants that turn up in
+# their place (DEU for Germany, and RUS/BLR which persist on some sheets
+# despite the neutral-athlete rules).
+_COUNTRY_CODES = frozenset("""
+AFG AHO ALB ALG AND ANG ANT ARG ARM ARU ASA AUS AUT AZE BAH BAN BAR BDI BEL BEN
+BER BHU BIH BIZ BLR BOL BOT BRA BRN BRU BUL BUR CAF CAM CAN CAY CGO CHA CHI CHN
+CIV CMR COD COK COL COM CPV CRC CRO CUB CYP CZE DEN DEU DJI DMA DOM ECU EGY ERI
+ESA ESP EST ETH FIJ FIN FRA FSM GAB GAM GBR GBS GEO GEQ GER GHA GRE GRN GUA GUI
+GUM GUY HAI HKG HON HUN INA IND IRI IRL IRQ ISL ISR ISV ITA IVB JAM JOR JPN KAZ
+KEN KGZ KIR KOR KOS KSA KUW LAO LAT LBA LBN LBR LCA LES LIE LTU LUX MAD MAR MAS
+MAW MDA MDV MEX MGL MHL MKD MLI MLT MNE MON MOZ MRI MTN MYA NAM NCA NED NEP NGR
+NIG NOR NRU NZL OMA PAK PAN PAR PER PHI PLE PLW PNG POL POR PRK PUR QAT ROU RSA
+RUS RWA SAM SEN SEY SIN SKN SLE SLO SMR SOL SOM SRB SRI SSD STP SUD SUI SUR SVK
+SWE SWZ SYR TAN TCH TGA THA TJK TKM TLS TOG TPE TTO TUN TUR TUV UAE UGA UKR URU
+USA UZB VAN VEN VIE VIN YEM ZAM ZIM
+""".split())
 
 # "QS" is qualifying singles, "MD" men's doubles — the sheet states both
 # dimensions in one code, which is exactly how they are filtered.
@@ -69,7 +97,21 @@ _EVENT_CODE_RE = re.compile(r'\b([MWQXBG])([SD])\b')
 
 
 def _clean_name(raw: str) -> str:
-    return _NAT_RE.sub('', _SEED_RE.sub('', raw or '')).strip()
+    """Strip the seeding and country the sheet lays out around a name.
+
+    The country is only ever a name's LAST token, so only the last token is
+    considered — and only when it is a code we recognise. A doubles slot puts
+    two names in one string ("O. LUZ BRA / R. MATOS BRA"), so each side of the
+    slash is trimmed on its own.
+    """
+    parts = []
+    for part in _SEED_RE.sub(' ', raw or '').split('/'):
+        part = ' '.join(part.split())
+        m = _TRAILING_CODE_RE.search(part)
+        if m and m.group(1) in _COUNTRY_CODES:
+            part = part[:m.start()].strip()
+        parts.append(part)
+    return ' / '.join(p for p in parts if p).strip()
 
 
 def _duration_for(discipline: str, best_of: int = 3) -> int:
@@ -331,6 +373,14 @@ async def ingest_document(db, tournament, play_date: date, url: str,
                         db.add(ScheduleEntryPlayer(
                             schedule_entry_id=entry.id, side=side, position=1,
                             raw_name=nm, draw_entry_id=eid))
+                    # The row's identity has to move with its content. This key
+                    # was derived from the alternatives just replaced ("Tien OR
+                    # Tiafoe"); leaving it there means the NEXT revision, which
+                    # prints the settled pair, hashes to something else, matches
+                    # nothing, and inserts the same match a second time. That is
+                    # exactly how Tiafoe/Auger-Aliassime came to be listed twice.
+                    entry.pairing_key = _pairing_key(
+                        tournament.id, play_date, discipline, na, nb, ids)
             elif side_a_ids or side_b_ids:
                 any_id = (side_a_ids + side_b_ids)[0]
                 entry.draw_id = entry_draw.get(any_id)
@@ -351,6 +401,7 @@ async def ingest_document(db, tournament, play_date: date, url: str,
             written += 1
 
     await db.flush()
+    await _dedupe_day(db, tournament.id, play_date)
     await _renumber_courts(db, tournament.id, play_date)
     await db.commit()
     return {'document_id': doc.id, 'entries': written, 'kind': meta.get('kind')}
@@ -384,6 +435,151 @@ async def _renumber_courts(db, tournament_id: int, play_date: date) -> None:
         for position, entry in enumerate(slots, 1):
             if entry.court_order != position:
                 entry.court_order = position
+
+
+def _name_tokens(raw: str) -> set:
+    """The tokens of one printed name worth matching on. Mirrors the closed-set
+    matching in `_resolve_players`: initials and country codes are dropped by
+    length, so "O. Luz" and "Orlando LUZ BRA" both reduce to {luz}."""
+    return {t for t in _norm(_clean_name(raw or '')).split() if len(t) > 2}
+
+
+def _side_tokens(entry, side: str) -> list:
+    """One side as printed, name by name — either the partners of a settled
+    side or the competing alternatives of an unresolved one."""
+    return [_name_tokens(p.raw_name)
+            for p in sorted(entry.players, key=lambda x: x.position)
+            if p.side == side]
+
+
+def _side_resolves(printed: list, alternatives: bool, settled: set) -> bool:
+    """Does this side of a TBD slot correspond to this side of a settled one?
+
+    Containment runs one way only. The sheet abbreviates alternatives ("O. Luz
+    / R. Matos") where it spells settled names out ("Orlando LUZ BRA"), so the
+    printed tokens must appear in the settled side, never the reverse.
+
+    A side of alternatives needs ONE of them to match — that is what being
+    decided means. A side that was already settled needs all of its names,
+    since nothing about it was in question.
+    """
+    if not printed:
+        return False
+    if alternatives:
+        return any(toks and toks <= settled for toks in printed)
+    return all(toks and toks <= settled for toks in printed)
+
+
+def _resolves(tbd, settled) -> bool:
+    """True when `settled` is `tbd` with its alternatives decided — i.e. the
+    two rows are the same slot, printed either side of a result.
+
+    Only a row that declared itself unresolved can be absorbed this way, which
+    is what keeps the test from collapsing genuinely different matches. The
+    structural guarantee is that a feeding match puts both its players on the
+    SAME side of the next round: an R16 "Melo/Zverev vs Luz/Matos" therefore
+    cannot satisfy both sides of the QF slot it feeds, however much its names
+    overlap.
+    """
+    if not tbd.is_tbd or settled.is_tbd:
+        return False
+    alt = tbd.tbd_side or ''
+    done = {s: set().union(set(), *_side_tokens(settled, s)) for s in ('a', 'b')}
+    # Sides swap between revisions often enough to be worth trying both ways.
+    for x, y in (('a', 'b'), ('b', 'a')):
+        if (_side_resolves(_side_tokens(tbd, 'a'), 'a' in alt, done[x])
+                and _side_resolves(_side_tokens(tbd, 'b'), 'b' in alt, done[y])):
+            return True
+    return False
+
+
+def _same_pairing(a, b) -> bool:
+    """Two settled rows describing the same match.
+
+    Compared on the players themselves rather than on `pairing_key`, so it
+    still holds when the key formula changes underneath stored rows — which it
+    does whenever name cleaning is corrected. The same two teams cannot meet
+    twice on one day, so equality on both sides is conclusive.
+    """
+    if a.is_tbd or b.is_tbd:
+        return False
+    A = {s: set().union(set(), *_side_tokens(a, s)) for s in ('a', 'b')}
+    B = {s: set().union(set(), *_side_tokens(b, s)) for s in ('a', 'b')}
+    if not all((A['a'], A['b'], B['a'], B['b'])):
+        return False
+    return ((A['a'] == B['a'] and A['b'] == B['b'])
+            or (A['a'] == B['b'] and A['b'] == B['a']))
+
+
+async def _absorb(db, keep, drop) -> None:
+    """Fold one row into another: the surviving row inherits the earlier
+    first_seen_at (it is when the slot was first printed, and _renumber_courts
+    breaks ties on it) and every change ever recorded against the loser."""
+    if drop.first_seen_at and (not keep.first_seen_at
+                               or drop.first_seen_at < keep.first_seen_at):
+        keep.first_seen_at = drop.first_seen_at
+    await db.execute(
+        update(ScheduleChange)
+        .where(ScheduleChange.schedule_entry_id == drop.id)
+        .values(schedule_entry_id=keep.id))
+    await db.delete(drop)       # players cascade off the relationship
+
+
+async def _dedupe_day(db, tournament_id: int, play_date: date) -> int:
+    """Collapse rows that are the same slot recorded twice.
+
+    Two revisions of a sheet can describe one match in ways that hash to
+    different pairing keys, and then it appears twice on the page:
+
+    * a slot printed "Tien OR Tiafoe" on one revision and "[17] Frances TIAFOE
+      USA" on the next — the identity moved when the alternatives resolved;
+    * doubles, where the same thing happens with no bracket match to fall back
+      on, because doubles draws are not in `matches` at all.
+
+    Run as a pass over the day rather than inline at write time, so it also
+    repairs rows already stored under a key no future revision will produce.
+    The most recently confirmed row wins, except that a settled row always
+    beats an unresolved one — its names are the real ones.
+    """
+    rows = (await db.execute(
+        select(ScheduleEntry).where(
+            ScheduleEntry.tournament_id == tournament_id,
+            ScheduleEntry.play_date == play_date,
+        ))).scalars().all()
+    if len(rows) < 2:
+        return 0
+
+    rows.sort(key=lambda r: (r.last_document_id or 0, r.id), reverse=True)
+    kept: list = []
+    dropped = 0
+    for row in rows:
+        twin = None
+        for k in kept:
+            if k.discipline != row.discipline:
+                continue
+            # Same bracket match on the same day is the same slot; only ever
+            # non-null for singles that resolved.
+            if k.match_id and row.match_id and k.match_id == row.match_id:
+                twin = k
+                break
+            if _resolves(row, k) or _resolves(k, row) or _same_pairing(row, k):
+                twin = k
+                break
+        if twin is None:
+            kept.append(row)
+            continue
+        # Prefer whichever of the two is settled, regardless of which sheet
+        # confirmed it last.
+        if twin.is_tbd and not row.is_tbd:
+            kept[kept.index(twin)] = row
+            await _absorb(db, keep=row, drop=twin)
+        else:
+            await _absorb(db, keep=twin, drop=row)
+        dropped += 1
+
+    if dropped:
+        await db.flush()
+    return dropped
 
 
 def _start_type_of(m) -> str:
@@ -517,6 +713,12 @@ async def recompute_expected_starts(db, tournament_id: int, play_date: date,
     from zoneinfo import ZoneInfo
 
     now = datetime.now(timezone.utc)
+
+    # Before the rows are read, for the same reason _renumber_courts runs here
+    # rather than only at ingest: ingest returns early when the PDF has not
+    # changed, so a duplicate left by an earlier revision would otherwise sit
+    # on the page until the sheet happened to change again.
+    await _dedupe_day(db, tournament_id, play_date)
 
     rows = (await db.execute(
         select(ScheduleEntry).where(
