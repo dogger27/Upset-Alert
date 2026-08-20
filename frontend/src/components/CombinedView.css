@@ -392,11 +392,14 @@
    floating item would compete with it for the same space. */
 .cv-live-point {
   margin-left: 7px;
-  padding: 1px 5px;
+  padding: 1px 6px;
   border-radius: 5px;
-  /* Smaller than the set score deliberately — this is the more volatile number,
-     not the more important one. The set score is what the page is about. */
-  font-size: 0.62em;
+  /* Same size as the set score it sits beside. It was set smaller on the
+     reasoning that the point is the more volatile number and the sets are what
+     the page is about — but at 0.62em it read as a footnote to the score rather
+     than as part of it, which is backwards for the one number this whole feature
+     exists to show. The tint still separates it; the size no longer demotes it. */
+  font-size: 1em;
   font-weight: 700;
   vertical-align: middle;
   white-space: nowrap;
@@ -404,6 +407,12 @@
   color: var(--live-point-fg, #1b4332);
   background: var(--live-point-bg, rgba(123, 168, 31, 0.22));
 }
+
+/* Sets are comma-separated by .score-set:not(:last-child)::after. Appending the
+   point pill made the final SET stop being the last child, so it grew a comma
+   and the score read "6-2, 2-5," with the point trailing like a third set.
+   Drop the comma from whichever set the pill follows. */
+.cv-live-score .score-set:has(+ .cv-live-point)::after { content: none; }
 
 /* A tiebreak count is a bare number and would otherwise read as a set score. */
 .cv-live-point--tb {
