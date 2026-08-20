@@ -667,7 +667,9 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                           if (!label) return null
                           // "Today at ~5:55 PM PDT" -> day part, time part. Two
                           // spans so a phone can stack them instead of shrinking
-                          // the type to fit one line.
+                          // the type to fit one line — everywhere but the
+                          // leftmost column, which has no vertical room for a
+                          // second line and shrinks instead (see the CSS).
                           const cut = label.indexOf(' at ')
                           const day = cut > 0 ? label.slice(0, cut + 3) : label
                           const time = cut > 0 ? label.slice(cut + 4) : ''
