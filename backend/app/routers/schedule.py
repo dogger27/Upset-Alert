@@ -23,6 +23,7 @@ from app.core.auth import get_optional_user
 from app.database import get_db
 from app.models.schedule import ScheduleEntry
 from app.models.tournament import Draw, DrawEntry, Match, Tournament
+from app.services.sofascore_live import live_point_for
 
 router = APIRouter(prefix="/schedule", tags=["schedule"])
 
@@ -83,6 +84,11 @@ class ScheduleEntryOut(BaseModel):
     # ESPN only. Absent for doubles and qualifying, which it does not cover.
     live_scores: Optional[list] = None
     scores: Optional[list] = None
+    # The point score, on the same terms as the draw page — and from the same
+    # helper, so this page and the bracket can never disagree about a match they
+    # are both showing. Carries its own `games`, which the client prefers over
+    # live_scores when present.
+    live_point: Optional[dict] = None
 
 
 class ScheduleDayOut(BaseModel):
@@ -310,6 +316,7 @@ async def schedule_day(
             started_at=_utc(getattr(m, "started_at", None)) if m else None,
             is_tbd=e.is_tbd, tbd_side=e.tbd_side, status=statuses[e.id], players=players,
             live_scores=(m.live_scores_json if m else None),
+            live_point=(live_point_for(m) if m else None),
             scores=(m.scores_json if m else None),
         ))
 

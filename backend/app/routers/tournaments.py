@@ -861,51 +861,9 @@ async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
     )
     matches = matches_result.scalars().all()
 
-    def _live_point(m: Match) -> Optional[dict]:
-        """The point score, but only while it is still true.
-
-        A point is the most perishable thing on the page: 40-30 becomes a new
-        game in seconds, and a stale one sitting beside a set score that has
-        moved on is worse than showing no point at all — it reads as a bug in
-        the bracket rather than as old data. So freshness is enforced here,
-        server-side, rather than trusted to whatever the client last received:
-        anything older than FRESH_SECONDS is dropped and the row falls back to
-        ESPN's games-only view.
-
-        Also dropped once the match has a winner. The poller clears its own
-        snapshot when an event leaves the live list, but ESPN can record the
-        result first, and for the moment in between the honest answer is that
-        the match is over.
-        """
-        from app.services.sofascore_live import FRESH_SECONDS
-
-        snap = m.sofa_live_json
-        if not snap or m.winner_id is not None:
-            return None
-        try:
-            at = datetime.fromisoformat(snap["at"])
-        except (KeyError, TypeError, ValueError):
-            return None
-        if at.tzinfo is None:
-            at = at.replace(tzinfo=timezone.utc)
-        if (datetime.now(timezone.utc) - at).total_seconds() > FRESH_SECONDS:
-            return None
-        point = snap.get("point") or [None, None]
-        if not any(p is not None for p in point):
-            return None
-        # Ship the snapshot's OWN games alongside its point, so the client can
-        # render one coherent state instead of splicing two feeds together.
-        # Taking games from ESPN and the point from here produces states that
-        # never existed: ESPN lags up to 60s, so a game can finish and the point
-        # reset while the set score still shows the old value — 40-30 beside a
-        # score that has already moved on. Same object, same instant, or nothing.
-        sets = snap.get("sets") or []
-        games = [[str(s[0]) if s and s[0] is not None else "" for s in sets],
-                 [str(s[1]) if s and s[1] is not None else "" for s in sets]]
-        return {"point": point,
-                "games": games if sets else None,
-                "tiebreak": bool(snap.get("tiebreak")),
-                "serving": snap.get("serving")}
+    # Shared with the schedule router so the two surfaces can never show
+    # different scores for the same match. See sofascore_live.live_point_for.
+    from app.services.sofascore_live import live_point_for
 
     def _player_out(p: DrawEntry) -> DrawEntryOut:
         out = DrawEntryOut.model_validate(p)
@@ -948,7 +906,7 @@ async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
             round_name=t.round_name(m.round_number),
             scores=m.scores_json,
             live_scores=m.live_scores_json,
-            live_point=_live_point(m),
+            live_point=live_point_for(m),
             locked=m.id in lock.locked_match_ids,
             # Stamped UTC: SQLite returns these naive, and an ISO string with
             # no zone is parsed by the browser as LOCAL time.

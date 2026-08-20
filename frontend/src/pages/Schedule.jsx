@@ -160,7 +160,34 @@ function seedNumber(player) {
 /* ESPN only, and formatted the way the draw page formats it — "6-4, 7-6³"
    rather than the raw game counts this first rendered as "5 | 4". */
 function liveLine(e) {
-  if (e.status === 'live' && e.live_scores) return liveScoreNodes(e.live_scores)
+  if (e.status === 'live' && (e.live_scores || e.live_point)) {
+    // Prefer the Sofascore snapshot's own games over ESPN's, for the same
+    // reason the draw page does: the point beside them has to describe the same
+    // instant. ESPN lags up to 60s, so splicing the two shows a point from
+    // after a game the set score has not registered yet — and the schedule
+    // disagreeing with the bracket about a match they both show is worse again.
+    const g = e.live_point?.games ?? null
+    const nodes = liveScoreNodes(
+      g ? [g[0], g[1], e.live_point.serving,
+           g[0].map((_, i) => i === g[0].length - 1
+             ? null
+             : Number(g[0][i]) > Number(g[1][i]))]
+        : e.live_scores)
+    const pts = e.live_point?.point ?? null
+    if (!nodes) return null
+    return (
+      <>
+        {nodes}
+        {pts && pts.some(p => p != null) && (
+          <span className={clsx('sched-live-point',
+                                { 'sched-live-point--tb': e.live_point.tiebreak })}
+                title={e.live_point.tiebreak ? 'Tiebreak points' : 'Current game'}>
+            {pts[0] ?? '0'}-{pts[1] ?? '0'}
+          </span>
+        )}
+      </>
+    )
+  }
   if (e.scores) return scoreNodes(e.scores)
   return null
 }

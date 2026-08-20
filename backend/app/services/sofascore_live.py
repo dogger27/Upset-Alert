@@ -183,6 +183,53 @@ def _snapshot(event: dict) -> dict:
     }
 
 
+def live_point_for(match) -> Optional[dict]:
+    """The renderable point score for a match, or None.
+
+    Shared by every surface that shows a live score — the bracket, the combined
+    view and the schedule — because the rules below are judgement calls, not
+    formatting, and three copies of them would drift apart. The schedule showing
+    a different score from the draw page for the same match is exactly the bug
+    this prevents.
+
+    Three reasons to return nothing:
+
+    * No snapshot. The normal case: no poller, or nothing on court.
+    * Stale. A point is the most perishable thing on the page — 40-30 becomes a
+      new game in seconds, and one sitting beside a set score that has moved on
+      reads as a bug in the bracket rather than as old data. Enforced here,
+      server-side, rather than trusted to whatever the client last received.
+    * The match has a winner. The poller clears its own snapshot when an event
+      leaves the live list, but ESPN can record the result first, and in the gap
+      the honest answer is that the match is over.
+
+    `games` travels with `point` so callers can render one coherent state
+    instead of splicing two feeds: taking games from ESPN and the point from
+    here produces states that never existed, because ESPN lags up to 60s.
+    """
+    snap = getattr(match, "sofa_live_json", None)
+    if not snap or getattr(match, "winner_id", None) is not None:
+        return None
+    try:
+        at = datetime.fromisoformat(snap["at"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if at.tzinfo is None:
+        at = at.replace(tzinfo=timezone.utc)
+    if (datetime.now(timezone.utc) - at).total_seconds() > FRESH_SECONDS:
+        return None
+    point = snap.get("point") or [None, None]
+    if not any(p is not None for p in point):
+        return None
+    sets = snap.get("sets") or []
+    games = [[str(s[0]) if s and s[0] is not None else "" for s in sets],
+             [str(s[1]) if s and s[1] is not None else "" for s in sets]]
+    return {"point": point,
+            "games": games if sets else None,
+            "tiebreak": bool(snap.get("tiebreak")),
+            "serving": snap.get("serving")}
+
+
 async def _tracked(db) -> tuple[dict, dict]:
     """((unique_tournament_id, season_id) -> draw_id, sofa_player_id -> entry_id).
 
