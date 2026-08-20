@@ -44,10 +44,20 @@ CONT_RE = re.compile(r'^(?:\[[^\]]*\]|[A-Z]{3})$')
 NOISE_RE = re.compile(
     r'sign-?in|deadline|supervisor|referee|tournament director|order of play|'
     r'ceremony|presentation|trophy|approximately|interview|practice|mins?\)|'
+    # Side events printed in the running order but not part of any draw. They
+    # carry their own "vs", so left alone they are absorbed into the real match
+    # above — Keys v Parry acquired "EXHIBITION DOUBLES - BAHRAMI/CLEMENT vs
+    # PIOLINE/SANTORO" as two extra opponents, which then read as a doubles
+    # match. Six files across the corpus do this.
+    r'exhibition|wheelchair|legends?\b|invitational|pro-?am|'
     r'^(?:singles|doubles|mixed)\s+(?:final|semi|quarter|qf|sf|f)\b|'
     r'^(?:MS|MD|WS|WD|XD|BS|BD|GS|GD|QS|QD)\s+(?:final|sf|qf|f|r\d+|tbf)\b|'
     r'locker-?room|director|^any match|'
     r'revised|released|any match|matches will|prize money|^\d+$|^page\b|'
+    # Scheduling-policy footnotes. They sit below the play but share a line with
+    # notes from neighbouring columns, so the y-cutoff does not always reach
+    # them and one arrived as a third opponent.
+    r'no matches later|matches not started|unless agreed|order of play is|'
     r'last match on any court|may be moved|order of play is subject', re.I)
 
 # Everything below the last match: officials rosters, physio lists, the
