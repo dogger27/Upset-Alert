@@ -385,8 +385,36 @@ class Match(Base):
     winner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("draw_entries.id"), nullable=True)
     is_bye: Mapped[bool] = mapped_column(Integer, default=False)
     scores_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
-    live_scores_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    # none_as_null on both JSON columns below. Without it SQLAlchemy stores a
+    # Python None as the JSON TEXT 'null', which is not SQL NULL — so
+    # `col.isnot(None)` still matches the row. Production accumulated 1,039 such
+    # rows in live_scores_json: harmless there only because espn_monitor also
+    # re-checks in Python, but it means every poll selects a thousand rows it has
+    # no use for. The same pattern in sofa_live_json below would have been a real
+    # fault, re-clearing and re-broadcasting a finished match every 10 seconds.
+    live_scores_json: Mapped[Optional[list]] = mapped_column(
+        JSON(none_as_null=True), nullable=True)
     served_first: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Sofascore's live snapshot, kept in its OWN column rather than merged into
+    # live_scores_json above. Two reasons, and both are about not creating a
+    # contradiction on screen:
+    #
+    #  1. espn_monitor owns live_scores_json outright — it writes it, clears it
+    #     when a match leaves the in-progress list, and treats "non-null" as
+    #     "this match is live". A second writer on the same column would fight
+    #     it every poll.
+    #  2. ESPN and Sofascore are sampled at different moments. Taking games from
+    #     one and points from the other produces states that never existed: a
+    #     game that has already been won still showing 40-30 beside a set score
+    #     that has moved on. Each snapshot here is internally consistent because
+    #     it came from a single response.
+    #
+    # Shape: {"sets": [[p1,p2], ...], "point": [p1,p2], "tiebreak": bool,
+    #         "serving": 1|2|None, "at": iso8601}
+    # Readers prefer this while it is fresh and fall back to live_scores_json,
+    # so ESPN remains the source of record and this is strictly additive.
+    sofa_live_json: Mapped[Optional[dict]] = mapped_column(
+        JSON(none_as_null=True), nullable=True)
     status: Mapped[str] = mapped_column(String, default="pending")
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     # First moment ESPN reported this match in progress, and the minutes between

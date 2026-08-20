@@ -69,12 +69,24 @@ async def lifespan(app: FastAPI):
     scrapers_on = settings.environment == "production"
     if scrapers_on:
         start_scheduler()
+
+    # Independent of the scheduler on purpose: this is the one thing staging is
+    # for, and it must be switchable there without also turning on every scraper
+    # — or turned off in production without stopping them.
+    live_on = settings.sofascore_live_enabled
+    if live_on:
+        from app.services.sofascore_live import monitor as sofa_live_monitor
+        sofa_live_monitor.start()
+        logging.getLogger("app").info("Sofascore live polling ENABLED")
     else:
         logging.getLogger("app").info(
             "Scrapers/scheduler DISABLED (environment=%s). Set ENVIRONMENT=production to enable.",
             settings.environment,
         )
     yield
+    if live_on:
+        from app.services.sofascore_live import monitor as sofa_live_monitor
+        sofa_live_monitor.stop()
     if scrapers_on:
         stop_scheduler()
     # Close every pooled connection so SQLite runs its closing checkpoint and
