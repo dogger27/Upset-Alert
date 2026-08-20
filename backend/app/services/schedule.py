@@ -443,7 +443,12 @@ async def _renumber_courts(db, tournament_id: int, play_date: date) -> None:
         by_court.setdefault(r.court or '', []).append(r)
 
     for slots in by_court.values():
-        slots.sort(key=lambda r: (r.court_order, r.first_seen_at or datetime.min.replace(tzinfo=timezone.utc)))
+        # _aware on every value: the fallback below is tz-aware, so a row read
+        # back from SQLite (naive) sorted against a row with no first_seen_at
+        # would compare naive with aware and raise.
+        slots.sort(key=lambda r: (r.court_order,
+                                  _aware(r.first_seen_at)
+                                  or datetime.min.replace(tzinfo=timezone.utc)))
         for position, entry in enumerate(slots, 1):
             if entry.court_order != position:
                 entry.court_order = position
@@ -527,8 +532,13 @@ async def _absorb(db, keep, drop) -> None:
     """Fold one row into another: the surviving row inherits the earlier
     first_seen_at (it is when the slot was first printed, and _renumber_courts
     breaks ties on it) and every change ever recorded against the loser."""
-    if drop.first_seen_at and (not keep.first_seen_at
-                               or drop.first_seen_at < keep.first_seen_at):
+    # Compared through _aware because these two rows reliably differ in kind: a
+    # row loaded from SQLite is naive, while one written earlier in this same
+    # session still holds the aware value it was assigned. Comparing them raised
+    # TypeError and, since _dedupe_day runs first, took the whole ingest with it
+    # — the schedule silently stopped updating rather than losing one row.
+    drop_first, keep_first = _aware(drop.first_seen_at), _aware(keep.first_seen_at)
+    if drop_first and (not keep_first or drop_first < keep_first):
         keep.first_seen_at = drop.first_seen_at
     await db.execute(
         update(ScheduleChange)
