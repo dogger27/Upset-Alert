@@ -45,6 +45,11 @@ class SchedulePlayerOut(BaseModel):
     # draw_entries row at all.
     seed: Optional[int] = None
     entry_type: Optional[str] = None
+    # For the H2H panel. Deliberately NOT what gates the button — an unmatched
+    # player would otherwise take head-to-head away from a match that is
+    # actually being played. Null means "no Tennis Explorer match", and the
+    # panel shows what it can.
+    te_slug: Optional[str] = None
 
 
 class ScheduleEntryOut(BaseModel):
@@ -124,7 +129,8 @@ def _printed_mark(raw: str) -> tuple:
     return seed, etype
 
 
-def _player_out(p, nats: dict, seeds: dict, types: dict, from_bracket: bool):
+def _player_out(p, nats: dict, seeds: dict, types: dict, from_bracket: bool,
+                slugs: dict = None):
     """One player, preferring what the bracket knows over what the sheet printed.
 
     `from_bracket` is false for anything but main-draw singles. A doubles
@@ -145,6 +151,7 @@ def _player_out(p, nats: dict, seeds: dict, types: dict, from_bracket: bool):
         nationality=nats.get(p.draw_entry_id),
         seed=seed,
         entry_type=etype,
+        te_slug=(slugs or {}).get(p.draw_entry_id),
     )
 
 
@@ -235,10 +242,11 @@ async def schedule_day(
     nats = {}
     ent_seeds = {}
     ent_types = {}
+    ent_slugs = {}
     if ent_ids:
         rows = (await db.execute(
             select(DrawEntry.id, DrawEntry.nationality,
-                   DrawEntry.seed, DrawEntry.entry_type).where(
+                   DrawEntry.seed, DrawEntry.entry_type, DrawEntry.te_slug).where(
                 DrawEntry.id.in_(ent_ids)))).all()
         nats = {r[0]: r[1] for r in rows if r[1]}
         # Seeding from the bracket, so it survives a name that never carried it.
@@ -250,6 +258,7 @@ async def schedule_day(
         # bracket writes no "[17]" into it.
         ent_seeds = {r[0]: r[2] for r in rows if r[2]}
         ent_types = {r[0]: r[3] for r in rows if r[3]}
+        ent_slugs = {r[0]: r[4] for r in rows if r[4]}
 
     tz_rows = (await db.execute(
         select(Draw.tournament_id, Draw.venue_timezone).where(
@@ -300,7 +309,8 @@ async def schedule_day(
         m = matches.get(e.match_id) if e.match_id else None
         players = [
             _player_out(p, nats, ent_seeds, ent_types,
-                        e.discipline == "singles" and e.stage == "main")
+                        e.discipline == "singles" and e.stage == "main",
+                        ent_slugs)
             for p in sorted(e.players, key=lambda x: (x.side, x.position))
         ]
         out.append(ScheduleEntryOut(

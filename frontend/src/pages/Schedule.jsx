@@ -1,13 +1,14 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
+import H2HPanel from '../components/H2HPanel'
 import { useSearchParams, Link } from 'react-router-dom'
 import clsx from 'clsx'
 import { getScheduleDay } from '../api/schedule'
 import { updateMe } from '../api/auth'
 import { useAuth } from '../store/auth'
 import { nationalityIso2, splitPlayerName } from '../utils/flags'
-import { scoreNodes, liveScoreNodes } from '../utils/score'
+import { parseSet } from '../utils/score'
 import './Schedule.css'
 
 const VIEW_KEY = 'ua-schedule-view'
@@ -158,41 +159,6 @@ function seedNumber(player) {
   return nums ? Math.min(...nums.map(Number)) : null
 }
 
-/* ESPN only, and formatted the way the draw page formats it — "6-4, 7-6³"
-   rather than the raw game counts this first rendered as "5 | 4". */
-function liveLine(e) {
-  if (e.status === 'live' && (e.live_scores || e.live_point)) {
-    // Prefer the Sofascore snapshot's own games over ESPN's, for the same
-    // reason the draw page does: the point beside them has to describe the same
-    // instant. ESPN lags up to 60s, so splicing the two shows a point from
-    // after a game the set score has not registered yet — and the schedule
-    // disagreeing with the bracket about a match they both show is worse again.
-    const g = e.live_point?.games ?? null
-    const nodes = liveScoreNodes(
-      g ? [g[0], g[1], e.live_point.serving,
-           g[0].map((_, i) => i === g[0].length - 1
-             ? null
-             : Number(g[0][i]) > Number(g[1][i]))]
-        : e.live_scores)
-    const pts = e.live_point?.point ?? null
-    if (!nodes) return null
-    return (
-      <>
-        {nodes}
-        {pts && pts.some(p => p != null) && (
-          <span className={clsx('sched-live-point',
-                                { 'sched-live-point--tb': e.live_point.tiebreak })}
-                title={e.live_point.tiebreak ? 'Tiebreak points' : 'Current game'}>
-            {pts[0] ?? '0'}-{pts[1] ?? '0'}
-          </span>
-        )}
-      </>
-    )
-  }
-  if (e.scores) return scoreNodes(e.scores)
-  return null
-}
-
 /**
  * One player: flag, then name. Doubles shows surnames only — four full names on
  * one row does not fit a phone, and the surname is what identifies a pair
@@ -295,10 +261,122 @@ function startedLine(e, zone) {
   return 'Started'
 }
 
-function MatchRow({ e, showCourt, zone, venueMode }) {
+/* A tennis ball, matching the draw page's. Same geometry deliberately: the two
+   pages show the same match and a second, different ball would read as a
+   different piece of information. */
+function ServeBall() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" className="sched-ball" aria-label="serving">
+      <circle cx="12" cy="12" r="11" fill="#7ba81f" />
+      <g fill="none" stroke="#fff" strokeWidth="2">
+        <path d="M12 1A12.04 12.04 0 0 1 1 12" />
+        <path d="M12 23A12.04 12.04 0 0 1 23 12" />
+      </g>
+      <circle cx="12" cy="12" r="11" fill="none" stroke="#1b4332" strokeWidth="2" />
+    </svg>
+  )
+}
+
+/* One set's games for one player, with the tiebreak as a superscript.
+   parseSet already understands "7(9)"; this only decides how it renders. */
+function SetCell({ cell, bold }) {
+  const { g, tb } = parseSet(cell)
+  if (g === '' && tb == null) return <span className="sched-set empty">·</span>
+  return (
+    <span className={clsx('sched-set', { 'sched-set--won': bold })}>
+      {g}{tb != null && <sup>{tb}</sup>}
+    </span>
+  )
+}
+
+/* Both competitors, one per line, each with their own scores.
+   Built from ONE source per render — the live snapshot when a match is under
+   way, the final scores when it is over. Mixing them is what put a point score
+   beside a set score that had already moved on. */
+function CompetitorRows({ e, a, b }) {
+  const doubles = e.discipline !== 'singles'
+  const lp = e.live_point ?? null
+  const live = e.status === 'live'
+
+  // Games: prefer the snapshot's own, exactly as the draw page does.
+  const g = lp?.games ?? null
+  const fromLive = live ? (g ? [g[0], g[1]] : (e.live_scores ? [e.live_scores[0], e.live_scores[1]] : null)) : null
+  const fromFinal = !live && e.scores ? [e.scores[0], e.scores[1]] : null
+  const sets = fromLive ?? fromFinal
+  const n = sets ? Math.max(sets[0]?.length ?? 0, sets[1]?.length ?? 0) : 0
+
+  // Who took each completed set, for the bolding. The set in play has no winner
+  // and must stay unbolded — that is what makes "in progress" legible.
+  const setWon = (i, side) => {
+    if (!sets) return false
+    if (live && i === n - 1) return false
+    const x = Number(parseSet(sets[0]?.[i]).g), y = Number(parseSet(sets[1]?.[i]).g)
+    if (Number.isNaN(x) || Number.isNaN(y)) return false
+    return side === 0 ? x > y : y > x
+  }
+
+  const winnerSide = (() => {
+    if (e.status !== 'completed' || !e.scores) return null
+    let x = 0, y = 0
+    for (let i = 0; i < n; i++) { if (setWon(i, 0)) x++; if (setWon(i, 1)) y++ }
+    return x === y ? null : (x > y ? 0 : 1)
+  })()
+
+  const serving = live ? (lp?.serving ?? e.live_scores?.[2] ?? null) : null
+  const point = live && lp?.point ? lp.point : null
+
+  const rows = [
+    { players: a, side: 0, tbd: !!e.tbd_side?.includes('a') },
+    { players: b, side: 1, tbd: !!e.tbd_side?.includes('b') },
+  ]
+
+  return (
+    <div className={clsx('sched-competitors', { 'sched-competitors--doubles': doubles })}>
+      {rows.map(({ players, side, tbd }) => (
+        <div key={side}
+             className={clsx('sched-competitor', {
+               'sched-competitor--won': winnerSide === side,
+               'sched-competitor--lost': winnerSide != null && winnerSide !== side,
+             })}>
+          <span className="sched-competitor-name">
+            <Side players={players} doubles={doubles} tbd={tbd} />
+          </span>
+          {serving === side + 1 && <ServeBall />}
+          {winnerSide != null && (
+            <span className={clsx('sched-mark', winnerSide === side ? 'sched-mark--win' : 'sched-mark--loss')}>
+              {winnerSide === side ? '\u2713' : '\u2717'}
+            </span>
+          )}
+          <span className="sched-sets">
+            {Array.from({ length: n }, (_, i) => (
+              <SetCell key={i} cell={sets?.[side]?.[i]} bold={setWon(i, side)} />
+            ))}
+            {/* The point last, tinted apart from the games — it is a different
+                kind of number and changes every few seconds. */}
+            {point && (
+              <span className={clsx('sched-point', { 'sched-point--tb': lp.tiebreak })}
+                    title={lp.tiebreak ? 'Tiebreak points' : 'Current game'}>
+                {point[side] ?? '0'}
+              </span>
+            )}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function MatchRow({ e, showCourt, zone, venueMode, onH2H }) {
   const a = e.players.filter(p => p.side === 'a')
   const b = e.players.filter(p => p.side === 'b')
-  const score = liveLine(e)
+
+  // Head-to-head needs exactly one named player a side. Doubles has four, and
+  // an unresolved "X OR Y" slot has no single opponent to compare against.
+  const h2hPair = (e.discipline === 'singles'
+                   && !e.is_tbd && a.length === 1 && b.length === 1
+                   && a[0]?.name && b[0]?.name)
+    ? { p1: a[0], p2: b[0], entry: e }
+    : null
   const done = e.status === 'completed'
   // Same flag the draw page reads — ESPN parks a suspended match at the fifth
   // slot of live_scores. Reusing the draw's own badge so rain reads the same
@@ -346,26 +424,38 @@ function MatchRow({ e, showCourt, zone, venueMode }) {
           {e.stage === 'qualifying' && <span className="sched-tag sched-tag--quali">Q</span>}
           {e.discipline !== 'singles' && <span className="sched-tag">{e.discipline === 'mixed' ? 'Mixed' : 'Doubles'}</span>}
         </div>
-        <div className="sched-playrow">
-        <div className={clsx('sched-players', { 'sched-players--pairs': e.discipline !== 'singles' })}>
-          {/* "vs" rides with the FIRST team rather than sitting on its own
-              line. Stacked pairs otherwise put it alone between them, which
-              reads as a third row of the match. Singles are unaffected: the
-              wrapper is inline, so "A vs B" still flows on one line. */}
-          <span className="sched-teamline">
-            <Side players={a} doubles={e.discipline !== 'singles'} tbd={!!e.tbd_side?.includes('a')} />
-            <span className="sched-vs">vs</span>
-          </span>
-          <Side players={b} doubles={e.discipline !== 'singles'} tbd={!!e.tbd_side?.includes('b')} />
-        </div>
-        {score && <div className="sched-score">{score}</div>}
-        </div>
+        {/* One competitor per line, with that competitor's own set scores in
+            columns beside them — the same statement the draw page makes.
+            "A vs B" with a combined "6-4, 7-6" score forced the reader to work
+            out which number belonged to whom, and on a phone it wrapped into an
+            unreadable block. Names shrink and fall back to surnames rather than
+            wrapping: a line per player is the invariant. */}
+        <CompetitorRows e={e} a={a} b={b} />
       </div>
+      {/* Head-to-head, in the same place and the same shape as the draw page —
+          the two surfaces describe the same match and a different affordance
+          would read as a different feature.
+
+          Singles only: with four players there is no single pairing to compare.
+          NOT gated on te_slug, matching the bracket: an unmatched player would
+          otherwise take the button away from a match being played right now. */}
+      {h2hPair && (
+        <button
+          className="h2h-strip sched-h2h"
+          onClick={() => onH2H(h2hPair)}
+          title={`Head-to-head: ${h2hPair.p1.name} vs ${h2hPair.p2.name}`}
+        >
+          <span className="h2h-strip-label">H2H</span>
+        </button>
+      )}
     </div>
   )
 }
 
 export default function Schedule() {
+  // The panel is owned by the page, not the row: it is a full-screen overlay,
+  // and one instance beats one per match.
+  const [h2h, setH2H] = useState(null)
   const [params, setParams] = useSearchParams()
   const [view, setView] = useState(storedView)
   const [hideDone, setHideDone] = useState(false)
@@ -516,6 +606,24 @@ export default function Schedule() {
 
   return (
     <div className="sched-page">
+      {/* Same panel the draw page opens, so head-to-head looks and behaves
+          identically wherever it is reached from. No picking here: the schedule
+          is a view of play, and a pick belongs on the bracket where the cascade
+          it affects is visible. */}
+      {h2h && (
+        <H2HPanel
+          slug1={h2h.p1.te_slug}
+          slug2={h2h.p2.te_slug}
+          player1={h2h.p1}
+          player2={h2h.p2}
+          tournSurface={h2h.entry?.surface}
+          tournGender={h2h.entry?.tour === 'WTA' ? 'F' : 'M'}
+          beforeDrawId={h2h.entry?.draw_id}
+          match={null}
+          canPick={false}
+          onClose={() => setH2H(null)}
+        />
+      )}
       <div className="sched-topbar">
         <div className="sched-titleblock">
           <h1 className="sched-title">
@@ -604,7 +712,7 @@ export default function Schedule() {
 
       {!isLoading && entries.length > 0 && view === 'time' && (
         <div className="sched-list sched-list--time">
-          {timeEntries.map(e => <MatchRow key={e.id} e={e} showCourt zone={zone} venueMode={tzMode === 'venue'} />)}
+          {timeEntries.map(e => <MatchRow key={e.id} e={e} showCourt zone={zone} venueMode={tzMode === 'venue'} onH2H={setH2H} />)}
         </div>
       )}
 
@@ -614,7 +722,7 @@ export default function Schedule() {
             <section className="sched-courtblock" key={name}>
               <h2 className="sched-courthead">{name}</h2>
               <div className="sched-list">
-                {list.map(e => <MatchRow key={e.id} e={e} showCourt={false} zone={zone} venueMode={tzMode === 'venue'} />)}
+                {list.map(e => <MatchRow key={e.id} e={e} showCourt={false} zone={zone} venueMode={tzMode === 'venue'} onH2H={setH2H} />)}
               </div>
             </section>
           ))}
