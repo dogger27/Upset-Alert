@@ -38,6 +38,12 @@ class SchedulePlayerOut(BaseModel):
     # Stays null for players we genuinely hold no country for, which is how
     # neutral athletes keep no flag.
     nationality: Optional[str] = None
+    # Seeding and entry status as data rather than as "[17] " on the front of
+    # the name. The bracket is preferred where the player resolved; the sheet
+    # is the only source for doubles teams and qualifiers, who have no
+    # draw_entries row at all.
+    seed: Optional[int] = None
+    entry_type: Optional[str] = None
 
 
 class ScheduleEntryOut(BaseModel):
@@ -87,6 +93,53 @@ class ScheduleDayOut(BaseModel):
 
 
 _CLOCK_RE = _re.compile(r'^(\d{1,2})[:.](\d{2})\s*(am|pm)?$', _re.I)
+
+
+_MARK_RE = _re.compile(r"\[([^\]]+)\]")
+
+
+def _printed_mark(raw: str) -> tuple:
+    """(seed, entry_type) as the sheet printed them.
+
+    The only source for a doubles team or a qualifier, neither of which has a
+    draw_entries row to read a seeding off. A name can carry both markers —
+    "[WC] [2]" — so digits and codes are collected separately rather than by
+    taking the first bracket.
+    """
+    seed = None
+    etype = None
+    for m in _MARK_RE.finditer(raw or ""):
+        value = m.group(1).strip()
+        if value.isdigit():
+            if seed is None:
+                seed = int(value)
+        elif value:
+            etype = value.upper()
+    return seed, etype
+
+
+def _player_out(p, nats: dict, seeds: dict, types: dict, from_bracket: bool):
+    """One player, preferring what the bracket knows over what the sheet printed.
+
+    `from_bracket` is false for anything but main-draw singles. A doubles
+    player still resolves to a draw_entries row — their own singles entry, the
+    only one this tournament has — and reading a seeding off it puts a SINGLES
+    seed on a DOUBLES team: Siniakova/Townsend are the [1] seeds in the doubles
+    and she is [33] in the singles. Qualifying is seeded separately again. In
+    both, the sheet is the only source that is about the event being played.
+    """
+    seed, etype = _printed_mark(p.raw_name)
+    if from_bracket:
+        seed = seeds.get(p.draw_entry_id) or seed
+        etype = types.get(p.draw_entry_id) or etype
+    return SchedulePlayerOut(
+        side=p.side, position=p.position,
+        name=p.raw_name,
+        draw_entry_id=p.draw_entry_id,
+        nationality=nats.get(p.draw_entry_id),
+        seed=seed,
+        entry_type=etype,
+    )
 
 
 def _printed_instant(entry, tz_name: Optional[str]) -> Optional[datetime]:
@@ -174,17 +227,23 @@ async def schedule_day(
 
     ent_ids = {p.draw_entry_id for e in entries for p in e.players if p.draw_entry_id}
     nats = {}
-    ent_names = {}
+    ent_seeds = {}
+    ent_types = {}
     if ent_ids:
         rows = (await db.execute(
-            select(DrawEntry.id, DrawEntry.nationality, DrawEntry.name).where(
+            select(DrawEntry.id, DrawEntry.nationality,
+                   DrawEntry.seed, DrawEntry.entry_type).where(
                 DrawEntry.id.in_(ent_ids)))).all()
         nats = {r[0]: r[1] for r in rows if r[1]}
-        # The bracket's name in preference to the printed one wherever the
-        # player resolved. The sheet wraps names in the seeding and country it
-        # is also laying out in columns — "[17] Frances TIAFOE USA" — and none
-        # of that belongs in a row that already shows a flag of its own.
-        ent_names = {r[0]: r[2] for r in rows if r[2]}
+        # Seeding from the bracket, so it survives a name that never carried it.
+        # The printed name is otherwise left alone: the client already turns
+        # "[17] Frances TIAFOE USA" into a badge, a name and a flag, and the
+        # capitalised surname it lays out is the page's own typography. What
+        # went missing was the seeding on rows whose name came from US — a slot
+        # resolved from "Tien OR Tiafoe" carries the bracket's name, and the
+        # bracket writes no "[17]" into it.
+        ent_seeds = {r[0]: r[2] for r in rows if r[2]}
+        ent_types = {r[0]: r[3] for r in rows if r[3]}
 
     tz_rows = (await db.execute(
         select(Draw.tournament_id, Draw.venue_timezone).where(
@@ -234,10 +293,8 @@ async def schedule_day(
             courts.append(e.court)
         m = matches.get(e.match_id) if e.match_id else None
         players = [
-            SchedulePlayerOut(side=p.side, position=p.position,
-                              name=ent_names.get(p.draw_entry_id) or p.raw_name,
-                              draw_entry_id=p.draw_entry_id,
-                              nationality=nats.get(p.draw_entry_id))
+            _player_out(p, nats, ent_seeds, ent_types,
+                        e.discipline == "singles" and e.stage == "main")
             for p in sorted(e.players, key=lambda x: (x.side, x.position))
         ]
         out.append(ScheduleEntryOut(

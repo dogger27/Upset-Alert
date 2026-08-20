@@ -139,14 +139,20 @@ function expectedStart(e, zone, venueMode) {
 const NO_SEED = 9999
 
 /**
- * The seed number in a printed name, or null.
+ * A player's seed number, or null.
+ *
+ * The API sends it as a field, taken from the bracket where the player
+ * resolved and from the sheet's own "[17]" otherwise — so a resolved name can
+ * be shown clean without the seeding disappearing with the brackets. The parse
+ * stays as the fallback for anything the API has not filled in.
  *
  * Only digits count. The same brackets carry [Q], [WC], [LL], [PR] and [Alt],
- * which say how a player entered rather than how highly they are ranked — and a
+ * which say how a player ENTERED rather than how highly they are ranked — and a
  * name can carry both, as in "[WC] [2]".
  */
-function seedNumber(raw) {
-  const { seed } = splitPlayerName(raw)
+function seedNumber(player) {
+  if (player?.seed != null) return player.seed
+  const { seed } = splitPlayerName(player?.name)
   const nums = seed && seed.match(/\d+/g)
   return nums ? Math.min(...nums.map(Number)) : null
 }
@@ -164,8 +170,11 @@ function liveLine(e) {
  * one row does not fit a phone, and the surname is what identifies a pair
  * anyway.
  */
-function PlayerName({ raw, surnameOnly, hideSeed, nationality }) {
-  const { seed, first, last, nat } = splitPlayerName(raw)
+function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp }) {
+  const { seed: printedSeed, first, last, nat } = splitPlayerName(raw)
+  // A seeding sent as a field beats one parsed out of the name: a resolved
+  // player's name comes from the bracket and never carried brackets to parse.
+  const seed = seedProp != null ? `[${seedProp}]` : printedSeed
   // Our own record wins over whatever the sheet printed: it drops the country
   // when space is tight, and a slot resolved from an "OR" carries the bracket's
   // name, which never had one inline.
@@ -209,7 +218,8 @@ function Side({ players, doubles, tbd }) {
   // A doubles seed belongs to the TEAM. The sheet repeats it against both
   // partners, which reads as two separately-seeded players.
   const teamSeed = doubles
-    ? players.map(p => splitPlayerName(p.name).seed).find(Boolean) ?? null
+    ? players.map(p => (p.seed != null ? `[${p.seed}]`
+                                       : splitPlayerName(p.name).seed)).find(Boolean) ?? null
     : null
   return (
     <span className="sched-side">
@@ -221,7 +231,7 @@ function Side({ players, doubles, tbd }) {
               sat between them. */}
           {i > 0 && <span className="sched-slash">/</span>}
           <PlayerName raw={p.name} surnameOnly={doubles} hideSeed={doubles}
-                      nationality={p.nationality} />
+                      nationality={p.nationality} seed={p.seed} />
         </Fragment>
       ))}
     </span>
@@ -455,7 +465,7 @@ export default function Schedule() {
         if (e.discipline !== 'singles') continue
         count += 1
         for (const p of e.players) {
-          const n = seedNumber(p.name)
+          const n = seedNumber(p)
           if (n != null && n < best) best = n
         }
       }
