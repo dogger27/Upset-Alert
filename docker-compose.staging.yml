@@ -36,7 +36,21 @@ services:
     container_name: staging-backend
     restart: unless-stopped
     ports:
+      # localhost for cloudflared, which dials the tunnel ingress at
+      # http://localhost:8002.
       - "127.0.0.1:8002:8001"
+      # ...and Jupiter's Tailscale address, so any device on the tailnet can
+      # reach staging WITHOUT DNS. That mattered immediately: a carrier resolver
+      # cached NXDOMAIN for staging.upsetalert.ca before the record existed and
+      # kept serving it, and Tailscale MagicDNS forwards to whatever the network
+      # hands it — so the hostname was unreachable from the laptop while being
+      # perfectly resolvable everywhere else.
+      #
+      # Not a public exposure: the tailnet is private to this account, which
+      # makes it a tighter audience than the Cloudflare hostname, not a wider
+      # one. Hard-coded because a Tailscale IP is stable for the life of the
+      # node.
+      - "100.74.46.52:8002:8001"
     volumes:
       # The DIRECTORY, never the .db file — SQLite in WAL mode writes sibling
       # -wal/-shm files next to the database, and a single-file mount strands
