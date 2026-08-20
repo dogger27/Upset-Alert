@@ -17,6 +17,25 @@ class Settings(BaseSettings):
     # sender; required by the VAPID spec.
     vapid_subject: str = "mailto:pdwiens@gmail.com"
 
+    # Master switch for anything that leaves this machine and reaches a USER —
+    # email and Web Push. Default True so production is unchanged and no deploy
+    # can silently go quiet.
+    #
+    # This exists because staging runs a COPY OF THE PRODUCTION DATABASE, which
+    # carries every real address and every real push subscription. Staging also
+    # has to run with environment="production", because that is the flag the
+    # scheduler and the scrapers gate on — so the existing `environment !=
+    # production` guard inside send_async cannot help there. Without a second,
+    # independent switch, standing up staging would mean every competitor gets a
+    # duplicate of every notification, from a box whose whole purpose is to run
+    # unfinished code.
+    #
+    # Deliberately NOT derived from environment, hostname, port or database
+    # path. A guard that infers what it is protecting against gets it wrong the
+    # first time something is renamed; this one has to be set to false on
+    # purpose, and says so in the log at boot.
+    outbound_notifications: bool = True
+
     class Config:
         env_file = ".env"
 

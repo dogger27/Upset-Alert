@@ -88,6 +88,14 @@ def _setup():
 
 
 def _send(params: resend.Emails.SendParams) -> Optional[Exception]:
+    # The last line before the network. Every email in the app funnels through
+    # here, so this is the one place the staging kill switch cannot be routed
+    # around by a caller that forgot about it — see Settings.outbound_notifications.
+    if not settings.outbound_notifications:
+        logger.warning(
+            "BLOCKED outbound email to %s (%r) — outbound_notifications=false",
+            params.get("to"), params.get("subject"))
+        return None
     _setup()
     try:
         resend.Emails.send(params)

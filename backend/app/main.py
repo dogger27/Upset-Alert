@@ -56,6 +56,16 @@ async def lifespan(app: FastAPI):
     # Only production runs the background scrapers (Wikipedia / Tennis Explorer /
     # ELO / ESPN / Wikimedia EventStreams). Local dev (environment=development)
     # leaves them off so it doesn't duplicate load / trip rate limits.
+    # Say it at boot, loudly, and in both directions. A staging box that is
+    # silently emailing real users and a staging box that is silently NOT are
+    # both bad, and the only difference is one flag — so neither state is left
+    # to be inferred from the absence of a log line.
+    if not settings.outbound_notifications:
+        logging.getLogger("app").warning(
+            "OUTBOUND NOTIFICATIONS DISABLED — email and Web Push will be "
+            "blocked at the send call. Correct for staging; on production this "
+            "means nobody is being notified of anything.")
+
     scrapers_on = settings.environment == "production"
     if scrapers_on:
         start_scheduler()
