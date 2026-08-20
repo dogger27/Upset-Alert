@@ -467,6 +467,12 @@ async def _migrate(conn):
         # re-run and converges to zero rows once the model change is deployed.
         "UPDATE matches SET live_scores_json = NULL WHERE live_scores_json = 'null'",
         "UPDATE matches SET sofa_live_json = NULL WHERE sofa_live_json = 'null'",
+        # Shadow columns for the ESPN replacement. Written by sofascore_results,
+        # read by nothing except the diff report — see Match.sofa_winner_id.
+        "ALTER TABLE matches ADD COLUMN sofa_winner_id INTEGER",
+        "ALTER TABLE matches ADD COLUMN sofa_completed_at DATETIME",
+        "ALTER TABLE matches ADD COLUMN sofa_scores_json JSON",
+        "ALTER TABLE matches ADD COLUMN sofa_started_at DATETIME",
     ]
     for sql in migrations:
         try:

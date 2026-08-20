@@ -55,6 +55,13 @@ class Settings(BaseSettings):
     # between tournaments. Never set it in production.
     sofascore_live_force: bool = False
 
+    # Sweep finished matches into the sofa_* SHADOW columns. Reads nothing back
+    # and changes nothing a user can see — it exists so ESPN and Sofascore can be
+    # diffed over a real tournament before Sofascore is allowed to own a result.
+    # Separate from the live flag because the two answer different questions and
+    # one may want turning off without the other.
+    sofascore_results_enabled: bool = False
+
     class Config:
         env_file = ".env"
 

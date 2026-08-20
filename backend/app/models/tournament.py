@@ -415,6 +415,35 @@ class Match(Base):
     # so ESPN remains the source of record and this is strictly additive.
     sofa_live_json: Mapped[Optional[dict]] = mapped_column(
         JSON(none_as_null=True), nullable=True)
+    # ── Shadow columns ───────────────────────────────────────────────────────
+    # What Sofascore says the RESULT was. Deliberately parallel to winner_id /
+    # completed_at / scores_json / started_at above rather than replacing them.
+    #
+    # Only espn_monitor writes the real columns; eighteen other modules read
+    # them — scoring, standings, locking, notifications, H2H, upsets. So the
+    # eventual cutover is one writer, not eighteen consumers, and until it
+    # happens the safe way to earn confidence is to write a second opinion
+    # beside the first and compare them over a real tournament.
+    #
+    # A wrong winner does not render badly, it scores the league wrong and
+    # emails everyone about it — and the notification dedup tables mean a bad
+    # send cannot be un-sent. Hence: shadow first, diff, then cut over.
+    sofa_winner_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("draw_entries.id"), nullable=True)
+    # When we first OBSERVED the match finished, not when it actually ended —
+    # Sofascore publishes no end timestamp. Later than the truth by up to one
+    # poll interval, which is the same limitation espn_monitor already has.
+    sofa_completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True)
+    # Final per-set games, in the same shape as scores_json ([p1[], p2[]], with
+    # the set loser's cell carrying "(n)" for a tiebreak) so the two can be
+    # compared cell by cell rather than through a translation layer.
+    sofa_scores_json: Mapped[Optional[list]] = mapped_column(
+        JSON(none_as_null=True), nullable=True)
+    # Sofascore's stated start. Better than started_at, which espn_monitor can
+    # only infer as "the first poll that saw it live".
+    sofa_started_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True)
     status: Mapped[str] = mapped_column(String, default="pending")
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     # First moment ESPN reported this match in progress, and the minutes between
