@@ -687,22 +687,11 @@
     padding: 0.5rem 0.45rem;
     /* Full width on a phone. Content-sizing is what makes cards match on a wide
        screen where they sit in separate grids; in a single narrow column they
-       are all full width already, and fit-content only invited an overflow. */
+       are all full width already, and fit-content only invited an overflow.
+       The competitor-row overrides that go with this live at the END of this
+       file — see the note there. */
     width: 100%;
   }
-
-  /* Release the measured name column. The width was computed against the page,
-     not against what is left after the time, scores and H2H columns — so on a
-     narrow screen it pushed the last set clean off the card. Here the name
-     simply takes what remains and ellipsises, which is what it is built for. */
-  .sched-competitor-name {
-    flex: 1 1 auto;
-    width: auto;
-  }
-
-  /* Scores must never be the thing that overflows: they are the row. */
-  .sched-sets { min-width: 0; }
-  .sched-h2h { margin-left: 0; }
   .sched-players { font-size: 0.86rem; }
 
   /* Keep "vs" beside the name it follows. On a phone the row is narrow enough
@@ -911,4 +900,30 @@
 @media (max-width: 480px) {
   /* Narrower, not hidden: it is the only way into head-to-head from here. */
   .sched-h2h { width: 13px; }
+}
+
+
+/* ── Phone overrides for the competitor rows ──────────────────────────────
+   AFTER the base rules on purpose. These were first written inside the 560px
+   block higher up, which is BEFORE .sched-competitor-name is defined — so the
+   base `flex: 0 0 auto` won, the name refused to shrink, and the scores
+   overflowed the card and rendered past the H2H strip. Equal specificity means
+   source order decides; a media query does not outrank anything by itself.
+   Same trap as the @container/@media ordering elsewhere in this app. */
+@media (max-width: 560px) {
+  /* Release the measured column. Its width is computed against the PAGE, and
+     on a phone the name must instead take whatever is left after the time,
+     scores, ball and H2H columns — then ellipsise, which is what it is for. */
+  .sched-competitor-name {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+  }
+
+  /* Scores are the row: they never shrink and never wrap. The name gives way
+     instead, which is the whole ordering this layout depends on. */
+  .sched-sets {
+    flex: 0 0 auto;
+    min-width: 0;
+  }
 }
