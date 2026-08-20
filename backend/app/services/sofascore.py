@@ -55,6 +55,7 @@ before it is trusted, and the unresolved list is the output that matters.
 """
 
 import asyncio
+import os
 from difflib import SequenceMatcher
 from typing import Optional
 from urllib.parse import quote
@@ -93,8 +94,13 @@ _TIMEOUT = 20
 # socks5h, not socks5: the h resolves DNS at the far end, so the exit's resolver
 # is used rather than leaking lookups from here.
 #
-# Unset means direct, which is the normal state. This is for the one-off
-# resolution job; a permanent poller wants an egress that is genuinely ours.
+# Now also carries the production egress: a rotating residential pool, where the
+# session id lives in the PASSWORD segment rather than the username —
+#   http://USER:PASS_country-ca_session-XXXX_lifetime-30m@geo.iproyal.com:12321
+# That is the opposite of most providers and is documented only in IPRoyal's
+# developer docs; every username-segment form is rejected outright. Without
+# _country-* the pool exits wherever it likes — a plain connection came out of
+# China Mobile.
 _PROXY_ENV = "SOFASCORE_PROXY"
 
 # Sofascore splits the tours into separate uniqueTournaments — Cincinnati is
@@ -163,15 +169,35 @@ _blocked_until = 0.0
 _BLOCK_COOLDOWN = 1800.0
 
 
-def _fetch(path: str) -> tuple:
-    """Blocking GET. curl_cffi has no async API, so callers use _get()."""
-    import os
+def _rotate_session(proxy: str) -> str:
+    """Give a rotating-pool proxy a NEW sticky session id.
 
+    IPRoyal puts session config in the password segment
+    (`pass_country-ca_session-XXX_lifetime-30m`), which is the opposite of most
+    providers and is not documented on their help site — only in the developer
+    docs. Every username-segment form is rejected outright.
+
+    Returns the proxy unchanged when there is no session token to replace, so
+    this is safe to call on a direct connection or a fixed-IP proxy.
+    """
+    import re
+    import secrets
+
+    if "_session-" not in proxy:
+        return proxy
+    return re.sub(r"_session-[^_@]+",
+                  f"_session-{secrets.token_hex(4)}", proxy, count=1)
+
+
+def _fetch(path: str, rotate: bool = False) -> tuple:
+    """Blocking GET. curl_cffi has no async API, so callers use _get()."""
     from curl_cffi import requests as cr
 
     kwargs = {"impersonate": _IMPERSONATE, "timeout": _TIMEOUT}
     proxy = os.environ.get(_PROXY_ENV)
     if proxy:
+        if rotate:
+            proxy = _rotate_session(proxy)
         kwargs["proxies"] = {"http": proxy, "https": proxy}
     r = cr.get(f"{_BASE}{path}", **kwargs)
     if r.status_code != 200:
@@ -198,6 +224,29 @@ async def _get(path: str) -> dict:
         _last_request_at = loop.time()
 
     status, payload = await asyncio.to_thread(_fetch, path)
+
+    # A 403 means two different things depending on where we are calling FROM,
+    # and treating them alike is either wasteful or dangerous.
+    #
+    # On a fixed egress it means "this IP is in the penalty box", and the only
+    # correct response is to stop — retrying is what turns a short block into a
+    # long one, which is how Jupiter's own address was lost for a day.
+    #
+    # Through a rotating residential pool the exit is one borrowed consumer IP
+    # out of thousands, and its reputation is inherited from a stranger. A 403
+    # there says nothing about us; it says that particular exit is dirty. Taking
+    # a fresh session and trying once more is the right move, and opening a
+    # 30-minute breaker over one unlucky draw would idle the poller for nothing.
+    if status == 403 and _rotate_session(os.environ.get(_PROXY_ENV) or "") != (
+            os.environ.get(_PROXY_ENV) or ""):
+        status, payload = await asyncio.to_thread(_fetch, path, True)
+        if status == 200:
+            await app_log(
+                "info", "sofascore",
+                "Rotated to a new residential exit after a 403 on the previous one",
+                detail={"path": path},
+                dedup_key="sofa_rotated", dedup_hours=6)
+
     if status == 403:
         _blocked_until = loop.time() + _BLOCK_COOLDOWN
         await app_log(

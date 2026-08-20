@@ -151,9 +151,30 @@ async def sweep_once(db) -> dict:
     if not by_tournament:
         return {"draws": 0, "seen": 0, "written": 0, "unmatched": 0}
 
+    # Is there anything left to find? A draw whose every playable match already
+    # carries a Sofascore verdict has nothing new until another match finishes,
+    # and a COMPLETED tournament never will. Without this the sweep kept pulling
+    # four pages per draw every three minutes forever — about 1.7 GB/month of
+    # requests that could only return what we already had, which is more traffic
+    # than the live poller uses.
+    pending = (await db.execute(
+        select(Match.id).where(
+            Match.draw_id.in_(list(by_tournament.values())),
+            Match.is_bye == False,                                  # noqa: E712
+            Match.player1_id.isnot(None), Match.player2_id.isnot(None),
+            Match.sofa_winner_id.is_(None),
+        ).limit(1))).first()
+    if pending is None:
+        return {"draws": len(by_tournament), "seen": 0, "written": 0,
+                "unmatched": 0, "skipped": "all tracked matches resolved"}
+
     seen = written = unmatched = 0
     now = datetime.now(timezone.utc)
 
+    # Page 0 is the 30 most recently finished events, which is far more than a
+    # tournament produces in three minutes. Deeper pages exist to backfill on
+    # first run or after downtime, so they are walked only when page 0 turns up
+    # something new — a page that adds nothing means we have caught up.
     for (ut_id, season_id), draw_id in by_tournament.items():
         for page in range(MAX_PAGES):
             try:
@@ -239,9 +260,12 @@ async def sweep_once(db) -> dict:
 
             if written:
                 await db.commit()
-            # Pages run newest-first. A page where nothing was new means we have
-            # walked back past everything this sweep can learn.
-            if page_wrote == 0 and page > 0:
+            # Pages run newest-first, so page 0 holds the most recent results.
+            # If it taught us nothing, no deeper page can either — new results
+            # are by definition recent. Previously this only broke from page 1
+            # onward, so a steady state still cost two pages per draw per sweep
+            # to learn nothing twice.
+            if page_wrote == 0:
                 break
 
     return {"draws": len(by_tournament), "seen": seen,
