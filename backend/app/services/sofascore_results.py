@@ -49,8 +49,19 @@ MAX_PAGES = 4
 
 _FINISHED = "finished"
 
+# Sofascore's status codes for a match that ended without being played out.
+# The feed carries these plainly; an earlier version of this file looked only at
+# status.type == "finished" and discarded the code, which silently turned every
+# retirement into a clean straight-sets win. Seven of them in one tournament.
+_RETIRED = 92
+_WALKOVER = 91
+# type == "canceled", so it never reaches the finished branch — listed for the
+# reader, because "no winnerCode" is a legitimate outcome rather than a gap.
+_CANCELED = 70
 
-def _final_scores(home: dict, away: dict) -> Optional[list]:
+
+def _final_scores(home: dict, away: dict, status_code: int = 100,
+                  winner_code: Optional[int] = None) -> Optional[list]:
     """Per-set games as scores_json shape: [[p1 cells], [p2 cells]].
 
     BOTH sides carry their tiebreak count — "7(7)-6(3)", not "7-6(3)".
@@ -76,7 +87,30 @@ def _final_scores(home: dict, away: dict) -> Optional[list]:
             cb = f"{cb}({tb})"
         p1.append(ca)
         p2.append(cb)
-    return [p1, p2] if p1 else None
+
+    # A walkover was never played, so there are no games at all. Stored the way
+    # the rest of the app writes it: the withdrawing side's only cell is the
+    # literal "w/o" and the winner's is empty (see WALKOVER_RE in the frontend).
+    if status_code == _WALKOVER:
+        if winner_code == 1:
+            return [[""], ["w/o"]]
+        if winner_code == 2:
+            return [["w/o"], [""]]
+        return None
+
+    if not p1:
+        return None
+
+    # A retirement marks the set the loser QUIT IN with a trailing "r", on that
+    # player's own cell — "6-1 3-0r" means the second player retired at 0 games
+    # in the second set. The bracket renders its "ret." badge off exactly this,
+    # so dropping it turns a retirement into a straight-sets win.
+    if status_code == _RETIRED and winner_code in (1, 2):
+        loser = p2 if winner_code == 1 else p1
+        if loser and loser[-1] != "":
+            loser[-1] = f"{loser[-1]}r"
+
+    return [p1, p2]
 
 
 async def sweep_once(db) -> dict:
@@ -143,9 +177,10 @@ async def sweep_once(db) -> dict:
                 # the single most damaging thing this file could get wrong.
                 sofa_winner = p1 if code == 1 else p2
 
+                status_code = (ev.get("status") or {}).get("code", 100)
                 home_sc = ev.get("homeScore") or {}
                 away_sc = ev.get("awayScore") or {}
-                scores = _final_scores(home_sc, away_sc)
+                scores = _final_scores(home_sc, away_sc, status_code, code)
                 if scores and match.player1_id == p2:
                     scores = [scores[1], scores[0]]
 
