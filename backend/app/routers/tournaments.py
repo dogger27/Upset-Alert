@@ -893,7 +893,17 @@ async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
         point = snap.get("point") or [None, None]
         if not any(p is not None for p in point):
             return None
+        # Ship the snapshot's OWN games alongside its point, so the client can
+        # render one coherent state instead of splicing two feeds together.
+        # Taking games from ESPN and the point from here produces states that
+        # never existed: ESPN lags up to 60s, so a game can finish and the point
+        # reset while the set score still shows the old value — 40-30 beside a
+        # score that has already moved on. Same object, same instant, or nothing.
+        sets = snap.get("sets") or []
+        games = [[str(s[0]) if s and s[0] is not None else "" for s in sets],
+                 [str(s[1]) if s and s[1] is not None else "" for s in sets]]
         return {"point": point,
+                "games": games if sets else None,
                 "tiebreak": bool(snap.get("tiebreak")),
                 "serving": snap.get("serving")}
 
