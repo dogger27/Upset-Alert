@@ -15,6 +15,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN playwright install chromium
 
 COPY app/ ./app/
+# Operational one-offs, run with `docker compose exec backend python -m
+# scripts.<name>`. Without this COPY they exist in git and not in the image,
+# which looks identical until the moment you need one.
+COPY scripts/ ./scripts/
 
 ENV PYTHONUNBUFFERED=1
 

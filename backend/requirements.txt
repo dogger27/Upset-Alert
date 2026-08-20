@@ -17,3 +17,7 @@ resend>=2.21.0
 playwright>=1.40.0
 pdfplumber>=0.11.0
 pywebpush>=2.0.0
+# Sofascore 403s every client whose TLS handshake is not a browser's — httpx and
+# plain curl included, on the website as well as the API. This replays a real
+# Chrome fingerprint and is the only way services/sofascore.py can reach it.
+curl_cffi>=0.7.0

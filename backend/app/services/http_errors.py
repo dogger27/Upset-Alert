@@ -14,6 +14,17 @@ Import these two helpers instead of matching exception types inline.
 
 import httpx
 
+# Sofascore refuses any client whose TLS handshake does not look like a browser,
+# so services/sofascore.py uses curl_cffi rather than httpx. Its errors are a
+# separate class hierarchy that httpx.TransportError does not cover, and without
+# this a Sofascore timeout would be logged as an application fault. Imported
+# defensively so this module keeps working if the package is ever dropped.
+try:                                            # pragma: no cover - import guard
+    from curl_cffi import CurlError as _CurlError
+    _CURL_ERRORS: tuple = (_CurlError,)
+except Exception:                               # pragma: no cover
+    _CURL_ERRORS = ()
+
 # Every way httpx reports "the request did not complete" — connect failures,
 # all four timeout flavours, read/write errors, protocol resets, proxy errors.
 # Matching the base class rather than listing leaves means a new httpx subclass
@@ -45,6 +56,8 @@ def is_transient_http_error(exc: BaseException) -> bool:
         return True
     if isinstance(exc, httpx.HTTPStatusError):
         return exc.response.status_code in _TRANSIENT_STATUS
+    if _CURL_ERRORS and isinstance(exc, _CURL_ERRORS):
+        return True
     return False
 
 
