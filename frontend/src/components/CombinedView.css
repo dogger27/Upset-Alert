@@ -364,13 +364,23 @@
    where the two boxes are close together. */
 .cv-eta--roomy { font-size: 1.05rem; font-weight: 700; }
 
-/* Compact (phone) mode. "Today at ~5:55 PM PDT" is too wide for a phone column
-   — but shrinking the type to fit made it unreadable, and a phone is short of
-   WIDTH, not height. So the time takes its own line at full size instead, which
-   is the dimension actually going spare between two opponents. */
-.cv-scroll--compact .cv-eta .cv-eta-day,
-.cv-scroll--compact .cv-eta .cv-eta-time {
+/* Compact (phone) mode. "Today at ~5:55 PM PDT" at the roomy size is wider than
+   a phone column — but shrinking the type to fit made it unreadable, and a
+   phone is short of WIDTH, not height. So the time takes its own line at full
+   size instead, which is the dimension actually going spare between two
+   opponents in these columns. */
+.cv-scroll--compact .cv-eta--roomy .cv-eta-day,
+.cv-scroll--compact .cv-eta--roomy .cv-eta-time {
   display: block;
   text-align: center;
 }
-.cv-scroll--compact .cv-eta { line-height: 1.25; }
+.cv-scroll--compact .cv-eta--roomy { line-height: 1.25; }
+
+/* The leftmost column is the exception, and the reason the rule above is scoped
+   to --roomy: every visible window puts its first column on the base pitch, so
+   the two opponents sit PAIR_OFF*2 - BOX_H = 16px apart there whatever round it
+   is. That is why scores are suppressed in it entirely (CombinedView.jsx), and
+   it is far too little for a second line — stacked, the time landed across both
+   player boxes. One line here, sized to clear 158px even for the longest label
+   this produces ("Tomorrow at ~12:40 PM PDT"). */
+.cv-scroll--compact .cv-eta:not(.cv-eta--roomy) { font-size: 0.68rem; }
