@@ -863,32 +863,7 @@ async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
 
     # Shared with the schedule router so the two surfaces can never show
     # different scores for the same match. See sofascore_live.live_point_for.
-    from app.services.sofascore_live import authoritative_view, live_point_for
-
-    _views: dict = {}
-
-    def _view(m: Match) -> dict:
-        """Cached per match — called several times per row."""
-        if m.id not in _views:
-            _views[m.id] = authoritative_view(m)
-        return _views[m.id]
-
-    def _winner_out(m: Match):
-        """The winner from whichever source is authoritative.
-
-        Serving ESPN's winner beside Sofascore's score is the contradiction this
-        whole indirection exists to prevent.
-        """
-        wid = _view(m)["winner_id"]
-        if wid is None:
-            return None
-        # Always one of this match's own two players — sofascore_results
-        # resolves the winner through the stamped entry ids of the pair, so no
-        # extra lookup is needed and none can miss.
-        for p in (m.winner, m.player1, m.player2):
-            if p is not None and p.id == wid:
-                return _player_out(p)
-        return None
+    from app.services.sofascore_live import live_point_for
 
     def _player_out(p: DrawEntry) -> DrawEntryOut:
         out = DrawEntryOut.model_validate(p)
@@ -925,15 +900,12 @@ async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
             match_number=m.match_number,
             player1=_player_out(m.player1) if m.player1 else None,
             player2=_player_out(m.player2) if m.player2 else None,
-            winner=_winner_out(m),
+            winner=_player_out(m.winner) if m.winner else None,
             is_bye=m.is_bye,
             status=m.status,
             round_name=t.round_name(m.round_number),
-            # Which source's result is served — see authoritative_view. Under
-            # the default flag this is exactly m.scores_json / m.live_scores_json
-            # and nothing changes.
-            scores=_view(m)["scores"],
-            live_scores=_view(m)["live_scores"],
+            scores=m.scores_json,
+            live_scores=m.live_scores_json,
             live_point=live_point_for(m),
             locked=m.id in lock.locked_match_ids,
             # Stamped UTC: SQLite returns these naive, and an ISO string with
