@@ -457,6 +457,16 @@ async def _migrate(conn):
         ("UPDATE schedule_entries SET stage = 'main' "
          "WHERE stage = 'qualifying' "
          "AND UPPER(round_label) NOT IN ('Q', 'Q1', 'Q2', 'Q3', 'Q4', 'FQ')"),
+        # Sofascore's live snapshot. Its own column on purpose — see the comment
+        # on Match.sofa_live_json for why it is not merged into live_scores_json.
+        "ALTER TABLE matches ADD COLUMN sofa_live_json JSON",
+        # Normalise the JSON text 'null' to real SQL NULL. These are rows a
+        # clearing pass wrote before the columns declared none_as_null, and they
+        # read as None in Python while still satisfying `IS NOT NULL` in SQL —
+        # so every live poll selected them and found nothing to do. Safe to
+        # re-run and converges to zero rows once the model change is deployed.
+        "UPDATE matches SET live_scores_json = NULL WHERE live_scores_json = 'null'",
+        "UPDATE matches SET sofa_live_json = NULL WHERE sofa_live_json = 'null'",
     ]
     for sql in migrations:
         try:

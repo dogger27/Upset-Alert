@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     # purpose, and says so in the log at boot.
     outbound_notifications: bool = True
 
+    # Sofascore live-score polling. Off by default so merging the poller changes
+    # nothing anywhere until an instance opts in — staging first, production only
+    # once it has been watched through a real tournament day.
+    sofascore_live_enabled: bool = False
+
     class Config:
         env_file = ".env"
 
