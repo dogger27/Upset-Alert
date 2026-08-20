@@ -32,6 +32,7 @@ from typing import Optional
 
 from sqlalchemy import select
 
+from app.core.config import settings
 from app.models.tournament import Draw, DrawEntry, Match
 from app.services.sofascore import SofascoreBlocked, _get
 from app.services.sofascore_live import _event_player_ids, _tracked
@@ -272,6 +273,33 @@ async def sweep_once(db) -> dict:
                 if match.sofa_completed_at is None:
                     match.sofa_completed_at = now
                     changed = True
+
+                # PROMOTE into the real columns when Sofascore is the source of
+                # record. This is the "one writer, not eighteen consumers"
+                # cutover: scoring, standings, Hall of Fame, locking, H2H and
+                # upsets all read winner_id / scores_json directly, and none of
+                # them can be reached by a shim at the API layer.
+                #
+                # Only matches we actually HAVE a result for are touched, which
+                # is what keeps byes correct: a bye has no Sofascore event and
+                # never will, so its scraper-set winner is left exactly alone.
+                # Blanking those was what put TBD through the whole bracket.
+                if settings.sofascore_authoritative:
+                    if match.winner_id != sofa_winner:
+                        match.winner_id = sofa_winner
+                        changed = True
+                    if scores and match.scores_json != scores:
+                        match.scores_json = scores
+                        changed = True
+                    if started and _aware(match.started_at) != started:
+                        match.started_at = started
+                        changed = True
+                    if match.completed_at is None:
+                        match.completed_at = now
+                        changed = True
+                    if match.status != "completed":
+                        match.status = "completed"
+                        changed = True
 
                 if changed:
                     written += 1

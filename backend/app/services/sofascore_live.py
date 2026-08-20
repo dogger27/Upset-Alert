@@ -52,6 +52,7 @@ from typing import Optional
 
 from sqlalchemy import select
 
+from app.core.config import settings
 from app.models.tournament import Draw, DrawEntry, Match
 from app.services.sofascore import SofascoreBlocked, _get
 from app.services.system_log import app_log
@@ -230,54 +231,22 @@ def live_point_for(match) -> Optional[dict]:
             "serving": snap.get("serving")}
 
 
-def authoritative_view(match) -> dict:
-    """Which source's fields the API should serve for one match.
+def _as_espn_shape(snap: dict) -> Optional[list]:
+    """A Sofascore snapshot in live_scores_json's shape.
 
-    The cutover happens HERE, at the read layer, rather than by changing who
-    writes. Both sets of columns keep being filled; this only decides which is
-    served. That makes it reversible by a restart with the flag off, with no
-    data to migrate back — swapping espn_monitor's writes would be a one-way
-    door, and the field at stake decides league scoring.
-
-    When Sofascore is authoritative, ESPN's columns are ignored ENTIRELY rather
-    than filled in from. A half-and-half view is how two sources become one
-    contradiction: staging showed a frozen ESPN "2-1 IN PROGRESS" for a match
-    Sofascore had already recorded Cobolli as winning.
+    [p1 games, p2 games, serving, set winners] — the format espn_monitor writes
+    and every renderer already understands. Writing this rather than teaching
+    the readers a second format is the whole point of promoting.
     """
-    from app.core.config import settings
-
-    if not settings.sofascore_authoritative:
-        return {
-            "winner_id": match.winner_id,
-            "scores": match.scores_json,
-            "live_scores": match.live_scores_json,
-            "started_at": match.started_at,
-        }
-
-    # A match is live only while a snapshot exists AND no result has landed.
-    # The poller clears its own snapshot when an event leaves the live list, but
-    # the results sweep can record the winner first, and in that gap the honest
-    # answer is that the match is over.
-    live = None
-    snap = match.sofa_live_json
-    if snap and match.sofa_winner_id is None:
-        sets = snap.get("sets") or []
-        p1 = [str(s[0]) if s and s[0] is not None else "" for s in sets]
-        p2 = [str(s[1]) if s and s[1] is not None else "" for s in sets]
-        if p1:
-            # live_scores is [p1 games, p2 games, serving, set winners]. Every
-            # set but the one in play is decided, and the higher count took it.
-            wins = [None if i == len(p1) - 1
-                    else (int(p1[i] or 0) > int(p2[i] or 0))
-                    for i in range(len(p1))]
-            live = [p1, p2, snap.get("serving"), wins]
-
-    return {
-        "winner_id": match.sofa_winner_id,
-        "scores": match.sofa_scores_json,
-        "live_scores": live,
-        "started_at": match.sofa_started_at,
-    }
+    sets = (snap or {}).get("sets") or []
+    p1 = [str(s[0]) if s and s[0] is not None else "" for s in sets]
+    p2 = [str(s[1]) if s and s[1] is not None else "" for s in sets]
+    if not p1:
+        return None
+    # Every set but the one in play is decided, and the higher count took it.
+    wins = [None if i == len(p1) - 1 else (int(p1[i] or 0) > int(p2[i] or 0))
+            for i in range(len(p1))]
+    return [p1, p2, (snap or {}).get("serving"), wins]
 
 
 async def _tracked(db) -> tuple[dict, dict]:
@@ -376,6 +345,17 @@ async def poll_once(db) -> dict:
             written += 1
             touched_draws.add(draw_id)
 
+        # Same promotion as the results sweep: when Sofascore is the record,
+        # espn_monitor is not running and live_scores_json would sit frozen at
+        # whatever it last said. Everything that renders a live score reads that
+        # column, so it has to be the one that moves.
+        if settings.sofascore_authoritative:
+            live = _as_espn_shape(snap)
+            if match.live_scores_json != live:
+                match.live_scores_json = live
+                written += 1
+                touched_draws.add(draw_id)
+
     if seen_matches:
         state.last_match_seen_at = datetime.now(timezone.utc)
 
@@ -399,6 +379,10 @@ async def poll_once(db) -> dict:
             m.sofa_live_json = None
             written += 1
             touched_draws.add(m.draw_id)
+            # Clear the promoted copy too, or a finished match keeps showing a
+            # live score for ever — exactly what staging did.
+            if settings.sofascore_authoritative and m.live_scores_json is not None:
+                m.live_scores_json = None
 
     if written:
         await db.commit()
