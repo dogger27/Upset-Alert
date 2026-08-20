@@ -78,12 +78,25 @@ async def lifespan(app: FastAPI):
         from app.services.sofascore_live import monitor as sofa_live_monitor
         sofa_live_monitor.start()
         logging.getLogger("app").info("Sofascore live polling ENABLED")
+
+    # Shadow results sweep. Independent of the live flag: it answers a different
+    # question (who won) on a different cadence, and writes only sofa_* columns
+    # that nothing reads except scripts/sofa_diff.
+    results_on = settings.sofascore_results_enabled
+    if results_on:
+        from app.services.sofascore_results import monitor as sofa_results_monitor
+        sofa_results_monitor.start()
+        logging.getLogger("app").info(
+            "Sofascore results sweep ENABLED (shadow columns only)")
     else:
         logging.getLogger("app").info(
             "Scrapers/scheduler DISABLED (environment=%s). Set ENVIRONMENT=production to enable.",
             settings.environment,
         )
     yield
+    if results_on:
+        from app.services.sofascore_results import monitor as sofa_results_monitor
+        sofa_results_monitor.stop()
     if live_on:
         from app.services.sofascore_live import monitor as sofa_live_monitor
         sofa_live_monitor.stop()

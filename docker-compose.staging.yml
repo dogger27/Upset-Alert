@@ -74,6 +74,10 @@ services:
       - OUTBOUND_NOTIFICATIONS=false
       - SOFASCORE_LIVE_ENABLED=true
       - SOFASCORE_LIVE_FORCE=true
+      # Shadow results sweep — writes sofa_* columns only, so ESPN and Sofascore
+      # can be diffed over a real tournament before either is trusted to own a
+      # winner. See scripts/sofa_diff.py.
+      - SOFASCORE_RESULTS_ENABLED=true
       # Where Sofascore requests leave from. Empty means direct, which is
       # correct once Jupiter's own IP is out of the penalty box; until then it
       # points at an SSH SOCKS tunnel to a machine on another network.
