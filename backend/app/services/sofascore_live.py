@@ -335,6 +335,19 @@ async def _anything_on_court(db) -> bool:
     """
     from sqlalchemy import or_
 
+    from app.core.config import settings
+
+    if settings.sofascore_live_force:
+        # Staging, where espn_monitor is not running and the signal below is a
+        # frozen copy. Still requires a draw worth polling for, so this does not
+        # become an unconditional loop against an empty tour calendar.
+        row = (await db.execute(
+            select(Draw.id).where(
+                Draw.sofa_tournament_id.isnot(None),
+                Draw.status != "completed",
+            ).limit(1))).first()
+        return row is not None
+
     row = (await db.execute(
         select(Match.id)
         .join(Draw, Draw.id == Match.draw_id)
