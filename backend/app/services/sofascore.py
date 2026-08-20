@@ -77,6 +77,26 @@ _BASE = "https://api.sofascore.com/api/v1"
 _IMPERSONATE = "chrome124"
 _TIMEOUT = 20
 
+# Optional egress override, read per call so it can be set without a rebuild.
+#
+# The gate is on the EGRESS IP, not the client — proven by driving the real site
+# in Camoufox from Jupiter and watching Sofascore's OWN in-page XHRs return 403,
+# while a plain phone browser on cellular got 200. So when Jupiter's address is
+# in the penalty box there is nothing to fix in this file, and the only lever is
+# where the request leaves from.
+#
+# Typically an SSH SOCKS tunnel to a machine on a different network:
+#   ssh -f -N -D 172.17.0.1:1080 <host>      # bind the docker bridge, not
+#                                            # 0.0.0.0 — that is an open proxy
+#   SOFASCORE_PROXY=socks5h://172.17.0.1:1080
+#
+# socks5h, not socks5: the h resolves DNS at the far end, so the exit's resolver
+# is used rather than leaking lookups from here.
+#
+# Unset means direct, which is the normal state. This is for the one-off
+# resolution job; a permanent poller wants an egress that is genuinely ours.
+_PROXY_ENV = "SOFASCORE_PROXY"
+
 # Sofascore splits the tours into separate uniqueTournaments — Cincinnati is
 # 2373 (ATP) and 2548 (WTA) — so the category is part of identifying the draw,
 # not a detail. Matching without it would cheerfully return the men's bracket
@@ -145,9 +165,15 @@ _BLOCK_COOLDOWN = 1800.0
 
 def _fetch(path: str) -> tuple:
     """Blocking GET. curl_cffi has no async API, so callers use _get()."""
+    import os
+
     from curl_cffi import requests as cr
 
-    r = cr.get(f"{_BASE}{path}", impersonate=_IMPERSONATE, timeout=_TIMEOUT)
+    kwargs = {"impersonate": _IMPERSONATE, "timeout": _TIMEOUT}
+    proxy = os.environ.get(_PROXY_ENV)
+    if proxy:
+        kwargs["proxies"] = {"http": proxy, "https": proxy}
+    r = cr.get(f"{_BASE}{path}", **kwargs)
     if r.status_code != 200:
         return r.status_code, None
     return 200, r.json()
