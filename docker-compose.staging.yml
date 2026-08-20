@@ -1,0 +1,61 @@
+# staging.upsetalert.ca — same image, same code, different configuration.
+#
+# Deliberately NOT a separate repository or a separate branch. Staging exists to
+# run exactly what production will run; the only thing that may differ is
+# configuration, so that "transfer to production" is a promotion rather than a
+# merge.
+#
+#   docker compose -f docker-compose.staging.yml up -d --build
+#
+# Differences from production, and why each one:
+#
+#   port 8002        so it can sit beside production's 8001 on the same host
+#   staging-data/    its own database — see the volume note below
+#   ENVIRONMENT      development, so the Wikipedia / Tennis Explorer / ESPN
+#                    scrapers stay OFF. A second instance scraping the same
+#                    sources would double the load on services production
+#                    depends on, and Wikipedia rate-limits.
+#   SOFASCORE_LIVE_* on, because this is the thing staging is for. Independent
+#                    of ENVIRONMENT precisely so it can run without the rest.
+#   OUTBOUND_*       off. This database is a copy of production and holds every
+#                    real address and push subscription.
+services:
+  backend:
+    build: ./backend
+    container_name: staging-backend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8002:8001"
+    volumes:
+      # The DIRECTORY, never the .db file — SQLite in WAL mode writes sibling
+      # -wal/-shm files next to the database, and a single-file mount strands
+      # them in the container layer where the next recreate discards them. This
+      # cost production a silent rollback on every deploy once already; staging
+      # gets the same rule rather than a fresh lesson.
+      - /home/paulwiens/upsetalert/staging-data:/data
+      - /home/paulwiens/upsetalert/staging-logs:/logs
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:////data/tennis_fantasy.db
+      - LOG_FILE=/logs/backend.log
+      # Its own key. Sharing production's would make staging-issued session
+      # tokens valid on the live site.
+      - SECRET_KEY=${STAGING_SECRET_KEY:?set STAGING_SECRET_KEY in the .env beside this file}
+      # No Resend key and no VAPID keys: nothing to send with, on top of the
+      # switch below. Two independent reasons a staging box cannot reach a user.
+      - RESEND_API_KEY=
+      - VAPID_PUBLIC_KEY=
+      - VAPID_PRIVATE_KEY=
+      - ENVIRONMENT=development
+      - OUTBOUND_NOTIFICATIONS=false
+      - SOFASCORE_LIVE_ENABLED=true
+      - SOFASCORE_LIVE_FORCE=true
+      # Where Sofascore requests leave from. Empty means direct, which is
+      # correct once Jupiter's own IP is out of the penalty box; until then it
+      # points at an SSH SOCKS tunnel to a machine on another network.
+      - SOFASCORE_PROXY=${SOFASCORE_PROXY:-}
+    extra_hosts:
+      # So SOFASCORE_PROXY can name the docker gateway for a host-side tunnel.
+      - "host.docker.internal:host-gateway"
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1

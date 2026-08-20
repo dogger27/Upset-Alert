@@ -41,6 +41,20 @@ class Settings(BaseSettings):
     # once it has been watched through a real tournament day.
     sofascore_live_enabled: bool = False
 
+    # Poll even though ESPN has not reported anything on court.
+    #
+    # For staging only, and it exists because of a specific asymmetry: staging
+    # runs with the scrapers OFF, so that a second instance does not double the
+    # load on Wikipedia and Tennis Explorer or risk the rate limits production
+    # depends on. But espn_monitor is part of that same scheduler, which means
+    # live_scores_json — the cheap signal the poll gate reads — never updates
+    # there. Without this the staging poller would gate itself off on a copied,
+    # frozen view of what is live.
+    #
+    # It costs real requests: the gate is what makes the loop free overnight and
+    # between tournaments. Never set it in production.
+    sofascore_live_force: bool = False
+
     class Config:
         env_file = ".env"
 
