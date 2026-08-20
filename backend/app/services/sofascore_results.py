@@ -60,6 +60,14 @@ _WALKOVER = 91
 _CANCELED = 70
 
 
+def _games(cell) -> Optional[int]:
+    """Game count from a score cell, ignoring any tiebreak annotation."""
+    if not cell:
+        return None
+    head = str(cell).split("(")[0].rstrip("r")
+    return int(head) if head.isdigit() else None
+
+
 def _final_scores(home: dict, away: dict, status_code: int = 100,
                   winner_code: Optional[int] = None) -> Optional[list]:
     """Per-set games as scores_json shape: [[p1 cells], [p2 cells]].
@@ -88,14 +96,16 @@ def _final_scores(home: dict, away: dict, status_code: int = 100,
         p1.append(ca)
         p2.append(cb)
 
-    # A walkover was never played, so there are no games at all. Stored the way
-    # the rest of the app writes it: the withdrawing side's only cell is the
-    # literal "w/o" and the winner's is empty (see WALKOVER_RE in the frontend).
+    # A walkover was never played, so there are no games at all.
+    # The WINNER's cell carries "w/o" — read off what is actually stored, not
+    # off the comment in the frontend, which states the opposite. Match 4805:
+    # O'Connell won by walkover and ESPN put "w/o" on HIS cell. It reads as "won
+    # by walkover", which is also how the bracket's badge renders.
     if status_code == _WALKOVER:
         if winner_code == 1:
-            return [[""], ["w/o"]]
-        if winner_code == 2:
             return [["w/o"], [""]]
+        if winner_code == 2:
+            return [[""], ["w/o"]]
         return None
 
     if not p1:
@@ -105,7 +115,25 @@ def _final_scores(home: dict, away: dict, status_code: int = 100,
     # player's own cell — "6-1 3-0r" means the second player retired at 0 games
     # in the second set. The bracket renders its "ret." badge off exactly this,
     # so dropping it turns a retirement into a straight-sets win.
-    if status_code == _RETIRED and winner_code in (1, 2):
+    #
+    # status_code alone is NOT enough. Sofascore flagged only 5 of the 7
+    # retirements ESPN recorded here; Fucsovics-Atmane and O'Connell-Ruud both
+    # came back code=100 "Ended" despite finishing 1-3 and 7-5 1-2. Nobody wins
+    # a match by those scores, so an incomplete scoreline is itself the evidence
+    # and is used as a second, independent signal.
+    retired = status_code == _RETIRED
+    if not retired and winner_code in (1, 2):
+        # Sets the declared winner actually took. A completed best-of-3 needs
+        # two; anything less means the match stopped early.
+        won = sum(1 for a, b in zip(p1, p2)
+                  if _games(a) is not None and _games(b) is not None
+                  and ((_games(a) > _games(b)) == (winner_code == 1)))
+        # Deliberately < 2 rather than a per-format threshold: a best-of-5 that
+        # ended at two sets would be missed, which is a gap rather than a wrong
+        # answer. Cincinnati and every non-Slam draw is best-of-3.
+        retired = won < 2
+
+    if retired and winner_code in (1, 2):
         loser = p2 if winner_code == 1 else p1
         if loser and loser[-1] != "":
             loser[-1] = f"{loser[-1]}r"
