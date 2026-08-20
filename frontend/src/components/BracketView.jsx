@@ -151,6 +151,7 @@ function PlayerRow({
   scores, retired, walkover, onClick, locked,
   showTypeSlot, showScores, markWinner, showRowBg, showFlag,
   qualifierNum, isServing, boldScores,
+  livePoint, pointIsTiebreak,
   isHighlighted, onHover,
 }) {
   const player = playerId != null ? playerById[playerId] : null
@@ -234,6 +235,18 @@ function PlayerRow({
       {showScores && scores && scores.length > 0 && (
         <span className="score-row">
           {scores.map((s, i) => <ScoreCell key={i} val={s} bold={boldScores?.has(i)} />)}
+          {/* The point (40, A, or a tiebreak count) sits after the set games and
+              is styled apart from them on purpose: it is a different kind of
+              number, it changes every few seconds, and running it into the set
+              scores would read as one more set. Absent unless a fresh snapshot
+              exists, so every draw without the poller looks exactly as before. */}
+          {livePoint != null && (
+            <span className={clsx('score-cell', 'point-cell',
+                                  { 'point-cell--tb': pointIsTiebreak })}
+                  title={pointIsTiebreak ? 'Tiebreak points' : 'Current game'}>
+              {livePoint}
+            </span>
+          )}
         </span>
       )}
     </div>
@@ -270,13 +283,32 @@ function MatchBox({ match, resolvedPlayers, h2hPair, playerById, drawRanks, pick
   const wo = hasWalkover(match.scores)
   const isWalkover = wo.p1 || wo.p2
 
+  // The point score, present only while Sofascore's snapshot is fresh — the API
+  // drops a stale one rather than let it sit beside a set score that has moved
+  // on. Null for every draw without the poller, which is the normal case.
+  const lp = match.live_point ?? null
+  const p1Point = lp?.point?.[0] ?? null
+  const p2Point = lp?.point?.[1] ?? null
+
   // Serving ball: live_scores[2] is 1 (p1 serving) or 2 (p2) or null
   // Suppress during tiebreaks: both players' last game count is "6" → 6-6 in current set
   const servingPlayer = isLive ? (match.live_scores?.[2] ?? null) : null
-  const inTiebreak = isLive && p1Scores?.length > 0 && p2Scores?.length > 0 &&
-    p1Scores[p1Scores.length - 1] === '6' && p2Scores[p2Scores.length - 1] === '6'
-  const p1Serving = servingPlayer === 1 && !inTiebreak
-  const p2Serving = servingPlayer === 2 && !inTiebreak
+  // Prefer Sofascore's own tiebreak flag over inferring one from 6-6. The
+  // inference is not wrong so much as blind: it cannot see an advantage set or
+  // a 10-point match tiebreak, and it fires on 6-6 even before the tiebreak
+  // starts. Kept as the fallback for every draw with no snapshot.
+  const inTiebreak = lp != null
+    ? !!lp.tiebreak
+    : (isLive && p1Scores?.length > 0 && p2Scores?.length > 0 &&
+       p1Scores[p1Scores.length - 1] === '6' && p2Scores[p2Scores.length - 1] === '6')
+  // With a snapshot, serve comes from Sofascore and is trusted even inside a
+  // tiebreak. The suppression below exists because ESPN's server is inferred
+  // from game parity, which is simply wrong in a tiebreak — serve alternates
+  // every two POINTS there, not every game. Sofascore states it outright, so
+  // there is nothing to suppress.
+  const liveServer = lp != null ? (lp.serving ?? null) : null
+  const p1Serving = liveServer != null ? liveServer === 1 : (servingPlayer === 1 && !inTiebreak)
+  const p2Serving = liveServer != null ? liveServer === 2 : (servingPlayer === 2 && !inTiebreak)
 
   // Bold completed set scores for the winner of each set
   // live_scores[3] is [true/false/null, ...] from p1's perspective
@@ -411,6 +443,8 @@ function MatchBox({ match, resolvedPlayers, h2hPair, playerById, drawRanks, pick
           qualifierNum={qualifierNums?.[p1id]}
           isServing={p1Serving}
           boldScores={p1BoldScores}
+          livePoint={p1Point}
+          pointIsTiebreak={inTiebreak}
           isHighlighted={hoveredPlayerId != null && p1id === hoveredPlayerId}
           onHover={onHoverPlayer}
         />
@@ -433,6 +467,8 @@ function MatchBox({ match, resolvedPlayers, h2hPair, playerById, drawRanks, pick
           qualifierNum={qualifierNums?.[p2id]}
           isServing={p2Serving}
           boldScores={p2BoldScores}
+          livePoint={p2Point}
+          pointIsTiebreak={inTiebreak}
           isHighlighted={hoveredPlayerId != null && p2id === hoveredPlayerId}
           onHover={onHoverPlayer}
         />

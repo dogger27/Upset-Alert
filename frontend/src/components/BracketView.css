@@ -440,6 +440,57 @@
 
 .score-cell.empty { color: var(--n-300); }
 
+/* The live point (40, A, or a tiebreak count).
+   Set separately from the set games because it is a different kind of number:
+   it changes every few seconds, it is not a set, and run together with the
+   games it reads as one more of them. A leading gap and a tinted pill do that
+   separating without adding a divider glyph that would itself look like score.
+   Wider min-width than .score-cell so "40" and "A" do not shift the row as the
+   point changes — see the badge-layout-shift trap. */
+.score-cell.point-cell {
+  min-width: 20px;
+  margin-left: 5px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-weight: 700;
+  color: var(--live-point-fg, #1b4332);
+  background: var(--live-point-bg, rgba(123, 168, 31, 0.22));
+}
+
+/* A tiebreak count is a raw number ("7"), which in the games row would read as
+   a set score. Distinct colour keeps the two apart at a glance. */
+.score-cell.point-cell--tb {
+  color: var(--live-point-tb-fg, #7c2d12);
+  background: var(--live-point-tb-bg, rgba(234, 88, 12, 0.20));
+}
+
+/* Dark is this app's default theme, so both signals are declared rather than
+   letting the light values above stand in — and the explicit data-theme rules
+   are what the in-app toggle sets, which must win over the media query in both
+   directions. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --live-point-fg: #d8f3a3;
+    --live-point-bg: rgba(123, 168, 31, 0.28);
+    --live-point-tb-fg: #fed7aa;
+    --live-point-tb-bg: rgba(234, 88, 12, 0.28);
+  }
+}
+
+:root[data-theme="dark"] {
+  --live-point-fg: #d8f3a3;
+  --live-point-bg: rgba(123, 168, 31, 0.28);
+  --live-point-tb-fg: #fed7aa;
+  --live-point-tb-bg: rgba(234, 88, 12, 0.28);
+}
+
+:root[data-theme="light"] {
+  --live-point-fg: #1b4332;
+  --live-point-bg: rgba(123, 168, 31, 0.22);
+  --live-point-tb-fg: #7c2d12;
+  --live-point-tb-bg: rgba(234, 88, 12, 0.20);
+}
+
 .ret-badge {
   font-size: 0.6rem;
   font-style: italic;

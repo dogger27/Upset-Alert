@@ -384,3 +384,32 @@
    player boxes. One line here, sized to clear 158px even for the longest label
    this produces ("Tomorrow at ~12:40 PM PDT"). */
 .cv-scroll--compact .cv-eta:not(.cv-eta--roomy) { font-size: 0.68rem; }
+
+/* Live point score (40-15, or a tiebreak count), riding alongside the set score
+   in the gap between a match's two opponents.
+   Inline rather than a second absolutely-positioned element: that gap belongs
+   to the match and already holds the set score on its centre line, so a second
+   floating item would compete with it for the same space. */
+.cv-live-point {
+  margin-left: 7px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  /* Smaller than the set score deliberately — this is the more volatile number,
+     not the more important one. The set score is what the page is about. */
+  font-size: 0.62em;
+  font-weight: 700;
+  vertical-align: middle;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--live-point-fg, #1b4332);
+  background: var(--live-point-bg, rgba(123, 168, 31, 0.22));
+}
+
+/* A tiebreak count is a bare number and would otherwise read as a set score. */
+.cv-live-point--tb {
+  color: var(--live-point-tb-fg, #7c2d12);
+  background: var(--live-point-tb-bg, rgba(234, 88, 12, 0.20));
+}
+
+/* A suspended match keeps its last point on screen but should not look live. */
+.cv-live-score--suspended .cv-live-point { opacity: 0.55; }
