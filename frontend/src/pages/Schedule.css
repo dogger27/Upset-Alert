@@ -679,10 +679,30 @@
   .sched-back { margin-right: auto; }
 
   .sched-row {
-    grid-template-columns: 4.4rem 1fr;
+    /* THREE columns, as at every other width. Dropping the third here left the
+       H2H strip with no cell of its own, so it wrapped onto a second grid row
+       and rendered sideways under the time column. */
+    grid-template-columns: 4.4rem 1fr auto;
     gap: 0.45rem;
     padding: 0.5rem 0.45rem;
+    /* Full width on a phone. Content-sizing is what makes cards match on a wide
+       screen where they sit in separate grids; in a single narrow column they
+       are all full width already, and fit-content only invited an overflow. */
+    width: 100%;
   }
+
+  /* Release the measured name column. The width was computed against the page,
+     not against what is left after the time, scores and H2H columns — so on a
+     narrow screen it pushed the last set clean off the card. Here the name
+     simply takes what remains and ellipsises, which is what it is built for. */
+  .sched-competitor-name {
+    flex: 1 1 auto;
+    width: auto;
+  }
+
+  /* Scores must never be the thing that overflows: they are the row. */
+  .sched-sets { min-width: 0; }
+  .sched-h2h { margin-left: 0; }
   .sched-players { font-size: 0.86rem; }
 
   /* Keep "vs" beside the name it follows. On a phone the row is narrow enough
@@ -861,7 +881,11 @@
   .sched-set { font-size: 0.85rem; }
 }
 
-@media (max-width: 380px) {
+/* 330, not 380: a 375px iPhone was losing its flags with room to spare, and
+   the flag is how a name is recognised at a glance. Now that the name column
+   ellipsises rather than being pinned to a measured width, it only gives up the
+   flag on genuinely tiny screens. */
+@media (max-width: 330px) {
   .sched-competitor-name { font-size: 0.82rem; }
   .sched-competitors--doubles .sched-competitor-name { font-size: 0.72rem; }
   /* Last resort before wrapping: the flag is decoration, the name is not. */

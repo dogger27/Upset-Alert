@@ -630,14 +630,27 @@ export default function Schedule() {
 
     const measure = () => {
       el.style.removeProperty('--sched-name-w')
+      // Below this the cards are full width in a single column, so they already
+      // match and a measured width can only cause an overflow. The CSS releases
+      // the column at the same breakpoint; leaving the variable set would fight
+      // it. Kept in step with the 560px media query in Schedule.css.
+      if (el.clientWidth < 560) return
       const names = el.querySelectorAll('.sched-competitor-name')
       if (!names.length) return
       let widest = 0
       for (const n of names) widest = Math.max(widest, n.scrollWidth)
-      // A cap, so one absurd doubles pairing cannot push every card off a
-      // phone. Past this the names ellipsise, which is the documented
-      // behaviour rather than a failure.
-      const cap = Math.max(120, el.clientWidth - 200)
+      // Cap against what is actually LEFT after the other columns, measured
+      // from a real row rather than guessed at. The first version subtracted a
+      // flat 200px, which did not cover the time column, the scores, the ball
+      // slot and the H2H strip together — so the last set was pushed off the
+      // card.
+      const row = el.querySelector('.sched-row')
+      const other = row
+        ? Array.from(row.children).reduce(
+            (sum, c) => sum + (c.classList.contains('sched-row-main') ? 0 : c.offsetWidth), 0)
+        : 120
+      const sets = el.querySelector('.sched-sets')
+      const cap = Math.max(120, el.clientWidth - other - (sets?.offsetWidth ?? 90) - 48)
       el.style.setProperty('--sched-name-w', `${Math.min(widest, cap)}px`)
     }
 
