@@ -440,6 +440,23 @@ async def _migrate(conn):
         "ALTER TABLE draw_entries ADD COLUMN sofa_player_id INTEGER",
         ("CREATE INDEX IF NOT EXISTS ix_draw_entries_sofa "
          "ON draw_entries (sofa_player_id)"),
+        # Un-stamp the quarter-finals that _classify called qualifying because
+        # "QF" starts with a Q. Re-ingesting the sheet now re-derives stage, but
+        # only for a day whose PDF is still being fetched — a row from a day
+        # already played would keep the wrong badge forever.
+        #
+        # The real qualifying rounds are named exactly, so this cannot touch one:
+        # a genuine qualifying row carries Q/Q1..Q4/FQ and never a derived label,
+        # because qualifying has no rows in `matches` to derive one from. A NULL
+        # label fails NOT IN and is left alone — that is the "QS" event-code path,
+        # which is qualifying on better evidence than the round text.
+        #
+        # Deliberately unguarded: once the classifier is fixed nothing new can
+        # match, so this converges to zero rows rather than re-firing forever, and
+        # the only rows it can ever touch are ones that are wrong by definition.
+        ("UPDATE schedule_entries SET stage = 'main' "
+         "WHERE stage = 'qualifying' "
+         "AND UPPER(round_label) NOT IN ('Q', 'Q1', 'Q2', 'Q3', 'Q4', 'FQ')"),
     ]
     for sql in migrations:
         try:
