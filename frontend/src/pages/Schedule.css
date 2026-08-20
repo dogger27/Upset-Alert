@@ -164,7 +164,11 @@
 
 .sched-row {
   display: grid;
-  grid-template-columns: 5.6rem 1fr;
+  /* Third column is the H2H strip. `auto` collapses to nothing on the rows
+     that have no button — doubles, qualifying, unresolved slots — so those are
+     laid out exactly as before. A two-column grid put the button on a second
+     ROW instead of the right edge. */
+  grid-template-columns: 5.6rem 1fr auto;
   align-items: center;
   gap: 0.6rem;
   padding: 0.55rem 0.6rem;
@@ -716,3 +720,132 @@
    made the final set stop being last, so it grew one and the score read
    "6-2, 2-5," with the point trailing like a third set. */
 .score-set:has(+ .sched-live-point)::after { content: none; }
+
+/* ── One competitor per line ──────────────────────────────────────────────
+   Replaces the old "A vs B" line with its combined score. That layout made
+   the reader work out which number belonged to whom, and on a phone it
+   wrapped into a block. This mirrors the draw page: name on the left, that
+   competitor's own set scores in columns on the right.
+
+   A LINE PER COMPETITOR IS THE INVARIANT. Everything below exists to hold it
+   — the name shrinks, ellipsises and drops to a surname before it is ever
+   allowed to wrap. */
+.sched-competitors {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.sched-competitor {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;          /* or the name refuses to shrink and forces a wrap */
+  line-height: 1.35;
+}
+
+/* The name takes whatever is left after the scores, and gives way first. */
+.sched-competitor-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sched-competitor-name .sched-side {
+  display: inline;
+  white-space: nowrap;
+}
+
+/* The loser of a finished match recedes; the winner does not shout. Weight
+   carries it rather than colour, so it still reads in either theme. */
+.sched-competitor--won  { font-weight: 700; }
+.sched-competitor--lost { opacity: 0.62; }
+
+.sched-ball { flex: 0 0 auto; display: block; }
+
+.sched-mark { flex: 0 0 auto; font-size: 0.85rem; line-height: 1; }
+.sched-mark--win  { color: var(--ok-fg, #4ade80); }
+.sched-mark--loss { color: var(--bad-fg, #f87171); }
+
+/* Scores never shrink and never wrap — they are the point of the row. */
+.sched-sets {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sched-set {
+  min-width: 12px;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.sched-set sup { font-size: 0.62em; vertical-align: super; line-height: 0; }
+.sched-set.empty { opacity: 0.35; }
+/* The set's winner in bold. The set in play is deliberately never bolded —
+   that absence is what makes "still going" legible at a glance. */
+.sched-set--won { font-weight: 700; }
+
+/* The live point, tinted apart from the games: a different kind of number,
+   and it changes every few seconds. Same tokens as the draw page. */
+.sched-point {
+  min-width: 20px;
+  margin-left: 3px;
+  padding: 0 5px;
+  border-radius: 5px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  text-align: center;
+  color: var(--live-point-fg, #1b4332);
+  background: var(--live-point-bg, rgba(123, 168, 31, 0.22));
+}
+
+.sched-point--tb {
+  color: var(--live-point-tb-fg, #7c2d12);
+  background: var(--live-point-tb-bg, rgba(234, 88, 12, 0.20));
+}
+
+/* Doubles names are twice as long in the same space, so they start smaller
+   rather than being ellipsised away to nothing. */
+.sched-competitors--doubles .sched-competitor-name { font-size: 0.88em; }
+
+/* Narrow phones: shrink the type further instead of letting a line break.
+   The order of sacrifice is deliberate — type size, then the flag, then the
+   seed, and the score is never touched. */
+@media (max-width: 480px) {
+  .sched-competitor-name { font-size: 0.9rem; }
+  .sched-competitors--doubles .sched-competitor-name { font-size: 0.78rem; }
+  .sched-sets { gap: 4px; }
+  .sched-set { font-size: 0.85rem; }
+}
+
+@media (max-width: 380px) {
+  .sched-competitor-name { font-size: 0.82rem; }
+  .sched-competitors--doubles .sched-competitor-name { font-size: 0.72rem; }
+  /* Last resort before wrapping: the flag is decoration, the name is not. */
+  .sched-competitor-name .fi { display: none; }
+}
+
+/* H2H strip on a schedule row. Reuses .h2h-strip from BracketView.css so the
+   two surfaces cannot drift apart; this only seats it in a row laid out
+   differently — full height at the right edge, as on the draw's match box.
+   Negative margins cancel the row's own padding so it meets the card edge
+   rather than floating inside it. */
+.sched-h2h {
+  align-self: stretch;
+  width: 16px;
+  margin: -0.55rem -0.6rem -0.55rem 0;
+  border-radius: 0 9px 9px 0;
+  border-left: 1px solid var(--n-300);
+}
+
+@media (max-width: 480px) {
+  /* Narrower, not hidden: it is the only way into head-to-head from here. */
+  .sched-h2h { width: 13px; }
+}
