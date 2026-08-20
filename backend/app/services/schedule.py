@@ -95,6 +95,12 @@ USA UZB VAN VEN VIE VIN YEM ZAM ZIM
 # dimensions in one code, which is exactly how they are filtered.
 _EVENT_CODE_RE = re.compile(r'\b([MWQXBG])([SD])\b')
 
+# The qualifying rounds, spelled out, because "starts with Q" also catches QF
+# and stamped every quarter-final as qualifying. These are exhaustive against
+# what the parser can produce: oop_parser.ROUND_RE emits only F, SF, QF, R\d+,
+# Q, Q1..Q9, FQ and 1R..4R, of which Q/Q\d/FQ are the qualifying ones.
+_QUALI_ROUND_RE = re.compile(r'^(?:Q\d?|FQ)$', re.I)
+
 
 def _clean_name(raw: str) -> str:
     """Strip the seeding and country the sheet lays out around a name.
@@ -145,7 +151,7 @@ def _classify(match) -> tuple[str, str]:
         if first == 'X':
             discipline = 'mixed'
         return stage, discipline
-    stage = 'qualifying' if (match.round or '').upper().startswith('Q') else 'main'
+    stage = 'qualifying' if _QUALI_ROUND_RE.match((match.round or '').strip()) else 'main'
     discipline = 'doubles' if match.is_doubles else 'singles'
     return stage, discipline
 
@@ -387,6 +393,12 @@ async def ingest_document(db, tournament, play_date: date, url: str,
 
             entry.court = court
             entry.court_order = order
+            # Re-stamped rather than set once at creation, so a correction to
+            # _classify reaches the rows it already got wrong. Safe to move on an
+            # existing row precisely because it is NOT part of pairing_key:
+            # discipline is, and so cannot change under a matched entry, but
+            # stage is free to be re-derived from the sheet on every pass.
+            entry.stage = stage
             entry.start_type = start_type
             entry.start_time_local = m.time
             entry.start_note = getattr(m, 'start_raw', None)
