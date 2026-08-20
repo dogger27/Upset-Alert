@@ -181,6 +181,7 @@ async def sweep_once(db) -> dict:
                 "unmatched": 0, "skipped": "all tracked matches resolved"}
 
     seen = written = unmatched = 0
+    touched_draws: set = set()
     now = datetime.now(timezone.utc)
 
     # Page 0 is the 30 most recently finished events, which is far more than a
@@ -275,6 +276,7 @@ async def sweep_once(db) -> dict:
                 if changed:
                     written += 1
                     page_wrote += 1
+                    touched_draws.add(draw_id)
 
             if written:
                 await db.commit()
@@ -285,6 +287,16 @@ async def sweep_once(db) -> dict:
             # to learn nothing twice.
             if page_wrote == 0:
                 break
+
+    # A recorded winner is the single most visible thing this service does, and
+    # without a nudge the browser would not learn about it until its next poll —
+    # two minutes on the draw page, and never on the schedule page, which has no
+    # interval at all. Keyed by tournament, which is what the broadcaster uses.
+    if touched_draws:
+        from app.services import broadcaster
+        from app.services.sofascore_live import _tournament_of
+        for tid in {_tournament_of[d] for d in touched_draws if d in _tournament_of}:
+            await broadcaster.publish(tid)
 
     return {"draws": len(by_tournament), "seen": seen,
             "written": written, "unmatched": unmatched}

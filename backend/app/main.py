@@ -47,7 +47,7 @@ import app.models.h2h  # noqa: F401
 import app.models.system_log  # noqa: F401
 from app.services.scheduler import start_scheduler, stop_scheduler
 from app.core.config import settings
-from app.routers import admin, auth, contact, discovery, h2h, leagues, predictions, push, schedule, tournaments
+from app.routers import admin, auth, contact, discovery, h2h, leagues, predictions, push, schedule, stream, tournaments
 
 
 @asynccontextmanager
@@ -139,6 +139,7 @@ app.include_router(predictions.router)
 app.include_router(h2h.router)
 app.include_router(push.router)
 app.include_router(schedule.router)
+app.include_router(stream.router)
 
 
 @app.exception_handler(Exception)

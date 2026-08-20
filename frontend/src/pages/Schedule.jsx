@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useSearchParams, Link } from 'react-router-dom'
 import clsx from 'clsx'
 import { getScheduleDay } from '../api/schedule'
@@ -402,7 +403,17 @@ export default function Schedule() {
     queryKey: ['schedule', day, tournamentId ?? 'all'],
     queryFn: () => getScheduleDay({ date: day, tournamentId }),
     staleTime: 30_000,
+    // A modest interval as the floor. This page previously had NONE — left open
+    // on a second screen it never updated at all, because React Query only
+    // refetches it on mount or when the tab regains focus. SSE below is what
+    // actually keeps it current; this only covers a dropped connection.
+    refetchInterval: 60_000,
   })
+
+  // Push updates for every tournament on this day, not just the filtered one —
+  // a day can span two events and the unwatched one would sit stale.
+  useLiveUpdates((data?.tournaments ?? []).map(t => t.id),
+                 [['schedule', day, tournamentId ?? 'all']])
 
   // Open on the tour of the draw we came from — someone who clicked OOP on the
   // men's draw wants the men's matches first. Only defaulted once, so a manual

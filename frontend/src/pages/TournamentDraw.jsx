@@ -4,6 +4,7 @@
  */
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react'
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
 import { getDraw, listTournaments, refreshDraw, toggleUnlockSelections } from '../api/tournaments'
@@ -138,6 +139,11 @@ function TournamentDraw() {
       return false
     },
   })
+
+  // Push updates. The 2-minute refetchInterval above stays as the safety net
+  // for a dropped connection; this is what makes a live score arrive in about a
+  // second instead of on the next tick.
+  useLiveUpdates(data?.tournament?.id, [['draw', id]])
 
   /*
    * Gated on the TOKEN, not on the resolved user.
