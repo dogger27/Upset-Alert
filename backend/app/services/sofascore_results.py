@@ -60,6 +60,18 @@ _WALKOVER = 91
 _CANCELED = 70
 
 
+def _aware(dt):
+    """SQLite returns datetimes naive; treat them as the UTC they were stored as.
+
+    Needed anywhere a stored timestamp is COMPARED with a computed one. The two
+    are otherwise never equal for the same instant, which is silent: no error,
+    just a write that repeats for ever.
+    """
+    if dt is None:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
 def _games(cell) -> Optional[int]:
     """Game count from a score cell, ignoring any tiebreak annotation."""
     if not cell:
@@ -244,7 +256,13 @@ async def sweep_once(db) -> dict:
                 if scores and match.sofa_scores_json != scores:
                     match.sofa_scores_json = scores
                     changed = True
-                if started and match.sofa_started_at != started:
+                # Compared through _aware, because these two are never equal
+                # otherwise: SQLite hands the stored value back NAIVE while the
+                # freshly computed one carries UTC, so the same instant compares
+                # unequal and every sweep rewrote all 175 rows and committed for
+                # nothing. Same trap that killed the order-of-play ingest in
+                # _absorb — see services/schedule.py.
+                if started and _aware(match.sofa_started_at) != started:
                     match.sofa_started_at = started
                     changed = True
                 # First observation only — this is "when we noticed", and
