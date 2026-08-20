@@ -53,11 +53,15 @@ _FINISHED = "finished"
 def _final_scores(home: dict, away: dict) -> Optional[list]:
     """Per-set games as scores_json shape: [[p1 cells], [p2 cells]].
 
-    Matches the convention the rest of the app already stores and renders: the
-    set LOSER carries the tiebreak in parentheses ("6(4)"), the winner is a bare
-    count. parseSet in the frontend reads exactly that, so a Sofascore result and
-    a Wikipedia-scraped one are indistinguishable downstream — which is the whole
-    point of writing this shape rather than a new one.
+    BOTH sides carry their tiebreak count — "7(7)-6(3)", not "7-6(3)".
+
+    That is what is already stored: diffing 174 matches against ESPN produced 63
+    "differences" of which the overwhelming majority were only this, because the
+    first version here annotated the loser alone. Nothing was wrong with either
+    scoreline; they were two spellings of the same result. Matching the stored
+    spelling is what makes a Sofascore result and a Wikipedia-scraped one
+    indistinguishable downstream, which is the entire point of writing this
+    shape rather than inventing one.
     """
     p1, p2 = [], []
     for n in range(1, 6):
@@ -66,13 +70,10 @@ def _final_scores(home: dict, away: dict) -> Optional[list]:
             continue
         ta, tb = home.get(f"period{n}TieBreak"), away.get(f"period{n}TieBreak")
         ca, cb = str(a if a is not None else ""), str(b if b is not None else "")
-        if ta is not None and tb is not None:
-            # Annotate the loser only. Equal games cannot happen in a completed
-            # set, so "who lost" is unambiguous.
-            if int(a) < int(b):
-                ca = f"{ca}({ta})"
-            elif int(b) < int(a):
-                cb = f"{cb}({tb})"
+        if ta is not None:
+            ca = f"{ca}({ta})"
+        if tb is not None:
+            cb = f"{cb}({tb})"
         p1.append(ca)
         p2.append(cb)
     return [p1, p2] if p1 else None
