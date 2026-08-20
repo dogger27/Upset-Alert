@@ -461,6 +461,7 @@ export default function Schedule() {
   // The panel is owned by the page, not the row: it is a full-screen overlay,
   // and one instance beats one per match.
   const [h2h, setH2H] = useState(null)
+  const bodyRef = useRef(null)
   const [params, setParams] = useSearchParams()
   const [view, setView] = useState(storedView)
   const [hideDone, setHideDone] = useState(false)
@@ -609,20 +610,62 @@ export default function Schedule() {
     return ranked.map(r => [r.name, r.list])
   }, [entries])
 
+  /*
+   * Give every card the same width, set by the LONGEST name on the page.
+   *
+   * CSS alone cannot do this: the cards live in separate court groups and, on a
+   * wide screen, in two independent grid columns, so no single grid can size
+   * them against one another. Measuring once and publishing the answer as a
+   * custom property is the pattern this codebase already uses for shared
+   * column widths.
+   *
+   * Two passes on purpose. The names have to be released to their natural width
+   * before they can be measured — reading scrollWidth while they are already
+   * constrained by a previous answer just returns that answer, and the column
+   * would ratchet and never shrink when the day's names get shorter.
+   */
+  useEffect(() => {
+    const el = bodyRef.current
+    if (!el) return
+
+    const measure = () => {
+      el.style.removeProperty('--sched-name-w')
+      const names = el.querySelectorAll('.sched-competitor-name')
+      if (!names.length) return
+      let widest = 0
+      for (const n of names) widest = Math.max(widest, n.scrollWidth)
+      // A cap, so one absurd doubles pairing cannot push every card off a
+      // phone. Past this the names ellipsise, which is the documented
+      // behaviour rather than a failure.
+      const cap = Math.max(120, el.clientWidth - 200)
+      el.style.setProperty('--sched-name-w', `${Math.min(widest, cap)}px`)
+    }
+
+    // After paint, so fonts and flags have been laid out.
+    const raf = requestAnimationFrame(measure)
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => { cancelAnimationFrame(raf); ro.disconnect() }
+    // Re-measure whenever the rendered set of names can have changed.
+  }, [entries, view, tzMode])
+
   return (
     <div className="sched-page">
       {/* Same panel the draw page opens, so head-to-head looks and behaves
           identically wherever it is reached from. No picking here: the schedule
           is a view of play, and a pick belongs on the bracket where the cascade
           it affects is visible. */}
+      {/* entry_name is the BRACKET's spelling — "Iga Świątek" — where the row
+          deliberately prints the sheet's "[7] Iga SWIATEK POL". The panel is
+          about the players; the row is about the sheet. */}
       {h2h && (
         <H2HPanel
           slug1={h2h.p1.te_slug}
           slug2={h2h.p2.te_slug}
-          player1={h2h.p1}
-          player2={h2h.p2}
+          player1={{ ...h2h.p1, name: h2h.p1.entry_name || h2h.p1.name }}
+          player2={{ ...h2h.p2, name: h2h.p2.entry_name || h2h.p2.name }}
           tournSurface={h2h.entry?.surface}
-          tournGender={h2h.entry?.tour === 'WTA' ? 'F' : 'M'}
+          tournGender={h2h.entry?.gender || (h2h.entry?.tour === 'WTA' ? 'F' : 'M')}
           beforeDrawId={h2h.entry?.draw_id}
           match={null}
           canPick={false}
@@ -685,7 +728,7 @@ export default function Schedule() {
           right edge. In time view that wrapper sizes to the widest row, so
           centring the boxes centres the controls above them too rather than
           leaving them stranded at the page edges. */}
-      <div className={clsx('sched-body', { 'sched-body--fit': view === 'time' })}>
+      <div ref={bodyRef} className={clsx('sched-body', { 'sched-body--fit': view === 'time' })}>
       <div className="sched-filters">
         {fromDraw && (
           <Link className="sched-back" to={`/tournaments/${fromDraw}`}>‹ Back to draw</Link>

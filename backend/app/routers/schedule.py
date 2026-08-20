@@ -16,12 +16,13 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import get_optional_user
 from app.database import get_db
 from app.models.schedule import ScheduleEntry
+from app.models.rankings import TePlayer, TeRankingsSnapshot
 from app.models.tournament import Draw, DrawEntry, Match, Tournament
 from app.services.sofascore_live import live_point_for
 
@@ -50,6 +51,17 @@ class SchedulePlayerOut(BaseModel):
     # actually being played. Null means "no Tennis Explorer match", and the
     # panel shows what it can.
     te_slug: Optional[str] = None
+    # The rest of what H2HPanel shows — rank, Elo rank, age — so head-to-head
+    # opened from here is the same panel it is on the draw page rather than a
+    # thinner one. Without these it rendered with the comparison rows missing
+    # and no explanation for why.
+    ranking: Optional[int] = None
+    elo_rank: Optional[int] = None
+    date_of_birth: Optional[date] = None
+    # The BRACKET's name, clean, beside the sheet's own. The row keeps printing
+    # the sheet's typography ("[7] Iga SWIATEK POL"); the panel wants
+    # "Iga Świątek", with the diacritics the sheet drops.
+    entry_name: Optional[str] = None
 
 
 class ScheduleEntryOut(BaseModel):
@@ -94,6 +106,12 @@ class ScheduleEntryOut(BaseModel):
     # are both showing. Carries its own `games`, which the client prefers over
     # live_scores when present.
     live_point: Optional[dict] = None
+    # The draw's own surface and gender. H2HPanel needs the surface for its
+    # per-surface comparison row and the gender to label the ranking column —
+    # without them it renders a thinner panel than the draw page does, with
+    # nothing on screen to explain the difference.
+    surface: Optional[str] = None
+    gender: Optional[str] = None
 
 
 class ScheduleDayOut(BaseModel):
@@ -130,7 +148,7 @@ def _printed_mark(raw: str) -> tuple:
 
 
 def _player_out(p, nats: dict, seeds: dict, types: dict, from_bracket: bool,
-                slugs: dict = None):
+                slugs: dict = None, extra: dict = None):
     """One player, preferring what the bracket knows over what the sheet printed.
 
     `from_bracket` is false for anything but main-draw singles. A doubles
@@ -152,6 +170,7 @@ def _player_out(p, nats: dict, seeds: dict, types: dict, from_bracket: bool,
         seed=seed,
         entry_type=etype,
         te_slug=(slugs or {}).get(p.draw_entry_id),
+        **((extra or {}).get(p.draw_entry_id) or {}),
     )
 
 
@@ -243,10 +262,13 @@ async def schedule_day(
     ent_seeds = {}
     ent_types = {}
     ent_slugs = {}
+    ent_extra = {}
     if ent_ids:
         rows = (await db.execute(
             select(DrawEntry.id, DrawEntry.nationality,
-                   DrawEntry.seed, DrawEntry.entry_type, DrawEntry.te_slug).where(
+                   DrawEntry.seed, DrawEntry.entry_type, DrawEntry.te_slug,
+                   DrawEntry.ranking, DrawEntry.te_player_id,
+                   DrawEntry.name).where(
                 DrawEntry.id.in_(ent_ids)))).all()
         nats = {r[0]: r[1] for r in rows if r[1]}
         # Seeding from the bracket, so it survives a name that never carried it.
@@ -259,6 +281,40 @@ async def schedule_day(
         ent_seeds = {r[0]: r[2] for r in rows if r[2]}
         ent_types = {r[0]: r[3] for r in rows if r[3]}
         ent_slugs = {r[0]: r[4] for r in rows if r[4]}
+
+        # Age and Elo come from the Tennis Explorer tables, exactly as the draw
+        # page sources them. Elo is read from the LATEST snapshot here rather
+        # than one pinned to a tournament's ranking week: the schedule only ever
+        # shows play happening now, so "now" is the right reference.
+        te_ids = [r[6] for r in rows if r[6]]
+        dobs, elos = {}, {}
+        if te_ids:
+            for row in (await db.execute(
+                    select(TePlayer.id, TePlayer.date_of_birth)
+                    .where(TePlayer.id.in_(te_ids)))).all():
+                if row[1]:
+                    dobs[row[0]] = row[1]
+            newest = select(func.max(TeRankingsSnapshot.week_date)).where(
+                TeRankingsSnapshot.player_id.in_(te_ids))
+            for row in (await db.execute(
+                    select(TeRankingsSnapshot.player_id, TeRankingsSnapshot.elo_rank)
+                    .where(TeRankingsSnapshot.player_id.in_(te_ids),
+                           TeRankingsSnapshot.elo_rank.isnot(None),
+                           TeRankingsSnapshot.week_date == newest.scalar_subquery()))).all():
+                if row[1]:
+                    elos[row[0]] = row[1]
+        ent_extra = {
+            r[0]: {
+                "ranking": r[5],
+                "elo_rank": elos.get(r[6]) if r[6] else None,
+                "date_of_birth": dobs.get(r[6]) if r[6] else None,
+                "entry_name": r[7],
+            } for r in rows
+        }
+
+    draw_meta = {r[0]: (r[1], r[2]) for r in (await db.execute(
+        select(Draw.id, Draw.surface, Draw.gender).where(
+            Draw.tournament_id.in_(t_ids)))).all()}
 
     tz_rows = (await db.execute(
         select(Draw.tournament_id, Draw.venue_timezone).where(
@@ -310,7 +366,7 @@ async def schedule_day(
         players = [
             _player_out(p, nats, ent_seeds, ent_types,
                         e.discipline == "singles" and e.stage == "main",
-                        ent_slugs)
+                        ent_slugs, ent_extra)
             for p in sorted(e.players, key=lambda x: (x.side, x.position))
         ]
         out.append(ScheduleEntryOut(
@@ -328,6 +384,8 @@ async def schedule_day(
             live_scores=(m.live_scores_json if m else None),
             live_point=(live_point_for(m) if m else None),
             scores=(m.scores_json if m else None),
+            surface=(draw_meta.get(e.draw_id) or (None, None))[0],
+            gender=(draw_meta.get(e.draw_id) or (None, None))[1],
         ))
 
     # The official PDF stays one tap away — the page replaces it as the primary

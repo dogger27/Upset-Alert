@@ -163,6 +163,11 @@
 }
 
 .sched-row {
+  /* Content-sized, not column-filling. Every card ends up identical because
+     both variable columns are pinned: the name by --sched-name-w, the scores
+     by their own min-width. */
+  width: fit-content;
+  max-width: 100%;
   display: grid;
   /* Third column is the H2H strip. `auto` collapses to nothing on the rows
      that have no button — doubles, qualifying, unresolved slots — so those are
@@ -317,6 +322,10 @@
 
 /* ── Court view ── */
 .sched-courts { display: flex; flex-direction: column; gap: 1.1rem; }
+
+/* Cards are content-sized now, so a column taller than its content would
+   otherwise stretch them. Align to the start and let them keep their width. */
+.sched-courtcol .sched-row, .sched-list .sched-row { justify-self: start; }
 
 .sched-courthead {
   position: sticky;
@@ -747,10 +756,18 @@
   line-height: 1.35;
 }
 
-/* The name takes whatever is left after the scores, and gives way first. */
+/* Fixed to the longest name on the page, published by the measuring effect in
+   Schedule.jsx as --sched-name-w. Fixing this column is what makes every card
+   the same width across both court columns — CSS cannot compare cards that
+   live in separate grids.
+   Falls back to flexible when the variable is absent, so the first paint and
+   any environment without the effect still render sensibly rather than
+   collapsing. */
 .sched-competitor-name {
-  flex: 1 1 auto;
+  flex: 0 0 var(--sched-name-w, auto);
+  width: var(--sched-name-w, auto);
   min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -788,8 +805,15 @@
   flex: 0 0 auto;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 5px;
   font-variant-numeric: tabular-nums;
+  /* Room for three sets plus a live point, always reserved. The scores column
+     is the other variable-width part of the row, so leaving it to size itself
+     would make a two-set card narrower than a three-set one and defeat the
+     whole point of fixing the name column. Best-of-five overflows this and
+     simply grows, which is correct — a Slam final should not be clipped. */
+  min-width: 5.4rem;
 }
 
 .sched-set {

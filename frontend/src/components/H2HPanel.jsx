@@ -440,6 +440,11 @@ export default function H2HPanel({
             control, rather than two arrows parked together with the thing they
             change sitting elsewhere on the bar. */}
         <div className="h2h-navbar">
+          {/* The arrows walk a SEQUENCE of matches, which only the bracket has.
+              Opened from the schedule there is nowhere to go, and two permanently
+              disabled arrows read as something broken rather than something
+              absent — so the whole group goes. */}
+          {(onPrev || onNext) && (
           <div className="h2h-nav-group">
           <button
             className="h2h-nav-btn"
@@ -464,6 +469,7 @@ export default function H2HPanel({
             aria-label="Next match"
           >›</button>
           </div>
+          )}
           <button className="h2h-close" onClick={onClose} aria-label="Close">✕</button>
         </div>
 
