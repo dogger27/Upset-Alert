@@ -277,8 +277,13 @@ function MatchBox({ match, resolvedPlayers, h2hPair, playerById, drawRanks, pick
   const isSuspended = match.live_scores?.[4] === 'suspended'
   // Live scores take priority; final scores shown only in live mode
   const scores = isLive ? match.live_scores : match.scores
-  const p1Scores = scores?.[0] ?? null
-  const p2Scores = scores?.[1] ?? null
+  // When a fresh Sofascore snapshot exists, its games win over ESPN's. Not
+  // because ESPN is wrong, but because the point beside them comes from the
+  // same object and the same instant. ESPN lags up to 60s, so mixing the two
+  // shows a point from after a game that the set score has not registered yet.
+  const snapGames = isLive ? (match.live_point?.games ?? null) : null
+  const p1Scores = snapGames ? snapGames[0] : (scores?.[0] ?? null)
+  const p2Scores = snapGames ? snapGames[1] : (scores?.[1] ?? null)
   const ret = hasRetirement(match.scores)  // retirement markers only on final scores
   const wo = hasWalkover(match.scores)
   const isWalkover = wo.p1 || wo.p2
@@ -313,8 +318,19 @@ function MatchBox({ match, resolvedPlayers, h2hPair, playerById, drawRanks, pick
   // Bold completed set scores for the winner of each set
   // live_scores[3] is [true/false/null, ...] from p1's perspective
   const setWinners = isLive ? (match.live_scores?.[3] ?? null) : null
-  const p1BoldScores = setWinners ? new Set(setWinners.flatMap((w, i) => w === true  ? [i] : [])) : null
-  const p2BoldScores = setWinners ? new Set(setWinners.flatMap((w, i) => w === false ? [i] : [])) : null
+  // ESPN's winner array indexes into ESPN's sets, so it cannot be reused when
+  // the games came from the snapshot instead. Derive it there: every set except
+  // the last is complete, and the higher game count took it. The set in play is
+  // left unbolded, which is what "no winner yet" should look like.
+  const derivedWinners = snapGames
+    ? snapGames[0].map((_, i) =>
+        i === snapGames[0].length - 1
+          ? null
+          : Number(snapGames[0][i]) > Number(snapGames[1][i]))
+    : null
+  const winnersForBold = derivedWinners ?? setWinners
+  const p1BoldScores = winnersForBold ? new Set(winnersForBold.flatMap((w, i) => w === true  ? [i] : [])) : null
+  const p2BoldScores = winnersForBold ? new Set(winnersForBold.flatMap((w, i) => w === false ? [i] : [])) : null
 
 
   const p1 = p1id != null ? playerById[p1id] : null

@@ -684,7 +684,20 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                           )
                         })()}
                         {isLive && (() => {
-                          const nodes = liveScoreNodes(m.live_scores)
+                          // Same coherence rule as BracketView: when a fresh
+                          // snapshot exists its games are used, so the point
+                          // beside them describes the same instant. ESPN lags up
+                          // to 60s, and splicing the two shows a point from
+                          // after a game the set score has not caught up to.
+                          const snapGames = m.live_point?.games ?? null
+                          const nodes = liveScoreNodes(
+                            snapGames
+                              ? [snapGames[0], snapGames[1], m.live_point.serving,
+                                 snapGames[0].map((_, i) =>
+                                   i === snapGames[0].length - 1
+                                     ? null
+                                     : Number(snapGames[0][i]) > Number(snapGames[1][i]))]
+                              : m.live_scores)
                           if (!nodes) return null
                           // The point rides with the set score rather than in a
                           // slot of its own: this gap belongs to the match, and
