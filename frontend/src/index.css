@@ -103,6 +103,7 @@
      is neither — it is not a result at all. Distinct from the muted grey the
      scores use, so the two never blur together. */
   --eta-text: #4f46e5;
+  --eta-bg: #eef2ff;
   --info: #1d4ed8;
   --info-bg: #dbeafe;
 
@@ -405,6 +406,7 @@
   /* Lifted for the dark card it sits on: 7.08:1 there, against 5.52:1 for the
      light value on its own surface. */
   --eta-text: #a5b4fc;
+  --eta-bg: #1e1b4b;
   --info:    #7aa9ff;      --info-bg:    #142743;
 
   /* The correct-pick box is the single most important state in the bracket, so

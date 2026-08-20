@@ -199,6 +199,15 @@
   pointer-events: none;
 }
 
+/* A match with a slot but no play yet. Indigo, matching the expected-start text
+   inside the box, so badge and time read as one statement rather than two
+   unrelated marks. */
+.in-progress-badge--scheduled {
+  background: var(--eta-bg);
+  border-color: var(--eta-text);
+  color: var(--eta-text);
+}
+
 .in-progress-badge--suspended {
   background: var(--warning-tint);
   border-color: var(--warning);

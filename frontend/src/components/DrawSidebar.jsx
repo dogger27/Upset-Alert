@@ -27,9 +27,9 @@ function Toast({ message, onDone }) {
 
 // overlay: compact (phone) draw mode — the sidebar floats over the draw
 // instead of taking flex-row space, so the bracket can use the full width.
-// showOop: render the order-of-play button in this sidebar. Set by the draw
-// page when its own header is too narrow to carry one — i.e. on a phone, where
-// the header never reaches its 'full' stage. Exactly one of the two shows.
+// showOop: render the order-of-play button in this sidebar. Now set on every
+// screen — the sidebar's top-left is where it lives, phone and desktop alike,
+// so there is one place to look for it rather than two depending on width.
 export default function DrawSidebar({ tournamentId, tournament, selectedUserId, defaultLeagueId, onSelectUser, onLeagueChange, collapsed = false, onToggleCollapsed, overlay = false, showOop = false }) {
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -136,9 +136,12 @@ export default function DrawSidebar({ tournamentId, tournament, selectedUserId, 
 
       {/* Mirrors the collapse button across the top of the open sidebar. Only
           while expanded — collapsed it is a narrow strip with no room. A
-          non-null oop_url is always today's; the server owns that test. */}
+          gated on oop_first_seen_at, not oop_url: the latter holds only TODAY's
+          PDF and goes null overnight and between rounds, which greyed the
+          button out even though the parsed schedule was still there to show.
+          Once a tournament has published an order of play, we have one. */}
       {showOop && !collapsed && (
-        tournament?.oop_url ? (
+        tournament?.oop_first_seen_at ? (
           <Link
             to={`/schedule?tournament=${tournament.tournament_id}&draw=${tournament.id}${tournament.oop_date ? `&date=${tournament.oop_date}` : ''}`}
             className="sidebar-oop-btn"

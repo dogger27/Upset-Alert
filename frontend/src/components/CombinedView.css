@@ -203,7 +203,7 @@
   /* Sits in the 24px gap (2 * LIVE_SPREAD + the pair's natural 16px). 1.5rem
      filled the gap exactly and read too heavy; 1.2rem keeps the score clearly
      the loudest thing between the two names with a little air around it. */
-  font-size: 1.2rem;
+  font-size: 1.05rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--info);
@@ -221,8 +221,11 @@
    five sets need only ~180px at 1rem. Two and three sets therefore share a
    size: stepping 3 down to 0.88 made the common mid-match score visibly
    smaller than the two-set one beside it for no width reason at all. */
-.cv-live-score--s2 { font-size: 1rem; }
-.cv-live-score--s3 { font-size: 1rem; }
+/* Sized to match .cv-eta--roomy: a live score and an expected start occupy the
+   same slot in the same box, one replacing the other as a match starts, so
+   different sizes made the box appear to change shape. */
+.cv-live-score--s2 { font-size: 1.05rem; }
+.cv-live-score--s3 { font-size: 1.05rem; }
 .cv-live-score--s4 { font-size: 0.92rem; }
 /* Compact (phone) columns are COMPACT_COL_W (158px), leaving only ~102px past
    the same 56px offset — a third of the desktop budget, where the step-down is
@@ -361,13 +364,13 @@
    where the two boxes are close together. */
 .cv-eta--roomy { font-size: 1.05rem; font-weight: 700; }
 
-/* Compact (phone) mode. The column is a fraction of its desktop width and the
-   label grew a zone suffix, so at the desktop sizes "Today at ~5:55 PM PDT" ran
-   past the box and under the H2H chip. Both variants drop to one size here:
-   later rounds have more VERTICAL room on a phone, not more horizontal, so the
-   roomy step buys nothing and only overflows further. */
-.cv-scroll--compact .cv-eta,
-.cv-scroll--compact .cv-eta--roomy {
-  font-size: 0.62rem;
-  font-weight: 700;
+/* Compact (phone) mode. "Today at ~5:55 PM PDT" is too wide for a phone column
+   — but shrinking the type to fit made it unreadable, and a phone is short of
+   WIDTH, not height. So the time takes its own line at full size instead, which
+   is the dimension actually going spare between two opponents. */
+.cv-scroll--compact .cv-eta .cv-eta-day,
+.cv-scroll--compact .cv-eta .cv-eta-time {
+  display: block;
+  text-align: center;
 }
+.cv-scroll--compact .cv-eta { line-height: 1.25; }

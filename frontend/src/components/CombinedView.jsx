@@ -639,6 +639,15 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                             {isSuspended ? 'Suspended' : 'In Progress'}
                           </span>
                         )}
+                        {/* Its counterpart for a match with a slot but no play
+                            yet — same badge, indigo, matching the time inside
+                            the box so the two read as one statement. */}
+                        {!isLive && !m.winner && !m.is_bye && m.expected_start_at && (
+                          <span className="in-progress-badge in-progress-badge--scheduled"
+                                style={{ position: 'absolute', top, left: '50%', transform: 'translate(-50%, -50%)' }}>
+                            Scheduled
+                          </span>
+                        )}
                         {/* Running score, centred in the gap the LIVE_SPREAD
                             nudge opened between this match's two opponents.
                             Sized to fill that gap; the --sN modifier steps the
@@ -656,12 +665,19 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                           const label = expectedStartLabel(
                             m.expected_start_at, m.expected_source, scheduleZone)
                           if (!label) return null
+                          // "Today at ~5:55 PM PDT" -> day part, time part. Two
+                          // spans so a phone can stack them instead of shrinking
+                          // the type to fit one line.
+                          const cut = label.indexOf(' at ')
+                          const day = cut > 0 ? label.slice(0, cut + 3) : label
+                          const time = cut > 0 ? label.slice(cut + 4) : ''
                           return (
                             <span
                               className={`cv-eta${colIdx > 0 ? ' cv-eta--roomy' : ''}`}
                               style={{ top: (yTop + yBot) / 2 }}
                             >
-                              {label}
+                              <span className="cv-eta-day">{day}</span>
+                              {time && <> <span className="cv-eta-time">{time}</span></>}
                             </span>
                           )
                         })()}

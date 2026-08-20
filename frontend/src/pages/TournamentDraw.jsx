@@ -1208,27 +1208,6 @@ function TournamentDraw() {
               )
             })()
           )}
-          {/* Order of play, sitting under the lock badge. The server only ever
-              sends oop_url when the PDF is today's, so presence is the whole
-              test — the client does no date comparison. Rendered in both states
-              so the column does not reflow when a schedule is published. */}
-          {tournament.oop_url ? (
-            <Link
-              to={`/schedule?tournament=${tournament.tournament_id}&draw=${tournament.id}${tournament.oop_date ? `&date=${tournament.oop_date}` : ''}`}
-              className="draw-oop-btn"
-              title="Today's order of play"
-            >
-              Order of Play
-            </Link>
-          ) : (
-            <span
-              className="draw-oop-btn draw-oop-btn--none"
-              title="No order of play published for today yet"
-              aria-disabled="true"
-            >
-              Order of Play
-            </span>
-          )}
           {/* Saved-picks pill sits directly on top of Reset Selections, both
               stretched to one shared width (see .draw-picks-stack). */}
           {(showPicksBadge || canReset) && (
@@ -1348,7 +1327,7 @@ function TournamentDraw() {
           onLeagueChange={setActiveLeagueId}
           collapsed={sidebarCollapsed}
           overlay={compactDraw}
-          showOop={headerStage !== 'full'}
+          showOop
           onToggleCollapsed={() => { setSidebarManual(true); setSidebarCollapsed(c => !c) }}
           onSelectUser={(uid, uname) => {
             setViewedUserId(uid)
