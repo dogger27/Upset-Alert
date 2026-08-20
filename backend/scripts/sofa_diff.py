@@ -29,13 +29,28 @@ What to look for, in order of how much it matters:
 import argparse
 import asyncio
 import sys
+from datetime import datetime, timezone
 
-# Import every model module before touching the registry, or SQLAlchemy fails
-# to resolve relationship targets it has not seen yet.
-from app.models import league, schedule, setting, tournament, user  # noqa: F401
-from app.database import AsyncSessionLocal
-from app.models.tournament import Draw, DrawEntry, Match
-from sqlalchemy import select
+# SQLAlchemy resolves relationship strings against a registry that only
+# app.main fully populates. Import every model module first, or select(Draw)
+# fails on a name it has never seen — 'League', 'UserPrediction', and so on.
+# Same list, and the same reason, as scripts/resolve_sofascore.py.
+for _m in ("league", "user", "prediction", "notification", "push", "alert",
+           "draw_history", "h2h", "rankings", "setting", "system_log",
+           "tournament", "schedule"):
+    try:
+        __import__(f"app.models.{_m}")
+    except ModuleNotFoundError:
+        pass
+
+from app.database import AsyncSessionLocal              # noqa: E402
+from app.models.tournament import Draw, DrawEntry, Match  # noqa: E402
+from sqlalchemy import select                           # noqa: E402
+
+
+def _aware(dt):
+    """SQLite hands datetimes back naive; treat them as the UTC they are."""
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
 def _fmt(scores) -> str:
@@ -64,8 +79,17 @@ async def main() -> int:
             select(DrawEntry.id, DrawEntry.name))).all()}
 
         totals = dict(agree=0, winner_mismatch=0, missing=0, extra=0,
-                      score_mismatch=0, score_agree=0)
+                      score_mismatch=0, score_agree=0, retirement_lost=0)
         deltas = []
+        # When this sweep first ran. Everything ESPN completed before it is
+        # historical backfill as far as timing is concerned.
+        first = (await db.execute(
+            select(Match.sofa_completed_at)
+            .where(Match.sofa_completed_at.isnot(None))
+            .order_by(Match.sofa_completed_at).limit(1))).scalar_one_or_none()
+        sweep_start = _aware(first) if first else None
+        if sweep_start is None:
+            sweep_start = datetime.max.replace(tzinfo=timezone.utc)
 
         for d in draws:
             matches = (await db.execute(
@@ -98,6 +122,15 @@ async def main() -> int:
                         print(f"     espn says : {names.get(espn, espn)}")
                         print(f"     sofa says : {names.get(sofa, sofa)}")
                     # Scores, only where both have a verdict.
+                    # Retirements. ESPN marks the set a player quit in with a
+                    # trailing "r"; nothing in the finished-events feed carries
+                    # that, so the marker is lost. It is not cosmetic — the
+                    # bracket renders a "ret." badge from it, and a retirement
+                    # scored as a clean win is a different match.
+                    if m.scores_json and any(
+                            "r" in str(c).lower()
+                            for side in m.scores_json for c in side):
+                        totals["retirement_lost"] += 1
                     if m.scores_json and m.sofa_scores_json:
                         if _fmt(m.scores_json) == _fmt(m.sofa_scores_json):
                             totals["score_agree"] += 1
@@ -108,13 +141,17 @@ async def main() -> int:
                                   f"  ({names.get(espn, espn)})")
                             print(f"     espn : {_fmt(m.scores_json)}")
                             print(f"     sofa : {_fmt(m.sofa_scores_json)}")
-                    if m.completed_at and m.sofa_completed_at:
-                        a = m.completed_at if m.completed_at.tzinfo else m.completed_at.replace(
-                            tzinfo=__import__("datetime").timezone.utc)
-                        b = m.sofa_completed_at if m.sofa_completed_at.tzinfo else \
-                            m.sofa_completed_at.replace(
-                                tzinfo=__import__("datetime").timezone.utc)
-                        deltas.append((b - a).total_seconds() / 60.0)
+                    # Timing is only meaningful for matches that finished
+                    # while BOTH sources were watching. sofa_completed_at is
+                    # "when this sweep first noticed", so for a match ESPN
+                    # completed days before the sweep existed the delta measures
+                    # when we deployed, not who reported faster. Including those
+                    # produced a headline figure of "sofa later by 6351 min".
+                    if (m.completed_at and m.sofa_completed_at
+                            and _aware(m.completed_at) >= sweep_start):
+                        deltas.append(
+                            (_aware(m.sofa_completed_at)
+                             - _aware(m.completed_at)).total_seconds() / 60.0)
                 elif espn is not None:
                     totals["missing"] += 1
                     head()
@@ -136,6 +173,11 @@ async def main() -> int:
         print(f"  sofa only (espn lag)  : {totals['extra']}")
         print(f"  scores agreed         : {totals['score_agree']}")
         print(f"  score differences     : {totals['score_mismatch']}")
+        print(f"  retirements ESPN has  : {totals['retirement_lost']}"
+              "   <- sofa preserves none of these")
+        if not deltas:
+            print("  completion timing     : no match finished while both "
+                  "sources were watching — rerun after a live match ends")
         if deltas:
             avg = sum(deltas) / len(deltas)
             print(f"  completion timing     : sofa {'later' if avg > 0 else 'earlier'} "
@@ -147,6 +189,14 @@ async def main() -> int:
         if totals["winner_mismatch"]:
             print("  VERDICT: not safe to cut over. Every winner must agree.")
             return 2
+        if totals["retirement_lost"]:
+            print(f"  VERDICT: winners all agree, but {totals['retirement_lost']} "
+                  "retirements would lose their marker.")
+            print("           Not a blocker for winner_id, which is unaffected.")
+            print("           IS a blocker for scores_json until retirements are "
+                  "sourced — a match that ended in a retirement would render as "
+                  "a clean win.")
+            return 0
         if decided < 20:
             print(f"  VERDICT: too little evidence yet ({decided} decided matches). "
                   "Let it run through a full tournament.")
