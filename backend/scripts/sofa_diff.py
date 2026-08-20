@@ -127,9 +127,15 @@ async def main() -> int:
                     # that, so the marker is lost. It is not cosmetic — the
                     # bracket renders a "ret." badge from it, and a retirement
                     # scored as a clean win is a different match.
-                    if m.scores_json and any(
-                            "r" in str(c).lower()
-                            for side in m.scores_json for c in side):
+                    def _marked(js):
+                        return bool(js) and any(
+                            "r" in str(c).lower() or "w/o" in str(c).lower()
+                            for side in js for c in side)
+                    # Only a marker ESPN has and Sofascore LACKS is a loss. The
+                    # first version counted every ESPN retirement regardless of
+                    # whether Sofascore had matched it, so the figure never moved
+                    # even as the capture went from 0/9 to 8/9.
+                    if _marked(m.scores_json) and not _marked(m.sofa_scores_json):
                         totals["retirement_lost"] += 1
                     if m.scores_json and m.sofa_scores_json:
                         if _fmt(m.scores_json) == _fmt(m.sofa_scores_json):
@@ -173,8 +179,7 @@ async def main() -> int:
         print(f"  sofa only (espn lag)  : {totals['extra']}")
         print(f"  scores agreed         : {totals['score_agree']}")
         print(f"  score differences     : {totals['score_mismatch']}")
-        print(f"  retirements ESPN has  : {totals['retirement_lost']}"
-              "   <- sofa preserves none of these")
+        print(f"  retirement/wo markers LOST : {totals['retirement_lost']}")
         if not deltas:
             print("  completion timing     : no match finished while both "
                   "sources were watching — rerun after a live match ends")
@@ -191,7 +196,7 @@ async def main() -> int:
             return 2
         if totals["retirement_lost"]:
             print(f"  VERDICT: winners all agree, but {totals['retirement_lost']} "
-                  "retirements would lose their marker.")
+                  "retirement/walkover markers are missing.")
             print("           Not a blocker for winner_id, which is unaffected.")
             print("           IS a blocker for scores_json until retirements are "
                   "sourced — a match that ended in a retirement would render as "
