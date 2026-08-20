@@ -7,6 +7,15 @@
 #
 #   docker compose -f docker-compose.staging.yml up -d --build
 #
+# THE `name:` BELOW IS LOAD-BEARING — DO NOT REMOVE IT.
+# Compose derives a project name from the directory, so both this file and
+# docker-compose.yml resolved to project "app". Both also define a service
+# called `backend`, so bringing staging up made compose believe the running
+# production container WAS this service under a new configuration: it
+# recreated app-backend-1 as staging-backend and took the live site down with
+# a 502 until production was brought back by hand. Naming the project is what
+# keeps the two sets of containers from claiming each other.
+#
 # Differences from production, and why each one:
 #
 #   port 8002        so it can sit beside production's 8001 on the same host
@@ -19,6 +28,8 @@
 #                    of ENVIRONMENT precisely so it can run without the rest.
 #   OUTBOUND_*       off. This database is a copy of production and holds every
 #                    real address and push subscription.
+name: upsetalert-staging
+
 services:
   backend:
     build: ./backend
