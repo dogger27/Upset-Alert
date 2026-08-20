@@ -85,6 +85,13 @@ def _send_one(sub_info: dict, payload: str) -> Optional[int]:
     Runs in a worker thread — pywebpush is synchronous and would otherwise stall
     the event loop for every subscription in the batch.
     """
+    # Same choke point as email._send: the last line before the network, so the
+    # staging kill switch holds no matter which caller got here.
+    if not settings.outbound_notifications:
+        logger.warning("BLOCKED outbound push to %s — outbound_notifications=false",
+                       (sub_info or {}).get("endpoint", "?")[:60])
+        return None
+
     from pywebpush import WebPushException, webpush
 
     try:
