@@ -148,6 +148,12 @@ class Draw(Base):
     country: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     wiki_page_title: Mapped[str] = mapped_column(String, nullable=False)
     wiki_page_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, unique=True)
+    # Sofascore's uniqueTournament id and the season within it. The tournament id
+    # is stable across years (Cincinnati ATP has been 2373 for several), the
+    # season id is not — it identifies this edition's draw. Both are resolved
+    # once by name and then never re-derived; see services/sofascore.py.
+    sofa_tournament_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    sofa_season_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     venue_timezone: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     # The venue's assumed day-1 start, from tournament_schedule's curated lookup
     # table. An assumption until first_match_* below observes the real thing.
@@ -355,6 +361,12 @@ class DrawEntry(Base):
     date_of_birth: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     te_player_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     te_slug: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    # Sofascore's player id, resolved once against this draw's own field and
+    # then joined on rather than re-matched. ESPN is matched by name on every
+    # poll because it publishes no id; this column is what stops the live-score
+    # path from repeating that. NULL means unresolved, never "no such player" —
+    # an unresolved entry is reported, not silently skipped.
+    sofa_player_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     draw: Mapped["Draw"] = relationship("Draw", back_populates="draw_entries")
 

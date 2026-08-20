@@ -431,6 +431,15 @@ async def _migrate(conn):
          "ON schedule_entries (tournament_id, play_date)"),
         ("CREATE INDEX IF NOT EXISTS ix_sched_expected "
          "ON schedule_entries (play_date, expected_start_at)"),
+        # Sofascore identity. Nothing is backfilled: an id is only meaningful
+        # once it has been matched against that draw's own published field, and
+        # inventing one here would be indistinguishable from a resolved match to
+        # every later reader. services/sofascore.py fills these in.
+        "ALTER TABLE draws ADD COLUMN sofa_tournament_id INTEGER",
+        "ALTER TABLE draws ADD COLUMN sofa_season_id INTEGER",
+        "ALTER TABLE draw_entries ADD COLUMN sofa_player_id INTEGER",
+        ("CREATE INDEX IF NOT EXISTS ix_draw_entries_sofa "
+         "ON draw_entries (sofa_player_id)"),
     ]
     for sql in migrations:
         try:
