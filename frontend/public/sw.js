@@ -13,7 +13,7 @@
  */
 
 // Bump to force every installed app onto the current build. See below.
-const SW_VERSION = '2026-08-19.60'
+const SW_VERSION = '2026-08-20.1'
 
 self.addEventListener('install', () => self.skipWaiting())
 
