@@ -619,7 +619,14 @@ async def resolve_pending_draws(db: AsyncSession, *, force: bool = False) -> lis
             # Stop the whole sweep. Continuing would issue a request per
             # remaining draw against a host that has already refused us, which
             # is what turns a short block into a long one.
-            break
+            #
+            # Re-raised rather than swallowed. Breaking quietly returned an empty
+            # list, which the caller could not tell apart from "there was nothing
+            # to resolve" — so a run that was refused on its very first request
+            # reported total success and left the operator none the wiser.
+            # Anything stamped before the block is already committed by
+            # resolve_draw, so nothing is lost by unwinding here.
+            raise
         except Exception as exc:
             if is_transient_http_error(exc):
                 # The job runs again on its own schedule; a timeout is not news.
