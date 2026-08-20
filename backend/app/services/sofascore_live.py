@@ -230,6 +230,56 @@ def live_point_for(match) -> Optional[dict]:
             "serving": snap.get("serving")}
 
 
+def authoritative_view(match) -> dict:
+    """Which source's fields the API should serve for one match.
+
+    The cutover happens HERE, at the read layer, rather than by changing who
+    writes. Both sets of columns keep being filled; this only decides which is
+    served. That makes it reversible by a restart with the flag off, with no
+    data to migrate back — swapping espn_monitor's writes would be a one-way
+    door, and the field at stake decides league scoring.
+
+    When Sofascore is authoritative, ESPN's columns are ignored ENTIRELY rather
+    than filled in from. A half-and-half view is how two sources become one
+    contradiction: staging showed a frozen ESPN "2-1 IN PROGRESS" for a match
+    Sofascore had already recorded Cobolli as winning.
+    """
+    from app.core.config import settings
+
+    if not settings.sofascore_authoritative:
+        return {
+            "winner_id": match.winner_id,
+            "scores": match.scores_json,
+            "live_scores": match.live_scores_json,
+            "started_at": match.started_at,
+        }
+
+    # A match is live only while a snapshot exists AND no result has landed.
+    # The poller clears its own snapshot when an event leaves the live list, but
+    # the results sweep can record the winner first, and in that gap the honest
+    # answer is that the match is over.
+    live = None
+    snap = match.sofa_live_json
+    if snap and match.sofa_winner_id is None:
+        sets = snap.get("sets") or []
+        p1 = [str(s[0]) if s and s[0] is not None else "" for s in sets]
+        p2 = [str(s[1]) if s and s[1] is not None else "" for s in sets]
+        if p1:
+            # live_scores is [p1 games, p2 games, serving, set winners]. Every
+            # set but the one in play is decided, and the higher count took it.
+            wins = [None if i == len(p1) - 1
+                    else (int(p1[i] or 0) > int(p2[i] or 0))
+                    for i in range(len(p1))]
+            live = [p1, p2, snap.get("serving"), wins]
+
+    return {
+        "winner_id": match.sofa_winner_id,
+        "scores": match.sofa_scores_json,
+        "live_scores": live,
+        "started_at": match.sofa_started_at,
+    }
+
+
 async def _tracked(db) -> tuple[dict, dict]:
     """((unique_tournament_id, season_id) -> draw_id, sofa_player_id -> entry_id).
 

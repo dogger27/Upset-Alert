@@ -23,7 +23,7 @@ from app.core.auth import get_optional_user
 from app.database import get_db
 from app.models.schedule import ScheduleEntry
 from app.models.tournament import Draw, DrawEntry, Match, Tournament
-from app.services.sofascore_live import live_point_for
+from app.services.sofascore_live import authoritative_view, live_point_for
 
 router = APIRouter(prefix="/schedule", tags=["schedule"])
 
@@ -193,9 +193,14 @@ def _status_of(entry, match) -> str:
     both of these onto the match every 60 seconds.
     """
     if match is not None:
-        if getattr(match, "winner_id", None):
+        # Through the authoritative view, not off the raw columns. Reading
+        # live_scores_json directly is what left staging showing "IN PROGRESS"
+        # on a match Sofascore had already finished — ESPN is not running there,
+        # so its column is frozen at whatever it last said and never clears.
+        view = authoritative_view(match)
+        if view["winner_id"]:
             return "completed"
-        if getattr(match, "live_scores_json", None):
+        if view["live_scores"]:
             return "live"
     return entry.status or "scheduled"
 
@@ -315,9 +320,11 @@ async def schedule_day(
             expected_start_at=_utc(e.expected_start_at), expected_source=e.expected_source,
             started_at=_utc(getattr(m, "started_at", None)) if m else None,
             is_tbd=e.is_tbd, tbd_side=e.tbd_side, status=statuses[e.id], players=players,
-            live_scores=(m.live_scores_json if m else None),
+            # Same authoritative view the draw page uses, so the two surfaces
+            # cannot disagree about a match they both show.
+            live_scores=(authoritative_view(m)["live_scores"] if m else None),
             live_point=(live_point_for(m) if m else None),
-            scores=(m.scores_json if m else None),
+            scores=(authoritative_view(m)["scores"] if m else None),
         ))
 
     # The official PDF stays one tap away — the page replaces it as the primary
