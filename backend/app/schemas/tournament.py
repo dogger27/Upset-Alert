@@ -120,6 +120,13 @@ class MatchOut(BaseModel):
     round_name: Optional[str] = None
     scores: Optional[list] = None
     live_scores: Optional[list] = None
+    # The point score (40-15), which ESPN's feed does not carry at all. Present
+    # only while a Sofascore snapshot is FRESH — see the router, which drops
+    # anything older than sofascore_live.FRESH_SECONDS rather than hand the
+    # client a stale point to render beside a moving set score. Null is the
+    # normal case: no poller running, no live match, or the feed went quiet.
+    # Shape: {"point": [p1, p2], "tiebreak": bool, "serving": 1|2|None}
+    live_point: Optional[dict] = None
     # Under progressive locking this match is under way or over, so its pick can
     # no longer be changed even though the bracket as a whole is still open.
     locked: bool = False

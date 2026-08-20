@@ -686,12 +686,27 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                         {isLive && (() => {
                           const nodes = liveScoreNodes(m.live_scores)
                           if (!nodes) return null
+                          // The point rides with the set score rather than in a
+                          // slot of its own: this gap belongs to the match, and
+                          // a second floating element in it would compete with
+                          // the score for the same centre line. Absent whenever
+                          // no fresh snapshot exists, which is every draw the
+                          // poller is not watching.
+                          const lp = m.live_point ?? null
+                          const pts = lp?.point ?? null
+                          const showPts = pts && pts.some(p => p != null)
                           return (
                             <span
                               className={`cv-live-score cv-live-score--s${Math.min(nodes.length, 4)}${isSuspended ? ' cv-live-score--suspended' : ''}`}
                               style={{ top: (yTop + yBot) / 2 }}
                             >
                               {nodes}
+                              {showPts && (
+                                <span className={`cv-live-point${lp.tiebreak ? ' cv-live-point--tb' : ''}`}
+                                      title={lp.tiebreak ? 'Tiebreak points' : 'Current game'}>
+                                  {pts[0] ?? '0'}-{pts[1] ?? '0'}
+                                </span>
+                              )}
                             </span>
                           )
                         })()}
