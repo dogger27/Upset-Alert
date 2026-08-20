@@ -62,6 +62,20 @@ class Settings(BaseSettings):
     # one may want turning off without the other.
     sofascore_results_enabled: bool = False
 
+    # Treat Sofascore as the SOURCE OF RECORD rather than a second opinion.
+    #
+    # Applied at the READ layer, not by changing who writes: the sofa_* columns
+    # keep being written beside ESPN's, and this decides which set the API
+    # serves. That makes the cutover reversible by restarting with the flag off,
+    # with no data to migrate back — as opposed to swapping espn_monitor's
+    # writes, which would be a one-way door.
+    #
+    # Evidence before enabling (scripts/sofa_diff.py): 174 winners agreed, zero
+    # mismatched; 172 of 174 scorelines identical; no retirement or walkover
+    # marker lost. Staging runs with it on and no ESPN scraper at all, which is
+    # the only honest test of "could Sofascore carry this alone".
+    sofascore_authoritative: bool = False
+
     class Config:
         env_file = ".env"
 
