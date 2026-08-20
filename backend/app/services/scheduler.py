@@ -1459,6 +1459,7 @@ async def _refresh_order_of_play() -> None:
     that has gone stale is the half that protects users from opening a PDF
     frozen on a finished tournament's last day. See order_of_play.py."""
     from app.services import order_of_play
+    from app.services.system_log import app_log
 
     try:
         atp = await order_of_play.refresh_atp_ids()
@@ -1487,6 +1488,7 @@ async def _refresh_atp_tournament_ids() -> None:
     costs one page load and means a newly added tournament is covered within a
     week rather than at the next season rollover."""
     from app.services import atp_ids
+    from app.services.system_log import app_log
 
     try:
         result = await atp_ids.refresh_atp_tournament_ids()
@@ -1515,20 +1517,28 @@ async def _refresh_schedule_estimates() -> None:
     from app.models.schedule import ScheduleEntry
     from app.models.tournament import Draw
     from app.services import schedule as schedule_svc
+    from app.services.system_log import app_log
 
     try:
+        # A window, not `today`. This clock is UTC and the venues are not, so a
+        # single date stops covering the session that is actually being played:
+        # from 8pm in Cincinnati it is already tomorrow here, and the evening
+        # matches — the ones whose estimates are still moving — would be the
+        # first to stop being re-chained. A day either side covers every venue
+        # offset in both directions, and days with no rows cost one query.
         today = _date.today()
+        days = [today - timedelta(days=1), today, today + timedelta(days=1)]
         async with AsyncSessionLocal() as db:
-            t_ids = [r[0] for r in (await db.execute(
-                _select(ScheduleEntry.tournament_id).where(
-                    ScheduleEntry.play_date == today).distinct())).all()]
-        for tid in t_ids:
+            pairs = (await db.execute(
+                _select(ScheduleEntry.tournament_id, ScheduleEntry.play_date)
+                .where(ScheduleEntry.play_date.in_(days)).distinct())).all()
+        for tid, day in pairs:
             async with AsyncSessionLocal() as db:
                 tz = (await db.execute(
                     _select(Draw.venue_timezone).where(
                         Draw.tournament_id == tid,
                         Draw.venue_timezone.isnot(None)))).scalars().first()
-                await schedule_svc.recompute_expected_starts(db, tid, today, venue_tz=tz)
+                await schedule_svc.recompute_expected_starts(db, tid, day, venue_tz=tz)
     except Exception as exc:
         logger.error("Schedule estimate refresh failed: %s", exc, exc_info=True)
         err = describe_exception(exc)

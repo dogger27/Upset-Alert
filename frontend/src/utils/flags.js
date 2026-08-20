@@ -41,11 +41,22 @@ export function splitPlayerName(raw) {
   const seed = seedMatch ? seedMatch[1].trim() : null
   if (seedMatch) s = s.slice(seedMatch[0].length).trim()
 
+  // A trailing three-letter capital is only a country when a SURNAME precedes
+  // it, because the format is "Firstname SURNAME NAT" and the surname is in
+  // caps too. Shape alone cannot tell "Orlando LUZ" from "Nuno BORGES POR",
+  // and reading LUZ as a country leaves the player called "Orlando".
+  //
+  // Tested structurally rather than against IOC_TO_ISO2, which is a flag table
+  // and holds only the countries that have one — matching on it would strand
+  // "BDI" and "MNE" inside the names of the players it cannot draw.
   let nat = null
   const natMatch = s.match(/\s([A-Z]{3})$/)
   if (natMatch) {
-    nat = natMatch[1]
-    s = s.slice(0, natMatch.index).trim()
+    const before = s.slice(0, natMatch.index).split(/\s+/).filter(Boolean)
+    if (before.some(w => w === w.toUpperCase() && /[A-Z]/.test(w))) {
+      nat = natMatch[1]
+      s = before.join(' ')
+    }
   }
 
   const words = s.split(/\s+/).filter(Boolean)
