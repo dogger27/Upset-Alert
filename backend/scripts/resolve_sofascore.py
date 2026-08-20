@@ -18,6 +18,7 @@ attaches another player's live score to a bracket slot.
 
 import argparse
 import asyncio
+import os
 import sys
 
 from sqlalchemy import select
@@ -65,6 +66,12 @@ async def main() -> int:
     ap.add_argument("--dry-run", action="store_true",
                     help="resolve, print, then roll back every write")
     args = ap.parse_args()
+
+    # State the egress. A run through a tunnel and a direct one are otherwise
+    # indistinguishable in the output, and which one produced a given result is
+    # the single most useful thing to know when reading it back later.
+    proxy = os.environ.get("SOFASCORE_PROXY")
+    print(f"egress: {proxy if proxy else 'direct (this host)'}")
 
     blocked = False
     async with AsyncSessionLocal() as db:
