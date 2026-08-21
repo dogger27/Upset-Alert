@@ -2,6 +2,8 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import useFlashOnChange from '../hooks/useFlashOnChange'
+import useScoreEvent from '../hooks/useScoreEvent'
+import ChampionFanfare from '../components/ChampionFanfare'
 import H2HPanel from '../components/H2HPanel'
 import { useSearchParams, Link } from 'react-router-dom'
 import clsx from 'clsx'
@@ -331,6 +333,46 @@ function ServeBall() {
   )
 }
 
+/* What a row is watched on, lowest tier first — see hooks/useScoreEvent.js.
+   COUNTED, not compared: "games played" going up by one IS a game finishing,
+   and knowing that needs no knowledge of which set it was in or who won it.
+   Same for sets. Derived this way, a row that arrives mid-match or whose feed
+   skips a beat cannot celebrate something that did not happen — the count
+   either moved or it did not.
+
+   The set in play is left out of the decided count, or every game the leader
+   wins would register as the set ending. A match tiebreak has no set in play,
+   so nothing is excluded there. */
+function scoreMarks(e) {
+  const live = e.status === 'live'
+  const lp = e.live_point ?? null
+  const g = lp?.games ?? (e.live_scores ? [e.live_scores[0], e.live_scores[1]] : null)
+  const sets = live ? g : (e.scores ? [e.scores[0], e.scores[1]] : null)
+
+  let games = 0, decided = 0
+  if (sets) {
+    const n = Math.max(sets[0]?.length ?? 0, sets[1]?.length ?? 0)
+    for (let i = 0; i < n; i++) {
+      const x = Number(parseSet(sets[0]?.[i]).g) || 0
+      const y = Number(parseSet(sets[1]?.[i]).g) || 0
+      games += x + y
+      const inPlay = live && i === n - 1 && !lp?.match_tiebreak
+      if (!inPlay && x !== y) decided += 1
+    }
+  }
+
+  const done = e.status === 'completed' ? 1 : 0
+  // A final is the only match that also ends a draw. Both tiers fire on the
+  // same update and the higher one wins, which is what ranking them is for.
+  const isFinal = /^(f|final)$/i.test(String(e.round_label ?? '').trim())
+  return [
+    ['game', games],
+    ['set', decided],
+    ['match', done],
+    ['champion', done && isFinal ? 1 : 0],
+  ]
+}
+
 /* One set's games for one player, with the tiebreak as a superscript.
    parseSet already understands "7(9)"; this only decides how it renders. */
 function SetCell({ cell, bold }) {
@@ -492,8 +534,21 @@ function MatchRow({ e, showCourt, zone, venueMode, onH2H }) {
   // on both screens rather than looking like ordinary play here.
   const suspended = e.live_scores?.[4] === 'suspended'
   const started = startedLine(e, zone)
+
+  // The biggest thing that just happened to this match, or null. Marks the CARD
+  // rather than a digit: a set belongs to the match, and putting the emphasis
+  // on whichever cell changed would celebrate a 6 instead of the thing the 6
+  // completed.
+  const fx = useScoreEvent(scoreMarks(e))
+  const winner = e.winner_side === 'a' ? a : e.winner_side === 'b' ? b : null
+
   return (
-    <div className={clsx('sched-row', {
+    <>
+    {fx === 'champion' && (
+      <ChampionFanfare name={winner?.map(p => splitPlayerName(p.name).last)
+                                    .filter(Boolean).join(' / ') || null} />
+    )}
+    <div className={clsx('sched-row', fx && `score-fx--${fx}`, {
       'sched-row--done': done,
       'sched-row--live': e.status === 'live' && !suspended,
       'sched-row--suspended': e.status === 'live' && suspended,
@@ -558,6 +613,7 @@ function MatchRow({ e, showCourt, zone, venueMode, onH2H }) {
         </button>
       )}
     </div>
+    </>
   )
 }
 

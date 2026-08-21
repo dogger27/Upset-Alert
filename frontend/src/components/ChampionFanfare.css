@@ -1,0 +1,186 @@
+/* Ten seconds for a champion.
+   Everything here animates transform, opacity or filter and nothing animates a
+   layout property, so the whole thing runs on the compositor and the page
+   underneath is not reflowed once while it plays. */
+
+.fanfare {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  overflow: hidden;
+  /* The page stays usable throughout. A ten-second animation that swallows a
+     tap is a ten-second outage. */
+  pointer-events: none;
+}
+
+/* A wash of colour that cycles the whole spectrum twice. hue-rotate on a single
+   conic gradient rather than a stack of tinted layers: one element, one
+   composited filter, every colour. */
+.fanfare-glow {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 190vmax;
+  height: 190vmax;
+  margin: -95vmax 0 0 -95vmax;
+  background: conic-gradient(
+    from 0deg,
+    #ff2d55, #ff9500, #ffcc00, #34c759, #00c7be,
+    #32ade6, #5856d6, #af52de, #ff2d55);
+  opacity: 0;
+  animation: fanfare-glow 10s ease-out forwards;
+}
+
+@keyframes fanfare-glow {
+  0%   { opacity: 0;    transform: scale(0.2) rotate(0deg);   filter: blur(60px); }
+  6%   { opacity: 0.42; transform: scale(1.05) rotate(90deg); filter: blur(70px); }
+  70%  { opacity: 0.30; transform: scale(1) rotate(540deg);   filter: blur(80px); }
+  100% { opacity: 0;    transform: scale(1.3) rotate(760deg); filter: blur(90px); }
+}
+
+/* Rays behind the trophy, turning the other way to the glow so the two do not
+   read as one spinning object. */
+.fanfare-rays {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 170vmax;
+  height: 170vmax;
+  margin: -85vmax 0 0 -85vmax;
+  background: repeating-conic-gradient(
+    from 0deg,
+    rgba(255, 255, 255, 0.16) 0deg 6deg,
+    transparent 6deg 18deg);
+  opacity: 0;
+  animation: fanfare-rays 10s ease-out forwards;
+}
+
+@keyframes fanfare-rays {
+  0%   { opacity: 0;    transform: rotate(0deg)    scale(0.4); }
+  10%  { opacity: 0.85; transform: rotate(-60deg)  scale(1); }
+  75%  { opacity: 0.45; transform: rotate(-320deg) scale(1); }
+  100% { opacity: 0;    transform: rotate(-420deg) scale(1.15); }
+}
+
+.fanfare-centre {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  /* Its own stacking level so the confetti passes behind the trophy rather than
+     across the middle of it. */
+  z-index: 2;
+}
+
+/* The trophy arrives overshooting its size, settles, then holds with a slow
+   heartbeat for the rest of the ten seconds — the still point everything else
+   is thrown around. */
+.fanfare-trophy {
+  font-size: clamp(5rem, 22vmin, 12rem);
+  line-height: 1;
+  animation: fanfare-trophy 10s cubic-bezier(0.2, 1.4, 0.3, 1) forwards;
+  filter: drop-shadow(0 0 26px rgba(255, 214, 10, 0.85));
+}
+
+@keyframes fanfare-trophy {
+  0%   { transform: scale(0)    rotate(-220deg); opacity: 0; }
+  12%  { transform: scale(1.45) rotate(18deg);   opacity: 1; }
+  20%  { transform: scale(1)    rotate(-6deg);   opacity: 1; }
+  26%  { transform: scale(1.12) rotate(4deg);    opacity: 1; }
+  32%  { transform: scale(1)    rotate(0deg);    opacity: 1; }
+  60%  { transform: scale(1.08) rotate(0deg);    opacity: 1; }
+  88%  { transform: scale(1)    rotate(0deg);    opacity: 1; }
+  100% { transform: scale(0.86) rotate(0deg);    opacity: 0; }
+}
+
+.fanfare-name {
+  margin-top: 0.4rem;
+  font-size: clamp(1.4rem, 5vmin, 3rem);
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  color: #fff;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.75);
+  white-space: nowrap;
+  animation: fanfare-text 10s ease-out forwards;
+}
+
+/* The word itself runs the rainbow, clipped to the glyphs — the one place a
+   full spectrum reads as celebration rather than as a broken gradient. */
+.fanfare-title {
+  margin-top: 0.15rem;
+  font-size: clamp(0.95rem, 3vmin, 1.8rem);
+  font-weight: 900;
+  letter-spacing: 0.42em;
+  text-indent: 0.42em;      /* letter-spacing adds a trailing gap; this recentres */
+  text-transform: uppercase;
+  background: linear-gradient(90deg,
+    #ff2d55, #ff9500, #ffcc00, #34c759, #32ade6, #af52de, #ff2d55);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: fanfare-text 10s ease-out forwards,
+             fanfare-hue 2.4s linear infinite;
+}
+
+@keyframes fanfare-text {
+  0%   { opacity: 0; transform: translateY(18px) scale(0.85); }
+  16%  { opacity: 1; transform: translateY(0)    scale(1); }
+  88%  { opacity: 1; transform: translateY(0)    scale(1); }
+  100% { opacity: 0; transform: translateY(-10px) scale(0.96); }
+}
+
+@keyframes fanfare-hue {
+  from { background-position:   0% 50%; }
+  to   { background-position: 300% 50%; }
+}
+
+/* One piece of confetti. Its whole trajectory is in custom properties set per
+   element, so 44 of these share one keyframe rule instead of needing 44. */
+.fanfare-piece {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  font-size: var(--size);
+  line-height: 1;
+  opacity: 0;
+  animation: fanfare-piece 10s cubic-bezier(0.15, 0.85, 0.25, 1) forwards;
+}
+
+@keyframes fanfare-piece {
+  0% {
+    opacity: 0;
+    transform: rotate(var(--angle)) translateY(0) rotate(0deg) scale(0.2);
+  }
+  8% { opacity: 1; }
+  /* Out fast, then a long slow drift with an arc on it — thrown, not fired. */
+  45% {
+    opacity: 1;
+    transform: rotate(calc(var(--angle) + var(--drift)))
+               translateY(calc(var(--distance) * -1))
+               rotate(var(--spin)) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(calc(var(--angle) + var(--drift) * 2))
+               translateY(calc(var(--distance) * -1.25))
+               rotate(calc(var(--spin) * 1.6)) scale(0.75);
+  }
+}
+
+/* Reduced motion: the moment still happens, it just stops flying. No confetti,
+   no spin, no strobing spectrum — the trophy and the name fade up and hold. */
+@media (prefers-reduced-motion: reduce) {
+  .fanfare-piece,
+  .fanfare-rays { display: none; }
+
+  .fanfare-glow { animation: fanfare-glow-calm 10s ease-out forwards; }
+  @keyframes fanfare-glow-calm {
+    0%, 100% { opacity: 0; }
+    12%, 82% { opacity: 0.22; }
+  }
+
+  .fanfare-trophy { animation: fanfare-text 10s ease-out forwards; filter: none; }
+  .fanfare-title  { animation: fanfare-text 10s ease-out forwards; }
+}
