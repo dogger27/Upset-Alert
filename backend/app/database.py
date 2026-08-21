@@ -482,6 +482,7 @@ async def _migrate(conn):
         "ALTER TABLE schedule_entries ADD COLUMN live_point_json JSON",
         "ALTER TABLE schedule_entries ADD COLUMN winner_side VARCHAR",
         "ALTER TABLE schedule_entries ADD COLUMN started_at DATETIME",
+        "ALTER TABLE schedule_entries ADD COLUMN completed_at DATETIME",
         "ALTER TABLE draws ADD COLUMN sofa_doubles_tournament_id INTEGER",
         "ALTER TABLE draws ADD COLUMN sofa_doubles_season_id INTEGER",
     ]

@@ -286,6 +286,12 @@ async def sweep_once(db, day: Optional[date] = None) -> dict:
                 e.status = "completed"
                 e.live_scores_json = None
                 e.live_point_json = None
+                # When the court freed. Only on the transition — re-stamping it
+                # on every sweep would walk the time forward for as long as the
+                # row stays in the day's window, and push everything chained
+                # behind it forward with it.
+                if e.completed_at is None:
+                    e.completed_at = datetime.now(timezone.utc)
                 scored += 1
 
     if resolved or scored:

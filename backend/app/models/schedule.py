@@ -113,6 +113,14 @@ class ScheduleEntry(Base):
     # by the doubles sweep on its first sighting of play.
     started_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True)
+    # And when it ended, for the same reason. This is what frees the court in
+    # the chained start-time estimates: without it a finished doubles match is
+    # indistinguishable from one that has not been played, and everything
+    # scheduled behind it keeps being announced for a time that has passed.
+    # Stamped when the sweep OBSERVES the transition, so it is accurate to the
+    # sweep's interval rather than to the minute.
+    completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True)
     discipline: Mapped[str] = mapped_column(String, default="singles")  # singles|doubles|mixed
     round_label: Mapped[Optional[str]] = mapped_column(String, nullable=True)  # R32|QF|Q1|Q2
 

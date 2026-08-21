@@ -800,9 +800,28 @@ async def recompute_expected_starts(db, tournament_id: int, play_date: date,
             printed_dt = (datetime.combine(play_date, printed, tzinfo=tz)
                           .astimezone(timezone.utc) if printed else None)
 
-            finished_at = _aware(getattr(m, 'completed_at', None)) if m else None
-            is_live = bool(m and getattr(m, 'live_scores_json', None)
-                           and not getattr(m, 'winner_id', None))
+            # Doubles has no draw match — that is the whole reason it is not in
+            # the brackets — so `m` is None for every doubles slot, and both
+            # tests below used to come back False no matter what had happened on
+            # court. A finished doubles match was therefore indistinguishable
+            # from one that had not started, the court never freed, and the
+            # chain carried guessed durations forward from the printed start all
+            # day: a semi-final whose court had stood empty for an hour was
+            # still being announced for the middle of the afternoon.
+            # The row carries its own state for exactly this case. Asked only
+            # when there is no match to ask, so singles is untouched.
+            if m is not None:
+                finished_at = _aware(getattr(m, 'completed_at', None))
+                is_live = bool(getattr(m, 'live_scores_json', None)
+                               and not getattr(m, 'winner_id', None))
+            else:
+                finished_at = _aware(s.completed_at) if s.status == 'completed' else None
+                is_live = s.status == 'live'
+                # Completed before this column existed, or by some path that does
+                # not stamp it. It is over either way, which is all the chain
+                # needs — see below.
+                if s.status == 'completed' and finished_at is None:
+                    finished_at = now
 
             if finished_at or is_live:
                 # Already under way or done. Its start is history — the printed
@@ -815,9 +834,13 @@ async def recompute_expected_starts(db, tournament_id: int, play_date: date,
                     s.expected_start_at = s.expected_start_at or prev_end
                     s.expected_source = s.expected_source or 'estimated'
                 # The court is not free the instant a match ends.
+                # A doubles row keeps its live score on itself, so read the
+                # remaining time from whichever of the two is actually carrying
+                # the match.
+                live_json = (getattr(m, 'live_scores_json', None) if m is not None
+                             else s.live_scores_json)
                 prev_end = (finished_at if finished_at else now + timedelta(
-                    minutes=_remaining_minutes(
-                        getattr(m, 'live_scores_json', None), s.discipline))) + gap
+                    minutes=_remaining_minutes(live_json, s.discipline))) + gap
                 s.estimated_duration_min = dur
                 if before != (s.expected_start_at, s.expected_source):
                     touched += 1

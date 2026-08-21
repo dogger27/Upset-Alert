@@ -87,8 +87,12 @@ async def lifespan(app: FastAPI):
     # scheduler. A no-op when the scheduler is running, which already owns it.
     oop_only = settings.order_of_play_enabled and not scrapers_on
     if oop_only:
-        from app.services.scheduler import run_order_of_play_only
+        from app.services.scheduler import (
+            run_order_of_play_only, run_schedule_estimates_only)
         asyncio.create_task(run_order_of_play_only())
+        # Its own task on its own cadence — see the note there for why the
+        # sheet's hour is the wrong interval for a job that talks to nobody.
+        asyncio.create_task(run_schedule_estimates_only())
         logging.getLogger("app").info(
             "Order-of-play refresh ENABLED without the rest of the scrapers")
 
