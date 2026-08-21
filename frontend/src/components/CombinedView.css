@@ -233,6 +233,32 @@
    the higher specificity wins regardless of source order. */
 .cv-scroll--compact .cv-live-score--s3 { font-size: 0.88rem; }
 .cv-scroll--compact .cv-live-score--s4 { font-size: 0.78rem; }
+
+/* On a phone the step-down is not enough on its own. Pinned to the right edge
+   with nothing holding its left, a three-set score plus a point pill needs
+   about 130px and has 102px — so it simply kept growing leftwards, out of the
+   column and across the boxes beside it. Nothing stopped it because nothing
+   was on that side.
+   Bounded on BOTH sides instead, and centred in what is left once the bell's
+   corner is set aside. A line too long for the box now overflows evenly rather
+   than entirely to the left, which is a legible failure rather than a broken
+   one.
+   The point pill takes its own line, the same trade the expected-start label
+   makes below: a phone column is short of width, and the gap these sit in has
+   height to spare. Roomy columns only — the leftmost pane holds its pair 16px
+   apart, which is one line and no more. */
+.cv-scroll--compact .cv-live-score--roomy {
+  left: 2px;
+  right: 42px;
+  transform: translateY(-50%);
+  text-align: center;
+  line-height: 1.2;
+}
+.cv-scroll--compact .cv-live-score--roomy .cv-live-point {
+  display: block;
+  width: fit-content;
+  margin: 4px auto 0;
+}
 /* Tiebreak superscript, offset without growing the line box (which is already
    the full height of the gap). */
 .cv-live-score sup {
@@ -375,6 +401,24 @@
   text-align: center;
 }
 .cv-scroll--compact .cv-eta--roomy { line-height: 1.25; }
+
+/* Centred on the column, the label ran under the upset bell — the bell hangs
+   in the rightmost ~40px and the two were laid out as if the other were not
+   there. Bounded to the space beside it and centred in that instead, so the
+   label sits where it always did relative to the room it actually has.
+   Unconditional, not only on matches that have a bell: a conditional offset
+   would shift the time sideways as an upset appeared or cleared, and the
+   reserved corner costs nothing when it is empty — the same reasoning the live
+   score's own offset is built on. */
+.cv-scroll--compact .cv-eta--roomy {
+  left: 2px;
+  right: 42px;
+  transform: translateY(-50%);
+  text-align: center;
+  /* 0.98 buys back what the narrower box costs, so the longest label this
+     produces — "Tomorrow at ~12:40 PM PDT", stacked — still clears it. */
+  font-size: 0.98rem;
+}
 
 /* The leftmost column is the exception, and the reason the rule above is scoped
    to --roomy: every visible window puts its first column on the base pitch, so

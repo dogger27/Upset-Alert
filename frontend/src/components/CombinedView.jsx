@@ -710,7 +710,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                           const showPts = pts && pts.some(p => p != null)
                           return (
                             <span
-                              className={`cv-live-score cv-live-score--s${Math.min(nodes.length, 4)}${isSuspended ? ' cv-live-score--suspended' : ''}`}
+                              className={`cv-live-score cv-live-score--s${Math.min(nodes.length, 4)}${colIdx > 0 ? ' cv-live-score--roomy' : ''}${isSuspended ? ' cv-live-score--suspended' : ''}`}
                               style={{ top: (yTop + yBot) / 2 }}
                             >
                               {nodes}
