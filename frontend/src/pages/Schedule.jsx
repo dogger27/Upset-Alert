@@ -608,6 +608,17 @@ export default function Schedule() {
   useLiveUpdates((data?.tournaments ?? []).map(t => t.id),
                  [['schedule', day, tournamentId ?? 'all']])
 
+  // ABOVE the effect that reads it. It used to sit below, which was fine while
+  // nothing above referenced it — then the tour default started needing the
+  // day's list of tours, and a const read before its own declaration is a
+  // temporal dead zone, not an undefined: the whole page threw on render.
+  // The dependency array is what does it, evaluated during render whether or
+  // not the effect body ever runs.
+  const tours = useMemo(() => {
+    const t = new Set((data?.entries ?? []).filter(e => e.tour).map(e => e.tour))
+    return [...t].sort()
+  }, [data])
+
   // Open on the tour of the draw we came from — someone who clicked OOP on the
   // men's draw wants the men's matches first. Only defaulted once, so a manual
   // choice is not overwritten when the day's data refreshes.
@@ -625,11 +636,6 @@ export default function Schedule() {
   // does with no timeZone option.
   const venueTz = data?.tournaments?.find(t => t.venue_timezone)?.venue_timezone
   const zone = tzMode === 'venue' ? venueTz : undefined
-
-  const tours = useMemo(() => {
-    const t = new Set((data?.entries ?? []).filter(e => e.tour).map(e => e.tour))
-    return [...t].sort()
-  }, [data])
 
   // Whether the day has anything that is not singles. The Doubles button is
   // shown only when there is doubles to show, the same way the tour chips
