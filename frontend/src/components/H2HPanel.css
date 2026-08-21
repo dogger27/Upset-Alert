@@ -709,9 +709,15 @@ html.h2h-modal-open body {
     column-gap: 0.25rem;
   }
 
-  .h2h-val-p1 { order: 1; }
-  .h2h-label  { order: 2; }
-  .h2h-val-p2 { order: 3; }
+  /* Scoped to a stats row, which is the only place this ordering means
+     anything. Unscoped, it also caught the two names on the TITLE BAR — they
+     wear .h2h-val-p1/p2 for the colour key underlining them — and gave them
+     order 1 and 3 in a flex row where "vs" still had the default 0. So "vs"
+     sorted ahead of both names and sat at the far left of the bar, which is
+     nowhere near the two things it joins. */
+  .h2h-row .h2h-val-p1 { order: 1; }
+  .h2h-row .h2h-label  { order: 2; }
+  .h2h-row .h2h-val-p2 { order: 3; }
 
   .h2h-label,
   .h2h-filter-btn {
@@ -972,6 +978,15 @@ html.h2h-modal-open body {
     column-gap: 0.3rem;
     row-gap: 0.15rem;
     padding: 0.55rem 0.75rem 0.6rem;
+  }
+
+  /* A rule between meetings. Each one is two lines, and with nothing but a gap
+     separating them the surname of the next result read as a third line of the
+     one above. Thin and semi-transparent so it separates without becoming
+     furniture — the coloured edge on the left is what the eye is meant to
+     follow down the list. */
+  .h2h-table tr + tr {
+    border-top: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
   }
 
   .h2h-table td { display: block; }

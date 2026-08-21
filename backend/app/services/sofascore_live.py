@@ -115,11 +115,21 @@ def _norm_point(raw, tiebreak: bool) -> Optional[str]:
     return s if s in ("0", "15", "30", "40", "A", "AD") else None
 
 
-def _sets_and_tiebreak(home: dict, away: dict) -> tuple[list, bool]:
-    """Per-set games for both players, plus whether the CURRENT set is a tiebreak.
+def _sets_and_tiebreak(home: dict, away: dict) -> tuple[list, bool, bool]:
+    """Per-set games, whether the CURRENT set is a tiebreak, and whether that
+    tiebreak is a MATCH tiebreak standing in for a whole set.
 
     Sofascore numbers sets period1..period5. The current set is the highest one
     present; a tiebreak in progress shows periodNTieBreak alongside it.
+
+    A match tiebreak — the first-to-ten doubles play instead of a deciding set —
+    arrives in the same shape as a set and is not one. There are no games in it,
+    so the running POINT COUNT goes in the period itself: an 8-7 tiebreak
+    reports as a period of 8-7. Rendered as a set that says a pair won eight
+    games, which is not a score tennis can produce.
+    A SET tiebreak is always played AT six games all, so its period reads 6-6
+    and the count lives in periodNTieBreak. That is the entire difference
+    between the two, and it is what the test below reads.
     """
     sets = []
     current_tb = False
@@ -133,7 +143,20 @@ def _sets_and_tiebreak(home: dict, away: dict) -> tuple[list, bool]:
         # overwritten rather than or-ed: a completed earlier tiebreak must not
         # make the current game read as one.
         current_tb = tb_key in home or tb_key in away
-    return sets, current_tb
+    match_tb = False
+    if current_tb and sets:
+        a, b = sets[-1]
+        try:
+            at_six_all = int(a) == 6 and int(b) == 6
+        except (TypeError, ValueError):
+            # Unreadable rather than not-6-6. Leaving the set in place is the
+            # behaviour that predates this, and a wrong SET is a smaller error
+            # than dropping a real one.
+            at_six_all = True
+        if not at_six_all:
+            match_tb = True
+            sets.pop()
+    return sets, current_tb, match_tb
 
 
 def _serving(first_to_serve: Optional[int], sets: list) -> Optional[int]:
@@ -173,12 +196,13 @@ def _snapshot(event: dict) -> dict:
     """One internally-consistent live state, built from a single response."""
     home = event.get("homeScore") or {}
     away = event.get("awayScore") or {}
-    sets, tiebreak = _sets_and_tiebreak(home, away)
+    sets, tiebreak, match_tb = _sets_and_tiebreak(home, away)
     return {
         "sets": sets,
         "point": [_norm_point(home.get("point"), tiebreak),
                   _norm_point(away.get("point"), tiebreak)],
         "tiebreak": tiebreak,
+        "match_tiebreak": match_tb,
         "serving": _serving(event.get("firstToServe"), sets),
         "at": datetime.now(timezone.utc).isoformat(),
     }
@@ -228,6 +252,11 @@ def live_point_for(match) -> Optional[dict]:
     return {"point": point,
             "games": games if sets else None,
             "tiebreak": bool(snap.get("tiebreak")),
+            # Every set in `games` is FINISHED when this is set — the one being
+            # played is the tiebreak, and it is deliberately not in the list.
+            # Without this a renderer leaves the last completed set unmarked,
+            # because "last set present" is how it knows which one is live.
+            "match_tiebreak": bool(snap.get("match_tiebreak")),
             "serving": snap.get("serving")}
 
 
@@ -244,7 +273,10 @@ def _as_espn_shape(snap: dict) -> Optional[list]:
     if not p1:
         return None
     # Every set but the one in play is decided, and the higher count took it.
-    wins = [None if i == len(p1) - 1 else (int(p1[i] or 0) > int(p2[i] or 0))
+    # In a match tiebreak there is no set in play — the tiebreak is not in this
+    # list — so every one of them is decided.
+    live_idx = -1 if (snap or {}).get("match_tiebreak") else len(p1) - 1
+    wins = [None if i == live_idx else (int(p1[i] or 0) > int(p2[i] or 0))
             for i in range(len(p1))]
     return [p1, p2, (snap or {}).get("serving"), wins]
 

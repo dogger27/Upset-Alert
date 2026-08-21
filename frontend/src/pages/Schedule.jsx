@@ -362,7 +362,11 @@ function CompetitorRows({ e, a, b }) {
   // and must stay unbolded — that is what makes "in progress" legible.
   const setWon = (i, side) => {
     if (!sets) return false
-    if (live && i === n - 1) return false
+    // The last set present is normally the one being played, so it has no
+    // winner yet. In a match tiebreak it is not — the tiebreak stands in for
+    // the deciding set and is scored as a point, so every set in this list is
+    // finished and the second one keeps the bold it earned.
+    if (live && i === n - 1 && !lp?.match_tiebreak) return false
     const x = Number(parseSet(sets[0]?.[i]).g), y = Number(parseSet(sets[1]?.[i]).g)
     if (Number.isNaN(x) || Number.isNaN(y)) return false
     return side === 0 ? x > y : y > x
