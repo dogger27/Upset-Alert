@@ -856,8 +856,12 @@
 
 /* The live point, tinted apart from the games: a different kind of number,
    and it changes every few seconds. Same tokens as the draw page. */
+/* Wide enough for two digits, so "0" and "40" occupy the same box. At 20px a
+   two-character point outgrew its min-width and pushed that row's set scores
+   left of the other's — the columns broke on exactly the rows where the score
+   was changing fastest. */
 .sched-point {
-  min-width: 20px;
+  min-width: 2rem;
   margin-left: 3px;
   padding: 0 5px;
   border-radius: 5px;
@@ -1038,7 +1042,12 @@
    present — a doubles team is identified by its two surnames, and no one
    scans an order of play for a pair's nationalities. Singles keeps its flag,
    where there is one name and room for it. */
-.sched-competitors--doubles .sched-flag { display: none; }
+/* Flags stay on doubles rows whenever they fit. They are still the first thing
+   to go when they do not — a flag is recognition, a name is identity — but
+   dropping them unconditionally spent space that most rows have. The measuring
+   effect in Schedule.jsx adds .sched-tight only when the longest pair on the
+   page cannot fit with them. */
+.sched-tight .sched-competitors--doubles .sched-flag { display: none; }
 
 /* The reclaimed space goes to the names, which no longer need to start small
    to fit — they were shrunk to 0.88em to buy room the flags were taking. */
@@ -1046,6 +1055,11 @@
 
 @media (max-width: 560px) {
   .sched-competitors--doubles .sched-competitor-name { font-size: 0.9rem; }
+  /* No measurement runs at this width — the column is released and names
+     ellipsise — so doubles flags go unconditionally. Four flags, two slashes
+     and two surnames does not fit a phone, and a flag with a truncated name
+     beside it is what made a cut-off name look like missing data. */
+  .sched-competitors--doubles .sched-flag { display: none; }
 }
 
 /* If a name is still too long to fit, it must ellipsise rather than vanish.

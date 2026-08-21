@@ -691,6 +691,9 @@ export default function Schedule() {
 
     const measure = () => {
       el.style.removeProperty('--sched-name-w')
+      // Start each pass assuming there is room for the flags. Whether there is
+      // depends on the longest pair ON THIS PAGE, which changes with the day.
+      el.classList.remove('sched-tight')
       // Below this the cards are full width in a single column, so they already
       // match and a measured width can only cause an overflow. The CSS releases
       // the column at the same breakpoint; leaving the variable set would fight
@@ -712,6 +715,20 @@ export default function Schedule() {
         : 120
       const sets = el.querySelector('.sched-sets')
       const cap = Math.max(120, el.clientWidth - other - (sets?.offsetWidth ?? 90) - 48)
+
+      // If the longest name cannot fit even at the cap, drop the doubles flags
+      // and measure again. A doubles row carries four of them, so this is the
+      // single largest saving available, and it costs recognition rather than
+      // identity — the names survive, which is what a truncated row was
+      // destroying.
+      if (widest > cap) {
+        el.classList.add('sched-tight')
+        widest = 0
+        for (const n of el.querySelectorAll('.sched-competitor-name')) {
+          widest = Math.max(widest, n.scrollWidth)
+        }
+      }
+
       el.style.setProperty('--sched-name-w', `${Math.min(widest, cap)}px`)
     }
 
