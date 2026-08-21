@@ -93,8 +93,24 @@ async def _doubles_ids(db, draw: Draw, tournament: Tournament) -> Optional[tuple
         return draw.sofa_doubles_tournament_id, draw.sofa_doubles_season_id
 
     want_cat = {"M": "ATP", "F": "WTA"}.get(draw.gender)
-    base = (tournament.name or "").split("(")[0].strip()
+
+    # Search SOFASCORE'S OWN NAME for the singles event, not ours. Our name is
+    # "Cincinnati Open" and theirs is "Cincinnati"; searching ours returns
+    # nothing at all. This app already learned that lesson resolving the singles
+    # draws — "French Open" is not indexed under that name either — and the
+    # singles uniqueTournament id we are holding is the reliable way to ask them
+    # what they call it.
     from urllib.parse import quote
+
+    try:
+        meta = await _get(f"/unique-tournament/{draw.sofa_tournament_id}")
+        their_name = ((meta.get("uniqueTournament") or {}).get("name")
+                      or (tournament.name or ""))
+    except Exception:
+        their_name = tournament.name or ""
+    base = their_name.split("(")[0].strip()
+    if not base:
+        return None
     payload = await _get(f"/search/unique-tournaments?q={quote(base)}")
     cand = None
     for row in payload.get("results", []):

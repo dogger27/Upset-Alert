@@ -102,9 +102,17 @@ def _final_scores(home: dict, away: dict, status_code: int = 100,
             continue
         ta, tb = home.get(f"period{n}TieBreak"), away.get(f"period{n}TieBreak")
         ca, cb = str(a if a is not None else ""), str(b if b is not None else "")
-        if ta is not None:
+        # Annotate ONLY a real set tiebreak, which by definition ends 7-6.
+        #
+        # A deciding MATCH tiebreak — standard in doubles — is reported with the
+        # points already in periodN (10 and 5), plus a periodNTieBreak that does
+        # not describe them (8 and 5). Annotating it produced "10(8)-5(5)",
+        # which is not a score anyone has ever written. The period value IS the
+        # score there, so it is left alone.
+        is_set_tb = {a, b} == {6, 7}
+        if is_set_tb and ta is not None:
             ca = f"{ca}({ta})"
-        if tb is not None:
+        if is_set_tb and tb is not None:
             cb = f"{cb}({tb})"
         p1.append(ca)
         p2.append(cb)
