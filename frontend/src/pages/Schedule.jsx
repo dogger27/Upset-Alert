@@ -690,46 +690,63 @@ export default function Schedule() {
     if (!el) return
 
     const measure = () => {
-      el.style.removeProperty('--sched-name-w')
-      // Start each pass assuming there is room for the flags. Whether there is
-      // depends on the longest pair ON THIS PAGE, which changes with the day.
+      // MEASURE UNCONSTRAINED. Everything that makes a name fit — the fixed
+      // column, the hidden overflow, the ellipsis — also makes it impossible to
+      // read its natural width back, because scrollWidth then reports the
+      // constraint rather than the content. Measuring through that is how the
+      // column ratcheted down and names came out as "DARDERI / ..." with half
+      // the card empty beside them.
+      el.classList.add('sched-measuring')
       el.classList.remove('sched-tight')
-      // Below this the cards are full width in a single column, so they already
-      // match and a measured width can only cause an overflow. The CSS releases
-      // the column at the same breakpoint; leaving the variable set would fight
-      // it. Kept in step with the 560px media query in Schedule.css.
-      if (el.clientWidth < 560) return
-      const names = el.querySelectorAll('.sched-competitor-name')
-      if (!names.length) return
-      let widest = 0
-      for (const n of names) widest = Math.max(widest, n.scrollWidth)
-      // Cap against what is actually LEFT after the other columns, measured
-      // from a real row rather than guessed at. The first version subtracted a
-      // flat 200px, which did not cover the time column, the scores, the ball
-      // slot and the H2H strip together — so the last set was pushed off the
-      // card.
-      const row = el.querySelector('.sched-row')
-      const other = row
-        ? Array.from(row.children).reduce(
-            (sum, c) => sum + (c.classList.contains('sched-row-main') ? 0 : c.offsetWidth), 0)
-        : 120
-      const sets = el.querySelector('.sched-sets')
-      const cap = Math.max(120, el.clientWidth - other - (sets?.offsetWidth ?? 90) - 48)
+      el.style.removeProperty('--sched-name-w')
 
-      // If the longest name cannot fit even at the cap, drop the doubles flags
-      // and measure again. A doubles row carries four of them, so this is the
-      // single largest saving available, and it costs recognition rather than
-      // identity — the names survive, which is what a truncated row was
-      // destroying.
-      if (widest > cap) {
-        el.classList.add('sched-tight')
-        widest = 0
-        for (const n of el.querySelectorAll('.sched-competitor-name')) {
-          widest = Math.max(widest, n.scrollWidth)
+      const natural = () => {
+        let w = 0
+        for (const n of el.querySelectorAll('.sched-competitor-name .sched-side')) {
+          // The inner run is the text itself. getBoundingClientRect is
+          // fractional, and rounding down by even half a pixel is what puts an
+          // ellipsis on a name that actually fits.
+          w = Math.max(w, Math.ceil(n.getBoundingClientRect().width))
         }
+        return w
       }
 
-      el.style.setProperty('--sched-name-w', `${Math.min(widest, cap)}px`)
+      // How much room a row can actually give the name: its own width, less
+      // everything else in it. Taken as the MINIMUM across rows, because one
+      // shared column has to fit the tightest of them — and taken from the rows
+      // themselves rather than from the page, which in court view is two
+      // columns wide and would have flattered every card by double.
+      let room = Infinity
+      for (const row of el.querySelectorAll('.sched-row')) {
+        let used = 0
+        for (const child of row.children) {
+          if (!child.classList.contains('sched-row-main')) used += child.offsetWidth
+        }
+        const main = row.querySelector('.sched-row-main')
+        const sets = row.querySelector('.sched-sets')
+        const fixed = Array.from(
+          row.querySelectorAll('.sched-ball-slot, .sched-mark, .sched-end'))
+          .reduce((sum, c) => sum + c.offsetWidth, 0)
+        // A little slack for the flex gaps between name, ball, mark and score.
+        const avail = row.clientWidth - used - (sets?.offsetWidth ?? 0) - fixed - 24
+        if (main && avail > 0) room = Math.min(room, avail)
+      }
+      if (!Number.isFinite(room)) room = 0
+
+      let widest = natural()
+      if (!widest) { el.classList.remove('sched-measuring'); return }
+
+      // Only now, and only if it genuinely will not fit, give up the flags.
+      if (widest > room && room > 0) {
+        el.classList.add('sched-tight')
+        widest = natural()
+      }
+
+      el.classList.remove('sched-measuring')
+      // Below the breakpoint the column is released in CSS and names take what
+      // is left, so publishing a width here would fight it.
+      if (el.clientWidth < 560) return
+      el.style.setProperty('--sched-name-w', `${Math.min(widest, Math.max(room, 120))}px`)
     }
 
     // After paint, so fonts and flags have been laid out.
