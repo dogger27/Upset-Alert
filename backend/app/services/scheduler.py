@@ -1586,12 +1586,40 @@ async def run_order_of_play_only() -> None:
     while True:
         try:
             await _refresh_order_of_play()
-            await _refresh_schedule_estimates()
         except asyncio.CancelledError:
             raise
         except Exception as exc:
             logger.warning("standalone order-of-play refresh failed: %s", exc)
         await asyncio.sleep(60 * 60)
+
+
+async def run_schedule_estimates_only() -> None:
+    """The chained start-time estimates, on their own loop, for the same instance.
+
+    Split back out of the loop above, where it had been folded in because the
+    two look like the same job. They are not. Fetching a sheet is a request to
+    somebody else's file host, and the hour above is a concession to sharing it.
+    Re-chaining the estimates touches nothing outside this process — it reads
+    and writes our own rows — so the reason for the hour does not apply, and
+    paying it anyway meant a court that freed at 1:05 went on announcing the
+    next match for 3:15 until the hour came round.
+
+    Two minutes, which is what the scheduler gives it on production. There is no
+    argument for staging being slower at a job that costs nothing.
+    """
+    import asyncio
+    import random
+
+    await asyncio.sleep(random.uniform(20, 90))
+
+    while True:
+        try:
+            await _refresh_schedule_estimates()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning("standalone schedule-estimate refresh failed: %s", exc)
+        await asyncio.sleep(120)
 
 
 def start_scheduler() -> None:
