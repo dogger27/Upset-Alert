@@ -334,6 +334,31 @@ async def poll_once(db) -> dict:
             if snap["serving"] in (1, 2):
                 snap["serving"] = 3 - snap["serving"]
 
+        # When the match ACTUALLY started, from the feed rather than from when
+        # we happened to look.
+        #
+        # Nothing was writing this for a live match: the results sweep sets it
+        # only once a match has finished, and espn_monitor — the other writer —
+        # does not run where Sofascore is the source. So a match in progress had
+        # no start time at all, and the schedule fell back to a bare "Started"
+        # with nothing after it.
+        #
+        # Better than what ESPN gives us, too: espn_monitor can only record the
+        # first poll that saw the match live, whereas this is the tournament's
+        # own stamp. Written once — a suspension and resumption must not restart
+        # the clock, because the elapsed time is what the schedule chain needs.
+        ts = ev.get("startTimestamp")
+        if ts:
+            started = datetime.fromtimestamp(ts, tz=timezone.utc)
+            if match.sofa_started_at is None:
+                match.sofa_started_at = started
+                written += 1
+                touched_draws.add(draw_id)
+            if settings.sofascore_authoritative and match.started_at is None:
+                match.started_at = started
+                written += 1
+                touched_draws.add(draw_id)
+
         # Compare without the timestamp: otherwise every poll is a write, and at
         # 10s that is 8,640 pointless UPDATEs and SSE broadcasts a day.
         before = dict(match.sofa_live_json or {})
