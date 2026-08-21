@@ -416,7 +416,8 @@
 .sched-side { display: flex; flex-wrap: wrap; align-items: center; gap: 0.15rem 0.5rem; font-weight: 600; }
 .sched-player { display: inline-flex; align-items: center; gap: 0.3rem; }
 .sched-pname { min-width: 0; }
-.sched-seed { color: var(--text-muted); font-weight: 700; margin-right: 0.2rem; font-size: 0.85em; }
+/* Trails the name now, so the margin swaps sides. */
+.sched-seed { color: var(--text-muted); font-weight: 700; margin-left: 0.28rem; font-size: 0.85em; }
 
 /* flag-icons needs an explicit box or it collapses; 4:3 matches the artwork. */
 .sched-flag {
@@ -445,7 +446,7 @@
   opacity: 0.65;
   padding-left: 0.1rem;
 }
-.sched-seed--team { margin-right: 0.1rem; }
+.sched-seed--team { margin-left: 0.3rem; }
 
 /* Unresolved opponent: two candidate teams, stacked with "or" between them so
    the pairing is legible. Previously rendered as a flat run of names, which
@@ -986,3 +987,9 @@
 /* A walkover marks the player who ADVANCED, not the one who withdrew, so it
    should not read as a failure the way a retirement does. */
 .sched-end--wo { color: var(--text-muted); font-style: normal; }
+
+
+/* Breathing room either side of the partner slash. Tight against both
+   surnames it read as one hyphenated name — "HSIEH/OSTAPENKO" — rather than
+   two people. The space is what makes it a separator. */
+.sched-slash { margin: 0 0.3rem; }

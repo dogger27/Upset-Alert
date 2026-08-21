@@ -183,8 +183,12 @@ function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp })
           official order of play withholds it on purpose. */}
       {iso2 && <span className={`fi fi-${iso2.toLowerCase()} sched-flag`} title={nat} />}
       <span className="sched-pname">
-        {!hideSeed && seed && <span className="sched-seed">{seed}</span>}
         {surnameOnly ? last : [first, last].filter(Boolean).join(' ')}
+        {/* AFTER the name. Leading it, the seed was the first thing on the line
+            and pushed every name to a different starting column depending on
+            whether it had one — so the names never formed an edge to scan. It
+            also read as the more important fact, which it is not. */}
+        {!hideSeed && seed && <span className="sched-seed">{seed}</span>}
       </span>
     </span>
   )
@@ -217,7 +221,6 @@ function Side({ players, doubles, tbd }) {
     : null
   return (
     <span className="sched-side">
-      {teamSeed && <span className="sched-seed sched-seed--team">{teamSeed}</span>}
       {players.map((p, i) => (
         <Fragment key={`${p.side}${p.position}${i}`}>
           {/* Partners are separated by a slash, the way every draw sheet writes
@@ -228,6 +231,8 @@ function Side({ players, doubles, tbd }) {
                       nationality={p.nationality} seed={p.seed} />
         </Fragment>
       ))}
+      {/* Same placement as a singles seed, and for the same reason. */}
+      {teamSeed && <span className="sched-seed sched-seed--team">{teamSeed}</span>}
     </span>
   )
 }
