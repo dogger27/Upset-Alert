@@ -21,7 +21,7 @@ import { useEffect, useRef, useState } from 'react'
  * nothing. It only ever starts in response to a change, so there is no loop
  * here: nothing this returns feeds back into `value`.
  */
-export default function useFlashOnChange(value, ms = 1500) {
+export default function useFlashOnChange(value, ms = 2600) {
   const prev = useRef(value)
   const [flash, setFlash] = useState(false)
 
