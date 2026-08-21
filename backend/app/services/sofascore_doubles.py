@@ -264,6 +264,14 @@ async def sweep_once(db, day: Optional[date] = None) -> dict:
                                   code, wc)
             if final and flip:
                 final = [final[1], final[0]]
+            # A match that finished before we ever saw it live has no observed
+            # start. The announced slot is the only thing left, and it beats
+            # showing nothing on a completed row.
+            if e.started_at is None and ev.get("startTimestamp"):
+                e.started_at = datetime.fromtimestamp(
+                    ev["startTimestamp"], tz=timezone.utc)
+                scored += 1
+
             side = ("a" if wc == 1 else "b") if not flip else ("b" if wc == 1 else "a")
             if e.scores_json != final or e.winner_side != side:
                 e.scores_json = final
