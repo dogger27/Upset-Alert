@@ -101,3 +101,52 @@ services:
     dns:
       - 8.8.8.8
       - 1.1.1.1
+
+  # The front door. staging.upsetalert.ca is the only hostname with a DNS
+  # record, so one process both serves the built app and gives it an API to
+  # call — see staging/web-server.py for why those are the same process.
+  #
+  # It is HERE, and not a shell job, because a shell job is invisible: nothing
+  # described it, nothing restarted it, and it was parented to whichever
+  # terminal session started it. The backend beside it restarts on its own and
+  # survives a reboot; this did not, and a live API behind a dead front door
+  # looks exactly like a deploy that broke the site.
+  web:
+    image: python:3.11-slim
+    container_name: staging-web
+    restart: unless-stopped
+    # Stock image, stdlib script, no build step — so there is nothing to
+    # rebuild when the frontend changes, and nothing to forget to rebuild.
+    command: ["python3", "/srv/app/staging/web-server.py"]
+    depends_on:
+      - backend
+    ports:
+      # cloudflared runs on the HOST and dials the tunnel ingress at
+      # localhost:8003, so this has to land on the host's loopback.
+      - "127.0.0.1:8003:8003"
+      # And the tailnet, for the same reason the backend publishes there: a
+      # device that cannot resolve the hostname can still reach the box.
+      - "100.74.46.52:8003:8003"
+    volumes:
+      # DIRECTORIES, not files. The built app is rsynced into this one with
+      # --delete on every deploy, which replaces inodes — a file mount would
+      # point at whatever was there when the container started and never see
+      # another deploy again. Read-only: this process serves the build, it does
+      # not produce it.
+      - /home/paulwiens/upsetalert/staging-web:/srv/web:ro
+      - ./staging:/srv/app/staging:ro
+    environment:
+      - STAGING_WEB_ROOT=/srv/web
+      - STAGING_WEB_PORT=8003
+      # By service name on the compose network, not through the host's
+      # published port — the container's own 127.0.0.1 is itself, and routing
+      # back out to the host to reach a container on the same network would be
+      # a longer path to the same place.
+      - STAGING_BACKEND_URL=http://backend:8001
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+             "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8003/index.html', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
