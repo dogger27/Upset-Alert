@@ -285,12 +285,11 @@ function startedLine(e, zone) {
   if (e.printed_start_at && e.start_type === 'fixed') {
     return `Started at ${new Date(e.printed_start_at).toLocaleTimeString([], opts)}`
   }
-  // Last resort. Every path above should have produced a time — the poller
-  // stamps started_at on its first sighting of play, for singles and doubles
-  // alike — so reaching here means we genuinely never saw the match begin.
-  // Say that, rather than a bare "Started" that looks like a time failed to
-  // render.
-  return 'In progress'
+  // Nothing recorded and nothing printed. A FINISHED match must not be
+  // labelled "In progress" — the pill beside it already says Completed, and
+  // the two would contradict each other — so it simply says nothing rather
+  // than guessing. Only a live match reaches the second line.
+  return e.status === 'completed' ? null : 'In progress'
 }
 
 /* A tennis ball, matching the draw page's. Same geometry deliberately: the two
