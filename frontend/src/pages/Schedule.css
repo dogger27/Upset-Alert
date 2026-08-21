@@ -370,7 +370,21 @@
 
 
 /* ── Court view ── */
-.sched-courts { display: flex; flex-direction: column; gap: 1.1rem; }
+/* Sized to its widest card, then centred. fit-content asks the browser for the
+   max-content width of everything inside — the longest pairing on the day at
+   its full size — and the cards fill what comes back, so they end up as wide as
+   the widest one needs and no wider.
+   This is the sizing the deleted measuring pass was trying to compute. CSS has
+   always known the answer; the mistake was reading it back into JavaScript,
+   where it fed the next measurement and ratcheted. Nothing reads it here. */
+.sched-courts {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  width: fit-content;
+  max-width: 100%;
+  margin-inline: auto;
+}
 
 /* A court is never wider than a card, so its heading sits directly over the
    left edge of the cards under it instead of over an empty stretch of page. */
@@ -419,14 +433,17 @@
 
   .sched-courts {
     display: grid;
-    /* Even halves of a container capped at two cards' worth, centred. Sizing
-       the TRACKS to the card instead left each column wider than its card on a
-       big screen, and a card aligned to the start of an over-wide track is what
-       opened the canyon down the middle of the page. Capping the container and
-       letting the cards fill their half cannot do that. */
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    max-width: calc(46rem * 2 + 1.4rem);
-    margin-inline: auto;
+    /* Two equal halves of a container that is itself only as wide as its
+       contents need — see the base rule for how that width is arrived at.
+       1fr rather than a track sized to the cards: equal fractions are what make
+       the two columns match EACH OTHER. Sizing each track to its own court gave
+       a court of singles a narrower column than a court of doubles, and the
+       cards stopped agreeing across the page.
+       Both together are what closes the canyon: fixed-width tracks on a wide
+       screen were wider than the cards in them, and a card sitting at the start
+       of an over-wide track is the gap. */
+    grid-template-columns: repeat(2, 1fr);
+    max-width: min(100%, calc(46rem * 2 + 1.4rem));
     gap: 1.1rem 1.4rem;
     /* Courts are as tall as their own list of matches. Stretching the shorter
        one to match its neighbour is what used to inflate its cards. */
