@@ -794,8 +794,11 @@
   width: var(--sched-name-w, auto);
   min-width: 0;
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* No clipping and no ellipsis: a name that does not fit is SHRUNK by the
+     measuring pass, never cut. This rule is the one that was still trimming
+     "Sara BEJLEK" to "Sara BEJLEI" after the ellipsis was removed from the
+     inner run — the outer box was clipping it regardless. */
+  overflow: visible;
   white-space: nowrap;
 }
 
