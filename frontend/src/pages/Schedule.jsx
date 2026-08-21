@@ -518,6 +518,10 @@ function MatchRow({ e, showCourt, zone, venueMode, onH2H }) {
   )
 }
 
+// Floor for the auto-shrink below. Under this a name stops being readable, at
+// which point a smaller size is no better than the truncation it replaced.
+const MIN_NAME_PX = 10
+
 export default function Schedule() {
   // The panel is owned by the page, not the row: it is a full-screen overlay,
   // and one instance beats one per match.
@@ -700,15 +704,20 @@ export default function Schedule() {
       el.classList.remove('sched-tight')
       el.style.removeProperty('--sched-name-w')
 
-      const natural = () => {
-        let w = 0
-        for (const n of el.querySelectorAll('.sched-competitor-name .sched-side')) {
-          // The inner run is the text itself. getBoundingClientRect is
-          // fractional, and rounding down by even half a pixel is what puts an
-          // ellipsis on a name that actually fits.
-          w = Math.max(w, Math.ceil(n.getBoundingClientRect().width))
+      // Natural width per name, and the widest of them. Measured off the inner
+      // run, which is the text itself; rounded up, because losing half a pixel
+      // is enough to make a name that fits look like one that does not.
+      const measureAll = () => {
+        const out = []
+        let max = 0
+        for (const n of el.querySelectorAll('.sched-competitor-name')) {
+          const run = n.querySelector('.sched-side')
+          if (!run) continue
+          const w = Math.ceil(run.getBoundingClientRect().width)
+          out.push({ el: n, w })
+          if (w > max) max = w
         }
-        return w
+        return { names: out, max }
       }
 
       // How much room a name COULD have — which is not the same as how much the
@@ -743,20 +752,42 @@ export default function Schedule() {
       }
       if (!Number.isFinite(room)) room = 0
 
-      let widest = natural()
+      let { names, max: widest } = measureAll()
       if (!widest) { el.classList.remove('sched-measuring'); return }
 
       // Only now, and only if it genuinely will not fit, give up the flags.
       if (widest > room && room > 0) {
         el.classList.add('sched-tight')
-        widest = natural()
+        ;({ names, max: widest } = measureAll())
+      }
+
+      const column = room > 0 ? Math.min(widest, Math.max(room, 120)) : widest
+
+      // A NAME IS NEVER TRUNCATED. Where one still does not fit the shared
+      // column, that line's type shrinks until it does — the name is the row's
+      // reason to exist, and "DARDERI /..." tells you less than the same name
+      // set two points smaller.
+      //
+      // Per line rather than per card: when one pairing is long and its
+      // opponent is short, shrinking both would cost legibility on a name that
+      // was never the problem.
+      //
+      // Width scales close enough to linearly with font size for one pass; the
+      // 0.98 absorbs the rounding, and the floor stops a pathological name
+      // rendering at a size nobody can read.
+      for (const { el: n, w } of names) {
+        n.style.removeProperty('font-size')
+        if (!column || w <= column) continue
+        const base = parseFloat(getComputedStyle(n).fontSize) || 14
+        const scaled = Math.max(MIN_NAME_PX, base * (column / w) * 0.98)
+        n.style.fontSize = `${scaled}px`
       }
 
       el.classList.remove('sched-measuring')
       // Below the breakpoint the column is released in CSS and names take what
       // is left, so publishing a width here would fight it.
       if (el.clientWidth < 560) return
-      el.style.setProperty('--sched-name-w', `${Math.min(widest, Math.max(room, 120))}px`)
+      el.style.setProperty('--sched-name-w', `${column}px`)
     }
 
     // After paint, so fonts and flags have been laid out.
