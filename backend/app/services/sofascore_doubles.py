@@ -261,6 +261,10 @@ async def sweep_once(db, day: Optional[date] = None) -> dict:
                 if snap["serving"] in (1, 2):
                     snap["serving"] = 3 - snap["serving"]
             live = _as_espn_shape(snap)
+            # snap carries its own `at`, which differs on every sweep, so this
+            # always writes — which is what keeps the stamp inside freshness for
+            # a doubles row. The singles poller compares without the stamp and
+            # has to refresh it deliberately; see the note there.
             if e.live_scores_json != live or e.live_point_json != snap:
                 e.live_scores_json = live
                 e.live_point_json = snap

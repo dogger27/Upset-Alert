@@ -208,6 +208,23 @@ def _snapshot(event: dict) -> dict:
     }
 
 
+def _older_than(stamp, seconds: float) -> bool:
+    """Whether an ISO stamp is missing, unreadable, or older than `seconds`.
+
+    Missing and unreadable both count as old: the caller is deciding whether to
+    refresh something, and refreshing a value it cannot read is the safe answer.
+    """
+    if not stamp:
+        return True
+    try:
+        at = datetime.fromisoformat(stamp)
+    except (TypeError, ValueError):
+        return True
+    if at.tzinfo is None:
+        at = at.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - at).total_seconds() > seconds
+
+
 def renderable_point(snap: Optional[dict], finished: bool) -> Optional[dict]:
     """The point score a reader should draw from this snapshot, or None.
 
@@ -420,11 +437,28 @@ async def poll_once(db) -> dict:
 
         # Compare without the timestamp: otherwise every poll is a write, and at
         # 10s that is 8,640 pointless UPDATEs and SSE broadcasts a day.
+        #
+        # BUT THE STAMP STILL HAS TO BE REFRESHED before it is read as stale,
+        # and this is where that went wrong. Readers discard a snapshot older
+        # than FRESH_SECONDS, and `at` only moved when the content did — so a
+        # match where nothing changed simply aged out. Nothing changes for a
+        # surprisingly long time: between games Sofascore sends no point at all,
+        # and across a changeover that is ninety seconds in which the games, the
+        # server and the point are all exactly what they were. The score
+        # vanished off a match that was plainly still being played, and came
+        # back when the next point landed.
+        #
+        # The two facts had been collapsed into one field. "When this state last
+        # CHANGED" is what the comparison needs; "when we last CONFIRMED it" is
+        # what freshness needs, and it is the second one that answers "is this
+        # still true". Refreshing at half the freshness window keeps the stamp
+        # honest at 2 writes a minute for a live match instead of 6 — the saving
+        # the comparison was for, without the lie.
         before = dict(match.sofa_live_json or {})
-        before.pop("at", None)
+        prev_at = before.pop("at", None)
         after = dict(snap)
         after.pop("at", None)
-        if before != after:
+        if before != after or _older_than(prev_at, FRESH_SECONDS / 2):
             match.sofa_live_json = snap
             written += 1
             touched_draws.add(draw_id)
