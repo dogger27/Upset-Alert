@@ -927,3 +927,41 @@
     min-width: 0;
   }
 }
+
+
+/* ── Score columns must line up between the two players ───────────────────
+   AFTER the base rules, deliberately — see the note on the phone overrides
+   above for why a media query alone does not win.
+
+   The misalignment was the TIEBREAK SUPERSCRIPT. "6" and "6⁴" are different
+   widths, so a set where one player reached a tiebreak and the other did not
+   pushed the two rows out of step, and every column after it with them.
+
+   Taking the superscript out of normal flow makes a cell's width depend only
+   on its game count, which is the same digit count on both rows in every
+   ordinary set. It sits in the gap between cells, which is what the gap is
+   now for. */
+.sched-set {
+  position: relative;
+  /* Two digits, so a super-tiebreak "10" does not widen one row alone. */
+  min-width: 1.15rem;
+  text-align: center;
+  flex: 0 0 auto;
+}
+
+.sched-set sup {
+  position: absolute;
+  left: 100%;
+  top: -0.15em;
+  margin-left: 1px;
+  font-size: 0.62em;
+  line-height: 1;
+}
+
+/* The point pill is the last column and must match too. */
+.sched-point { flex: 0 0 auto; }
+
+/* Both rows always render the same number of cells, so with every cell a
+   fixed width the two lines form real columns. Right-aligned as a block so a
+   two-set match and a three-set match still agree with each other. */
+.sched-sets { justify-content: flex-end; }
