@@ -247,17 +247,39 @@
    makes below: a phone column is short of width, and the gap these sit in has
    height to spare. Roomy columns only — the leftmost pane holds its pair 16px
    apart, which is one line and no more. */
-.cv-scroll--compact .cv-live-score--roomy {
+.cv-scroll--compact .cv-live-score {
   left: 2px;
-  right: 42px;
+  right: 2px;
   transform: translateY(-50%);
   text-align: center;
-  line-height: 1.2;
 }
+/* The bell's corner is set aside only on the matches that HAVE a bell. It was
+   reserved on every match on the reasoning that a conditional offset would make
+   the score jump as an upset appeared or cleared — but an upset pick is settled
+   before the match starts and does not change while it is being played, so the
+   jump the reservation was guarding against does not happen. What it did do was
+   push every other score permanently off centre. */
+.cv-scroll--compact .cv-live-score--bell { right: 42px; }
+
+/* Roomy columns hold their pair far enough apart for a second line, so the
+   point takes one and the sets get the whole width to themselves. */
+.cv-scroll--compact .cv-live-score--roomy { line-height: 1.2; }
 .cv-scroll--compact .cv-live-score--roomy .cv-live-point {
   display: block;
   width: fit-content;
   margin: 4px auto 0;
+}
+/* And with the point no longer sharing the line, the sets can have back the
+   size they were stepped down to make room for it. */
+.cv-scroll--compact .cv-live-score--roomy.cv-live-score--s3 { font-size: 1.05rem; }
+.cv-scroll--compact .cv-live-score--roomy.cv-live-score--s4 { font-size: 0.82rem; }
+
+/* The leftmost pane is the exception: its pair sits 24px apart even for a live
+   match, which is one line and no more. The point keeps its place on that line
+   and gives up its padding instead. */
+.cv-scroll--compact .cv-live-score:not(.cv-live-score--roomy) .cv-live-point {
+  margin-left: 4px;
+  padding: 0 3px;
 }
 /* Tiebreak superscript, offset without growing the line box (which is already
    the full height of the gap). */
@@ -412,13 +434,15 @@
    score's own offset is built on. */
 .cv-scroll--compact .cv-eta--roomy {
   left: 2px;
-  right: 42px;
+  right: 2px;
   transform: translateY(-50%);
   text-align: center;
   /* 0.98 buys back what the narrower box costs, so the longest label this
      produces — "Tomorrow at ~12:40 PM PDT", stacked — still clears it. */
   font-size: 0.98rem;
 }
+/* Same as the live score: the corner is only spoken for when a bell is in it. */
+.cv-scroll--compact .cv-eta--roomy.cv-eta--bell { right: 42px; }
 
 /* The leftmost column is the exception, and the reason the rule above is scoped
    to --roomy: every visible window puts its first column on the base pitch, so
