@@ -142,6 +142,22 @@ _ISO3_TO_IOC = {
 # HTTP
 # ---------------------------------------------------------------------------
 
+class SofascoreNotFound(CurlError):
+    """
+    The endpoint answered, and the answer is that there is nothing there.
+
+    NOT a block, and the distinction is load-bearing. `events/next/0` returns
+    404 for a season with no upcoming matches, which is the ordinary state of
+    every tournament from its last day onwards. Treating that as a refusal took
+    down the whole doubles sweep — the caller re-raises a block on purpose, to
+    trip its thirty-minute breaker — so on the day a tournament finished, its
+    finished matches stopped being recorded.
+
+    Subclasses CurlError for the same reason SofascoreBlocked does: that is what
+    is_transient_http_error() recognises, so it is logged rather than paged on.
+    """
+
+
 class SofascoreBlocked(CurlError):
     """
     Sofascore is refusing this host.
@@ -256,6 +272,12 @@ async def _get(path: str) -> dict:
             detail={"path": path},
             dedup_key="sofa_blocked", dedup_hours=1)
         raise SofascoreBlocked(f"403 on {path}")
+    # A 404 is an ANSWER, not a refusal. Sofascore returns one for a season
+    # with no upcoming events, an event id that has aged out, and any path that
+    # simply has no data behind it — all states a caller should decide about,
+    # none of them a reason to stop talking to the host.
+    if status == 404:
+        raise SofascoreNotFound(f"404 on {path}")
     if status != 200:
         raise SofascoreBlocked(f"HTTP {status} on {path}")
     return payload

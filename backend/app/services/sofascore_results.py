@@ -34,7 +34,7 @@ from sqlalchemy import select
 
 from app.core.config import settings
 from app.models.tournament import Draw, DrawEntry, Match
-from app.services.sofascore import SofascoreBlocked, _get
+from app.services.sofascore import SofascoreBlocked, SofascoreNotFound, _get
 from app.services.sofascore_live import _event_player_ids, _tracked
 from app.services.system_log import app_log
 
@@ -204,6 +204,10 @@ async def sweep_once(db) -> dict:
                     f"/unique-tournament/{ut_id}/season/{season_id}/events/last/{page}")
             except SofascoreBlocked:
                 raise
+            except SofascoreNotFound:
+                # Past the last page. Walking until the pages run out is how the
+                # backfill knows where to stop, so arriving there is success.
+                break
             except Exception as exc:
                 logger.warning("results page %s for draw %s failed: %s",
                                page, draw_id, exc)
