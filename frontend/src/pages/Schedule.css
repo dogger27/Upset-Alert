@@ -1176,3 +1176,28 @@
   .sched-pname--long .sched-name-full { display: none; }
   .sched-pname--long .sched-name-abbr { display: inline; }
 }
+
+/* ── A phone gets the whole width ─────────────────────────────────────────
+   fit-content earns its place on a wide screen, where a card sized to its
+   content is the difference between a legible row and one stretched across a
+   monitor. A phone has no width to spare, so the same rule only produced a
+   margin down the right-hand side and a card narrower than the page it was
+   already struggling to fit its names into.
+   At the end of the file so it wins over the base rules, which have the same
+   specificity — a media query does not outrank anything by itself. */
+@media (max-width: 560px) {
+  .sched-body--fit,
+  .sched-courts {
+    width: 100%;
+    max-width: 100%;
+  }
+}
+
+/* The time view prints the COURT under the clock, which the court view does not
+   — it has the court in a heading instead. "P&G Stadium Court" is three lines in
+   a 4.4rem column, and the card's fixed body was measured against the court
+   view's two, so the last line was hanging a few pixels past the border.
+   Sized for the view rather than raising it everywhere: cards only ever have to
+   agree with the ones beside them, and the two views are never on screen
+   together. */
+.sched-list--time .sched-row { --sched-card-body: 4.9rem; }
