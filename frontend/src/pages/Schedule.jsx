@@ -550,7 +550,15 @@ export default function Schedule() {
   const [h2h, setH2H] = useState(null)
   const [params, setParams] = useSearchParams()
   const [view, setView] = useState(storedView)
-  const [hideDone, setHideDone] = useState(false)
+  // Every filter on this page now says what to SHOW. "Hide completed" was the
+  // odd one out — an off switch among on switches — so the row read as three
+  // things you turn on and one you turn off, which is two mental models for
+  // four adjacent buttons. On by default, which is the behaviour it replaces.
+  const [showDone, setShowDone] = useState(true)
+  // Off by default. The time view is the curated list of what people are
+  // playing for, and doubles is not in the draws — but it is on the sheet, and
+  // asking for it should not mean switching to the court view to find it.
+  const [showDoubles, setShowDoubles] = useState(false)
   const [tzMode, setTzModeState] = useState(storedTz)
   const user = useAuth(s => s.user)
 
@@ -576,7 +584,10 @@ export default function Schedule() {
   // The draw we arrived from, if any. Drives both the back link and which tour
   // the time view opens on.
   const fromDraw = params.get('draw') ? Number(params.get('draw')) : undefined
-  const [tour, setTour] = useState(null)      // null = not yet defaulted
+  // A SET of tours, not one. Any combination shows, so ATP+WTA is expressible
+  // and is the default on a combined event. null until the day's data has
+  // arrived and the default can be worked out.
+  const [tourSel, setTourSel] = useState(null)
 
   useEffect(() => { try { localStorage.setItem(VIEW_KEY, view) } catch {} }, [view])
   useEffect(() => { try { localStorage.setItem(TZ_KEY, tzMode) } catch {} }, [tzMode])
@@ -604,10 +615,11 @@ export default function Schedule() {
   useEffect(() => {
     if (defaulted.current || !data?.entries?.length) return
     defaulted.current = true
-    if (!fromDraw) return
-    const origin = data.entries.find(e => e.draw_id === fromDraw)
-    if (origin?.tour) setTour(origin.tour)
-  }, [data, fromDraw])
+    const origin = fromDraw ? data.entries.find(e => e.draw_id === fromDraw) : null
+    // Arriving from a draw narrows to that draw's tour; arriving cold shows
+    // everything the day has.
+    setTourSel(new Set(origin?.tour ? [origin.tour] : tours))
+  }, [data, fromDraw, tours])
 
   // undefined => render in the reader's own zone, which is what toLocaleTimeString
   // does with no timeZone option.
@@ -619,6 +631,25 @@ export default function Schedule() {
     return [...t].sort()
   }, [data])
 
+  // Whether the day has anything that is not singles. The Doubles button is
+  // shown only when there is doubles to show, the same way the tour chips
+  // appear only on a day that runs both — a control that cannot change what is
+  // on screen is worse than no control.
+  const hasDoubles = useMemo(
+    () => (data?.entries ?? []).some(e => e.discipline !== 'singles'), [data])
+
+  const toggleTour = (t) => setTourSel(prev => {
+    const cur = new Set(prev ?? tours)
+    if (!cur.has(t)) { cur.add(t); return cur }
+    // The last tour stays on. Turning it off would empty the page, and a page
+    // that has gone blank reads as broken rather than as filtered — the one
+    // combination worth taking away from a set of filters that are otherwise
+    // free to be set any way at all.
+    if (cur.size === 1) return prev ?? cur
+    cur.delete(t)
+    return cur
+  })
+
   const setDay = (iso) => {
     const next = new URLSearchParams(params)
     next.set('date', iso)
@@ -628,19 +659,20 @@ export default function Schedule() {
   const entries = useMemo(() => {
     const all = data?.entries ?? []
     return all.filter(e => {
-      // Discipline follows the VIEW rather than a toggle. Court view reproduces
-      // the sheet — every match on it, doubles and mixed included — because the
-      // running order of a court only makes sense if nothing is missing from
-      // it. Time view is the curated list of what people are playing for, so
-      // singles only.
-      if (view === 'time' && e.discipline !== 'singles') return false
-      // Tour filter is a TIME-view control. The court view reproduces the sheet,
-      // and a court running both tours would read as if matches were missing.
-      if (view === 'time' && tour && e.tour !== tour) return false
-      if (hideDone && e.status === 'completed') return false
+      // Court view reproduces the sheet — every match on it, doubles and mixed
+      // included — because the running order of a court only makes sense if
+      // nothing is missing from it. So discipline and tour are TIME-view
+      // controls: a court running both tours, filtered, would read as if
+      // matches had gone missing rather than been hidden.
+      if (view === 'time' && e.discipline !== 'singles' && !showDoubles) return false
+      // An entry with no tour recorded is shown regardless — the filter picks
+      // between tours, and a row that names none is not a row that names the
+      // other one.
+      if (view === 'time' && tourSel && e.tour && !tourSel.has(e.tour)) return false
+      if (!showDone && e.status === 'completed') return false
       return true
     })
-  }, [data, view, hideDone, tour])
+  }, [data, view, showDone, showDoubles, tourSel])
 
   /* Order the time view by when a match ACTUALLY began, falling back to the
      estimate for anything still to come.
@@ -795,20 +827,24 @@ export default function Schedule() {
       <div className={clsx('sched-body', { 'sched-body--fit': view === 'time' })}>
       <div className="sched-filters">
         {fromDraw && (
-          <Link className="sched-back" to={`/tournaments/${fromDraw}`}>‹ Back to draw</Link>
+          <Link className="sched-back" to={`/tournaments/${fromDraw}`}>Back</Link>
         )}
         {view === 'time' && tours.length > 1 && (
           <>
             {tours.map(t => (
               <button key={t}
                       className={clsx('sched-chip', `sched-chip--${t.toLowerCase()}`,
-                                      { 'sched-chip--on': tour === t })}
-                      onClick={() => setTour(tour === t ? null : t)}>{t}</button>
+                                      { 'sched-chip--on': !tourSel || tourSel.has(t) })}
+                      onClick={() => toggleTour(t)}>{t}</button>
             ))}
           </>
         )}
-        <button className={clsx('sched-chip', { 'sched-chip--on': hideDone })}
-                onClick={() => setHideDone(v => !v)}>Hide completed</button>
+        {view === 'time' && hasDoubles && (
+          <button className={clsx('sched-chip', { 'sched-chip--on': showDoubles })}
+                  onClick={() => setShowDoubles(v => !v)}>Doubles</button>
+        )}
+        <button className={clsx('sched-chip', { 'sched-chip--on': showDone })}
+                onClick={() => setShowDone(v => !v)}>Completed</button>
       </div>
 
       {isLoading && <div className="sched-empty">Loading…</div>}
