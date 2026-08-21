@@ -637,3 +637,52 @@ input:focus, select:focus { outline: none; border-color: var(--brand-line); }
 .badge-wc   { background: var(--badge-wc-bg);   color: var(--badge-wc-fg); }
 .badge-q    { background: var(--badge-q-bg);    color: var(--badge-q-fg); }
 .badge-ll   { background: var(--badge-ll-bg);   color: var(--badge-ll-fg); }
+
+/* ── A score that has just moved ──────────────────────────────────────────
+   Live scores arrive over SSE with no sound and no motion, so a point won
+   while you are looking at the row is indistinguishable from one won a minute
+   ago — the page just reads differently the next time you glance at it. This
+   is the only cue that anything happened.
+
+   Deliberately small. It fires every few seconds on a busy day, across every
+   row on screen, so anything with real amplitude would turn an order of play
+   into a fairground. A brief lift in weight and colour reads as "this one"
+   without asking to be watched.
+
+   transform, not font-size: a score cell is a fixed-width column and the two
+   lines of a match have to keep their numbers aligned, so the glyph may grow
+   but the box it sits in may not. transform does not touch layout, which is
+   the whole reason it is the property here.
+
+   Shared by the schedule and the draw rather than written twice — the same
+   number appears on both surfaces and there is no reading under which it
+   should announce itself differently on one of them. */
+@keyframes score-bump {
+  0%   { transform: scale(1);    filter: none; }
+  25%  { transform: scale(1.32); filter: brightness(1.45); }
+  100% { transform: scale(1);    filter: none; }
+}
+
+.sched-score--bump,
+.cv-score--bump {
+  animation: score-bump 700ms cubic-bezier(0.2, 0.9, 0.3, 1);
+  /* The cell is inline and would ignore a transform otherwise. */
+  display: inline-block;
+  will-change: transform;
+}
+
+/* Motion is the part that is optional; knowing the score changed is not. With
+   reduced motion the same moment is carried by colour alone. */
+@media (prefers-reduced-motion: reduce) {
+  @keyframes score-bump {
+    0%   { background-color: transparent; }
+    25%  { background-color: color-mix(in srgb, var(--brand-fill) 45%, transparent); }
+    100% { background-color: transparent; }
+  }
+  .sched-score--bump,
+  .cv-score--bump {
+    animation: score-bump 900ms ease-out;
+    transform: none;
+    will-change: auto;
+  }
+}

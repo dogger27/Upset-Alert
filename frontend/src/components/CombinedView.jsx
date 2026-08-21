@@ -20,6 +20,7 @@ import { createPortal } from 'react-dom'
 import H2HPanel from './H2HPanel'
 import PredictorsPopup from './PredictorsPopup'
 import { buildH2HSequence, buildMatchIndex, h2hNeighbours, resolveRealFirst } from '../utils/h2hSequence'
+import useFlashOnChange from '../hooks/useFlashOnChange'
 import './CombinedView.css'
 import { parseSet, scoreNodes, liveScoreNodes, expectedStartLabel } from '../utils/score'
 import { useAuth } from '../store/auth'
@@ -27,6 +28,25 @@ import { useAuth } from '../store/auth'
 // Upset bell with the same hover tooltip as BracketView's (portal-rendered,
 // "Upset Alert!" pill) — pulled into its own component so each bell instance
 // tracks its own hover state and bounding-rect-derived tooltip position.
+/* The live point on the draw, in its own component so it can hold the flash
+   hook — see hooks/useFlashOnChange.js.
+   The pill and not the line around it: .cv-live-score is centred with
+   transform: translateY(-50%), and an animation that sets transform would
+   REPLACE that and drop the score half its own height down the gap. The pill
+   has no transform of its own, so it is the safe thing to move. It is also the
+   right thing: the games beside it change every few minutes and this changes
+   every few seconds. */
+function LivePoint({ pts, tiebreak }) {
+  const label = `${pts[0] ?? '0'}-${pts[1] ?? '0'}`
+  const flash = useFlashOnChange(label)
+  return (
+    <span className={`cv-live-point${tiebreak ? ' cv-live-point--tb' : ''}${flash ? ' cv-score--bump' : ''}`}
+          title={tiebreak ? 'Tiebreak points' : 'Current game'}>
+      {label}
+    </span>
+  )
+}
+
 function UpsetBell({ style }) {
   const ref = useRef(null)
   const [tipPos, setTipPos] = useState(null)
@@ -798,12 +818,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                               style={{ top: (yTop + yBot) / 2 }}
                             >
                               {nodes}
-                              {showPts && (
-                                <span className={`cv-live-point${lp.tiebreak ? ' cv-live-point--tb' : ''}`}
-                                      title={lp.tiebreak ? 'Tiebreak points' : 'Current game'}>
-                                  {pts[0] ?? '0'}-{pts[1] ?? '0'}
-                                </span>
-                              )}
+                              {showPts && <LivePoint pts={pts} tiebreak={lp.tiebreak} />}
                             </span>
                           )
                         })()}

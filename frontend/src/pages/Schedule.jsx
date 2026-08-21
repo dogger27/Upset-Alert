@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
+import useFlashOnChange from '../hooks/useFlashOnChange'
 import H2HPanel from '../components/H2HPanel'
 import { useSearchParams, Link } from 'react-router-dom'
 import clsx from 'clsx'
@@ -334,10 +335,29 @@ function ServeBall() {
    parseSet already understands "7(9)"; this only decides how it renders. */
 function SetCell({ cell, bold }) {
   const { g, tb } = parseSet(cell)
+  // Before the early return, not after — a games count that goes from a number
+  // to nothing still has to run the hook. (See the note in Schedule.css on what
+  // the flash is for.)
+  const flash = useFlashOnChange(`${g}|${tb ?? ''}`)
   if (g === '' && tb == null) return <span className="sched-set empty">·</span>
   return (
-    <span className={clsx('sched-set', { 'sched-set--won': bold })}>
+    <span className={clsx('sched-set', { 'sched-set--won': bold, 'sched-score--bump': flash })}>
       {g}{tb != null && <sup>{tb}</sup>}
+    </span>
+  )
+}
+
+/* The point, which is the number that actually moves while you are watching.
+   Its own component so it can hold the hook — the games beside it change every
+   few minutes and this changes every few seconds, and they should not flash
+   together. */
+function PointCell({ point, tiebreak }) {
+  const flash = useFlashOnChange(point)
+  return (
+    <span className={clsx('sched-point', { 'sched-point--tb': tiebreak,
+                                           'sched-score--bump': flash })}
+          title={tiebreak ? 'Tiebreak points' : 'Current game'}>
+      {point}
     </span>
   )
 }
@@ -446,10 +466,7 @@ function CompetitorRows({ e, a, b }) {
             {/* The point last, tinted apart from the games — it is a different
                 kind of number and changes every few seconds. */}
             {point && (
-              <span className={clsx('sched-point', { 'sched-point--tb': lp.tiebreak })}
-                    title={lp.tiebreak ? 'Tiebreak points' : 'Current game'}>
-                {point[side] ?? '0'}
-              </span>
+              <PointCell point={point[side] ?? '0'} tiebreak={lp.tiebreak} />
             )}
           </span>
         </div>
