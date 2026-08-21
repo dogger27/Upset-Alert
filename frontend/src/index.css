@@ -228,9 +228,15 @@
      the accent on a previous meeting says WHICH of these two won it, and
      red/green said "good/bad" instead — while green already means "W" on the
      form chips a few centimetres above. Blue and violet carry no verdict.
-     Ordered to match the header: player one is on the left in both. */
-  --h2h-p1: #2563eb;
-  --h2h-p2: #7c3aed;
+     Ordered to match the header: player one is on the left in both.
+
+     Separated on hue AND temperature, not hue alone. The first pair sat about
+     40 degrees apart and read as one colour on a 3px bar — there is very
+     little of either to look at, so the eye needs more than a nudge. These are
+     ~85 degrees apart, with the blue pushed toward cyan and the violet toward
+     magenta, so one is unmistakably cool and the other unmistakably warm. */
+  --h2h-p1: #0e6fd1;
+  --h2h-p2: #9b2fd6;
 
   --atp-text: var(--atp-600);
   /* The 2px rule under the ATP/WTA column headings. Its own token because it is
@@ -424,10 +430,10 @@
   --pick-needs:   #f0b03f;
 
   /* Lifted for the dark surfaces — see the light-theme note for why these are
-     blue and violet rather than green and red. Far enough apart in hue to read
-     as two things at a 3px bar, and clear of the WTA magenta. */
-  --h2h-p1: #7aa2f7;
-  --h2h-p2: #b18cf5;
+     blue and violet, and why they are this far apart. Still clear of the WTA
+     magenta, which is pinker and never appears on these bars. */
+  --h2h-p1: #38a8f0;
+  --h2h-p2: #c76df2;
 
   --atp-text: #8fb6ff;
   --atp-rule: #4d7ab5;
