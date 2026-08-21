@@ -1011,3 +1011,26 @@ html.h2h-modal-open body {
     opacity: 0.45;
   }
 }
+
+/* ── Which player won, not whether winning is good ────────────────────────
+   The accent on a previous meeting identifies the WINNER OF THAT MEETING,
+   which is one of exactly two people — an identity, not a verdict. Red and
+   green said "bad" and "good", and green already means "W" on the form chips
+   directly above, so the same colour carried two meanings at two scales.
+   Blue and violet say only "this one" and "that one". */
+.h2h-table tr.h2h-row-win  { border-left-color: var(--h2h-p1); }
+.h2h-table tr.h2h-row-loss { border-left-color: var(--h2h-p2); }
+.h2h-row-win  { border-left-color: var(--h2h-p1); }
+.h2h-row-loss { border-left-color: var(--h2h-p2); }
+
+/* The legend. Without it the colours are a code with no key — the reader has
+   to infer from the names which bar is whose. A rule under each header name,
+   in that player's colour, ties the list to the two people above it and costs
+   one line of type. Ordered left/right exactly as the bars are p1/p2. */
+.h2h-row--names .h2h-val-p1 .h2h-name-last,
+.h2h-row--names .h2h-val-p2 .h2h-name-last {
+  border-bottom: 2px solid transparent;
+  padding-bottom: 2px;
+}
+.h2h-row--names .h2h-val-p1 .h2h-name-last { border-bottom-color: var(--h2h-p1); }
+.h2h-row--names .h2h-val-p2 .h2h-name-last { border-bottom-color: var(--h2h-p2); }
