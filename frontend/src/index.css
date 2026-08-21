@@ -224,6 +224,14 @@
   --scrim-strong: rgba(255, 255, 255, 0.72);
   --stripe: rgba(0, 0, 0, 0.025);
 
+  /* The two players in a head-to-head. An IDENTITY pair, not a valence one:
+     the accent on a previous meeting says WHICH of these two won it, and
+     red/green said "good/bad" instead — while green already means "W" on the
+     form chips a few centimetres above. Blue and violet carry no verdict.
+     Ordered to match the header: player one is on the left in both. */
+  --h2h-p1: #2563eb;
+  --h2h-p2: #7c3aed;
+
   --atp-text: var(--atp-600);
   /* The 2px rule under the ATP/WTA column headings. Its own token because it is
      the one place these hues are drawn ON the section fill rather than on a
@@ -414,6 +422,12 @@
   --pick-correct: #45c977; --pick-correct-bg: #1c4a33;
   --pick-wrong:   #f2726a; --pick-wrong-bg:   #4a2320;
   --pick-needs:   #f0b03f;
+
+  /* Lifted for the dark surfaces — see the light-theme note for why these are
+     blue and violet rather than green and red. Far enough apart in hue to read
+     as two things at a 3px bar, and clear of the WTA magenta. */
+  --h2h-p1: #7aa2f7;
+  --h2h-p2: #b18cf5;
 
   --atp-text: #8fb6ff;
   --atp-rule: #4d7ab5;
