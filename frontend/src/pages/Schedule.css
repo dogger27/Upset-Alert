@@ -11,6 +11,23 @@
   padding: 0.75rem 0.75rem 3rem;
 }
 
+/* One shrink-to-fit column for the whole page, so the header and the filter row
+   end on the same edges as the match boxes instead of on the edges of the
+   monitor. On a wide screen the boxes started an inch and a half inside a title
+   sitting against the left margin, and the two read as unrelated furniture.
+
+   fit-content resolves to the widest thing inside, and that is the boxes —
+   which is the direction that has to hold. The controls are narrower than a day
+   of matches and simply take the width they are given; had it gone the other
+   way the boxes would have stretched to fit the header, which is the thing they
+   were sized to stop doing.
+   Capped at 100% so a phone still gets the full width. */
+.sched-shell {
+  width: fit-content;
+  max-width: 100%;
+  margin-inline: auto;
+}
+
 /* ── Header ──
    Three zones: identity top-left, the PDF top-right, and the day/view controls
    centred beneath them. */
