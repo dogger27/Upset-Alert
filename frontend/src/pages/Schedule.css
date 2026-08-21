@@ -965,3 +965,21 @@
    fixed width the two lines form real columns. Right-aligned as a block so a
    two-set match and a three-set match still agree with each other. */
 .sched-sets { justify-content: flex-end; }
+
+/* How a match ended when it did not end normally — "ret." or "w/o".
+   Italic and muted, sitting just before the scores: it QUALIFIES the score
+   rather than being part of it, and after the numbers it read as another set.
+   Same wording the bracket uses, so the two pages describe an abandoned match
+   identically. */
+.sched-end {
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  font-style: italic;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--ret-fg, #f0a5a5);
+}
+
+/* A walkover marks the player who ADVANCED, not the one who withdrew, so it
+   should not read as a failure the way a retirement does. */
+.sched-end--wo { color: var(--text-muted); font-style: normal; }
