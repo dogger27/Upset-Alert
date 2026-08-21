@@ -711,25 +711,35 @@ export default function Schedule() {
         return w
       }
 
-      // How much room a row can actually give the name: its own width, less
-      // everything else in it. Taken as the MINIMUM across rows, because one
-      // shared column has to fit the tightest of them — and taken from the rows
-      // themselves rather than from the page, which in court view is two
-      // columns wide and would have flattered every card by double.
+      // How much room a name COULD have — which is not the same as how much the
+      // row currently occupies. A card is width:fit-content, so its own width
+      // is a function of the name inside it: measuring that and taking the
+      // minimum across rows let the card with the SHORTEST names set the column
+      // for every card, and the whole page collapsed onto it. That is what cut
+      // "Sara BEJLEK" to "Sara BEJLEI" while two thirds of the screen sat
+      // empty.
+      //
+      // The real limit is the CONTAINER the card sits in — a court column in
+      // court view, the list in time view — less everything the row spends on
+      // things that are not the name.
       let room = Infinity
       for (const row of el.querySelectorAll('.sched-row')) {
+        const box = row.parentElement
+        if (!box) continue
         let used = 0
         for (const child of row.children) {
           if (!child.classList.contains('sched-row-main')) used += child.offsetWidth
         }
-        const main = row.querySelector('.sched-row-main')
         const sets = row.querySelector('.sched-sets')
         const fixed = Array.from(
           row.querySelectorAll('.sched-ball-slot, .sched-mark, .sched-end'))
           .reduce((sum, c) => sum + c.offsetWidth, 0)
-        // A little slack for the flex gaps between name, ball, mark and score.
-        const avail = row.clientWidth - used - (sets?.offsetWidth ?? 0) - fixed - 24
-        if (main && avail > 0) room = Math.min(room, avail)
+        const cs = getComputedStyle(row)
+        const padding = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight)
+        // Slack for the flex gaps between name, ball, mark and score.
+        const avail = box.clientWidth - padding - used
+                      - (sets?.offsetWidth ?? 0) - fixed - 24
+        if (avail > 0) room = Math.min(room, avail)
       }
       if (!Number.isFinite(room)) room = 0
 
