@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import logging.handlers
 import os
@@ -82,6 +83,15 @@ async def lifespan(app: FastAPI):
     # Shadow results sweep. Independent of the live flag: it answers a different
     # question (who won) on a different cadence, and writes only sofa_* columns
     # that nothing reads except scripts/sofa_diff.
+    # The order of play on its own, for an instance running without the full
+    # scheduler. A no-op when the scheduler is running, which already owns it.
+    oop_only = settings.order_of_play_enabled and not scrapers_on
+    if oop_only:
+        from app.services.scheduler import run_order_of_play_only
+        asyncio.create_task(run_order_of_play_only())
+        logging.getLogger("app").info(
+            "Order-of-play refresh ENABLED without the rest of the scrapers")
+
     doubles_on = settings.sofascore_doubles_enabled
     if doubles_on:
         from app.services.sofascore_doubles import monitor as sofa_doubles_monitor

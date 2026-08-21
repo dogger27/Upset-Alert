@@ -86,6 +86,11 @@ services:
       # Score doubles too. They have no draw and never will; this fills in the
       # rows on the order of play that ESPN could never bring to life.
       - SOFASCORE_DOUBLES_ENABLED=true
+      # The order of play is what this environment exists to test, and with the
+      # scrapers off its schedule froze on the day the database was seeded.
+      # These are static PDFs on the tours' own hosts, not the rate-limited
+      # sources the other scrapers use.
+      - ORDER_OF_PLAY_ENABLED=true
       # Where Sofascore requests leave from. Empty means direct, which is
       # correct once Jupiter's own IP is out of the penalty box; until then it
       # points at an SSH SOCKS tunnel to a machine on another network.
