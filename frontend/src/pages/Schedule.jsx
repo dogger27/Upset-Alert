@@ -774,6 +774,12 @@ export default function Schedule() {
           onClose={() => setH2H(null)}
         />
       )}
+      {/* Everything on the page shares one shrink-to-fit column, so the header
+          and the filters end on the same left and right edges as the match
+          boxes rather than on the edges of the monitor. The boxes are what
+          decide that width — they are the widest thing here — so the controls
+          follow them instead of the other way round. */}
+      <div className="sched-shell">
       <div className="sched-topbar">
         <div className="sched-titleblock">
           <h1 className="sched-title">
@@ -882,6 +888,7 @@ export default function Schedule() {
           ))}
         </div>
       )}
+      </div>
       </div>
     </div>
   )
