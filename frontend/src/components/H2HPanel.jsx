@@ -445,6 +445,32 @@ export default function H2HPanel({
     return () => window.removeEventListener('resize', measureList)
   }, [measureList, displayMatches.length, isLoading])
 
+  // The draw supplies a sequence to walk; the schedule opens one match and
+  // supplies nothing. That single fact decides both whether the arrows exist
+  // and, because of what they cost in width, where the names go.
+  const hasNav = !!(onPrev || onNext)
+
+  // One definition, placed in one of two rows. Written out twice it would have
+  // been two things to keep in step, and the pick handlers are the part that
+  // would quietly have diverged.
+  const names = (
+    <div className="h2h-navnames">
+      <PickableName
+        className="h2h-navname h2h-val-p1"
+        player={player1} fallback={name_p1}
+        picked={pickedId != null && pickedId === player1?.id}
+        onPick={canPick && player1?.id != null ? () => onPick(match.id, player1.id) : null}
+      />
+      <span className="h2h-navvs">vs</span>
+      <PickableName
+        className="h2h-navname h2h-val-p2"
+        player={player2} fallback={name_p2}
+        picked={pickedId != null && pickedId === player2?.id}
+        onPick={canPick && player2?.id != null ? () => onPick(match.id, player2.id) : null}
+      />
+    </div>
+  )
+
   const showRank = rank_p1 != null || rank_p2 != null
   const showElo = elo_rank_p1 != null || elo_rank_p2 != null
   const showAge = age_p1 != null || age_p2 != null
@@ -459,7 +485,7 @@ export default function H2HPanel({
         {/* The arrows flank what they move: ‹ round / match › reads as one
             control, rather than two arrows parked together with the thing they
             change sitting elsewhere on the bar. */}
-        <div className="h2h-navbar">
+        <div className={`h2h-navbar${hasNav ? ' h2h-navbar--nav' : ''}`}>
           {/* The arrows walk a SEQUENCE of matches, which only the bracket has.
               Opened from the schedule there is nowhere to go, and two permanently
               disabled arrows read as something broken rather than something
@@ -468,23 +494,15 @@ export default function H2HPanel({
               the title bar. They previously had a row to themselves directly
               underneath, which on a phone cost a whole band of vertical space
               to repeat what the bar could have said — and the bar had been left
-              nearly empty since the arrows became conditional. */}
-          <div className="h2h-navnames">
-            <PickableName
-              className="h2h-navname h2h-val-p1"
-              player={player1} fallback={name_p1}
-              picked={pickedId != null && pickedId === player1?.id}
-              onPick={canPick && player1?.id != null ? () => onPick(match.id, player1.id) : null}
-            />
-            <span className="h2h-navvs">vs</span>
-            <PickableName
-              className="h2h-navname h2h-val-p2"
-              player={player2} fallback={name_p2}
-              picked={pickedId != null && pickedId === player2?.id}
-              onPick={canPick && player2?.id != null ? () => onPick(match.id, player2.id) : null}
-            />
-          </div>
-          {(onPrev || onNext) && (
+              nearly empty since the arrows became conditional.
+              WHEN THE ARROWS ARE THERE, it is not. Opened from the draw the bar
+              already carries two buttons, the round and a match counter, and
+              four things on one phone-width line meant every one of them was
+              cut — "QUARTERFI…" beside half a surname. So the names drop to
+              their own row in that case only, which is the arrangement the row
+              below was there for in the first place. */}
+          {!hasNav && names}
+          {hasNav && (
           <div className="h2h-nav-group">
           <button
             className="h2h-nav-btn"
@@ -512,6 +530,7 @@ export default function H2HPanel({
           )}
           <button className="h2h-close" onClick={onClose} aria-label="Close">✕</button>
         </div>
+        {hasNav && <div className="h2h-namebar">{names}</div>}
 
         <div className="h2h-content">
         {busy && (
