@@ -837,7 +837,9 @@
 .sched-competitor {
   display: flex;
   align-items: center;
-  gap: 6px;
+  /* 4px. Every one of these gaps is subtracted from the name, and there are
+     three of them on a finished row — name, ball, mark, scores. */
+  gap: 4px;
   min-width: 0;          /* or the name refuses to shrink and forces a wrap */
   line-height: 1.35;
 }
@@ -880,7 +882,9 @@
    lines stopped forming a column — the whole point of this layout. */
 .sched-ball-slot {
   flex: 0 0 auto;
-  width: 15px;
+  /* A hair over the ball itself. The slot only has to hold it, and its width is
+     reserved on both lines whether or not anyone is serving. */
+  width: 13px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -896,7 +900,10 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 5px;
+  /* The tiebreak superscript lives in this gap — it is taken out of the cell so
+     that "6" and "6⁴" stay the same width — so it cannot close entirely. 4px
+     plus the slack inside the next cell is enough to clear it. */
+  gap: 4px;
   font-variant-numeric: tabular-nums;
   /* No reserved width. It used to hold 5.4rem — room for three sets — so that a
      two-set card came out the same width as a three-set one. Cards are now
@@ -928,9 +935,11 @@
    left of the other's — the columns broke on exactly the rows where the score
    was changing fastest. */
 .sched-point {
-  min-width: 2rem;
-  margin-left: 3px;
-  padding: 0 5px;
+  /* Sized to "40" and no more — two bold tabular digits and its padding. It was
+     the widest fixed thing between the name and the card edge. */
+  min-width: 1.7rem;
+  margin-left: 2px;
+  padding: 0 4px;
   border-radius: 5px;
   font-weight: 700;
   font-size: 0.9rem;
@@ -954,7 +963,7 @@
 @media (max-width: 480px) {
   .sched-competitor-name { font-size: 0.9rem; }
   .sched-competitors--doubles .sched-competitor-name { font-size: 0.78rem; }
-  .sched-sets { gap: 4px; }
+  .sched-sets { gap: 3px; }
   .sched-set { font-size: 0.85rem; }
 }
 
@@ -1088,7 +1097,7 @@
 /* Breathing room either side of the partner slash. Tight against both
    surnames it read as one hyphenated name — "HSIEH/OSTAPENKO" — rather than
    two people. The space is what makes it a separator. */
-.sched-slash { margin: 0 0.3rem; }
+.sched-slash { margin: 0 0.22rem; }
 
 /* Long/short wording pairs. The short form is hidden by default and swaps in
    on a phone, where the time column is 4.4rem and "Followed by" wrapped.
@@ -1121,10 +1130,12 @@
 .sched-competitors--doubles .sched-competitor-name { font-size: 1em; }
 
 @media (max-width: 560px) {
-  /* 0.82, not 0.9: with the flags gone a phone still has to carry two surnames,
-     a slash and a team seed — "GRANOLLERS / ZEBALLOS [2]" — and at 0.9rem that
-     was a few pixels over the column. */
-  .sched-competitors--doubles .sched-competitor-name { font-size: 0.82rem; }
+  /* 0.78. A phone still has to carry two surnames, a slash and a team seed —
+     "BOLELLI / VAVASSORI [4]" — with the flags already gone, and 0.82rem was
+     about fourteen pixels over the column, which put the seed on top of the
+     serving ball. The tightened score columns above cover most of that; this
+     covers the rest. */
+  .sched-competitors--doubles .sched-competitor-name { font-size: 0.78rem; }
   /* No measurement runs at this width — the column is released and names
      ellipsise — so doubles flags go unconditionally. Four flags, two slashes
      and two surnames does not fit a phone, and a flag with a truncated name
