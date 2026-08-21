@@ -175,11 +175,13 @@
 }
 
 .sched-row {
-  /* Content-sized, not column-filling. Every card ends up identical because
-     both variable columns are pinned: the name by --sched-name-w, the scores
-     by their own min-width. */
-  width: fit-content;
-  max-width: 100%;
+  /* Fills its column, up to a cap. Every card in a column is then identical by
+     construction — no measuring, nothing to drift — and the name simply takes
+     what is left after the fixed columns.
+     The cap is what stops a card stretching across a wide screen, which is the
+     thing content-sizing was for. It just does not need JavaScript to find. */
+  width: 100%;
+  max-width: 46rem;
   display: grid;
   /* Third column is the H2H strip. `auto` collapses to nothing on the rows
      that have no button — doubles, qualifying, unresolved slots — so those are
@@ -370,7 +372,11 @@
 @media (min-width: 900px) {
   .sched-courts {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    /* Columns sized to the cards, and the pair centred, so a wide screen does
+       not open a canyon between them. 1fr split the viewport in half and left
+       each card marooned at the inner edge of its own column. */
+    grid-template-columns: repeat(2, minmax(0, 46rem));
+    justify-content: center;
     gap: 1.1rem 1.4rem;
   }
 
@@ -790,8 +796,9 @@
    any environment without the effect still render sensibly rather than
    collapsing. */
 .sched-competitor-name {
-  flex: 0 0 var(--sched-name-w, auto);
-  width: var(--sched-name-w, auto);
+  /* Takes the room the fixed columns leave. No measured width, so nothing can
+     ratchet it down and nothing reflows to compute it. */
+  flex: 1 1 auto;
   min-width: 0;
   max-width: 100%;
   /* No clipping and no ellipsis: a name that does not fit is SHRUNK by the
@@ -1047,12 +1054,10 @@
    present — a doubles team is identified by its two surnames, and no one
    scans an order of play for a pair's nationalities. Singles keeps its flag,
    where there is one name and room for it. */
-/* Flags stay on doubles rows whenever they fit. They are still the first thing
-   to go when they do not — a flag is recognition, a name is identity — but
-   dropping them unconditionally spent space that most rows have. The measuring
-   effect in Schedule.jsx adds .sched-tight only when the longest pair on the
-   page cannot fit with them. */
-.sched-tight .sched-competitors--doubles .sched-flag { display: none; }
+/* Flags stay on doubles rows. The conditional version needed a measuring pass
+   to decide, and that pass is gone — with a card filling its column there is
+   room for them anyway. Below the phone breakpoint they still come off, where
+   four flags genuinely do not fit. */
 
 /* The reclaimed space goes to the names, which no longer need to start small
    to fit — they were shrunk to 0.88em to buy room the flags were taking. */
@@ -1078,24 +1083,3 @@
   white-space: nowrap;
 }
 
-/* ── Measuring state ──────────────────────────────────────────────────────
-   Applied for the duration of one measurement pass and removed immediately.
-   Every rule that makes a name FIT also makes its natural width unreadable:
-   scrollWidth on a clipped element reports the clip, not the content. Without
-   releasing these first, the column measures its own previous answer and
-   ratchets down — which is how names ended up as "DARDERI / ..." with half the
-   card sitting empty next to them.
-
-   !important because these must beat the fixed column set by the very
-   variable this pass exists to compute. */
-.sched-measuring .sched-competitor-name {
-  flex: 0 0 auto !important;
-  width: auto !important;
-  max-width: none !important;
-  overflow: visible !important;
-}
-
-.sched-measuring .sched-competitor-name .sched-side {
-  overflow: visible !important;
-  text-overflow: clip !important;
-}

@@ -518,15 +518,10 @@ function MatchRow({ e, showCourt, zone, venueMode, onH2H }) {
   )
 }
 
-// Floor for the auto-shrink below. Under this a name stops being readable, at
-// which point a smaller size is no better than the truncation it replaced.
-const MIN_NAME_PX = 10
-
 export default function Schedule() {
   // The panel is owned by the page, not the row: it is a full-screen overlay,
   // and one instance beats one per match.
   const [h2h, setH2H] = useState(null)
-  const bodyRef = useRef(null)
   const [params, setParams] = useSearchParams()
   const [view, setView] = useState(storedView)
   const [hideDone, setHideDone] = useState(false)
@@ -676,127 +671,21 @@ export default function Schedule() {
   }, [entries])
 
   /*
-   * Give every card the same width, set by the LONGEST name on the page.
+   * No measuring pass. There used to be one here that sized every card to the
+   * longest name on the page, and it caused more damage than it prevented:
    *
-   * CSS alone cannot do this: the cards live in separate court groups and, on a
-   * wide screen, in two independent grid columns, so no single grid can size
-   * them against one another. Measuring once and publishing the answer as a
-   * custom property is the pattern this codebase already uses for shared
-   * column widths.
+   *  - it fed on itself. A card is width:fit-content, so its width depends on
+   *    the name being measured, and reading that back produced a column that
+   *    ratcheted smaller every pass.
+   *  - it never settled. The pass mutated font sizes and a CSS variable, the
+   *    ResizeObserver watching the container saw the resulting reflow, and ran
+   *    it again — text visibly vibrating on both desktop and mobile.
    *
-   * Two passes on purpose. The names have to be released to their natural width
-   * before they can be measured — reading scrollWidth while they are already
-   * constrained by a previous answer just returns that answer, and the column
-   * would ratchet and never shrink when the day's names get shorter.
+   * CSS does the same job without either failure: cards fill their column up
+   * to a maximum, so every card in a column is identical by construction, and
+   * the name takes whatever is left after the fixed columns. No JavaScript
+   * measures anything, so there is nothing to oscillate.
    */
-  useEffect(() => {
-    const el = bodyRef.current
-    if (!el) return
-
-    const measure = () => {
-      // MEASURE UNCONSTRAINED. Everything that makes a name fit — the fixed
-      // column, the hidden overflow, the ellipsis — also makes it impossible to
-      // read its natural width back, because scrollWidth then reports the
-      // constraint rather than the content. Measuring through that is how the
-      // column ratcheted down and names came out as "DARDERI / ..." with half
-      // the card empty beside them.
-      el.classList.add('sched-measuring')
-      el.classList.remove('sched-tight')
-      el.style.removeProperty('--sched-name-w')
-
-      // Natural width per name, and the widest of them. Measured off the inner
-      // run, which is the text itself; rounded up, because losing half a pixel
-      // is enough to make a name that fits look like one that does not.
-      const measureAll = () => {
-        const out = []
-        let max = 0
-        for (const n of el.querySelectorAll('.sched-competitor-name')) {
-          const run = n.querySelector('.sched-side')
-          if (!run) continue
-          const w = Math.ceil(run.getBoundingClientRect().width)
-          out.push({ el: n, w })
-          if (w > max) max = w
-        }
-        return { names: out, max }
-      }
-
-      // How much room a name COULD have — which is not the same as how much the
-      // row currently occupies. A card is width:fit-content, so its own width
-      // is a function of the name inside it: measuring that and taking the
-      // minimum across rows let the card with the SHORTEST names set the column
-      // for every card, and the whole page collapsed onto it. That is what cut
-      // "Sara BEJLEK" to "Sara BEJLEI" while two thirds of the screen sat
-      // empty.
-      //
-      // The real limit is the CONTAINER the card sits in — a court column in
-      // court view, the list in time view — less everything the row spends on
-      // things that are not the name.
-      let room = Infinity
-      for (const row of el.querySelectorAll('.sched-row')) {
-        const box = row.parentElement
-        if (!box) continue
-        let used = 0
-        for (const child of row.children) {
-          if (!child.classList.contains('sched-row-main')) used += child.offsetWidth
-        }
-        const sets = row.querySelector('.sched-sets')
-        const fixed = Array.from(
-          row.querySelectorAll('.sched-ball-slot, .sched-mark, .sched-end'))
-          .reduce((sum, c) => sum + c.offsetWidth, 0)
-        const cs = getComputedStyle(row)
-        const padding = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight)
-        // Slack for the flex gaps between name, ball, mark and score.
-        const avail = box.clientWidth - padding - used
-                      - (sets?.offsetWidth ?? 0) - fixed - 24
-        if (avail > 0) room = Math.min(room, avail)
-      }
-      if (!Number.isFinite(room)) room = 0
-
-      let { names, max: widest } = measureAll()
-      if (!widest) { el.classList.remove('sched-measuring'); return }
-
-      // Only now, and only if it genuinely will not fit, give up the flags.
-      if (widest > room && room > 0) {
-        el.classList.add('sched-tight')
-        ;({ names, max: widest } = measureAll())
-      }
-
-      const column = room > 0 ? Math.min(widest, Math.max(room, 120)) : widest
-
-      // A NAME IS NEVER TRUNCATED. Where one still does not fit the shared
-      // column, that line's type shrinks until it does — the name is the row's
-      // reason to exist, and "DARDERI /..." tells you less than the same name
-      // set two points smaller.
-      //
-      // Per line rather than per card: when one pairing is long and its
-      // opponent is short, shrinking both would cost legibility on a name that
-      // was never the problem.
-      //
-      // Width scales close enough to linearly with font size for one pass; the
-      // 0.98 absorbs the rounding, and the floor stops a pathological name
-      // rendering at a size nobody can read.
-      for (const { el: n, w } of names) {
-        n.style.removeProperty('font-size')
-        if (!column || w <= column) continue
-        const base = parseFloat(getComputedStyle(n).fontSize) || 14
-        const scaled = Math.max(MIN_NAME_PX, base * (column / w) * 0.98)
-        n.style.fontSize = `${scaled}px`
-      }
-
-      el.classList.remove('sched-measuring')
-      // Below the breakpoint the column is released in CSS and names take what
-      // is left, so publishing a width here would fight it.
-      if (el.clientWidth < 560) return
-      el.style.setProperty('--sched-name-w', `${column}px`)
-    }
-
-    // After paint, so fonts and flags have been laid out.
-    const raf = requestAnimationFrame(measure)
-    const ro = new ResizeObserver(measure)
-    ro.observe(el)
-    return () => { cancelAnimationFrame(raf); ro.disconnect() }
-    // Re-measure whenever the rendered set of names can have changed.
-  }, [entries, view, tzMode])
 
   return (
     <div className="sched-page">
@@ -877,7 +766,7 @@ export default function Schedule() {
           right edge. In time view that wrapper sizes to the widest row, so
           centring the boxes centres the controls above them too rather than
           leaving them stranded at the page edges. */}
-      <div ref={bodyRef} className={clsx('sched-body', { 'sched-body--fit': view === 'time' })}>
+      <div className={clsx('sched-body', { 'sched-body--fit': view === 'time' })}>
       <div className="sched-filters">
         {fromDraw && (
           <Link className="sched-back" to={`/tournaments/${fromDraw}`}>‹ Back to draw</Link>
