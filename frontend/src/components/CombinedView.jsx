@@ -715,6 +715,35 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                     const height = Math.abs(yBot - yTop) + BOX_H + topPad + bottomPad
                     const isSuspended = m.live_scores?.[4] === 'suspended'
                     const isLive = isLiveMatch(m)
+
+                    /* Where the gap between these two opponents actually begins
+                       and ends — which is not simply the two box edges.
+
+                       The box ABOVE prints its completed score underneath
+                       itself, and the box BELOW carries the real winner's name
+                       across its own top border. Both of those are inside the
+                       gap, and centring on the midpoint of the box CENTRES
+                       ignored them: with a wrong pick underneath, the running
+                       score sat directly on the name of the player who actually
+                       won.
+
+                       Measured off the two rules rather than guessed. .cv-score
+                       starts 18px below a box's centre and stands about 18 tall,
+                       so it reaches 20px past the box's own edge;
+                       .cv-real-winner is 11px tall sitting 10px above its box's
+                       centre, so it pokes 5px above that box's top edge. */
+                    const SCORE_H = 20
+                    const NOTE_H = 5
+                    const boxAt = (i) => (c === 0 ? entrantBox(c, i) : winnerBox(c, i))
+                    const upper = boxAt(yTop <= yBot ? 2 * ri : 2 * ri + 1)
+                    const lower = boxAt(yTop <= yBot ? 2 * ri + 1 : 2 * ri)
+                    // Scores render only from the second visible column on, so
+                    // this keys off colIdx exactly as the outline above does.
+                    const gapTop = Math.min(yTop, yBot) + BOX_H / 2
+                                   + (colIdx > 0 && upper?.score ? SCORE_H : 0)
+                    const gapBot = Math.max(yTop, yBot) - BOX_H / 2
+                                   - (lower?.realName ? NOTE_H : 0)
+                    const gapMid = (gapTop + gapBot) / 2
                     /* Whether the upset bell hangs in this column's right-hand
                        corner. Anything centred in the gap between two opponents
                        shares that corner with it, so it has to know.
@@ -780,7 +809,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                           return (
                             <span
                               className={`cv-eta${colIdx > 0 ? ' cv-eta--roomy' : ''}${bell ? ' cv-eta--bell' : ''}`}
-                              style={{ top: (yTop + yBot) / 2 }}
+                              style={{ top: gapMid }}
                             >
                               <span className="cv-eta-day">{day}</span>
                               {time && <> <span className="cv-eta-time">{time}</span></>}
@@ -815,7 +844,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                           return (
                             <span
                               className={`cv-live-score cv-live-score--s${Math.min(nodes.length, 4)}${colIdx > 0 ? ' cv-live-score--roomy' : ''}${bell ? ' cv-live-score--bell' : ''}${isSuspended ? ' cv-live-score--suspended' : ''}`}
-                              style={{ top: (yTop + yBot) / 2 }}
+                              style={{ top: gapMid }}
                             >
                               {nodes}
                               {showPts && <LivePoint pts={pts} tiebreak={lp.tiebreak} />}
