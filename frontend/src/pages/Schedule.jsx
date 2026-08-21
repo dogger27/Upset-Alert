@@ -325,6 +325,22 @@ function CompetitorRows({ e, a, b }) {
   const serving = live ? (lp?.serving ?? e.live_scores?.[2] ?? null) : null
   const point = live && lp?.point ? lp.point : null
 
+  /* How the match ENDED, when it did not end normally.
+     parseSet strips the trailing "r" to read the games off a cell, so without
+     this the schedule showed a retirement as an ordinary 4-1 win — a different
+     match from the one that was played.
+
+     Read off whichever side carries the marker, matching the bracket: a
+     retirement marks the player who QUIT, a walkover marks the player who
+     ADVANCED ("won by walkover"). The two sit on opposite sides on purpose;
+     that is how they are stored. */
+  const endedWith = (side) => {
+    const cells = (e.scores || [])[side] || []
+    if (cells.some(c => /^w\/?o$/i.test(String(c ?? '').trim()))) return 'w/o'
+    if (cells.some(c => /r$/i.test(String(c ?? '')))) return 'ret.'
+    return null
+  }
+
   const rows = [
     { players: a, side: 0, tbd: !!e.tbd_side?.includes('a') },
     { players: b, side: 1, tbd: !!e.tbd_side?.includes('b') },
@@ -350,6 +366,13 @@ function CompetitorRows({ e, a, b }) {
           {winnerSide != null && (
             <span className={clsx('sched-mark', winnerSide === side ? 'sched-mark--win' : 'sched-mark--loss')}>
               {winnerSide === side ? '\u2713' : '\u2717'}
+            </span>
+          )}
+          {/* Before the scores, where it qualifies them. After, it reads as
+              another set. */}
+          {endedWith(side) && (
+            <span className={clsx('sched-end', { 'sched-end--wo': endedWith(side) === 'w/o' })}>
+              {endedWith(side)}
             </span>
           )}
           <span className="sched-sets">
