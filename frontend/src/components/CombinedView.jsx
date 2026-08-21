@@ -683,6 +683,23 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                     const height = Math.abs(yBot - yTop) + BOX_H + topPad + bottomPad
                     const isSuspended = m.live_scores?.[4] === 'suspended'
                     const isLive = isLiveMatch(m)
+                    /* Whether the upset bell hangs in this column's right-hand
+                       corner. Anything centred in the gap between two opponents
+                       shares that corner with it, so it has to know.
+                       The same guard the overlay below uses, not just the upset
+                       test: a column with no round after it draws no bell at
+                       all, and reserving the corner there would push the score
+                       off centre for nothing — which is the fault this exists to
+                       fix, in a different disguise. */
+                    const bell = (() => {
+                      if (!nextCenters || nextC < 1) return false
+                      const { p1: bA, p2: bB } = resolved[m.id] || {}
+                      const pick = picks?.[m.id] ?? null
+                      const rA = bA != null ? drawRanks[bA] : null
+                      const rB = bB != null ? drawRanks[bB] : null
+                      if (pick == null || rA == null || rB == null) return false
+                      return pick !== (rA <= rB ? bA : bB)
+                    })()
                     return (
                       <Fragment key={`mo${m.id}`}>
                         <div
@@ -730,7 +747,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                           const time = cut > 0 ? label.slice(cut + 4) : ''
                           return (
                             <span
-                              className={`cv-eta${colIdx > 0 ? ' cv-eta--roomy' : ''}`}
+                              className={`cv-eta${colIdx > 0 ? ' cv-eta--roomy' : ''}${bell ? ' cv-eta--bell' : ''}`}
                               style={{ top: (yTop + yBot) / 2 }}
                             >
                               <span className="cv-eta-day">{day}</span>
@@ -765,7 +782,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                           const showPts = pts && pts.some(p => p != null)
                           return (
                             <span
-                              className={`cv-live-score cv-live-score--s${Math.min(nodes.length, 4)}${colIdx > 0 ? ' cv-live-score--roomy' : ''}${isSuspended ? ' cv-live-score--suspended' : ''}`}
+                              className={`cv-live-score cv-live-score--s${Math.min(nodes.length, 4)}${colIdx > 0 ? ' cv-live-score--roomy' : ''}${bell ? ' cv-live-score--bell' : ''}${isSuspended ? ' cv-live-score--suspended' : ''}`}
                               style={{ top: (yTop + yBot) / 2 }}
                             >
                               {nodes}
