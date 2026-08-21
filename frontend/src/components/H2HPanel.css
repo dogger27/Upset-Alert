@@ -939,64 +939,75 @@ html.h2h-modal-open body {
     border-radius: 0;
   }
 
-  /* 4. Two lines per meeting, using the full width.
-     It was three: name, then tournament, then surface/year/round, each
-     starting at the left margin with the score marooned on the far right and
-     nothing in between.
+  /* 4. Two lines per meeting, each anchored left AND right.
+     It was three lines, all starting at the left margin, with the score
+     marooned on the far right and nothing in between.
 
-     Laid out as inline text rather than flex items, so the meta reads as one
-     sentence — "Stuttgart · Clay · 2024 · SF" — instead of three stacked
-     fragments. The forced break belongs to the tournament, which is what
-     starts the second line. */
+     Grid with explicit placement, because the cells arrive in the DOM in a
+     different order than they should read — score is written first — and a
+     grid is the only thing here that can reorder without touching the markup.
+     The 1fr in column two is the whole mechanism: it absorbs the slack and
+     pushes the meta group to the right edge, so both lines are anchored at
+     both ends instead of trailing off.
+
+         Jessica Pegula                      6-1, 4-6, 3-6
+         Hard                          Dubai · 2026 · SF          */
   .h2h-table tr {
-    display: block;
+    display: grid;
+    grid-template-columns: auto 1fr auto auto auto;
+    align-items: baseline;
+    column-gap: 0.3rem;
+    row-gap: 0.15rem;
     padding: 0.55rem 0.75rem 0.6rem;
   }
 
-  .h2h-table td { display: inline; }
+  .h2h-table td { display: block; }
 
   .h2h-winner {
+    grid-area: 1 / 1 / 2 / 3;
     font-size: 0.86rem;
     font-weight: 700;
     color: var(--text);
   }
 
-  /* Floated so the score holds the right edge while the name keeps the left —
-     the width between them is what the old layout wasted. */
   .h2h-score {
-    float: right;
-    margin-left: 0.6rem;
+    grid-area: 1 / 3 / 2 / -1;
+    justify-self: end;
     font-size: 0.82rem;
     font-weight: 600;
     color: var(--text-muted);
     font-variant-numeric: tabular-nums;
   }
 
-  /* An empty block before the tournament is the line break. Cleaner than a
-     100% flex-basis, which forced a wrap and then let the remaining cells wrap
-     again onto a third line. */
-  .h2h-tourn::before { content: ''; display: block; }
-
-  .h2h-tourn {
+  /* Surface holds the left of the second line — it is the one fact you scan a
+     head-to-head list for, so it gets its own anchor rather than being third
+     in a run of separators. */
+  .h2h-surface {
+    grid-area: 2 / 1 / 3 / 2;
     font-size: 0.74rem;
     font-weight: 600;
     color: var(--text);
   }
 
-  .h2h-surface,
+  .h2h-tourn { grid-area: 2 / 3 / 3 / 4; }
+  .h2h-year  { grid-area: 2 / 4 / 3 / 5; }
+  .h2h-round { grid-area: 2 / 5 / 3 / -1; }
+
+  .h2h-tourn,
   .h2h-year,
   .h2h-round {
     font-size: 0.72rem;
     color: var(--text-muted);
+    white-space: nowrap;
   }
 
-  /* Separators between the meta parts only — never a trailing one after the
-     round, which is the last thing on the line. */
+  /* Separators BETWEEN the meta parts, never trailing after the round. The
+     old rules hung one off surface and year regardless of what followed, which
+     is where the stray "2026 ·" at the end of a line came from. */
   .h2h-tourn::after,
-  .h2h-surface::after,
   .h2h-year::after {
     content: '·';
-    margin: 0 0.32rem;
+    margin-left: 0.3rem;
     opacity: 0.45;
   }
 }
