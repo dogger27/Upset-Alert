@@ -15,11 +15,13 @@ import { useEffect, useRef, useState } from 'react'
  * change of filter — motion that means nothing, at the moment there is most of
  * it to look at.
  *
- * The timer is the animation's own length. It only ever starts in response to a
- * change, so there is no loop here: nothing this returns feeds back into
- * `value`.
+ * The timer is the animation's own length and has to stay in step with it — see
+ * the score-bump keyframes in index.css. Ending early cuts the animation off
+ * mid-curve; ending late leaves an element carrying a class that is doing
+ * nothing. It only ever starts in response to a change, so there is no loop
+ * here: nothing this returns feeds back into `value`.
  */
-export default function useFlashOnChange(value, ms = 700) {
+export default function useFlashOnChange(value, ms = 1500) {
   const prev = useRef(value)
   const [flash, setFlash] = useState(false)
 
