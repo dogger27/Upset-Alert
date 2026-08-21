@@ -147,7 +147,7 @@ const FORM_POPUP_EDGE = 8
 // avoids — see the commit effect in H2HPanel.
 const SWAP_WAIT_MS = 2500
 
-function FormBox({ m }) {
+function FormBox({ m, boxKey, openKey, onOpen }) {
   const ref = useRef(null)
   const [pos, setPos] = useState(null)
 
@@ -181,6 +181,15 @@ function FormBox({ m }) {
     return () => document.removeEventListener('touchstart', away)
   }, [pos])
 
+  // Only one popup in the panel at a time, enforced by ownership rather than by
+  // the dismiss handler above. That handler cannot do it: each square calls
+  // stopPropagation on touch so a tap does not also close the whole sheet, and
+  // that is exactly what stops the OTHER square's document listener from ever
+  // firing — so tapping a second result left the first popup stranded on screen.
+  useEffect(() => {
+    if (openKey !== boxKey) setPos(null)
+  }, [openKey, boxKey])
+
   if (!m) return <span className="h2h-form-box h2h-form-box--empty" />
 
   return (
@@ -188,15 +197,18 @@ function FormBox({ m }) {
       <span
         ref={ref}
         className={`h2h-form-box ${m.result === 'W' ? 'h2h-form-box--win' : 'h2h-form-box--loss'}`}
-        onMouseEnter={open}
+        onMouseEnter={() => { onOpen(boxKey); open() }}
         onMouseLeave={() => setPos(null)}
         // Touch has no hover, so these squares were pure decoration on a phone —
         // the match behind each result was unreachable. Tap opens the same popup.
-        onTouchStart={e => { e.stopPropagation(); pos ? setPos(null) : open() }}
+        onTouchStart={e => {
+          e.stopPropagation()
+          if (pos) { setPos(null); onOpen(null) } else { onOpen(boxKey); open() }
+        }}
       >
         {m.result}
       </span>
-      {pos && createPortal(
+      {pos && openKey === boxKey && createPortal(
         <div className="h2h-form-popup" style={{ position: 'fixed', left: pos.x, top: pos.y - 8, transform: 'translate(-50%, -100%)' }}>
           <div className="h2h-form-popup-event">{[m.event, m.round].filter(Boolean).join(' · ')}</div>
           <div className="h2h-form-popup-row"><span>vs</span><strong>{m.opponent}</strong></div>
@@ -209,11 +221,16 @@ function FormBox({ m }) {
   )
 }
 
-function FormRow({ matches }) {
+function FormRow({ matches, side, openKey, onOpen }) {
   const boxes = Array.from({ length: 10 }, (_, i) => matches?.[i] ?? null)
   return (
     <div className="h2h-form-row">
-      {boxes.map((m, i) => <FormBox key={i} m={m} />)}
+      {boxes.map((m, i) => (
+        // Keyed by SIDE as well as index, so the two players' rows cannot
+        // collide — square 3 of one player is not square 3 of the other.
+        <FormBox key={i} m={m} boxKey={`${side}:${i}`}
+                 openKey={openKey} onOpen={onOpen} />
+      ))}
     </div>
   )
 }
@@ -248,6 +265,9 @@ export default function H2HPanel({
   matchOrder = null, matchTotal = 0,
 }) {
   const [surfFilter, setSurfFilter] = useState('all') // 'all' | 'surface'
+  // Which form square owns the popup, across BOTH players' rows. Held here
+  // rather than in each square so opening one closes the rest by construction.
+  const [openForm, setOpenForm] = useState(null)
   const [showEloInfo, setShowEloInfo] = useState(false)
 
   // Freeze the page behind the panel for as long as it is open — see the
@@ -572,9 +592,9 @@ export default function H2HPanel({
           {showForm && (
             <div className="h2h-row h2h-row--form">
               <div className="h2h-label">Form</div>
-              <div className="h2h-col-val h2h-val-p1"><FormRow matches={form_p1} /></div>
+              <div className="h2h-col-val h2h-val-p1"><FormRow matches={form_p1} side="p1" openKey={openForm} onOpen={setOpenForm} /></div>
               <div className="h2h-vs" />
-              <div className="h2h-col-val h2h-val-p2"><FormRow matches={form_p2} /></div>
+              <div className="h2h-col-val h2h-val-p2"><FormRow matches={form_p2} side="p2" openKey={openForm} onOpen={setOpenForm} /></div>
             </div>
           )}
         </div>
