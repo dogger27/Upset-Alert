@@ -902,3 +902,101 @@ html.h2h-modal-open body {
 @media (prefers-reduced-motion: reduce) {
   .h2h-panel { animation: none; }
 }
+
+/* ══ Panel fixes ══════════════════════════════════════════════════════════
+   Appended deliberately: these override rules defined earlier in this file,
+   and equal specificity means source order decides. */
+
+/* 1. The bar must be able to hold the close button on its own.
+   The prev/next arrows are hidden when there is no match sequence to walk —
+   the schedule opens one match, not a list — which left the bar with NO
+   in-flow content at all, because the close button is absolutely positioned.
+   It collapsed to its own padding, and the 46px button, centred on a 14px
+   box, overflowed the panel's top edge and was clipped by overflow:hidden. */
+.h2h-navbar { min-height: 3rem; }
+
+/* 2. A border, not just a shadow.
+   The form popup is a card on a card in a dark theme, where a soft shadow
+   carries almost no edge — it read as text floating over the panel. This is
+   the one element that appears ON TOP of content it must be distinguishable
+   from, so it gets the strongest edge in the sheet. */
+.h2h-form-popup {
+  border: 1.5px solid var(--brand-line, var(--border-strong));
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+
+@media (max-width: 560px) {
+  /* 3. Full height. The sheet was capped at 88dvh and pinned to the top, so
+     the remaining 12% showed as a black band under it — which reads as the
+     page having ended, not as a sheet. A sheet that covers the viewport also
+     stops the page behind it peeking through on a scroll bounce. */
+  .h2h-backdrop { align-items: stretch; }
+
+  .h2h-panel {
+    height: 100dvh;
+    max-height: 100dvh;
+    /* No bottom corners to round any more — it meets the edge of the screen. */
+    border-radius: 0;
+  }
+
+  /* 4. Two lines per meeting, using the full width.
+     It was three: name, then tournament, then surface/year/round, each
+     starting at the left margin with the score marooned on the far right and
+     nothing in between.
+
+     Laid out as inline text rather than flex items, so the meta reads as one
+     sentence — "Stuttgart · Clay · 2024 · SF" — instead of three stacked
+     fragments. The forced break belongs to the tournament, which is what
+     starts the second line. */
+  .h2h-table tr {
+    display: block;
+    padding: 0.55rem 0.75rem 0.6rem;
+  }
+
+  .h2h-table td { display: inline; }
+
+  .h2h-winner {
+    font-size: 0.86rem;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  /* Floated so the score holds the right edge while the name keeps the left —
+     the width between them is what the old layout wasted. */
+  .h2h-score {
+    float: right;
+    margin-left: 0.6rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* An empty block before the tournament is the line break. Cleaner than a
+     100% flex-basis, which forced a wrap and then let the remaining cells wrap
+     again onto a third line. */
+  .h2h-tourn::before { content: ''; display: block; }
+
+  .h2h-tourn {
+    font-size: 0.74rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .h2h-surface,
+  .h2h-year,
+  .h2h-round {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+  }
+
+  /* Separators between the meta parts only — never a trailing one after the
+     round, which is the last thing on the line. */
+  .h2h-tourn::after,
+  .h2h-surface::after,
+  .h2h-year::after {
+    content: '·';
+    margin: 0 0.32rem;
+    opacity: 0.45;
+  }
+}
