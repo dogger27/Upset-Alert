@@ -181,15 +181,25 @@
    them: the score ended up marooned an inch from the names it belongs to. Left
    aligned rather than centred, so the filters above keep the same left edge.
    The court view is untouched — it genuinely uses the width for two columns. */
-/* fit-content, not a fixed max-width. The column becomes exactly as wide as
-   the widest row needs at its natural font size — no guessed constant to
-   revisit when a long pairing or a three-set score turns up — and centres in
-   the page. Capped at 100% so it can still shrink rather than overflow. */
+/* Fills the shell, which is the page's one shrink-to-fit column — so a row ends
+   exactly where the header above it ends.
+   It used to be fit-content, sized to the widest row. That was right while the
+   header was a separate full-width band and the two were never going to agree
+   anyway; now that they share a column it is the thing keeping them apart. The
+   time view is one column of rows, and the header is wider than any single row,
+   so the rows are what has to give. */
 .sched-body--fit {
-  width: fit-content;
+  width: 100%;
   max-width: 100%;
   margin-inline: auto;
 }
+
+/* And the cap comes off with it. 46rem stops a row stretching across a monitor,
+   which is a real hazard for a card floating in open page — but this one is
+   bounded by the shell, and the shell is bounded by the widest thing on the
+   page. The court view keeps its cap: there a row sits in a grid track that is
+   already at most 46rem, so the cap does nothing there either way. */
+.sched-list--time .sched-row { max-width: none; }
 
 .sched-row {
   /* Fills its column, up to a cap. Every card in a column is then identical by
