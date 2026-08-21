@@ -211,6 +211,36 @@ def _utc(dt):
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
+def _doubles_point(entry) -> Optional[dict]:
+    """The live point for a doubles row, on the same freshness terms as singles.
+
+    A point is worthless once it is stale — it sits on 15-30 for a whole game
+    and contradicts the set score beside it — so the same rule applies whether
+    the match has a bracket row or not.
+    """
+    from app.services.sofascore_live import FRESH_SECONDS
+
+    snap = getattr(entry, "live_point_json", None)
+    if not snap or getattr(entry, "winner_side", None):
+        return None
+    try:
+        at = datetime.fromisoformat(snap["at"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if at.tzinfo is None:
+        at = at.replace(tzinfo=timezone.utc)
+    if (datetime.now(timezone.utc) - at).total_seconds() > FRESH_SECONDS:
+        return None
+    point = snap.get("point") or [None, None]
+    if not any(p is not None for p in point):
+        return None
+    sets = snap.get("sets") or []
+    games = [[str(s[0]) if s and s[0] is not None else "" for s in sets],
+             [str(s[1]) if s and s[1] is not None else "" for s in sets]]
+    return {"point": point, "games": games if sets else None,
+            "tiebreak": bool(snap.get("tiebreak")), "serving": snap.get("serving")}
+
+
 def _status_of(entry, match) -> str:
     """Live state comes from the MATCH, not from the schedule row.
 
@@ -222,6 +252,12 @@ def _status_of(entry, match) -> str:
         if getattr(match, "winner_id", None):
             return "completed"
         if getattr(match, "live_scores_json", None):
+            return "live"
+    else:
+        # Doubles: the row IS the record, so its own columns decide.
+        if getattr(entry, "winner_side", None):
+            return "completed"
+        if getattr(entry, "live_scores_json", None):
             return "live"
     return entry.status or "scheduled"
 
@@ -381,9 +417,12 @@ async def schedule_day(
             expected_start_at=_utc(e.expected_start_at), expected_source=e.expected_source,
             started_at=_utc(getattr(m, "started_at", None)) if m else None,
             is_tbd=e.is_tbd, tbd_side=e.tbd_side, status=statuses[e.id], players=players,
-            live_scores=(m.live_scores_json if m else None),
-            live_point=(live_point_for(m) if m else None),
-            scores=(m.scores_json if m else None),
+            # Singles reads through the match; doubles has none and carries its
+            # own result on the row. Same field names either way, so the client
+            # needs no idea which kind of match it is looking at.
+            live_scores=(m.live_scores_json if m else e.live_scores_json),
+            live_point=(live_point_for(m) if m else _doubles_point(e)),
+            scores=(m.scores_json if m else e.scores_json),
             surface=(draw_meta.get(e.draw_id) or (None, None))[0],
             gender=(draw_meta.get(e.draw_id) or (None, None))[1],
         ))
