@@ -363,16 +363,23 @@ function CompetitorRows({ e, a, b }) {
           <span className="sched-ball-slot">
             {serving === side + 1 && <ServeBall />}
           </span>
-          {winnerSide != null && (
-            <span className={clsx('sched-mark', winnerSide === side ? 'sched-mark--win' : 'sched-mark--loss')}>
-              {winnerSide === side ? '\u2713' : '\u2717'}
-            </span>
-          )}
-          {/* Before the scores, where it qualifies them. After, it reads as
-              another set. */}
+          {/* BEFORE the tick/cross, not between it and the scores.
+              Everything here is fixed-width and right-packed, so an element's
+              position depends on the total width of everything after it. With
+              "ret." sitting after the mark, the row that had one pushed its
+              cross left of the other row's tick — and the two stopped lining
+              up. In front of the mark it is absorbed by the flexible name
+              instead, and the marks stay in a column.
+              Still ahead of the scores, where it qualifies them; after the
+              numbers it read as another set. */}
           {endedWith(side) && (
             <span className={clsx('sched-end', { 'sched-end--wo': endedWith(side) === 'w/o' })}>
               {endedWith(side)}
+            </span>
+          )}
+          {winnerSide != null && (
+            <span className={clsx('sched-mark', winnerSide === side ? 'sched-mark--win' : 'sched-mark--loss')}>
+              {winnerSide === side ? '\u2713' : '\u2717'}
             </span>
           )}
           <span className="sched-sets">
