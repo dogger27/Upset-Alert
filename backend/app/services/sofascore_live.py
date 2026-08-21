@@ -208,14 +208,14 @@ def _snapshot(event: dict) -> dict:
     }
 
 
-def live_point_for(match) -> Optional[dict]:
-    """The renderable point score for a match, or None.
+def renderable_point(snap: Optional[dict], finished: bool) -> Optional[dict]:
+    """The point score a reader should draw from this snapshot, or None.
 
-    Shared by every surface that shows a live score — the bracket, the combined
-    view and the schedule — because the rules below are judgement calls, not
-    formatting, and three copies of them would drift apart. The schedule showing
-    a different score from the draw page for the same match is exactly the bug
-    this prevents.
+    ONE copy of these rules, because they are judgement calls rather than
+    formatting and every surface has to make the same ones — the schedule
+    showing a different score from the draw for the same match is exactly the
+    bug this prevents. It lived in two places until the doubles copy quietly
+    missed a field the singles copy had gained, which is how that goes.
 
     Three reasons to return nothing:
 
@@ -224,16 +224,15 @@ def live_point_for(match) -> Optional[dict]:
       new game in seconds, and one sitting beside a set score that has moved on
       reads as a bug in the bracket rather than as old data. Enforced here,
       server-side, rather than trusted to whatever the client last received.
-    * The match has a winner. The poller clears its own snapshot when an event
-      leaves the live list, but ESPN can record the result first, and in the gap
-      the honest answer is that the match is over.
+    * The match is over. The poller clears its own snapshot when an event leaves
+      the live list, but a result can be recorded first, and in that gap the
+      honest answer is that the match has finished.
 
     `games` travels with `point` so callers can render one coherent state
     instead of splicing two feeds: taking games from ESPN and the point from
     here produces states that never existed, because ESPN lags up to 60s.
     """
-    snap = getattr(match, "sofa_live_json", None)
-    if not snap or getattr(match, "winner_id", None) is not None:
+    if not snap or finished:
         return None
     try:
         at = datetime.fromisoformat(snap["at"])
@@ -243,9 +242,16 @@ def live_point_for(match) -> Optional[dict]:
         at = at.replace(tzinfo=timezone.utc)
     if (datetime.now(timezone.utc) - at).total_seconds() > FRESH_SECONDS:
         return None
-    point = snap.get("point") or [None, None]
-    if not any(p is not None for p in point):
-        return None
+
+    # BETWEEN GAMES SOFASCORE SENDS NO POINT AT ALL, and this used to return
+    # None on that alone — so the score blinked out for a few seconds after
+    # every single game and came back for the next one. A gap that opens and
+    # closes a dozen times a set reads as something broken, not as an absence.
+    # The snapshot is fresh, which means the match is being played, and the
+    # score between two games is love all. Say so.
+    point = [p if p is not None else "0"
+             for p in (snap.get("point") or [None, None])]
+
     sets = snap.get("sets") or []
     games = [[str(s[0]) if s and s[0] is not None else "" for s in sets],
              [str(s[1]) if s and s[1] is not None else "" for s in sets]]
@@ -258,6 +264,12 @@ def live_point_for(match) -> Optional[dict]:
             # because "last set present" is how it knows which one is live.
             "match_tiebreak": bool(snap.get("match_tiebreak")),
             "serving": snap.get("serving")}
+
+
+def live_point_for(match) -> Optional[dict]:
+    """The renderable point for a BRACKET match — singles, which has a draw row."""
+    return renderable_point(getattr(match, "sofa_live_json", None),
+                            getattr(match, "winner_id", None) is not None)
 
 
 def _as_espn_shape(snap: dict) -> Optional[list]:

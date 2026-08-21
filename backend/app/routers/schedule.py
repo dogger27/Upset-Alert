@@ -211,34 +211,16 @@ def _utc(dt):
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
-def _doubles_point(entry) -> Optional[dict]:
-    """The live point for a doubles row, on the same freshness terms as singles.
+def _doubles_point(entry):
+    """The live point for a doubles row, which has no bracket match to carry it.
 
-    A point is worthless once it is stale — it sits on 15-30 for a whole game
-    and contradicts the set score beside it — so the same rule applies whether
-    the match has a bracket row or not.
+    Same rules as singles, and literally the same code — see renderable_point.
+    The two were separate copies until the doubles one fell behind by a field.
     """
-    from app.services.sofascore_live import FRESH_SECONDS
+    from app.services.sofascore_live import renderable_point
 
-    snap = getattr(entry, "live_point_json", None)
-    if not snap or getattr(entry, "winner_side", None):
-        return None
-    try:
-        at = datetime.fromisoformat(snap["at"])
-    except (KeyError, TypeError, ValueError):
-        return None
-    if at.tzinfo is None:
-        at = at.replace(tzinfo=timezone.utc)
-    if (datetime.now(timezone.utc) - at).total_seconds() > FRESH_SECONDS:
-        return None
-    point = snap.get("point") or [None, None]
-    if not any(p is not None for p in point):
-        return None
-    sets = snap.get("sets") or []
-    games = [[str(s[0]) if s and s[0] is not None else "" for s in sets],
-             [str(s[1]) if s and s[1] is not None else "" for s in sets]]
-    return {"point": point, "games": games if sets else None,
-            "tiebreak": bool(snap.get("tiebreak")), "serving": snap.get("serving")}
+    return renderable_point(getattr(entry, "live_point_json", None),
+                            bool(getattr(entry, "winner_side", None)))
 
 
 def _status_of(entry, match) -> str:
