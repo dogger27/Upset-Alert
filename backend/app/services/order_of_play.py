@@ -34,6 +34,7 @@ header alone, and a file frozen since February looks fresh to anything that
 only checks "did this change recently".
 """
 
+import asyncio
 import re
 from datetime import date, datetime, timedelta, timezone
 from io import BytesIO
@@ -71,6 +72,11 @@ _WTA_API = "https://api.wtatennis.com/tennis/tournaments/"
 _WTA_PDF = "https://wtafiles.wtatennis.com/pdf/draws/{year}/{lsid}/OP.pdf"
 
 _UA = "TennisFantasyLeague/1.0 (https://upsetalert.ca; pdwiens@gmail.com)"
+# Seconds between consecutive PDF fetches. See the pacing note in the fetch
+# loop — the tours' file hosts rate-limit a burst, and a paced pass costs
+# seconds on a quarter-hourly job.
+_FETCH_GAP_SECONDS = 1.5
+
 _HEADERS = {"User-Agent": _UA}
 
 # The API ignores a `year` filter and returns all ~18.7k tournaments back to
@@ -409,7 +415,17 @@ async def refresh_order_of_play() -> int:
         for tournament, draw in rows:
             by_tournament.setdefault(tournament.id, []).append((tournament, draw))
 
-        for group in by_tournament.values():
+        for gi, group in enumerate(by_tournament.values()):
+            # Pace the burst. Every tournament's PDF was requested back to back
+            # against the same two file hosts, and protennislive.com answers a
+            # run like that with 429s — which cost whichever tournaments came
+            # later in the loop their refresh entirely.
+            #
+            # A second and a half between fetches adds about ten seconds to a
+            # job that runs every fifteen minutes. Nothing waits on it, and the
+            # alternative is a burst that reliably loses its own tail.
+            if gi:
+                await asyncio.sleep(_FETCH_GAP_SECONDS)
             tournament = group[0][0]
             draws = [d for _, d in group]
             # WTA file where there is one — at a shared venue it covers both
