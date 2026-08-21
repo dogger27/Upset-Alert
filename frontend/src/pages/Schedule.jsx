@@ -203,10 +203,13 @@ function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp })
      Whether it fits depends on the width, which only CSS knows, so both forms
      are rendered and the breakpoint chooses. The length test is a pure function
      of the string — nothing is measured, so there is nothing to oscillate.
-     14 characters is where the column runs out: "Jessica PEGULA" is the longest
-     that still fits beside a flag, a seed and three sets. */
+     THE SEED COUNTS. It is part of the same run of text — "Madison KEYS" fits
+     and "Madison KEYS [20]" does not, and measuring the name alone let exactly
+     that case through, with the seed sitting on top of the set score.
+     15 characters is where the column runs out, flag and three sets included. */
   const full = [first, last].filter(Boolean).join(' ')
-  const longName = !surnameOnly && full.length > 14
+  const shown = full + (!hideSeed && seed ? ` ${seed}` : '')
+  const longName = !surnameOnly && shown.length > 15
   const initialled = first ? `${first.trim()[0]}. ${last}` : last
 
   return (
