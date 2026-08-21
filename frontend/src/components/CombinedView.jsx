@@ -293,27 +293,82 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
     const parts = full.trim().split(/\s+/)
     return parts.length > 1 ? parts.slice(1).join(' ') : parts[0]
   }
-  const lastNameCounts = {}
-  if (compact) {
-    for (const pl of players) {
-      if (!pl.name) continue
-      const last = lastNameOf(pl.name)
-      lastNameCounts[last] = (lastNameCounts[last] || 0) + 1
+  // Two players in a draw can share a surname, and a shortened name that no
+  // longer tells them apart is worse than a long one. Counted for BOTH of the
+  // surname forms the ladder below can fall back to.
+  const nameCounts = {}
+  for (const pl of players) {
+    if (!pl.name) continue
+    const parts = pl.name.trim().split(/\s+/)
+    for (const form of new Set([lastNameOf(pl.name), parts[parts.length - 1]])) {
+      nameCounts[form] = (nameCounts[form] || 0) + 1
     }
   }
 
+  /* How much room a name has, in the px the draw is laid out in — the zoom
+     magnifies the result but does not change it.
+     Every term is a constant of the layout, not something read back off the
+     page: the box is the column less the slot's 4px insets, its own 3+8
+     padding and its 1px borders, and each badge either renders at a fixed
+     width or does not render at all. Nothing is measured, so nothing can feed
+     back into what it measured. */
+  const NAME_BOX = (compact ? COMPACT_COL_W : COL_W) - 21
+  const CH_EM = 0.63       // uppercase advance for this face, in em
+  const BOX_FONT = 12.8    // .cv-box sets 0.8rem
+  const nameBudget = (p, serving) => {
+    let w = NAME_BOX
+    if (p?.seed != null || drawRanks?.[p?.id] != null) w -= compact ? 32 : 26
+    if (!compact) w -= 33                      // the flag, which renders even when empty
+    if (p?.entry_type) w -= 32
+    if (serving) w -= 20
+    return w
+  }
+
+  /* Full name, first initial, surname, surname's final word. Two forms of
+     surname because the app treats everything after the first token as one —
+     right for "Carreño Busta", wrong for "Tomás Martín Etcheverry", and there
+     is no way to tell them apart from the string. So the longer reading is
+     tried first and the shorter one is there for when it does not fit. */
+  const nameForms = (full) => {
+    const parts = full.trim().split(/\s+/)
+    if (parts.length === 1) return [full]
+    const rest = parts.slice(1).join(' ')
+    return [full, `${parts[0][0]}. ${rest}`, rest, parts[parts.length - 1]]
+  }
+
   const isUnnamedQ = (p) => p?.entry_type === 'Q' && !p.name
-  const slotName = (p, abbrev) => {
-    if (!p) return 'TBD'
+  /* Each rung is used only because the one above it does not fit, and a rung
+     that would collide with another player in the draw is skipped — telling
+     two people apart matters more than saving a few pixels.
+     THE SURNAME IS NEVER CUT. When even the shortest rung is too wide the type
+     comes down to meet it, which is the last thing to give and the only one
+     that costs no information. An ellipsis costs the end of the name, which is
+     the part that identifies the player. */
+  const slotName = (p, serving) => {
+    if (!p) return { text: 'TBD', scale: 1 }
     if (isUnnamedQ(p)) {
       const n = qualifierNums[p.id]
-      return `Qualifier${n != null ? ` ${n}` : ''}`
+      return { text: `Qualifier${n != null ? ` ${n}` : ''}`, scale: 1 }
     }
-    if (compact) {
-      const last = lastNameOf(p.name)
-      return lastNameCounts[last] > 1 ? abbrevName(p.name) : last
+    const forms = nameForms(p.name)
+    // Where the ladder starts is today's choice, unchanged: a phone shows the
+    // surname (or the initial form when that surname is shared), a wide column
+    // shows the initial form. The rungs below only come into play when that
+    // choice does not fit, so nothing that fits today moves.
+    const start = forms.length === 1 ? 0
+      : compact ? (nameCounts[forms[2]] > 1 ? 1 : 2)
+      : 1
+    const chain = []
+    for (let i = start; i < forms.length; i++) {
+      const t = forms[i]
+      if (i > start && (t === chain[chain.length - 1] || nameCounts[t] > 1)) continue
+      chain.push(t)
     }
-    return abbrev ? abbrevName(p.name) : p.name
+    const budget = nameBudget(p, serving)
+    const width = (t) => t.length * CH_EM * BOX_FONT
+    for (const t of chain) if (width(t) <= budget) return { text: t, scale: 1 }
+    const text = chain[chain.length - 1]
+    return { text, scale: Math.max(0.55, budget / width(text)) }
   }
 
   // Rounds (arrays of matches, sorted by match_number)
@@ -730,6 +785,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                   {Array.from({ length: count }, (_, i) => {
                     const box = c === 0 ? entrantBox(c, i) : winnerBox(c, i)
                     const p = box.player
+                    const fit = box.isBye ? null : slotName(p, box.serving)
                     return (
                       <div key={box.key} className="cv-slot" style={{ top: cc[i] }}>
                         <div
@@ -744,8 +800,10 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                             <>
                               <span className="cv-badges"><SeedBadge player={p} drawRanks={drawRanks} /></span>
                               {!compact && <Flag nat={p?.nationality} />}
-                              <span className={`cv-name${isUnnamedQ(p) ? ' cv-name--muted' : ''}`} title={p?.nationality ? `${p.name} (${p.nationality})` : (p?.name || undefined)}>
-                                {slotName(p, box.abbrev)}
+                              <span className={`cv-name${isUnnamedQ(p) ? ' cv-name--muted' : ''}`}
+                                    style={fit.scale < 1 ? { fontSize: `${fit.scale}em` } : undefined}
+                                    title={p?.nationality ? `${p.name} (${p.nationality})` : (p?.name || undefined)}>
+                                {fit.text}
                               </span>
                               {box.serving && <span className="cv-serving" title="Serving"><TennisBall /></span>}
                               <EntryBadge player={p} />
