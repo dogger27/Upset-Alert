@@ -55,7 +55,19 @@
   border: 1.5px solid var(--border);
   background: transparent;
   color: var(--text);
-  font-size: 1.3rem;
+  /* Centred by the box, not by the glyph's own metrics. A button centres its
+     text horizontally by default and does nothing vertically, and ‹ › sit high
+     in the em square — so they rode above the middle of the button. Flex
+     centring places the text box itself, which is what makes it look right.
+     padding:0 so the box is the button and nothing nudges it off-centre. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  /* Nearly the height of the button. These are small glyphs for their point
+     size — at 1.3rem the arrow was a third of the box and the border read as
+     the control while the arrow read as decoration. */
+  font-size: 1.9rem;
   line-height: 1;
   cursor: pointer;
 }
