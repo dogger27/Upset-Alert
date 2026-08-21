@@ -956,8 +956,18 @@ html.h2h-modal-open body {
          Jessica Pegula                      6-1, 4-6, 3-6
          Hard                          Dubai · 2026 · SF          */
   .h2h-table tr {
+    /* ONE size for everything in a meeting, set here so it cannot drift.
+       Five cells were at four different sizes — 0.86 / 0.82 / 0.74 / 0.72 —
+       which made the row look like a heading with footnotes rather than one
+       fact stated in four parts. Hierarchy is carried by weight and colour
+       instead, which do not cost legibility. */
+    --h2h-row-size: 0.95rem;
     display: grid;
-    grid-template-columns: auto 1fr auto auto auto;
+    /* minmax(0, auto) on the tournament column so it can SHRINK. A bare `auto`
+       sizes to content and refuses to go below it, and at the larger type
+       "Australian Open · 2026 · QF" would have run past the card edge rather
+       than truncating. */
+    grid-template-columns: auto 1fr minmax(0, auto) auto auto;
     align-items: baseline;
     column-gap: 0.3rem;
     row-gap: 0.15rem;
@@ -968,7 +978,7 @@ html.h2h-modal-open body {
 
   .h2h-winner {
     grid-area: 1 / 1 / 2 / 3;
-    font-size: 0.86rem;
+    font-size: var(--h2h-row-size);
     font-weight: 700;
     color: var(--text);
   }
@@ -976,7 +986,7 @@ html.h2h-modal-open body {
   .h2h-score {
     grid-area: 1 / 3 / 2 / -1;
     justify-self: end;
-    font-size: 0.82rem;
+    font-size: var(--h2h-row-size);
     font-weight: 600;
     color: var(--text-muted);
     font-variant-numeric: tabular-nums;
@@ -987,19 +997,27 @@ html.h2h-modal-open body {
      in a run of separators. */
   .h2h-surface {
     grid-area: 2 / 1 / 3 / 2;
-    font-size: 0.74rem;
+    font-size: var(--h2h-row-size);
     font-weight: 600;
     color: var(--text);
   }
 
-  .h2h-tourn { grid-area: 2 / 3 / 3 / 4; }
+  /* The tournament gives way first: the year and round are two or three
+     characters and always readable, and the surface is the fact being scanned
+     for. A truncated venue still says which event it was. */
+  .h2h-tourn {
+    grid-area: 2 / 3 / 3 / 4;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .h2h-year  { grid-area: 2 / 4 / 3 / 5; }
   .h2h-round { grid-area: 2 / 5 / 3 / -1; }
 
   .h2h-tourn,
   .h2h-year,
   .h2h-round {
-    font-size: 0.72rem;
+    font-size: var(--h2h-row-size);
     color: var(--text-muted);
     white-space: nowrap;
   }
