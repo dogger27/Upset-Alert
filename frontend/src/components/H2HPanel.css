@@ -55,9 +55,10 @@ html.h2h-modal-open body {
   display: flex;
   align-items: center;
   justify-content: center;
-  /* Equal side padding keeps the group truly centred, and 3rem is enough that
-     it never reaches the close button sitting on top of the right edge. */
-  padding: 0.5rem 3rem;
+  /* Room on the right for the absolutely-positioned close button, and the same
+     on the left so a centred group stays centred. 2.4rem now that the button
+     is 26px rather than 34 — the extra was dead space the names could use. */
+  padding: 0.5rem 2.4rem;
   border-bottom: 1px solid var(--n-150);
   flex-shrink: 0;
 }
@@ -1036,3 +1037,93 @@ html.h2h-modal-open body {
 }
 .h2h-row--names .h2h-val-p1 .h2h-name-last { border-bottom-color: var(--h2h-p1); }
 .h2h-row--names .h2h-val-p2 .h2h-name-last { border-bottom-color: var(--h2h-p2); }
+
+/* ══ Players on the title bar ═════════════════════════════════════════════
+   They used to have a row of their own directly beneath, which spent a whole
+   band of vertical space repeating what the bar could say — and the bar had
+   been sitting nearly empty since the prev/next arrows became conditional.
+   On a phone that band was the difference between seeing two previous
+   meetings and seeing four. */
+.h2h-navnames {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+}
+
+.h2h-navname {
+  min-width: 0;
+  background: none;
+  border: none;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  overflow: hidden;
+}
+
+/* Surnames only up here. The bar has one line to work with and a surname is
+   how a player is referred to in tennis anyway — the given name is detail,
+   and it is still on the meetings list below. */
+.h2h-navnames .h2h-name-first { display: none; }
+
+.h2h-navnames .h2h-name-last {
+  font-size: 0.95rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* The colour key stays with the name, since this bar is now the only place
+     the two players are identified. */
+  border-bottom: 2px solid transparent;
+  padding-bottom: 2px;
+}
+
+.h2h-navnames .h2h-val-p1 .h2h-name-last { border-bottom-color: var(--h2h-p1); }
+.h2h-navnames .h2h-val-p2 .h2h-name-last { border-bottom-color: var(--h2h-p2); }
+
+.h2h-navvs {
+  flex: 0 0 auto;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* A smaller, quieter close button. It was a solid card-coloured box with a
+   full border, which on a bar that now carries the match itself competed with
+   it — the ✕ is an exit, not a feature. Half-transparent and tighter, so the
+   names get the room. */
+.h2h-close {
+  background: color-mix(in srgb, var(--surface-card) 50%, transparent);
+  border-width: 1px;
+  border-radius: 6px;
+  min-width: 26px;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  font-size: 0.8rem;
+}
+
+@media (max-width: 560px) {
+  /* Still a comfortable target despite the smaller box — the tap area is the
+     button, and 32px with the bar's own padding around it clears the minimum
+     without the border having to be that big. */
+  .h2h-close {
+    min-width: 32px;
+    width: 32px;
+    height: 32px;
+    font-size: 0.85rem;
+  }
+
+  /* The close button is absolutely positioned over the right edge, so the bar
+     has to reserve room for it or the names slide underneath. 32px button +
+     its 0.6rem offset + a gap. Reduced from 3.4rem, which was sized for the
+     old larger button and was costing the names half a name's width. */
+  .h2h-navbar { padding-left: 0.7rem; padding-right: 2.7rem; }
+
+  .h2h-navnames .h2h-name-last { font-size: 0.9rem; }
+}

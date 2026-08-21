@@ -464,6 +464,26 @@ export default function H2HPanel({
               Opened from the schedule there is nowhere to go, and two permanently
               disabled arrows read as something broken rather than something
               absent — so the whole group goes. */}
+          {/* The two players ARE the title of this sheet, so they belong on
+              the title bar. They previously had a row to themselves directly
+              underneath, which on a phone cost a whole band of vertical space
+              to repeat what the bar could have said — and the bar had been left
+              nearly empty since the arrows became conditional. */}
+          <div className="h2h-navnames">
+            <PickableName
+              className="h2h-navname h2h-val-p1"
+              player={player1} fallback={name_p1}
+              picked={pickedId != null && pickedId === player1?.id}
+              onPick={canPick && player1?.id != null ? () => onPick(match.id, player1.id) : null}
+            />
+            <span className="h2h-navvs">vs</span>
+            <PickableName
+              className="h2h-navname h2h-val-p2"
+              player={player2} fallback={name_p2}
+              picked={pickedId != null && pickedId === player2?.id}
+              onPick={canPick && player2?.id != null ? () => onPick(match.id, player2.id) : null}
+            />
+          </div>
           {(onPrev || onNext) && (
           <div className="h2h-nav-group">
           <button
@@ -507,23 +527,10 @@ export default function H2HPanel({
             The rows have to be separate grids for that reorder to be possible:
             in one flat grid, `order` can't move an item within its own row. */}
         <div className="h2h-header">
-          {/* Names row — always use our API names (Firstname Lastname order) */}
-          <div className="h2h-row h2h-row--names">
-            <div className="h2h-label" />
-            <PickableName
-              className="h2h-col-val h2h-val-p1"
-              player={player1} fallback={name_p1}
-              picked={pickedId != null && pickedId === player1?.id}
-              onPick={canPick && player1?.id != null ? () => onPick(match.id, player1.id) : null}
-            />
-            <div className="h2h-vs">vs</div>
-            <PickableName
-              className="h2h-col-val h2h-val-p2"
-              player={player2} fallback={name_p2}
-              picked={pickedId != null && pickedId === player2?.id}
-              onPick={canPick && player2?.id != null ? () => onPick(match.id, player2.id) : null}
-            />
-          </div>
+          {/* The players now title the sheet from the nav bar above, so the
+              stat rows below are identified by position alone — left column is
+              player one, right is player two, matching the bar and the coloured
+              rules under each name. */}
 
           {/* Overall row — click to show all matches. Rendered immediately;
               values show a loading placeholder until the (possibly slow, TE-scraped) data arrives. */}
