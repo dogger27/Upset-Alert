@@ -35,7 +35,7 @@ from sqlalchemy import select
 
 from app.models.schedule import ScheduleEntry, ScheduleEntryPlayer
 from app.models.tournament import Draw, Tournament
-from app.services.sofascore import SofascoreBlocked, _get
+from app.services.sofascore import SofascoreBlocked, SofascoreNotFound, _get
 from app.services.sofascore_live import _as_espn_shape, _norm_point, _sets_and_tiebreak
 from app.services.sofascore_results import _final_scores
 from app.services.system_log import app_log
@@ -191,6 +191,12 @@ async def sweep_once(db, day: Optional[date] = None) -> dict:
                     f"/unique-tournament/{ut}/season/{season}/events/{kind}/0")
             except SofascoreBlocked:
                 raise
+            except SofascoreNotFound:
+                # No upcoming doubles in this season — the ordinary state of a
+                # tournament on its final day, and of every tournament after it.
+                # The `last` page is the one that matters by then, and it must
+                # still be read: that is where the results are.
+                continue
             except Exception as exc:
                 logger.warning("doubles %s page failed for ut %s: %s", kind, ut, exc)
                 continue
