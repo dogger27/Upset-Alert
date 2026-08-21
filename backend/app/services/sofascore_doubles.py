@@ -235,6 +235,19 @@ async def sweep_once(db, day: Optional[date] = None) -> dict:
 
         if status == "inprogress":
             snap = _snapshot(ev)
+            # First sighting of play, on the same terms as the singles poller:
+            # `startTimestamp` is the announced slot rather than the first
+            # point, so it is only used when games are already on the board and
+            # we plainly missed the start.
+            if e.started_at is None:
+                played = sum((x[0] or 0) + (x[1] or 0) for x in (snap.get("sets") or []))
+                ts = ev.get("startTimestamp")
+                if played == 0:
+                    e.started_at = datetime.now(timezone.utc)
+                    scored += 1
+                elif ts:
+                    e.started_at = datetime.fromtimestamp(ts, tz=timezone.utc)
+                    scored += 1
             if flip:
                 snap["sets"] = [[b, a] for a, b in snap["sets"]]
                 snap["point"] = [snap["point"][1], snap["point"][0]]

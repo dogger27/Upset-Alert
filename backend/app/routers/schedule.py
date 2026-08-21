@@ -415,7 +415,9 @@ async def schedule_day(
             start_note=e.start_note,
             printed_start_at=_printed_instant(e, tzs.get(e.tournament_id)),
             expected_start_at=_utc(e.expected_start_at), expected_source=e.expected_source,
-            started_at=_utc(getattr(m, "started_at", None)) if m else None,
+            # Singles reads it off the match; doubles has none and carries its
+            # own, so the field means the same thing either way.
+            started_at=_utc(getattr(m, "started_at", None) if m else e.started_at),
             is_tbd=e.is_tbd, tbd_side=e.tbd_side, status=statuses[e.id], players=players,
             # Singles reads through the match; doubles has none and carries its
             # own result on the row. Same field names either way, so the client

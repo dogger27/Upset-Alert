@@ -271,7 +271,8 @@ function startedLine(e, zone) {
   const opts = { hour: 'numeric', minute: '2-digit' }
   if (zone) opts.timeZone = zone
 
-  // The observed start, when we have one.
+  // The observed start — when the first point was played, stamped by whichever
+  // poller saw it. This is the normal path now for anything live or finished.
   if (e.started_at) {
     return `Started at ${new Date(e.started_at).toLocaleTimeString([], opts)}`
   }
@@ -284,8 +285,12 @@ function startedLine(e, zone) {
   if (e.printed_start_at && e.start_type === 'fixed') {
     return `Started at ${new Date(e.printed_start_at).toLocaleTimeString([], opts)}`
   }
-  // No time to show at all — "Followed by" and friends. Say only what is known.
-  return 'Started'
+  // Last resort. Every path above should have produced a time — the poller
+  // stamps started_at on its first sighting of play, for singles and doubles
+  // alike — so reaching here means we genuinely never saw the match begin.
+  // Say that, rather than a bare "Started" that looks like a time failed to
+  // render.
+  return 'In progress'
 }
 
 /* A tennis ball, matching the draw page's. Same geometry deliberately: the two

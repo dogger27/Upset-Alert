@@ -334,30 +334,45 @@ async def poll_once(db) -> dict:
             if snap["serving"] in (1, 2):
                 snap["serving"] = 3 - snap["serving"]
 
-        # When the match ACTUALLY started, from the feed rather than from when
-        # we happened to look.
+        # WHEN THE FIRST POINT WAS PLAYED — not when the match was scheduled.
         #
-        # Nothing was writing this for a live match: the results sweep sets it
-        # only once a match has finished, and espn_monitor — the other writer —
-        # does not run where Sofascore is the source. So a match in progress had
-        # no start time at all, and the schedule fell back to a bare "Started"
-        # with nothing after it.
+        # `startTimestamp` is the announced slot, not the start of play. It came
+        # back as exactly 17:00:00.000 for a match the sheet listed as "not
+        # before 1:00 PM", which is the same fact the row already showed. Putting
+        # that behind the words "Started at" states something the feed does not
+        # know: a match on a "not before" slot routinely begins much later.
         #
-        # Better than what ESPN gives us, too: espn_monitor can only record the
-        # first poll that saw the match live, whereas this is the tournament's
-        # own stamp. Written once — a suspension and resumption must not restart
-        # the clock, because the elapsed time is what the schedule chain needs.
-        ts = ev.get("startTimestamp")
-        if ts:
-            started = datetime.fromtimestamp(ts, tz=timezone.utc)
-            if match.sofa_started_at is None:
-                match.sofa_started_at = started
-                written += 1
-                touched_draws.add(draw_id)
-            if settings.sofascore_authoritative and match.started_at is None:
-                match.started_at = started
-                written += 1
-                touched_draws.add(draw_id)
+        # So the stamp is OUR first sighting of play, which at a 10-second poll
+        # is within ten seconds of the first point. That is also what
+        # espn_monitor records, so the two sources stay comparable.
+        #
+        # The exception is joining a match already in progress — after a deploy,
+        # or on the first poll of the day. Games already on the board prove it
+        # started before we looked, and "now" would be a worse answer than the
+        # scheduled time, so the announced stamp is used there instead.
+        played = sum((s[0] or 0) + (s[1] or 0) for s in (snap.get("sets") or []))
+        if match.sofa_started_at is None or (
+                settings.sofascore_authoritative and match.started_at is None):
+            ts = ev.get("startTimestamp")
+            if played == 0:
+                first_play = datetime.now(timezone.utc)
+            elif ts:
+                first_play = datetime.fromtimestamp(ts, tz=timezone.utc)
+            else:
+                first_play = None
+            if first_play is not None:
+                # Written once. A suspension and resumption must not restart the
+                # clock — the elapsed time is what the expected-start chain
+                # reads, and a match paused for rain has been on court since it
+                # began.
+                if match.sofa_started_at is None:
+                    match.sofa_started_at = first_play
+                    written += 1
+                    touched_draws.add(draw_id)
+                if settings.sofascore_authoritative and match.started_at is None:
+                    match.started_at = first_play
+                    written += 1
+                    touched_draws.add(draw_id)
 
         # Compare without the timestamp: otherwise every poll is a write, and at
         # 10s that is 8,640 pointless UPDATEs and SSE broadcasts a day.
