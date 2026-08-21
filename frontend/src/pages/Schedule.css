@@ -1026,3 +1026,34 @@
   .sched-abbr-full  { display: none; }
   .sched-abbr-short { display: inline; }
 }
+
+/* ── Doubles: names over flags ────────────────────────────────────────────
+   A doubles row carries four flags, two slashes, two surnames and a team
+   seed. That is more than the column holds, and the tail is what gets cut —
+   which put the truncation immediately after a partner's flag and rendered
+   as "HSIEH / 🇱🇻" with no second name at all. A flag with no name beside it
+   is worse than no flag: it looks like missing data.
+
+   So the flags go on doubles rows. They are the least load-bearing thing
+   present — a doubles team is identified by its two surnames, and no one
+   scans an order of play for a pair's nationalities. Singles keeps its flag,
+   where there is one name and room for it. */
+.sched-competitors--doubles .sched-flag { display: none; }
+
+/* The reclaimed space goes to the names, which no longer need to start small
+   to fit — they were shrunk to 0.88em to buy room the flags were taking. */
+.sched-competitors--doubles .sched-competitor-name { font-size: 1em; }
+
+@media (max-width: 560px) {
+  .sched-competitors--doubles .sched-competitor-name { font-size: 0.9rem; }
+}
+
+/* If a name is still too long to fit, it must ellipsise rather than vanish.
+   text-overflow needs the overflowing box to be the one with the property,
+   so it is set on the inline run itself and not only on the flex parent. */
+.sched-competitor-name .sched-side {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
