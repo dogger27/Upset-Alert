@@ -831,7 +831,12 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  /* Takes whatever height the tag row leaves, and centres the two lines in it.
+     The card has a fixed height, so on the cards whose timing column is the
+     taller of the two there is slack — and packed to the top, the names sat
+     hard against the tags with all of it below them. */
   flex: 1;
+  justify-content: center;
 }
 
 .sched-competitor {
