@@ -37,7 +37,19 @@ _TRANSPORT_BUT_OUR_FAULT = (
 # Server-side "come back later", plus the bot-blocking that Tennis Explorer
 # serves as 403 when requests arrive too fast. A 4xx that isn't one of these
 # (404, 401, 400) means we asked for the wrong thing and does deserve a log.
-_TRANSIENT_STATUS = frozenset({403, 408, 429, 500, 502, 503, 504})
+#
+# 520-527 are CLOUDFLARE'S OWN codes for "the origin behind me is not
+# answering" — 522 is a connection timeout to the origin, 521 is the origin
+# refusing, 524 is the origin taking too long. They say nothing about our
+# request and there is nothing to fix on this side; the site is simply down for
+# a moment. Several of the sources this app scrapes sit behind Cloudflare, so
+# these arrive regularly. Their absence here paged as an ERROR for a
+# tennisabstract.com outage that had already ended by the time the mail was
+# read.
+_TRANSIENT_STATUS = frozenset({
+    403, 408, 429, 500, 502, 503, 504,
+    520, 521, 522, 523, 524, 525, 526, 527,
+})
 
 
 def is_transient_http_error(exc: BaseException) -> bool:
