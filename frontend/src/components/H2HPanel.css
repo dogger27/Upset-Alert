@@ -1120,6 +1120,27 @@ html.h2h-modal-open body {
 .h2h-navnames .h2h-val-p1 .h2h-name-last { border-bottom-color: var(--h2h-p1); }
 .h2h-navnames .h2h-val-p2 .h2h-name-last { border-bottom-color: var(--h2h-p2); }
 
+/* The names' own row, used only when the bar is carrying the draw's arrows and
+   match counter. Same padding and rule as the bar above it so the two read as
+   one header rather than a header and a stray line.
+   The close button is absolutely positioned over the bar, not over this, so
+   this row has the full width — which is the point of moving down here, and
+   why the names can sit at their full size with no reserved corner. */
+.h2h-namebar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45rem 0.7rem 0.55rem;
+  border-bottom: 1px solid var(--n-150);
+  flex-shrink: 0;
+}
+
+/* Without the names in it, the bar is the arrows and the round — which is what
+   it held before the names moved in, so it goes back to the tighter height it
+   had then rather than keeping the 3rem floor that was there to stop an EMPTY
+   bar collapsing under the close button. */
+.h2h-navbar--nav { min-height: 0; }
+
 .h2h-navvs {
   flex: 0 0 auto;
   font-size: 0.7rem;
@@ -1161,5 +1182,13 @@ html.h2h-modal-open body {
      old larger button and was costing the names half a name's width. */
   .h2h-navbar { padding-left: 0.7rem; padding-right: 2.7rem; }
 
+  /* The reservation belongs to the bar the button is over. On the names' own
+     row it would just push the pair off centre. */
+  .h2h-namebar { padding-left: 0.7rem; padding-right: 0.7rem; }
+
   .h2h-navnames .h2h-name-last { font-size: 0.9rem; }
+
+  /* A full row to itself, so the surnames take the size they were shrunk out
+     of when they were sharing the bar with two buttons and a counter. */
+  .h2h-namebar .h2h-name-last { font-size: 1.05rem; }
 }
