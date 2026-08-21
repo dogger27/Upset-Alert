@@ -195,6 +195,20 @@ function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp })
   // when space is tight, and a slot resolved from an "OR" carries the bracket's
   // name, which never had one inline.
   const iso2 = nationalityIso2(nationality || nat)
+
+  /* Two forms of a singles name, and CSS picks. On a phone the name column is
+     about 180px and a long one — "Amanda ANISIMOVA [9]" — ran under the result
+     mark and the score. An initial is how a draw sheet prints a name it has no
+     room for, and it still names the same person; a cut or shrunk one does not.
+     Whether it fits depends on the width, which only CSS knows, so both forms
+     are rendered and the breakpoint chooses. The length test is a pure function
+     of the string — nothing is measured, so there is nothing to oscillate.
+     14 characters is where the column runs out: "Jessica PEGULA" is the longest
+     that still fits beside a flag, a seed and three sets. */
+  const full = [first, last].filter(Boolean).join(' ')
+  const longName = !surnameOnly && full.length > 14
+  const initialled = first ? `${first.trim()[0]}. ${last}` : last
+
   return (
     <span className="sched-player">
       {/* No placeholder when there is no flag. A missing nationality here is
@@ -204,8 +218,13 @@ function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp })
           does hold a country for them, and we deliberately do not use it: the
           official order of play withholds it on purpose. */}
       {iso2 && <span className={`fi fi-${iso2.toLowerCase()} sched-flag`} title={nat} />}
-      <span className="sched-pname">
-        {surnameOnly ? last : [first, last].filter(Boolean).join(' ')}
+      <span className={clsx('sched-pname', { 'sched-pname--long': longName })}>
+        {surnameOnly ? last : longName ? (
+          <>
+            <span className="sched-name-full">{full}</span>
+            <span className="sched-name-abbr">{initialled}</span>
+          </>
+        ) : full}
         {/* AFTER the name. Leading it, the seed was the first thing on the line
             and pushed every name to a different starting column depending on
             whether it had one — so the names never formed an edge to scan. It

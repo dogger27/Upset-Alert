@@ -182,6 +182,18 @@
      thing content-sizing was for. It just does not need JavaScript to find. */
   width: 100%;
   max-width: 46rem;
+
+  /* EVERY CARD IS THE SAME HEIGHT, so the k-th card in one court lines up with
+     the k-th card in the court beside it. That only holds if the height is a
+     constant rather than a consequence of content, which is what this is: the
+     two columns inside the card are given this height outright below, and the
+     card is padding + this + borders on every row on the page.
+     4.3rem is the taller of the two columns, not a round number — the timing
+     column can print a wording, a clock, an estimate wording and an estimated
+     clock, four lines at 0.9rem and 0.78rem, which is 4.18rem. The players
+     column is a tag row and two names, 3.82rem. */
+  --sched-card-body: 4.3rem;
+
   display: grid;
   /* Third column is the H2H strip. `auto` collapses to nothing on the rows
      that have no button — doubles, qualifying, unresolved slots — so those are
@@ -226,7 +238,30 @@
    read first down a column. */
 .sched-row--done .sched-score { color: var(--text-muted); }
 
-.sched-row-when { display: flex; flex-direction: column; gap: 0.15rem; }
+/* Both columns are given the card's height outright rather than taking it from
+   their contents. That is the whole mechanism behind cards that match: a card
+   is padding + --sched-card-body + borders no matter what is in it, so a court
+   with two matches and a court with six produce identical boxes and the rows
+   line up straight across the page.
+   The timing column gets max-height rather than height so a short one still
+   centres; either way it cannot make the card taller than its neighbour. */
+.sched-row-when {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.15rem;
+  max-height: var(--sched-card-body);
+}
+/* Packed to the top, not centred. The status pill is positioned against the
+   card's top corner, so the tag row it sits beside has to stay put — centring
+   the block would drift the two apart by a few pixels on the cards that have
+   slack. The slack goes under the names instead, where nothing is anchored. */
+.sched-row-main {
+  height: var(--sched-card-body);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
 .sched-time { font-size: 0.9rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 
 /* Wording on one line, clock on the next, and the clock never broken — "9:44"
@@ -337,9 +372,9 @@
 /* ── Court view ── */
 .sched-courts { display: flex; flex-direction: column; gap: 1.1rem; }
 
-/* Cards are content-sized now, so a column taller than its content would
-   otherwise stretch them. Align to the start and let them keep their width. */
-.sched-courtcol .sched-row, .sched-list .sched-row { justify-self: start; }
+/* A court is never wider than a card, so its heading sits directly over the
+   left edge of the cards under it instead of over an empty stretch of page. */
+.sched-courtblock { width: 100%; max-width: 46rem; margin-inline: auto; }
 
 .sched-courthead {
   position: sticky;
@@ -367,37 +402,39 @@
 /* ── Narrow screens ── */
 
 
-/* Only where there is real room do courts sit side by side, the way the sheet
-   prints them. */
-@media (min-width: 900px) {
+/* 1200px, not 900px. Two columns is a trade — twice the matches on screen for
+   half the width each — and below this the width is what runs out first: a
+   doubles line is four flags, two surnames, a slash and a team seed, and at
+   900px it was landing in a 200px column and being cut mid-surname.
+   At 1200 each column is around 585px, which carries the longest pairing on
+   tour with room to spare. Under it the courts stack full width, where nothing
+   has ever had to be shortened. */
+@media (min-width: 1200px) {
+  /* The page's 1100px cap was set when this was one column of rows. Two full
+     cards side by side need 1494px, and holding the old cap would have handed
+     each column 530px — back inside the width where doubles names have to be
+     cut, which is the whole thing this breakpoint exists to avoid. Sized to
+     exactly two cards and a gutter, so it stops there rather than sprawling. */
+  .sched-page { max-width: calc(46rem * 2 + 1.4rem + 1.5rem); }
+
   .sched-courts {
     display: grid;
-    /* Columns sized to the cards, and the pair centred, so a wide screen does
-       not open a canyon between them. 1fr split the viewport in half and left
-       each card marooned at the inner edge of its own column. */
-    grid-template-columns: repeat(2, minmax(0, 46rem));
-    justify-content: center;
+    /* Even halves of a container capped at two cards' worth, centred. Sizing
+       the TRACKS to the card instead left each column wider than its card on a
+       big screen, and a card aligned to the start of an over-wide track is what
+       opened the canyon down the middle of the page. Capping the container and
+       letting the cards fill their half cannot do that. */
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-width: calc(46rem * 2 + 1.4rem);
+    margin-inline: auto;
     gap: 1.1rem 1.4rem;
+    /* Courts are as tall as their own list of matches. Stretching the shorter
+       one to match its neighbour is what used to inflate its cards. */
+    align-items: start;
   }
 
-  /* Line the columns up WITHOUT guessing a height.
-     A fixed min-height does not work: it is only a floor, and the rows that
-     break alignment are exactly the ones that exceed it — doubles carrying two
-     lines of players, or a slot printing three lines of timing. Whatever number
-     is chosen, the tallest row escapes it.
-     Instead each court block stretches to the tallest in its row of the grid
-     (grid items stretch by default), its list takes the leftover height, and
-     grid-auto-rows: 1fr divides that evenly. Two courts side by side with the
-     same number of matches then line up exactly, and adapt on their own when
-     content grows. Desktop only — on a phone the courts stack and there is
-     nothing to align. */
-  .sched-courtblock { display: flex; flex-direction: column; }
-  .sched-courts .sched-list {
-    flex: 1;
-    display: grid;
-    grid-auto-rows: 1fr;
-    gap: 0.4rem;
-  }
+  /* The cap belongs to the container here; the track already enforces it. */
+  .sched-courtblock { max-width: none; }
 }
 
 /* The tournament's own PDF. Styled as an outline button matching the filter
@@ -844,12 +881,15 @@
   justify-content: flex-end;
   gap: 5px;
   font-variant-numeric: tabular-nums;
-  /* Room for three sets plus a live point, always reserved. The scores column
-     is the other variable-width part of the row, so leaving it to size itself
-     would make a two-set card narrower than a three-set one and defeat the
-     whole point of fixing the name column. Best-of-five overflows this and
-     simply grows, which is correct — a Slam final should not be clipped. */
-  min-width: 5.4rem;
+  /* No reserved width. It used to hold 5.4rem — room for three sets — so that a
+     two-set card came out the same width as a three-set one. Cards are now
+     sized by their column instead, so the reservation bought nothing and cost
+     something: a two-set match left the unused half of that box sitting between
+     the tick and the first score, which put the result mark adrift in the
+     middle of the card instead of against the score it belongs to.
+     The two lines of a match always render the same number of cells, so they
+     still form columns with each other — which is the alignment that matters. */
+  min-width: 0;
 }
 
 .sched-set {
@@ -1064,7 +1104,10 @@
 .sched-competitors--doubles .sched-competitor-name { font-size: 1em; }
 
 @media (max-width: 560px) {
-  .sched-competitors--doubles .sched-competitor-name { font-size: 0.9rem; }
+  /* 0.82, not 0.9: with the flags gone a phone still has to carry two surnames,
+     a slash and a team seed — "GRANOLLERS / ZEBALLOS [2]" — and at 0.9rem that
+     was a few pixels over the column. */
+  .sched-competitors--doubles .sched-competitor-name { font-size: 0.82rem; }
   /* No measurement runs at this width — the column is released and names
      ellipsise — so doubles flags go unconditionally. Four flags, two slashes
      and two surnames does not fit a phone, and a flag with a truncated name
@@ -1083,3 +1126,15 @@
   white-space: nowrap;
 }
 
+
+/* ── Singles: the initial form, on a phone, for the names that need it ─────
+   Both forms are in the DOM — see PlayerName in Schedule.jsx for why — and
+   only one is ever displayed. At the end of the file so nothing above it wins.
+   The class only exists on names long enough to be at risk, so short ones keep
+   their first name at every width. */
+.sched-name-abbr { display: none; }
+
+@media (max-width: 560px) {
+  .sched-pname--long .sched-name-full { display: none; }
+  .sched-pname--long .sched-name-abbr { display: inline; }
+}
