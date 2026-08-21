@@ -993,3 +993,13 @@
    surnames it read as one hyphenated name — "HSIEH/OSTAPENKO" — rather than
    two people. The space is what makes it a separator. */
 .sched-slash { margin: 0 0.3rem; }
+
+/* Long/short wording pairs. The short form is hidden by default and swaps in
+   on a phone, where the time column is 4.4rem and "Followed by" wrapped.
+   At the end of the file so it wins over anything above it. */
+.sched-abbr-short { display: none; }
+
+@media (max-width: 560px) {
+  .sched-abbr-full  { display: none; }
+  .sched-abbr-short { display: inline; }
+}

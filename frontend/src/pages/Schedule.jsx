@@ -72,11 +72,33 @@ function splitTimeLine(text) {
   return m ? { label: m[1].trim(), time: m[2].trim() } : { label: text, time: '' }
 }
 
+/* Wordings that are too long for the time column on a phone.
+   Abbreviated at RENDER only, and only on a narrow screen — start_note keeps
+   whatever the tournament actually printed, so the stored record stays
+   faithful and this stays a display decision. Distinct from SHORTEN below,
+   which applies at every width because those phrasings are too long
+   everywhere. */
+const MOBILE_ABBR = {
+  'Followed by': 'Fol. By',
+}
+
 function TimeLine({ text, className }) {
   const { label, time } = splitTimeLine(text)
+  const short = MOBILE_ABBR[label]
   return (
     <span className={className}>
-      {label && <span className="sched-time-label">{label}</span>}
+      {label && (
+        <span className="sched-time-label">
+          {/* Both forms, with CSS choosing. Picking in JS would need a width
+              listener and a re-render on every rotation, to change two words. */}
+          {short ? (
+            <>
+              <span className="sched-abbr-full">{label}</span>
+              <span className="sched-abbr-short">{short}</span>
+            </>
+          ) : label}
+        </span>
+      )}
       {time && <span className="sched-time-clock">{time}</span>}
     </span>
   )
