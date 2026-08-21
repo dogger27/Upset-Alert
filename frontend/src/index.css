@@ -657,15 +657,24 @@ input:focus, select:focus { outline: none; border-color: var(--brand-line); }
    Shared by the schedule and the draw rather than written twice — the same
    number appears on both surfaces and there is no reading under which it
    should announce itself differently on one of them. */
+/* 1.5s, and most of it is the way back down. At 700ms the whole thing was over
+   before the eye had found it — which on a page you are scanning rather than
+   staring at is the same as it not having happened. Rising fast and settling
+   slowly is what makes it readable at this size: the jump says a number moved,
+   and the long return leaves it marked for long enough to look at.
+   The hold at 22-32% is the part doing that work. Without it the curve is a
+   spike, and a spike is what reads as fast however long it actually lasts. */
 @keyframes score-bump {
   0%   { transform: scale(1);    filter: none; }
-  25%  { transform: scale(1.32); filter: brightness(1.45); }
+  14%  { transform: scale(1.32); filter: brightness(1.5); }
+  32%  { transform: scale(1.32); filter: brightness(1.5); }
   100% { transform: scale(1);    filter: none; }
 }
 
 .sched-score--bump,
 .cv-score--bump {
-  animation: score-bump 700ms cubic-bezier(0.2, 0.9, 0.3, 1);
+  /* Keep in step with the hook's timer — see hooks/useFlashOnChange.js. */
+  animation: score-bump 1500ms cubic-bezier(0.25, 0.6, 0.2, 1);
   /* The cell is inline and would ignore a transform otherwise. */
   display: inline-block;
   will-change: transform;
@@ -676,12 +685,13 @@ input:focus, select:focus { outline: none; border-color: var(--brand-line); }
 @media (prefers-reduced-motion: reduce) {
   @keyframes score-bump {
     0%   { background-color: transparent; }
-    25%  { background-color: color-mix(in srgb, var(--brand-fill) 45%, transparent); }
+    14%  { background-color: color-mix(in srgb, var(--brand-fill) 45%, transparent); }
+    32%  { background-color: color-mix(in srgb, var(--brand-fill) 45%, transparent); }
     100% { background-color: transparent; }
   }
   .sched-score--bump,
   .cv-score--bump {
-    animation: score-bump 900ms ease-out;
+    animation: score-bump 1500ms ease-out;
     transform: none;
     will-change: auto;
   }
