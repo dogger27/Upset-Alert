@@ -1564,10 +1564,24 @@ async def run_order_of_play_only() -> None:
     Staging keeps the scrapers off so it cannot double the load on Wikipedia or
     Tennis Explorer, but the order of play is exactly what it is there to test —
     and without this its schedule simply stopped at whatever day it was seeded
-    with. Same 15-minute cadence the scheduler uses, and the same function, so
-    the two environments cannot drift in behaviour.
+    with.
+
+    SLOWER THAN THE SCHEDULER'S 15 MINUTES, on purpose. This was first written
+    to match it exactly, on the reasoning that these are static PDFs and cheap.
+    protennislive.com disagreed: with two instances on the same egress IP asking
+    for the same files, a run of 429s appeared in both logs. The tours' file
+    hosts are a shared budget, and production's claim on it is the one that
+    matters.
+
+    Hourly is ample here. Nobody is watching staging for a sheet revision within
+    the quarter-hour, and an offset start keeps the two instances from arriving
+    together even when the periods happen to align.
     """
     import asyncio
+    import random
+
+    # Offset so a restart of both containers does not line the two up.
+    await asyncio.sleep(random.uniform(60, 300))
 
     while True:
         try:
@@ -1577,7 +1591,7 @@ async def run_order_of_play_only() -> None:
             raise
         except Exception as exc:
             logger.warning("standalone order-of-play refresh failed: %s", exc)
-        await asyncio.sleep(15 * 60)
+        await asyncio.sleep(60 * 60)
 
 
 def start_scheduler() -> None:
