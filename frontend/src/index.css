@@ -755,19 +755,42 @@ input:focus, select:focus { outline: none; border-color: var(--brand-line); }
 }
 .score-fx--set { animation: fx-set 4200ms cubic-bezier(0.22, 0.7, 0.15, 1); }
 
-/* A MATCH. Gold, a wobble, and a hold long enough to look up at. */
+/* A MATCH. A wobble, a hold long enough to look up at, and a ring that walks
+   the spectrum while it holds.
+   Gold alone put this on the same note as the champion tier one step above it,
+   which left the two distinguishable only by how long they lasted — and by the
+   time you can judge that, the shorter one is over. Colour is the difference
+   the eye reads first, so the ring cycles here and the CARD stays itself; a
+   champion turns the whole card through the spectrum instead, so the two
+   escalate by how much of the thing is transformed rather than by duration.
+
+   The ring is animated as its own colour rather than through a filter, because
+   a filter on the card would drag its text and its tour tint round with it —
+   fine for ten seconds of nonsense, wrong for a result you are still reading. */
 @keyframes fx-match {
-  0%   { transform: scale(1) rotate(0deg); box-shadow: 0 0 0 0 transparent; filter: none; }
+  0%   { transform: scale(1) rotate(0deg);
+         box-shadow: 0 0 0 0 transparent;
+         filter: none; }
   6%   { transform: scale(1.075) rotate(-1.2deg);
-         box-shadow: 0 0 0 6px rgba(255, 214, 10, 0.95), 0 0 52px 10px rgba(255, 214, 10, 0.6);
-         filter: brightness(1.4) saturate(1.5); }
-  14%  { transform: scale(1.055) rotate(1.1deg); }
-  22%  { transform: scale(1.075) rotate(-0.8deg); }
-  30%  { transform: scale(1.055) rotate(0.6deg); }
-  40%  { transform: scale(1.07) rotate(0deg);
-         box-shadow: 0 0 0 6px rgba(255, 214, 10, 0.95), 0 0 52px 10px rgba(255, 214, 10, 0.6);
-         filter: brightness(1.4) saturate(1.5); }
-  100% { transform: scale(1) rotate(0deg); box-shadow: 0 0 0 0 transparent; filter: none; }
+         box-shadow: 0 0 0 6px #ff2d55, 0 0 54px 10px rgba(255, 45, 85, 0.65);
+         filter: brightness(1.35) saturate(1.6); }
+  14%  { transform: scale(1.055) rotate(1.1deg);
+         box-shadow: 0 0 0 6px #ff9500, 0 0 54px 10px rgba(255, 149, 0, 0.65); }
+  22%  { transform: scale(1.075) rotate(-0.8deg);
+         box-shadow: 0 0 0 6px #ffd60a, 0 0 54px 10px rgba(255, 214, 10, 0.65); }
+  30%  { transform: scale(1.055) rotate(0.6deg);
+         box-shadow: 0 0 0 6px #34c759, 0 0 54px 10px rgba(52, 199, 89, 0.65); }
+  38%  { transform: scale(1.075) rotate(-0.4deg);
+         box-shadow: 0 0 0 6px #32ade6, 0 0 54px 10px rgba(50, 173, 230, 0.65); }
+  46%  { transform: scale(1.06) rotate(0.3deg);
+         box-shadow: 0 0 0 6px #af52de, 0 0 54px 10px rgba(175, 82, 222, 0.65);
+         filter: brightness(1.35) saturate(1.6); }
+  56%  { transform: scale(1.07) rotate(0deg);
+         box-shadow: 0 0 0 6px #ff2d55, 0 0 54px 10px rgba(255, 45, 85, 0.65); }
+  70%  { box-shadow: 0 0 0 5px #ffd60a, 0 0 40px 8px rgba(255, 214, 10, 0.5); }
+  100% { transform: scale(1) rotate(0deg);
+         box-shadow: 0 0 0 0 transparent;
+         filter: none; }
 }
 .score-fx--match { animation: fx-match 5200ms cubic-bezier(0.22, 0.7, 0.15, 1); }
 
