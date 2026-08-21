@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from datetime import datetime, timedelta, timezone
 import re as _re
 from typing import Optional
 
@@ -1236,17 +1237,39 @@ def _esc(text) -> str:
     return (str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
 
 
+def _now_utc() -> datetime:
+    """Now, tz-aware. The alert payload's timestamps are aware, and comparing
+    an aware value with a naive one raises — the trap that has already cost
+    this app an order-of-play ingest and a repeated database write."""
+    return datetime.now(timezone.utc)
+
+
 def _alert_card(issue: dict, tz, is_last: bool) -> str:
     style = _ALERT_STYLES.get(issue["level"], _ALERT_STYLES["error"])
     count = issue["count"]
 
     if issue["is_recurrence"]:
-        ago = _alert_ago(issue["last_seen"] - issue["last_alerted"]) if issue["last_alerted"] else ""
+        # "Still happening" was asserted from is_recurrence alone — meaning only
+        # "we have alerted about this before" — with nothing checking whether it
+        # was still occurring. A fault that happened twice and then stopped, or
+        # was fixed between the last occurrence and this send, was described as
+        # ongoing. That is the fastest way to teach someone to ignore an alert.
+        #
+        # Say what the evidence supports instead: how long ago it was last seen.
+        # A reader can tell "3 minutes ago" from "14 hours ago" without being
+        # told what it means, and the second one is not a claim that has to be
+        # retracted once it is fixed.
         nth = issue["previous_alerts"] + 1
+        quiet_for = _now_utc() - issue["last_seen"]
+        if quiet_for > timedelta(hours=2):
+            head = f'Last seen {_alert_ago(quiet_for)} ago — nothing since'
+        else:
+            head = 'Still happening'
+        since = (f' · last alerted {_alert_ago(issue["last_seen"] - issue["last_alerted"])} '
+                 f'before that' if issue["last_alerted"] else '')
         recurrence = (
             f'<div style="font-size:12px;color:{style["fg"]};font-weight:600;margin:8px 0 0">'
-            f'Still happening — you were last alerted about this {ago} ago '
-            f'(alert #{nth})</div>'
+            f'{head} (alert #{nth}){since}</div>'
         )
     else:
         recurrence = ""
@@ -1328,7 +1351,10 @@ async def send_system_alert_digest(
         subject = f"Upset Alert: {len(issues)} issues ({counts})"
         heading = f"{len(issues)} issues need your attention"
 
-    recurrences = sum(1 for i in issues if i["is_recurrence"])
+    # Only count something as "still going" if it actually happened recently.
+    # The summary line made the same unchecked claim as the card beneath it.
+    recurrences = sum(1 for i in issues if i["is_recurrence"]
+                      and (_now_utc() - i["last_seen"]) <= timedelta(hours=2))
     if len(issues) == 1:
         recurring = " It has been alerted before and is still going." if recurrences else ""
     elif recurrences == len(issues):
