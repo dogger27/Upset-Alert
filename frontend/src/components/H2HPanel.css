@@ -982,11 +982,14 @@ html.h2h-modal-open body {
 
   /* A rule between meetings. Each one is two lines, and with nothing but a gap
      separating them the surname of the next result read as a third line of the
-     one above. Thin and semi-transparent so it separates without becoming
-     furniture — the coloured edge on the left is what the eye is meant to
-     follow down the list. */
+     one above.
+     Full-strength --border rather than a wash of it: the rows sit on the
+     panel's own surface with no fill of their own, so a line mixed down to
+     half opacity disappeared into the background it was meant to divide. It is
+     still the quietest edge in the sheet — 1px, and the coloured bar on the
+     left is what the eye follows down the list. */
   .h2h-table tr + tr {
-    border-top: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+    border-top: 1px solid var(--border-strong, var(--border));
   }
 
   .h2h-table td { display: block; }
