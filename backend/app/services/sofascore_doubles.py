@@ -143,12 +143,13 @@ async def _doubles_ids(db, draw: Draw, tournament: Tournament) -> Optional[tuple
 def _snapshot(event: dict) -> dict:
     """The live point state, in the same shape the singles poller produces."""
     home, away = event.get("homeScore") or {}, event.get("awayScore") or {}
-    sets, tiebreak = _sets_and_tiebreak(home, away)
+    sets, tiebreak, match_tb = _sets_and_tiebreak(home, away)
     return {
         "sets": sets,
         "point": [_norm_point(home.get("point"), tiebreak),
                   _norm_point(away.get("point"), tiebreak)],
         "tiebreak": tiebreak,
+        "match_tiebreak": match_tb,
         "serving": event.get("firstToServe") if event.get("firstToServe") in (1, 2) else None,
         "at": datetime.now(timezone.utc).isoformat(),
     }
