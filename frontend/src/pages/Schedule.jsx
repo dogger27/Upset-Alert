@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import useFlashOnChange from '../hooks/useFlashOnChange'
 import useScoreEvent from '../hooks/useScoreEvent'
+import useServiceBreak from '../hooks/useServiceBreak'
 import ChampionFanfare from '../components/ChampionFanfare'
 import H2HPanel from '../components/H2HPanel'
 import { useSearchParams, Link } from 'react-router-dom'
@@ -540,6 +541,19 @@ function MatchRow({ e, showCourt, zone, venueMode, onH2H }) {
   // on whichever cell changed would celebrate a 6 instead of the thing the 6
   // completed.
   const fx = useScoreEvent(scoreMarks(e))
+
+  // A break of serve, worked out from two consecutive readings of this row —
+  // see the hook. Its own banner rather than another card tier: a break is not
+  // a bigger game, it is a different KIND of fact, and the tiers are a scale of
+  // how much a result matters rather than a vocabulary of what happened.
+  const lpNow = e.live_point ?? null
+  const brokeGames = lpNow?.games
+    ?? (e.live_scores ? [e.live_scores[0], e.live_scores[1]] : null)
+  const broke = useServiceBreak(
+    e.status === 'live' ? brokeGames : null,
+    lpNow?.serving ?? e.live_scores?.[2] ?? null,
+    lpNow?.tiebreak)
+
   const winner = e.winner_side === 'a' ? a : e.winner_side === 'b' ? b : null
 
   return (
@@ -562,6 +576,9 @@ function MatchRow({ e, showCourt, zone, venueMode, onH2H }) {
           in the tag row it queued up behind ATP/R16/DOUBLES and moved around as
           those changed. The in-progress badge is the draw page's own, so both
           screens read identically. */}
+      {/* Shouted across the whole card, because what just happened is about the
+          match rather than about either line of it. */}
+      {broke && <span className="sched-shout" aria-hidden="true">BREAK</span>}
       {e.status === 'live' && <span className="in-progress-badge sched-status">In progress</span>}
       {e.status === 'completed' && <span className="sched-status sched-status--done">Completed</span>}
 
