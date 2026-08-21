@@ -891,8 +891,10 @@ html.h2h-modal-open body {
     color: var(--text-muted);
   }
 
-  .h2h-surface::after,
-  .h2h-year::after { content: '·'; margin-left: 0.4rem; opacity: 0.5; }
+  /* No separator after the surface. It now anchors the LEFT of the second
+     line with a gap after it, so a "·" trailed off into empty space pointing
+     at nothing. Separators belong between the meta parts, which the grid
+     block at the end of this file handles. */
 
   /* Tap targets: the popup is dismissed by the next touch, so it must not be
      able to swallow it. */
