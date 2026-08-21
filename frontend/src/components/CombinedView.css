@@ -469,7 +469,13 @@
      exists to show. The tint still separates it; the size no longer demotes it. */
   font-size: 1em;
   font-weight: 700;
-  vertical-align: middle;
+  /* baseline, not middle. `middle` aligns the box's own midpoint against the
+     baseline plus half an x-height, which for a pill carrying padding and a
+     fill sits its digits a couple of pixels BELOW the set scores beside it —
+     the two numbers read as one line and were not on one.
+     They are the same size, so aligning the baselines aligns the digits, and
+     the pill's fill centres itself on them rather than the other way round. */
+  vertical-align: baseline;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
   color: var(--live-point-fg, #1b4332);
