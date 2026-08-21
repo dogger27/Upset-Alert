@@ -76,6 +76,13 @@ class Settings(BaseSettings):
     # the only honest test of "could Sofascore carry this alone".
     sofascore_authoritative: bool = False
 
+    # Score the DOUBLES rows on the order of play. They have no draw and no
+    # bracket — nobody picks doubles — so this only fills in the one part of the
+    # sheet that has never been able to show a result, ESPN covering neither
+    # doubles nor qualifying. Separate flag because it touches a different table
+    # and can be turned off without stopping singles.
+    sofascore_doubles_enabled: bool = False
+
     class Config:
         env_file = ".env"
 

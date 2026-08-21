@@ -82,6 +82,12 @@ async def lifespan(app: FastAPI):
     # Shadow results sweep. Independent of the live flag: it answers a different
     # question (who won) on a different cadence, and writes only sofa_* columns
     # that nothing reads except scripts/sofa_diff.
+    doubles_on = settings.sofascore_doubles_enabled
+    if doubles_on:
+        from app.services.sofascore_doubles import monitor as sofa_doubles_monitor
+        sofa_doubles_monitor.start()
+        logging.getLogger("app").info("Sofascore doubles scoring ENABLED")
+
     results_on = settings.sofascore_results_enabled
     if results_on:
         from app.services.sofascore_results import monitor as sofa_results_monitor
@@ -94,6 +100,9 @@ async def lifespan(app: FastAPI):
             settings.environment,
         )
     yield
+    if doubles_on:
+        from app.services.sofascore_doubles import monitor as sofa_doubles_monitor
+        sofa_doubles_monitor.stop()
     if results_on:
         from app.services.sofascore_results import monitor as sofa_results_monitor
         sofa_results_monitor.stop()

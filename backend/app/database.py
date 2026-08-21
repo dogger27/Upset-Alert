@@ -473,6 +473,16 @@ async def _migrate(conn):
         "ALTER TABLE matches ADD COLUMN sofa_completed_at DATETIME",
         "ALTER TABLE matches ADD COLUMN sofa_scores_json JSON",
         "ALTER TABLE matches ADD COLUMN sofa_started_at DATETIME",
+        # Doubles scoring. Doubles has no draw and no bracket row — see the note
+        # on ScheduleEntry — so its result lives on the schedule row, which is
+        # the only record of the match there is.
+        "ALTER TABLE schedule_entries ADD COLUMN sofa_event_id INTEGER",
+        "ALTER TABLE schedule_entries ADD COLUMN live_scores_json JSON",
+        "ALTER TABLE schedule_entries ADD COLUMN scores_json JSON",
+        "ALTER TABLE schedule_entries ADD COLUMN live_point_json JSON",
+        "ALTER TABLE schedule_entries ADD COLUMN winner_side VARCHAR",
+        "ALTER TABLE draws ADD COLUMN sofa_doubles_tournament_id INTEGER",
+        "ALTER TABLE draws ADD COLUMN sofa_doubles_season_id INTEGER",
     ]
     for sql in migrations:
         try:

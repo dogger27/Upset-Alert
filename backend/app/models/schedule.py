@@ -25,7 +25,7 @@ are precisely the changes worth detecting. See `pairing_key`.
 from datetime import date, datetime, timezone
 from typing import Optional
 
-from sqlalchemy import (Boolean, Date, DateTime, ForeignKey, Integer, String,
+from sqlalchemy import (JSON, Boolean, Date, DateTime, ForeignKey, Integer, String,
                         UniqueConstraint)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -81,6 +81,33 @@ class ScheduleEntry(Base):
     # defaults off. The sheet states both in its event code — "QS" is
     # qualifying singles, "MD" men's doubles.
     stage: Mapped[str] = mapped_column(String, default="main")          # main|qualifying
+    # ── Doubles scoring ──────────────────────────────────────────────────
+    # Doubles has NO draw and NO bracket row — that is deliberate and stays
+    # true; nobody picks doubles, so there is nothing to score against. But the
+    # order of play lists it, and until now those rows sat at "scheduled" all
+    # day with no score, because ESPN covers neither doubles nor qualifying.
+    #
+    # Sofascore does. So the result lives HERE, on the schedule row itself,
+    # which is the only record of the match that exists. Singles keeps reading
+    # through match_id; these columns are only ever populated for rows that have
+    # no match to read.
+    #
+    # Resolved once by surname against the doubles unique-tournament, then
+    # joined by id — the same resolve-and-persist pattern as everything else.
+    # Measured 16/16 on a real day's sheet.
+    sofa_event_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Same shapes the singles path uses, so the API and the client need no
+    # second format: [p1 games, p2 games, serving, set winners] and
+    # [[a cells], [b cells]].
+    live_scores_json: Mapped[Optional[list]] = mapped_column(
+        JSON(none_as_null=True), nullable=True)
+    scores_json: Mapped[Optional[list]] = mapped_column(
+        JSON(none_as_null=True), nullable=True)
+    live_point_json: Mapped[Optional[dict]] = mapped_column(
+        JSON(none_as_null=True), nullable=True)
+    # 'a' or 'b' — which SIDE of this row won. There is no draw_entries row to
+    # point at, which is precisely why doubles is not in the draws.
+    winner_side: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     discipline: Mapped[str] = mapped_column(String, default="singles")  # singles|doubles|mixed
     round_label: Mapped[Optional[str]] = mapped_column(String, nullable=True)  # R32|QF|Q1|Q2
 

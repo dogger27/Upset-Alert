@@ -154,6 +154,16 @@ class Draw(Base):
     # once by name and then never re-derived; see services/sofascore.py.
     sofa_tournament_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     sofa_season_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # The DOUBLES event of the same tournament and gender. Sofascore keeps it as
+    # a separate uniqueTournament — Cincinnati is 2373 (ATP) / 2548 (WTA) for
+    # singles and 2381 / 2553 for doubles — so it needs its own id.
+    #
+    # Stored on the DRAW rather than the tournament because a combined event has
+    # two of each and the draw is already the per-gender row. There is still no
+    # doubles draw and no doubles bracket: this is a pointer used to find the
+    # scores for schedule rows, nothing more.
+    sofa_doubles_tournament_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    sofa_doubles_season_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     venue_timezone: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     # The venue's assumed day-1 start, from tournament_schedule's curated lookup
     # table. An assumption until first_match_* below observes the real thing.
