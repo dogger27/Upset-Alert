@@ -513,7 +513,16 @@
 
 /* ── Players ── */
 .sched-side { display: flex; flex-wrap: wrap; align-items: center; gap: 0.15rem 0.5rem; font-weight: 600; }
-.sched-player { display: inline-flex; align-items: center; gap: 0.3rem; }
+/* baseline, not center — and the flag opts back out below.
+   A team seed is a sibling of these boxes, not a child of one, so the line box
+   has to align an inline-flex container against plain text. A flex container's
+   baseline is taken from its first item that participates in baseline
+   alignment; with everything centred there was no such item, so it fell back to
+   the first item's bottom edge — the FLAG's — and "[2]" sat a couple of pixels
+   below the surname it belongs to.
+   Baseline alignment gives .sched-pname that role, which puts the container's
+   baseline on the name's own text baseline, where the seed already is. */
+.sched-player { display: inline-flex; align-items: baseline; gap: 0.3rem; }
 .sched-pname { min-width: 0; }
 /* Trails the name now, so the margin swaps sides. */
 .sched-seed { color: var(--text-muted); font-weight: 700; margin-left: 0.28rem; font-size: 0.85em; }
@@ -523,6 +532,10 @@
   width: 1.05rem;
   height: 0.79rem;
   flex: 0 0 auto;
+  /* Centred against the name as it always was. Opting out here is what lets the
+     row above use baseline alignment for the thing that needs it — a flag has
+     no baseline of its own, and sitting it on the text's would drop it. */
+  align-self: center;
   border-radius: 2px;
   background-size: cover !important;
   background-position: center !important;
