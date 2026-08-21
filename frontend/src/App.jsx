@@ -22,10 +22,24 @@ import ResetPassword from './pages/ResetPassword'
 import VerifyEmail from './pages/VerifyEmail'
 import { lazyImport } from './utils/chunk'
 
+/* Signed out, on a page that only means something signed in.
+ *
+ * Home rather than the login form, matching RequireAdmin below: "/" is already
+ * the answer to "you cannot be here", and it is the dashboard when there is a
+ * user and the landing page when there is not — so it explains itself either
+ * way, which a login form dropped on somebody who did not ask to sign in does
+ * not.
+ *
+ * `loading` returning null is the load-bearing line. The store starts at
+ * user: null, loading: true and only resolves once init() has asked the server,
+ * so without this every signed-in visitor would be bounced to the dashboard on
+ * every hard refresh — redirected by the moment before the answer arrives
+ * rather than by the answer.
+ */
 function RequireAuth({ children }) {
   const { user, loading } = useAuth()
   if (loading) return null
-  if (!user) return <Navigate to="/login" replace />
+  if (!user) return <Navigate to="/" replace />
   return children
 }
 
@@ -68,20 +82,23 @@ export default function App() {
       <InstallPrompt />
       <PushPrompt />
       <Routes>
+        {/* Open without an account: the pages that exist to get you one, or to
+            explain the site. Everything else is the game itself and is wrapped
+            in RequireAuth above. */}
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/tournaments" element={<RequireAdmin><Tournaments /></RequireAdmin>} />
-        <Route path="/tournaments/:id" element={<TournamentDraw />} />
-        <Route path="/leagues" element={<Leagues />}>
+        <Route path="/tournaments/:id" element={<RequireAuth><TournamentDraw /></RequireAuth>} />
+        <Route path="/leagues" element={<RequireAuth><Leagues /></RequireAuth>}>
           <Route index element={<LeagueDetail />} />
           <Route path=":id" element={<LeagueDetail />} />
         </Route>
         <Route path="/admin" element={<RequireAdmin><Admin /></RequireAdmin>} />
         <Route path="/about" element={<About />} />
-        <Route path="/draw-history" element={<DrawHistory />} />
-        <Route path="/hall-of-fame" element={<HallOfFame />} />
-        <Route path="/schedule" element={<Schedule />} />
+        <Route path="/draw-history" element={<RequireAuth><DrawHistory /></RequireAuth>} />
+        <Route path="/hall-of-fame" element={<RequireAuth><HallOfFame /></RequireAuth>} />
+        <Route path="/schedule" element={<RequireAuth><Schedule /></RequireAuth>} />
         <Route path="/rules" element={<Rules />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
