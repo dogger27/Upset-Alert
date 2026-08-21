@@ -108,6 +108,11 @@ class ScheduleEntry(Base):
     # 'a' or 'b' — which SIDE of this row won. There is no draw_entries row to
     # point at, which is precisely why doubles is not in the draws.
     winner_side: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    # When play actually began, for a row with no match to carry it. Singles
+    # keeps using matches.started_at; this is the doubles equivalent, written
+    # by the doubles sweep on its first sighting of play.
+    started_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True)
     discipline: Mapped[str] = mapped_column(String, default="singles")  # singles|doubles|mixed
     round_label: Mapped[Optional[str]] = mapped_column(String, nullable=True)  # R32|QF|Q1|Q2
 
