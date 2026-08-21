@@ -1071,3 +1071,25 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ── Measuring state ──────────────────────────────────────────────────────
+   Applied for the duration of one measurement pass and removed immediately.
+   Every rule that makes a name FIT also makes its natural width unreadable:
+   scrollWidth on a clipped element reports the clip, not the content. Without
+   releasing these first, the column measures its own previous answer and
+   ratchets down — which is how names ended up as "DARDERI / ..." with half the
+   card sitting empty next to them.
+
+   !important because these must beat the fixed column set by the very
+   variable this pass exists to compute. */
+.sched-measuring .sched-competitor-name {
+  flex: 0 0 auto !important;
+  width: auto !important;
+  max-width: none !important;
+  overflow: visible !important;
+}
+
+.sched-measuring .sched-competitor-name .sched-side {
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
