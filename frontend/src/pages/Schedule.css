@@ -891,7 +891,10 @@
   /* Full card height including the status pill's band — it is a sibling of the
      row content, not of the badge, so it must not be overlapped by it. */
   z-index: 2;
-  width: 16px;
+  /* 1.5x, matching the bracket's strip. Slightly wider than the bracket's 21px
+     because a schedule row is taller, so the bar is a longer, thinner shape and
+     needs the extra to stay in proportion. */
+  width: 24px;
   margin: -0.55rem -0.6rem -0.55rem 0;
   border-radius: 0 9px 9px 0;
   border-left: 1px solid var(--n-300);
@@ -899,7 +902,7 @@
 
 @media (max-width: 480px) {
   /* Narrower, not hidden: it is the only way into head-to-head from here. */
-  .sched-h2h { width: 13px; }
+  .sched-h2h { width: 20px; }
 }
 
 

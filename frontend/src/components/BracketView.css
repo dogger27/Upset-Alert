@@ -144,8 +144,11 @@
 .upset-tooltip-exclaim { color: var(--on-brand); }
 
 /* ── H2H strip ── */
+/* 1.5x the original 14px. The label is set to fill it — the two are coupled,
+   so changing one without the other either crops the text or leaves the strip
+   looking empty. */
 .h2h-strip {
-  width: 14px;
+  width: 21px;
   flex-shrink: 0;
   background: var(--atp-tint);
   border: none;
@@ -163,9 +166,14 @@
   writing-mode: vertical-rl;
   text-orientation: mixed;
   transform: rotate(180deg);
-  font-size: 0.52rem;
+  /* Sized to the strip's width, not chosen for its own sake: the text is
+     rotated, so its "height" here is the strip's width and the type has to
+     grow with it or the bar reads as an empty gutter. line-height:1 removes
+     the leading that would otherwise eat the gain. */
+  font-size: 0.8rem;
+  line-height: 1;
   font-weight: 800;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.06em;
   color: var(--atp-text);
   text-transform: uppercase;
   user-select: none;
