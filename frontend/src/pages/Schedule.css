@@ -837,6 +837,11 @@
      hard against the tags with all of it below them. */
   flex: 1;
   justify-content: center;
+  /* Nudged off centre, deliberately. The card's own bottom padding sits under
+     this block and nothing sits above it, so splitting the slack evenly still
+     reads high — there is more clear space below the names than the numbers
+     suggest. The offset buys back what the eye expects. */
+  padding-top: 0.3rem;
 }
 
 .sched-competitor {
