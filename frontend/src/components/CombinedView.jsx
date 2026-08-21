@@ -313,7 +313,14 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
      width or does not render at all. Nothing is measured, so nothing can feed
      back into what it measured. */
   const NAME_BOX = (compact ? COMPACT_COL_W : COL_W) - 21
-  const CH_EM = 0.63       // uppercase advance for this face, in em
+  /* 0.68, measured off a rendered draw rather than guessed: "ETCHEVERRY" is ten
+     characters and occupies 86px of a 158px column at 12.8px, which is 0.67em
+     each. The first pass used 0.63, and that was optimistic in BOTH directions
+     at once — it let through a rung that did not fit, then computed a shrink
+     too small to save it, so a name that should have stepped down twice
+     ellipsised instead. Every name here is uppercased by .cv-name, so one
+     figure covers the page. */
+  const CH_EM = 0.68
   const BOX_FONT = 12.8    // .cv-box sets 0.8rem
   const nameBudget = (p, serving) => {
     let w = NAME_BOX
@@ -351,13 +358,18 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
       return { text: `Qualifier${n != null ? ` ${n}` : ''}`, scale: 1 }
     }
     const forms = nameForms(p.name)
-    // Where the ladder starts is today's choice, unchanged: a phone shows the
-    // surname (or the initial form when that surname is shared), a wide column
-    // shows the initial form. The rungs below only come into play when that
-    // choice does not fit, so nothing that fits today moves.
-    const start = forms.length === 1 ? 0
-      : compact ? (nameCounts[forms[2]] > 1 ? 1 : 2)
-      : 1
+    /* Everything starts at the initial form, phone included. A phone used to
+       start a rung lower, on the bare surname, because there was no way to find
+       out whether the initial would fit — so it was never offered. The ladder
+       can answer that now, and an initial is worth having wherever there is
+       room: it is what tells two Zverevs apart on sight.
+       Where it does not fit, the rung below is the bare surname — exactly what
+       a phone showed before — so this only ever ADDS a first initial, it never
+       takes a surname away.
+       The case for two players sharing a surname needs no special handling any
+       more either: the surname rungs are skipped when they collide, which
+       leaves the initial form standing on its own. */
+    const start = forms.length === 1 ? 0 : 1
     const chain = []
     for (let i = start; i < forms.length; i++) {
       const t = forms[i]
