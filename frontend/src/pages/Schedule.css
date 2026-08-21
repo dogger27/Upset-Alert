@@ -942,6 +942,8 @@
     flex: 1 1 auto;
     width: auto;
     min-width: 0;
+    /* No clipping here either — the shrink pass runs at this width too. */
+    overflow: visible;
   }
 
   /* Scores are the row: they never shrink and never wrap. The name gives way
@@ -1062,13 +1064,14 @@
   .sched-competitors--doubles .sched-flag { display: none; }
 }
 
-/* If a name is still too long to fit, it must ellipsise rather than vanish.
-   text-overflow needs the overflowing box to be the one with the property,
-   so it is set on the inline run itself and not only on the flex parent. */
+/* NO ELLIPSIS ON A NAME. A name that does not fit is shrunk by the measuring
+   pass in Schedule.jsx until it does — see MIN_NAME_PX there. "DARDERI /..."
+   tells a reader less than the same name set two points smaller, and on a
+   doubles row it read as missing data rather than as a layout limit.
+   overflow:visible so a name mid-resize is never clipped in passing. */
 .sched-competitor-name .sched-side {
   display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow: visible;
   white-space: nowrap;
 }
 
