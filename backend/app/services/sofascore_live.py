@@ -70,6 +70,12 @@ _LIVE_PATH = "/sport/tennis/events/live"
 # score beside it, which is worse than showing no point at all.
 POLL_INTERVAL = 10.0
 
+# How long a match may be absent from the live list before we accept it is
+# gone. Comfortably longer than a set break, which is what the absence usually
+# is, and short enough that a match which vanished without a result does not sit
+# there all evening.
+GONE_AFTER = 180.0
+
 # Readers treat a snapshot older than this as stale and fall back to ESPN.
 # Comfortably more than POLL_INTERVAL so an ordinary late response does not
 # flicker the UI, comfortably less than a game so nothing lingers when we stop.
@@ -493,14 +499,38 @@ async def poll_once(db) -> dict:
             Match.sofa_live_json.isnot(None),
         ))).scalars().all()
     for m in stale:
-        if m.player1_id not in live_ids or m.player2_id not in live_ids:
-            m.sofa_live_json = None
-            written += 1
-            touched_draws.add(m.draw_id)
-            # Clear the promoted copy too, or a finished match keeps showing a
-            # live score for ever — exactly what staging did.
-            if settings.sofascore_authoritative and m.live_scores_json is not None:
-                m.live_scores_json = None
+        if m.player1_id in live_ids and m.player2_id in live_ids:
+            continue
+
+        # MISSING FROM ONE POLL IS NOT THE SAME AS OVER, and treating it that
+        # way is what put "Scheduled" on a match in its third set. Sofascore
+        # drops an event out of the live list between sets and puts it back a
+        # few seconds later; clearing on the first absence blanked the score,
+        # and with an expected start still on the row the draw had nothing left
+        # to call it but not-yet-started.
+        #
+        # Two things end a match, and neither of them is silence. A result is
+        # the real one — the sweep records a winner and this clears on the next
+        # poll. The other is an event that simply never comes back, and the
+        # snapshot's own stamp already dates that: it is refreshed every time we
+        # see the match, so a stamp three minutes old means three minutes of not
+        # seeing it, which no set break lasts.
+        #
+        # Nothing is left showing a stale POINT in the meantime — that has its
+        # own, much shorter freshness rule, and 45 seconds of silence retires it
+        # while the set score stays up. Which is the right split: a set score
+        # from a minute ago is still true, and a point from a minute ago is not.
+        if m.winner_id is None and not _older_than(
+                (m.sofa_live_json or {}).get("at"), GONE_AFTER):
+            continue
+
+        m.sofa_live_json = None
+        written += 1
+        touched_draws.add(m.draw_id)
+        # Clear the promoted copy too, or a finished match keeps showing a
+        # live score for ever — exactly what staging did.
+        if settings.sofascore_authoritative and m.live_scores_json is not None:
+            m.live_scores_json = None
 
     if written:
         await db.commit()
