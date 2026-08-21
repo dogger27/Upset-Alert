@@ -1558,6 +1558,28 @@ async def _scan_system_alerts() -> None:
         logger.error("System alert scan failed: %s", exc, exc_info=True)
 
 
+async def run_order_of_play_only() -> None:
+    """The order-of-play refresh, on its own loop, for a non-scraping instance.
+
+    Staging keeps the scrapers off so it cannot double the load on Wikipedia or
+    Tennis Explorer, but the order of play is exactly what it is there to test —
+    and without this its schedule simply stopped at whatever day it was seeded
+    with. Same 15-minute cadence the scheduler uses, and the same function, so
+    the two environments cannot drift in behaviour.
+    """
+    import asyncio
+
+    while True:
+        try:
+            await _refresh_order_of_play()
+            await _refresh_schedule_estimates()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning("standalone order-of-play refresh failed: %s", exc)
+        await asyncio.sleep(15 * 60)
+
+
 def start_scheduler() -> None:
     scheduler.add_job(
         _auto_discover_tournaments,

@@ -83,6 +83,19 @@ class Settings(BaseSettings):
     # and can be turned off without stopping singles.
     sofascore_doubles_enabled: bool = False
 
+    # Fetch the order-of-play PDFs even when the rest of the scrapers are off.
+    #
+    # Staging runs with environment="development" so it does not double the load
+    # on Wikipedia and Tennis Explorer, which rate-limit and which production
+    # depends on. But the order of play is the page staging exists to test, and
+    # without this its schedule froze on whatever day the database was seeded —
+    # production had tomorrow's play and staging did not.
+    #
+    # Safe to run in both: these are static PDFs on the tours' own file hosts,
+    # fetched every 15 minutes and skipped entirely when the file has not
+    # changed. Nothing like the Wikipedia budget.
+    order_of_play_enabled: bool = False
+
     class Config:
         env_file = ".env"
 
