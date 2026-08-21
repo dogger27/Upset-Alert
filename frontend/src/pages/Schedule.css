@@ -536,6 +536,10 @@
      was rendering on top of it. 16px strip + 1px border + the row's own 0.6rem
      padding, so the pill still lines up with the scores beneath it. */
   right: calc(0.6rem + 17px);
+  /* Raised from 0.4rem. A tiebreak superscript rises above the cap height of
+     the row beneath, and at 0.4rem the pill's underside was almost touching
+     it — two unrelated things reading as one stack. */
+  top: 0.22rem;
   /* in-progress-badge sets left:50% for its use on the draw page. Setting
      `right` without clearing `left` stretches an absolutely positioned element
      between the two, which is why this rendered full width. */
@@ -965,13 +969,20 @@
   flex: 0 0 auto;
 }
 
+/* Zero-width, not absolutely positioned.
+   `left: 100%` anchored the superscript to the CELL's right edge, and the cell
+   is deliberately wider than one digit so the columns line up — so the tiebreak
+   floated several pixels clear of the number it belongs to and read as its own
+   little column. An inline-block of zero width sits immediately after the digit
+   and still contributes nothing to the cell's width, which is the property the
+   column alignment depends on. */
 .sched-set sup {
-  position: absolute;
-  left: 100%;
-  top: -0.15em;
-  margin-left: 1px;
+  display: inline-block;
+  width: 0;
+  overflow: visible;
+  vertical-align: super;
   font-size: 0.62em;
-  line-height: 1;
+  line-height: 0;
 }
 
 /* The point pill is the last column and must match too. */
