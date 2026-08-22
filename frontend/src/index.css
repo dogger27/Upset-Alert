@@ -541,6 +541,23 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* NOTHING makes the page wider than the screen.
+   A single element overhanging the right edge widens the layout viewport, and a
+   phone then shows a page that does not fit — which is read as "it opened
+   zoomed in", because zooming out is how you get the rest of it back. The
+   causes are all small and all invisible on a desktop: a card scaling up during
+   a celebration (transform contributes to scrollable overflow even though it
+   contributes nothing to layout), a wide glow, a table a few pixels over.
+
+   `clip`, not `hidden`. Both stop the scroll; `hidden` also turns the element
+   into a scroll container, which silently kills `position: sticky` inside it
+   and gives programmatic scrolling a second thing to fight over. `clip` just
+   clips. Vertical scrolling is untouched either way. */
+html,
+body {
+  overflow-x: clip;
+}
+
 h1, h2, h3, h4 {
   font-family: var(--font-display);
   font-weight: var(--fw-bold);
