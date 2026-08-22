@@ -56,6 +56,7 @@ before it is trusted, and the unresolved list is the output that matters.
 
 import asyncio
 import os
+from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from typing import Optional
 from urllib.parse import quote
@@ -661,13 +662,27 @@ async def resolve_draw(db: AsyncSession, draw: Draw, *, force: bool = False) -> 
     return report
 
 
-async def resolve_pending_draws(db: AsyncSession, *, force: bool = False) -> list:
+# How long before a draw that still has unresolved names is tried again.
+# Entries arrive over days — qualifiers fill the last slots on the morning of
+# play — so one pass can only stamp who was in the field at the time, and a
+# retry is genuinely needed. But some names Sofascore simply does not carry, and
+# without a floor those four or five would be re-resolved every pass forever,
+# spending a request each time on an answer that will not change.
+RESOLVE_RETRY_HOURS = 6.0
+
+
+async def resolve_pending_draws(db: AsyncSession, *, force: bool = False,
+                                retry_hours: float = 0.0) -> list:
     """
     Resolve every draw that has entries and at least one unstamped one.
 
     Completed draws are skipped: their ids would never be read, and a finished
     edition's cup tree is exactly the payload most likely to have been rotated
     away by Sofascore.
+
+    `retry_hours` puts a floor under repeat attempts, for the scheduled caller
+    that runs this every hour forever. Zero — the default, and what a human at a
+    terminal wants — means "try everything now".
     """
     rows = (await db.execute(
         select(Draw)
@@ -684,8 +699,18 @@ async def resolve_pending_draws(db: AsyncSession, *, force: bool = False) -> lis
                 DrawEntry.sofa_player_id.is_(None)).limit(1))).first()
         if pending is None and not force:
             continue
+        # Tried recently and still short of a full field? Leave it. The names
+        # that did not resolve an hour ago are the same names now.
+        if retry_hours and draw.sofa_resolved_at is not None:
+            last = draw.sofa_resolved_at
+            if last.tzinfo is None:
+                last = last.replace(tzinfo=timezone.utc)
+            if (datetime.now(timezone.utc) - last).total_seconds() < retry_hours * 3600:
+                continue
         try:
+            draw.sofa_resolved_at = datetime.now(timezone.utc)
             reports.append(await resolve_draw(db, draw, force=force))
+            await db.commit()
         except SofascoreBlocked:
             # Stop the whole sweep. Continuing would issue a request per
             # remaining draw against a host that has already refused us, which
