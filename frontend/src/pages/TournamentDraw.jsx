@@ -957,11 +957,23 @@ function TournamentDraw() {
       s.live = true
       scrubOwnsScroll.current = true
       s.dir = dir
+      /* THE ORIGIN IS HERE, not at touchstart.
+         The axis lock needs SWIPE_AXIS_LOCK_PX of travel before it knows the
+         gesture is horizontal, and t was measured from where the finger first
+         landed — so the moment the scrub was claimed it jumped straight to
+         8/150 of a round and carried on smoothly from there. That is the pop on
+         the first movement: not a rendering problem, an arithmetic one. Zeroing
+         the origin at the instant of recognition makes the first applied value
+         0, and the bracket starts from where it is.
+         It also gives the state change a frame to land before t is far enough
+         from zero for the difference to show. */
+      s.originX = t.clientX
     }
     // Reversing mid-drag would need the other neighbouring layout, which is
     // not rendered; clamp instead, so a wavering finger settles back where it
     // started rather than snapping to something it never saw.
-    s.t = Math.max(0, Math.min(1, (s.dir * -dx) / SWIPE_TRAVEL_PX))
+    s.t = Math.max(0, Math.min(1,
+      (s.dir * -(t.clientX - s.originX)) / SWIPE_TRAVEL_PX))
     api.move(s.t)
   }
 

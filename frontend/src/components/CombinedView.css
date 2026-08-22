@@ -165,8 +165,13 @@
   font-weight: 600;
   color: var(--n-950);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* NO ellipsis, and no clipping. A cut name is the one failure a name box
+     must not have — the end of a surname is the part that identifies the
+     player, and "QUALIFIE…" identifies nobody. Every path through slotName now
+     measures and shrinks instead, so nothing should reach this rule needing to
+     be cut; leaving overflow visible means that if anything ever does, it is
+     obvious rather than silently truncated. */
+  overflow: visible;
   text-transform: uppercase;
 }
 .cv-name--muted { color: var(--text-muted); font-weight: 500; font-style: italic; }

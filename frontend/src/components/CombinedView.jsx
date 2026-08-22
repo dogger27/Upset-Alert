@@ -445,8 +445,15 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
   const slotName = (p, serving) => {
     if (!p) return { text: 'TBD', scale: 1 }
     if (isUnnamedQ(p)) {
+      /* Measured like every other name. It used to return scale 1 without
+         asking whether it fit, so "Qualifier 28" overflowed and the stylesheet
+         cut it to "QUALIFIE…" — the one outcome the ladder below exists to
+         prevent, arrived at by skipping the ladder. */
       const n = qualifierNums[p.id]
-      return { text: `Qualifier${n != null ? ` ${n}` : ''}`, scale: 1 }
+      const t = `Qualifier${n != null ? ` ${n}` : ''}`
+      const budget = nameBudget(p, serving)
+      const w = t.length * CH_EM * BOX_FONT
+      return { text: t, scale: w <= budget ? 1 : Math.max(0.55, budget / w) }
     }
     const forms = nameForms(p.name)
     /* Everything starts at the initial form, phone included. A phone used to

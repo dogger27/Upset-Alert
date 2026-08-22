@@ -352,7 +352,18 @@
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
-.sched-court { font-size: 0.68rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
+/* The court name shrinks to fit its own column rather than running into the
+   player beside it. --court-scale is set per row from the name's length, the
+   same counted ladder the players use; 1 when it fits, so nothing pays for this
+   on the common case. It is the right thing to sacrifice here: which court a
+   match is on is context, and the players are the row. */
+.sched-court {
+  font-size: calc(0.68rem * var(--court-scale, 1));
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
 
 .sched-row-main { min-width: 0; }
 
@@ -937,9 +948,9 @@
 .sched-competitor {
   display: flex;
   align-items: center;
-  /* 4px. Every one of these gaps is subtracted from the name, and there are
+  /* 3px. Every one of these gaps is subtracted from the name, and there are
      three of them on a finished row — name, ball, mark, scores. */
-  gap: 4px;
+  gap: 3px;
   min-width: 0;          /* or the name refuses to shrink and forces a wrap */
   line-height: 1.35;
 }
@@ -1001,9 +1012,11 @@
   align-items: center;
   justify-content: flex-end;
   /* The tiebreak superscript lives in this gap — it is taken out of the cell so
-     that "6" and "6⁴" stay the same width — so it cannot close entirely. 4px
-     plus the slack inside the next cell is enough to clear it. */
-  gap: 4px;
+     that "6" and "6⁴" stay the same width — so it cannot close entirely. 2px
+     plus the slack inside the next cell is enough to clear it; the cell's own
+     min-width carries the rest, and what this gives up goes to the name, which
+     is the thing actually running out of room. */
+  gap: 2px;
   font-variant-numeric: tabular-nums;
   /* No reserved width. It used to hold 5.4rem — room for three sets — so that a
      two-set card came out the same width as a three-set one. Cards are now
@@ -1017,7 +1030,9 @@
 }
 
 .sched-set {
-  min-width: 12px;
+  /* 10px, not 12: a single digit is about 8px at this size, so the extra was
+     padding on every cell of every row — three cells a line, two lines a card. */
+  min-width: 10px;
   text-align: center;
   font-size: 0.9rem;
 }
