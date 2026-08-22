@@ -362,7 +362,12 @@
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  white-space: nowrap;
+  /* WRAPS. "P&G STADIUM COURT" is three lines in this column and always was —
+     it is the only thing on the page with room to spend downward, the timing
+     column having nothing under it. Pinning it to one line is what sent it
+     under the player's name; the shrink above is there to need FEWER lines,
+     not to avoid them. */
+  overflow-wrap: anywhere;
 }
 
 .sched-row-main { min-width: 0; }
