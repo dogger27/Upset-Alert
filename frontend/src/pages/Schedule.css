@@ -1294,6 +1294,40 @@
    deleted silently: the number looks arbitrary and the temptation is to
    reintroduce it. */
 
+/* ── Everything that is not the champion ──────────────────────────────────
+   Ten seconds of confetti over a list of twenty rows announces that something
+   enormous happened and leaves you hunting for WHICH row it happened on — the
+   fanfare covers the screen and the card underneath it is wherever the sort put
+   it. The page scrolls the winner to the middle and everything else recedes, so
+   the one card still lit is the answer.
+
+   Faded rather than hidden, and slowly: a row that vanished would collapse the
+   list and move the very card being celebrated. Only opacity and filter, so
+   nothing here can affect layout.
+
+   AFTER .sched-row--done, which sets its own opacity — same specificity, so
+   this has to be the later rule to win on a finished match. Which is every
+   match this ever applies to. */
+.sched-row--dimmed {
+  opacity: 0.1;
+  filter: saturate(0.3);
+  pointer-events: none;
+}
+/* Both directions, but not at the same speed. Going dim is part of the
+   celebration and should feel deliberate; coming back should be over before
+   anyone thinks about it. */
+.sched-row {
+  transition: opacity 700ms var(--ease-out, ease), filter 700ms var(--ease-out, ease);
+}
+.sched-row--dimmed { transition-duration: 900ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sched-row { transition: none; }
+  /* Still dimmed — this is what identifies the match, not decoration — just
+     not animated into it. */
+  .sched-row--dimmed { opacity: 0.25; filter: none; }
+}
+
 /* ── BREAK ────────────────────────────────────────────────────────────────
    Across the whole card, not in the score columns: a break is a fact about the
    match, and the row already says which player it was — their game count is

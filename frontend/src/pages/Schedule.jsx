@@ -364,9 +364,18 @@ function scoreMarks(e) {
   }
 
   const done = e.status === 'completed' ? 1 : 0
-  // A final is the only match that also ends a draw. Both tiers fire on the
-  // same update and the higher one wins, which is what ranking them is for.
-  const isFinal = /^(f|final)$/i.test(String(e.round_label ?? '').trim())
+  /* A final is the only match that also ends a draw. Both tiers fire on the
+     same update and the higher one wins, which is what ranking them is for.
+
+     MAIN-DRAW SINGLES ONLY. A doubles final is labelled "F" like any other, and
+     on 2026-08-22 the Cincinnati women's doubles final threw the full
+     ten-second champion fanfare across a day on which no draw had finished
+     anything. Doubles is not a draw here — there is no bracket, nobody picks
+     it, nothing scores it — so its final ends nothing this page is about.
+     Qualifying is excluded for the same reason: winning a final qualifying
+     round gets you INTO the tournament. */
+  const isFinal = e.discipline === 'singles' && e.stage === 'main'
+    && /^(f|final)$/i.test(String(e.round_label ?? '').trim())
   return [
     ['game', games],
     ['set', decided],
@@ -544,7 +553,8 @@ function CompetitorRows({ e, a, b }) {
   )
 }
 
-function MatchRow({ e, showCourt, zone, venueMode, onH2H }) {
+function MatchRow({ e, showCourt, zone, venueMode, onH2H, onChampion, dimmed }) {
+  const rowRef = useRef(null)
   const a = e.players.filter(p => p.side === 'a')
   const b = e.players.filter(p => p.side === 'b')
 
@@ -577,6 +587,27 @@ function MatchRow({ e, showCourt, zone, venueMode, onH2H }) {
   const marks = scoreMarks(e)
   const fx = useScoreEvent(marks, arrivalTier(e, marks))
 
+  /* A champion is a whole-page event, so the page has to be told. Ten seconds
+     of confetti over a list of twenty rows says something enormous happened and
+     leaves you hunting for which line it happened on — the fanfare covers the
+     screen, and the card underneath it is wherever it happened to be sorted,
+     quite possibly off the bottom. Reporting up lets the page scroll this row
+     to the middle and fade the rest, which is the only part that answers
+     "which match?".
+     Cleared on the way out, and on unmount — a row that scrolls out of the list
+     mid-celebration must not leave the whole page dimmed behind it. */
+  useEffect(() => {
+    if (fx !== 'champion') return
+    onChampion?.(e.id)
+    rowRef.current?.scrollIntoView({
+      block: 'center',
+      behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+        ? 'auto' : 'smooth',
+    })
+    return () => onChampion?.(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fx === 'champion', e.id])
+
   // A break of serve, worked out from two consecutive readings of this row —
   // see the hook. Its own banner rather than another card tier: a break is not
   // a bigger game, it is a different KIND of fact, and the tiers are a scale of
@@ -597,7 +628,10 @@ function MatchRow({ e, showCourt, zone, venueMode, onH2H }) {
       <ChampionFanfare name={winner?.map(p => splitPlayerName(p.name).last)
                                     .filter(Boolean).join(' / ') || null} />
     )}
-    <div className={clsx('sched-row', fx && `score-fx--${fx}`, {
+    <div ref={rowRef} className={clsx('sched-row', fx && `score-fx--${fx}`, {
+      // Everything that is not the champion recedes for the duration, so the
+      // one card still lit is unmistakably the one being celebrated.
+      'sched-row--dimmed': dimmed,
       'sched-row--done': done,
       'sched-row--live': e.status === 'live' && !suspended,
       'sched-row--suspended': e.status === 'live' && suspended,
@@ -673,6 +707,11 @@ export default function Schedule() {
   // The panel is owned by the page, not the row: it is a full-screen overlay,
   // and one instance beats one per match.
   const [h2h, setH2H] = useState(null)
+  /* The id of the row throwing a champion celebration, or null. Owned by the
+     page rather than the row because the answer to "which match?" is about
+     every OTHER row — they all have to recede for the one that is left lit to
+     mean anything. */
+  const [champion, setChampion] = useState(null)
   const [params, setParams] = useSearchParams()
   const [view, setView] = useState(storedView)
   // Every filter on this page now says what to SHOW. "Hide completed" was the
@@ -1031,7 +1070,9 @@ export default function Schedule() {
 
       {!isLoading && entries.length > 0 && view === 'time' && (
         <div className="sched-list sched-list--time">
-          {timeEntries.map(e => <MatchRow key={e.id} e={e} showCourt zone={zone} venueMode={tzMode === 'venue'} onH2H={setH2H} />)}
+          {timeEntries.map(e => <MatchRow key={e.id} e={e} showCourt zone={zone} venueMode={tzMode === 'venue'}
+                                onH2H={setH2H} onChampion={setChampion}
+                                dimmed={champion != null && champion !== e.id} />)}
         </div>
       )}
 
@@ -1041,7 +1082,9 @@ export default function Schedule() {
             <section className="sched-courtblock" key={name}>
               <h2 className="sched-courthead">{name}</h2>
               <div className="sched-list">
-                {list.map(e => <MatchRow key={e.id} e={e} showCourt={false} zone={zone} venueMode={tzMode === 'venue'} onH2H={setH2H} />)}
+                {list.map(e => <MatchRow key={e.id} e={e} showCourt={false} zone={zone} venueMode={tzMode === 'venue'}
+                                onH2H={setH2H} onChampion={setChampion}
+                                dimmed={champion != null && champion !== e.id} />)}
               </div>
             </section>
           ))}
