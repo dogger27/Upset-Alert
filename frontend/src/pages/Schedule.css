@@ -1281,6 +1281,22 @@
     width: 100%;
     max-width: 100%;
   }
+
+  /* And the shell with them, which is where the real margin was hiding.
+     fit-content sizes the shell to its widest CHILD, and on a phone that is the
+     filter row — about 316pt of chips. So the whole page, cards included, was
+     laid out 316pt wide and centred in 359, putting everything 29pt in from
+     each edge while .sched-page's own padding accounted for only 8 of it. That
+     is most of a centimetre of screen either side, spent on nothing, and no
+     amount of adjusting the padding could reach it.
+     fit-content earns its place on a desktop, where it is what makes the header
+     end on the same edge as the match boxes instead of on the edge of a
+     monitor. Here they agree anyway: everything is full width. */
+  .sched-shell { width: 100%; }
+
+  /* Which leaves the margin as pure padding, and a real number rather than a
+     side effect. Roughly half what it was. */
+  .sched-page { padding-inline: 0.9rem; }
 }
 
 /* The 4.9rem that used to be here is gone. It existed because the time view
