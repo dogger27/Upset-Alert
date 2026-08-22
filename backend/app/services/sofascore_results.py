@@ -43,10 +43,20 @@ logger = logging.getLogger(__name__)
 # How often to sweep for results. Minutes, not seconds — see the module note.
 POLL_INTERVAL = 180.0
 
-# Pages of finished events to walk per draw. 30 per page, and a 96-draw event
-# has 95 matches, so 4 pages covers a completed Masters with room to spare.
-# Walked newest-first and stopped early once a page yields nothing new.
-MAX_PAGES = 4
+# Pages of finished events to walk per draw. 30 per page.
+#
+# Was 4, on the arithmetic that a 96-draw event has 95 matches and 120 slots
+# therefore covers it. That counted the wrong thing: `events/last` returns every
+# finished event in the SEASON, and a season is singles plus doubles plus
+# qualifying — around 175 for one gender of a combined Masters. The oldest
+# fifty-odd matches sat past the wall and never came back, which is exactly
+# where sofa_diff's two missing first-round matches were.
+#
+# Cheap to raise. Pages run newest-first and the walk stops as soon as one
+# teaches us nothing, so steady state is a single page per draw either way —
+# the depth is only spent on a first run or catching up after downtime, which
+# is precisely when it is needed.
+MAX_PAGES = 8
 
 _FINISHED = "finished"
 
