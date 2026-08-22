@@ -154,17 +154,24 @@ function renderFooter({ section, pickState, drawDates, oopPill }) {
     // qualifying is being played while its main draw is still open is exactly
     // when someone wants the order of play, and Winston-Salem spent its
     // qualifying Saturday with no way to reach it from the dashboard at all.
+    // The action on the left, the state in the middle, order of play on the
+    // right — which puts the star in the same centre slot the active card uses,
+    // so the one badge does not move as a draw goes from open to under way.
+    // "Picks →" rather than "Make picks →": the card it sits on already names
+    // the tournament and the arrow already says this goes somewhere, so the
+    // verb was the one word carrying nothing, and the row has three items to
+    // fit on a phone.
     return centredRow(
+      <span style={{
+        fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '0.8rem',
+        letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--brand-text)',
+      }}>Picks →</span>,
       // Picks entered collapses to the star; the other two keep their words.
       // See the note on InfoStar — an unfinished entry is a thing you still
       // have to do, and a call to action behind a hover goes unnoticed.
       state === 'complete'
         ? <InfoStar label="Picks entered" />
-        : <span style={map[state]}>{label[state]}</span>,
-      <span style={{
-        fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '0.8rem',
-        letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--brand-text)',
-      }}>Make picks →</span>
+        : <span style={map[state]}>{label[state]}</span>
     )
   }
 
