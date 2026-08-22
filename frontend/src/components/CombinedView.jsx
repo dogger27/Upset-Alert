@@ -15,7 +15,7 @@
  * Windowed like BracketView: only `windowSize` columns render, starting at
  * `windowStart` (the parent's dot pager controls both).
  */
-import { Fragment, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import H2HPanel from './H2HPanel'
 import PredictorsPopup from './PredictorsPopup'
@@ -291,6 +291,48 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
   // Hovering any box of a player highlights ALL that player's boxes across
   // the bracket (ported from BracketView's hoveredPlayerId behaviour).
   const [hoveredPlayerId, setHoveredPlayerId] = useState(null)
+
+  /* Keep the picked player on screen when the window moves.
+     Paging changes which rounds are drawn but not how far down the bracket you
+     are, and a player's box sits at a DIFFERENT height in the next round —
+     roughly twice as far down, since each round halves the field over the same
+     span. So scrubbing forward from a highlighted name routinely left it above
+     or below the fold, and the blue path you were following disappeared at the
+     moment you asked to follow it.
+
+     Compact only. On a phone the highlight comes from a tap and stays put, so
+     it is a deliberate "follow this player". On a desktop it comes from the
+     mouse merely being over a box, and scrolling the bracket because the
+     pointer happened to be resting somewhere would be startling.
+
+     Scrolls the CONTAINER rather than calling scrollIntoView, which walks up
+     and scrolls every ancestor it can — including the page behind a bracket
+     that is supposed to scroll inside its own box. */
+  const scrollRef = useRef(null)
+  const lastWindow = useRef(windowStart)
+  useEffect(() => {
+    const moved = lastWindow.current !== windowStart
+    lastWindow.current = windowStart
+    if (!moved || !compact || hoveredPlayerId == null) return
+    const box = scrollRef.current
+    if (!box) return
+    // After the new columns have been laid out — their heights are what the
+    // target position is measured against.
+    const raf = requestAnimationFrame(() => {
+      const el = box.querySelector(`[data-player-id="${hoveredPlayerId}"]`)
+      if (!el) return
+      const outer = box.getBoundingClientRect()
+      const inner = el.getBoundingClientRect()
+      box.scrollTo({
+        top: Math.max(0, box.scrollTop + (inner.top - outer.top)
+                         - (outer.height - inner.height) / 2),
+        behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+          ? 'auto' : 'smooth',
+      })
+    })
+    return () => cancelAnimationFrame(raf)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [windowStart])
   const colW = compact ? COMPACT_COL_W : COL_W
 
   const playerById = Object.fromEntries(players.map(p => [p.id, p]))
@@ -637,7 +679,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
           container's content origin can't be scrolled to, it's simply clipped,
           so without this the first column's chips lose their left edge. When
           the nav gutter is present its own inset is already wider than that. */}
-      <div className={`cv-scroll${compact ? ' cv-scroll--compact' : ''}`} style={{ paddingLeft: insetLeft ? `${insetLeft + 4}px` : `${GROUP_CHIP_GUTTER}px` }}>
+      <div ref={scrollRef} className={`cv-scroll${compact ? ' cv-scroll--compact' : ''}`} style={{ paddingLeft: insetLeft ? `${insetLeft + 4}px` : `${GROUP_CHIP_GUTTER}px` }}>
         {/* Scale-to-fit: outer claims the SMALLER (zoomed) footprint so
             .cv-scroll's scrollWidth shrinks with it (needed for 2 rounds to
             fit a narrow phone without horizontal scrolling); inner renders at
@@ -864,6 +906,10 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                         <div
                           className={`cv-box${box.isBye ? ' cv-box--bye' : ''}${!box.isBye && !p ? ' cv-box--tbd' : ''}${box.correct ? ' cv-box--correct' : ''}${box.wrong ? ' cv-box--wrong' : ''}${box.clickable ? ' cv-box--clickable' : ''}${p != null && p.id === hoveredPlayerId ? ' cv-box--highlight' : ''}`}
                           onClick={box.onClick}
+                          /* How the effect above finds this player again once
+                             the window has moved and these boxes have been
+                             replaced by the next round's. */
+                          data-player-id={p?.id}
                           onMouseEnter={p != null ? () => setHoveredPlayerId(p.id) : undefined}
                           onMouseLeave={p != null ? () => setHoveredPlayerId(null) : undefined}
                         >
