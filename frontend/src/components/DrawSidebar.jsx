@@ -142,10 +142,16 @@ export default function DrawSidebar({ tournamentId, tournament, selectedUserId, 
           Once a tournament has published an order of play, we have one. */}
       {showOop && !collapsed && (
         tournament?.oop_first_seen_at ? (
+          /* No `date` in the link any more. It used to pin the stored oop_date,
+             which is whichever sheet was seen last and is yesterday's by the
+             time anyone clicks the morning after — and if that day had been
+             superseded the reader landed on it anyway. The schedule page now
+             lands on the LATEST day it holds data for, so one page owns "which
+             day exists" instead of two guessing separately. */
           <Link
-            to={`/schedule?tournament=${tournament.tournament_id}&draw=${tournament.id}${tournament.oop_date ? `&date=${tournament.oop_date}` : ''}`}
+            to={`/schedule?tournament=${tournament.tournament_id}&draw=${tournament.id}`}
             className="sidebar-oop-btn"
-            title="Today's order of play"
+            title="Latest order of play"
           >
             Order of Play
           </Link>

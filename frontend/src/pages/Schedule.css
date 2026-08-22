@@ -90,6 +90,17 @@
 }
 .sched-nav-btn:hover { background: var(--surface-raised); }
 
+/* No day that way. Faded rather than hidden, so the control keeps its place and
+   the date label does not slide sideways at the ends of a tournament — and so
+   the reader can see that they have reached the edge of what exists rather than
+   wondering where the button went. Hover is suppressed too: a button that
+   lights up and then does nothing is worse than one that plainly cannot. */
+.sched-nav-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.sched-nav-btn:disabled:hover { background: transparent; }
+
 /* Fixed width so the arrows never move. The label is the only thing that
    changes size between days, and letting it size to its content drags the
    buttons sideways under the cursor. */

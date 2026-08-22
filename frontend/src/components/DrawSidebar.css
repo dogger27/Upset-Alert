@@ -96,7 +96,23 @@
   transition: background 0.15s, opacity 0.15s;
 }
 
-.sidebar-oop-btn:hover { background: var(--brand-fill-hover); }
+/* The BORDER answers the cursor, matching the dashboard card's button. The
+   fill already carries the button's own meaning, and brightening it read as a
+   change of state rather than as something being under the pointer — the
+   transparent border is there for exactly this, so it costs no layout. */
+.sidebar-oop-btn:hover,
+.sidebar-oop-btn:focus-visible {
+  background: var(--brand-fill-hover);
+  border-color: var(--brand-line, var(--on-brand));
+}
+
+/* ...but not the disabled one. A control that lights up and then does nothing
+   is worse than one that plainly cannot be used. */
+.sidebar-oop-btn--none:hover,
+.sidebar-oop-btn--none:focus-visible {
+  background: transparent;
+  border-color: var(--border);
+}
 
 .sidebar-oop-btn--none {
   background: transparent;
