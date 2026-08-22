@@ -166,6 +166,22 @@ const NO_SEED = 9999
    would leave a band of lengths that neither rung catches. */
 const FIT_CHARS = 15
 
+/* A round label that already announces qualifying, so the separate "Q" chip
+   beside it would only repeat itself. */
+const QUALI_ROUND = /^(q\d?|fq)$/i
+
+/* Characters the court column carries at full size. Narrower than the name
+   column and holding words like "GRANDSTAND" and "STADIUM COURT", so it runs
+   out first — and when it does it is the court that gives, not the player. */
+const COURT_FIT = 9
+
+function courtScale(court) {
+  const n = (court || '').length
+  return n > COURT_FIT
+    ? { '--court-scale': Math.max(0.72, COURT_FIT / n) }
+    : undefined
+}
+
 /**
  * A player's seed number, or null.
  *
@@ -213,7 +229,12 @@ function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp })
      15 characters is where the column runs out, flag and three sets included. */
   const full = [first, last].filter(Boolean).join(' ')
   const shown = full + (!hideSeed && seed ? ` ${seed}` : '')
-  const longName = !surnameOnly && shown.length > 15
+  /* A LIVE row is narrower than a finished one. It spends width on the serve
+     ball and on the point column, and the name is what pays for both — which is
+     how the ball came to sit on top of "En-Shuo LIANG". Same ladder, three
+     characters less to work with. */
+  const fit = FIT_CHARS - (tight ? 3 : 0)
+  const longName = !surnameOnly && shown.length > fit
   const initialled = first ? `${first.trim()[0]}. ${last}` : last
 
   /* AND A RUNG BELOW THE INITIAL, because some surnames are longer than the
@@ -235,8 +256,8 @@ function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp })
      breakpoint decides whether. */
   const tightest = surnameOnly ? last : (longName ? initialled : full)
     + (!hideSeed && seed ? ` ${seed}` : '')
-  const scale = tightest.length > FIT_CHARS
-    ? Math.max(0.74, FIT_CHARS / tightest.length)
+  const scale = tightest.length > fit
+    ? Math.max(0.74, fit / tightest.length)
     : 1
 
   return (
@@ -266,7 +287,7 @@ function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp })
   )
 }
 
-function Side({ players, doubles, tbd }) {
+function Side({ players, doubles, tbd, tight }) {
   if (!players.length) return <span className="sched-side">TBD</span>
 
   // An unresolved side is a choice between two whole teams, not a list of
@@ -308,7 +329,7 @@ function Side({ players, doubles, tbd }) {
               sat between them. */}
           {i > 0 && <span className="sched-slash">/</span>}
           <PlayerName raw={p.name} surnameOnly={doubles} hideSeed={doubles}
-                      nationality={p.nationality} seed={p.seed} />
+                      nationality={p.nationality} seed={p.seed} tight={tight} />
         </Fragment>
       ))}
       {/* Same placement as a singles seed, and for the same reason. */}
@@ -541,7 +562,8 @@ function CompetitorRows({ e, a, b }) {
                'sched-competitor--lost': winnerSide != null && winnerSide !== side,
              })}>
           <span className="sched-competitor-name">
-            <Side players={players} doubles={doubles} tbd={tbd} />
+            <Side players={players} doubles={doubles} tbd={tbd}
+                  tight={serving != null || point != null} />
           </span>
           {/* A SLOT, always present, not a conditional element. The ball
               appears on one line only, so rendering it inline shifted that
@@ -689,7 +711,9 @@ function MatchRow({ e, showCourt, zone, venueMode, onH2H, onChampion, dimmed }) 
           })}
           text={started ?? (showCourt ? expectedStart(e, zone, venueMode)
                                       : printedStart(e, zone, venueMode))} />
-        {showCourt && e.court && <span className="sched-court">{e.court}</span>}
+        {showCourt && e.court && (
+          <span className="sched-court" style={courtScale(e.court)}>{e.court}</span>
+        )}
         {/* Court view keeps the sheet's wording, but "Followed by" alone does
             not tell you when to turn up. The chained estimate goes underneath.
             Only when it ADDS something: a slot whose expected time is simply
@@ -702,7 +726,13 @@ function MatchRow({ e, showCourt, zone, venueMode, onH2H, onChampion, dimmed }) 
         <div className="sched-tags">
           {e.tour && <span className={clsx('sched-tag', `sched-tag--${e.tour.toLowerCase()}`)}>{e.tour}</span>}
           {e.round_label && <span className="sched-tag sched-tag--round">{e.round_label}</span>}
-          {e.stage === 'qualifying' && <span className="sched-tag sched-tag--quali">Q</span>}
+          {/* Only when the round does not already say so. "Q1" beside a "Q"
+              states the same fact twice and costs the tag row the width. It
+              still earns its place on a qualifying row whose round we could not
+              derive — which is most ATP sheets, since they print no round at
+              all (see _classify). */}
+          {e.stage === 'qualifying' && !QUALI_ROUND.test(String(e.round_label ?? '').trim())
+            && <span className="sched-tag sched-tag--quali">Q</span>}
           {e.discipline !== 'singles' && <span className="sched-tag">{e.discipline === 'mixed' ? 'Mixed' : 'Doubles'}</span>}
         </div>
         {/* One competitor per line, with that competitor's own set scores in
