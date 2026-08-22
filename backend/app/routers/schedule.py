@@ -10,7 +10,7 @@ them at render time, is what keeps that true when someone later adds a field.
 """
 
 import re as _re
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timezone, timedelta
 from zoneinfo import ZoneInfo
 from typing import Optional
 
@@ -23,6 +23,7 @@ from app.core.auth import get_optional_user
 from app.database import get_db
 from app.models.schedule import ScheduleEntry
 from app.models.rankings import TePlayer, TeRankingsSnapshot
+from app.services.sofascore_doubles import _sheet_surnames
 from app.services.rankings import _norm
 from app.models.tournament import Draw, DrawEntry, Match, Tournament
 from app.services.sofascore_live import live_point_for
@@ -475,6 +476,49 @@ async def schedule_day(
                     Match.player2_id.in_(alt_ids)))).all()
         }
 
+    # ── The same question for doubles ───────────────────────────────────────
+    # Doubles has no bracket row, so the singles path above — which finds the
+    # completed Match between two candidates — can never answer it. Its result
+    # lives on the SCHEDULE ROW: the semi-final that fed this final is another
+    # entry, with its own two sides and a winner_side stamped by the Sofascore
+    # sweep.
+    #
+    # So the feeder is found the same way, by identity rather than by id: the
+    # four surnames on a TBD side are the four surnames of the match that
+    # decides it. Keyed on that set, the answer is which pair won.
+    dbl_settled: dict[frozenset, frozenset] = {}
+    if any(e.is_tbd and e.discipline != "singles" for e in entries):
+        since = day - timedelta(days=14)
+        rows = (await db.execute(
+            select(ScheduleEntry).where(
+                ScheduleEntry.tournament_id.in_(t_ids),
+                ScheduleEntry.discipline != "singles",
+                ScheduleEntry.winner_side.isnot(None),
+                ScheduleEntry.play_date >= since,
+                ScheduleEntry.play_date <= day))).scalars().all()
+        for r in rows:
+            sides = {}
+            for p in r.players:
+                sides.setdefault(p.side, []).append(p.raw_name)
+            a, b = _sheet_surnames(sides.get("a", [])), _sheet_surnames(sides.get("b", []))
+            if not a or not b:
+                continue
+            dbl_settled[frozenset(a | b)] = frozenset(a if r.winner_side == "a" else b)
+
+    def _settle_doubles(side_players):
+        """(players, resolved) — the pair that came through, once they have met."""
+        if len(side_players) != 2:
+            return side_players, False
+        teams = [_sheet_surnames([p.raw_name]) for p in side_players]
+        if not all(teams):
+            return side_players, False
+        won = dbl_settled.get(frozenset(teams[0] | teams[1]))
+        if won is None:
+            return side_players, False
+        keep = [p for p, t in zip(side_players, teams) if t & won]
+        # Exactly one of the two, or we have not identified anything.
+        return (keep, True) if len(keep) == 1 else (side_players, False)
+
     def _settle(side_players):
         """(players, resolved) — the winner alone once the candidates have met.
 
@@ -505,7 +549,8 @@ async def schedule_day(
             sp = sorted((p for p in e.players if p.side == side),
                         key=lambda x: x.position)
             if side in unresolved:
-                sp, settled = _settle(sp)
+                sp, settled = (_settle(sp) if e.discipline == "singles"
+                               else _settle_doubles(sp))
                 if settled:
                     unresolved = unresolved.replace(side, "")
             ordered.extend(sp)

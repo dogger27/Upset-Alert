@@ -639,6 +639,11 @@
    the line where it belongs. */
 .sched-altteam { display: inline-flex; align-items: baseline; gap: 0.35rem; }
 .sched-or {
+  /* Breathing room on BOTH sides. .sched-side--alt sets a flex gap, but the
+     competitor row makes the side `display: inline` so its alternatives flow as
+     text — and an inline formatting context has no gap, which is why "Vasselin"
+     ran straight into "OR". Margin works in both. */
+  margin: 0 0.32rem;
   font-size: 0.62rem;
   font-weight: 800;
   text-transform: uppercase;
