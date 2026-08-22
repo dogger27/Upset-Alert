@@ -164,6 +164,15 @@ class Draw(Base):
     # scores for schedule rows, nothing more.
     sofa_doubles_tournament_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     sofa_doubles_season_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # When resolution was last ATTEMPTED for this draw — not when it succeeded.
+    # The automatic resolver retries a draw that still has unstamped entries,
+    # because entries arrive over days (qualifiers fill in last) and one pass
+    # can only ever stamp who was in the field at the time. Without a record of
+    # the attempt that retry has no floor: a draw with four names Sofascore
+    # simply does not carry would be re-resolved every single pass, forever,
+    # spending a request per pass on an answer that is not going to change.
+    sofa_resolved_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True)
     venue_timezone: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     # The venue's assumed day-1 start, from tournament_schedule's curated lookup
     # table. An assumption until first_match_* below observes the real thing.

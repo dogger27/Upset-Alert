@@ -80,6 +80,13 @@ async def lifespan(app: FastAPI):
         sofa_live_monitor.start()
         logging.getLogger("app").info("Sofascore live polling ENABLED")
 
+    # The identity layer every one of the sweeps below reads. Without it a draw
+    # is invisible to all of them and shows no live score at all, silently — see
+    # the note in sofa_resolver.py for how that went unnoticed for two days.
+    if settings.sofascore_live_enabled or settings.sofascore_results_enabled:
+        from app.services import sofa_resolver
+        asyncio.create_task(sofa_resolver.start())
+
     # Shadow results sweep. Independent of the live flag: it answers a different
     # question (who won) on a different cadence, and writes only sofa_* columns
     # that nothing reads except scripts/sofa_diff.

@@ -485,6 +485,9 @@ async def _migrate(conn):
         "ALTER TABLE schedule_entries ADD COLUMN completed_at DATETIME",
         "ALTER TABLE draws ADD COLUMN sofa_doubles_tournament_id INTEGER",
         "ALTER TABLE draws ADD COLUMN sofa_doubles_season_id INTEGER",
+        # The floor under the automatic resolver's retries — see the column note
+        # in models/tournament.py.
+        "ALTER TABLE draws ADD COLUMN sofa_resolved_at DATETIME",
     ]
     for sql in migrations:
         try:
