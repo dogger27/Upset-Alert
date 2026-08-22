@@ -643,7 +643,26 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
     }
   }
 
-  const slotStyle = (c, i, a) => trav(a, centersNext?.[c]?.[i], 'top')
+  /* Slots move by TRANSFORM, not by top.
+     They are the majority of what travels — 168 of them on a Masters draw
+     against 84 outlines — and `top` is a layout property: changing it forces
+     the engine to lay the column out again, sixty times a second, for every
+     box. translateY is composite-only and costs none of that. It is safe here
+     and only here: .cv-slot is a bare positioned wrapper with no transform of
+     its own, whereas the chips are all rotated and the score pill is centred
+     with translate(-50%), so composing onto those would mean carrying their
+     transforms around in JS.
+     One --d rather than an --a/--b pair: the delta is all the transform needs,
+     and it is one fewer custom property on every one of those elements. */
+  const slotStyle = (c, i, a) => {
+    const b = centersNext?.[c]?.[i]
+    if (b == null || b === a) return { top: a }
+    return {
+      top: a,
+      '--d': b - a,
+      transform: 'translateY(calc(var(--d) * var(--t, 0) * 1px))',
+    }
+  }
 
   /* ── The scrub, driven from the parent's touch handlers ──────────────────
      Owned HERE rather than in the page, because pinning the row under the
@@ -1354,7 +1373,20 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
               const chipsLeaving = scrubbing
                 && colIdx === (backward ? visible.length - 1 : 0)
               const chips = nextCenters.map((y, ri) => {
-                const chipTop = trav(y, nextCentersScrub?.[ri], 'top')
+                /* Chips travel by transform too — three per match makes them
+                   the largest population of all, and `top` would lay the
+                   overlay out again on every frame.
+                   Only the DELTA is set here. Each chip composes it into its
+                   own rule, because they do not share a transform: H2H and the
+                   group pill are rotated -90deg, the bell is not. Writing the
+                   composed transform inline would mean copying each of those
+                   rotations into JS and keeping them in step with the
+                   stylesheet forever — and getting the bell wrong the first
+                   time, which is exactly what happened. */
+                const b = nextCentersScrub?.[ri]
+                const chipTop = b == null || b === y
+                  ? { top: y }
+                  : { top: y, '--d': b - y }
                 const m = R[nextC - 1][ri]
                 const { p1: aId, p2: bId } = resolved[m.id] || {}
                 const a = aId != null ? playerById[aId] : null
