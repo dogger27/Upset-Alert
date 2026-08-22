@@ -277,7 +277,7 @@ function Connectors({ leftCenters, rightCenters, totalH }) {
 // compact: phone-width mode — country flags are dropped to buy name space.
 // zoom:    scales the whole rendered draw (layout included, via CSS zoom) so
 //          the parent can shrink it until the target number of rounds fits.
-export default function CombinedView({ tournament, matches, players, picks, onPick, locked = true, windowStart = 0, windowSize = 4, labelsHidden = false, insetLeft = 0, compact = false, zoom = 1, leagueId = null, lockedMatchIds = new Set(), predictionsHidden = false }) {
+export default function CombinedView({ tournament, matches, players, picks, onPick, locked = true, windowStart = 0, windowSize = 4, labelsHidden = false, insetLeft = 0, compact = false, zoom = 1, scrubbing = false, leagueId = null, lockedMatchIds = new Set(), predictionsHidden = false }) {
   /* Which clock upcoming times are shown in. The account's choice where there
      is one; otherwise the reader's own, which needs no explanation when they
      have never expressed a preference. undefined means "this device". */
@@ -486,27 +486,64 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
   // Feeder-centred vertical layout for the visible columns. The left-most (base)
   // column pairs each match's two opponents tightly (small within-pair gap,
   // larger gap between matches); columns to its right centre on their feeders.
-  const centers = {}
-  visible.forEach((c, p) => {
-    const count = colCount(c)
-    if (p === 0) {
-      centers[c] = []
-      const nPairs = Math.ceil(count / 2)
-      for (let pi = 0; pi < nPairs; pi++) {
-        const mc = pi * PAIR_SLOT + PAIR_SLOT / 2
-        const hasSecond = 2 * pi + 1 < count
-        centers[c].push(hasSecond ? mc - PAIR_OFF : mc)
-        if (hasSecond) centers[c].push(mc + PAIR_OFF)
+  /* The whole vertical geometry of a window is a pure function of its LEFTMOST
+     column: that one gets the full pair spacing, and every column right of it
+     sits at the midpoint of the two boxes feeding it. Which is why scrubbing
+     can be a smooth interpolation rather than a redesign — advancing one round
+     is exactly "column s+1 stops being a midpoint and becomes a pair slot",
+     and every other column follows from that. Extracted so the same rule can
+     be evaluated for the window we are on AND the window we are heading to. */
+  const layoutFrom = (cols) => {
+    const out = {}
+    cols.forEach((c, p) => {
+      const count = colCount(c)
+      if (p === 0) {
+        out[c] = []
+        const nPairs = Math.ceil(count / 2)
+        for (let pi = 0; pi < nPairs; pi++) {
+          const mc = pi * PAIR_SLOT + PAIR_SLOT / 2
+          const hasSecond = 2 * pi + 1 < count
+          out[c].push(hasSecond ? mc - PAIR_OFF : mc)
+          if (hasSecond) out[c].push(mc + PAIR_OFF)
+        }
+      } else {
+        const prev = out[cols[p - 1]]
+        out[c] = Array.from({ length: count }, (_, i) => {
+          const a = prev[2 * i], b = prev[2 * i + 1]
+          if (a != null && b != null) return (a + b) / 2
+          return a ?? (i * SLOT + SLOT / 2)
+        })
       }
-    } else {
-      const prev = centers[visible[p - 1]]
-      centers[c] = Array.from({ length: count }, (_, i) => {
-        const a = prev[2 * i], b = prev[2 * i + 1]
-        if (a != null && b != null) return (a + b) / 2
-        return a ?? (i * SLOT + SLOT / 2)
-      })
+    })
+    return out
+  }
+
+  const centers = layoutFrom(visible)
+
+  /* WHERE THE SAME COLUMNS LAND ONE ROUND ON. Only while a scrub is in flight,
+     and only in compact mode, which is the only place the gesture exists.
+     Every slot then carries both positions and CSS interpolates between them
+     from a single --t on the container, so a drag costs one style write per
+     frame instead of re-rendering a bracket sixty times a second.
+     Column `start` is not in the next window at all; it keeps its own position
+     and fades, which is what leaving looks like. */
+  const nextVisible = scrubbing
+    ? Array.from({ length: size }, (_, i) => Math.min(start + 1 + i, totalCols - 1))
+    : null
+  const centersNext = nextVisible ? layoutFrom(nextVisible) : null
+  /* One box's two homes. Without a scrub in flight this is just `top`, exactly
+     as before — nothing pays for the gesture when it is not happening. */
+  const slotStyle = (c, i, a) => {
+    if (!centersNext) return { top: a }
+    const b = centersNext[c]?.[i]
+    if (b == null) return { top: a }
+    return {
+      '--a': a,
+      '--b': b,
+      top: 'calc((var(--a) + (var(--b) - var(--a)) * var(--t, 0)) * 1px)',
     }
-  })
+  }
+
   const totalH = Math.ceil(colCount(visible[0]) / 2) * PAIR_SLOT
   // Natural (unscaled) footprint of the labels+body block, for the
   // scale-to-fit wrapper below. LABELS_H is an estimate of .cv-labels'
@@ -902,7 +939,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                     const p = box.player
                     const fit = box.isBye ? null : slotName(p, box.serving)
                     return (
-                      <div key={box.key} className="cv-slot" style={{ top: cc[i] }}>
+                      <div key={box.key} className="cv-slot" style={slotStyle(c, i, cc[i])}>
                         <div
                           className={`cv-box${box.isBye ? ' cv-box--bye' : ''}${!box.isBye && !p ? ' cv-box--tbd' : ''}${box.correct ? ' cv-box--correct' : ''}${box.wrong ? ' cv-box--wrong' : ''}${box.clickable ? ' cv-box--clickable' : ''}${p != null && p.id === hoveredPlayerId ? ' cv-box--highlight' : ''}`}
                           onClick={box.onClick}
