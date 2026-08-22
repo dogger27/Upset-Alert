@@ -8,7 +8,7 @@ import ChampionFanfare from '../components/ChampionFanfare'
 import H2HPanel from '../components/H2HPanel'
 import { useSearchParams, Link } from 'react-router-dom'
 import clsx from 'clsx'
-import { getScheduleDay } from '../api/schedule'
+import { getScheduleDay, getScheduleDates } from '../api/schedule'
 import { updateMe } from '../api/auth'
 import { useAuth } from '../store/auth'
 import { nationalityIso2, splitPlayerName } from '../utils/flags'
@@ -41,13 +41,6 @@ function storedView() {
 
 function isoDay(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-function shiftDay(iso, delta) {
-  const [y, m, d] = iso.split('-').map(Number)
-  const dt = new Date(y, m - 1, d)
-  dt.setDate(dt.getDate() + delta)
-  return isoDay(dt)
 }
 
 function prettyDay(iso) {
@@ -711,8 +704,36 @@ export default function Schedule() {
     if (user) updateMe({ schedule_tz: mode }).catch(() => {})
   }
 
-  const day = params.get('date') || isoDay(new Date())
   const tournamentId = params.get('tournament') ? Number(params.get('tournament')) : undefined
+
+  /* Which days actually exist. Every day this page can show is a day somebody
+     published a sheet for, and the arrows walk that list rather than the
+     calendar — stepping by ±1 day walked into gaps (a tournament plays through
+     but only publishes the day before, and qualifying leaves a hole before the
+     main draw), and every one of those landed on an empty page that looks
+     exactly like a page that failed to load. */
+  const { data: dateData } = useQuery({
+    queryKey: ['schedule-dates', tournamentId ?? 'all'],
+    queryFn: () => getScheduleDates(tournamentId),
+    staleTime: 5 * 60_000,
+  })
+  const dates = dateData?.dates ?? []
+
+  /* No date in the URL means the latest published one — the sheet you would
+     have gone looking for. Today is the wrong default: at 2am the day being
+     played is still yesterday's sheet, and out of season today has nothing at
+     all. Falls back to today only until the list arrives, so the first paint
+     has something to ask for.
+     A date that IS in the URL is clamped to the list, so an old link or a hand
+     typed date cannot strand the page on a day with nothing on it. */
+  const asked = params.get('date')
+  const day = (dates.length
+    ? (asked && dates.includes(asked) ? asked : dates[dates.length - 1])
+    : (asked || isoDay(new Date())))
+
+  const dayIndex = dates.indexOf(day)
+  const prevDay = dayIndex > 0 ? dates[dayIndex - 1] : null
+  const nextDay = dayIndex >= 0 && dayIndex < dates.length - 1 ? dates[dayIndex + 1] : null
   // The draw we arrived from, if any. Drives both the back link and which tour
   // the time view opens on.
   const fromDraw = params.get('draw') ? Number(params.get('draw')) : undefined
@@ -924,12 +945,18 @@ export default function Schedule() {
 
         <div className="sched-center">
             <div className="sched-daynav">
-            <button className="sched-nav-btn" onClick={() => setDay(shiftDay(day, -1))} aria-label="Previous day">‹</button>
+            {/* Disabled at the ends rather than walking into an empty day. A
+                page with no matches on it is indistinguishable from one that
+                failed to load, so the arrow that would produce it is the wrong
+                thing to offer. */}
+            <button className="sched-nav-btn" onClick={() => prevDay && setDay(prevDay)}
+                    disabled={!prevDay} aria-label="Previous day">‹</button>
             {/* Fixed width, so the arrows hold their position as the date
                 changes — "Wed, Aug 19" and "Thu, Sep 3" are different widths and
                 the buttons would otherwise shuffle under the cursor. */}
             <span className="sched-day-label">{prettyDay(day)}</span>
-            <button className="sched-nav-btn" onClick={() => setDay(shiftDay(day, 1))} aria-label="Next day">›</button>
+            <button className="sched-nav-btn" onClick={() => nextDay && setDay(nextDay)}
+                    disabled={!nextDay} aria-label="Next day">›</button>
           </div>
 
             <div className="sched-viewswitch" role="tablist">

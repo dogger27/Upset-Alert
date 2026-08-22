@@ -117,6 +117,59 @@ function InfoStar({ label }) {
   )
 }
 
+/* The order-of-play button, in both of its states.
+
+   No `date` in the link, deliberately. The schedule page lands on the LATEST
+   day it has data for, and that is the right destination from here — a stored
+   oop_date is whichever sheet was seen last and can be yesterday's by the time
+   anyone clicks. One page owns "which day exists", rather than two places
+   guessing and disagreeing.
+
+   The border is what responds to hover: the pill's fill is already carrying its
+   own meaning against the pills beside it, and brightening it made the row look
+   like it had changed state rather than that something was under the cursor. */
+function OopButton({ to }) {
+  const [hot, setHot] = useState(false)
+  const base = {
+    ...pillBase, textDecoration: 'none', letterSpacing: '0.04em',
+    border: '1px solid transparent',
+    transition: 'border-color var(--dur, 150ms) var(--ease-out, ease), color var(--dur, 150ms) var(--ease-out, ease)',
+  }
+
+  if (!to) {
+    return (
+      <span
+        aria-disabled="true"
+        title="No order of play published yet"
+        style={{ ...base, background: 'var(--n-150)', color: 'var(--text-muted)',
+                 opacity: 0.45, cursor: 'default' }}
+      >
+        Order of Play
+      </span>
+    )
+  }
+
+  return (
+    <Link
+      to={to}
+      onClick={e => e.stopPropagation()}
+      onPointerEnter={() => setHot(true)}
+      onPointerLeave={() => setHot(false)}
+      onFocus={() => setHot(true)}
+      onBlur={() => setHot(false)}
+      style={{
+        ...base, background: 'var(--n-150)', color: 'var(--brand-text)',
+        borderColor: hot ? 'var(--brand-line, var(--brand-text))' : 'transparent',
+      }}
+    >
+      {/* Spelled out. "OOP" is the term inside this codebase, not one a reader
+          arrives with, and the abbreviation saved room the footer no longer
+          needs now that "Competing" has collapsed to its star. */}
+      Order of Play
+    </Link>
+  )
+}
+
 function renderFooter({ section, pickState, drawDates, oopPill }) {
   /* Status on the left, the card's own action in the middle, order of play on
      the right.
@@ -236,20 +289,16 @@ export function TournamentCard({ tour = 'ATP', name, city, surface = 'grass', ti
   const interactive = section !== 'upcoming'
 
   /* Same pill as the ones beside it — only the ink differs, so it reads as an
-     action rather than another status. */
-  const oopPill = oopTo ? (
-    <Link
-      to={oopTo}
-      onClick={e => e.stopPropagation()}
-      style={{ ...pillBase, background: 'var(--n-150)', color: 'var(--brand-text)',
-               textDecoration: 'none', letterSpacing: '0.04em' }}
-    >
-      {/* Spelled out. "OOP" is the term inside this codebase, not one a reader
-          arrives with, and the abbreviation saved room the footer no longer
-          needs now that "Competing" has collapsed to its star. */}
-      Order of Play
-    </Link>
-  ) : null
+     action rather than another status.
+
+     Two states, never absent. A tournament with no sheet published yet shows
+     the button greyed out rather than not showing it, because a control that
+     appears the moment a PDF lands and is missing until then reads as a bug in
+     the page rather than as a fact about the tournament. Greyed, it says the
+     order of play is a thing that will exist. */
+  const oopPill = (
+    <OopButton to={oopTo} />
+  )
 
   const footer = renderFooter({ section, pickState, drawDates, oopPill })
 
