@@ -332,7 +332,11 @@
 /* H2H chip centred on the connector "T" — position is independent of the bell. */
 .cv-h2h {
   position: absolute;
-  transform: translate(-50%, -50%) rotate(-90deg);
+  /* --d is the distance this chip travels over a scrub, set per chip in JS;
+     zero at rest, so this is the same transform it always had. Composed HERE
+     rather than inline because these three do not share a transform and an
+     inline one would replace the whole stack. */
+  transform: translate(-50%, -50%) translateY(calc(var(--d, 0) * var(--t, 0) * 1px)) rotate(-90deg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -358,7 +362,11 @@
    reads as a mistake rather than a distinction. */
 .cv-group {
   position: absolute;
-  transform: translate(-50%, -50%) rotate(-90deg);
+  /* --d is the distance this chip travels over a scrub, set per chip in JS;
+     zero at rest, so this is the same transform it always had. Composed HERE
+     rather than inline because these three do not share a transform and an
+     inline one would replace the whole stack. */
+  transform: translate(-50%, -50%) translateY(calc(var(--d, 0) * var(--t, 0) * 1px)) rotate(-90deg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -386,7 +394,7 @@
 /* Upset bell — free to overlap the boxes to its left; sits above them. */
 .cv-bell {
   position: absolute;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%) translateY(calc(var(--d, 0) * var(--t, 0) * 1px));
   font-size: 1.5rem;
   line-height: 1;
   user-select: none;
@@ -543,26 +551,20 @@
   transition: --t 220ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
-.cv-scroll--settling .cv-body,
-.cv-scroll--settling .cv-labels,
-.cv-scroll--settling .cv-slot,
-.cv-scroll--settling .cv-match-outline,
-.cv-scroll--settling .cv-live-score,
-.cv-scroll--settling .cv-eta,
-.cv-scroll--settling .cv-h2h,
-.cv-scroll--settling .cv-group,
-.cv-scroll--settling .cv-bell,
-.cv-scroll--settling .cv-col,
-.cv-scroll--settling .cv-label,
-.cv-scroll--settling .cv-score {
-  /* height as well as top: the match outline wraps a PAIR, so it changes shape
-     as the pair closes up, and easing one while snapping the other is worse
-     than easing neither. */
-  transition: transform 220ms cubic-bezier(0.22, 0.61, 0.36, 1),
-              top 220ms cubic-bezier(0.22, 0.61, 0.36, 1),
-              height 220ms cubic-bezier(0.22, 0.61, 0.36, 1),
-              opacity 220ms cubic-bezier(0.22, 0.61, 0.36, 1);
-}
+/* NOTHING ELSE IS TRANSITIONED. Every position, height and opacity in the
+   gesture is derived from --t, and --t is registered, so transitioning that one
+   value carries all of them — there is no list to keep in step and nothing gets
+   forgotten.
+   The list that used to be here named a dozen selectors and put a separate
+   transition on each matching element: about 500 of them on a Masters draw,
+   every one an animation the engine has to track, most of them animating `top`
+   and `height`, which are layout properties. Five releases of that inside a
+   minute is enough to put a phone renderer over the edge. One transition
+   replaces all of it.
+   Engines without @property cannot interpolate --t and will land instantly
+   instead. That is Safari before 16.4 and Chrome before 85; the gesture is
+   touch-only, so in practice it means a very old phone gets a snap rather than
+   a glide, which is the right thing to lose. */
 
 /* The connectors bow out for the duration.
    They are SVG paths between two sets of box centres, and those centres are
