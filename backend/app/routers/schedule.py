@@ -94,6 +94,13 @@ class ScheduleEntryOut(BaseModel):
     # carry this — ESPN is the source and it covers nothing else — and only from
     # the moment we started recording it, so the client must fall back.
     started_at: Optional[datetime] = None
+    # When it FINISHED, for clients that want to react to a result rather than
+    # merely display one. A phone discards a backgrounded tab and reloads it, so
+    # "we watched the status change" is a fact the browser is often not around
+    # to observe; a timestamp is one the page can check on arrival. Only set
+    # where a real result was recorded — a status inferred from the court order
+    # below leaves this null rather than guessing an instant.
+    completed_at: Optional[datetime] = None
     is_tbd: bool = False
     tbd_side: Optional[str] = None
     status: str = "scheduled"
@@ -400,6 +407,9 @@ async def schedule_day(
             # Singles reads it off the match; doubles has none and carries its
             # own, so the field means the same thing either way.
             started_at=_utc(getattr(m, "started_at", None) if m else e.started_at),
+            # Same read-through as started_at: singles carries the result on the
+            # match, doubles on the row itself.
+            completed_at=_utc(getattr(m, "completed_at", None) if m else e.completed_at),
             is_tbd=e.is_tbd, tbd_side=e.tbd_side, status=statuses[e.id], players=players,
             # Singles reads through the match; doubles has none and carries its
             # own result on the row. Same field names either way, so the client
