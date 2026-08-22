@@ -250,7 +250,14 @@ const SCRUB_SHIFT = {
   // Backward renders an extra column on the LEFT, so it starts already shifted
   // off by one and slides back to flush: (t-1)·+1.
   transform: 'translateX(calc((var(--t, 0) * var(--tdir, -1) + var(--tbase, 0)) * var(--step, 0px)))',
-  willChange: 'transform',
+  // NO will-change. It reads as a free optimisation and is the opposite here:
+  // it pins a backing texture the size of the promoted element, and .cv-body is
+  // the WHOLE bracket — 1920px tall for a 32 draw, 7680px for a 128, four to
+  // sixteen megabytes of texture. Promoted and dropped on every gesture, that
+  // is enough to kill a phone renderer outright after enough scrubbing back and
+  // forth ("Can't open this page"). The transform still composites when it
+  // changes; the hint only asks the browser to prepare for it in advance, which
+  // is worth nothing on a surface this size.
 }
 export const H2H_X = 8          // H2H chip's x within the gap — centred on the match box's right border
 const BELL_OFFSET = 34   // distance (px) the bell sits left of the H2H chip's centre
@@ -681,15 +688,31 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
         return true
       },
 
-      // t runs 0 -> 1 for "one round forward". The page clamps it.
+      /* t runs 0 -> 1 for "one round forward". The page clamps it.
+
+         COALESCED TO ONE WRITE PER FRAME. touchmove fires faster than the
+         screen refreshes — 120Hz on a recent iPhone, and coalesced events can
+         deliver several at once — and every write to --t invalidates style for
+         the entire subtree, because it is an inheriting registered property and
+         every box, outline and chip reads it. Doing that two or three times
+         between paints is pure waste, and on a long draw it is a lot of waste.
+         The last value before the frame is the only one that was ever going to
+         be seen. */
       move(t) {
-        const el = scrollRef.current
         const st = scrub.current
-        if (!el || !st) return
-        el.style.setProperty('--t', String(t))
-        if (st.idx == null) return
-        const y = atIndex(st.a, st.idx) + (atIndex(st.b, st.idx) - atIndex(st.a, st.idx)) * t
-        el.scrollTop = Math.max(0, y * (zoom || 1) - st.localY)
+        if (!st) return
+        st.pending = t
+        if (st.raf) return
+        st.raf = requestAnimationFrame(() => {
+          st.raf = 0
+          const el = scrollRef.current
+          if (!el || scrub.current !== st) return
+          const v = st.pending
+          el.style.setProperty('--t', String(v))
+          if (st.idx == null) return
+          const a = atIndex(st.a, st.idx)
+          el.scrollTop = Math.max(0, (a + (atIndex(st.b, st.idx) - a) * v) * (zoom || 1) - st.localY)
+        })
       },
 
       // Settle to 0 or 1, then hand the window change to the page. The class
@@ -706,7 +729,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
           const y = target ? atIndex(st.b, st.idx) : atIndex(st.a, st.idx)
           el.scrollTop = Math.max(0, y * (zoom || 1) - st.localY)
         }
-        window.setTimeout(() => {
+        st.settle = window.setTimeout(() => {
           /* ORDER MATTERS, and getting it wrong is the flash on release.
              --t was being removed FIRST, which snaps every interpolated
              position back to its t=0 value — the OLD window's geometry — while
@@ -721,6 +744,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
              Only once THAT has painted is it safe to drop --t, which two
              frames guarantees. By then nothing reads it: scrubbing is false, so
              every position is a plain number again. */
+          if (st.raf) cancelAnimationFrame(st.raf)
           scrub.current = null
           if (target === 1) onDone?.()
           setScrubDir(0)
@@ -730,6 +754,17 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
           }))
         }, SETTLE_MS)
       },
+    }
+
+    // Leaving the page mid-gesture must not leave a frame or a settle timer
+    // pointing at a detached bracket. Cheap insurance, and this component is
+    // unmounted every time the reader changes draw.
+    return () => {
+      const st = scrub.current
+      if (st?.raf) cancelAnimationFrame(st.raf)
+      if (st?.settle) clearTimeout(st.settle)
+      scrub.current = null
+      if (scrubRef) scrubRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scrubRef, start, size, totalCols, colW, zoom])
