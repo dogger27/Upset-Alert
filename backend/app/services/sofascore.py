@@ -55,7 +55,9 @@ before it is trusted, and the unresolved list is the output that matters.
 """
 
 import asyncio
+import logging
 import os
+import re
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from typing import Optional
@@ -69,6 +71,8 @@ from app.models.tournament import Draw, DrawEntry
 from app.services.http_errors import describe_exception, is_transient_http_error
 from app.services.rankings import _norm
 from app.services.system_log import app_log
+
+logger = logging.getLogger(__name__)
 
 _BASE = "https://api.sofascore.com/api/v1"
 
@@ -533,6 +537,9 @@ async def _resolve_against_field(draw: Draw, entries: list) -> Optional[tuple]:
         return None
 
     best = None
+    # Candidates whose season exists but whose bracket is not published yet.
+    # See the fallback below for why they are worth remembering.
+    unpublished = []
     for cand in await _candidate_tournaments(draw):
         season = await _season_for(cand["id"], draw.year)
         if season is None:
@@ -548,16 +555,49 @@ async def _resolve_against_field(draw: Draw, entries: list) -> Optional[tuple]:
             if is_transient_http_error(exc):
                 continue
             raise
-        if not field:
+        # A cuptree of R16P1, R16P2, ... is a bracket Sofascore has created but
+        # not filled in. There are no names to overlap against, which is not the
+        # same as no match.
+        named = [t for t in field
+                 if not _PLACEHOLDER_SLOT.match(str(t.get("name") or ""))]
+        if not named:
+            unpublished.append((cand["id"], season["id"]))
             continue
+        field = named
         theirs = {_toks(t.get("name") or "") for t in field}
         overlap = sum(1 for ts, _ in ours if ts in theirs) / len(ours)
         if best is None or overlap > best[0]:
             best = (overlap, cand["id"], season["id"], field)
 
-    if best is None or best[0] < _MIN_FIELD_OVERLAP:
-        return None
-    return best[1], best[2], best[3]
+    if best is not None and best[0] >= _MIN_FIELD_OVERLAP:
+        return best[1], best[2], best[3]
+
+    # NOTHING TO CHECK AGAINST IS NOT THE SAME AS NOTHING MATCHING.
+    #
+    # A tournament publishes its bracket a day or two before it starts, and
+    # until then its cuptree is a row of placeholders. Overlap cannot be
+    # computed, so this returned None — and a draw with no uniqueTournament id
+    # is invisible to the live poller, the results sweep and the doubles sweep
+    # alike. Monterrey sat like that on the morning it started and had to be
+    # stamped by hand.
+    #
+    # So: when exactly ONE candidate survives the name-and-category filter and
+    # its bracket simply is not up yet, take it. One candidate is not a choice,
+    # and the alternative is no scoring at all on the day of play.
+    #
+    # This is the ONLY place a tournament is accepted without checking its
+    # field, and it is deliberately not silent about it. If the guess is wrong,
+    # no player will ever resolve against it, and the coverage check in
+    # sofa_resolver says exactly that — "a tournament id but not one player
+    # resolved" — within the hour. A wrong id that announces itself beats a
+    # correct one that arrives after the tournament.
+    if len(unpublished) == 1:
+        uid, season_id = unpublished[0]
+        logger.info("Sofascore: accepting %s season %s for %s %s on name alone "
+                    "— its bracket is not published yet",
+                    uid, season_id, draw.name, draw.gender)
+        return uid, season_id, []
+    return None
 
 
 async def resolve_tournament(db: AsyncSession, draw: Draw) -> Optional[tuple]:
@@ -675,6 +715,9 @@ async def resolve_draw(db: AsyncSession, draw: Draw, *, force: bool = False) -> 
 # without a floor those four or five would be re-resolved every pass forever,
 # spending a request each time on an answer that will not change.
 RESOLVE_RETRY_HOURS = 6.0
+
+# "R16P1", "QFP3" — a bracket slot Sofascore has created but not yet filled.
+_PLACEHOLDER_SLOT = re.compile(r"^(?:R\d+|QF|SF|F)P\d+$", re.I)
 
 
 async def resolve_pending_draws(db: AsyncSession, *, force: bool = False,
