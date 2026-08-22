@@ -575,15 +575,22 @@
    boxes have visibly moved is worse than no line at all. */
 .cv-scrubbing .cv-conn {
   opacity: 0;
-  transition: opacity 90ms linear;
+  transition: opacity 140ms ease-out;
 }
-/* Back in only once the boxes have LANDED. The lines are drawn against the
-   settled geometry, so fading them in while the columns are still travelling
-   paints them against positions the boxes have already left — which reads as
-   the connectors popping into place a beat after everything else, the exact
-   complaint this whole pass is about. The delay is the settle. */
+/* Back in as soon as the class comes off, WITHOUT a delay.
+   There used to be one, equal to the settle, from when .cv-scrubbing was
+   dropped at the START of the landing and the columns were still travelling —
+   fading lines in over moving boxes paints them against positions the boxes
+   have already left. The landing was later moved so the class comes off at the
+   END of it, and the delay was not moved with it: the geometry had been still
+   for a fifth of a second before the lines began to appear, which is long
+   enough to read as them popping on by themselves rather than returning with
+   everything else.
+   Slower than the fade out, deliberately. Going, they should be gone before
+   the boxes move far; coming back, an unhurried fade is what stops a hard edge
+   appearing out of nothing. */
 .cv-conn {
-  transition: opacity 140ms linear 220ms;
+  transition: opacity 260ms ease-out;
 }
 
 /* The round being left behind. It is not in the destination window at all, so
