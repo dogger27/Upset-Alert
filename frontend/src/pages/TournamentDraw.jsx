@@ -945,7 +945,7 @@ function TournamentDraw() {
       // The anchor is taken from where the finger STARTED, not where it is now
       // — a few pixels of axis-detection travel must not move the match the
       // reader was pointing at.
-      if (!api.begin(s.y)) return
+      if (!api.begin(s.y, dir)) return
       s.live = true
       s.dir = dir
     }
