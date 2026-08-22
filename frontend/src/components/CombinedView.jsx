@@ -339,22 +339,14 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
   // the bracket (ported from BracketView's hoveredPlayerId behaviour).
   const [hoveredPlayerId, setHoveredPlayerId] = useState(null)
 
-  /* Keep the picked player on screen when the window moves.
-     Paging changes which rounds are drawn but not how far down the bracket you
-     are, and a player's box sits at a DIFFERENT height in the next round —
-     roughly twice as far down, since each round halves the field over the same
-     span. So scrubbing forward from a highlighted name routinely left it above
-     or below the fold, and the blue path you were following disappeared at the
-     moment you asked to follow it.
+  /* The scroll container. It has ONE owner while a gesture is running: the
+     scrub, which holds the row under the finger.
 
-     Compact only. On a phone the highlight comes from a tap and stays put, so
-     it is a deliberate "follow this player". On a desktop it comes from the
-     mouse merely being over a box, and scrolling the bracket because the
-     pointer happened to be resting somewhere would be startling.
-
-     Scrolls the CONTAINER rather than calling scrollIntoView, which walks up
-     and scrolls every ancestor it can — including the page behind a bracket
-     that is supposed to scroll inside its own box. */
+     A tapped player used to be re-centred here whenever the window moved,
+     back when moving the window was a discrete page and nothing else claimed
+     the scroll. The scrub anchors on the finger instead, and two things
+     deciding where the bracket sits is one too many — the finger is the better
+     answer of the two, being the one the reader is actually pointing with. */
   const scrollRef = useRef(null)
   // 0 = idle, +1 = pulling deeper rounds in, -1 = going back. The DIRECTION has
   // to reach the layout, not just the commit: interpolating toward start+1
@@ -370,30 +362,6 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
   // a new gesture can run it early rather than race it.
   const settleRef = useRef(0)
   const landRef = useRef(null)
-  const lastWindow = useRef(windowStart)
-  useEffect(() => {
-    const moved = lastWindow.current !== windowStart
-    lastWindow.current = windowStart
-    if (!moved || !compact || hoveredPlayerId == null) return
-    const box = scrollRef.current
-    if (!box) return
-    // After the new columns have been laid out — their heights are what the
-    // target position is measured against.
-    const raf = requestAnimationFrame(() => {
-      const el = box.querySelector(`[data-player-id="${hoveredPlayerId}"]`)
-      if (!el) return
-      const outer = box.getBoundingClientRect()
-      const inner = el.getBoundingClientRect()
-      box.scrollTo({
-        top: Math.max(0, box.scrollTop + (inner.top - outer.top)
-                         - (outer.height - inner.height) / 2),
-        behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-          ? 'auto' : 'smooth',
-      })
-    })
-    return () => cancelAnimationFrame(raf)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [windowStart])
   const colW = compact ? COMPACT_COL_W : COL_W
 
   const playerById = Object.fromEntries(players.map(p => [p.id, p]))
@@ -1336,10 +1304,6 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                         <div
                           className={`cv-box${box.isBye ? ' cv-box--bye' : ''}${!box.isBye && !p ? ' cv-box--tbd' : ''}${box.correct ? ' cv-box--correct' : ''}${box.wrong ? ' cv-box--wrong' : ''}${box.clickable ? ' cv-box--clickable' : ''}${p != null && p.id === hoveredPlayerId ? ' cv-box--highlight' : ''}`}
                           onClick={box.onClick}
-                          /* How the effect above finds this player again once
-                             the window has moved and these boxes have been
-                             replaced by the next round's. */
-                          data-player-id={p?.id}
                           onMouseEnter={p != null ? () => setHoveredPlayerId(p.id) : undefined}
                           onMouseLeave={p != null ? () => setHoveredPlayerId(null) : undefined}
                         >
