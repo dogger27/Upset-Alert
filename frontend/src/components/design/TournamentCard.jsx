@@ -13,20 +13,27 @@ const pillBase = {
 }
 
 /* The star alone, with the word behind it.
-   "★ Competing" was the widest thing in the footer and it says one bit: you are
-   in this one. The star carries that on its own once you have seen it named
-   once, and the room it gives back is what lets the OOP button sit beside it.
+   "★ Competing" and "✓ Picks entered" were the widest things in their footers
+   and each says one bit: you are in this one. The star carries that on its own
+   once you have seen it named, and the room it gives back is what lets the
+   Order of Play button beside it be spelled out. Same glyph in both places on
+   purpose — it is the same fact at two moments, before the draw starts and
+   after — so `label` differs while nothing else does.
 
-   The label still has to be reachable, so: hover on a pointer, tap on a touch
-   screen, and focus for a keyboard. Not a `title` — the native tooltip takes
-   about a second to appear, never appears at all on touch, and cannot be
-   styled, which is why nothing else in this app uses one.
+   Only the GOOD state collapses. "Picks incomplete" and "Picks not started"
+   keep their words: they are not a badge you have earned, they are something
+   you still have to do, and hiding a call to action behind a hover is how it
+   goes unnoticed.
+
+   The label has to be reachable by every input, so: hover for a pointer, tap
+   for a touch screen, focus for a keyboard. Not a `title` — the native tooltip
+   takes about a second, never appears at all on touch, and cannot be styled.
 
    Portalled to the body because the card sets overflow: hidden to clip its own
    accent bar, and a popover in normal flow is cut off by it — the same trap the
    bracket's upset bell hit. Position comes from the trigger's own rect at the
    moment it opens, so it needs no layout knowledge of its ancestors. */
-function CompetingStar() {
+function InfoStar({ label }) {
   const ref = useRef(null)
   const [tip, setTip] = useState(null)
 
@@ -36,10 +43,17 @@ function CompetingStar() {
   }
   const close = () => setTip(null)
 
-  // A tap must not follow the card's link, and must not be delivered twice —
-  // a touch that fires both a synthetic click here and the anchor's navigation
-  // would open the draw instead of the popover.
+  /* HOVER IS FOR MICE ONLY, and this is what made a phone need two taps.
+     A touch fires a synthetic mouseenter before its click, so the first tap
+     opened the popover on enter and the click that followed toggled it straight
+     back shut — a tap that visibly did nothing. The second tap worked only
+     because mouseenter does not fire again. Gating on pointerType leaves the
+     tap with exactly one thing to do. */
+  const hover = (fn) => (e) => { if (e.pointerType === 'mouse') fn() }
+
   const toggle = (e) => {
+    // Not the card's link. The star sits inside one, and a tap that bubbled
+    // would open the draw instead of the label.
     e.preventDefault()
     e.stopPropagation()
     tip ? close() : open()
@@ -49,7 +63,10 @@ function CompetingStar() {
   // leaves the popover behind. Cheaper and steadier than following it: close.
   useEffect(() => {
     if (!tip) return
-    const away = () => close()
+    // A pointerdown ON the star is the start of its own toggle, and closing
+    // here would race the click that follows — the other half of the two-tap
+    // bug. Only somewhere else counts as dismissing.
+    const away = (e) => { if (!ref.current?.contains(e.target)) close() }
     window.addEventListener('scroll', away, true)
     window.addEventListener('resize', away)
     document.addEventListener('pointerdown', away)
@@ -66,14 +83,14 @@ function CompetingStar() {
         ref={ref}
         role="button"
         tabIndex={0}
-        aria-label="Competing"
+        aria-label={label}
         style={{
           ...pillBase, background: 'var(--green-600)', color: '#fff',
           boxShadow: 'var(--glow-green)', cursor: 'pointer',
           padding: '4px 9px', fontSize: '0.8rem', lineHeight: 1,
         }}
-        onMouseEnter={open}
-        onMouseLeave={close}
+        onPointerEnter={hover(open)}
+        onPointerLeave={hover(close)}
         onFocus={open}
         onBlur={close}
         onClick={toggle}
@@ -92,7 +109,7 @@ function CompetingStar() {
             letterSpacing: '0.03em', pointerEvents: 'none',
           }}
         >
-          Competing
+          {label}
         </span>,
         document.body
       )}
@@ -138,7 +155,12 @@ function renderFooter({ section, pickState, drawDates, oopPill }) {
     // when someone wants the order of play, and Winston-Salem spent its
     // qualifying Saturday with no way to reach it from the dashboard at all.
     return centredRow(
-      <span style={map[state]}>{label[state]}</span>,
+      // Picks entered collapses to the star; the other two keep their words.
+      // See the note on InfoStar — an unfinished entry is a thing you still
+      // have to do, and a call to action behind a hover goes unnoticed.
+      state === 'complete'
+        ? <InfoStar label="Picks entered" />
+        : <span style={map[state]}>{label[state]}</span>,
       <span style={{
         fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '0.8rem',
         letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--brand-text)',
@@ -150,7 +172,7 @@ function renderFooter({ section, pickState, drawDates, oopPill }) {
     const competing = pickState === 'complete'
     return centredRow(
       <span style={{ ...pillBase, background: 'var(--n-150)', color: 'var(--text-soft)' }}>🔒 Closed</span>,
-      competing ? <CompetingStar /> : null
+      competing ? <InfoStar label="Competing" /> : null
     )
   }
 
@@ -251,12 +273,25 @@ export function TournamentCard({ tour = 'ATP', name, city, surface = 'grass', ti
           }}>{name}</span>
           <TierBadge tour={tour} tier={tier} name={name} size="sm" style={{ flexShrink: 0 }} />
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          {city && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-soft)' }}>{city}</span>}
-          <SurfacePill surface={surface} />
+        {/* City, surface and dates on ONE line, always.
+            It used to wrap, and what wrapped was the date range — pushed onto a
+            line of its own by a long city name, where it read as a separate
+            fact rather than as the third item in a summary. Nowrap makes the
+            city the thing that gives, since a truncated "Winston-Sale…" still
+            says where, whereas half a date range says nothing. The surface and
+            the dates are short, fixed and never worth shortening. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'nowrap' }}>
+          {city && <span style={{
+            fontFamily: 'var(--font-body)', fontSize: '0.8rem', fontWeight: 600,
+            color: 'var(--text-soft)',
+            minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>{city}</span>}
+          <span style={{ flexShrink: 0, display: 'inline-flex' }}><SurfacePill surface={surface} /></span>
           {dateRange && <span style={{
-            marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: '0.72rem',
+            marginLeft: 'auto', flexShrink: 0,
+            fontFamily: 'var(--font-mono)', fontSize: '0.72rem',
             color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums',
+            whiteSpace: 'nowrap',
           }}>{dateRange}</span>}
         </div>
         {footer && (

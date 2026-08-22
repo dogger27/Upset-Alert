@@ -130,7 +130,9 @@ function Section({ title, description, accent, live, items, section, pickStatus,
     <section style={{
       display: 'flex', flexDirection: 'column', gap: 16,
       background: bg, border: '1px solid var(--border-strong)',
-      borderRadius: 'var(--radius-lg)', padding: '20px 24px 22px',
+      // Same reasoning as the page padding — see the note there. This box sits
+      // inside it, so the two were charging a phone twice for the same margin.
+      borderRadius: 'var(--radius-lg)', padding: '20px clamp(11px, 3.5vw, 24px) 22px',
       boxShadow: 'var(--shadow-xs)',
     }}>
       <SectionHeader
@@ -346,7 +348,14 @@ export default function Home() {
         </div>
       )}
 
-      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '26px 28px 56px' }}>
+      {/* Side padding scales with the viewport instead of being a fixed 28px.
+          A phone was spending 56px of a 375px screen on margin here and another
+          48px on the section box inside it, which left a draw card about 235px
+          to fit a city, a surface and a date range into — so the dates wrapped
+          to a line of their own. clamp keeps the roomy figure on a desktop,
+          where it is what stops the page running to the edges, and gives most
+          of it back where there is none to spare. */}
+      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '26px clamp(10px, 4vw, 28px) 56px' }}>
         <div style={{ width: '100%', maxWidth: 900, margin: '0 auto' }}>
         {user && (
           <LeagueStrip
