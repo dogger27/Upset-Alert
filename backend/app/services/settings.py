@@ -34,8 +34,27 @@ LOCK_PROGRESSIVE_R1 = "r1_progressive"
 
 LOCK_MODES = (LOCK_AT_DRAW_START, LOCK_PROGRESSIVE_R1)
 
+# ── Which source owns a result ───────────────────────────────────────────────
+#
+# "1" = Sofascore writes winner_id / scores_json / started_at / completed_at.
+# "0" = ESPN keeps them and Sofascore stays in its shadow columns.
+# Absent  = defer to SOFASCORE_AUTHORITATIVE in the environment.
+#
+# Stored rather than left to the env var because the cutover is automatic (see
+# services/sofa_cutover.py) and a decision the app makes about itself has to
+# survive the next restart. An env var can only be changed by a deploy, which
+# is exactly the human step the automation exists to remove — and the same step
+# that would be needed at 3am to undo it.
+SOFA_AUTHORITATIVE = "sofa_authoritative"
+
 _DEFAULTS = {PICK_LOCK_MODE: LOCK_AT_DRAW_START}
 _cache: dict[str, str] = {}
+
+# The stored answer, resolved once at startup and again whenever it is written.
+# None means "not loaded yet", which is NOT the same as "no", so reads before
+# the first load fall back to the environment rather than silently answering
+# false and letting a sweep write to the wrong columns.
+_sofa_auth: Optional[bool] = None
 
 
 async def get_setting(db, key: str) -> str:
@@ -94,3 +113,37 @@ async def resolve_draw_lock_mode(db, draw, commit: bool = True) -> str:
             await db.rollback()
             logger.debug("Could not stamp lock mode on draw %s", getattr(draw, "id", "?"))
     return mode
+
+
+# ── Sofascore authority ──────────────────────────────────────────────────────
+
+async def load_sofa_authoritative(db) -> bool:
+    """Resolve the stored answer into the process cache. Call at startup."""
+    global _sofa_auth
+    stored = await get_setting(db, SOFA_AUTHORITATIVE)
+    if stored in ("0", "1"):
+        _sofa_auth = stored == "1"
+    else:
+        from app.core.config import settings as env
+        _sofa_auth = bool(env.sofascore_authoritative)
+    return _sofa_auth
+
+
+def sofa_authoritative() -> bool:
+    """Does Sofascore own the real result columns right now?
+
+    Synchronous on purpose. It is read inside per-match loops and inside the
+    API's serialisation path, neither of which has a session to spare, and the
+    value changes about once in the lifetime of the project.
+    """
+    if _sofa_auth is None:
+        from app.core.config import settings as env
+        return bool(env.sofascore_authoritative)
+    return _sofa_auth
+
+
+async def set_sofa_authoritative(db, value: bool) -> None:
+    """Persist and take effect immediately. Caller commits."""
+    global _sofa_auth
+    await set_setting(db, SOFA_AUTHORITATIVE, "1" if value else "0")
+    _sofa_auth = value

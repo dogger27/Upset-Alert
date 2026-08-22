@@ -108,6 +108,11 @@ async def lifespan(app: FastAPI):
         sofa_results_monitor.start()
         logging.getLogger("app").info(
             "Sofascore results sweep ENABLED (shadow columns only)")
+        # And the thing that decides when "shadow" stops being true. It holds
+        # the gate shut until the evidence is there, opens it once, and puts
+        # ESPN back in charge if a winner ever disagrees afterwards.
+        from app.services import sofa_cutover
+        asyncio.create_task(sofa_cutover.start())
     else:
         logging.getLogger("app").info(
             "Scrapers/scheduler DISABLED (environment=%s). Set ENVIRONMENT=production to enable.",
