@@ -23,6 +23,7 @@ from app.core.auth import get_optional_user
 from app.database import get_db
 from app.models.schedule import ScheduleEntry
 from app.models.rankings import TePlayer, TeRankingsSnapshot
+from app.services.rankings import _norm
 from app.models.tournament import Draw, DrawEntry, Match, Tournament
 from app.services.sofascore_live import live_point_for
 
@@ -154,8 +155,58 @@ def _printed_mark(raw: str) -> tuple:
     return seed, etype
 
 
+_NAME_TAGS = _re.compile(r"\[[^\]]*\]")
+_TRAILING_CAPS = _re.compile(r"[A-Z]{3}$")
+
+
+def _name_key(raw: str) -> str:
+    """A sheet name reduced to something a Tennis Explorer name can be compared to.
+
+    "[1] Maya JOINT AUS" -> "maya joint". The sheet prints an entry tag, given
+    names normally, the surname in capitals and a country code; TE prints
+    "Maya Joint". Only the words are common to both.
+
+    The trailing three-letter capital is a COUNTRY only when a surname already
+    precedes it — the same rule the order-of-play parser and the frontend use,
+    and for the same reason: strip every one of them and "Luca POW GBR" loses
+    the player, along with LUZ, GUO, RAM and LEE.
+    """
+    toks = [t for t in _NAME_TAGS.sub(" ", raw or "").split() if len(t) >= 2]
+    if (len(toks) >= 2 and _TRAILING_CAPS.match(toks[-1])
+            and any(t.isupper() for t in toks[:-1])):
+        toks = toks[:-1]
+    return _norm(" ".join(toks))
+
+
+async def _slugs_by_name(db, raws: list) -> dict:
+    """te_slug for players the bracket does not know, matched on the WHOLE name.
+
+    Whole name, never a surname: te_slug is not unique, the table holds both
+    tours, and "Joint" alone is the kind of match that quietly attaches one
+    player's head-to-head record to another. A full-name match that finds
+    exactly one candidate is safe; anything else is left unresolved, which is
+    the honest answer and the state this replaces anyway.
+    """
+    keys = {k for k in (_name_key(r) for r in raws) if k}
+    if not keys:
+        return {}
+    surnames = {k.split()[-1] for k in keys if k.split()}
+    rows = (await db.execute(
+        select(TePlayer.te_slug, TePlayer.name_display).where(
+            func.lower(TePlayer.last_name).in_(surnames),
+            TePlayer.te_slug.isnot(None)))).all()
+    hits: dict = {}
+    for slug, display in rows:
+        k = _norm(display or "")
+        if k not in keys:
+            continue
+        # Two people spelled the same way is exactly the case to walk away from.
+        hits[k] = None if k in hits else slug
+    return {k: v for k, v in hits.items() if v}
+
+
 def _player_out(p, nats: dict, seeds: dict, types: dict, from_bracket: bool,
-                slugs: dict = None, extra: dict = None):
+                slugs: dict = None, extra: dict = None, by_name: dict = None):
     """One player, preferring what the bracket knows over what the sheet printed.
 
     `from_bracket` is false for anything but main-draw singles. A doubles
@@ -176,7 +227,13 @@ def _player_out(p, nats: dict, seeds: dict, types: dict, from_bracket: bool,
         nationality=nats.get(p.draw_entry_id),
         seed=seed,
         entry_type=etype,
-        te_slug=(slugs or {}).get(p.draw_entry_id),
+        # By draw entry where there is one; by NAME where there is not.
+        # Qualifying has no draw_entries row — a 128-draw stores rounds 1-7 and
+        # players who fail to qualify never reach it at all — so every
+        # qualifying row reported "no Tennis Explorer profile" for players who
+        # plainly have one. Maya Joint is te_players 2322.
+        te_slug=((slugs or {}).get(p.draw_entry_id)
+                 or (by_name or {}).get(_name_key(p.raw_name))),
         **((extra or {}).get(p.draw_entry_id) or {}),
     )
 
@@ -346,6 +403,13 @@ async def schedule_day(
             Draw.tournament_id.in_(t_ids), Draw.venue_timezone.isnot(None)))).all()
     tzs = {r[0]: r[1] for r in tz_rows}
 
+    # Players the bracket does not know — qualifying, in practice. Resolved by
+    # name so their head-to-head and form work like everyone else's; one query
+    # for the whole day, keyed on surname and confirmed on the full name.
+    unlinked = [p.raw_name for e in entries for p in e.players
+                if not p.draw_entry_id and e.discipline == "singles"]
+    slugs_by_name = await _slugs_by_name(db, unlinked) if unlinked else {}
+
     match_ids = {e.match_id for e in entries if e.match_id}
     matches = {}
     if match_ids:
@@ -449,7 +513,7 @@ async def schedule_day(
         players = [
             _player_out(p, nats, ent_seeds, ent_types,
                         e.discipline == "singles" and e.stage == "main",
-                        ent_slugs, ent_extra)
+                        ent_slugs, ent_extra, slugs_by_name)
             for p in ordered
         ]
         out.append(ScheduleEntryOut(
