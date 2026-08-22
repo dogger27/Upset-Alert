@@ -56,8 +56,9 @@ POLL_INTERVAL = 60.0
 _MIN_SURNAMES = 3
 _MIN_SURNAMES_SINGLES = 2
 
-# "[WC]", "[2]" and a trailing country code are the sheet's own annotations.
-_SHEET_NOISE = re.compile(r"\[[^\]]*\]|\b[A-Z]{3}\b")
+# "[WC]" and "[2]" are the sheet's own annotations and never part of a name.
+_SHEET_TAGS = re.compile(r"\[[^\]]*\]")
+_THREE_CAPS = re.compile(r"[A-Z]{3}$")
 
 
 def _sheet_surnames(raw_names: list) -> set:
@@ -70,21 +71,51 @@ def _sheet_surnames(raw_names: list) -> set:
     out = set()
     for raw in raw_names:
         for part in (raw or "").split("/"):
-            part = _SHEET_NOISE.sub(" ", part)
-            toks = [t for t in part.split() if len(t) > 2]
+            part = _SHEET_TAGS.sub(" ", part)
+            # Two letters, not three. "Li TU AUS" is a real entry and TU is a
+            # real surname; at three the whole name vanished and the row could
+            # never be matched. A two-letter particle ("de", "van") is lower
+            # case on these sheets, so it is never mistaken for the surname.
+            toks = [t for t in part.split() if len(t) >= 2]
+            # A trailing three-letter capital is a COUNTRY only when a surname
+            # already precedes it. Stripping every one of them cost this sweep
+            # "Luca POW GBR" — POW is the surname — and the same shape eats LUZ,
+            # GUO, RAM and LEE. Tested structurally rather than against a
+            # country list, which would strand exactly the players whose surname
+            # happens to be spelled like one.
+            if (len(toks) >= 2 and _THREE_CAPS.match(toks[-1])
+                    and any(t.isupper() for t in toks[:-1])):
+                toks = toks[:-1]
             caps = [t for t in toks if t.isupper()]
             out |= {t.lower() for t in (caps or toks[-1:])}
     return out
 
 
 def _sofa_surnames(team_name: str) -> set:
-    """Surnames as SOFASCORE spells them — "Doumbia S / Reboul F"."""
-    out = set()
-    for side in (team_name or "").split("/"):
-        toks = [t for t in side.replace(".", " ").split() if len(t) > 2]
-        if toks:
-            out.add(toks[0].lower())
-    return out
+    """Surnames as SOFASCORE spells them.
+
+    They use two different formats and the surname is at opposite ends of each:
+
+        doubles   "Doumbia S. / Reboul F."   surname FIRST, initial after
+        singles   "Pierre-Hugues Herbert"    given name first, surname LAST
+
+    Taking the first token — right for doubles, and all this handled until
+    qualifying singles arrived — reads "Felix Balshaw" as a player called
+    Felix, which matches nothing on the sheet. The "/" is what tells them
+    apart: a doubles team names two people, a singles event names one.
+    """
+    name = team_name or ""
+    if "/" in name:
+        out = set()
+        for side in name.split("/"):
+            toks = [t for t in side.replace(".", " ").split() if len(t) > 2]
+            if toks:
+                out.add(toks[0].lower())
+        return out
+    # Singles. Last token, which also lands correctly on the particled names —
+    # "Alex De Minaur" is Minaur, not De.
+    toks = [t for t in name.replace(".", " ").split() if len(t) >= 2]
+    return {toks[-1].lower()} if toks else set()
 
 
 async def _doubles_ids(db, draw: Draw, tournament: Tournament) -> Optional[tuple]:
