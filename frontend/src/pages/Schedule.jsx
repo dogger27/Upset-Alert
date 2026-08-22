@@ -206,7 +206,7 @@ function seedNumber(player) {
  * one row does not fit a phone, and the surname is what identifies a pair
  * anyway.
  */
-function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp }) {
+function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp, tight }) {
   const { seed: printedSeed, first, last, nat } = splitPlayerName(raw)
   // A seeding sent as a field beats one parsed out of the name: a resolved
   // player's name comes from the bracket and never carried brackets to parse.
