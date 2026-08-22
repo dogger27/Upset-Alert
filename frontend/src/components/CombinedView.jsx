@@ -739,15 +739,26 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
   // only to draw the trailing feed bars (connectors + H2H + bell) off the
   // right-most visible column. Its box column itself is never rendered.
   const afterC = visible[visible.length - 1] + 1
-  let afterCenters = null
-  if (afterC <= N) {
-    const count = colCount(afterC)
-    const prev = centers[visible[visible.length - 1]]
-    afterCenters = Array.from({ length: count }, (_, i) => {
+  const midpointsOf = (prev, count) => (
+    prev ? Array.from({ length: count }, (_, i) => {
       const a = prev[2 * i], b = prev[2 * i + 1]
       if (a != null && b != null) return (a + b) / 2
       return a ?? (i * SLOT + SLOT / 2)
-    })
+    }) : null
+  )
+  let afterCenters = null
+  // ...and where those same feed bars land one round on. Without this the LAST
+  // rendered column's H2H chip, group chip and upset bell had no destination
+  // and simply did not travel — and going forward that column is on screen by
+  // the end of the gesture, so they visibly lagged behind the boxes they hang
+  // off. Every other column got its destination from centersNext directly;
+  // this one is past the end of it and has to be extended the same way the
+  // current layout is.
+  let afterCentersScrub = null
+  if (afterC <= N) {
+    const count = colCount(afterC)
+    afterCenters = midpointsOf(centers[visible[visible.length - 1]], count)
+    afterCentersScrub = midpointsOf(centersNext?.[visible[visible.length - 1]], count)
   }
 
   // A live match prints its running score in the gap between its two
@@ -1209,15 +1220,28 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                             top border is removed for wrong picks (see .cv-box--wrong)
                             so it never shows through underneath this label. */}
                         {box.realName && <div className="cv-real-winner" title={box.realFullName || undefined}>{box.realName}</div>}
-                        {/* The leftmost pane never shows a score (no room under
-                            its boxes). Going forward, THIS column becomes the
-                            leftmost the moment the gesture commits — so the
-                            score does not disappear on release, it fades across
-                            the gesture that is taking its room away.
-                            Backward needs nothing: renderStart is already the
-                            destination's start, so no column changes index. */}
+                        {/* The leftmost pane never shows a score — there is no
+                            room under its boxes — so a column crossing into or
+                            out of that position gains or loses one. Both
+                            crossings are the same column, index 1, and both
+                            have to be gradual:
+
+                              FORWARD   index 1 becomes the leftmost on commit,
+                                        so the score fades OUT across the drag
+                                        that is taking its room away.
+                              BACKWARD  index 1 IS the round that was leftmost
+                                        until the gesture began, so its score
+                                        appears — and without this it appeared
+                                        at full opacity in a single frame, the
+                                        moment a finger moved.
+
+                            The first pass only did the forward half, on the
+                            reasoning that no column changes index going back.
+                            True, and beside the point: what changed is which
+                            index it already had. */}
                         {colIdx > 0 && box.score && (
-                          <div className={`cv-score${scrubbing && !backward && colIdx === 1 ? ' cv-score--yielding' : ''}`}>
+                          <div className={`cv-score${scrubbing && colIdx === 1
+                            ? (backward ? ' cv-score--arriving' : ' cv-score--yielding') : ''}`}>
                             {box.score}
                           </div>
                         )}
@@ -1253,7 +1277,9 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
               // the H2H buttons and bells stayed put while the bracket moved
               // out from under them. Falls back to no travel for the trailing
               // stub past the window, which is off-screen anyway.
-              const nextCentersScrub = centersNext?.[nextC] || null
+              const nextCentersScrub = isLastVisible
+                ? afterCentersScrub
+                : (centersNext?.[nextC] || null)
               const gapX = colIdx * (colW + COL_GAP) + colW
               // The chips belong to the column they hang off, so they have to
               // leave with it. This overlay is a sibling of the columns, not a

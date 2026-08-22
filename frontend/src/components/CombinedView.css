@@ -594,6 +594,13 @@
   opacity: calc(1 - var(--t, 0));
 }
 
+/* ...and the same score coming back the other way. Going backward, index 1 is
+   the round that was leftmost until the gesture began, so its score is
+   appearing rather than leaving — at full opacity in one frame, before this. */
+.cv-scrubbing .cv-score--arriving {
+  opacity: var(--t, 0);
+}
+
 /* The round headings travel with their columns, so the one leaving fades with
    them rather than being replaced in a single frame. */
 .cv-scrubbing .cv-label--leaving {
