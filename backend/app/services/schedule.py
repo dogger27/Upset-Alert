@@ -140,8 +140,12 @@ def _parse_clock(value: Optional[str]) -> Optional[time]:
     return time(hour, minute)
 
 
-def _classify(match) -> tuple[str, str]:
-    """(stage, discipline) — from the event code when present, else the parse."""
+def _classify(match, *, before_main: bool = False, resolved: bool = True) -> tuple[str, str]:
+    """(stage, discipline) — from the event code when present, else the parse.
+
+    `before_main` and `resolved` are the last resort, for sheets that say
+    nothing at all. See the note on the fallback below.
+    """
     blob = ' '.join([match.court or '', match.round or '', match.discipline or ''])
     m = _EVENT_CODE_RE.search(blob)
     if m:
@@ -152,6 +156,21 @@ def _classify(match) -> tuple[str, str]:
             discipline = 'mixed'
         return stage, discipline
     stage = 'qualifying' if _QUALI_ROUND_RE.match((match.round or '').strip()) else 'main'
+    # Some sheets carry NEITHER an event code nor a round. A tournament whose
+    # qualifying has a day to itself has nothing to disambiguate, so it prints
+    # nothing: Winston-Salem's Saturday is eight matches under three court
+    # headings and a date, with no "QS", no "Q1" and no "Qualifying" anywhere on
+    # the page. Read literally that is a main-draw day, which is how eight
+    # qualifying matches came to be filed as main draw with no round at all.
+    #
+    # Two facts settle it without the sheet's help: the day is BEFORE the main
+    # draw starts, and not one player on it is in the main draw's entry list.
+    # Both, never either alone — a main-draw slot on an early sheet still
+    # resolves to entries, and a name we merely failed to match is not thereby a
+    # qualifier. Deliberately silent about WHICH qualifying round: nothing here
+    # knows, and a wrong Q2 is worse than an honest Q.
+    if stage == 'main' and before_main and not resolved:
+        stage = 'qualifying'
     discipline = 'doubles' if match.is_doubles else 'singles'
     return stage, discipline
 
@@ -276,11 +295,20 @@ async def ingest_document(db, tournament, play_date: date, url: str,
 
     seen_keys = []
     per_court: dict[str, list] = {}
+    # The earliest main draw starts here. A slot printed before it, by players
+    # none of whom are in it, is qualifying — see _classify.
+    main_start = min((d['draw'].start_date for d in draws if d['draw'].start_date),
+                     default=None)
+    before_main = bool(main_start and play_date < main_start)
+
     for m in matches:
-        stage, discipline = _classify(m)
         names_a = list(m.side_a)
         names_b = list(m.side_b)
+        # Resolved BEFORE classifying now, because whether these players are in
+        # the main draw is one of the two things that identifies a qualifying
+        # sheet which names itself nothing.
         ids = await _resolve_players(db, draws, m.tour, names_a + names_b)
+        stage, discipline = _classify(m, before_main=before_main, resolved=any(ids))
         key = _pairing_key(tournament.id, play_date, discipline, names_a, names_b, ids)
         per_court.setdefault(m.court or '', []).append(
             (m, stage, discipline, names_a, names_b, ids, key))
