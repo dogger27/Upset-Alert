@@ -1136,6 +1136,18 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                     const boxN = boxOf(ccN)
                     const top = boxA.top
                     const height = boxA.height
+                    /* The status pill rides on the outline's top edge, so it
+                       has to travel with it. Only the DELTA is set here and the
+                       CSS composes it: the pill already carries a
+                       translate(-50%, -50%) of its own, and an inline transform
+                       would replace that outright — the same trap the chips
+                       hit, where hardcoding the stylesheet's transform in JS
+                       got the bell wrong. */
+                    const badgeTravel = {
+                      position: 'absolute', top: boxA.top, left: '50%',
+                      ...(boxN && boxN.top !== boxA.top
+                        ? { '--d': boxN.top - boxA.top } : {}),
+                    }
                     const outlineTravel = {
                       ...trav(boxA.top, boxN?.top, 'top'),
                       ...trav(boxA.height, boxN?.height, 'height', '--ha', '--hb'),
@@ -1208,7 +1220,8 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                           style={outlineTravel}
                         />
                         {isLive && (
-                          <span className={`in-progress-badge${isSuspended ? ' in-progress-badge--suspended' : ''}`} style={{ position: 'absolute', top, left: '50%', transform: 'translate(-50%, -50%)' }}>
+                          <span className={`in-progress-badge${isSuspended ? ' in-progress-badge--suspended' : ''}`}
+                                style={badgeTravel}>
                             {isSuspended ? 'Suspended' : 'In Progress'}
                           </span>
                         )}
@@ -1217,7 +1230,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                             the box so the two read as one statement. */}
                         {!isLive && !m.winner && !m.is_bye && m.expected_start_at && (
                           <span className="in-progress-badge in-progress-badge--scheduled"
-                                style={{ position: 'absolute', top, left: '50%', transform: 'translate(-50%, -50%)' }}>
+                                style={badgeTravel}>
                             Scheduled
                           </span>
                         )}

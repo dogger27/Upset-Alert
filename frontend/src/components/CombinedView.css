@@ -614,3 +614,12 @@
 .cv-scrubbing .cv-label--leaving {
   opacity: calc(1 - var(--t, 0));
 }
+
+/* The status pill travels with the match outline it sits on. Composed here, not
+   inline, because the pill's own centring transform would be replaced by an
+   inline one — and --d is zero at rest, so this is the transform it always had.
+   Scoped to .cv-body: the same badge is used on the schedule page, which
+   positions it differently and must not inherit a scrub it has no part in. */
+.cv-body .in-progress-badge {
+  transform: translate(-50%, -50%) translateY(calc(var(--d, 0) * var(--t, 0) * 1px));
+}
