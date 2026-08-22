@@ -1,11 +1,13 @@
 """
-Doubles scoring — for matches that have no draw and never will.
+Scoring for order-of-play rows that have no bracket match — doubles, and
+qualifying singles.
 
-WHY THIS IS SEPARATE FROM EVERYTHING ELSE. Doubles is on the order of play but
-not in the app's draws, because nobody picks it: there is no bracket, no
-predictions, and nothing to score against. ESPN covers neither doubles nor
-qualifying, so those rows sat at "scheduled" all day with no score — the one
-part of the sheet the page could not bring to life.
+WHY THIS IS SEPARATE FROM EVERYTHING ELSE. Both are on the order of play and
+neither is in the app's draws. Doubles because nobody picks it: no bracket, no
+predictions, nothing to score against. Qualifying because a 128-draw stores
+rounds 1-7 only, and players who fail to qualify never reach `draw_entries` at
+all. ESPN covers neither, so those rows sat at "scheduled" all day with no
+score — the one part of the sheet the page could not bring to life.
 
 Sofascore does cover them. So the result is stored on the SCHEDULE ROW itself,
 which is the only record of a doubles match that exists here. Nothing about the
@@ -31,7 +33,7 @@ import re
 from datetime import date, datetime, timezone
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from app.models.schedule import ScheduleEntry, ScheduleEntryPlayer
 from app.models.tournament import Draw, Tournament
@@ -47,7 +49,12 @@ POLL_INTERVAL = 60.0
 # Three of four surnames. Four is the norm; three is what a hyphen or a
 # diacritic costs, and two would start matching a team against a different
 # pairing that happens to share a player — which in doubles is common.
+# Doubles puts four surnames on a row and three have to land; hyphens and
+# diacritics ("Roger-Vasselin", "Heliovaara") routinely cost the fourth.
+# Singles has only two, so both must — which is the stricter test of the pair,
+# and the right one: there is no spare name to be wrong about.
 _MIN_SURNAMES = 3
+_MIN_SURNAMES_SINGLES = 2
 
 # "[WC]", "[2]" and a trailing country code are the sheet's own annotations.
 _SHEET_NOISE = re.compile(r"\[[^\]]*\]|\b[A-Z]{3}\b")
@@ -159,9 +166,13 @@ async def sweep_once(db, day: Optional[date] = None) -> dict:
     """Resolve unmatched doubles rows, then score every one we can."""
     day = day or date.today()
 
+    # Everything on the sheet with no bracket row behind it. Main-draw singles
+    # is excluded because it HAS one: it scores through `matches`, and letting
+    # it also match here would give one match two writers.
     entries = (await db.execute(
         select(ScheduleEntry).where(
-            ScheduleEntry.discipline != "singles",
+            or_(ScheduleEntry.discipline != "singles",
+                ScheduleEntry.stage == "qualifying"),
             ScheduleEntry.play_date == day,
         ))).scalars().all()
     if not entries:
@@ -180,10 +191,21 @@ async def sweep_once(db, day: Optional[date] = None) -> dict:
 
     # One events pull per doubles season, shared by every row that needs it.
     by_season, events = {}, []
+    # Qualifying is NOT a separate uniqueTournament — Sofascore files it under
+    # the singles one, distinguished only by the sub-tournament name
+    # ("Winston Salem, USA, Qualifying") and the round. So a tournament with
+    # qualifying rows today needs its singles season pulled as well, and the
+    # surname match sorts out which event belongs to which row.
+    quali_tournaments = {e.tournament_id for e in entries
+                         if e.discipline == "singles" and e.stage == "qualifying"}
     for d in draws:
         ids = await _doubles_ids(db, d, tourns.get(d.tournament_id))
         if ids:
             by_season[(d.tournament_id, d.gender)] = ids
+        if (d.tournament_id in quali_tournaments
+                and d.sofa_tournament_id and d.sofa_season_id):
+            by_season[(d.tournament_id, d.gender, "q")] = (d.sofa_tournament_id,
+                                                           d.sofa_season_id)
     for ut, season in set(by_season.values()):
         for kind in ("last", "next"):
             try:
@@ -223,7 +245,9 @@ async def sweep_once(db, day: Optional[date] = None) -> dict:
                 hit = len(ours & theirs)
                 if hit > best_score:
                     best, best_score = cand, hit
-            if best is None or best_score < _MIN_SURNAMES:
+            need = (_MIN_SURNAMES_SINGLES if e.discipline == "singles"
+                    else _MIN_SURNAMES)
+            if best is None or best_score < need:
                 continue
             e.sofa_event_id = best["id"]
             ev = best
