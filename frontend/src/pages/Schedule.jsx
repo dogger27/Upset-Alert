@@ -374,6 +374,31 @@ function scoreMarks(e) {
   ]
 }
 
+/* How recently a match has to have finished for its result to still count as
+   news when the page opens. Long enough to survive a phone waking up, a reload
+   and a round-trip to the API; short enough that it is genuinely "that just
+   happened" rather than a recap of the afternoon. */
+const JUST_FINISHED_MS = 90_000
+
+/* The tier to fire on FIRST render, or null to stay quiet — see useScoreEvent.
+   Only a finish qualifies. A game or a set is over in the time it takes to walk
+   back from the kitchen and there is no useful record of when either happened,
+   whereas a completed match is stamped and is the one moment worth catching up
+   on. Rows whose status was inferred from the court order carry no stamp and
+   correctly say nothing.
+
+   Tolerant in one direction on purpose: a clock that reads BEHIND the server
+   makes this negative, and a phone with a slightly wrong clock should still see
+   the animation. Ahead by more than the window, it silently does not fire,
+   which is the harmless way round. */
+function arrivalTier(e, marks) {
+  if (e.status !== 'completed' || !e.completed_at) return null
+  const at = Date.parse(e.completed_at)
+  if (!Number.isFinite(at) || Date.now() - at > JUST_FINISHED_MS) return null
+  // marks[3] is the champion mark — set only on a final that is over.
+  return marks[3][1] ? 'champion' : 'match'
+}
+
 /* One set's games for one player, with the tiebreak as a superscript.
    parseSet already understands "7(9)"; this only decides how it renders. */
 function SetCell({ cell, bold }) {
@@ -540,7 +565,16 @@ function MatchRow({ e, showCourt, zone, venueMode, onH2H }) {
   // rather than a digit: a set belongs to the match, and putting the emphasis
   // on whichever cell changed would celebrate a 6 instead of the thing the 6
   // completed.
-  const fx = useScoreEvent(scoreMarks(e))
+  //
+  // The second argument covers the case where the result was already in by the
+  // time this row first rendered. That is the NORMAL case on a phone — the tab
+  // is discarded while backgrounded and the page rebuilt on return, so a match
+  // that finished while the screen was off has no transition for the hook to
+  // watch. Comparing renders can only ever catch a change the browser was
+  // awake for; the row's own completed_at says what happened regardless of who
+  // was watching, which is what makes the finish visible on mobile at all.
+  const marks = scoreMarks(e)
+  const fx = useScoreEvent(marks, arrivalTier(e, marks))
 
   // A break of serve, worked out from two consecutive readings of this row —
   // see the hook. Its own banner rather than another card tier: a break is not

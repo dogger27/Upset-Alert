@@ -26,8 +26,22 @@ export const FX_MS = {
  * a page where a match is already finished is not the match finishing. Without
  * that, every completed match on the day would celebrate itself on load, and a
  * champion decided this morning would throw a ten-second party at midnight.
+ *
+ * `onArrival` is the exception, and it is what makes any of this work on a
+ * phone. Watching for a CHANGE only fires if the page was mounted across it,
+ * and on a phone it usually is not: a backgrounded tab gets discarded and
+ * reloaded, and React Query's poll does not run while the window is unfocused
+ * either. So the ordinary mobile path is that a match was live when you looked
+ * away and is already finished when the page comes back — no transition was
+ * ever rendered, because the browser was not there to render it. Nothing is
+ * wrong with the animation in that case; it was never asked to run.
+ *
+ * Pass a tier here when the DATA says the thing happened moments ago (see
+ * `completed_at` on the schedule row) and it fires once on mount instead.
+ * Whether that counts as "moments ago" is the caller's judgement, not this
+ * hook's — all it does here is turn one silence into one animation.
  */
-export default function useScoreEvent(marks) {
+export default function useScoreEvent(marks, onArrival = null) {
   const prev = useRef(null)
   const [fx, setFx] = useState(null)
   const sig = marks.map(m => m[1]).join('')
@@ -49,6 +63,22 @@ export default function useScoreEvent(marks) {
     // sig, not marks — a new array every render would re-run this for ever.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sig])
+
+  // The arrival, deliberately in an effect of its own rather than folded into
+  // the branch above. Mount-only, so it re-runs whole under StrictMode's
+  // mount/unmount/mount — which the combined version did not survive: the
+  // second mount found a previous reading already recorded, saw no change
+  // against it, and left the animation switched on with nothing left to switch
+  // it off. Two effects that each do one thing cannot get into that state.
+  useEffect(() => {
+    if (!onArrival) return
+    setFx(onArrival)
+    const t = setTimeout(() => setFx(null), FX_MS[onArrival] ?? 3000)
+    return () => clearTimeout(t)
+    // Mount only. A row that arrives already finished is news exactly once; if
+    // it were still in play, there is nothing here to announce.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return fx
 }
