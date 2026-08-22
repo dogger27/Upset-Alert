@@ -41,9 +41,10 @@ from io import BytesIO
 from typing import Optional
 
 import httpx
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 
 from app.database import AsyncSessionLocal
+from app.models.schedule import ScheduleEntry
 from app.models.tournament import Draw, Tournament
 from app.services.http_errors import is_transient_http_error, describe_exception
 from app.services.rankings import _norm
@@ -460,7 +461,26 @@ async def refresh_order_of_play() -> int:
                                   dedup_key=f"oop_fetch_{tournament.id}", dedup_hours=6)
                 continue  # leave yesterday's value; the next tick re-checks
 
-            fresh = oop_date == today
+            # WHAT COUNTS AS A SHEET WORTH STORING.
+            #
+            # This was `oop_date == today`, and that one `==` meant the site
+            # could never show tomorrow's order of play. Tournaments publish the
+            # next day's sheet the evening before — that is the whole point of
+            # an order of play — and every one of them was fetched, parsed and
+            # thrown away for being dated tomorrow. Winston-Salem's first main
+            # draw day was sitting on protennislive for hours while the site
+            # showed nothing.
+            #
+            # It also broke the other way. `today` is UTC and venues are not:
+            # from 8pm in Cincinnati the server has already rolled over, so the
+            # sheet for the day still being PLAYED is dated "yesterday" and was
+            # dropped for the rest of the evening — exactly when scores matter.
+            #
+            # The guard was only ever meant to stop a FINISHED tournament's last
+            # sheet being rewritten on every tick, so that is all it does now:
+            # reject the genuinely stale, accept today, tomorrow, and yesterday
+            # for the venues still living in it.
+            fresh = oop_date is not None and oop_date >= today - timedelta(days=1)
             covers_atp = atp_labels >= _MIN_TOUR_LABELS
 
             # Store the schedule itself, not just the link. Only when the file
@@ -521,4 +541,56 @@ async def refresh_order_of_play() -> int:
                 draw.oop_checked_at = datetime.now(timezone.utc)
 
         await db.commit()
+
+    await _alert_missing_schedule()
     return updated
+
+
+async def _alert_missing_schedule() -> None:
+    """Say so when a tournament being played has no order of play stored.
+
+    THE POINT. Everything above is a mechanism, and the mechanism failed
+    silently for weeks: a single `==` meant a sheet dated tomorrow was fetched,
+    parsed and discarded, so the site could never show the next day's play and
+    nothing anywhere said so. The fetch succeeded. The parse succeeded. There
+    was simply no schedule, and no reason for anyone to look until a person
+    noticed the page was empty.
+
+    So this asks the only question that matters — is there a schedule for a
+    tournament that is being played — and asks it of the STORED RESULT rather
+    than of any step that produces it. It stays true if the fetching, the
+    parsing or the freshness rule are rewritten, and it catches causes nobody
+    has thought of yet.
+    """
+    today = date.today()
+    async with AsyncSessionLocal() as db:
+        rows = (await db.execute(
+            select(Tournament.id, Tournament.name,
+                   func.min(Draw.start_date), func.max(Draw.end_date))
+            .join(Draw, Draw.tournament_id == Tournament.id)
+            .where(Draw.status != "completed",
+                   Draw.start_date.isnot(None))
+            .group_by(Tournament.id))).all()
+
+        for tid, name, start, end in rows:
+            # Under way, or starting tomorrow — the point by which a sheet
+            # exists in the real world, so its absence here is ours.
+            if start is None or start > today + timedelta(days=1):
+                continue
+            if end is not None and end < today:
+                continue
+            have = (await db.execute(
+                select(func.count()).select_from(ScheduleEntry).where(
+                    ScheduleEntry.tournament_id == tid,
+                    ScheduleEntry.play_date >= today))).scalar_one()
+            if have:
+                continue
+            await app_log(
+                "warning", "order_of_play",
+                f"No order of play stored for '{name}' — it runs {start} to {end} "
+                f"and there is nothing on or after {today}. The sheet is "
+                f"published by now, so this is a fetch or a parse failing "
+                f"quietly, not a tournament that has not posted one.",
+                {"tournament_id": tid, "start_date": str(start),
+                 "end_date": str(end)},
+                dedup_key=f"oop_missing_{tid}", dedup_hours=12)
