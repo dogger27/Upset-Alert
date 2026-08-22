@@ -201,6 +201,37 @@
    already at most 46rem, so the cap does nothing there either way. */
 .sched-list--time .sched-row { max-width: none; }
 
+/* ── The time view sizes itself to the DAY ────────────────────────────────
+   The fixed --sched-card-body below is a worst case: four lines in the timing
+   column, because a slot CAN print a wording, a clock, an estimate wording and
+   an estimated clock. Most days print none of that. A qualifying Saturday with
+   no tour tag, no round and one line of court under each clock reserved 4.9rem
+   to display about three, and every card carried an inch of empty green.
+
+   One grid, auto rows at 1fr: every row takes the height of the tallest row on
+   the page, and no more. That is the same "all cards identical" guarantee the
+   fixed height gives, computed from what is actually on screen instead of from
+   what might be.
+
+   Why this is safe HERE and was not for the court view: 1fr equalises within
+   ONE grid, and the court view is a grid per court — each sized its cards to
+   its own tallest, so a court with a long slot line made taller cards than the
+   court beside it and the two columns stopped lining up. That is the bug the
+   fixed height was introduced to fix. The time view is a single list, so there
+   is only one maximum and nothing to disagree with. */
+.sched-list--time {
+  display: grid;
+  grid-auto-rows: 1fr;
+}
+.sched-list--time .sched-row {
+  /* The grid track owns the height now. The inner columns must stop asserting
+     one of their own, or they would hold the row at the worst case the track
+     was just freed from. */
+  --sched-card-body: auto;
+}
+.sched-list--time .sched-row-when { max-height: none; }
+.sched-list--time .sched-row-main { height: 100%; }
+
 .sched-row {
   /* Fills its column, up to a cap. Every card in a column is then identical by
      construction — no measuring, nothing to drift — and the name simply takes
@@ -1241,14 +1272,16 @@
   }
 }
 
-/* The time view prints the COURT under the clock, which the court view does not
-   — it has the court in a heading instead. "P&G Stadium Court" is three lines in
-   a 4.4rem column, and the card's fixed body was measured against the court
-   view's two, so the last line was hanging a few pixels past the border.
-   Sized for the view rather than raising it everywhere: cards only ever have to
-   agree with the ones beside them, and the two views are never on screen
-   together. */
-.sched-list--time .sched-row { --sched-card-body: 4.9rem; }
+/* The 4.9rem that used to be here is gone. It existed because the time view
+   prints the COURT under the clock where the court view has it in a heading, so
+   "P&G Stadium Court" ran to three lines in a 4.4rem column and hung past the
+   card's border — a worst case, raised to fit the worst day. Every other day
+   paid for it in empty space.
+   The time view now sizes its rows from a single grid instead (see the block
+   near .sched-list--time at the top of this file), which fits the tallest card
+   ON THE PAGE and cannot hang over or under. Left as a note rather than
+   deleted silently: the number looks arbitrary and the temptation is to
+   reintroduce it. */
 
 /* ── BREAK ────────────────────────────────────────────────────────────────
    Across the whole card, not in the score columns: a break is a fact about the
