@@ -363,6 +363,13 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
   const [scrubDir, setScrubDir] = useState(0)
   const scrubbing = scrubDir !== 0
   const scrub = useRef(null)
+  // Frame handle for the post-commit cleanup, so a gesture starting inside it
+  // can call it off.
+  const cleanupRef = useRef(0)
+  // The pending landing of the last gesture: its timer, and the work itself so
+  // a new gesture can run it early rather than race it.
+  const settleRef = useRef(0)
+  const landRef = useRef(null)
   const lastWindow = useRef(windowStart)
   useEffect(() => {
     const moved = lastWindow.current !== windowStart
@@ -694,15 +701,42 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
       begin(clientY, dir) {
         const el = scrollRef.current
         if (!el) return false
+
+        /* A gesture may start while the last one is still settling — the
+           transition lives for 220ms after release and a second drag can begin
+           inside that. Left in place it eases every frame of the NEW drag
+           toward where the finger was a fifth of a second ago, which reads as
+           the bracket lagging or springing back rather than following. Cleared
+           here rather than trusted to have expired. */
+        el.classList.remove('cv-scroll--settling')
+        // Settle the PREVIOUS gesture in full before taking over: it earned its
+        // window change and must not lose it, and it must not still be owed one
+        // when this gesture's state is in place.
+        if (landRef.current) landRef.current()
+        // ...and call off its deferred cleanup, which would otherwise strip --t
+        // out from under this drag two frames from now.
+        if (cleanupRef.current) {
+          cancelAnimationFrame(cleanupRef.current)
+          cleanupRef.current = 0
+        }
+
         const rect = el.getBoundingClientRect()
         const localY = clientY - rect.top
-        // Content coordinates, undoing the fit-to-width scale.
-        const contentY = (el.scrollTop + localY) / (zoom || 1)
+        /* Content coordinates — undoing the fit-to-width scale AND the offset
+           of the body within the scroller.
+           The centres are measured from the top of .cv-body; localY is measured
+           from the top of .cv-scroll, and between the two sits the round-label
+           row. Ignoring it put every anchor out by the height of that row, in
+           the same direction every time: the bracket settled lower than the
+           finger that was supposedly holding it. Read once per gesture, not
+           per frame. */
+        const bodyTop = el.querySelector('.cv-body')?.offsetTop || 0
+        const contentY = (el.scrollTop + localY - bodyTop) / (zoom || 1)
         // From a known zero: the previous gesture deliberately leaves --t
         // behind so its commit can paint, and it is cleared here rather than
         // there.
         el.style.setProperty('--t', '0')
-        scrub.current = { localY, idx: null, contentY, step, dir }
+        scrub.current = { localY, idx: null, contentY, step, dir, bodyTop }
         setScrubDir(dir)
         return true
       },
@@ -730,7 +764,8 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
           el.style.setProperty('--t', String(v))
           if (st.idx == null) return
           const a = atIndex(st.a, st.idx)
-          el.scrollTop = Math.max(0, (a + (atIndex(st.b, st.idx) - a) * v) * (zoom || 1) - st.localY)
+          el.scrollTop = Math.max(0, (a + (atIndex(st.b, st.idx) - a) * v) * (zoom || 1)
+                                     + st.bodyTop - st.localY)
         })
       },
 
@@ -746,9 +781,20 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
         el.style.setProperty('--t', String(target))
         if (st.idx != null) {
           const y = target ? atIndex(st.b, st.idx) : atIndex(st.a, st.idx)
-          el.scrollTop = Math.max(0, y * (zoom || 1) - st.localY)
+          el.scrollTop = Math.max(0, y * (zoom || 1) + st.bodyTop - st.localY)
         }
-        st.settle = window.setTimeout(() => {
+        /* The landing, as a function rather than only a timer, so a gesture
+           that starts inside the 220ms can FLUSH it instead of racing it.
+           Cancelling outright would be wrong — the previous scrub earned its
+           window change and dropping it loses a round. Letting it fire on
+           schedule is worse: it nulls scrub.current, which by then belongs to
+           the NEW gesture, ending it mid-stroke. */
+        const land = () => {
+          if (settleRef.current) {
+            clearTimeout(settleRef.current)
+            settleRef.current = 0
+          }
+          if (landRef.current === land) landRef.current = null
           /* ORDER MATTERS, and getting it wrong is the flash on release.
              --t was being removed FIRST, which snaps every interpolated
              position back to its t=0 value — the OLD window's geometry — while
@@ -767,11 +813,22 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
           scrub.current = null
           if (target === 1) onDone?.()
           setScrubDir(0)
-          requestAnimationFrame(() => requestAnimationFrame(() => {
-            el.classList.remove('cv-scroll--settling')
-            el.style.removeProperty('--t')
-          }))
-        }, SETTLE_MS)
+          /* Deferred two frames so the committed window can paint first — see
+             above. Tracked, because a second gesture can begin inside those two
+             frames: starting one and having the PREVIOUS gesture's cleanup
+             strip --t out from under it resets the new drag to zero mid-stroke,
+             which is the bracket snapping back to where it started while a
+             finger is still on it. Cancelled in begin(). */
+          cleanupRef.current = requestAnimationFrame(() => {
+            cleanupRef.current = requestAnimationFrame(() => {
+              cleanupRef.current = 0
+              el.classList.remove('cv-scroll--settling')
+              el.style.removeProperty('--t')
+            })
+          })
+        }
+        landRef.current = land
+        settleRef.current = window.setTimeout(land, SETTLE_MS)
       },
     }
 
@@ -781,7 +838,8 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
     return () => {
       const st = scrub.current
       if (st?.raf) cancelAnimationFrame(st.raf)
-      if (st?.settle) clearTimeout(st.settle)
+      if (settleRef.current) clearTimeout(settleRef.current)
+      if (cleanupRef.current) cancelAnimationFrame(cleanupRef.current)
       scrub.current = null
       if (scrubRef) scrubRef.current = null
     }
