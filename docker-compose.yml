@@ -30,6 +30,46 @@ services:
       - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
       - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
       - ENVIRONMENT=production
+      # ── Sofascore ──────────────────────────────────────────────────────
+      # Runs BESIDE ESPN, not instead of it. The two things it adds here are
+      # things ESPN cannot supply at all: the point score (40-15), which is a
+      # property of their feed rather than our parser, and any score whatsoever
+      # for doubles and qualifying, which ESPN does not cover.
+      - SOFASCORE_LIVE_ENABLED=true
+      # Deliberately NOT SOFASCORE_LIVE_FORCE. The gate reads ESPN's live
+      # column to decide whether anything is on court, which is what keeps the
+      # poller silent overnight and out of season. Staging sets it because
+      # staging has no ESPN to gate on; production has one, and forcing here
+      # would spend requests on an empty tour all winter.
+      #
+      # Shadow results sweep. Every promote into winner_id / scores_json /
+      # started_at / completed_at sits behind sofascore_authoritative below, so
+      # with that false this writes sofa_* columns ONLY and cannot move a
+      # result. Scoring, standings, Hall of Fame and pick-locking read the real
+      # columns and are untouched.
+      - SOFASCORE_RESULTS_ENABLED=true
+      # ESPN still owns the record. The point of running the sweep in the dark
+      # is the one measurement staging structurally cannot produce: how long
+      # after ESPN — or before it — Sofascore sees a match finish. Staging has
+      # no ESPN, so its sweep writes both stamps itself and they compare equal
+      # to the microsecond. Flip this only once that number exists and is sane;
+      # it is a read-layer switch, so a restart puts it back with nothing to
+      # migrate.
+      - SOFASCORE_AUTHORITATIVE=false
+      # Doubles and qualifying have no bracket row and never will, so their
+      # result lives on the schedule row itself. Nothing here overlaps anything
+      # ESPN writes — this is the empty half of the order of play being filled
+      # in for the first time.
+      - SOFASCORE_DOUBLES_ENABLED=true
+      # Empty means direct, which is correct while Jupiter's own address is
+      # accepted. It exists so that a block — which costs live scoring until it
+      # clears, with no proxy left to rotate to since IPRoyal was cancelled —
+      # can be answered by pointing at an SSH SOCKS tunnel and a restart,
+      # rather than by a code change.
+      - SOFASCORE_PROXY=${SOFASCORE_PROXY:-}
+    extra_hosts:
+      # So SOFASCORE_PROXY can name the docker gateway for a host-side tunnel.
+      - "host.docker.internal:host-gateway"
     dns:
       - 8.8.8.8
       - 1.1.1.1
