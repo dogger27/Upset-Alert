@@ -59,6 +59,9 @@ _MIN_SURNAMES_SINGLES = 2
 # "[WC]" and "[2]" are the sheet's own annotations and never part of a name.
 _SHEET_TAGS = re.compile(r"\[[^\]]*\]")
 _THREE_CAPS = re.compile(r"[A-Z]{3}$")
+# Everything that is not a letter, for telling an INITIAL ("H.") from a
+# capitalised surname ("NYS") — both are uppercase, only one has two letters.
+_ALPHA = re.compile(r"[^A-Za-z]")
 
 
 def _sheet_surnames(raw_names: list) -> set:
@@ -86,7 +89,11 @@ def _sheet_surnames(raw_names: list) -> set:
             if (len(toks) >= 2 and _THREE_CAPS.match(toks[-1])
                     and any(t.isupper() for t in toks[:-1])):
                 toks = toks[:-1]
-            caps = [t for t in toks if t.isupper()]
+            # An INITIAL is uppercase too. "H. Nys" made caps == ["H."], so the
+            # surname was thrown away and the initial kept — which is why a
+            # doubles final could not be matched to the semi that fed it. A
+            # capitalised surname has at least two letters; an initial has one.
+            caps = [t for t in toks if t.isupper() and len(_ALPHA.sub("", t)) >= 2]
             out |= {t.lower() for t in (caps or toks[-1:])}
     return out
 
