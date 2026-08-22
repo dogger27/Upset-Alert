@@ -613,15 +613,35 @@ class ESPNMonitor:
                 by_id[tid].name, by_id[tid].gender, event.get("name"), confidence,
                 winner.name, claims[holder[key]][1],
             )
+            # Losing a claim BEFORE your own first ball is the ordinary state,
+            # not a fault. ESPN publishes an event around the time play begins,
+            # so in the days before that a draw has nothing of its own to match
+            # and falls through to player overlap — where it scores against
+            # whatever is running this week, because next week's field is
+            # largely this week's early losers. Winston-Salem hit Cincinnati at
+            # 0.33 every poll for the two days before it started. The guard
+            # correctly refused it; alerting on the guard working is an email a
+            # day for every event in the week before it opens.
+            #
+            # Recorded either way, so the Admin panel still shows the reasoning
+            # — only the LEVEL moves, and only "warning" reaches the alert
+            # digest. Once play has begun and we still cannot see the
+            # tournament, that is worth waking someone for: the live scores and
+            # the sharpened pick lock both depend on this match.
+            started = (by_id[tid].start_date is not None
+                       and today >= by_id[tid].start_date)
             from app.services.system_log import app_log
             await app_log(
-                "warning", "espn",
+                "warning" if started else "info", "espn",
                 f"'{by_id[tid].name}' ({by_id[tid].gender}) matched ESPN event "
                 f"'{event.get('name')}' at {confidence:.2f}, but '{winner.name}' matched it "
-                f"at {claims[holder[key]][1]:.2f} — left unmatched rather than tracking the wrong event",
+                f"at {claims[holder[key]][1]:.2f} — left unmatched rather than tracking the wrong event"
+                + ("" if started else " (not started yet — its own event is not published)"),
                 {"tournament_id": tid, "tournament_name": by_id[tid].name,
                  "gender": by_id[tid].gender, "espn_event": event.get("name"),
                  "confidence": round(confidence, 3),
+                 "start_date": str(by_id[tid].start_date),
+                 "started": started,
                  "winner_tournament_id": winner.id, "winner_name": winner.name,
                  "winner_confidence": round(claims[holder[key]][1], 3)},
                 dedup_key=f"espn_claim_lost_{tid}", dedup_hours=6,
