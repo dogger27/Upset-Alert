@@ -29,9 +29,13 @@ one per pass forever.
 
 import asyncio
 import logging
+from datetime import date, timedelta
+
+from sqlalchemy import func, or_, select
 
 from app.core.config import settings
 from app.database import AsyncSessionLocal
+from app.models.tournament import Draw, DrawEntry, Match
 from app.services.sofascore import (RESOLVE_RETRY_HOURS, SofascoreBlocked,
                                     resolve_pending_draws)
 from app.services.system_log import app_log
@@ -50,6 +54,11 @@ STARTUP_DELAY = 120.0
 # A block costs live scoring until it clears, so back off hard rather than
 # retrying on the hourly cadence into a host that has just refused us.
 BLOCKED_BACKOFF = 6 * 3600.0
+
+# How far ahead of its first ball a draw must be joinable. Two days is comfortably
+# after a bracket is published and comfortably before anyone needs a score from it,
+# so a warning here is actionable rather than merely early.
+COVERAGE_LEAD_DAYS = 2
 
 
 async def _once() -> int:
@@ -74,6 +83,73 @@ async def _once() -> int:
     return stamped
 
 
+async def _coverage_check(db) -> None:
+    """Say so when a draw is about to be played and cannot be scored.
+
+    THIS IS THE POINT OF THE WHOLE MODULE. Everything above is a mechanism, and
+    a mechanism that fails silently is indistinguishable from one that was never
+    built — which is exactly how this went wrong: resolution ran once by hand in
+    August, nothing called it again, and for two days the only tournament on the
+    calendar with live scores was the one somebody had happened to resolve.
+    Nothing was broken. Nothing logged. There was simply no score, and no reason
+    for anyone to look.
+
+    So the guarantee is not "the resolver works". It is that a draw about to be
+    played without the means to be scored says so, whatever the reason — an
+    unpublished bracket, a block, a name nothing matches, or some future cause
+    nobody has thought of. Checked from the OUTCOME rather than from any of the
+    steps, so it stays true if the steps are rewritten.
+    """
+    today = date.today()
+    horizon = today + timedelta(days=COVERAGE_LEAD_DAYS)
+    draws = (await db.execute(
+        select(Draw).where(
+            Draw.status != "completed",
+            Draw.start_date.isnot(None),
+            Draw.start_date <= horizon,
+            or_(Draw.end_date.is_(None), Draw.end_date >= today),
+        ))).scalars().all()
+
+    for d in draws:
+        when = "under way" if d.start_date <= today else f"starts {d.start_date}"
+        problem = None
+
+        if not (d.sofa_tournament_id and d.sofa_season_id):
+            problem = ("no Sofascore tournament id, so nothing can score it — "
+                       "usually a bracket Sofascore has not published yet")
+        else:
+            stamped = (await db.execute(
+                select(func.count()).select_from(DrawEntry).where(
+                    DrawEntry.draw_id == d.id,
+                    DrawEntry.sofa_player_id.isnot(None)))).scalar_one()
+            if stamped == 0:
+                problem = ("a tournament id but not one player resolved, so no "
+                           "match on it can be joined to a live event")
+            elif d.start_date <= today:
+                # Playing, joinable, and still nothing has arrived. That is the
+                # case no amount of retrying fixes by itself.
+                seen = (await db.execute(
+                    select(func.count()).select_from(Match).where(
+                        Match.draw_id == d.id,
+                        or_(Match.sofa_live_json.isnot(None),
+                            Match.sofa_winner_id.isnot(None))))).scalar_one()
+                if seen == 0:
+                    problem = ("everything resolved, but not one match has "
+                               "received a score — check the poller and the "
+                               "egress before play gets away")
+
+        if problem:
+            logger.warning("Sofascore coverage: %s %s (%s) — %s",
+                           d.name, d.year, d.gender, problem)
+            await app_log(
+                "warning", "sofascore",
+                f"'{d.name}' {d.year} ({d.gender}) {when} with {problem}.",
+                {"draw_id": d.id, "start_date": str(d.start_date),
+                 "sofa_tournament_id": d.sofa_tournament_id,
+                 "sofa_season_id": d.sofa_season_id},
+                dedup_key=f"sofa_coverage_{d.id}", dedup_hours=24)
+
+
 async def start() -> None:
     if not (settings.sofascore_live_enabled or settings.sofascore_results_enabled):
         # Nothing reads the ids, so spending requests to keep them fresh would
@@ -85,6 +161,10 @@ async def start() -> None:
         delay = POLL_INTERVAL
         try:
             await _once()
+            # AFTER resolving, so a draw fixed on this very pass is not reported
+            # as broken a second later.
+            async with AsyncSessionLocal() as db:
+                await _coverage_check(db)
         except SofascoreBlocked as exc:
             delay = BLOCKED_BACKOFF
             logger.warning("Sofascore resolve blocked, backing off %.0fh: %s",

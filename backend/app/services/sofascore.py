@@ -595,9 +595,15 @@ async def resolve_draw(db: AsyncSession, draw: Draw, *, force: bool = False) -> 
         "unresolved": [], "field_size": 0, "error": None,
     }
 
-    entries = (await db.execute(
+    # `is not None` is not the same as "has a name". An unfilled qualifier slot
+    # is stored as an empty string, not NULL, so eight of Winston-Salem's forty
+    # eight "unresolved entries" were four real names and four blanks that could
+    # never resolve and were never meant to — reported as failures every day
+    # until the qualifiers came through.
+    entries = [e for e in (await db.execute(
         select(DrawEntry).where(DrawEntry.draw_id == draw.id,
                                 DrawEntry.name.isnot(None)))).scalars().all()
+               if (e.name or "").strip()]
     report["total"] = len(entries)
     if not entries:
         report["error"] = "draw has no named entries yet"
