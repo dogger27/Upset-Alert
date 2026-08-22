@@ -526,9 +526,19 @@
    IS the finger, and easing that would feel like lag. */
 .cv-scroll--settling .cv-body,
 .cv-scroll--settling .cv-labels,
-.cv-scroll--settling .cv-slot {
+.cv-scroll--settling .cv-slot,
+.cv-scroll--settling .cv-match-outline,
+.cv-scroll--settling .cv-live-score,
+.cv-scroll--settling .cv-eta,
+.cv-scroll--settling .cv-h2h,
+.cv-scroll--settling .cv-group,
+.cv-scroll--settling .cv-bell {
+  /* height as well as top: the match outline wraps a PAIR, so it changes shape
+     as the pair closes up, and easing one while snapping the other is worse
+     than easing neither. */
   transition: transform 220ms cubic-bezier(0.22, 0.61, 0.36, 1),
-              top 220ms cubic-bezier(0.22, 0.61, 0.36, 1);
+              top 220ms cubic-bezier(0.22, 0.61, 0.36, 1),
+              height 220ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
 /* The connectors bow out for the duration.

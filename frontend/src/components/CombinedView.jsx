@@ -588,18 +588,27 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
       scrub.current.idx = fracIndex(scrub.current.a, scrub.current.contentY)
     }
   }
-  /* One box's two homes. Without a scrub in flight this is just `top`, exactly
-     as before — nothing pays for the gesture when it is not happening. */
-  const slotStyle = (c, i, a) => {
-    if (!centersNext) return { top: a }
-    const b = centersNext[c]?.[i]
-    if (b == null) return { top: a }
+  /* Any measurement that has to travel with the layout — a top, a height, the
+     middle of a gap. Without a scrub in flight it is the plain number, exactly
+     as before, so nothing pays for the gesture when it is not happening.
+
+     EVERYTHING keyed to the centres has to go through this, not just the boxes.
+     The match outlines, the score in the gap, the H2H chips and the upset bells
+     are all positioned from the same arrays, and interpolating only the boxes
+     left them sliding out from under their own furniture.
+
+     Distinct variable names per property, because two travelling values on one
+     element would otherwise both claim --a. */
+  const trav = (a, b, prop, na = '--a', nb = '--b') => {
+    if (b == null || b === a) return { [prop]: a }
     return {
-      '--a': a,
-      '--b': b,
-      top: 'calc((var(--a) + (var(--b) - var(--a)) * var(--t, 0)) * 1px)',
+      [na]: a,
+      [nb]: b,
+      [prop]: `calc((var(${na}) + (var(${nb}) - var(${na})) * var(--t, 0)) * 1px)`,
     }
   }
+
+  const slotStyle = (c, i, a) => trav(a, centersNext?.[c]?.[i], 'top')
 
   /* ── The scrub, driven from the parent's touch handlers ──────────────────
      Owned HERE rather than in the page, because pinning the row under the
@@ -716,15 +725,21 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
   // the pair's midpoint — which is exactly what the next column's box centre,
   // its H2H chip and the connector fan all key off, so none of them shift.
   // Only the live pair itself moves, and only by LIVE_SPREAD each way.
-  visible.forEach((c) => {
-    const cc = centers[c]
-    R[c]?.forEach((m, ri) => {
-      const a = 2 * ri, b = 2 * ri + 1
-      if (!isLiveMatch(m) || cc[a] == null || cc[b] == null) return
-      cc[a] -= LIVE_SPREAD
-      cc[b] += LIVE_SPREAD
+  // Applied to the SCRUB layout too, or the two disagree about where a live
+  // pair sits and the box jumps by LIVE_SPREAD at the end of every gesture.
+  for (const map of [centers, centersNext]) {
+    if (!map) continue
+    Object.keys(map).forEach((key) => {
+      const c = Number(key)
+      const cc = map[c]
+      R[c]?.forEach((m, ri) => {
+        const a = 2 * ri, b = 2 * ri + 1
+        if (!isLiveMatch(m) || cc[a] == null || cc[b] == null) return
+        cc[a] -= LIVE_SPREAD
+        cc[b] += LIVE_SPREAD
+      })
     })
-  })
+  }
 
   // ---- box builders -------------------------------------------------------
   // Clicking a box picks ITS player as the predicted winner of the match they
@@ -898,6 +913,9 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
           {visible.map((c, colIdx) => {
             const count = colCount(c)
             const cc = centers[c]
+            // Where this column's boxes land one round on, for everything that
+            // has to travel with them.
+            const ccN = centersNext?.[c] || null
             // The leftmost column is the one leaving on a forward scrub — it
             // has no place in the next window, so it fades rather than
             // interpolating to a position it does not have.
@@ -936,8 +954,26 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                     // absolute round — so the outline must key off colIdx, not c.
                     const topPad = 12
                     const bottomPad = colIdx === 0 ? 12 : 28
-                    const top = Math.min(yTop, yBot) - BOX_H / 2 - topPad
-                    const height = Math.abs(yBot - yTop) + BOX_H + topPad + bottomPad
+                    // The outline wraps the pair, so BOTH its top and its
+                    // height are functions of the two centres — and both have
+                    // to travel, or the box stays the height of the round it
+                    // came from while the names inside it close up.
+                    const boxOf = (arr) => {
+                      const t0 = arr?.[2 * ri], b0 = arr?.[2 * ri + 1]
+                      if (t0 == null || b0 == null) return null
+                      return {
+                        top: Math.min(t0, b0) - BOX_H / 2 - topPad,
+                        height: Math.abs(b0 - t0) + BOX_H + topPad + bottomPad,
+                      }
+                    }
+                    const boxA = boxOf(cc)
+                    const boxN = boxOf(ccN)
+                    const top = boxA.top
+                    const height = boxA.height
+                    const outlineTravel = {
+                      ...trav(boxA.top, boxN?.top, 'top'),
+                      ...trav(boxA.height, boxN?.height, 'height', '--ha', '--hb'),
+                    }
                     const isSuspended = m.live_scores?.[4] === 'suspended'
                     const isLive = isLiveMatch(m)
 
@@ -964,11 +1000,24 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                     const lower = boxAt(yTop <= yBot ? 2 * ri + 1 : 2 * ri)
                     // Scores render only from the second visible column on, so
                     // this keys off colIdx exactly as the outline above does.
+                    // The middle of the gap the score sits in. Computed from
+                    // whichever pair of centres, so it can travel like the rest.
+                    const midOf = (arr) => {
+                      const t0 = arr?.[2 * ri], b0 = arr?.[2 * ri + 1]
+                      if (t0 == null || b0 == null) return null
+                      const gt = Math.min(t0, b0) + BOX_H / 2
+                                 + (colIdx > 0 && upper?.score ? SCORE_H : 0)
+                      const gb = Math.max(t0, b0) - BOX_H / 2
+                                 - (lower?.realName ? NOTE_H : 0)
+                      return (gt + gb) / 2
+                    }
                     const gapTop = Math.min(yTop, yBot) + BOX_H / 2
                                    + (colIdx > 0 && upper?.score ? SCORE_H : 0)
                     const gapBot = Math.max(yTop, yBot) - BOX_H / 2
                                    - (lower?.realName ? NOTE_H : 0)
                     const gapMid = (gapTop + gapBot) / 2
+                    // What the score, the ETA and the bell all hang from.
+                    const gapMidTravel = trav(gapMid, midOf(ccN), 'top')
                     /* Whether the upset bell hangs in this column's right-hand
                        corner. Anything centred in the gap between two opponents
                        shares that corner with it, so it has to know.
@@ -990,7 +1039,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                       <Fragment key={`mo${m.id}`}>
                         <div
                           className={`cv-match-outline${isMissingPick ? ' cv-match-outline--missing' : ''}`}
-                          style={{ top, height }}
+                          style={outlineTravel}
                         />
                         {isLive && (
                           <span className={`in-progress-badge${isSuspended ? ' in-progress-badge--suspended' : ''}`} style={{ position: 'absolute', top, left: '50%', transform: 'translate(-50%, -50%)' }}>
@@ -1034,7 +1083,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                           return (
                             <span
                               className={`cv-eta${colIdx > 0 ? ' cv-eta--roomy' : ''}${bell ? ' cv-eta--bell' : ''}`}
-                              style={{ top: gapMid }}
+                              style={gapMidTravel}
                             >
                               <span className="cv-eta-day">{day}</span>
                               {time && <> <span className="cv-eta-time">{time}</span></>}
@@ -1069,7 +1118,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                           return (
                             <span
                               className={`cv-live-score cv-live-score--s${Math.min(nodes.length, 4)}${colIdx > 0 ? ' cv-live-score--roomy' : ''}${bell ? ' cv-live-score--bell' : ''}${isSuspended ? ' cv-live-score--suspended' : ''}`}
-                              style={{ top: gapMid }}
+                              style={gapMidTravel}
                             >
                               {nodes}
                               {showPts && <LivePoint pts={pts} tiebreak={lp.tiebreak} />}
@@ -1144,8 +1193,15 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
               const nextC = isLastVisible ? afterC : visible[colIdx + 1]
               const nextCenters = isLastVisible ? afterCenters : centers[nextC]
               if (!nextCenters || nextC < 1) return null
+              // The same column's centres one round on. The chips hang off the
+              // boxes they point at, so they travel with them — without this
+              // the H2H buttons and bells stayed put while the bracket moved
+              // out from under them. Falls back to no travel for the trailing
+              // stub past the window, which is off-screen anyway.
+              const nextCentersScrub = centersNext?.[nextC] || null
               const gapX = colIdx * (colW + COL_GAP) + colW
               return nextCenters.map((y, ri) => {
+                const chipTop = trav(y, nextCentersScrub?.[ri], 'top')
                 const m = R[nextC - 1][ri]
                 const { p1: aId, p2: bId } = resolved[m.id] || {}
                 const a = aId != null ? playerById[aId] : null
@@ -1168,7 +1224,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                     {ha?.name && hb?.name && (
                       <button
                         className="cv-h2h"
-                        style={{ top: y, left: gapX + H2H_X, pointerEvents: 'auto' }}
+                        style={{ ...chipTop, left: gapX + H2H_X, pointerEvents: 'auto' }}
                         title={`Head-to-head: ${ha.name} vs ${hb.name}`}
                         onClick={() => setH2H({ p1: ha, p2: hb, match: m })}
                       >
@@ -1188,7 +1244,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                     {m.winner?.id != null && !m.is_bye && !predictionsHidden && (
                       <button
                         className="cv-group"
-                        style={{ top: y, left: colIdx * (colW + COL_GAP) - H2H_X, pointerEvents: 'auto' }}
+                        style={{ ...chipTop, left: colIdx * (colW + COL_GAP) - H2H_X, pointerEvents: 'auto' }}
                         title={`Who predicted ${m.winner.name}?`}
                         aria-label={`Who predicted ${m.winner.name}?`}
                         onClick={() => setPredictorsMatch(m)}
@@ -1197,7 +1253,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                       </button>
                     )}
                     {isUpsetPick && (
-                      <UpsetBell style={{ top: y, left: gapX + H2H_X - BELL_OFFSET, pointerEvents: 'auto' }} />
+                      <UpsetBell style={{ ...chipTop, left: gapX + H2H_X - BELL_OFFSET, pointerEvents: 'auto' }} />
                     )}
                   </Fragment>
                 )
