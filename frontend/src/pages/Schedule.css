@@ -1265,6 +1265,16 @@
 @media (max-width: 560px) {
   .sched-pname--long .sched-name-full { display: none; }
   .sched-pname--long .sched-name-abbr { display: inline; }
+
+  /* The rung below the initial. Some surnames are longer than this column on
+     their own — "Q. VANDECASTEELE [8]" is already abbreviated as far as it can
+     be and still ran under the set scores — so the type gives instead. The
+     amount comes from PlayerName as --name-scale; whether it applies at all is
+     this media query's business, since a desktop card has three times the room
+     and shows the full name regardless.
+     On .sched-player, so the seed shrinks with the name it belongs to. The flag
+     is sized in rem and keeps its own footprint. */
+  .sched-player { font-size: calc(1em * var(--name-scale, 1)); }
 }
 
 /* ── A phone gets the whole width ─────────────────────────────────────────

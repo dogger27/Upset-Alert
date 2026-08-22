@@ -159,6 +159,13 @@ function expectedStart(e, zone, venueMode) {
 // the array in whatever order it started in.
 const NO_SEED = 9999
 
+/* Characters the name column carries at full size on a phone, seed included.
+   Where even the INITIALLED form stops fitting and the type has to shrink —
+   the same threshold PlayerName uses to decide an initial is worth using, on
+   purpose. They are one measurement of one column, and letting the two drift
+   would leave a band of lengths that neither rung catches. */
+const FIT_CHARS = 15
+
 /**
  * A player's seed number, or null.
  *
@@ -209,8 +216,32 @@ function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp })
   const longName = !surnameOnly && shown.length > 15
   const initialled = first ? `${first.trim()[0]}. ${last}` : last
 
+  /* AND A RUNG BELOW THE INITIAL, because some surnames are longer than the
+     column on their own. "Q. VANDECASTEELE [8]" is already the abbreviated
+     form and still runs under the set scores — there is no shorter way to
+     write it that still names the person, so the type has to give instead.
+     Same order of sacrifice the draw page uses: full name, then an initial,
+     then size. Never a truncation — a cut surname names nobody.
+     Proportional to how far over it is, floored so it cannot shrink into
+     illegibility chasing a name no width would have held. Applied to the whole
+     player, so the seed shrinks with the name it belongs to rather than
+     staying full size beside a smaller one; the flag is sized in rem and holds
+     its own.
+     Handed to CSS as a custom property rather than a font-size, because
+     WHETHER to shrink is a question about width and only the stylesheet knows
+     the width. A desktop card is three times this column and shows the full
+     name anyway — shrinking there would be a regression bought for nothing.
+     Same division of labour as the initial above: JS decides how much, the
+     breakpoint decides whether. */
+  const tightest = surnameOnly ? last : (longName ? initialled : full)
+    + (!hideSeed && seed ? ` ${seed}` : '')
+  const scale = tightest.length > FIT_CHARS
+    ? Math.max(0.74, FIT_CHARS / tightest.length)
+    : 1
+
   return (
-    <span className="sched-player">
+    <span className="sched-player"
+          style={scale < 1 ? { '--name-scale': scale } : undefined}>
       {/* No placeholder when there is no flag. A missing nationality here is
           not missing DATA — the tours list Russian and Belarusian players as
           neutral athletes with no flag, and the sheet omits it deliberately, so
