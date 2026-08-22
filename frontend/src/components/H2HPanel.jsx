@@ -41,6 +41,12 @@ function fmtName(teName) {
   return `${parts[parts.length - 1]} ${parts.slice(0, -1).join(' ')}`
 }
 
+/* Characters a name carries at full size in the title bar, where two names, a
+   "vs" and a close button share one line. Deliberately one number for both
+   rungs and the shrink: they are three answers to the same question about the
+   same box, and letting them drift would leave lengths that no rung catches. */
+const H2H_FIT = 12
+
 /** "Alejandro Davidovich Fokina" -> ["Alejandro", "Davidovich Fokina"].
  *  Splits at the FIRST space, so compound surnames stay whole on their line. */
 function splitName(full) {
@@ -67,11 +73,40 @@ function PlayerName({ player, fallback }) {
     : null
   const iso = iocToFlagClass(player?.nationality || parsed.nat)
   const [first, last] = splitName(clean ?? fmtName(fallback))
+
+  /* THE LADDER. Two names, a "vs" and a close button share one line, so a name
+     gets about half of what is left — and "Jessica HINOJOSA GOMEZ" is not
+     close to fitting. It was simply overflowing, clipped at both ends, which
+     is the one outcome that names must never have: half a surname identifies
+     nobody.
+
+     Same order of sacrifice as the draw and the schedule: the given name goes
+     to an initial, then goes entirely, and only then does the type shrink.
+     Every rung still names the person; a truncation does not.
+
+     Counted, not measured. The threshold is a property of the string, so there
+     is nothing to observe and nothing that can oscillate — and the surname is
+     what the budget is really about, since by the last two rungs it is all
+     that is left. */
+  const initial = first ? `${first.trim()[0]}.` : ''
+  const shownFirst = !last ? first
+    : `${first} ${last}`.length <= H2H_FIT ? first
+    : `${initial} ${last}`.length <= H2H_FIT ? initial
+    : ''
+  const scale = last && last.length > H2H_FIT
+    ? Math.max(0.7, H2H_FIT / last.length)
+    : 1
+
   return (
     <>
       {iso && <span className={`fi fi-${iso} h2h-flag`} />}
-      <span className="h2h-name-first">{first}</span>
-      {last && <span className="h2h-name-last">{last}</span>}
+      {shownFirst && <span className="h2h-name-first">{shownFirst}</span>}
+      {last && (
+        <span className="h2h-name-last"
+              style={scale < 1 ? { fontSize: `${scale}em` } : undefined}>
+          {last}
+        </span>
+      )}
     </>
   )
 }
