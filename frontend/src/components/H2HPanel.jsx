@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { getH2H, getPlayerForm } from '../api/players'
+import { splitPlayerName } from '../utils/flags'
 import './H2HPanel.css'
 
 function teKeys(tournSurface) {
@@ -50,8 +51,22 @@ function splitName(full) {
 }
 
 function PlayerName({ player, fallback }) {
-  const iso = iocToFlagClass(player?.nationality)
-  const [first, last] = splitName(player?.name ?? fmtName(fallback))
+  /* The order of play prints a name as "[1] Maya JOINT AUS" — an entry tag, a
+     capitalised surname and a country code — and for a player with no bracket
+     row that raw string IS the name the schedule hands over. Rendered as-is it
+     read "Maya JOINT AUS", with her country as part of her surname.
+     splitPlayerName is the app's one parser for that shape, and it already
+     knows the rule that matters: a trailing three-letter capital is a country
+     only when a surname precedes it, so LUZ, GUO, RAM and LEE survive as the
+     names they are. It also yields the nationality, which is the only place a
+     qualifying player's flag can come from — there is no draw entry carrying
+     one. A bracket name passes through untouched, having none of these parts. */
+  const parsed = splitPlayerName(player?.name ?? '')
+  const clean = player?.name
+    ? [parsed.first, parsed.last].filter(Boolean).join(' ') || player.name
+    : null
+  const iso = iocToFlagClass(player?.nationality || parsed.nat)
+  const [first, last] = splitName(clean ?? fmtName(fallback))
   return (
     <>
       {iso && <span className={`fi fi-${iso} h2h-flag`} />}
