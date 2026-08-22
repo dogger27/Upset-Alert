@@ -524,6 +524,19 @@
 
 /* Release. The only moment anything is animated — during the drag the position
    IS the finger, and easing that would feel like lag. */
+/* THE RELEASE ANIMATES --t ITSELF, which is what registering it above bought.
+   Everything in the gesture is derived from that one number — the transform,
+   every top, the outline heights, and now the opacities — so transitioning the
+   source means all of them land together and nothing has to be listed. Without
+   it the opacities would snap while the positions eased, which is precisely
+   the "some things pop" this fixes.
+   The per-property transitions below stay as the fallback for engines without
+   @property, where --t can only change discretely: there the positions still
+   ease even though the fades cannot. */
+.cv-scroll--settling {
+  transition: --t 220ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
 .cv-scroll--settling .cv-body,
 .cv-scroll--settling .cv-labels,
 .cv-scroll--settling .cv-slot,
@@ -532,13 +545,17 @@
 .cv-scroll--settling .cv-eta,
 .cv-scroll--settling .cv-h2h,
 .cv-scroll--settling .cv-group,
-.cv-scroll--settling .cv-bell {
+.cv-scroll--settling .cv-bell,
+.cv-scroll--settling .cv-col,
+.cv-scroll--settling .cv-label,
+.cv-scroll--settling .cv-score {
   /* height as well as top: the match outline wraps a PAIR, so it changes shape
      as the pair closes up, and easing one while snapping the other is worse
      than easing neither. */
   transition: transform 220ms cubic-bezier(0.22, 0.61, 0.36, 1),
               top 220ms cubic-bezier(0.22, 0.61, 0.36, 1),
-              height 220ms cubic-bezier(0.22, 0.61, 0.36, 1);
+              height 220ms cubic-bezier(0.22, 0.61, 0.36, 1),
+              opacity 220ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
 /* The connectors bow out for the duration.
@@ -552,13 +569,36 @@
   opacity: 0;
   transition: opacity 90ms linear;
 }
+/* Back in only once the boxes have LANDED. The lines are drawn against the
+   settled geometry, so fading them in while the columns are still travelling
+   paints them against positions the boxes have already left — which reads as
+   the connectors popping into place a beat after everything else, the exact
+   complaint this whole pass is about. The delay is the settle. */
 .cv-conn {
-  transition: opacity 160ms linear 60ms;
+  transition: opacity 140ms linear 220ms;
 }
 
-/* The round being left behind. It is not in the next window at all, so rather
-   than interpolate it to a position it does not have, it fades on its way off
-   the left edge. */
+/* The round being left behind. It is not in the destination window at all, so
+   rather than interpolate it to a position it does not have, it fades on its
+   way off the edge — and so do the chips hanging off it, which live in a
+   separate overlay and were sliding away at full opacity as loose pills. */
 .cv-scrubbing .cv-col--leaving {
   opacity: calc(1 - var(--t, 0));
+}
+
+/* A score that is about to lose its room. The leftmost pane has none under its
+   boxes, and going forward this column becomes the leftmost the moment the
+   gesture commits — so rather than the score vanishing on release, it goes with
+   the gesture that is taking the space away. */
+.cv-scrubbing .cv-score--yielding {
+  opacity: calc(1 - var(--t, 0));
+}
+
+/* The round headings travel with their columns, so the one leaving fades with
+   them rather than being replaced in a single frame. */
+.cv-scrubbing .cv-label--leaving {
+  opacity: calc(1 - var(--t, 0));
+}
+.cv-scrubbing .cv-label--arriving {
+  opacity: var(--t, 0);
 }

@@ -933,9 +933,18 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
             const label = c === 0
               ? (R[0][0]?.round_name || 'Round 1')
               : c < N ? (R[c][0]?.round_name || `Round ${c + 1}`) : 'Champion'
+            // A heading belongs to its column: the one whose column is leaving
+            // fades out, the one whose column is arriving fades in. Without
+            // this the whole row swapped in a single frame at commit, which is
+            // the most visible pop of the lot because it is the only text that
+            // changes.
+            const state = !scrubbing ? ''
+              : i === (backward ? visible.length - 1 : 0) ? ' cv-label--leaving'
+              : i === (backward ? 0 : visible.length - 1) ? ' cv-label--arriving'
+              : ''
             return (
               <div key={c} style={{ display: 'flex', flexShrink: 0 }}>
-                <div className="cv-label" style={{ width: colW }}>{label}</div>
+                <div className={`cv-label${state}`} style={{ width: colW }}>{label}</div>
                 {i < visible.length - 1 && <div style={{ width: COL_GAP }} />}
               </div>
             )
@@ -1200,7 +1209,18 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                             top border is removed for wrong picks (see .cv-box--wrong)
                             so it never shows through underneath this label. */}
                         {box.realName && <div className="cv-real-winner" title={box.realFullName || undefined}>{box.realName}</div>}
-                        {colIdx > 0 && box.score && <div className="cv-score">{box.score}</div>}
+                        {/* The leftmost pane never shows a score (no room under
+                            its boxes). Going forward, THIS column becomes the
+                            leftmost the moment the gesture commits — so the
+                            score does not disappear on release, it fades across
+                            the gesture that is taking its room away.
+                            Backward needs nothing: renderStart is already the
+                            destination's start, so no column changes index. */}
+                        {colIdx > 0 && box.score && (
+                          <div className={`cv-score${scrubbing && !backward && colIdx === 1 ? ' cv-score--yielding' : ''}`}>
+                            {box.score}
+                          </div>
+                        )}
                       </div>
                     )
                   })}
@@ -1235,7 +1255,13 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
               // stub past the window, which is off-screen anyway.
               const nextCentersScrub = centersNext?.[nextC] || null
               const gapX = colIdx * (colW + COL_GAP) + colW
-              return nextCenters.map((y, ri) => {
+              // The chips belong to the column they hang off, so they have to
+              // leave with it. This overlay is a sibling of the columns, not a
+              // child, so .cv-col--leaving never reached them and they slid off
+              // the edge at full opacity as loose pills.
+              const chipsLeaving = scrubbing
+                && colIdx === (backward ? visible.length - 1 : 0)
+              const chips = nextCenters.map((y, ri) => {
                 const chipTop = trav(y, nextCentersScrub?.[ri], 'top')
                 const m = R[nextC - 1][ri]
                 const { p1: aId, p2: bId } = resolved[m.id] || {}
@@ -1293,6 +1319,9 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                   </Fragment>
                 )
               })
+              return chipsLeaving
+                ? <div key={c} className="cv-col--leaving">{chips}</div>
+                : chips
             })}
           </div>
         </div>
