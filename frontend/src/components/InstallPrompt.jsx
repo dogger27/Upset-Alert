@@ -320,28 +320,13 @@ export default function InstallPrompt() {
             <ol>
               {steps.map((s, i) => <li key={i}>{s}</li>)}
             </ol>
-            {os === 'ios' && !isInAppBrowser() && (
-              <>
-                {/* Opened from Messages, WhatsApp, Gmail, LinkedIn and the rest,
-                    iOS uses a built-in browser whose share sheet has no "Add to
-                    Home Screen". Its user-agent is identical to Safari's, so it
-                    cannot be detected the way the named social apps are — only
-                    mentioned. This is the likeliest reason someone following the
-                    steps exactly still finds nothing. */}
-                <p className="install-steps-note">
-                  Opened this from a text or email? Tap the compass icon to open it
-                  in Safari first — built-in browsers can’t add to the Home Screen.
-                </p>
-                <p className="install-steps-note">
-                  Already added it? Just open Upset Alert from your Home Screen —
-                  iPhone can’t switch you there automatically.
-                </p>
-                <p className="install-steps-note">
-                  Notifications on iPhone only work once the app is on your Home Screen —
-                  Safari can’t send them from a tab.
-                </p>
-              </>
-            )}
+            {/* The three amber caveats that used to sit here are gone — the
+                built-in-browser warning, the already-installed note and the
+                notifications one. They were written when the steps were prose
+                and covered every way prose could be misread; now each step
+                shows the button it names, so the reader either finds it or is
+                somewhere the pictures plainly do not match, which is the same
+                information without three paragraphs of hedging under it. */}
             <button className="install-steps-done" onClick={() => setShowSteps(false)}>Got it</button>
           </div>
         </div>
