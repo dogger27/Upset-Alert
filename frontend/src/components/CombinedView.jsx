@@ -245,7 +245,11 @@ function atIndex(arr, idx) {
 }
 
 const SCRUB_SHIFT = {
-  transform: 'translateX(calc(var(--t, 0) * var(--step, 0px) * -1))',
+  // --tdir and --tbase carry the direction, because the two are not mirror
+  // images. Forward starts flush and slides one column LEFT: (t)·-1.
+  // Backward renders an extra column on the LEFT, so it starts already shifted
+  // off by one and slides back to flush: (t-1)·+1.
+  transform: 'translateX(calc((var(--t, 0) * var(--tdir, -1) + var(--tbase, 0)) * var(--step, 0px)))',
   willChange: 'transform',
 }
 export const H2H_X = 8          // H2H chip's x within the gap — centred on the match box's right border
@@ -345,7 +349,12 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
      and scrolls every ancestor it can — including the page behind a bracket
      that is supposed to scroll inside its own box. */
   const scrollRef = useRef(null)
-  const [scrubbing, setScrubbing] = useState(false)
+  // 0 = idle, +1 = pulling deeper rounds in, -1 = going back. The DIRECTION has
+  // to reach the layout, not just the commit: interpolating toward start+1
+  // whichever way the finger went is what made a backward drag animate forward
+  // and then snap.
+  const [scrubDir, setScrubDir] = useState(0)
+  const scrubbing = scrubDir !== 0
   const scrub = useRef(null)
   const lastWindow = useRef(windowStart)
   useEffect(() => {
@@ -517,11 +526,14 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
   const size = Math.min(windowSize, totalCols)
   const maxStart = Math.max(0, totalCols - size)
   const start = Math.min(Math.max(0, windowStart), maxStart)
-  // One extra column while a scrub is in flight, so the round being pulled in
-  // exists in the DOM before it is needed. It overflows to the right, which
-  // this container already allows deliberately (see the note by naturalW).
-  const renderCount = size + (scrubbing && start + size < totalCols ? 1 : 0)
-  const visible = Array.from({ length: renderCount }, (_, i) => start + i)
+  /* One extra column while a scrub is in flight, so the round being pulled in
+     exists in the DOM before it is needed — appended going forward, PREPENDED
+     going back, which is the asymmetry the first version missed entirely. */
+  const backward = scrubDir < 0
+  const renderStart = backward ? Math.max(0, start - 1) : start
+  const extra = scrubbing && (backward ? start > 0 : start + size < totalCols) ? 1 : 0
+  const visible = Array.from({ length: size + extra }, (_, i) => renderStart + i)
+    .filter((c) => c < totalCols)
 
   const colCount = (c) => (c === 0 ? 2 * R[0].length : R[c - 1].length)
 
@@ -560,28 +572,44 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
     return out
   }
 
-  const centers = layoutFrom(visible)
+  /* A scrub is one rule evaluated at two anchors, and which anchor is "now"
+     depends on the direction.
 
-  /* WHERE THE SAME COLUMNS LAND ONE ROUND ON. A column that was a row of
-     evenly-spaced midpoints becomes a column of tight match pairs, occupying
-     half the height — that is the telescoping, and it is why the scroll has to
-     be offset to hold the anchor. Only while a scrub is in flight,
-     and only in compact mode, which is the only place the gesture exists.
-     Every slot then carries both positions and CSS interpolates between them
-     from a single --t on the container, so a drag costs one style write per
-     frame instead of re-rendering a bracket sixty times a second.
-     Column `start` is not in the next window at all; it keeps its own position
-     and fades, which is what leaving looks like. */
-  const nextVisible = scrubbing
-    ? Array.from({ length: size }, (_, i) => Math.min(start + 1 + i, totalCols - 1))
-    : null
-  const centersNext = nextVisible ? layoutFrom(nextVisible) : null
+     FORWARD  now = this window; next = one round deeper. The column being left
+              has no place in the destination, so it fades.
+     BACKWARD now = this window; next = one round back — and the destination is
+              anchored one column LEFT of everything rendered, so the roles
+              simply swap: the layout of what we render IS the destination, and
+              "now" is that same rule one column in.
+
+     The column arriving on a backward scrub has no position in the current
+     layout at all. Its boxes emerge from the parent they feed, which is the
+     exact inverse of the forward case where a column's boxes converge onto
+     their winner — so the two directions look like each other played
+     backwards, which is what makes the gesture read as reversible. */
+  const collapseOnto = (parents, count) =>
+    Array.from({ length: count }, (_, i) => parents?.[Math.floor(i / 2)] ?? 0)
+
+  let centers
+  let centersNext = null
+  if (backward && visible.length > 1) {
+    centersNext = layoutFrom(visible)
+    centers = layoutFrom(visible.slice(1))
+    centers[visible[0]] = collapseOnto(centers[visible[1]], colCount(visible[0]))
+  } else {
+    centers = layoutFrom(visible)
+    if (scrubbing && visible.length > 1) centersNext = layoutFrom(visible.slice(1))
+  }
+
 
   // Both layouts of the expanding column, for the anchor. Assigned during
   // render rather than in an effect: the first move() can arrive in the same
   // frame the gesture starts, before any effect has run.
   if (scrub.current && centersNext) {
-    const focus = start + 1
+    // A column present in BOTH layouts, so the fractional index means the same
+    // thing at each end. Forward that is the round being pulled in; backward it
+    // is the one we are on, which becomes the second column of the destination.
+    const focus = backward ? start : start + 1
     scrub.current.a = centers[focus] || centers[start]
     scrub.current.b = centersNext[focus] || centersNext[start + 1]
     if (scrub.current.idx == null) {
@@ -634,15 +662,18 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
       // a bracket at its last round still scrolls normally.
       canPage: (dir) => dir > 0 ? start + size < totalCols : start > 0,
 
-      begin(clientY) {
+      // dir must arrive HERE, not at commit time: it decides which layout the
+      // interpolation runs toward, and that has to be settled before the first
+      // frame is drawn.
+      begin(clientY, dir) {
         const el = scrollRef.current
         if (!el) return false
         const rect = el.getBoundingClientRect()
         const localY = clientY - rect.top
         // Content coordinates, undoing the fit-to-width scale.
         const contentY = (el.scrollTop + localY) / (zoom || 1)
-        scrub.current = { localY, idx: null, contentY, step }
-        setScrubbing(true)
+        scrub.current = { localY, idx: null, contentY, step, dir }
+        setScrubDir(dir)
         return true
       },
 
@@ -663,7 +694,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
       finish(t, onDone) {
         const el = scrollRef.current
         const st = scrub.current
-        if (!el || !st) { setScrubbing(false); return }
+        if (!el || !st) { setScrubDir(0); return }
         const target = t >= 0.5 ? 1 : 0
         el.classList.add('cv-scroll--settling')
         el.style.setProperty('--t', String(target))
@@ -675,7 +706,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
           el.classList.remove('cv-scroll--settling')
           el.style.removeProperty('--t')
           scrub.current = null
-          setScrubbing(false)
+          setScrubDir(0)
           if (target === 1) onDone?.()
         }, SETTLE_MS)
       },
@@ -868,8 +899,11 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
            className={`cv-scroll${compact ? ' cv-scroll--compact' : ''}${scrubbing ? ' cv-scrubbing' : ''}`}
            style={{
              paddingLeft: insetLeft ? `${insetLeft + 4}px` : `${GROUP_CHIP_GUTTER}px`,
-             // One round's travel, in px. Read by SCRUB_SHIFT.
+             // One round's travel, in px, and which way it runs. Read by
+             // SCRUB_SHIFT.
              '--step': `${colW + COL_GAP}px`,
+             '--tdir': backward ? 1 : -1,
+             '--tbase': backward ? -1 : 0,
            }}>
         {/* Scale-to-fit: outer claims the SMALLER (zoomed) footprint so
             .cv-scroll's scrollWidth shrinks with it (needed for 2 rounds to
@@ -916,10 +950,11 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
             // Where this column's boxes land one round on, for everything that
             // has to travel with them.
             const ccN = centersNext?.[c] || null
-            // The leftmost column is the one leaving on a forward scrub — it
-            // has no place in the next window, so it fades rather than
-            // interpolating to a position it does not have.
-            const leaving = scrubbing && colIdx === 0
+            // The column with no place in the destination fades rather than
+            // interpolating to a position it does not have. Going forward that
+            // is the leftmost; going back it is the one falling off the right.
+            const leaving = scrubbing
+              && colIdx === (backward ? visible.length - 1 : 0)
 
             // Interior gap: feeds the next VISIBLE column. Trailing stub: the
             // right-most visible column still gets its feed bars (connectors,
