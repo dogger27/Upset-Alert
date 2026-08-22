@@ -385,8 +385,31 @@ async def ingest_document(db, tournament, play_date: date, url: str,
                     # prints the settled pair, hashes to something else, matches
                     # nothing, and inserts the same match a second time. That is
                     # exactly how Tiafoe/Auger-Aliassime came to be listed twice.
-                    entry.pairing_key = _pairing_key(
+                    #
+                    # But only if the key is FREE. An earlier revision may have
+                    # printed the settled pair and already stored a row under
+                    # it, which is the ordinary case for a slot that resolves
+                    # mid-day: this row and that one are then the same slot, and
+                    # taking the key is a unique-constraint violation, not a
+                    # merge. It does not even fail here — the next query's
+                    # autoflush raises it, so the traceback lands on an
+                    # unrelated statement and the WHOLE DAY's ingest rolls back
+                    # over one duplicated slot. Cincinnati lost a full revision
+                    # that way on 2026-08-22.
+                    #
+                    # Leaving the old key is safe: it is still unique, and the
+                    # two rows now carry identical players and the same
+                    # match_id, which is the first relation _dedupe_day tests a
+                    # few lines below. Merging is its job; this only has to
+                    # avoid making the merge impossible to reach.
+                    settled_key = _pairing_key(
                         tournament.id, play_date, discipline, na, nb, ids)
+                    taken = (await db.execute(
+                        select(ScheduleEntry.id).where(
+                            ScheduleEntry.pairing_key == settled_key,
+                            ScheduleEntry.id != entry.id))).scalars().first()
+                    if taken is None:
+                        entry.pairing_key = settled_key
             elif side_a_ids or side_b_ids:
                 any_id = (side_a_ids + side_b_ids)[0]
                 entry.draw_id = entry_draw.get(any_id)
@@ -540,6 +563,17 @@ async def _absorb(db, keep, drop) -> None:
     drop_first, keep_first = _aware(drop.first_seen_at), _aware(keep.first_seen_at)
     if drop_first and (not keep_first or drop_first < keep_first):
         keep.first_seen_at = drop.first_seen_at
+    # A doubles result lives on the ROW — there is no match to read it back
+    # from, because doubles draws have no rows in `matches` at all. So folding
+    # two doubles rows together can delete the only record that the match was
+    # played, and the survivor goes back to reading "scheduled" with the court
+    # behind it stuck waiting on a match that finished hours ago. Singles is
+    # unaffected either way: everything it shows comes through match_id.
+    # Only fills gaps — whatever the survivor already knows about itself wins.
+    for field in ("sofa_event_id", "live_scores_json", "scores_json",
+                  "live_point_json", "winner_side", "started_at", "completed_at"):
+        if getattr(keep, field, None) is None and getattr(drop, field, None) is not None:
+            setattr(keep, field, getattr(drop, field))
     await db.execute(
         update(ScheduleChange)
         .where(ScheduleChange.schedule_entry_id == drop.id)
