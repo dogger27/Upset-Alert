@@ -580,7 +580,22 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
     centers[visible[0]] = collapseOnto(centers[visible[1]], colCount(visible[0]))
   } else {
     centers = layoutFrom(visible)
-    if (scrubbing && visible.length > 1) centersNext = layoutFrom(visible.slice(1))
+    if (scrubbing && visible.length > 1) {
+      centersNext = layoutFrom(visible.slice(1))
+      /* AND THE COLUMN ON ITS WAY OUT CONDENSES ONTO ITS WINNERS.
+         It has no place in the destination layout, and the first version took
+         that to mean it had nowhere to go — so it sat still and faded while
+         everything around it moved, which is what "the left column does not
+         condense inwards" was describing.
+         It does have somewhere to go: each of its boxes converges on the box it
+         feeds. That is collapseOnto, the same function the backward case uses
+         to UNFOLD an arriving column, run in the other direction — which is
+         why reversing a backward drag mid-gesture already looked right and a
+         forward one did not. The two directions are now the same animation
+         played each way, which is what makes a scrub feel reversible. */
+      centersNext[visible[0]] = collapseOnto(
+        centersNext[visible[1]], colCount(visible[0]))
+    }
   }
 
 
