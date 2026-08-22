@@ -571,7 +571,15 @@
   align-items: baseline;
   gap: 0.1rem 0.45rem;
 }
-.sched-altteam { display: flex; align-items: baseline; gap: 0.35rem; }
+/* inline-flex, not flex. The competitor row sets `.sched-side { display:
+   inline }` so a side flows as text on its one allotted line — which quietly
+   takes the flex context away from .sched-side--alt above, leaving these as
+   BLOCK boxes that stacked one per line whatever the wrap rule said. Two
+   candidates then cost two lines, both sides cost four, and the card's fixed
+   body is budgeted for two: the last name hung out past the bottom border.
+   Inline-flex keeps the internal baseline alignment and puts the box back in
+   the line where it belongs. */
+.sched-altteam { display: inline-flex; align-items: baseline; gap: 0.35rem; }
 .sched-or {
   font-size: 0.62rem;
   font-weight: 800;

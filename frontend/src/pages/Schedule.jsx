@@ -255,7 +255,15 @@ function Side({ players, doubles, tbd }) {
         {players.map((p, i) => (
           <span key={i} className="sched-altteam">
             {i > 0 && <span className="sched-or">or</span>}
-            <span className="sched-pname">{p.name}</span>
+            {/* Surnames for singles. Two candidates and a separator have to fit
+                the ONE line this side is given, and a slot that has not
+                resolved is by definition the least important thing on the card
+                — it is two names neither of which may turn out to be playing.
+                A doubles alternative is a whole team in one string
+                ("O. Luz / R. Matos"), which has no surname to take. */}
+            <span className="sched-pname">
+              {doubles ? p.name : (splitPlayerName(p.name).last || p.name)}
+            </span>
           </span>
         ))}
       </span>

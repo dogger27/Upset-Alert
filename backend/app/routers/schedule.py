@@ -382,17 +382,75 @@ async def schedule_day(
             if e.court_order < highest_started and statuses[e.id] == "scheduled":
                 statuses[e.id] = "completed"
 
+    # ── Who actually came through ────────────────────────────────────────────
+    # The sheet is printed before the matches feeding it have been played, so a
+    # semi-final slot reads "Fritz OR Nakashima" from the moment it is published
+    # — and goes on reading that for the rest of the day, long after the
+    # quarter-final settled it. The bracket knows the answer; only the PDF does
+    # not, and it will not until somebody reprints it.
+    #
+    # An unresolved side lists the players of the match feeding it, so the pair
+    # of candidates IS a match — and in a knockout draw two players meet at most
+    # once, so a completed match between exactly those two can only be the
+    # feeder. Its winner is who is standing in the slot.
+    #
+    # Resolved at the point of SERVING, not written back. The row keeps the
+    # alternatives it was ingested with, so the next revision still reconciles
+    # against what the sheet says rather than against something we decided —
+    # being right today this way costs nothing tomorrow.
+    alt_ids = {p.draw_entry_id for e in entries if e.is_tbd
+               for p in e.players if p.draw_entry_id}
+    decided: dict[frozenset, int] = {}
+    if alt_ids:
+        decided = {
+            frozenset((r[0], r[1])): r[2]
+            for r in (await db.execute(
+                select(Match.player1_id, Match.player2_id, Match.winner_id).where(
+                    Match.winner_id.isnot(None),
+                    Match.player1_id.in_(alt_ids),
+                    Match.player2_id.in_(alt_ids)))).all()
+        }
+
+    def _settle(side_players):
+        """(players, resolved) — the winner alone once the candidates have met.
+
+        Only the clean case: exactly two candidates, both matched to bracket
+        rows, who have played each other and one of them won. A slot listing a
+        qualifier, an unmatched name or a match still in progress falls through
+        unchanged, which is the honest answer — the alternatives really are
+        still the alternatives.
+        """
+        ids = [p.draw_entry_id for p in side_players]
+        if len(ids) != 2 or None in ids:
+            return side_players, False
+        won = decided.get(frozenset(ids))
+        if won is None:
+            return side_players, False
+        return [p for p in side_players if p.draw_entry_id == won], True
+
     out: list[ScheduleEntryOut] = []
     courts: list[str] = []
     for e in entries:
         if e.court and e.court not in courts:
             courts.append(e.court)
         m = matches.get(e.match_id) if e.match_id else None
+
+        unresolved = e.tbd_side or ""
+        ordered = []
+        for side in ("a", "b"):
+            sp = sorted((p for p in e.players if p.side == side),
+                        key=lambda x: x.position)
+            if side in unresolved:
+                sp, settled = _settle(sp)
+                if settled:
+                    unresolved = unresolved.replace(side, "")
+            ordered.extend(sp)
+
         players = [
             _player_out(p, nats, ent_seeds, ent_types,
                         e.discipline == "singles" and e.stage == "main",
                         ent_slugs, ent_extra)
-            for p in sorted(e.players, key=lambda x: (x.side, x.position))
+            for p in ordered
         ]
         out.append(ScheduleEntryOut(
             id=e.id, tournament_id=e.tournament_id,
@@ -410,7 +468,11 @@ async def schedule_day(
             # Same read-through as started_at: singles carries the result on the
             # match, doubles on the row itself.
             completed_at=_utc(getattr(m, "completed_at", None) if m else e.completed_at),
-            is_tbd=e.is_tbd, tbd_side=e.tbd_side, status=statuses[e.id], players=players,
+            # What is STILL unresolved after the substitution above, so a slot
+            # settled by the bracket renders as the ordinary match it now is —
+            # H2H included, which is gated on the row naming one player a side.
+            is_tbd=bool(unresolved), tbd_side=unresolved or None,
+            status=statuses[e.id], players=players,
             # Singles reads through the match; doubles has none and carries its
             # own result on the row. Same field names either way, so the client
             # needs no idea which kind of match it is looking at.
