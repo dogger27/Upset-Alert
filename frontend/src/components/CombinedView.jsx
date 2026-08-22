@@ -219,7 +219,7 @@ export const COL_GAP = 44
    on the container, because the column width differs between compact and full. */
 // How long the release takes to land on a round. Long enough to read as
 // deceleration, short enough that a decisive flick still feels immediate.
-const SETTLE_MS = 220
+export const SETTLE_MS = 220
 
 /* Where a y sits in a column's centres, as a FRACTIONAL box index, and the
    inverse. The index is what survives a round expanding — the spacing changes,
@@ -672,6 +672,10 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
         const localY = clientY - rect.top
         // Content coordinates, undoing the fit-to-width scale.
         const contentY = (el.scrollTop + localY) / (zoom || 1)
+        // From a known zero: the previous gesture deliberately leaves --t
+        // behind so its commit can paint, and it is cleared here rather than
+        // there.
+        el.style.setProperty('--t', '0')
         scrub.current = { localY, idx: null, contentY, step, dir }
         setScrubDir(dir)
         return true
@@ -703,11 +707,27 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
           el.scrollTop = Math.max(0, y * (zoom || 1) - st.localY)
         }
         window.setTimeout(() => {
-          el.classList.remove('cv-scroll--settling')
-          el.style.removeProperty('--t')
+          /* ORDER MATTERS, and getting it wrong is the flash on release.
+             --t was being removed FIRST, which snaps every interpolated
+             position back to its t=0 value — the OLD window's geometry — while
+             the scroll still points at the new one. One frame of the bracket
+             in the wrong place before React caught up.
+
+             So: commit the window and clear the scrub state together (React
+             batches them into one render), and leave --t alone. The new window
+             draws its boxes at exactly the values --t=1 was showing, so that
+             render is pixel-identical to what is already on screen.
+
+             Only once THAT has painted is it safe to drop --t, which two
+             frames guarantees. By then nothing reads it: scrubbing is false, so
+             every position is a plain number again. */
           scrub.current = null
-          setScrubDir(0)
           if (target === 1) onDone?.()
+          setScrubDir(0)
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            el.classList.remove('cv-scroll--settling')
+            el.style.removeProperty('--t')
+          }))
         }, SETTLE_MS)
       },
     }

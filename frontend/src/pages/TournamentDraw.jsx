@@ -86,6 +86,12 @@ function TournamentDraw() {
   // there because pinning the row under the finger needs both round layouts
   // and the scroll container, and this page has neither.
   const scrubApi = useRef(null)
+  // True while a scrub owns the scroll position. The header's auto-hide watches
+  // scrollTop, and a scrub REWRITES scrollTop every frame to hold the anchor —
+  // which reads as a hard scroll down and collapsed the round labels mid
+  // gesture, so they were missing for the whole release. Its own ref because
+  // the scroll listener is mounted once and must not close over state.
+  const scrubOwnsScroll = useRef(false)
   // Round-nav buttons' own rendered width, for the compact-mode zoom-fit
   // calc below (so the draw content's zoom targets the button's ACTUAL size
   // rather than a guessed constant). Left and right buttons share the same
@@ -340,6 +346,8 @@ function TournamentDraw() {
       const y = el.scrollTop
       const dy = y - lastY
       lastY = y
+      // A scrub drives scrollTop itself; that is not the reader scrolling.
+      if (scrubOwnsScroll.current) { accum = 0; return }
       if (now < ignoreUntil) return               // reflow during animation: ignore
       if (y <= 24) { apply(false); return }        // near the top: always show
       if ((dy > 0) !== (accum > 0)) accum = 0      // direction flipped: reset travel
@@ -947,6 +955,7 @@ function TournamentDraw() {
       // reader was pointing at.
       if (!api.begin(s.y, dir)) return
       s.live = true
+      scrubOwnsScroll.current = true
       s.dir = dir
     }
     // Reversing mid-drag would need the other neighbouring layout, which is
@@ -961,6 +970,10 @@ function TournamentDraw() {
     swipeRef.current = null
     if (!s?.live) return
     scrubApi.current?.finish(s.t, () => pageBy(s.dir))
+    // Released, but the settle is still moving the scroll. Hand it back only
+    // once that has finished, or the landing itself trips the auto-hide.
+    window.setTimeout(() => { scrubOwnsScroll.current = false },
+                      SCRUB_SETTLE_MS + 120)
   }
   // Point the native listener at this render's closure (see swipeMoveRef).
   swipeMoveRef.current = onDrawTouchMove
