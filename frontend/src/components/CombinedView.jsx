@@ -938,8 +938,17 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
             below: a few px of harmless overflow beats a clipping artifact. */}
         <div style={zoom !== 1 ? { width: naturalW * zoom, height: naturalH * zoom } : undefined}>
         <div style={zoom !== 1 ? { width: naturalW, height: naturalH, transform: `scale(${zoom})`, transformOrigin: 'top left' } : undefined}>
-        <div className={`cv-labels${labelsHidden ? ' cv-labels--collapsed' : ''}`}
-             style={scrubbing ? SCRUB_SHIFT : undefined}>
+        {/* The shift goes on an inner TRACK, not on .cv-labels itself.
+            .cv-labels carries overflow:hidden for the collapse-on-scroll
+            animation, and transforming an element moves its clip box along
+            with its contents — so the arriving round's heading sat outside
+            that box for the whole gesture however far the row travelled, and
+            could only appear once the transform was removed at commit. That is
+            the heading "popping on after release": it was clipped, not faded.
+            Sliding the track through a clip box that stays put is what the
+            body has been doing all along, having no clip of its own. */}
+        <div className={`cv-labels${labelsHidden ? ' cv-labels--collapsed' : ''}`}>
+        <div className="cv-labels-track" style={scrubbing ? SCRUB_SHIFT : undefined}>
           {visible.map((c, i) => {
             const label = c === 0
               ? (R[0][0]?.round_name || 'Round 1')
@@ -949,10 +958,11 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
             // this the whole row swapped in a single frame at commit, which is
             // the most visible pop of the lot because it is the only text that
             // changes.
-            const state = !scrubbing ? ''
-              : i === (backward ? visible.length - 1 : 0) ? ' cv-label--leaving'
-              : i === (backward ? 0 : visible.length - 1) ? ' cv-label--arriving'
-              : ''
+            // Only the LEAVING one fades. The arriving column does not fade
+            // in — it slides in — so fading its heading made the heading
+            // faintest at precisely the moment it became readable.
+            const state = scrubbing && i === (backward ? visible.length - 1 : 0)
+              ? ' cv-label--leaving' : ''
             return (
               <div key={c} style={{ display: 'flex', flexShrink: 0 }}>
                 <div className={`cv-label${state}`} style={{ width: colW }}>{label}</div>
@@ -960,6 +970,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
               </div>
             )
           })}
+        </div>
         </div>
 
         <div className="cv-body"
