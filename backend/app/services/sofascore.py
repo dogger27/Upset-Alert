@@ -701,11 +701,21 @@ async def resolve_pending_draws(db: AsyncSession, *, force: bool = False,
             continue
         # Tried recently and still short of a full field? Leave it. The names
         # that did not resolve an hour ago are the same names now.
-        if retry_hours and draw.sofa_resolved_at is not None:
+        #
+        # Except when the TOURNAMENT itself is still unresolved, which is a
+        # different situation wearing the same clothes. A draw missing a few
+        # players scores every other match on it; a draw missing its
+        # uniqueTournament id scores nothing at all, and the usual reason is
+        # that Sofascore has not published the bracket yet — its cuptree comes
+        # back as R16P1, R16P2, placeholders with no names to match against.
+        # That resolves itself the hour the draw goes up, so check every hour
+        # rather than leaving a tournament dark for most of its first day.
+        wait = retry_hours if draw.sofa_tournament_id else min(retry_hours, 1.0)
+        if wait and draw.sofa_resolved_at is not None:
             last = draw.sofa_resolved_at
             if last.tzinfo is None:
                 last = last.replace(tzinfo=timezone.utc)
-            if (datetime.now(timezone.utc) - last).total_seconds() < retry_hours * 3600:
+            if (datetime.now(timezone.utc) - last).total_seconds() < wait * 3600:
                 continue
         try:
             draw.sofa_resolved_at = datetime.now(timezone.utc)
