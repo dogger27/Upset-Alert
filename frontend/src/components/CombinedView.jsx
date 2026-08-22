@@ -1433,10 +1433,12 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                    rotations into JS and keeping them in step with the
                    stylesheet forever — and getting the bell wrong the first
                    time, which is exactly what happened. */
-                const b = nextCentersScrub?.[ri]
-                const chipTop = b == null || b === y
+                // chipB, not b: this scope already has a `b` — the away
+                // player — and shadowing it broke the BUILD outright.
+                const chipB = nextCentersScrub?.[ri]
+                const chipTop = chipB == null || chipB === y
                   ? { top: y }
-                  : { top: y, '--d': b - y }
+                  : { top: y, '--d': chipB - y }
                 const m = R[nextC - 1][ri]
                 const { p1: aId, p2: bId } = resolved[m.id] || {}
                 const a = aId != null ? playerById[aId] : null
