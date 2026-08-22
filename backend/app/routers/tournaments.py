@@ -450,15 +450,23 @@ async def global_draws(db: AsyncSession = Depends(get_db)):
         if r.pick_count > 0:
             entered[r.draw_id] += 1
 
-    out = []
+    # Fetch first, then decorate. Assigning to a loaded row marks it dirty, and
+    # the NEXT db.get in this loop autoflushes it as an UPDATE — a read endpoint
+    # taking a write lock, which is what surfaced as "database is locked" on the
+    # draw page. Splitting the loop leaves no query after the assignment.
+    found = []
     for draw_id, picker_count in entered.items():
         t = await db.get(Draw, draw_id)
         if t:
-            t.status = t.computed_status
-            out.append(LeagueTournamentOut(
-                tournament=TournamentOut.model_validate(t),
-                picker_count=picker_count,
-            ))
+            found.append((t, picker_count))
+
+    out = []
+    for t, picker_count in found:
+        t.status = t.computed_status
+        out.append(LeagueTournamentOut(
+            tournament=TournamentOut.model_validate(t),
+            picker_count=picker_count,
+        ))
     return out
 
 
@@ -467,14 +475,21 @@ async def get_tournament(tournament_id: int, db: AsyncSession = Depends(get_db))
     t = await db.get(Draw, tournament_id)
     if not t:
         raise HTTPException(404, "Tournament not found")
-    # Same override every other serializing endpoint applies — "open" exists
-    # only in computed_status, so without this the raw column leaks out and
-    # any status === 'open' check against this endpoint silently fails.
-    t.status = t.computed_status
     lat = await db.execute(
         select(func.max(Match.completed_at)).where(Match.draw_id == tournament_id)
     )
     t.latest_result_at = lat.scalar_one_or_none()
+    # Same override every other serializing endpoint applies — "open" exists
+    # only in computed_status, so without this the raw column leaks out and
+    # any status === 'open' check against this endpoint silently fails.
+    # NOT flushed. Assigning to a loaded ORM row marks it dirty, and the next
+    # query in the session autoflushes it as a real UPDATE — which is how a GET
+    # came to hold a write lock and fail with "database is locked" against the
+    # Sofascore sweeps. "open" is PURELY computed and must never reach the
+    # column; the assignment exists only so the response carries it. Done after
+    # every query, so nothing is left to trigger a flush, and the session is
+    # never committed on a read.
+    t.status = t.computed_status
     return t
 
 
@@ -801,14 +816,6 @@ async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
     t = await db.get(Draw, tournament_id)
     if not t:
         raise HTTPException(404, "Tournament not found")
-    # The raw `status` column only ever holds upcoming/active/completed — "open"
-    # is purely computed (see Draw.computed_status). list_tournaments() and
-    # global_draws() already apply this override before serializing; this
-    # single-draw endpoint never did, so the frontend's `tournament.status`
-    # was always the stale raw value here, silently breaking every
-    # status === 'open' check on the draw page (auto-init banner, DA/Qual badges).
-    t.status = t.computed_status
-
     players_result = await db.execute(
         select(DrawEntry).where(DrawEntry.draw_id == tournament_id).order_by(DrawEntry.bracket_position)
     )
@@ -918,6 +925,21 @@ async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
         ))
 
     t.latest_result_at = max((m.completed_at for m in matches if m.completed_at), default=None)
+    # The raw `status` column only ever holds upcoming/active/completed — "open"
+    # is purely computed (see Draw.computed_status). list_tournaments() and
+    # global_draws() already apply this override before serializing; this
+    # single-draw endpoint never did, so the frontend's `tournament.status`
+    # was always the stale raw value here, silently breaking every
+    # status === 'open' check on the draw page (auto-init banner, DA/Qual badges).
+    # NOT flushed. Assigning to a loaded ORM row marks it dirty, and the next
+    # query in the session autoflushes it as a real UPDATE — which is how a GET
+    # came to hold a write lock and fail with "database is locked" against the
+    # Sofascore sweeps. "open" is PURELY computed and must never reach the
+    # column; the assignment exists only so the response carries it. Done after
+    # every query, so nothing is left to trigger a flush, and the session is
+    # never committed on a read.
+    t.status = t.computed_status
+
     return DrawOut(
         tournament=TournamentOut.model_validate(t),
         draw_entries=[_player_out(p) for p in players],
