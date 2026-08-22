@@ -55,6 +55,33 @@ const platform = () => {
 }
 
 /*
+ * Which browser, on iOS — because the taps genuinely differ and the old single
+ * set of steps was wrong in both.
+ *
+ * Every iOS browser is WebKit underneath, so the engine tells you nothing; only
+ * the vendor token does. Chrome puts Share in the address bar at the TOP.
+ * Safari has no Share button in its bar at all any more — it moved inside the
+ * ••• menu at the bottom, which is why "tap the Share button at the bottom of
+ * the screen" sent people looking for something that is not there.
+ *
+ * Firefox and Edge fall through to the Safari steps: they are also ⋯-then-Share
+ * and their menus are close enough to follow, which beats naming a browser we
+ * have no screenshot of.
+ */
+const iosBrowser = () => (/CriOS/.test(navigator.userAgent) ? 'chrome' : 'safari')
+
+/* A screenshot of the actual tap, with the button ringed.
+ *
+ * Worth the bytes: the alternative is prose describing where a button is, and
+ * we already know from a real report that prose was not enough — the reader was
+ * looking at a bar that does not contain what the sentence named. A picture of
+ * their own screen is checkable at a glance.
+ * Lazy, so the four images cost nothing until the sheet is opened. */
+const Shot = ({ src, alt }) => (
+  <img className="install-shot" src={src} alt={alt} loading="lazy" decoding="async" />
+)
+
+/*
  * In-app browsers cannot add to the Home Screen: they are WKWebViews, and "Add
  * to Home Screen" is a Safari-only action, so their share sheet does not offer
  * it. Sending someone there to hunt for it wastes their time and ends with them
@@ -202,20 +229,47 @@ export default function InstallPrompt() {
           'Or just tap the Upset Alert icon on your home screen.',
         ]
       : os === 'ios'
-      ? [
-          // Where the button is, not just what it looks like. The old wording
-          // named the icon and stopped, and the one report we have from a real
-          // iPhone user was "can't find the share button" — it sits in Safari's
-          // bottom toolbar, which hides itself as soon as you scroll.
-          <>
-            Tap the Share button <ShareIcon /> at the <strong>bottom</strong> of the
-            screen. Don’t see it? Scroll up, or tap the very bottom once to bring
-            the bar back.
-          </>,
-          <>Scroll down that list and tap <strong>“Add to Home Screen”</strong>.</>,
-          <>Tap <strong>“Add”</strong>, top right. Upset Alert is now an icon on your
-          Home Screen — open it from there.</>,
-        ]
+      ? iosBrowser() === 'chrome'
+        ? [
+            <>
+              Tap the Share button <ShareIcon /> inside the address bar, at the
+              <strong> top</strong> of the screen.
+              <Shot src="/install/chrome-share.jpg"
+                    alt="Chrome's address bar, with the Share button at its right end ringed" />
+            </>,
+            <>
+              Scroll down that list and tap <strong>“Add to Home Screen”</strong>.
+              <Shot src="/install/add-to-home.jpg"
+                    alt="The share sheet scrolled down, with Add to Home Screen ringed" />
+            </>,
+            <>Tap <strong>“Add”</strong>, top right. Upset Alert is now an icon on your
+            Home Screen — open it from there.</>,
+          ]
+        : [
+            // Safari has no Share button in its bar any more. The old steps said
+            // "the Share button at the bottom of the screen", and the one report
+            // we have from a real iPhone user was "can't find the share button"
+            // — because it is not there. It lives inside the ••• menu now.
+            <>
+              Tap the <strong>•••</strong> button at the <strong>bottom</strong> of
+              the screen. Don’t see the bar? Scroll up, or tap the very bottom once
+              to bring it back.
+              <Shot src="/install/safari-more.jpg"
+                    alt="Safari's bottom bar, with the ••• button at its right end ringed" />
+            </>,
+            <>
+              Tap <strong>“Share”</strong> at the top of that menu.
+              <Shot src="/install/safari-share.jpg"
+                    alt="Safari's menu, with Share at the top ringed" />
+            </>,
+            <>
+              Scroll down that list and tap <strong>“Add to Home Screen”</strong>.
+              <Shot src="/install/add-to-home.jpg"
+                    alt="The share sheet scrolled down, with Add to Home Screen ringed" />
+            </>,
+            <>Tap <strong>“Add”</strong>, top right. Upset Alert is now an icon on your
+            Home Screen — open it from there.</>,
+          ]
       : [
           'Tap the ⋮ menu in the top right.',
           'Tap “Install app” (some phones say “Add to Home screen”).',
