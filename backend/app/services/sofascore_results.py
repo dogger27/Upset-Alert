@@ -32,11 +32,11 @@ from typing import Optional
 
 from sqlalchemy import select
 
-from app.core.config import settings
 from app.models.tournament import Draw, DrawEntry, Match
 from app.services.sofascore import SofascoreBlocked, SofascoreNotFound, _get
 from app.services.sofascore_live import _event_player_ids, _tracked
 from app.services.system_log import app_log
+from app.services.settings import sofa_authoritative
 
 logger = logging.getLogger(__name__)
 
@@ -306,7 +306,7 @@ async def sweep_once(db) -> dict:
                 # is what keeps byes correct: a bye has no Sofascore event and
                 # never will, so its scraper-set winner is left exactly alone.
                 # Blanking those was what put TBD through the whole bracket.
-                if settings.sofascore_authoritative:
+                if sofa_authoritative():
                     if match.winner_id != sofa_winner:
                         match.winner_id = sofa_winner
                         changed = True

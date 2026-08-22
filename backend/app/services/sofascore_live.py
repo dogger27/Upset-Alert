@@ -52,10 +52,10 @@ from typing import Optional
 
 from sqlalchemy import select
 
-from app.core.config import settings
 from app.models.tournament import Draw, DrawEntry, Match
 from app.services.sofascore import SofascoreBlocked, _get
 from app.services.system_log import app_log
+from app.services.settings import sofa_authoritative
 
 logger = logging.getLogger(__name__)
 
@@ -419,7 +419,7 @@ async def poll_once(db) -> dict:
         # scheduled time, so the announced stamp is used there instead.
         played = sum((s[0] or 0) + (s[1] or 0) for s in (snap.get("sets") or []))
         if match.sofa_started_at is None or (
-                settings.sofascore_authoritative and match.started_at is None):
+                sofa_authoritative() and match.started_at is None):
             ts = ev.get("startTimestamp")
             if played == 0:
                 first_play = datetime.now(timezone.utc)
@@ -436,7 +436,7 @@ async def poll_once(db) -> dict:
                     match.sofa_started_at = first_play
                     written += 1
                     touched_draws.add(draw_id)
-                if settings.sofascore_authoritative and match.started_at is None:
+                if sofa_authoritative() and match.started_at is None:
                     match.started_at = first_play
                     written += 1
                     touched_draws.add(draw_id)
@@ -473,7 +473,7 @@ async def poll_once(db) -> dict:
         # espn_monitor is not running and live_scores_json would sit frozen at
         # whatever it last said. Everything that renders a live score reads that
         # column, so it has to be the one that moves.
-        if settings.sofascore_authoritative:
+        if sofa_authoritative():
             live = _as_espn_shape(snap)
             if match.live_scores_json != live:
                 match.live_scores_json = live
@@ -529,7 +529,7 @@ async def poll_once(db) -> dict:
         touched_draws.add(m.draw_id)
         # Clear the promoted copy too, or a finished match keeps showing a
         # live score for ever — exactly what staging did.
-        if settings.sofascore_authoritative and m.live_scores_json is not None:
+        if sofa_authoritative() and m.live_scores_json is not None:
             m.live_scores_json = None
 
     if written:
