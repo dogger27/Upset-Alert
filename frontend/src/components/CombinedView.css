@@ -19,6 +19,12 @@
   max-height: 80px;
   transition: max-height 0.28s ease, padding-bottom 0.28s ease, opacity 0.2s ease;
 }
+/* The row that actually moves. .cv-labels stays put so its clip box does —
+   see the note at its use in CombinedView.jsx. */
+.cv-labels-track {
+  display: flex;
+}
+
 .cv-labels--collapsed {
   max-height: 0;
   padding-bottom: 0;
@@ -605,7 +611,4 @@
    them rather than being replaced in a single frame. */
 .cv-scrubbing .cv-label--leaving {
   opacity: calc(1 - var(--t, 0));
-}
-.cv-scrubbing .cv-label--arriving {
-  opacity: var(--t, 0);
 }
