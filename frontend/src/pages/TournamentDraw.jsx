@@ -82,6 +82,10 @@ function TournamentDraw() {
   const bodyWidthRef = useCallback(makeWidthRef(setBodyWidth), [])
   // In-flight touch gesture for swipe-to-page (see the handlers further down).
   const swipeRef = useRef(null)
+  // CombinedView publishes its scrub geometry here — begin/move/finish. Owned
+  // there because pinning the row under the finger needs both round layouts
+  // and the scroll container, and this page has neither.
+  const scrubApi = useRef(null)
   // Round-nav buttons' own rendered width, for the compact-mode zoom-fit
   // calc below (so the draw content's zoom targets the button's ACTUAL size
   // rather than a guessed constant). Left and right buttons share the same
@@ -871,18 +875,32 @@ function TournamentDraw() {
   // because .draw-main--swipe (applied while showPager) restricts touch panning
   // to the vertical axis; see that rule for why the draw has horizontal slack
   // to steal the gesture in the first place.
-  const SWIPE_MIN_PX = 45      // ignore taps and small drags (e.g. picking a player)
   const SWIPE_H_RATIO = 1.5    // must be clearly horizontal, not a vertical scroll
   // Axis is decided (and, if horizontal, the native pan cancelled) THIS early,
-  // because the browser starts panning after only a few px — waiting until
-  // SWIPE_MIN_PX to call preventDefault let the draw visibly slide and snap
-  // back before the swipe was ever recognised. Paging still waits for the
-  // full SWIPE_MIN_PX, so a short drag cancels harmlessly instead of paging.
+  // because the browser starts panning after only a few px. It also has to be
+  // this early for the scrub: the bracket starts moving with the finger from
+  // the first pixel, so there is no later moment at which to claim the gesture.
+  // A drag that goes nowhere now settles back to where it started rather than
+  // being cancelled, which is the same outcome by a nicer route.
   const SWIPE_AXIS_LOCK_PX = 8
   const pageBy = (delta) => {
     if (delta === 0) return
     setWindowStart(Math.min(Math.max(windowPos + delta, 0), maxWindowStart))
   }
+  /* A horizontal drag PULLS the bracket rather than paging it.
+     The travel maps to a fraction of one round, the incoming round regroups
+     from evenly-spaced midpoints into match pairs as the finger moves, and the
+     row under the finger stays under the finger — so the match you are pointing at is the
+     match you are still pointing at when its winner arrives. The geometry all
+     lives in CombinedView, which is the only place that holds both layouts and
+     the scroll container; this supplies the gesture and nothing else.
+
+     SWIPE_TRAVEL_PX, not SWIPE_MIN_PX: the old constant was the distance at
+     which a swipe COMMITTED, which no longer means anything — there is no
+     moment of commitment now, only a position. This is the distance that
+     equals one whole round, and release rounds to the nearest. */
+  const SWIPE_TRAVEL_PX = 150
+
   const onDrawTouchStart = (e) => {
     if (!showPager || e.touches.length !== 1) { swipeRef.current = null; return }
     // The sidebar is inside .draw-body too; leave its own gestures alone.
@@ -892,8 +910,9 @@ function TournamentDraw() {
     // there IS no native horizontal pan to defer to. Checking for one anyway
     // would create a dead zone — a drag that neither pages nor scrolls.
     const t = e.touches[0]
-    swipeRef.current = { x: t.clientX, y: t.clientY, axis: null, fired: false }
+    swipeRef.current = { x: t.clientX, y: t.clientY, axis: null, live: false, t: 0 }
   }
+
   const onDrawTouchMove = (e) => {
     const s = swipeRef.current
     if (!s || e.touches.length !== 1) return
@@ -915,14 +934,34 @@ function TournamentDraw() {
     // this runs from a non-passive listener.
     if (e.cancelable) e.preventDefault()
 
-    // `fired` caps it at one round per gesture — without it a long drag would
-    // keep re-triggering on every touchmove and skip several rounds at once.
-    if (s.fired || Math.abs(dx) < SWIPE_MIN_PX) return
-    s.fired = true
-    // Content follows the finger: dragging left pulls later rounds into view.
-    pageBy(dx < 0 ? 1 : -1)
+    const api = scrubApi.current
+    if (!api) return
+    // Dragging LEFT pulls later rounds in, which is +1.
+    const dir = dx < 0 ? 1 : -1
+    if (!s.live) {
+      // Nothing that way? Leave the gesture alone rather than rubber-banding
+      // against an edge the pager already greys out.
+      if (!api.canPage(dir)) { s.axis = 'v'; return }
+      // The anchor is taken from where the finger STARTED, not where it is now
+      // — a few pixels of axis-detection travel must not move the match the
+      // reader was pointing at.
+      if (!api.begin(s.y)) return
+      s.live = true
+      s.dir = dir
+    }
+    // Reversing mid-drag would need the other neighbouring layout, which is
+    // not rendered; clamp instead, so a wavering finger settles back where it
+    // started rather than snapping to something it never saw.
+    s.t = Math.max(0, Math.min(1, (s.dir * -dx) / SWIPE_TRAVEL_PX))
+    api.move(s.t)
   }
-  const onDrawTouchEnd = () => { swipeRef.current = null }
+
+  const onDrawTouchEnd = () => {
+    const s = swipeRef.current
+    swipeRef.current = null
+    if (!s?.live) return
+    scrubApi.current?.finish(s.t, () => pageBy(s.dir))
+  }
   // Point the native listener at this render's closure (see swipeMoveRef).
   swipeMoveRef.current = onDrawTouchMove
 
@@ -1361,6 +1400,7 @@ function TournamentDraw() {
               insetLeft={drawInsetLeft}
               compact={compactDraw}
               zoom={drawZoom}
+              scrubRef={scrubApi}
               leagueId={activeLeagueId}
               predictionsHidden={!!data.predictions_hidden}
             />

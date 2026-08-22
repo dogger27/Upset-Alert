@@ -212,6 +212,42 @@ export const COMPACT_COL_W = 158
 // sideways. 44 measures 377 — still inside the screen, with more of the
 // connector visible than the 32 this was briefly set to.
 export const COL_GAP = 44
+
+/* Rounds slide left by exactly one column-and-gap as --t runs 0 -> 1, which is
+   the horizontal half of a scrub. Shared by the labels and the body so the
+   round headings travel with the boxes they name. --step is set alongside --t
+   on the container, because the column width differs between compact and full. */
+// How long the release takes to land on a round. Long enough to read as
+// deceleration, short enough that a decisive flick still feels immediate.
+const SETTLE_MS = 220
+
+/* Where a y sits in a column's centres, as a FRACTIONAL box index, and the
+   inverse. The index is what survives a round expanding — the spacing changes,
+   "three and a bit boxes down" does not — so it is the coordinate the finger
+   anchor is held in.
+   Module scope because both are used during render, and a const declared
+   inside the component below its own use is a temporal dead zone, not an
+   undefined. */
+function fracIndex(arr, y) {
+  if (!arr || arr.length === 0) return 0
+  if (y <= arr[0]) return 0
+  for (let i = 0; i < arr.length - 1; i++) {
+    if (y <= arr[i + 1]) return i + (y - arr[i]) / (arr[i + 1] - arr[i] || 1)
+  }
+  return arr.length - 1
+}
+
+function atIndex(arr, idx) {
+  if (!arr || arr.length === 0) return 0
+  const lo = Math.max(0, Math.min(arr.length - 1, Math.floor(idx)))
+  const hi = Math.min(arr.length - 1, lo + 1)
+  return arr[lo] + (arr[hi] - arr[lo]) * (idx - lo)
+}
+
+const SCRUB_SHIFT = {
+  transform: 'translateX(calc(var(--t, 0) * var(--step, 0px) * -1))',
+  willChange: 'transform',
+}
 export const H2H_X = 8          // H2H chip's x within the gap — centred on the match box's right border
 const BELL_OFFSET = 34   // distance (px) the bell sits left of the H2H chip's centre
 // Left padding when there's no nav gutter: H2H_X (the chip's centre, 8px past
@@ -277,7 +313,7 @@ function Connectors({ leftCenters, rightCenters, totalH }) {
 // compact: phone-width mode — country flags are dropped to buy name space.
 // zoom:    scales the whole rendered draw (layout included, via CSS zoom) so
 //          the parent can shrink it until the target number of rounds fits.
-export default function CombinedView({ tournament, matches, players, picks, onPick, locked = true, windowStart = 0, windowSize = 4, labelsHidden = false, insetLeft = 0, compact = false, zoom = 1, scrubbing = false, leagueId = null, lockedMatchIds = new Set(), predictionsHidden = false }) {
+export default function CombinedView({ tournament, matches, players, picks, onPick, locked = true, windowStart = 0, windowSize = 4, labelsHidden = false, insetLeft = 0, compact = false, zoom = 1, scrubRef = null, leagueId = null, lockedMatchIds = new Set(), predictionsHidden = false }) {
   /* Which clock upcoming times are shown in. The account's choice where there
      is one; otherwise the reader's own, which needs no explanation when they
      have never expressed a preference. undefined means "this device". */
@@ -309,6 +345,8 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
      and scrolls every ancestor it can — including the page behind a bracket
      that is supposed to scroll inside its own box. */
   const scrollRef = useRef(null)
+  const [scrubbing, setScrubbing] = useState(false)
+  const scrub = useRef(null)
   const lastWindow = useRef(windowStart)
   useEffect(() => {
     const moved = lastWindow.current !== windowStart
@@ -479,7 +517,11 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
   const size = Math.min(windowSize, totalCols)
   const maxStart = Math.max(0, totalCols - size)
   const start = Math.min(Math.max(0, windowStart), maxStart)
-  const visible = Array.from({ length: size }, (_, i) => start + i)
+  // One extra column while a scrub is in flight, so the round being pulled in
+  // exists in the DOM before it is needed. It overflows to the right, which
+  // this container already allows deliberately (see the note by naturalW).
+  const renderCount = size + (scrubbing && start + size < totalCols ? 1 : 0)
+  const visible = Array.from({ length: renderCount }, (_, i) => start + i)
 
   const colCount = (c) => (c === 0 ? 2 * R[0].length : R[c - 1].length)
 
@@ -520,7 +562,10 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
 
   const centers = layoutFrom(visible)
 
-  /* WHERE THE SAME COLUMNS LAND ONE ROUND ON. Only while a scrub is in flight,
+  /* WHERE THE SAME COLUMNS LAND ONE ROUND ON. A column that was a row of
+     evenly-spaced midpoints becomes a column of tight match pairs, occupying
+     half the height — that is the telescoping, and it is why the scroll has to
+     be offset to hold the anchor. Only while a scrub is in flight,
      and only in compact mode, which is the only place the gesture exists.
      Every slot then carries both positions and CSS interpolates between them
      from a single --t on the container, so a drag costs one style write per
@@ -531,6 +576,18 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
     ? Array.from({ length: size }, (_, i) => Math.min(start + 1 + i, totalCols - 1))
     : null
   const centersNext = nextVisible ? layoutFrom(nextVisible) : null
+
+  // Both layouts of the expanding column, for the anchor. Assigned during
+  // render rather than in an effect: the first move() can arrive in the same
+  // frame the gesture starts, before any effect has run.
+  if (scrub.current && centersNext) {
+    const focus = start + 1
+    scrub.current.a = centers[focus] || centers[start]
+    scrub.current.b = centersNext[focus] || centersNext[start + 1]
+    if (scrub.current.idx == null) {
+      scrub.current.idx = fracIndex(scrub.current.a, scrub.current.contentY)
+    }
+  }
   /* One box's two homes. Without a scrub in flight this is just `top`, exactly
      as before — nothing pays for the gesture when it is not happening. */
   const slotStyle = (c, i, a) => {
@@ -543,6 +600,79 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
       top: 'calc((var(--a) + (var(--b) - var(--a)) * var(--t, 0)) * 1px)',
     }
   }
+
+  /* ── The scrub, driven from the parent's touch handlers ──────────────────
+     Owned HERE rather than in the page, because pinning the row under the
+     finger needs both layouts and the scroll container, and this is the only
+     place that has them. The page supplies the gesture; this supplies the
+     geometry.
+
+     THE ANCHOR IS THE WHOLE POINT. A finger between two names is at some
+     fractional index in the incoming column's centres — say 3.4 boxes down.
+     That index does not change as the round expands; only the pixel spacing
+     does. So the pixel position is recomputed from the same index every frame
+     and the scroll is offset to keep it under the finger. The match you were
+     pointing at is the match you are still pointing at, which is what makes it
+     read as pulling the bracket rather than paging it.
+
+     Everything per-frame is a style write. React renders once when the gesture
+     starts and once when it ends. */
+  useEffect(() => {
+    if (!scrubRef) return
+    const step = colW + COL_GAP
+    scrubRef.current = {
+      // Is there anywhere to go? The page asks before claiming the gesture, so
+      // a bracket at its last round still scrolls normally.
+      canPage: (dir) => dir > 0 ? start + size < totalCols : start > 0,
+
+      begin(clientY) {
+        const el = scrollRef.current
+        if (!el) return false
+        const rect = el.getBoundingClientRect()
+        const localY = clientY - rect.top
+        // Content coordinates, undoing the fit-to-width scale.
+        const contentY = (el.scrollTop + localY) / (zoom || 1)
+        scrub.current = { localY, idx: null, contentY, step }
+        setScrubbing(true)
+        return true
+      },
+
+      // t runs 0 -> 1 for "one round forward". The page clamps it.
+      move(t) {
+        const el = scrollRef.current
+        const st = scrub.current
+        if (!el || !st) return
+        el.style.setProperty('--t', String(t))
+        if (st.idx == null) return
+        const y = atIndex(st.a, st.idx) + (atIndex(st.b, st.idx) - atIndex(st.a, st.idx)) * t
+        el.scrollTop = Math.max(0, y * (zoom || 1) - st.localY)
+      },
+
+      // Settle to 0 or 1, then hand the window change to the page. The class
+      // does the easing; when it lands, `scrubbing` goes false, --t is cleared
+      // and the boxes are already where the new window would have drawn them.
+      finish(t, onDone) {
+        const el = scrollRef.current
+        const st = scrub.current
+        if (!el || !st) { setScrubbing(false); return }
+        const target = t >= 0.5 ? 1 : 0
+        el.classList.add('cv-scroll--settling')
+        el.style.setProperty('--t', String(target))
+        if (st.idx != null) {
+          const y = target ? atIndex(st.b, st.idx) : atIndex(st.a, st.idx)
+          el.scrollTop = Math.max(0, y * (zoom || 1) - st.localY)
+        }
+        window.setTimeout(() => {
+          el.classList.remove('cv-scroll--settling')
+          el.style.removeProperty('--t')
+          scrub.current = null
+          setScrubbing(false)
+          if (target === 1) onDone?.()
+        }, SETTLE_MS)
+      },
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scrubRef, start, size, totalCols, colW, zoom])
 
   const totalH = Math.ceil(colCount(visible[0]) / 2) * PAIR_SLOT
   // Natural (unscaled) footprint of the labels+body block, for the
@@ -558,7 +688,10 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
   // sit tighter, with the unneeded tail of the line simply overflowing off
   // the viewport edge instead of reserving dead space for it.
   const TRAILING_W = H2H_X + 9 // chip's right edge: its centre (H2H_X into the gap) + half its rotated visual width (height:18 -> 9)
-  const naturalW = visible.length * colW + (visible.length - 1) * COL_GAP + TRAILING_W
+  // `size`, NOT visible.length. The extra scrub column must not enter the
+  // footprint: naturalW feeds the zoom-to-fit, so counting it would shrink the
+  // whole bracket the instant a finger went down and grow it again on release.
+  const naturalW = size * colW + (size - 1) * COL_GAP + TRAILING_W
   const LABELS_H = 34
   const naturalH = totalH + LABELS_H
 
@@ -716,7 +849,13 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
           container's content origin can't be scrolled to, it's simply clipped,
           so without this the first column's chips lose their left edge. When
           the nav gutter is present its own inset is already wider than that. */}
-      <div ref={scrollRef} className={`cv-scroll${compact ? ' cv-scroll--compact' : ''}`} style={{ paddingLeft: insetLeft ? `${insetLeft + 4}px` : `${GROUP_CHIP_GUTTER}px` }}>
+      <div ref={scrollRef}
+           className={`cv-scroll${compact ? ' cv-scroll--compact' : ''}${scrubbing ? ' cv-scrubbing' : ''}`}
+           style={{
+             paddingLeft: insetLeft ? `${insetLeft + 4}px` : `${GROUP_CHIP_GUTTER}px`,
+             // One round's travel, in px. Read by SCRUB_SHIFT.
+             '--step': `${colW + COL_GAP}px`,
+           }}>
         {/* Scale-to-fit: outer claims the SMALLER (zoomed) footprint so
             .cv-scroll's scrollWidth shrinks with it (needed for 2 rounds to
             fit a narrow phone without horizontal scrolling); inner renders at
@@ -739,7 +878,8 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
             below: a few px of harmless overflow beats a clipping artifact. */}
         <div style={zoom !== 1 ? { width: naturalW * zoom, height: naturalH * zoom } : undefined}>
         <div style={zoom !== 1 ? { width: naturalW, height: naturalH, transform: `scale(${zoom})`, transformOrigin: 'top left' } : undefined}>
-        <div className={`cv-labels${labelsHidden ? ' cv-labels--collapsed' : ''}`}>
+        <div className={`cv-labels${labelsHidden ? ' cv-labels--collapsed' : ''}`}
+             style={scrubbing ? SCRUB_SHIFT : undefined}>
           {visible.map((c, i) => {
             const label = c === 0
               ? (R[0][0]?.round_name || 'Round 1')
@@ -753,10 +893,15 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
           })}
         </div>
 
-        <div className="cv-body" style={{ height: totalH }}>
+        <div className="cv-body"
+             style={scrubbing ? { height: totalH, ...SCRUB_SHIFT } : { height: totalH }}>
           {visible.map((c, colIdx) => {
             const count = colCount(c)
             const cc = centers[c]
+            // The leftmost column is the one leaving on a forward scrub — it
+            // has no place in the next window, so it fades rather than
+            // interpolating to a position it does not have.
+            const leaving = scrubbing && colIdx === 0
 
             // Interior gap: feeds the next VISIBLE column. Trailing stub: the
             // right-most visible column still gets its feed bars (connectors,
@@ -770,7 +915,8 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
 
             return (
               <div key={c} style={{ display: 'flex', flexShrink: 0 }}>
-                <div className="cv-col" style={{ width: colW, height: totalH }}>
+                <div className={`cv-col${leaving ? ' cv-col--leaving' : ''}`}
+                     style={{ width: colW, height: totalH }}>
                   {/* Light grey box grouping every match's two feeder boxes together;
                       switches to red once both opponents are known but the user
                       hasn't picked a winner yet (mirrors BracketView's "missing-pick"

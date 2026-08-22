@@ -496,3 +496,59 @@
 
 /* A suspended match keeps its last point on screen but should not look live. */
 .cv-live-score--suspended .cv-live-point { opacity: 0.55; }
+
+/* ── Fluid round scrubbing ────────────────────────────────────────────────
+   Dragging sideways does not page the bracket, it pulls it: the incoming round
+   regroups from evenly-spaced midpoints into tight match pairs as the finger
+   travels — halving the span it occupies — and the row under the finger stays
+   under the finger. All of it rides one --t on this
+   container, written once per frame, so the bracket renders twice per gesture
+   rather than sixty times a second. See the scrub API in CombinedView.jsx. */
+/* REGISTERED, which is the difference between a release that eases and one
+   that snaps. An unregistered custom property has no type, so it can only
+   change discretely — a transition on a `top` that reads it has nothing to
+   interpolate. Declaring the syntax makes --t itself animatable and everything
+   derived from it follows. The plain declaration below is the fallback for
+   anything without @property. */
+@property --t {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+.cv-scroll {
+  /* Set per gesture in JS. Declared here so the first frame has a value rather
+     than falling through to the fallback halfway through a transform. */
+  --t: 0;
+}
+
+/* Release. The only moment anything is animated — during the drag the position
+   IS the finger, and easing that would feel like lag. */
+.cv-scroll--settling .cv-body,
+.cv-scroll--settling .cv-labels,
+.cv-scroll--settling .cv-slot {
+  transition: transform 220ms cubic-bezier(0.22, 0.61, 0.36, 1),
+              top 220ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+/* The connectors bow out for the duration.
+   They are SVG paths between two sets of box centres, and those centres are
+   moving every frame — keeping them attached would mean recomputing path
+   geometry sixty times a second in JS, which is exactly the cost this design
+   avoids everywhere else. Faded rather than hidden so they leave and return
+   rather than blinking, and quickly, because a line still fading while the
+   boxes have visibly moved is worse than no line at all. */
+.cv-scrubbing .cv-conn {
+  opacity: 0;
+  transition: opacity 90ms linear;
+}
+.cv-conn {
+  transition: opacity 160ms linear 60ms;
+}
+
+/* The round being left behind. It is not in the next window at all, so rather
+   than interpolate it to a position it does not have, it fades on its way off
+   the left edge. */
+.cv-scrubbing .cv-col--leaving {
+  opacity: calc(1 - var(--t, 0));
+}
