@@ -69,10 +69,38 @@
   background: var(--surface-card);
   border-radius: 14px 14px 0 0;
   padding: 1.1rem 1.15rem calc(1.1rem + env(safe-area-inset-bottom, 0px));
+  /* Scrolls now that the steps carry screenshots. Four of them plus the three
+     notes are taller than a phone, and this sheet is anchored to the BOTTOM of
+     the screen — so without a bound it grows off the top and takes "Got it"
+     with it, leaving the only way out a tap on the backdrop that nothing tells
+     you about. Contained, so flicking through the steps does not scroll the
+     page behind them. */
+  max-height: 88vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .install-steps h3 { margin: 0 0 0.75rem; font-size: 1rem; color: var(--n-950); }
 .install-steps ol { margin: 0; padding-left: 1.15rem; }
 .install-steps li { font-size: 0.88rem; line-height: 1.5; color: var(--n-700); margin-bottom: 0.5rem; }
+
+/* A picture of the reader's own screen with the button ringed, under the step
+   that names it.
+   Bordered and inset rather than bled to the edges: these are screenshots of a
+   DIFFERENT interface than the one they are sitting in, and without a frame
+   they read as part of this dialog — which is exactly the confusion they exist
+   to remove. block + margin so they sit under the sentence rather than trying
+   to share its line. */
+.install-shot {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0.5rem 0 0.75rem;
+  border: 1px solid var(--border-strong, var(--border));
+  border-radius: 8px;
+  /* The screenshots are dark-mode captures. On a light theme a bare dark image
+     floats; a matching surface behind it gives the frame something to sit on. */
+  background: var(--n-900, #1b1b1b);
+}
 .install-steps-note {
   margin: 0.35rem 0 0;
   font-size: 0.78rem;
