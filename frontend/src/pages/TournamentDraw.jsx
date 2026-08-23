@@ -742,8 +742,31 @@ function TournamentDraw() {
     return newPicks
   }
 
+  /* A PICK THAT WOULD DISTURB A MATCH ALREADY UNDER WAY IS REFUSED HERE.
+     Changing a winner tears down the path that player was carrying — every
+     later round where they were picked to appear stops making sense the moment
+     they no longer advance. If any of those later matches has started, the
+     server refuses those writes, and it is right to: they are frozen.
+     What that produced was the worst of both. The click was applied on screen,
+     the save came back "3 pick(s) could not be changed", and the bracket then
+     said something the server had never agreed to — with no way to tell which
+     three, or what to do about it.
+     So the whole change is tested before any of it is applied. It is the same
+     question the server asks (rejected_changes) with the same answer, just
+     asked early enough to be useful. Nothing is written and nothing moves. */
+  const blockedByLive = (basePicks, nextPicks) => Object.keys(nextPicks)
+    .some(mid => nextPicks[mid] !== basePicks[mid] && lockedMatchIds.has(Number(mid)))
+
+  const LIVE_PICK_MSG =
+    'The selected prediction is not possible because it will impact matches '
+    + 'that have already started.'
+
   const handlePick = (matchId, playerId) => {
     const newPicks = computeNextPicks(picks, matchId, playerId)
+    if (blockedByLive(picks, newPicks)) {
+      window.alert(LIVE_PICK_MSG)
+      return
+    }
     setPicks(newPicks)
     if (user && !locked) {
       saveMutation.mutate(newPicks)
@@ -767,6 +790,12 @@ function TournamentDraw() {
     const who = viewedUserName ? `@${viewedUserName}` : 'another user'
     if (!window.confirm(`Are you sure you want to change ${who}'s prediction?`)) return
     const newPicks = computeNextPicks(otherPicks, matchId, playerId)
+    // Same test as your own bracket — an admin cannot rewrite a started match
+    // either, and finding out from a failed save is no better here.
+    if (blockedByLive(otherPicks, newPicks)) {
+      window.alert(LIVE_PICK_MSG)
+      return
+    }
     setOtherPicks(newPicks)
     saveOtherMutation.mutate(newPicks)
   }
