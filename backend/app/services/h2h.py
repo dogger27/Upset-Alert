@@ -540,8 +540,13 @@ async def prefetch_h2h_for_draw(tournament_id: int) -> None:
                 set_={"fetched_at": now, "data_json": data},
             )
             await db.execute(stmt)
-            await db.flush()
+            # COMMIT PER PAIR, NOT PER TOURNAMENT. flush() takes SQLite's one
+            # write lock and the old commit sat at the end of the loop — so the
+            # lock was held across every network fetch and every 2-second sleep
+            # in between, minutes at a time for a new draw. That single loop is
+            # what was locking out everything else on the box: pick saves,
+            # PATCH /auth/me, the estimate refresh, the scrape stamping its own
+            # last_scraped_at. Committing here holds the writer for one insert.
+            await db.commit()
             await asyncio.sleep(2.0)  # TE blocks bursts; 0.4s was too aggressive
-
-        await db.commit()
         logger.info("H2H prefetch complete for tournament %d", tournament_id)

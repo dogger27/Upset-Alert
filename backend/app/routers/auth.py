@@ -1,3 +1,4 @@
+import asyncio
 import secrets
 from datetime import datetime, timedelta, timezone
 
@@ -214,9 +215,41 @@ async def update_me(
         if body.schedule_tz not in ("venue", "user"):
             raise HTTPException(status_code=400, detail="Unknown schedule timezone mode")
         current_user.schedule_tz = body.schedule_tz
-    await db.commit()
-    await db.refresh(current_user)
-    return current_user
+
+    # CAPTURED BEFORE THE FIRST COMMIT ATTEMPT, because rollback() reverts the
+    # ORM row and anything read off it afterwards is the OLD value — a retry
+    # that re-reads the session would faithfully save nothing.
+    updates = {f: getattr(current_user, f)
+               for f in ("username", "full_name", "display_name",
+                         "timezone", "theme", "schedule_tz")}
+
+    # Retry a lost writer rather than 500ing a settings save — same fault as the
+    # predictions save: a background committer can invalidate this session's
+    # read snapshot, and only trying again on a fresh session fixes it.
+    from sqlalchemy.exc import OperationalError
+    from app.database import AsyncSessionLocal
+    last = None
+    for attempt in range(4):
+        try:
+            if attempt == 0:
+                await db.commit()
+                await db.refresh(current_user)
+                return current_user
+            async with AsyncSessionLocal() as fresh:
+                user = await fresh.get(User, current_user.id)
+                for f, v in updates.items():
+                    setattr(user, f, v)
+                await fresh.commit()
+                return user
+        except OperationalError as exc:
+            if "locked" not in str(exc).lower():
+                raise
+            last = exc
+            if attempt == 0:
+                await db.rollback()
+            await asyncio.sleep(0.1 * 2 ** attempt)
+    raise HTTPException(503, "Could not save your settings — please try again "
+                        "in a moment.") from last
 
 
 # Every type, both channels: notifications are on by default and stay on until

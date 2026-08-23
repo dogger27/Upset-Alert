@@ -990,6 +990,11 @@ async def prefetch_dob_for_draw(tournament_id: int) -> None:
                         tp.last_name = last_name
                 if nationality and tp.nationality is None:
                     tp.nationality = nationality
+                # Commit per player, same reason as the H2H prefetch: a dirty
+                # row plus any query in the loop autoflushes and takes the one
+                # write lock, and the old end-of-loop commit held it across
+                # every TE fetch and sleep in between.
+                await db.commit()
                 await asyncio.sleep(0.3)
 
         for tp in without_slug:
@@ -1006,6 +1011,7 @@ async def prefetch_dob_for_draw(tournament_id: int) -> None:
                 tp.last_name = last_name
             if nationality and tp.nationality is None:
                 tp.nationality = nationality
+            await db.commit()
             await asyncio.sleep(0.3)
 
         await db.commit()
