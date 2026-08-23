@@ -6,6 +6,7 @@ Background scheduler:
 """
 
 import asyncio
+import functools
 import logging
 import traceback
 from datetime import date, datetime, timedelta, timezone
@@ -1660,9 +1661,43 @@ async def run_schedule_estimates_only() -> None:
         await asyncio.sleep(120)
 
 
+def _on_shutdown_quietly(fn):
+    """Wrap a scheduled job so being cancelled at shutdown is not an ERROR.
+
+    asyncio.CancelledError inherits from BaseException, not Exception, so every
+    `except Exception` guard in these jobs steps aside for it. Stopping the
+    container mid-tick therefore cancelled whatever HTTP call was in flight, the
+    CancelledError travelled up to APScheduler, and APScheduler logged it as a
+    job failure:
+
+      Job "_refresh_order_of_play (trigger: interval[0:15:00] ...)" raised an
+      exception ... asyncio.CancelledError
+
+    Nothing was wrong. The process was asked to stop and it stopped. But it
+    lands in the same error log the alert digest reads, and an error that means
+    "a deploy happened" trains the reader to skim past errors that do not.
+
+    Deliberately applied to EVERY job rather than to the one that happened to be
+    caught: any of them can be mid-request when the signal arrives, and which
+    one it is depends only on timing.
+
+    Swallowed rather than re-raised, and only here at the outermost frame — the
+    task is being torn down with the loop, so there is nothing left to co-
+    operate with, and re-raising only puts the same line back in the log.
+    """
+    @functools.wraps(fn)
+    async def wrapper(*args, **kwargs):
+        try:
+            return await fn(*args, **kwargs)
+        except asyncio.CancelledError:
+            logger.info("%s cancelled — shutting down", fn.__name__)
+            return None
+    return wrapper
+
+
 def start_scheduler() -> None:
     scheduler.add_job(
-        _auto_discover_tournaments,
+        _on_shutdown_quietly(_auto_discover_tournaments),
         "cron",
         hour=0,
         minute=0,
@@ -1671,14 +1706,14 @@ def start_scheduler() -> None:
     )
     # Scrape active tournaments every 30 minutes so live scores update promptly.
     scheduler.add_job(
-        _refresh_active_tournaments,
+        _on_shutdown_quietly(_refresh_active_tournaments),
         "interval",
         minutes=30,
         id="refresh_active",
         misfire_grace_time=300,
     )
     scheduler.add_job(
-        _sync_subscriptions,
+        _on_shutdown_quietly(_sync_subscriptions),
         "interval",
         minutes=5,
         id="sync_subscriptions",
@@ -1688,7 +1723,7 @@ def start_scheduler() -> None:
     # docstring. 10 min cadence matches the 10 min stability cooldown, so worst
     # case a stable release waits one extra tick (up to ~10 min) before emailing.
     scheduler.add_job(
-        _notify_pending_draw_releases,
+        _on_shutdown_quietly(_notify_pending_draw_releases),
         "interval",
         minutes=10,
         id="notify_draw_releases",
@@ -1697,7 +1732,7 @@ def start_scheduler() -> None:
     # Weekly round-completion digest. 10 min matches the draw-release job: a
     # round that completes the batch waits at most one tick before going out.
     scheduler.add_job(
-        _notify_pending_round_digests,
+        _on_shutdown_quietly(_notify_pending_round_digests),
         "interval",
         minutes=10,
         id="notify_round_digests",
@@ -1708,7 +1743,7 @@ def start_scheduler() -> None:
     # when a batch goes out, so a tighter tick only sharpens that boundary — it
     # cannot make anything send sooner than the draw settling allows.
     scheduler.add_job(
-        _notify_pending_draw_changes,
+        _on_shutdown_quietly(_notify_pending_draw_changes),
         "interval",
         minutes=5,
         id="notify_draw_changes",
@@ -1718,7 +1753,7 @@ def start_scheduler() -> None:
     # called them right. Also on 5 min: this job does the measuring as well as
     # the sending, and a match that is measured late is notified late.
     scheduler.add_job(
-        _notify_pending_standout_picks,
+        _on_shutdown_quietly(_notify_pending_standout_picks),
         "interval",
         minutes=5,
         id="notify_standout_picks",
@@ -1727,14 +1762,14 @@ def start_scheduler() -> None:
     # Sanity sweep for silent failures (released-but-not-open, wiki title
     # never resolving) — see _check_draw_health docstring.
     scheduler.add_job(
-        _check_draw_health,
+        _on_shutdown_quietly(_check_draw_health),
         "interval",
         minutes=60,
         id="check_draw_health",
         misfire_grace_time=600,
     )
     scheduler.add_job(
-        _check_rankings_health,
+        _on_shutdown_quietly(_check_rankings_health),
         "interval",
         minutes=60,
         id="check_rankings_health",
@@ -1743,7 +1778,7 @@ def start_scheduler() -> None:
     # Keep the "Highest_Rank" baseline user's picks current as entries/rankings
     # firm up. 10 min cadence matches the draw-release notify job.
     scheduler.add_job(
-        _sync_highest_rank_bot,
+        _on_shutdown_quietly(_sync_highest_rank_bot),
         "interval",
         minutes=10,
         id="sync_highest_rank_bot",
@@ -1756,7 +1791,7 @@ def start_scheduler() -> None:
     # restart is when transient connect/timeout noise is most likely, and the
     # first interval tick picks up anything real 15 minutes later anyway.
     scheduler.add_job(
-        _scan_system_alerts,
+        _on_shutdown_quietly(_scan_system_alerts),
         "interval",
         minutes=15,
         id="scan_system_alerts",
@@ -1768,7 +1803,7 @@ def start_scheduler() -> None:
     # limited a burst of ~12 requests in two minutes during development, which
     # is a useful reminder that these endpoints are not built for polling.
     scheduler.add_job(
-        _refresh_order_of_play,
+        _on_shutdown_quietly(_refresh_order_of_play),
         "interval",
         minutes=15,
         id="refresh_order_of_play",
@@ -1782,7 +1817,7 @@ def start_scheduler() -> None:
     # quiet hour. New tournaments are picked up within a week; existing ids are
     # never overwritten, so a failed run changes nothing.
     scheduler.add_job(
-        _refresh_atp_tournament_ids,
+        _on_shutdown_quietly(_refresh_atp_tournament_ids),
         "cron",
         day_of_week="mon",
         hour=4,
@@ -1791,14 +1826,14 @@ def start_scheduler() -> None:
         misfire_grace_time=3600,
     )
     scheduler.add_job(
-        _refresh_schedule_estimates,
+        _on_shutdown_quietly(_refresh_schedule_estimates),
         "interval",
         minutes=2,
         id="refresh_schedule_estimates",
         misfire_grace_time=120,
     )
     scheduler.add_job(
-        _refresh_weekly_rankings,
+        _on_shutdown_quietly(_refresh_weekly_rankings),
         "cron",
         day_of_week="sun",
         hour=18,
@@ -1808,7 +1843,7 @@ def start_scheduler() -> None:
         misfire_grace_time=3600,
     )
     scheduler.add_job(
-        _refresh_elo,
+        _on_shutdown_quietly(_refresh_elo),
         "cron",
         day_of_week="mon",
         hour=1,
