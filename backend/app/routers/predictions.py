@@ -116,6 +116,29 @@ async def save_predictions(
         if invalid:
             raise HTTPException(400, f"Unknown match IDs: {invalid}")
 
+    # JOINING A DRAW THAT IS ALREADY UNDER WAY.
+    #
+    # Under match-by-match locking the bracket stays open through the first
+    # round, so a user can enter a draw whose early matches have been played —
+    # and those are precisely the ones they may not pick. Without this they
+    # score nothing on them, nor on anything downstream of them, which is most
+    # of a bracket: the entry is unwinnable from the moment it is made and
+    # nothing on screen says why.
+    #
+    # So every locked match they have no pick for is set to the better-ranked
+    # player, the same projection the Highest_Rank account plays, carried up the
+    # tree to the final exactly as the lock itself propagates.
+    #
+    # BEFORE the refusal check below, deliberately. These become stored picks,
+    # so a client that posts the same value for a locked match now agrees with
+    # what is stored and is allowed through, where a moment earlier it would
+    # have been a "change" to a locked match and refused. A client posting a
+    # DIFFERENT winner there is still refused, which is the rule working.
+    if lock.locked_match_ids:
+        from app.services.highest_rank_bot import fill_locked_with_favourite
+        if await fill_locked_with_favourite(db, tournament, uid, lock.locked_match_ids):
+            await db.commit()
+
     # Under progressive locking the bracket is open but individual matches are
     # not. Compared against what is stored, so an unchanged pick on a match now
     # in play still saves — the client posts its whole set every time, and
