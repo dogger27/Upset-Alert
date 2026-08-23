@@ -30,7 +30,7 @@ like the rest of the app.
 import asyncio
 import logging
 import re
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy import or_, select
@@ -202,7 +202,16 @@ def _snapshot(event: dict) -> dict:
 
 async def sweep_once(db, day: Optional[date] = None) -> dict:
     """Resolve unmatched doubles rows, then score every one we can."""
+    """day is the LATEST day swept; yesterday is swept with it."""
     day = day or date.today()
+    # YESTERDAY TOO. The server clock is UTC and venues are not: in Monterrey
+    # the date rolls over at 6pm local, mid-session, so a match still on court
+    # becomes "yesterday" and was never looked at again. Three of Monterrey's
+    # eight qualifiers froze that way — one of them still reading "scheduled"
+    # while the player who beat her was on court in the next round.
+    # Two days, not a window: a sheet is published a day ahead and finished the
+    # same night, so anything older than that is not going to change.
+    days = [day - timedelta(days=1), day]
 
     # Everything on the sheet with no bracket row behind it. Main-draw singles
     # is excluded because it HAS one: it scores through `matches`, and letting
@@ -211,7 +220,7 @@ async def sweep_once(db, day: Optional[date] = None) -> dict:
         select(ScheduleEntry).where(
             or_(ScheduleEntry.discipline != "singles",
                 ScheduleEntry.stage == "qualifying"),
-            ScheduleEntry.play_date == day,
+            ScheduleEntry.play_date.in_(days),
         ))).scalars().all()
     if not entries:
         return {"entries": 0, "resolved": 0, "scored": 0}
@@ -399,7 +408,7 @@ class SofascoreDoublesMonitor:
                         from app.services import broadcaster
                         for tid in {e for e in
                                     (await db.execute(select(ScheduleEntry.tournament_id)
-                                                      .where(ScheduleEntry.play_date == date.today())
+                                                      .where(ScheduleEntry.play_date >= date.today() - timedelta(days=1))
                                                       )).scalars().all()}:
                             await broadcaster.publish(tid)
             except SofascoreBlocked as exc:

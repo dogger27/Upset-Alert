@@ -267,15 +267,26 @@ function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp, t
      name anyway — shrinking there would be a regression bought for nothing.
      Same division of labour as the initial above: JS decides how much, the
      breakpoint decides whether. */
-  const tightest = surnameOnly ? last : (longName ? initialled : full)
-    + (!hideSeed && seed ? ` ${seed}` : '')
-  /* Floored at 0.82, not 0.74. The floor is what a name falls back on when no
-     amount of shrinking would have fitted it, so it should be the smallest size
-     still comfortable to read rather than the smallest that technically fits —
-     past that point the name is overflowing anyway and a smaller one only
-     costs legibility without buying room. */
+  /* THE RUNG THAT WAS MISSING. full -> "A. Bondar" -> "Bondar" -> shrink.
+     Without the third, a long given name and a long surname together had only
+     one step of relief and then a floor, and the pair ran straight over the
+     score. The surname alone still names the person; a name over a score names
+     nobody and hides the score as well. */
+  const seedPart = !hideSeed && seed ? ` ${seed}` : ''
+  const lastOnly = last || full
+  const tightest = surnameOnly
+    ? last
+    : (`${full}${seedPart}`.length <= fit ? `${full}${seedPart}`
+       : `${initialled}${seedPart}`.length <= fit ? `${initialled}${seedPart}`
+       : `${lastOnly}${seedPart}`)
+  /* AND THEN IT SHRINKS AS FAR AS IT HAS TO. The floor is 0.45, which is small
+     enough to be barely readable and is deliberately not a compromise: a name
+     that overlaps the score has destroyed two pieces of information, and one
+     unreadably small name has destroyed less than that. It is also nearly
+     unreachable — by this rung the text is a bare surname, and a surname long
+     enough to need half size is not a real one. */
   const scale = tightest.length > fit
-    ? Math.max(0.82, fit / tightest.length)
+    ? Math.max(0.45, fit / tightest.length)
     : 1
 
   return (
@@ -292,7 +303,13 @@ function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp, t
         {surnameOnly ? last : longName ? (
           <>
             <span className="sched-name-full">{full}</span>
-            <span className="sched-name-abbr">{initialled}</span>
+            {/* The abbreviated form is whichever rung the scale above was
+                computed against — an initial where that fits, the bare surname
+                where it does not. Rendering the initial while having sized the
+                surname is how a name ends up over the score. */}
+            <span className="sched-name-abbr">
+              {`${initialled}${seedPart}`.length <= fit ? initialled : lastOnly}
+            </span>
           </>
         ) : full}
         {/* AFTER the name. Leading it, the seed was the first thing on the line
