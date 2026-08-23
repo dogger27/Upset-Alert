@@ -164,7 +164,8 @@ async def fill_missing_picks(db, draw, user_id: int,
     """Give a user the favourite on every match they have not picked. Returns
     how many were written; the caller commits.
 
-    NO MATCH IS EVER LEFT BLANK for someone who has entered a draw. An unpicked
+    NO MATCH ANYONE COULD PICK is left blank for someone who has entered a draw.
+    Byes are the exception and are never written; see below. An unpicked
     match scores nothing and reads as an oversight rather than a decision, so
     the default is the same projection the Highest_Rank account plays — the
     better-ranked player advancing — and the only picks that differ from it are
@@ -199,6 +200,14 @@ async def fill_missing_picks(db, draw, user_id: int,
     written = 0
     for match in matches:
         if match.id in stored:
+            continue
+        # A BYE IS NOT A MATCH TO PREDICT. It carries a winner from the moment
+        # the draw is released and there is no contest to have an opinion about,
+        # which is why every scoring query in the app excludes byes explicitly —
+        # a pick sitting on one is called a stray pick there, and scoring it
+        # would hand out free points. Writing them deliberately would be
+        # manufacturing exactly what those filters exist to ignore.
+        if match.is_bye:
             continue
         if restrict_to is not None and match.id not in restrict_to:
             continue
