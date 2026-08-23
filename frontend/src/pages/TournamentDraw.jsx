@@ -558,24 +558,52 @@ function TournamentDraw() {
     })
   }
 
+  /* The SERVER'S answer replaces ours, immediately.
+     Changing a pick clears the path the old player was carrying, so those later
+     matches go momentarily unpicked — and the server fills them straight back
+     in with the better-ranked player (fill_missing_picks), because no match is
+     ever left without a pick. Waiting for a refetch to learn that meant the
+     bracket showed TBD in the meantime; the save already returns the complete,
+     final set of rows, so it is applied directly and the gap never exists. */
+  const applySaved = (rows) => {
+    if (!Array.isArray(rows)) return
+    const map = {}
+    for (const p of rows) {
+      if (p.predicted_winner_id != null) map[p.match_id] = p.predicted_winner_id
+    }
+    setPicks(map)
+  }
+
   const saveMutation = useMutation({
     mutationFn: (latestPicks) => savePredictions(Number(id), latestPicks),
-    onSuccess: () => qc.invalidateQueries(['predictions', id]),
+    onSuccess: (rows) => {
+      applySaved(rows)
+      qc.invalidateQueries({ queryKey: ['predictions', id] })
+    },
   })
 
   const saveOtherMutation = useMutation({
     mutationFn: (latestPicks) => savePredictions(Number(id), latestPicks, viewedUserId),
-    onSuccess: () => qc.invalidateQueries(['predictions', id, viewedUserId]),
+    onSuccess: (rows) => {
+      if (Array.isArray(rows)) {
+        const map = {}
+        for (const p of rows) {
+          if (p.predicted_winner_id != null) map[p.match_id] = p.predicted_winner_id
+        }
+        setOtherPicks(map)
+      }
+      qc.invalidateQueries({ queryKey: ['predictions', id, viewedUserId] })
+    },
   })
 
   const refreshMutation = useMutation({
     mutationFn: () => refreshDraw(Number(id)),
-    onSuccess: () => qc.invalidateQueries(['draw', id]),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['draw', id] }),
   })
 
   const unlockMutation = useMutation({
     mutationFn: () => toggleUnlockSelections(Number(id)),
-    onSuccess: () => { qc.invalidateQueries(['draw', id]); setShowUnlockConfirm(false) },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['draw', id] }); setShowUnlockConfirm(false) },
   })
 
   const applyPicks = (newPicks) => {

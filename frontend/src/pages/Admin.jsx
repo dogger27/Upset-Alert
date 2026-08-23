@@ -86,7 +86,7 @@ function UsersPanel({ user }) {
   })
   const adminMutation = useMutation({
     mutationFn: ({ userId, isAdmin }) => setUserAdmin(userId, isAdmin),
-    onSuccess: () => qc.invalidateQueries(['admin-users']),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }),
   })
   return (
     <div className="card admin-section">
@@ -513,11 +513,11 @@ function LogsPanel({ user }) {
 
   const clearMutation = useMutation({
     mutationFn: () => clearLogs(30),
-    onSuccess: () => qc.invalidateQueries(['admin-logs']),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-logs'] }),
   })
   const clearAllMutation = useMutation({
     mutationFn: () => clearLogs(0),
-    onSuccess: () => qc.invalidateQueries(['admin-logs']),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-logs'] }),
   })
 
   // Counts are of distinct problems, not log rows: 172 rows of two broken wiki

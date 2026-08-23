@@ -180,7 +180,7 @@ export function CreateLeagueModal({ onClose }) {
 
   const mutation = useMutation({
     mutationFn: createLeague,
-    onSuccess: (lg) => { qc.invalidateQueries(['leagues']); navigate(`/leagues/${lg.id}`) },
+    onSuccess: (lg) => { qc.invalidateQueries({ queryKey: ['leagues'] }); navigate(`/leagues/${lg.id}`) },
     onError: (e) => setError(e.response?.data?.detail || 'Failed to create'),
   })
 
@@ -228,7 +228,7 @@ export function JoinLeagueModal({ onClose }) {
 
   const mutation = useMutation({
     mutationFn: (code) => joinLeague(code),
-    onSuccess: () => { qc.invalidateQueries(['leagues']); onClose() },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['leagues'] }); onClose() },
     onError: (e) => setError(e.response?.data?.detail || 'Failed to join'),
   })
 
