@@ -5,6 +5,7 @@ app_log() writes a row to system_logs — visible in the Admin panel.
 Use dedup_key to suppress repeated identical entries (default: 1 hour TTL).
 """
 
+import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -41,15 +42,30 @@ async def app_log(
     from app.database import AsyncSessionLocal
     from app.models.system_log import SystemLog
 
-    try:
-        async with AsyncSessionLocal() as db:
-            entry = SystemLog(
-                level=level,
-                category=category,
-                message=message,
-                detail_json=detail or {},
-            )
-            db.add(entry)
-            await db.commit()
-    except Exception as exc:
-        logger.error("Failed to write system log: %s", exc)
+    # RETRY A LOCK RATHER THAN LOSING THE ENTRY. system_logs is what the alert
+    # digest reads, so a write dropped here is an alert nobody ever sees — and
+    # the times it is most likely to be dropped are exactly the times something
+    # is wrong enough to be worth reporting.
+    #
+    # "database is locked" here is not the 30s busy_timeout expiring. A writer
+    # that has to upgrade from a read snapshot fails IMMEDIATELY when another
+    # writer has committed underneath it, because the snapshot it read against
+    # is gone; waiting longer cannot help and only a fresh attempt can. Each try
+    # gets its own session for that reason.
+    for attempt in range(4):
+        try:
+            async with AsyncSessionLocal() as db:
+                entry = SystemLog(
+                    level=level,
+                    category=category,
+                    message=message,
+                    detail_json=detail or {},
+                )
+                db.add(entry)
+                await db.commit()
+            return
+        except Exception as exc:
+            if "locked" not in str(exc).lower() or attempt == 3:
+                logger.error("Failed to write system log: %s", exc)
+                return
+            await asyncio.sleep(0.2 * 2 ** attempt)
