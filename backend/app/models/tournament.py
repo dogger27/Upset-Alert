@@ -278,6 +278,16 @@ class Draw(Base):
         """
         if self.selections_unlocked:
             return False
+        # UNDER MATCH-BY-MATCH LOCKING THE CALENDAR DECIDES NOTHING. The bracket
+        # stays open until every first-round match is complete, however long
+        # that takes and whatever the date says — matches freeze individually as
+        # they go on court, which is draw_lock_state's business, and it stamps
+        # picks_locked_at at the moment the round is genuinely done.
+        # computed_status still moves to "active" on the start date, because
+        # that is a statement about PLAY and this is a statement about PICKS;
+        # under this mode the two are deliberately not the same thing.
+        if self.pick_lock_mode == "r1_progressive":
+            return self.picks_locked_at is not None
         return self.computed_status in ("active", "completed")
 
     @property
