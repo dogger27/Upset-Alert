@@ -221,6 +221,49 @@ export const COL_GAP = 44
 // deceleration, short enough that a decisive flick still feels immediate.
 export const SETTLE_MS = 220
 
+/* HOW WIDE IS THIS TEXT, ACTUALLY.
+ *
+ * Every name on the draw used to be estimated as `length * 0.68em`, an average
+ * character width measured off one rendered surname. An average is wrong for
+ * every string that is not average, and it is wrong in the direction that
+ * matters: "QUALIFIER 2" is eleven characters of I, L, space and digit — all
+ * narrow — so the estimate ran well over the truth and shrank text that would
+ * have fitted at full size.
+ *
+ * Canvas measureText is the real thing. It is exact, it is synchronous, and it
+ * touches no layout: no element, no reflow, nothing to thrash. Cached per
+ * string, because a bracket asks about the same names on every render.
+ *
+ * The font has to match what .cv-name renders, or an exact measurement of the
+ * wrong font is just a more confident estimate — hence reading the family off
+ * the document rather than hardcoding one.
+ */
+let _ctx = null
+let _fontSpec = ''
+const _widths = new Map()
+
+function textWidth(text, px, weight = 600) {
+  if (!text) return 0
+  if (typeof document === 'undefined') return text.length * 0.68 * px
+  if (!_ctx) {
+    try { _ctx = document.createElement('canvas').getContext('2d') }
+    catch { _ctx = false }
+  }
+  if (!_ctx) return text.length * 0.68 * px
+  const family = getComputedStyle(document.body).fontFamily || 'sans-serif'
+  const spec = `${weight} ${px}px ${family}`
+  if (spec !== _fontSpec) { _fontSpec = spec; _widths.clear() }
+  const key = spec + '\u0000' + text
+  let w = _widths.get(key)
+  if (w === undefined) {
+    _ctx.font = spec
+    // Uppercased by .cv-name, so measure what is actually drawn.
+    w = _ctx.measureText(text.toUpperCase()).width
+    _widths.set(key, w)
+  }
+  return w
+}
+
 /* Where a y sits in a column's centres, as a FRACTIONAL box index, and the
    inverse. The index is what survives a round expanding — the spacing changes,
    "three and a bit boxes down" does not — so it is the coordinate the finger
@@ -404,14 +447,6 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
      width or does not render at all. Nothing is measured, so nothing can feed
      back into what it measured. */
   const NAME_BOX = (compact ? COMPACT_COL_W : COL_W) - 21
-  /* 0.68, measured off a rendered draw rather than guessed: "ETCHEVERRY" is ten
-     characters and occupies 86px of a 158px column at 12.8px, which is 0.67em
-     each. The first pass used 0.63, and that was optimistic in BOTH directions
-     at once — it let through a rung that did not fit, then computed a shrink
-     too small to save it, so a name that should have stepped down twice
-     ellipsised instead. Every name here is uppercased by .cv-name, so one
-     figure covers the page. */
-  const CH_EM = 0.68
   const BOX_FONT = 12.8    // .cv-box sets 0.8rem
   const nameBudget = (p, serving) => {
     let w = NAME_BOX
@@ -452,7 +487,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
       const n = qualifierNums[p.id]
       const t = `Qualifier${n != null ? ` ${n}` : ''}`
       const budget = nameBudget(p, serving)
-      const w = t.length * CH_EM * BOX_FONT
+      const w = textWidth(t, BOX_FONT)
       return { text: t, scale: w <= budget ? 1 : Math.max(0.55, budget / w) }
     }
     const forms = nameForms(p.name)
@@ -475,7 +510,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
       chain.push(t)
     }
     const budget = nameBudget(p, serving)
-    const width = (t) => t.length * CH_EM * BOX_FONT
+    const width = (t) => textWidth(t, BOX_FONT)
     for (const t of chain) if (width(t) <= budget) return { text: t, scale: 1 }
     const text = chain[chain.length - 1]
     return { text, scale: Math.max(0.55, budget / width(text)) }
