@@ -104,23 +104,27 @@ async def save_predictions(
     all: the failed one still holds the snapshot that is no longer usable. And
     if it really cannot get through, it says so instead of returning a bare 500.
     """
-    from sqlalchemy.exc import OperationalError
+    from sqlalchemy.exc import OperationalError, PendingRollbackError
     from app.database import AsyncSessionLocal
 
+    # EVERY attempt gets its own session, including the first. Reusing the
+    # injected one meant a failed attempt left it rolled back, and the next
+    # thing to touch it raised PendingRollbackError — a different exception
+    # class, so the retry below did not even catch it and the user got the same
+    # bare 500 the retry existed to prevent.
     last = None
     for attempt in range(4):
         try:
-            if attempt == 0:
-                return await _save_predictions_once(
-                    tournament_id, body, user_id, db, current_user)
             async with AsyncSessionLocal() as fresh:
                 return await _save_predictions_once(
                     tournament_id, body, user_id, fresh, current_user)
-        except OperationalError as exc:
+        except (OperationalError, PendingRollbackError) as exc:
             if "locked" not in str(exc).lower():
                 raise
             last = exc
-            await asyncio.sleep(0.15 * 2 ** attempt)
+            # Short, because somebody is watching the screen. Four tries inside
+            # about a second beats one try and a shrug.
+            await asyncio.sleep(0.1 * 2 ** attempt)
     raise HTTPException(
         503,
         "The draw is busy being updated — your picks were not saved. "
