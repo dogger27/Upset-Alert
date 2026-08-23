@@ -690,6 +690,59 @@ async def _notify_pending_draw_changes() -> None:
         if held_incomplete:
             logger.info("Qualifier announcement held for %d draw(s) still being "
                         "transcribed: %s", len(held_incomplete), held_incomplete)
+
+        # A TOURNAMENT ANNOUNCES ITS QUALIFIERS ONCE, FOR BOTH DRAWS AT ONCE.
+        #
+        # A combined event runs an ATP and a WTA draw under one tournament, and
+        # their qualifying finishes at different times. Released per draw, that
+        # is two messages hours apart about the same event, the first of which
+        # is only half the news. So a tournament is held until every one of its
+        # draws that still owes a qualifying field is ready, then they go
+        # together.
+        #
+        # "Still owes" is deliberately wider than "has events pending": a draw
+        # whose qualifying is played later today has no events YET, and is
+        # exactly the sibling worth waiting for. It is recognised by having
+        # un-named entries still to fill.
+        from app.models.tournament import Draw, DrawEntry
+        if complete:
+            ready = set(complete)
+            tourn_of = dict((await db.execute(
+                select(Draw.id, Draw.tournament_id)
+                .where(Draw.id.in_(ready)))).all())
+            siblings = (await db.execute(
+                select(Draw.id, Draw.tournament_id).where(
+                    Draw.tournament_id.in_({t for t in tourn_of.values() if t}),
+                    Draw.status != "completed",
+                ))).all()
+
+            pending_ids = set((await db.execute(
+                select(DrawChangeEvent.draw_id).where(
+                    DrawChangeEvent.notified_at.is_(None),
+                    DrawChangeEvent.kind == "filled",
+                ).distinct())).scalars().all())
+            unfinished_ids = set((await db.execute(
+                select(DrawEntry.draw_id).where(
+                    func.trim(func.coalesce(DrawEntry.name, "")) == "",
+                ).distinct())).scalars().all())
+
+            waiting_on = {}
+            for draw_id, t_id in siblings:
+                if draw_id in ready or t_id is None:
+                    continue
+                # A sibling only holds the tournament if it has something to say
+                # and has not said it yet.
+                if draw_id in pending_ids or draw_id in unfinished_ids:
+                    waiting_on.setdefault(t_id, []).append(draw_id)
+
+            held_for_sibling = [d for d in complete
+                                if waiting_on.get(tourn_of.get(d))]
+            if held_for_sibling:
+                logger.info("Qualifier announcement held for %d draw(s) whose "
+                            "sibling draw is not ready: %s",
+                            len(held_for_sibling), held_for_sibling)
+            complete = [d for d in complete if not waiting_on.get(tourn_of.get(d))]
+
         ready_by_kind["filled"] = complete
 
         if not any(ready_by_kind.values()):
