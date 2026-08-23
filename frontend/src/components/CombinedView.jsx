@@ -378,10 +378,6 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
   const [h2h, setH2H] = useState(null)
   // Completed match whose predictors popup is open (the group chip's target).
   const [predictorsMatch, setPredictorsMatch] = useState(null)
-  // Hovering any box of a player highlights ALL that player's boxes across
-  // the bracket (ported from BracketView's hoveredPlayerId behaviour).
-  const [hoveredPlayerId, setHoveredPlayerId] = useState(null)
-
   /* The scroll container. It has ONE owner while a gesture is running: the
      scrub, which holds the row under the finger.
 
@@ -1380,10 +1376,8 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                     return (
                       <div key={box.key} className="cv-slot" style={slotStyle(c, i, cc[i])}>
                         <div
-                          className={`cv-box${box.isBye ? ' cv-box--bye' : ''}${!box.isBye && !p ? ' cv-box--tbd' : ''}${box.correct ? ' cv-box--correct' : ''}${box.wrong ? ' cv-box--wrong' : ''}${box.clickable ? ' cv-box--clickable' : ''}${p != null && p.id === hoveredPlayerId ? ' cv-box--highlight' : ''}`}
+                          className={`cv-box${box.isBye ? ' cv-box--bye' : ''}${!box.isBye && !p ? ' cv-box--tbd' : ''}${box.correct ? ' cv-box--correct' : ''}${box.wrong ? ' cv-box--wrong' : ''}${box.clickable ? ' cv-box--clickable' : ''}`}
                           onClick={box.onClick}
-                          onMouseEnter={p != null ? () => setHoveredPlayerId(p.id) : undefined}
-                          onMouseLeave={p != null ? () => setHoveredPlayerId(null) : undefined}
                         >
                           {box.isBye ? (
                             <span className="cv-name cv-name--muted">BYE</span>

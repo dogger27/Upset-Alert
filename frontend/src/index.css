@@ -298,6 +298,7 @@
      one alpha applied to both. */
   --row-picked: rgba(21, 128, 61, 0.08);
   --row-picked-hover: rgba(21, 128, 61, 0.16);
+  /* Unused since the player-highlight was removed; kept as palette. */
   --row-highlight: rgba(37, 99, 235, 0.14);
   /* The inset marker down the left edge of a highlighted row. Lives in a
      box-shadow, which the colour sweep skipped, so it stayed literal. */

@@ -275,13 +275,7 @@
 .player-row.clickable:hover { background: var(--n-100); }
 
 /* Highlight every row for the hovered player across all rounds */
-.player-row.highlight,
-.player-row.highlight.clickable:hover,
-.player-row.picked.highlight,
-.player-row.picked.highlight.clickable:hover {
-  background: var(--row-highlight);
-  box-shadow: inset 2px 0 0 var(--row-highlight-bar);
-}
+
 
 .player-row.picked {
   font-weight: 600;
