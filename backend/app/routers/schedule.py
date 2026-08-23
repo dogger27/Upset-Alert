@@ -487,12 +487,16 @@ async def schedule_day(
     # four surnames on a TBD side are the four surnames of the match that
     # decides it. Keyed on that set, the answer is which pair won.
     dbl_settled: dict[frozenset, frozenset] = {}
-    if any(e.is_tbd and e.discipline != "singles" for e in entries):
+    if any(e.is_tbd for e in entries):
         since = day - timedelta(days=14)
+        # EVERY discipline, not just doubles. Qualifying singles has no bracket
+        # row either — a 128-draw stores rounds 1-7 and players who fail to
+        # qualify never reach draw_entries — so the singles resolver above can
+        # no more answer a Q2 slot than it can a doubles final. Both are
+        # answered here, by the row that recorded the result.
         rows = (await db.execute(
             select(ScheduleEntry).where(
                 ScheduleEntry.tournament_id.in_(t_ids),
-                ScheduleEntry.discipline != "singles",
                 ScheduleEntry.winner_side.isnot(None),
                 ScheduleEntry.play_date >= since,
                 ScheduleEntry.play_date <= day))).scalars().all()
@@ -549,8 +553,16 @@ async def schedule_day(
             sp = sorted((p for p in e.players if p.side == side),
                         key=lambda x: x.position)
             if side in unresolved:
-                sp, settled = (_settle(sp) if e.discipline == "singles"
-                               else _settle_doubles(sp))
+                if e.discipline == "singles":
+                    sp, settled = _settle(sp)
+                    # No bracket match to be found — qualifying — so ask the
+                    # rows. This is the fallback that was missing: a Q2 slot
+                    # showed "Bondar OR Jacquemot" while one of them was on
+                    # court playing it.
+                    if not settled:
+                        sp, settled = _settle_doubles(sp)
+                else:
+                    sp, settled = _settle_doubles(sp)
                 if settled:
                     unresolved = unresolved.replace(side, "")
             ordered.extend(sp)
