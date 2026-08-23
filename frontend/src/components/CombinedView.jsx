@@ -310,7 +310,7 @@ const GROUP_CHIP_GUTTER = 20
 
 function Flag({ nat }) {
   const iso2 = nationalityIso2(nat)
-  if (!iso2) return <span className="cv-flag cv-flag--empty" />
+  if (!iso2) return <span className="cv-flag flag-blank" aria-hidden="true" />
   return <span className={`fi fi-${iso2.toLowerCase()} cv-flag`} title={nat} />
 }
 

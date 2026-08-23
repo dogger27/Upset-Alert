@@ -99,7 +99,9 @@ function PlayerName({ player, fallback }) {
 
   return (
     <>
-      {iso && <span className={`fi fi-${iso} h2h-flag`} />}
+      {iso
+        ? <span className={`fi fi-${iso} h2h-flag`} />
+        : <span className="h2h-flag flag-blank" aria-hidden="true" />}
       {shownFirst && <span className="h2h-name-first">{shownFirst}</span>}
       {last && (
         <span className="h2h-name-last"

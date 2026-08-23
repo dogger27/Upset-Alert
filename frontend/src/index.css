@@ -850,3 +850,31 @@ input:focus, select:focus { outline: none; border-color: var(--brand-line); }
   .score-fx--match    { --fx-ring: 5px; --fx-colour: rgba(255, 214, 10, 0.95); }
   .score-fx--champion { --fx-ring: 7px; --fx-colour: rgba(255, 214, 10, 1); }
 }
+
+/* ── Missing flag ───────────────────────────────────────────────────────────
+   An outlined empty box where a flag would go, so a name with no flag lines up
+   with the names around it instead of starting a flag's width to the left.
+
+   Wanted wherever a flag is drawn, so it is here rather than in any one page's
+   stylesheet: pair it with that component's own flag class, which supplies the
+   dimensions, and this supplies the outline.
+
+       <span className="sched-flag flag-blank" />
+
+   Deliberately NOT given `fi`. That class carries flag-icons'
+   `width: 1.333333em` with no !important, which ties on specificity with a
+   single-class size rule and can win depending on bundle order — the bug that
+   made these boxes render square in production once already. With no `fi`
+   there is no competing width at all.
+
+   `!important` on the border for the same reason in reverse: .cv-flag sets its
+   own border colour, and this has to beat it whichever order they land in.
+   `border-box` keeps the outlined box the exact size of a real flag, which is
+   the whole point of drawing it. */
+.flag-blank {
+  display: inline-block;
+  box-sizing: border-box;
+  background: none !important;
+  border: 1px solid var(--border-strong) !important;
+  border-radius: 2px;
+}
