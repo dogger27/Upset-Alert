@@ -63,6 +63,26 @@ _THREE_CAPS = re.compile(r"[A-Z]{3}$")
 # capitalised surname ("NYS") — both are uppercase, only one has two letters.
 _ALPHA = re.compile(r"[^A-Za-z]")
 
+# How far an event's own start may sit from the day the sheet says, before it is
+# a different match rather than the same one seen across a timezone.
+_EVENT_DAY_SLACK = timedelta(days=1)
+
+
+def _event_near(event, play_date: date) -> bool:
+    """Is this event on (or beside) the day the row is scheduled for?
+
+    Sofascore stamps startTimestamp in UTC and the sheet prints the venue's
+    date, so an evening match in the Americas is legitimately "tomorrow" by the
+    clock we compare against. A day of slack absorbs that and nothing more.
+    An event with no timestamp is allowed through — it is a match not yet given
+    a time, which is exactly the upcoming one we want.
+    """
+    ts = event.get("startTimestamp")
+    if not ts:
+        return True
+    when = datetime.fromtimestamp(ts, tz=timezone.utc).date()
+    return abs((when - play_date).days) <= _EVENT_DAY_SLACK.days
+
 
 def _sheet_surnames(raw_names: list) -> set:
     """Surnames as the ORDER OF PLAY spells them.
@@ -287,6 +307,20 @@ async def sweep_once(db, day: Optional[date] = None) -> dict:
             ours = _sheet_surnames([p.raw_name for p in players.get(e.id, [])])
             best, best_score = None, 0
             for cand in events:
+                # THE EVENT HAS TO BE ON THE RIGHT DAY.
+                #
+                # Surnames alone match a player, not a match. events/last
+                # returns a whole season, so the same two names from an earlier
+                # round win the comparison just as well as today's — and did:
+                # rows on today's sheet came back stamped with a started_at from
+                # six days earlier, complete with that match's score and a
+                # "completed" status for a match that had not been played.
+                #
+                # A day either side, because the sheet's date is the venue's and
+                # the timestamp is UTC, and the two disagree for a whole evening
+                # at any American venue.
+                if not _event_near(cand, e.play_date):
+                    continue
                 theirs = (_sofa_surnames(cand["homeTeam"]["name"])
                           | _sofa_surnames(cand["awayTeam"]["name"]))
                 hit = len(ours & theirs)
