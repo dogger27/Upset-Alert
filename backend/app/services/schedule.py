@@ -30,6 +30,7 @@ from typing import Optional
 
 from sqlalchemy import and_, delete, or_, select, update
 
+from app.services.sofascore_doubles import _sheet_surnames
 from app.models.schedule import (ScheduleChange, ScheduleDocument,
                                  ScheduleEntry, ScheduleEntryPlayer)
 from app.models.tournament import Draw, DrawEntry, Match
@@ -140,7 +141,8 @@ def _parse_clock(value: Optional[str]) -> Optional[time]:
     return time(hour, minute)
 
 
-def _classify(match, *, before_main: bool = False, resolved: bool = True) -> tuple[str, str]:
+def _classify(match, *, before_main: bool = False, resolved: bool = True,
+              seen_qualifying: bool = False) -> tuple[str, str]:
     """(stage, discipline) — from the event code when present, else the parse.
 
     `before_main` and `resolved` are the last resort, for sheets that say
@@ -169,7 +171,20 @@ def _classify(match, *, before_main: bool = False, resolved: bool = True) -> tup
     # resolves to entries, and a name we merely failed to match is not thereby a
     # qualifier. Deliberately silent about WHICH qualifying round: nothing here
     # knows, and a wrong Q2 is worse than an honest Q.
-    if stage == 'main' and before_main and not resolved:
+    # ...or the same players were on a qualifying row earlier this week.
+    #
+    # `before_main` alone misses the last qualifying round, which is played ON
+    # the main draw's first day — Winston-Salem ran Q2 on the morning of its
+    # R64, and every one of those four rows came through as main draw with no
+    # round at all. The date cannot separate them because they share it.
+    #
+    # Having played qualifying here two days ago can. It is a fact about these
+    # players at this tournament, it needs no sheet to state it, and it cannot
+    # be true of a main-draw entrant — nobody plays qualifying after they are in
+    # the draw. Still requires the row to resolve to no main-draw entry, so a
+    # qualifier who has since come through is read as the main-draw player they
+    # now are.
+    if stage == 'main' and not resolved and (before_main or seen_qualifying):
         stage = 'qualifying'
     discipline = 'doubles' if match.is_doubles else 'singles'
     return stage, discipline
@@ -301,6 +316,19 @@ async def ingest_document(db, tournament, play_date: date, url: str,
                      default=None)
     before_main = bool(main_start and play_date < main_start)
 
+    # Surnames already seen on a qualifying row of this tournament. One query,
+    # and it is what lets the LAST qualifying round be recognised on a day it
+    # shares with the main draw.
+    quali_names: set = set()
+    for row in (await db.execute(
+            select(ScheduleEntryPlayer.raw_name)
+            .join(ScheduleEntry, ScheduleEntry.id == ScheduleEntryPlayer.schedule_entry_id)
+            .where(ScheduleEntry.tournament_id == tournament.id,
+                   ScheduleEntry.stage == 'qualifying',
+                   ScheduleEntry.play_date >= play_date - timedelta(days=14),
+                   ScheduleEntry.play_date < play_date))).scalars().all():
+        quali_names |= _sheet_surnames([row])
+
     for m in matches:
         names_a = list(m.side_a)
         names_b = list(m.side_b)
@@ -308,7 +336,10 @@ async def ingest_document(db, tournament, play_date: date, url: str,
         # the main draw is one of the two things that identifies a qualifying
         # sheet which names itself nothing.
         ids = await _resolve_players(db, draws, m.tour, names_a + names_b)
-        stage, discipline = _classify(m, before_main=before_main, resolved=any(ids))
+        stage, discipline = _classify(
+            m, before_main=before_main, resolved=any(ids),
+            seen_qualifying=bool(quali_names
+                                 & _sheet_surnames(names_a + names_b)))
         key = _pairing_key(tournament.id, play_date, discipline, names_a, names_b, ids)
         per_court.setdefault(m.court or '', []).append(
             (m, stage, discipline, names_a, names_b, ids, key))
