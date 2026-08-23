@@ -587,7 +587,24 @@
 .sched-player { display: inline-flex; align-items: baseline; gap: 0.3rem; }
 .sched-pname { min-width: 0; }
 /* Trails the name now, so the margin swaps sides. */
-.sched-seed { color: var(--text-muted); font-weight: 700; margin-left: 0.28rem; font-size: 0.85em; }
+/* ON THE NAME'S BASELINE, and out of everyone else's way.
+   .sched-player aligns its children on the baseline, which is right for text —
+   but the seed is 0.85em, and an inline-block's baseline is its LAST line box,
+   so it sat fractionally off from the name it belongs to. `align-self: baseline`
+   states the alignment on the element itself rather than inheriting whatever
+   the parent's default resolves to.
+   `flex: 0 0 auto` so it is never the thing that shrinks, and never overlaps
+   the tennis ball beside it: the name is what gives, and PlayerName now
+   measures the seed's real width before deciding how much. */
+.sched-seed {
+  color: var(--text-muted);
+  font-weight: 700;
+  margin-left: 0.28rem;
+  font-size: 0.85em;
+  align-self: baseline;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
 
 /* flag-icons needs an explicit box or it collapses; 4:3 matches the artwork. */
 .sched-flag {
