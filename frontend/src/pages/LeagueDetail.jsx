@@ -159,7 +159,7 @@ export default function LeagueDetail() {
       )}
 
       {editing && canManageSettings && (
-        <LeagueSettings league={league} onDone={() => { setEditing(false); qc.invalidateQueries(['league', id]) }} />
+        <LeagueSettings league={league} onDone={() => { setEditing(false); qc.invalidateQueries({ queryKey: ['league', id] }) }} />
       )}
 
       {(() => {
@@ -741,23 +741,23 @@ function LeagueSettings({ league, onDone, currentUserId }) {
 
   const mutation = useMutation({
     mutationFn: (data) => updateLeague(league.id, data),
-    onSuccess: () => { qc.invalidateQueries(['league', String(league.id)]); onDone() },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['league', String(league.id)] }); onDone() },
     onError: (e) => setError(e.response?.data?.detail || 'Failed'),
   })
 
   const adminMutation = useMutation({
     mutationFn: ({ userId, isAdmin }) => setMemberAdmin(league.id, userId, isAdmin),
-    onSuccess: () => qc.invalidateQueries(['league', String(league.id)]),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['league', String(league.id)] }),
   })
 
   const removeMutation = useMutation({
     mutationFn: (userId) => removeMember(league.id, userId),
-    onSuccess: () => qc.invalidateQueries(['league', String(league.id)]),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['league', String(league.id)] }),
   })
 
   const deleteMutation = useMutation({
     mutationFn: () => deleteLeague(league.id),
-    onSuccess: () => { qc.invalidateQueries(['leagues']); navigate('/') },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['leagues'] }); navigate('/') },
   })
 
   return (
