@@ -1610,23 +1610,37 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
 
     # NO ENTRANT'S BRACKET IS LEFT WITH A HOLE IN IT.
     #
-    # Every unpicked match defaults to the better-ranked player, and this is the
-    # other moment one can appear — not because anybody picked or failed to
-    # pick, but because the DRAW changed underneath them. A slot that was an
-    # unnamed qualifier when they entered had nobody to advance and was skipped;
-    # once the qualifier is named there is, so it is filled here rather than
-    # waiting for that user to come back. The same goes for a bracket that grows
-    # or is corrected by a re-parse.
+    # Every unpicked match defaults to the better-ranked player, and this is one
+    # of the two moments a hole can appear — not because anybody picked or
+    # failed to pick, but because the DRAW changed underneath them. A slot that
+    # was an unnamed qualifier when they entered had nobody to advance and was
+    # skipped; once the qualifier is named there is.
     #
-    # Idempotent and never overwrites, so re-scraping an unchanged draw writes
-    # nothing. A locked draw is left alone: its brackets are final, and adding
-    # picks to one after the fact would be inventing entries nobody made.
-    if not tournament.is_locked:
+    # ONLY WHEN THE BRACKET ACTUALLY CHANGED. Running this on every scrape put
+    # ~7 entrants x a 127-match bracket inside the scrape's own write
+    # transaction, four draws in a row: the refresh went to 81 seconds, and
+    # Cincinnati's failed outright on "database is locked" trying to stamp its
+    # own last_scraped_at while every other background writer queued behind it.
+    # A draw whose entrants are already complete has nothing to fill, and
+    # pending_changes is precisely the signal that a name moved.
+    #
+    # The rows are read ONCE and shared across entrants — they are the same
+    # every time, and re-reading them per user was most of the cost.
+    #
+    # A locked draw is left alone: its brackets are final, and adding picks to
+    # one after the fact would be inventing entries nobody made.
+    if pending_changes and not tournament.is_locked:
         from app.models.prediction import UserPrediction
         from app.services.highest_rank_bot import fill_missing_picks
         await db.flush()
         entrants = (await db.execute(
             select(UserPrediction.user_id)
             .where(UserPrediction.draw_id == tournament.id).distinct())).scalars().all()
-        for entrant_id in entrants:
-            await fill_missing_picks(db, tournament, entrant_id)
+        if entrants:
+            fill_entries = (await db.execute(
+                select(DrawEntry).where(DrawEntry.draw_id == tournament.id))).scalars().all()
+            fill_matches = (await db.execute(
+                select(Match).where(Match.draw_id == tournament.id))).scalars().all()
+            for entrant_id in entrants:
+                await fill_missing_picks(db, tournament, entrant_id,
+                                         entries=fill_entries, matches=fill_matches)

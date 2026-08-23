@@ -160,7 +160,9 @@ async def sync_draw_picks(db: AsyncSession, draw: Draw, bot_user_id: int) -> boo
 
 
 async def fill_missing_picks(db, draw, user_id: int,
-                             restrict_to: Optional[set] = None) -> int:
+                             restrict_to: Optional[set] = None,
+                             entries: Optional[list] = None,
+                             matches: Optional[list] = None) -> int:
     """Give a user the favourite on every match they have not picked. Returns
     how many were written; the caller commits.
 
@@ -191,10 +193,15 @@ async def fill_missing_picks(db, draw, user_id: int,
             UserPrediction.user_id == user_id,
             UserPrediction.draw_id == draw.id))).scalars().all()}
 
-    entries = (await db.execute(
-        select(DrawEntry).where(DrawEntry.draw_id == draw.id))).scalars().all()
-    matches = (await db.execute(
-        select(Match).where(Match.draw_id == draw.id))).scalars().all()
+    # The caller may hand these in when filling several users of one draw —
+    # they are the same rows every time, and re-reading a 127-match bracket once
+    # per entrant is most of the cost of doing this at all.
+    if entries is None:
+        entries = (await db.execute(
+            select(DrawEntry).where(DrawEntry.draw_id == draw.id))).scalars().all()
+    if matches is None:
+        matches = (await db.execute(
+            select(Match).where(Match.draw_id == draw.id))).scalars().all()
     projected = project_bracket(entries, matches, stored)
 
     written = 0
