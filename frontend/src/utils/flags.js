@@ -49,14 +49,19 @@ export function splitPlayerName(raw) {
   // Tested structurally rather than against IOC_TO_ISO2, which is a flag table
   // and holds only the countries that have one — matching on it would strand
   // "BDI" and "MNE" inside the names of the players it cannot draw.
+  //
+  // STRIP EVERY ONE OF THEM, not just the last. A Winston-Salem sheet printed
+  // "[6] Dhakshineswar SURESH IND ANY"; taking one token read ANY as the
+  // country — which draws no flag — and left the name as "SURESH IND". The
+  // country is the one nearest the name, so the last strip wins.
   let nat = null
-  const natMatch = s.match(/\s([A-Z]{3})$/)
-  if (natMatch) {
+  for (;;) {
+    const natMatch = s.match(/\s([A-Z]{3})$/)
+    if (!natMatch) break
     const before = s.slice(0, natMatch.index).split(/\s+/).filter(Boolean)
-    if (before.some(w => w === w.toUpperCase() && /[A-Z]/.test(w))) {
-      nat = natMatch[1]
-      s = before.join(' ')
-    }
+    if (!before.some(w => w === w.toUpperCase() && /[A-Z]/.test(w))) break
+    nat = natMatch[1]
+    s = before.join(' ')
   }
 
   const words = s.split(/\s+/).filter(Boolean)
