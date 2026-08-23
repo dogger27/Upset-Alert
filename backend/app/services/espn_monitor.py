@@ -1043,6 +1043,21 @@ class ESPNMonitor:
                 )
                 return
 
+            # NOT UNDER MATCH-BY-MATCH LOCKING. picks_locked_at means "the
+            # bracket is closed", and closing it at the first ball is the
+            # draw_start rule. A progressive draw stays open until every
+            # first-round match is complete — matches freeze individually as
+            # they go on court, which draw_lock_state handles, and that is the
+            # whole point of the mode. Stamping here closed Winston-Salem with
+            # none of its sixteen first-round matches played.
+            #
+            # draw_lock_state stamps it when the round is genuinely done, so the
+            # column keeps its meaning under both rules and everything reading
+            # is_locked keeps getting a straight answer.
+            from app.services.settings import LOCK_PROGRESSIVE_R1, resolve_draw_lock_mode
+            if await resolve_draw_lock_mode(db, tournament) == LOCK_PROGRESSIVE_R1:
+                return
+
             # Capture predicted closing_time before overwriting it
             original_ct = tournament.closing_time
 

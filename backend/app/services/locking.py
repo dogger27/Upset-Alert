@@ -9,6 +9,7 @@ while the server would happily take the change.
 """
 
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 
@@ -71,6 +72,16 @@ async def draw_lock_state(db, draw) -> LockState:
     r1_done = _r1_complete(rows)
 
     if draw.status == "completed" or r1_done:
+        # The moment the bracket closes under this rule, recorded where the rest
+        # of the app already looks for it. picks_locked_at means "picks are
+        # shut"; espn_monitor stamps it at the first ball for draw_start draws
+        # and deliberately does not for these, so this is the only thing that
+        # closes one — and without it Draw.is_locked, which every card and
+        # dashboard reads, would never agree with the answer being returned
+        # here. Stamped once and only when it is not already set.
+        if draw.picks_locked_at is None:
+            draw.picks_locked_at = datetime.now(timezone.utc)
+            await db.commit()
         return LockState(
             mode=mode, draw_locked=True,
             reason="every first-round match is complete",
