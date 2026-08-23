@@ -179,6 +179,60 @@ def _name_key(raw: str) -> str:
     return _norm(" ".join(toks))
 
 
+async def _profiles_by_name(db, raws: list) -> dict:
+    """Rank, Elo rank and date of birth for players the bracket does not know.
+
+    Same matching rule as _slugs_by_name and for the same reason — the whole
+    name, one candidate or nothing — because attaching another player's ranking
+    is the same mistake as attaching their head-to-head.
+
+    Without this the H2H panel opened from the ORDER OF PLAY showed a
+    qualifying match with its comparison rows blank: the panel reads rank, Elo
+    and age off the player object, and those were only ever filled in from a
+    draw_entries row. Qualifying has none — a 128-draw stores rounds 1-7, and
+    players who fail to qualify never reach it at all — so every qualifying
+    match rendered a thinner panel with no explanation. The head-to-head record
+    itself was already resolving by name, which is what made the gap look
+    arbitrary rather than absent.
+    """
+    keys = {k for k in (_name_key(r) for r in raws) if k}
+    if not keys:
+        return {}
+    surnames = {k.split()[-1] for k in keys if k.split()}
+    rows = (await db.execute(
+        select(TePlayer.id, TePlayer.name_display, TePlayer.date_of_birth)
+        .where(func.lower(TePlayer.last_name).in_(surnames)))).all()
+    by_key: dict = {}
+    for te_id, display, dob in rows:
+        k = _norm(display or "")
+        if k not in keys:
+            continue
+        by_key[k] = None if k in by_key else (te_id, dob)
+    matched = {k: v for k, v in by_key.items() if v}
+    if not matched:
+        return {}
+
+    te_ids = [v[0] for v in matched.values()]
+    # Newest week we hold, same reference the bracket-linked players use.
+    newest = select(func.max(TeRankingsSnapshot.week_date)).where(
+        TeRankingsSnapshot.player_id.in_(te_ids))
+    ranks, elos = {}, {}
+    for pid, rank, elo in (await db.execute(
+            select(TeRankingsSnapshot.player_id, TeRankingsSnapshot.rank,
+                   TeRankingsSnapshot.elo_rank)
+            .where(TeRankingsSnapshot.player_id.in_(te_ids),
+                   TeRankingsSnapshot.week_date == newest.scalar_subquery()))).all():
+        if rank:
+            ranks[pid] = rank
+        if elo:
+            elos[pid] = elo
+    return {
+        k: {"ranking": ranks.get(te_id), "elo_rank": elos.get(te_id),
+            "date_of_birth": dob}
+        for k, (te_id, dob) in matched.items()
+    }
+
+
 async def _slugs_by_name(db, raws: list) -> dict:
     """te_slug for players the bracket does not know, matched on the WHOLE name.
 
@@ -207,7 +261,8 @@ async def _slugs_by_name(db, raws: list) -> dict:
 
 
 def _player_out(p, nats: dict, seeds: dict, types: dict, from_bracket: bool,
-                slugs: dict = None, extra: dict = None, by_name: dict = None):
+                slugs: dict = None, extra: dict = None, by_name: dict = None,
+                extra_by_name: dict = None):
     """One player, preferring what the bracket knows over what the sheet printed.
 
     `from_bracket` is false for anything but main-draw singles. A doubles
@@ -235,7 +290,11 @@ def _player_out(p, nats: dict, seeds: dict, types: dict, from_bracket: bool,
         # plainly have one. Maya Joint is te_players 2322.
         te_slug=((slugs or {}).get(p.draw_entry_id)
                  or (by_name or {}).get(_name_key(p.raw_name))),
-        **((extra or {}).get(p.draw_entry_id) or {}),
+        # By draw entry where there is one, by NAME where there is not — the
+        # same fallback te_slug above already had.
+        **((extra or {}).get(p.draw_entry_id)
+           or (extra_by_name or {}).get(_name_key(p.raw_name))
+           or {}),
     )
 
 
@@ -410,6 +469,7 @@ async def schedule_day(
     unlinked = [p.raw_name for e in entries for p in e.players
                 if not p.draw_entry_id and e.discipline == "singles"]
     slugs_by_name = await _slugs_by_name(db, unlinked) if unlinked else {}
+    extra_by_name = await _profiles_by_name(db, unlinked) if unlinked else {}
 
     match_ids = {e.match_id for e in entries if e.match_id}
     matches = {}
@@ -581,7 +641,7 @@ async def schedule_day(
         players = [
             _player_out(p, nats, ent_seeds, ent_types,
                         e.discipline == "singles" and e.stage == "main",
-                        ent_slugs, ent_extra, slugs_by_name)
+                        ent_slugs, ent_extra, slugs_by_name, extra_by_name)
             for p in ordered
         ]
         out.append(ScheduleEntryOut(
