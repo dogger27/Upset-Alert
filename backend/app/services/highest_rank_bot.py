@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.tournament import Draw, DrawEntry, Match
 from app.models.prediction import UserPrediction
 from app.models.user import User
+from app.services.system_log import app_log
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +86,70 @@ def simulate_highest_rank_picks(
                 picks[match.id] = winner.id
 
     return picks
+
+
+async def fill_locked_with_favourite(db, draw, user_id: int,
+                                     locked_match_ids: set) -> int:
+    """Give a user the better-ranked player on every locked match they never
+    picked. Returns how many were written. Caller commits.
+
+    WHY ANYONE HAS UNPICKED LOCKED MATCHES AT ALL. Under match-by-match locking
+    the bracket stays open through the first round, so somebody can join a draw
+    that is already under way — and the matches already played are exactly the
+    ones they are not allowed to pick. Left alone they score nothing on those,
+    and on everything downstream of them, which is most of a bracket: the entry
+    is unwinnable before it starts and the reason is invisible.
+
+    The default is the same projection the Highest_Rank account plays, and it is
+    a projection rather than the result: a completed match resolves to the
+    better-ranked player even where the better-ranked player LOST. That is the
+    point — the pick is what someone with no information would have chosen, not
+    a free correct answer handed out after the fact.
+
+    `simulate_highest_rank_picks` walks the tree advancing the favourite, so a
+    locked match's whole path to the final is filled consistently: the same
+    player the projection advanced out of the locked match is the one it carries
+    forward. That matters because `_locked_with_downstream` locks exactly that
+    path, so the two sets line up by construction rather than by coincidence.
+
+    Only fills what is MISSING. An existing pick is never overwritten, whether
+    it was made before the match started or is one of these defaults.
+    """
+    if not locked_match_ids:
+        return 0
+    stored = set((await db.execute(
+        select(UserPrediction.match_id).where(
+            UserPrediction.user_id == user_id,
+            UserPrediction.draw_id == draw.id))).scalars().all())
+    missing = set(locked_match_ids) - stored
+    if not missing:
+        return 0
+
+    entries = (await db.execute(
+        select(DrawEntry).where(DrawEntry.draw_id == draw.id))).scalars().all()
+    matches = (await db.execute(
+        select(Match).where(Match.draw_id == draw.id))).scalars().all()
+    projected = simulate_highest_rank_picks(entries, matches)
+
+    written = 0
+    for match_id in missing:
+        winner_id = projected.get(match_id)
+        # Omitted by the projection means neither side has resolved to a real
+        # entry yet — an unnamed qualifier slot. Nothing to default to, and a
+        # guess there would be a guess about who is even playing.
+        if winner_id is None:
+            continue
+        db.add(UserPrediction(user_id=user_id, draw_id=draw.id,
+                              match_id=match_id, predicted_winner_id=winner_id))
+        written += 1
+
+    if written:
+        await app_log(
+            "info", "predictions",
+            f"Filled {written} locked pick(s) with the better-ranked player for "
+            f"user {user_id} in draw {draw.id}",
+            {"draw_id": draw.id, "user_id": user_id, "filled": written})
+    return written
 
 
 async def get_bot_user(db: AsyncSession) -> Optional[User]:
