@@ -150,9 +150,10 @@
 /* Collapsed state: a larger edge button with the chevron filling it, a dark
    border to make it obvious, and a 50%-transparent background. Sized by an
    invisible "CHAMP" sizer rendered in JSX rather than hardcoded numbers, and
-   offset 3px from the left edge. It used to be matched deliberately to the
-   round-pager button that sat in the same column; that button is gone and
-   dragging pages the draw now, so this is the only thing floating there. */
+   offset 3px from the left edge — deliberately the same footprint and offset as
+   the round-pager button, so where both are present they read as one column.
+   Where there is no pointer the pager is not rendered and this floats alone,
+   which is why the sizing lives here and is not borrowed from it. */
 .draw-sidebar--collapsed .sidebar-collapse-btn {
   top: 0.6rem;
   left: 3px;
