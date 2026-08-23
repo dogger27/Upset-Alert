@@ -752,7 +752,20 @@ function TournamentDraw() {
   }
 
   // Admin making picks on behalf of another user
+  /* CHANGING SOMEBODY ELSE'S BRACKET IS ASKED ABOUT EVERY TIME.
+     An admin is the only person who can reach this at all — canEditOther
+     requires it, and the server refuses the user_id outright otherwise — but
+     being allowed to is not the same as meaning to. These picks belong to
+     someone who is not in the room, cannot see it happen, and has no way to
+     tell an edit from their own choice afterwards.
+     Asked per change rather than once per user: a bracket is edited one match
+     at a time, and a single yes at the start would cover every click after it.
+     Named with the @username the sidebar passes up, which is what identifies a
+     person here — display names are often just a real name and two people can
+     share one. */
   const handlePickForOther = (matchId, playerId) => {
+    const who = viewedUserName ? `@${viewedUserName}` : 'another user'
+    if (!window.confirm(`Are you sure you want to change ${who}'s prediction?`)) return
     const newPicks = computeNextPicks(otherPicks, matchId, playerId)
     setOtherPicks(newPicks)
     saveOtherMutation.mutate(newPicks)
