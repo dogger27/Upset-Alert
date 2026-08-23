@@ -130,7 +130,17 @@ def _sheet_surnames(raw_names: list) -> set:
             # GUO, RAM and LEE. Tested structurally rather than against a
             # country list, which would strand exactly the players whose surname
             # happens to be spelled like one.
-            if (len(toks) >= 2 and _THREE_CAPS.match(toks[-1])
+            # STRIP EVERY trailing three-letter capital, not just one. A
+            # Winston-Salem sheet printed "Dhakshineswar SURESH IND ANY";
+            # removing one token left IND as the surname, so the row matched no
+            # event, went unscored, and its estimated start ran away to 11:20pm
+            # while the match had in fact finished at 5pm.
+            #
+            # Looping is safe for the same reason one pass was: the guard needs
+            # ANOTHER capitalised token in front. "Luca POW GBR" gives up GBR
+            # and then stops, because "Luca" is not capitalised and POW is the
+            # surname. See the note above.
+            while (len(toks) >= 2 and _THREE_CAPS.match(toks[-1])
                     and any(t.isupper() for t in toks[:-1])):
                 toks = toks[:-1]
             # An INITIAL is uppercase too. "H. Nys" made caps == ["H."], so the
@@ -224,7 +234,17 @@ def _sheet_people(raw_names: list, pids=None, ref=None) -> list:
         for part in (raw or "").split("/"):
             part = _SHEET_TAGS.sub(" ", part)
             toks = [t for t in part.split() if len(t) >= 2]
-            if (len(toks) >= 2 and _THREE_CAPS.match(toks[-1])
+            # STRIP EVERY trailing three-letter capital, not just one. A
+            # Winston-Salem sheet printed "Dhakshineswar SURESH IND ANY";
+            # removing one token left IND as the surname, so the row matched no
+            # event, went unscored, and its estimated start ran away to 11:20pm
+            # while the match had in fact finished at 5pm.
+            #
+            # Looping is safe for the same reason one pass was: the guard needs
+            # ANOTHER capitalised token in front. "Luca POW GBR" gives up GBR
+            # and then stops, because "Luca" is not capitalised and POW is the
+            # surname. See the note above.
+            while (len(toks) >= 2 and _THREE_CAPS.match(toks[-1])
                     and any(t.isupper() for t in toks[:-1])):
                 toks = toks[:-1]
             caps = [t for t in toks if t.isupper() and len(_ALPHA.sub("", t)) >= 2]
