@@ -943,14 +943,25 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
   // them to win THAT match and advance into the Quarterfinals column. Column
   // c's box i always feeds match R[c][floor(i/2)]. The Champion column (c===N)
   // has no further match, so it's never clickable.
+  /* A REFUSED CLICK STILL CALLS onPick, which explains why. Returning null
+     here left the box inert, and an inert box is indistinguishable from a page
+     that did not register the tap. The handler owns every reason (see
+     pickRefusal in TournamentDraw) so there is one list of them, not two.
+     `pickable` is separate and drives the STYLING: a locked box should not look
+     clickable, it just has to answer when clicked. */
   function nextMatchOnClick(c, i, playerId) {
-    if (locked || !onPick || playerId == null || c >= N) return null
+    if (!onPick || playerId == null || c >= N) return null
     const nextMatch = R[c][Math.floor(i / 2)]
     if (!nextMatch) return null
+    return () => onPick(nextMatch.id, playerId)
+  }
+
+  function nextMatchPickable(c, i, playerId) {
+    if (locked || playerId == null || c >= N) return false
+    const nextMatch = R[c][Math.floor(i / 2)]
     // Clicking a player picks them in the NEXT match, so it is that match's
     // lock that decides — not the one they are standing in.
-    if (lockedMatchIds.has(nextMatch.id)) return null
-    return () => onPick(nextMatch.id, playerId)
+    return !!nextMatch && !lockedMatchIds.has(nextMatch.id)
   }
 
   // Is the player in column c, row i currently serving? Their live match is
@@ -988,7 +999,8 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
     // should be clickable, so a click can never save a redundant "pick"
     // for a match that was always going to auto-advance regardless.
     const onClick = match.is_bye ? null : nextMatchOnClick(0, i, pid)
-    return { key: `e${i}`, player, isBye, serving: !isBye && isServing(0, i), abbrev: true, kind: 'entrant', clickable: !!onClick, onClick }
+    const pickable = !match.is_bye && nextMatchPickable(0, i, pid)
+    return { key: `e${i}`, player, isBye, serving: !isBye && isServing(0, i), abbrev: true, kind: 'entrant', clickable: pickable, onClick }
   }
 
   function winnerBox(c, i) {
@@ -1011,12 +1023,13 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
     const score = match.is_bye || isLiveMatch(match) ? null : scoreNodes(match.scores)
 
     const onClick = nextMatchOnClick(c, i, displayId)
+    const pickable = nextMatchPickable(c, i, displayId)
 
     return {
       key: `w${match.id}`, player, correct, wrong, score, serving: isServing(c, i),
       realName: wrong && realPlayer ? abbrevName(realPlayer.name) : null,
       realFullName: wrong && realPlayer ? realPlayer.name : null,
-      match, abbrev: true, kind: 'winner', clickable: !!onClick, onClick,
+      match, abbrev: true, kind: 'winner', clickable: pickable, onClick,
     }
   }
 

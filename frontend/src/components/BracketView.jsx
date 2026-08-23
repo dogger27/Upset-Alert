@@ -179,11 +179,13 @@ function PlayerRow({
   if (!player || (player.entry_type === 'Q' && !player.name)) {
     const isQ = player?.entry_type === 'Q'
     const label = isQ ? `Qualifier${qualifierNum != null ? ` ${qualifierNum}` : ''}` : 'TBD'
+    // Clicked even when locked, so the handler can say why — see the note on
+    // the row below. `clickable` still reflects whether it would be allowed.
     const isClickable = isQ && !locked && onClick
     return (
       <div
         className={clsx('player-row', { picked: isQ && isPicked, clickable: isClickable })}
-        onClick={isClickable ? onClick : undefined}
+        onClick={isQ && onClick ? onClick : undefined}
       >
         <span className="badge-left-slot" />
         {showTypeSlot && <span className="badge-type-slot" />}
@@ -211,7 +213,12 @@ function PlayerRow({
         // live/not-yet-started match where `picked`'s other styling doesn't apply.
         'pick-choice': isPicked,
       })}
-      onClick={!locked && onClick ? onClick : undefined}
+      /* ALWAYS wired when there is anything to pick. A locked row that
+         swallows the click is indistinguishable from a page that did not
+         register it; the handler owns every refusal and explains it (see
+         pickRefusal in TournamentDraw). `locked` still drives the styling
+         through the class list above, so it does not LOOK clickable. */
+      onClick={onClick}
       title={player.nationality ? `${player.name} (${player.nationality})` : player.name}
     >
       <span className="badge-left-slot">{leftBadge}</span>

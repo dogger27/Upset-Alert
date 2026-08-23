@@ -761,7 +761,33 @@ function TournamentDraw() {
     'The selected prediction is not possible because it will impact matches '
     + 'that have already started.'
 
+  /* EVERY REFUSED PICK SAYS WHY. A click that is quietly ignored reads as a
+     broken page — there is no way to tell "not allowed" from "did not
+     register". Each reason is checked in the order it becomes true, so the
+     message names the thing actually stopping this pick rather than the first
+     rule that happens to apply. Returns null when the pick is fine. */
+  const pickRefusal = (matchId) => {
+    if (!user) return 'Sign in to make predictions.'
+    if (viewingOther && !canEditOther) {
+      return 'You can only change your own predictions.'
+    }
+    if (locked) {
+      return data?.lock_reason
+        ? `Predictions are closed for this draw — ${data.lock_reason}.`
+        : 'Predictions are closed for this draw.'
+    }
+    if (lockedMatchIds.has(Number(matchId))) {
+      return 'This match has already started, so its prediction is locked.'
+    }
+    return null
+  }
+
   const handlePick = (matchId, playerId) => {
+    const refusal = pickRefusal(matchId)
+    if (refusal) {
+      window.alert(refusal)
+      return
+    }
     const newPicks = computeNextPicks(picks, matchId, playerId)
     if (blockedByLive(picks, newPicks)) {
       window.alert(LIVE_PICK_MSG)
@@ -787,6 +813,11 @@ function TournamentDraw() {
      person here — display names are often just a real name and two people can
      share one. */
   const handlePickForOther = (matchId, playerId) => {
+    const refusal = pickRefusal(matchId)
+    if (refusal) {
+      window.alert(refusal)
+      return
+    }
     const who = viewedUserName ? `@${viewedUserName}` : 'another user'
     if (!window.confirm(`Are you sure you want to change ${who}'s prediction?`)) return
     const newPicks = computeNextPicks(otherPicks, matchId, playerId)
@@ -1543,7 +1574,7 @@ function TournamentDraw() {
               matches={matches}
               players={players}
               picks={activePicks}
-              onPick={viewingOther ? (canEditOther ? handlePickForOther : () => {}) : handlePick}
+              onPick={viewingOther ? handlePickForOther : handlePick}
               locked={!user || locked || (viewingOther && !canEditOther)}
               lockedMatchIds={lockedMatchIds}
               windowStart={windowPos}
@@ -1562,7 +1593,7 @@ function TournamentDraw() {
               matches={matches}
               players={players}
               picks={activePicks}
-              onPick={viewingOther ? (canEditOther ? handlePickForOther : () => {}) : handlePick}
+              onPick={viewingOther ? handlePickForOther : handlePick}
               locked={!user || locked || (viewingOther && !canEditOther)}
               lockedMatchIds={lockedMatchIds}
               mode={viewMode}
