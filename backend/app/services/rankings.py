@@ -57,6 +57,32 @@ _YEAR_BRACKET_RE = re.compile(r'\s*\(\d{4}\)\s*')
 # Avoids reloading thousands of rows from SQLite on every assign_rankings call.
 _week_cache: dict[tuple, tuple[dict, dict, dict]] = {}
 
+
+def _invalidate_te_index() -> None:
+    """Forget the cached name index, because te_players just grew.
+
+    The index is built once per (gender, week) and kept for the life of the
+    process. That is right for a table that does not change — and wrong for this
+    one, which gains a row every time a player TE had not published turns up.
+
+    The two together defeated each other. assign_rankings retries unmatched
+    players on every scrape, precisely so someone unmatched at the moment they
+    entered a draw resolves later; the cached index made "later" mean "after the
+    next deploy", so the retry read a stale index and reported the same players
+    unresolved every half hour:
+
+      Winston-Salem Open: retried 5 unresolved player(s), 5 still unresolved
+
+    All five matched a freshly built index — four exactly, one by the fuzzy
+    fallback (Abdullah / Abedallah Shelbayh). Nothing was wrong with the
+    matching; it was being asked about a table snapshot taken before they
+    existed.
+
+    Cleared on INSERT rather than on a timer: a new row is exactly what makes
+    the index wrong, and rebuilding it is one query of a few thousand rows.
+    """
+    _week_cache.clear()
+
 # ---------------------------------------------------------------------------
 # Name normalization
 # ---------------------------------------------------------------------------
@@ -437,6 +463,7 @@ async def ensure_te_week(gender: str, week_date: date, db: AsyncSession, log_err
                 tp = TePlayer(gender=gender, name_raw=name_raw, name_norm=_norm(name_raw), te_slug=slug)
                 db.add(tp)
                 await db.flush()
+                _invalidate_te_index()
             existing_by_raw[name_raw] = tp
             existing_by_ts[frozenset(_norm(name_raw).split())] = tp
             if tp.te_slug:
@@ -601,6 +628,10 @@ async def assign_rankings(
                 ts = frozenset(_norm(player.name).split())
                 te_index.setdefault(ts, []).append(new_tp.id)
                 id_to_norm[new_tp.id] = _norm(player.name)
+                # The live dicts above are patched for THIS pass; the cache holds
+                # the same objects, so it is consistent — but drop it anyway so a
+                # later pass cannot inherit a half-updated one.
+                _invalidate_te_index()
                 if slug:
                     id_to_slug[new_tp.id] = slug
 
