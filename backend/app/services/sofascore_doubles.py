@@ -14,29 +14,35 @@ which is the only record of a doubles match that exists here. Nothing about the
 draws changes, and `schedule_entries.match_id` stays null for these rows exactly
 as it always has.
 
-WHY SURNAMES, WHEN EVERYTHING ELSE RESOLVES BY ID. Only 19 of 64 doubles player
-slots on a real day carried a `sofa_player_id`, because most doubles specialists
-are not in a singles draw and so were never stamped. Id-matching cannot carry
-this. Surnames can, and decisively: the sheet prints them in CAPITALS
-("Sadio DOUMBIA FRA") and Sofascore prints them first ("Doumbia S"), so the
-surname is the one token both spell in full. Measured 16/16 on a real day, most
-at 4 of 4 — the 3-of-4 cases are only hyphens and diacritics ("Roger-Vasselin",
-"Heliövaara").
+HOW A ROW IS MATCHED TO AN EVENT. By id where we have one, and by everything
+else where we do not. Most doubles specialists are in no singles draw, so only
+19 of 64 doubles slots on a real day carried a `sofa_player_id` and ids alone
+cannot carry this — but ids are decisive when present, so a confident match
+writes back the ones it just proved and the next one leans on names less.
 
-Matched ONCE and the event id written down, after which everything joins by id
-like the rest of the app.
+Names alone are NOT enough, and the day this was believed cost a whole Sunday:
+surnames identify a person, not a match, and a "winner of Bondar/Jacquemot" row
+contains exactly the names of the Q1 match that decides it. So a candidate has
+to agree on the day, the printed time, the round, the shape of the match, and
+both sides pairing off one-to-one — see `_match`, which is the whole of it.
+
+Claims are re-checked on every sweep rather than trusted once, so a wrong one
+lets go by itself; and one event can be claimed by only one row.
 """
 
 import asyncio
 import logging
 import re
-from datetime import date, datetime, timedelta, timezone
+import unicodedata
+from collections import namedtuple
+from itertools import permutations
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy import or_, select
 
 from app.models.schedule import ScheduleEntry, ScheduleEntryPlayer
-from app.models.tournament import Draw, Tournament
+from app.models.tournament import Draw, DrawEntry, Tournament
 from app.services.sofascore import SofascoreBlocked, SofascoreNotFound, _get
 from app.services.sofascore_live import _as_espn_shape, _norm_point, _sets_and_tiebreak
 from app.services.sofascore_results import _final_scores
@@ -46,16 +52,6 @@ logger = logging.getLogger(__name__)
 
 POLL_INTERVAL = 60.0
 
-# Three of four surnames. Four is the norm; three is what a hyphen or a
-# diacritic costs, and two would start matching a team against a different
-# pairing that happens to share a player — which in doubles is common.
-# Doubles puts four surnames on a row and three have to land; hyphens and
-# diacritics ("Roger-Vasselin", "Heliovaara") routinely cost the fourth.
-# Singles has only two, so both must — which is the stricter test of the pair,
-# and the right one: there is no spare name to be wrong about.
-_MIN_SURNAMES = 3
-_MIN_SURNAMES_SINGLES = 2
-
 # "[WC]" and "[2]" are the sheet's own annotations and never part of a name.
 _SHEET_TAGS = re.compile(r"\[[^\]]*\]")
 _THREE_CAPS = re.compile(r"[A-Z]{3}$")
@@ -63,25 +59,53 @@ _THREE_CAPS = re.compile(r"[A-Z]{3}$")
 # capitalised surname ("NYS") — both are uppercase, only one has two letters.
 _ALPHA = re.compile(r"[^A-Za-z]")
 
-# How far an event's own start may sit from the day the sheet says, before it is
-# a different match rather than the same one seen across a timezone.
-_EVENT_DAY_SLACK = timedelta(days=1)
+# A day at a venue, expressed in UTC. Play starts no earlier than 06:00 local
+# and the last match can finish after midnight, so against play_date's midnight
+# UTC an event may legitimately land anywhere from 6h before (UTC+13 morning) to
+# 30h after (UTC-6 night session).
+_DAY_FROM = timedelta(hours=6)
+_DAY_TO = timedelta(hours=30)
+
+# How far an event may sit from the time the SHEET prints for that row. A day's
+# order of play runs about twelve hours, so anything further away is a different
+# day's match rather than a delayed one.
+_SLOT_SLACK = timedelta(hours=12)
 
 
-def _event_near(event, play_date: date) -> bool:
-    """Is this event on (or beside) the day the row is scheduled for?
+def _event_near(event, entry) -> bool:
+    """Is this event the row's match, or the same fixture on another day?
 
-    Sofascore stamps startTimestamp in UTC and the sheet prints the venue's
-    date, so an evening match in the Americas is legitimately "tomorrow" by the
-    clock we compare against. A day of slack absorbs that and nothing more.
-    An event with no timestamp is allowed through — it is a match not yet given
-    a time, which is exactly the upcoming one we want.
+    Two tests, because either alone lets a wrong day through:
+
+    The day window catches an event from another week. It has to be wide — the
+    sheet prints the venue's date and Sofascore stamps UTC, and those disagree
+    for the whole night session at any American venue.
+
+    That width is exactly what lets in the near miss: yesterday's session sits
+    only a couple of hours outside today's midnight, so it passes the window
+    while being the same fixture a day early. The printed start is a far sharper
+    anchor, so when the row has one, the event has to be near THAT too.
     """
     ts = event.get("startTimestamp")
     if not ts:
+        # No time yet: an upcoming match, which is the one being looked for.
         return True
-    when = datetime.fromtimestamp(ts, tz=timezone.utc).date()
-    return abs((when - play_date).days) <= _EVENT_DAY_SLACK.days
+    when = datetime.fromtimestamp(ts, tz=timezone.utc)
+
+    day = datetime.combine(entry.play_date, time(0, 0), tzinfo=timezone.utc)
+    if not (day - _DAY_FROM <= when <= day + _DAY_TO):
+        return False
+
+    # Only a PRINTED time may veto. `expected_start_at` is our own estimate
+    # whenever the sheet gave no time, and an estimate is derived from the very
+    # rows being matched — one wrong match skews it, and the skewed estimate
+    # then rejects the right match. It gets a vote on nothing.
+    slot = entry.expected_start_at if entry.expected_source == "printed" else None
+    if slot is None:
+        return True
+    if slot.tzinfo is None:
+        slot = slot.replace(tzinfo=timezone.utc)
+    return abs(when - slot) <= _SLOT_SLACK
 
 
 def _sheet_surnames(raw_names: list) -> set:
@@ -118,32 +142,280 @@ def _sheet_surnames(raw_names: list) -> set:
     return out
 
 
-def _sofa_surnames(team_name: str) -> set:
-    """Surnames as SOFASCORE spells them.
+# ---------------------------------------------------------------- IDENTITY
+#
+# WHY THIS IS NOT SURNAME OVERLAP ANY MORE. Overlap counted how many of a row's
+# surnames appeared anywhere in an event, which identifies PEOPLE, not a MATCH.
+# On 2026-08-23 every one of Sunday's qualifying rows was wearing Saturday's
+# result. A "winner of Bondar/Jacquemot" row literally contains both surnames,
+# so the Q1 match that DECIDES that row scored a flawless two out of two; three
+# Saturday events were each claimed by two rows at once; and one row had been
+# holding a match from six days earlier, score and all, for a week.
+#
+# A match is not a bag of names. It is two sides, on a day, at a time, in a
+# round, of a shape — and all of that is checked here, because each of those
+# wrong matches satisfied the names and contradicted something else. Sofascore's
+# own player ids settle it outright wherever we hold them, and every confident
+# match writes back the ones we did not, so this gets more certain every day.
 
-    They use two different formats and the surname is at opposite ends of each:
+Person = namedtuple("Person", "surname initial pid ref",
+                    defaults=(None, None))
+Found = namedtuple("Found", "key flip pairs")
 
-        doubles   "Doumbia S. / Reboul F."   surname FIRST, initial after
-        singles   "Pierre-Hugues Herbert"    given name first, surname LAST
 
-    Taking the first token — right for doubles, and all this handled until
-    qualifying singles arrived — reads "Felix Balshaw" as a player called
-    Felix, which matches nothing on the sheet. The "/" is what tells them
-    apart: a doubles team names two people, a singles event names one.
+def _fold(text: str) -> str:
+    """Letters only, lower case, no accents — the spelling both sides agree on.
+
+    "Heliovaara"/"Heliovaara" and "Roger-Vasselin"/"Roger Vasselin" are the same
+    surname spelled by two sources with different punctuation, and used to cost
+    a name each.
     """
-    name = team_name or ""
-    if "/" in name:
-        out = set()
-        for side in name.split("/"):
-            toks = [t for t in side.replace(".", " ").split() if len(t) > 2]
-            if toks:
-                out.add(toks[0].lower())
-        return out
-    # Singles. Last token, which also lands correctly on the particled names —
-    # "Alex De Minaur" is Minaur, not De.
-    toks = [t for t in name.replace(".", " ").split() if len(t) >= 2]
-    return {toks[-1].lower()} if toks else set()
+    text = unicodedata.normalize("NFKD", text or "")
+    text = "".join(c for c in text if not unicodedata.combining(c))
+    return _ALPHA.sub("", text).lower()
 
+
+def _person(name: str, pid=None) -> Optional[Person]:
+    """One player, however the source spells them.
+
+    Both orders occur and a single trailing letter is what tells them apart,
+    since no surname is one letter long:
+
+        "Hugo Nys", "Alex De Minaur"   given name first, surname last
+        "Nys H."                       surname first, initial last
+    """
+    toks = [t for t in (name or "").replace(".", " ").split() if _ALPHA.sub("", t)]
+    if not toks:
+        return None
+    if len(toks) >= 2 and len(_ALPHA.sub("", toks[-1])) == 1:
+        return Person(_fold(toks[0]), _fold(toks[-1])[:1], pid)
+    return Person(_fold(toks[-1]), _fold(toks[0])[:1], pid)
+
+
+def _sofa_people(team: dict) -> list:
+    """The players on a Sofascore team, with their ids.
+
+    A doubles team carries `subTeams`, which is the good path twice over: it
+    gives each player's own id — the same id `draw_entries.sofa_player_id`
+    holds — and their FULL name, where the team name only has "Nys H".
+    """
+    subs = team.get("subTeams")
+    if subs:
+        return [p for p in (_person(s.get("name"), s.get("id")) for s in subs) if p]
+    name = team.get("name") or ""
+    if "/" in name:
+        return [p for p in (_person(part) for part in name.split("/")) if p]
+    p = _person(name, team.get("id"))
+    return [p] if p else []
+
+
+def _sheet_people(raw_names: list, pids=None, ref=None) -> list:
+    """The players on one side of the order of play.
+
+    Surname extraction is the same reading as _sheet_surnames — the sheet prints
+    the surname in capitals — and this keeps its two hard-won exceptions: a
+    trailing three-letter capital is only a country when a surname precedes it
+    ("Luca POW GBR" is a player called Pow), and a lone capital is an initial
+    rather than a surname ("H. Nys").
+    """
+    out = []
+    for i, raw in enumerate(raw_names):
+        pid = pids[i] if pids and i < len(pids) else None
+        for part in (raw or "").split("/"):
+            part = _SHEET_TAGS.sub(" ", part)
+            toks = [t for t in part.split() if len(t) >= 2]
+            if (len(toks) >= 2 and _THREE_CAPS.match(toks[-1])
+                    and any(t.isupper() for t in toks[:-1])):
+                toks = toks[:-1]
+            caps = [t for t in toks if t.isupper() and len(_ALPHA.sub("", t)) >= 2]
+            surname = _fold(caps[-1]) if caps else (_fold(toks[-1]) if toks else "")
+            if not surname:
+                continue
+            initial = ""
+            for t in part.split():
+                letters = _ALPHA.sub("", t)
+                if letters and _fold(t) != surname:
+                    initial = letters[0].lower()
+                    break
+            out.append(Person(surname, initial, pid, ref[i] if ref else None))
+    return out
+
+
+def _same_person(ours: Person, theirs: Person) -> int:
+    """2 certain, 1 by name, 0 unknown, -1 contradicted.
+
+    An id disagreeing is a contradiction and not merely a miss: these are the
+    same identifiers, so two different ones are two different people however
+    alike the names read. Initials work the same way — Zverev A and Zverev M
+    share every letter of the only token surname matching ever looked at.
+    """
+    if ours.pid and theirs.pid:
+        return 2 if ours.pid == theirs.pid else -1
+    if ours.surname and ours.surname == theirs.surname:
+        if ours.initial and theirs.initial and ours.initial != theirs.initial:
+            return -1
+        return 1
+    return 0
+
+
+def _pair_side(ours: list, theirs: list):
+    """Pair our side against their team one-to-one. None if it cannot be done.
+
+    Sides are one or two people, so every assignment is tried rather than
+    guessed at. Requiring one-to-one is the point: it is what stops one player
+    appearing on our row from carrying a whole team.
+    """
+    if len(ours) != len(theirs) or not ours:
+        return None
+    best = None
+    for perm in permutations(theirs):
+        certain = matched = 0
+        for a, b in zip(ours, perm):
+            verdict = _same_person(a, b)
+            if verdict < 0:
+                break
+            certain += verdict == 2
+            matched += verdict >= 1
+        else:
+            key = (certain, matched)
+            if best is None or key > best[0]:
+                best = (key, list(zip(ours, perm)))
+    return best
+
+
+def _alternatives_ok(alts: list, theirs: list) -> bool:
+    """For a side the sheet has not settled — "winner of X/Y" — is this them?
+
+    The row names everyone it could be, so the test is containment: whoever
+    Sofascore has must be one of the people the sheet listed. This is what lets
+    a half-decided row still be scored, without letting the match that decides
+    it be mistaken for it.
+    """
+    if not alts or not theirs or len(theirs) > len(alts):
+        return False
+    return all(any(_same_person(a, t) >= 1 for a in alts) for t in theirs)
+
+
+def _round_key(text: str):
+    """A round as ("q", n) or ("m", draw size), or None when unreadable.
+
+    Both sources name rounds, in different words, and they must agree: a Q2 row
+    is not the Q1 match that feeds it, however identical the four names are.
+    """
+    t = (text or "").lower()
+    if not t:
+        return None
+    digits = re.search(r"\d+", t)
+    if "qual" in t or re.fullmatch(r"f?q\d*", t.strip()):
+        # ("q", 0) is a WILDCARD qualifying round. Sofascore calls the last one
+        # "Qualification Final" and never numbers it, because which number it is
+        # depends on the draw — two rounds at a tour event, three at a slam —
+        # and our own sheets say "FQ" or a bare "Q" for the same reason. Reading
+        # the missing digit as round 1 made every Q2 row reject its own match.
+        # Being unnumbered is safe here: the numbered rounds still exclude each
+        # other, and the day, the printed time and one-event-one-row all stand.
+        if digits and "final" not in t:
+            return ("q", int(digits.group()))
+        return ("q", 0)
+    if "quarter" in t or t.strip() == "qf":
+        return ("m", 8)
+    if "semi" in t or t.strip() == "sf":
+        return ("m", 4)
+    if "final" in t or t.strip() == "f":
+        return ("m", 2)
+    if digits:
+        return ("m", int(digits.group()))
+    return None
+
+
+def _rounds_agree(event: dict, entry) -> bool:
+    ours = _round_key(entry.round_label)
+    info = event.get("roundInfo") or {}
+    theirs = _round_key(info.get("name") or info.get("slug") or "")
+    if ours is None or theirs is None:
+        return True
+    if ours[0] == "q" and theirs[0] == "q" and 0 in (ours[1], theirs[1]):
+        return True
+    return ours == theirs
+
+
+
+def _match(entry, event: dict, sides: dict):
+    """Is this event this row's match? Every gate, or nothing.
+
+    Each of the wrong matches that prompted this satisfied the names and broke
+    one of these, so none of them is optional:
+
+      the day        an event from another week, six days stale
+      the time       yesterday's session, two hours the wrong side of midnight
+      the round      the Q1 match that DECIDES a Q2 row, sharing all its names
+      the shape      one side pairing off against a team of a different size
+      one-to-one     both people on our side being the same person on theirs
+    """
+    if not _event_near(event, entry):
+        return None
+    if not _rounds_agree(event, entry):
+        return None
+
+    teams = (_sofa_people(event.get("homeTeam") or {}),
+             _sofa_people(event.get("awayTeam") or {}))
+    tbd = entry.tbd_side or ""
+    best = None
+    for flip in (False, True):
+        assign = (("a", teams[1 if flip else 0]), ("b", teams[0 if flip else 1]))
+        certain = matched = settled = sure_sides = 0
+        pairs, ok = [], True
+        for side, theirs in assign:
+            ours = sides.get(side) or []
+            if side in tbd:
+                # The sheet has not decided this side yet, so it is checked for
+                # containment: whoever Sofascore has must be one of the people
+                # the sheet listed. Both sides may be undecided — a Q2 match
+                # between two pending Q1 winners is exactly that — and
+                # containment on BOTH still identifies it, because only one of
+                # the four possible pairings is a real event.
+                if not _alternatives_ok(ours, theirs):
+                    ok = False
+                    break
+                continue
+            got = _pair_side(ours, theirs)
+            if got is None or got[0][1] < 1:
+                ok = False
+                break
+            certain += got[0][0]
+            matched += got[0][1]
+            settled += len(ours)
+            sure_sides += 1
+            pairs += got[1]
+        if not ok:
+            continue
+        # One name may miss where there are three or more to go on — that is
+        # what a diacritic or a hyphen costs. With only two there is no spare
+        # name to be wrong about, so both have to land.
+        if matched < settled - (1 if settled >= 3 else 0):
+            continue
+        key = (certain, matched, sure_sides)
+        if best is None or key > best.key:
+            best = Found(key, flip, pairs)
+    return best
+
+
+def _unclaim(entry) -> None:
+    """Drop an event that no longer passes, and everything derived from it.
+
+    THIS IS THE SELF-HEALING. Claims are re-checked on every sweep rather than
+    trusted once, so a bad one lets go by itself and the row is free to match
+    correctly on the next pass. Without it the Sunday rows would have kept
+    Saturday's scores until somebody edited the database by hand.
+    """
+    entry.sofa_event_id = None
+    entry.started_at = None
+    entry.completed_at = None
+    entry.winner_side = None
+    entry.live_scores_json = None
+    entry.live_point_json = None
+    entry.scores_json = None
+    entry.status = "scheduled"
 
 async def _doubles_ids(db, draw: Draw, tournament: Tournament) -> Optional[tuple]:
     """(unique_tournament_id, season_id) for this draw's DOUBLES event.
@@ -297,49 +569,111 @@ async def sweep_once(db, day: Optional[date] = None) -> dict:
                 ScheduleEntryPlayer.schedule_entry_id.in_([e.id for e in entries])))).scalars().all():
         players.setdefault(row.schedule_entry_id, []).append(row)
 
+    # Whatever Sofascore ids we already hold for these people. This is the
+    # strong identifier, and the reason the matching gets more certain over
+    # time: every confident match below writes back the ones that were missing,
+    # so a player matched by name today is matched by id tomorrow.
+    de_ids = {p.draw_entry_id for rows in players.values() for p in rows
+              if p.draw_entry_id}
+    draw_entries = {d.id: d for d in (await db.execute(
+        select(DrawEntry).where(DrawEntry.id.in_(de_ids)))).scalars().all()} if de_ids else {}
+    taken = set()
+    if draw_entries:
+        taken = {(d.draw_id, d.sofa_player_id) for d in (await db.execute(
+            select(DrawEntry).where(
+                DrawEntry.draw_id.in_({d.draw_id for d in draw_entries.values()}),
+                DrawEntry.sofa_player_id.isnot(None)))).scalars().all()}
+
+    sides_of = {}
+    for e in entries:
+        grouped = {}
+        for pl in players.get(e.id, []):
+            grouped.setdefault(pl.side, []).append(pl)
+        sides_of[e.id] = {
+            side: _sheet_people(
+                [pl.raw_name for pl in rows],
+                [(draw_entries.get(pl.draw_entry_id).sofa_player_id
+                  if draw_entries.get(pl.draw_entry_id) else None) for pl in rows],
+                rows)
+            for side, rows in grouped.items()}
+
     by_id = {ev["id"]: ev for ev in events}
     resolved = scored = 0
 
+    # A claim is re-checked, never trusted. A row holding an event that no
+    # longer passes lets go of it here and is free to match properly below.
+    for e in entries:
+        if not e.sofa_event_id:
+            continue
+        held = by_id.get(e.sofa_event_id)
+        if held is not None and _match(e, held, sides_of[e.id]) is None:
+            app_log("sofascore_doubles", "warning",
+                    f"dropped event {e.sofa_event_id} from schedule row {e.id} "
+                    f"({e.play_date} {e.round_label}) — it no longer identifies "
+                    f"this match")
+            _unclaim(e)
+
+    # ONE EVENT, ONE ROW. Three of Saturday's events were each being scored
+    # into two different rows at once, which is how Sunday's sheet came to be
+    # showing Saturday's results. Rows propose, the best proposal wins, and an
+    # event that is already spoken for is not on offer.
+    claimed = {e.sofa_event_id for e in entries if e.sofa_event_id}
+    proposals = []
+    for e in entries:
+        if e.sofa_event_id:
+            continue
+        best = runner = chosen = None
+        for cand in events:
+            if cand["id"] in claimed:
+                continue
+            got = _match(e, cand, sides_of[e.id])
+            if got is None:
+                continue
+            if best is None or got.key > best.key:
+                best, runner, chosen = got, best, cand
+            elif runner is None or got.key > runner.key:
+                runner = got
+        if best is None:
+            continue
+        if runner is not None and runner.key == best.key:
+            # Two events fit equally well, so neither is identified. Saying so
+            # and waiting is right: one of them is the wrong match, and there is
+            # nothing here to tell which.
+            app_log("sofascore_doubles", "warning",
+                    f"schedule row {e.id} ({e.play_date} {e.round_label}) "
+                    f"matches more than one event equally well — left unresolved")
+            continue
+        proposals.append((best.key, e, chosen, best))
+
+    proposals.sort(key=lambda x: x[0], reverse=True)
+    for _key, e, cand, got in proposals:
+        if cand["id"] in claimed:
+            continue
+        e.sofa_event_id = cand["id"]
+        claimed.add(cand["id"])
+        resolved += 1
+        # The ratchet: write down the ids this match just proved.
+        for ours, theirs in got.pairs:
+            entry = draw_entries.get(ours.ref.draw_entry_id) if ours.ref else None
+            if (entry is None or entry.sofa_player_id or not theirs.pid
+                    or (entry.draw_id, theirs.pid) in taken):
+                continue
+            entry.sofa_player_id = theirs.pid
+            taken.add((entry.draw_id, theirs.pid))
+
     for e in entries:
         ev = by_id.get(e.sofa_event_id) if e.sofa_event_id else None
-
         if ev is None:
-            ours = _sheet_surnames([p.raw_name for p in players.get(e.id, [])])
-            best, best_score = None, 0
-            for cand in events:
-                # THE EVENT HAS TO BE ON THE RIGHT DAY.
-                #
-                # Surnames alone match a player, not a match. events/last
-                # returns a whole season, so the same two names from an earlier
-                # round win the comparison just as well as today's — and did:
-                # rows on today's sheet came back stamped with a started_at from
-                # six days earlier, complete with that match's score and a
-                # "completed" status for a match that had not been played.
-                #
-                # A day either side, because the sheet's date is the venue's and
-                # the timestamp is UTC, and the two disagree for a whole evening
-                # at any American venue.
-                if not _event_near(cand, e.play_date):
-                    continue
-                theirs = (_sofa_surnames(cand["homeTeam"]["name"])
-                          | _sofa_surnames(cand["awayTeam"]["name"]))
-                hit = len(ours & theirs)
-                if hit > best_score:
-                    best, best_score = cand, hit
-            need = (_MIN_SURNAMES_SINGLES if e.discipline == "singles"
-                    else _MIN_SURNAMES)
-            if best is None or best_score < need:
-                continue
-            e.sofa_event_id = best["id"]
-            ev = best
-            resolved += 1
-
+            continue
         # Which side of OUR row is Sofascore's home team? The sheet's order and
         # theirs need not agree, and getting it backwards would credit the win
-        # to the wrong pair.
-        a_names = _sheet_surnames([p.raw_name for p in players.get(e.id, []) if p.side == "a"])
-        home = _sofa_surnames(ev["homeTeam"]["name"])
-        flip = len(a_names & home) < len(a_names & _sofa_surnames(ev["awayTeam"]["name"]))
+        # to the wrong pair. This comes out of the match itself now rather than
+        # being guessed at separately — it is the orientation that made the two
+        # sides pair off one-to-one.
+        got = _match(e, ev, sides_of[e.id])
+        if got is None:
+            continue
+        flip = got.flip
 
         status = (ev.get("status") or {}).get("type")
         code = (ev.get("status") or {}).get("code", 100)
