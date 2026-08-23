@@ -758,8 +758,8 @@ function TournamentDraw() {
     .some(mid => nextPicks[mid] !== basePicks[mid] && lockedMatchIds.has(Number(mid)))
 
   const LIVE_PICK_MSG =
-    'The selected prediction is not possible because it will impact matches '
-    + 'that have already started.'
+    'This change is not possible because it may have been made based on the '
+    + 'state of a match that has already started.'
 
   /* EVERY REFUSED PICK SAYS WHY. A click that is quietly ignored reads as a
      broken page — there is no way to tell "not allowed" from "did not
