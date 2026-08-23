@@ -643,11 +643,15 @@
    the line where it belongs. */
 .sched-altteam { display: inline-flex; align-items: baseline; gap: 0.35rem; }
 .sched-or {
-  /* Breathing room on BOTH sides. .sched-side--alt sets a flex gap, but the
-     competitor row makes the side `display: inline` so its alternatives flow as
-     text — and an inline formatting context has no gap, which is why "Vasselin"
-     ran straight into "OR". Margin works in both. */
-  margin: 0 0.32rem;
+  /* Space on the LEFT only. The right-hand side already has some: "or" and the
+     name after it are the two children of .sched-altteam, an inline-flex box
+     with its own 0.35rem gap, so a right margin here was added to that and made
+     the gap after "or" twice the gap before it.
+     The left side genuinely has none — the two alternatives are separate
+     inline-flex boxes inside a side the competitor row sets to `display:
+     inline`, and an inline formatting context has no gap to give. Hence a
+     margin one side and a gap the other, which look the same and are not. */
+  margin-left: 0.32rem;
   font-size: 0.62rem;
   font-weight: 800;
   text-transform: uppercase;
