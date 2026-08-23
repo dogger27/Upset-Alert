@@ -126,9 +126,11 @@ export default function DrawSidebar({ tournamentId, tournament, selectedUserId, 
         title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
       >
         {/* Invisible sizer giving this button a stable width and height in
-            every draw mode, from the same text the round pager used to be
-            lettered with. It borrowed that button's class until the pager was
-            removed; the rule lives here now (.sidebar-collapse-sizer). */}
+            every draw mode, from the same text the round pager is lettered
+            with — the two float in the same column and must read as one. The
+            rule is this component's own (.sidebar-collapse-sizer) rather than
+            borrowed from .round-nav-label, because the pager is pointer-only
+            and this button is not. */}
         {collapsed && (
           <span className="sidebar-collapse-sizer" aria-hidden="true">CHAMP</span>
         )}

@@ -54,6 +54,28 @@ const EDGE_SLACK = 8
    settle — the natural width is a constant for a given string. */
 const BAR_NAME_REM = 0.8   // must match .draw-dots-bar-name's font-size
 
+/* Does this device have a POINTER? That, not the width, is what decides whether
+   the edge round-pager buttons are worth their space. Dragging the draw pages
+   it on anything with a finger, which makes the buttons redundant there and
+   costs the bracket the gutter they stand in; with a mouse there is nothing to
+   drag with, so they are the only way to page besides the dots.
+   A narrow desktop window keeps them, and a wide tablet does not — both of
+   which a width test would get backwards. */
+function useHasPointer() {
+  const [has, setHas] = useState(
+    () => typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia('(hover: hover) and (pointer: fine)').matches
+      : true)
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
+    const mq = window.matchMedia('(hover: hover) and (pointer: fine)')
+    const onChange = () => setHas(mq.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
+  return has
+}
+
 function DrawDotsBar({ name, dots, catPill, isATP }) {
   const barRef = useRef(null)
   const [scale, setScale] = useState(1)
@@ -155,9 +177,17 @@ function TournamentDraw() {
   // CSS sizing, so either one updates this — two independent observers
   // (not one shared closure) so whichever button happens to be mounted
   // (paging can hide either one) keeps it current.
-  // Also capture the .draw-body node so we can bind the swipe's touchmove
-  // natively (below).
+  // Also capture the .draw-body node so we can measure the drawn bracket's
+  // right edge (for positioning the right-hand round-nav button), and to bind
+  // the swipe's touchmove natively (below).
   const bodyNodeRef = useRef(null)
+  // Above every early return, like every other hook in this component (#310).
+  const hasPointer = useHasPointer()
+  // Measured from the buttons themselves rather than assumed, so the gutter
+  // they stand in tracks their real footprint.
+  const [navBtnW, setNavBtnW] = useState(26)
+  const navBtnLeftRef = useCallback(makeWidthRef(setNavBtnW), [])
+  const navBtnRightRef = useCallback(makeWidthRef(setNavBtnW), [])
   const scrollerRef = useRef(null)   // .cv-scroll / .bracket-scroll, re-found on each measure
   // Which league the sidebar is showing (null = Global). Owned here because the
   // draw itself needs it — the per-match predictors popup lists that league's
@@ -413,6 +443,30 @@ function TournamentDraw() {
   }, [])
   // Never leave the header hidden when the view or tournament changes
   useEffect(() => { setHeaderHidden(false) }, [viewMode, id])
+
+  // Measure the right edge of the last visible round's boxes (relative to
+  // .draw-body) so the right-hand round-nav button can sit just past the drawn
+  // content rather than flush against the page edge. Re-runs whenever the
+  // window, view, size, or sidebar changes; a ResizeObserver catches the rest.
+  const [rightNavX, setRightNavX] = useState(null)
+  useLayoutEffect(() => {
+    const body = bodyNodeRef.current
+    if (!body) return
+    const measure = () => {
+      // Anchor to the trailing connector gap's right edge when present (so the
+      // button clears the green feed lines + H2H chip), else the last column.
+      const gaps = body.querySelectorAll('.cv-gap')
+      const cols = body.querySelectorAll('.cv-col, .bracket-col')
+      const anchor = gaps[gaps.length - 1] || cols[cols.length - 1]
+      if (!anchor) { setRightNavX(null); return }
+      const bx = body.getBoundingClientRect().left
+      setRightNavX(anchor.getBoundingClientRect().right - bx)
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(body)
+    return () => ro.disconnect()
+  }, [windowStart, data, mainWidth, bodyWidth, sidebarCollapsed, viewMode, headerHidden])
 
   // ── Unpicked matches scrolled off the top/bottom of the round on screen ───
   // This is the vertical case: a 128-draw column
@@ -794,10 +848,19 @@ function TournamentDraw() {
     if (c === 8) return 'R16'
     return `R${i + 1}`
   }
+  // Round label by DRAW SIZE at that round (players = 2×matches): R128/R64/R32/
+  // R16, then QF/SF/F. Used on the edge round-nav buttons.
+  const navLabel = (rn) => {
+    const c = roundCountByNum[rn]
+    if (c === 1) return 'F'
+    if (c === 2) return 'SF'
+    if (c === 4) return 'QF'
+    return `R${c * 2}`
+  }
   // Pager columns: one per round for Picks/Live; Combined adds a Champion column.
-  const roundCols = roundNumbers.map((rn, i) => ({ label: dotLabel(rn, i), title: roundNameByNum[rn] || `Round ${rn}` }))
+  const roundCols = roundNumbers.map((rn, i) => ({ label: dotLabel(rn, i), title: roundNameByNum[rn] || `Round ${rn}`, nav: navLabel(rn) }))
   const pagerColumns = viewMode === 'combined'
-    ? [...roundCols, { label: '🏆', title: 'Champion' }]
+    ? [...roundCols, { label: '🏆', title: 'Champion', nav: 'CHAMP' }]
     : roundCols
   const columnCount = pagerColumns.length
 
@@ -830,6 +893,9 @@ function TournamentDraw() {
     const maxStart = Math.max(0, columnCount - dw)
     return { dw, maxStart, pos: Math.min(windowStart, maxStart), fit }
   }
+  // Pass 1 (no inset) decides whether the left button COULD show (paging
+  // possible at all); pass 2 reserves its gutter.
+  const w0 = computeWindow(0)
   // COMPACT draw mode: when fewer than 2 full-size rounds would fit in NORMAL
   // mode, go all-in on showing TWO rounds anyway: the collapsed sidebar strip
   // overlays the draw instead of taking flex space (its reveal button floats
@@ -843,19 +909,22 @@ function TournamentDraw() {
   const COMPACT_BREAK = 2 * colUnit + 44 + 24 + 16 - COL_GAP_PX
   const compactDraw = viewMode === 'combined' && bodyWidth > 0 && sidebarCollapsed
     && bodyWidth < COMPACT_BREAK
-  // Zoomed content is inset by the left gutter (drawInsetLeft below, +4 —
-  // mirrors CombinedView's actual paddingLeft). The right boundary is now
-  // simply the body's edge less a hair: it used to stop short of the right
-  // pager button's measured width so the trailing H2H chip sat almost flush
-  // against it, and with that button gone the width it was holding back goes
-  // to the draw, which is the point of removing it.
+  // Zoomed content is inset by the left nav gutter (drawInsetLeft below, +4 —
+  // mirrors CombinedView's actual paddingLeft). The right boundary targets the
+  // right round-nav button's OWN measured position (navBtnW, pinned at
+  // RIGHT_MARGIN from the body's right edge in compact mode) minus a small
+  // clearance — the last visible round's trailing connector stub carries a
+  // real, clickable H2H chip, and the goal is that chip sitting almost flush
+  // against the button. With no pointer there is no button, and the width it
+  // would have held back goes to the draw instead.
   // COMPACT_COL_W/COMPACT_GAP mirror CombinedView's COMPACT_COL_W/COL_GAP —
   // NOT colUnit/COL_GAP_PX (260+24), which describe normal mode's wider
   // columns and would shrink the draw more than the actually-rendered
   // (narrower) compact content needs.
   const COMPACT_COL_W = CV_COMPACT_COL_W
   const COMPACT_GAP = CV_COL_GAP
-  const RIGHT_MARGIN = 3 // keeps the trailing H2H chip off the very edge
+  const RIGHT_MARGIN = 3 // the right button's own distance from the body's edge
+  const H2H_GAP = 3      // clearance between the trailing H2H chip and it
   const drawLeftPad = NAV_INSET + 4
   // TRAILING_W mirrors CombinedView's own TRAILING_W (H2H_X + half the H2H
   // chip's rotated visual width): credit the trailing stub only for the H2H
@@ -866,6 +935,7 @@ function TournamentDraw() {
   const TRAILING_W = CV_H2H_X + 9
   const naturalWCompact = 2 * COMPACT_COL_W + 1 * COMPACT_GAP + TRAILING_W
   const rightBoundary = bodyWidth - RIGHT_MARGIN
+    - (hasPointer ? navBtnW + H2H_GAP : 0)
   const drawZoom = compactDraw
     ? Math.max(0.5, (rightBoundary - drawLeftPad) / naturalWCompact)
     : 1
@@ -875,11 +945,15 @@ function TournamentDraw() {
   // ALWAYS in compact mode — there the button floats over the draw, and the
   // gutter keeps the leftmost boxes clear of it (they'd otherwise start at
   // the scroll padding, right underneath it).
-  // Only compact mode still needs it, for the SIDEBAR's reveal button, which
-  // floats over the draw at the same left:3px the pager used to. With the pager
-  // gone there is nothing to clear when the sidebar is open, so that gutter is
-  // handed back to the bracket rather than left as a margin around nothing.
-  const drawInsetLeft = compactDraw ? NAV_INSET : 0
+  // Compact mode always needs it, for the SIDEBAR's reveal button, which floats
+  // over the draw at the same left:3px. Beyond that it is the LEFT PAGER
+  // button's gutter — reserved whenever paging is possible rather than only
+  // while that button is visible, so pressing the right one does not shift the
+  // whole bracket sideways the moment the left one first appears. On a touch
+  // device there is no pager button, so the bracket keeps the width.
+  const leftNavInDraw = compactDraw
+    || (hasPointer && !sidebarCollapsed && columnCount > w0.dw)
+  const drawInsetLeft = leftNavInDraw ? NAV_INSET : 0
   let { dw: DRAW_WINDOW, maxStart: maxWindowStart, pos: windowPos, fit: windowFit } = computeWindow(drawInsetLeft)
   if (compactDraw) {
     DRAW_WINDOW = Math.min(2, columnCount)
@@ -888,6 +962,8 @@ function TournamentDraw() {
     windowFit = 2
   }
   const showPager = columnCount > DRAW_WINDOW
+  // The edge buttons, and every reservation made for them, are pointer-only.
+  const edgeNav = showPager && hasPointer
 
   // ── Swipe-to-page (touch only) ──────────────────────────────────────────
   // Touch events only fire on touch devices, so this is inherently mobile-only
@@ -1001,6 +1077,24 @@ function TournamentDraw() {
   }
   // Point the native listener at this render's closure (see swipeMoveRef).
   swipeMoveRef.current = onDrawTouchMove
+
+  // Off-screen unpicked matches: a match with no prediction can be paged out of
+  // view, with nothing on screen hinting it's still there. Flag whichever edge
+  // button leads toward it so it isn't missed. Only worth computing where those
+  // buttons exist — with a finger you scrub past it instead.
+  let missingPickLeft = false
+  let missingPickRight = false
+  if (edgeNav && user && !viewingOther) {
+    const roundIndexOf = {}
+    roundNumbers.forEach((rn, i) => { roundIndexOf[rn] = i })
+    for (const m of matches) {
+      if (m.is_bye || activePicks[m.id] != null) continue
+      const colIdx = roundIndexOf[m.round_number]
+      if (colIdx == null) continue
+      if (colIdx < windowPos) missingPickLeft = true
+      else if (colIdx >= windowPos + DRAW_WINDOW) missingPickRight = true
+    }
+  }
 
   // Viewport so narrow that only 1–2 rounds fit → keep the sub-header hidden
   // at all times (vertical space is at a premium; the dots bar below still
@@ -1440,8 +1534,46 @@ function TournamentDraw() {
 
         </div>
 
-        {/* Unpicked matches in the round on screen that are scrolled out of
-            sight.
+        {/* Big edge buttons to page the round just off-screen — POINTER ONLY.
+            Dragging the draw does this on a touch device, which makes them
+            redundant there and costs the bracket the gutter they stand in.
+            The left button hugs the page edge; the right one, in compact mode,
+            is pinned to the far right edge instead (drawZoom is computed to
+            bring the content right up to it) — in normal mode it sits just past
+            the last drawn round (rightNavX, measured above). */}
+        {edgeNav && windowPos > 0 && (
+          <button
+            ref={navBtnLeftRef}
+            className={clsx('round-nav round-nav--left', { 'round-nav--missing-pick': missingPickLeft })}
+            style={{ left: sidebarCollapsed ? 3 : Math.max(3, bodyWidth - mainWidth + 3) }}
+            onClick={() => setWindowStart(windowPos - 1)}
+            title={missingPickLeft
+              ? `Show ${pagerColumns[windowPos - 1].title} — missing pick(s)`
+              : `Show ${pagerColumns[windowPos - 1].title}`}
+            aria-label={`Show ${pagerColumns[windowPos - 1].title}`}
+          >
+            <span className="round-nav-label round-nav-label--sizer" aria-hidden="true">CHAMP</span>
+            <span className="round-nav-label">{pagerColumns[windowPos - 1].nav}</span>
+          </button>
+        )}
+        {edgeNav && windowPos < maxWindowStart && (compactDraw || rightNavX != null) && (
+          <button
+            ref={navBtnRightRef}
+            className={clsx('round-nav round-nav--right', { 'round-nav--missing-pick': missingPickRight })}
+            style={compactDraw ? { right: 3, left: 'auto' } : { left: Math.min(rightNavX + 6, bodyWidth - 30) }}
+            onClick={() => setWindowStart(windowPos + 1)}
+            title={missingPickRight
+              ? `Show ${pagerColumns[windowPos + DRAW_WINDOW].title} — missing pick(s)`
+              : `Show ${pagerColumns[windowPos + DRAW_WINDOW].title}`}
+            aria-label={`Show ${pagerColumns[windowPos + DRAW_WINDOW].title}`}
+          >
+            <span className="round-nav-label round-nav-label--sizer" aria-hidden="true">CHAMP</span>
+            <span className="round-nav-label">{pagerColumns[windowPos + DRAW_WINDOW].nav}</span>
+          </button>
+        )}
+
+        {/* Vertical counterpart to the round-nav buttons above: unpicked
+            matches in the round on screen that are scrolled out of sight.
             Pinned to the scroller's own top/bottom edge (measured, since the
             sidebar and collapsing header both move it) and tapping jumps to
             the nearest one. */}
