@@ -771,11 +771,11 @@ function TournamentDraw() {
     if (viewingOther && !canEditOther) {
       return 'You can only change your own predictions.'
     }
-    if (locked) {
-      return data?.lock_reason
-        ? `Predictions are closed for this draw — ${data.lock_reason}.`
-        : 'Predictions are closed for this draw.'
-    }
+    // A CLOSED DRAW SAYS NOTHING. The whole bracket is inert and reads that
+    // way — a popup on every box would be explaining the obvious, once per tap.
+    // The messages below are for the opposite case: a draw still open, where
+    // one box refuses and the reason is genuinely not visible.
+    if (locked) return null
     if (lockedMatchIds.has(Number(matchId))) {
       return 'This match has already started, so its prediction is locked.'
     }
