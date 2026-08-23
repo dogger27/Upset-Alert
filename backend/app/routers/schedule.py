@@ -489,11 +489,9 @@ async def schedule_day(
     dbl_settled: dict[frozenset, frozenset] = {}
     if any(e.is_tbd for e in entries):
         since = day - timedelta(days=14)
-        # EVERY discipline, not just doubles. Qualifying singles has no bracket
-        # row either — a 128-draw stores rounds 1-7 and players who fail to
-        # qualify never reach draw_entries — so the singles resolver above can
-        # no more answer a Q2 slot than it can a doubles final. Both are
-        # answered here, by the row that recorded the result.
+        # Every row that recorded a result, of any discipline and any stage.
+        # Filtering this by kind is what made the resolver need fixing once per
+        # kind; a result is a result.
         rows = (await db.execute(
             select(ScheduleEntry).where(
                 ScheduleEntry.tournament_id.in_(t_ids),
@@ -509,8 +507,14 @@ async def schedule_day(
                 continue
             dbl_settled[frozenset(a | b)] = frozenset(a if r.winner_side == "a" else b)
 
-    def _settle_doubles(side_players):
-        """(players, resolved) — the pair that came through, once they have met."""
+    def _settle_rows(side_players):
+        """(players, resolved) — who came through, from the row that recorded it.
+
+        Discipline-agnostic and stage-agnostic by construction: it knows only
+        that two candidates met and that some row says who won. A doubles final,
+        a qualifying second round, and anything not yet invented resolve through
+        the same lookup.
+        """
         if len(side_players) != 2:
             return side_players, False
         teams = [_sheet_surnames([p.raw_name]) for p in side_players]
@@ -553,16 +557,23 @@ async def schedule_day(
             sp = sorted((p for p in e.players if p.side == side),
                         key=lambda x: x.position)
             if side in unresolved:
-                if e.discipline == "singles":
-                    sp, settled = _settle(sp)
-                    # No bracket match to be found — qualifying — so ask the
-                    # rows. This is the fallback that was missing: a Q2 slot
-                    # showed "Bondar OR Jacquemot" while one of them was on
-                    # court playing it.
-                    if not settled:
-                        sp, settled = _settle_doubles(sp)
-                else:
-                    sp, settled = _settle_doubles(sp)
+                # ONE PATH, WHATEVER THE ROW IS.
+                #
+                # There is no branch on discipline or stage here, and there must
+                # never be one again. Three times this was fixed for one
+                # combination and broke for the next — main-draw singles, then
+                # doubles, then qualifying singles — because the CODE was
+                # organised around the kind of match while the PROBLEM is not.
+                #
+                # A TBD side names the participants of the match that decides
+                # it. That match recorded its result in one of exactly two
+                # places: a bracket row, if it has one, or its own schedule row,
+                # if it does not. So ask both, in that order, for every row.
+                # Qualifying doubles needs no new code; nor does anything else,
+                # because there is nowhere else for a result to be.
+                sp, settled = _settle(sp)
+                if not settled:
+                    sp, settled = _settle_rows(sp)
                 if settled:
                     unresolved = unresolved.replace(side, "")
             ordered.extend(sp)
