@@ -44,12 +44,15 @@ async def list_tournaments(db: AsyncSession = Depends(get_db)):
         .order_by(Draw.year.desc(), Draw.name)
     )
     rows = result.all()
-    tournaments = []
-    for t, lat in rows:
-        t.status = t.computed_status
-        t.latest_result_at = lat
-        tournaments.append(t)
-    return tournaments
+    # Serialised, never assigned back. Writing to a loaded ORM row marks it
+    # dirty and the next query in the session autoflushes it as a real UPDATE —
+    # which is how a GET comes to hold a write lock. Both of these are computed
+    # for the response and neither belongs in the column.
+    return [
+        TournamentOut.model_validate(t).model_copy(
+            update={"status": t.computed_status, "latest_result_at": lat})
+        for t, lat in rows
+    ]
 
 
 @router.post("", response_model=TournamentOut, status_code=201)
@@ -460,14 +463,16 @@ async def global_draws(db: AsyncSession = Depends(get_db)):
         if t:
             found.append((t, picker_count))
 
-    out = []
-    for t, picker_count in found:
-        t.status = t.computed_status
-        out.append(LeagueTournamentOut(
-            tournament=TournamentOut.model_validate(t),
+    # Overridden on the way out, not on the row — see the note in the list
+    # endpoint above.
+    return [
+        LeagueTournamentOut(
+            tournament=TournamentOut.model_validate(t).model_copy(
+                update={"status": t.computed_status}),
             picker_count=picker_count,
-        ))
-    return out
+        )
+        for t, picker_count in found
+    ]
 
 
 @router.get("/{tournament_id}", response_model=TournamentOut)
@@ -482,15 +487,15 @@ async def get_tournament(tournament_id: int, db: AsyncSession = Depends(get_db))
     # Same override every other serializing endpoint applies — "open" exists
     # only in computed_status, so without this the raw column leaks out and
     # any status === 'open' check against this endpoint silently fails.
-    # NOT flushed. Assigning to a loaded ORM row marks it dirty, and the next
-    # query in the session autoflushes it as a real UPDATE — which is how a GET
-    # came to hold a write lock and fail with "database is locked" against the
-    # Sofascore sweeps. "open" is PURELY computed and must never reach the
-    # column; the assignment exists only so the response carries it. Done after
-    # every query, so nothing is left to trigger a flush, and the session is
-    # never committed on a read.
-    t.status = t.computed_status
-    return t
+    # NEVER ASSIGNED TO THE ROW. Writing to a loaded ORM row marks it dirty and
+    # the next query in the session autoflushes it as a real UPDATE — which is
+    # how a GET came to hold a write lock and fail with "database is locked".
+    # Ordering the assignment after the queries was the old defence and it was
+    # too fragile: one query added below it, at any depth, brings the fault
+    # straight back. "open" is PURELY computed and must never reach the column,
+    # so it is set on the RESPONSE, where nothing can flush it.
+    return TournamentOut.model_validate(t).model_copy(
+        update={"status": t.computed_status})
 
 
 @router.get("/{tournament_id}/competitors", response_model=list[UserPublicOut])
@@ -924,30 +929,35 @@ async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
             court=(sm[3] if sm else None),
         ))
 
-    t.latest_result_at = max((m.completed_at for m in matches if m.completed_at), default=None)
     # The raw `status` column only ever holds upcoming/active/completed — "open"
-    # is purely computed (see Draw.computed_status). list_tournaments() and
-    # global_draws() already apply this override before serializing; this
-    # single-draw endpoint never did, so the frontend's `tournament.status`
-    # was always the stale raw value here, silently breaking every
-    # status === 'open' check on the draw page (auto-init banner, DA/Qual badges).
-    # NOT flushed. Assigning to a loaded ORM row marks it dirty, and the next
-    # query in the session autoflushes it as a real UPDATE — which is how a GET
-    # came to hold a write lock and fail with "database is locked" against the
-    # Sofascore sweeps. "open" is PURELY computed and must never reach the
-    # column; the assignment exists only so the response carries it. Done after
-    # every query, so nothing is left to trigger a flush, and the session is
-    # never committed on a read.
-    t.status = t.computed_status
-
+    # is purely computed (see Draw.computed_status), and the frontend's every
+    # `status === 'open'` check depends on the override reaching it.
+    #
+    # NEITHER OF THESE IS ASSIGNED TO THE ROW. Writing to a loaded ORM row marks
+    # it dirty, and the next query in the session autoflushes it as a real
+    # UPDATE — which is how this GET came to hold a write lock:
+    #
+    #   OperationalError on GET /tournaments/121/draw ... database is locked
+    #   [SQL: UPDATE draws SET status=? WHERE draws.id = ?]  ('open', 121)
+    #
+    # The old defence was to assign only AFTER every query. It read as safe and
+    # was not: `predictions_visible` sits inside the return below and queries,
+    # so the flush happened anyway. Ordering cannot hold a rule like this —
+    # anything added later, at any depth, brings it straight back. Set on the
+    # RESPONSE instead, where there is nothing to flush.
+    hidden = not await predictions_visible(db, t)
     return DrawOut(
-        tournament=TournamentOut.model_validate(t),
+        tournament=TournamentOut.model_validate(t).model_copy(update={
+            "status": t.computed_status,
+            "latest_result_at": max(
+                (m.completed_at for m in matches if m.completed_at), default=None),
+        }),
         draw_entries=[_player_out(p) for p in players],
         matches=match_outs,
         lock_mode=lock.mode,
         draw_locked=lock.draw_locked,
         lock_reason=lock.reason,
-        predictions_hidden=not await predictions_visible(db, t),
+        predictions_hidden=hidden,
     )
 
 
