@@ -1269,11 +1269,15 @@
      serving ball. The tightened score columns above cover most of that; this
      covers the rest. */
   .sched-competitors--doubles .sched-competitor-name { font-size: 0.78rem; }
-  /* No measurement runs at this width — the column is released and names
-     ellipsise — so doubles flags go unconditionally. Four flags, two slashes
-     and two surnames does not fit a phone, and a flag with a truncated name
-     beside it is what made a cut-off name look like missing data. */
-  .sched-competitors--doubles .sched-flag { display: none; }
+  /* Doubles flags come off ONLY when they do not fit. Four flags, two slashes
+     and two surnames does not fit a phone in the general case, which is why
+     this was once unconditional — but a match that has not been played shows
+     no set columns, and on that row they fit easily. The fitting pass in
+     Schedule.jsx decides, against the columns the row actually renders, and
+     marks the side when it has room; both teams get the same answer. */
+  .sched-competitors--doubles .sched-side:not(.sched-side--flags) .sched-flag {
+    display: none;
+  }
 }
 
 /* NO ELLIPSIS ON A NAME. A name that does not fit is shrunk by the measuring
