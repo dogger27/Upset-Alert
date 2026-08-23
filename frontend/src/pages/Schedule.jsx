@@ -226,6 +226,66 @@ const COURT_FIT = 9
    people rather than one. */
 const DOUBLES_FIT = 22
 
+/* Roughly what one flag costs the line it sits on, in characters: the box is
+   1.05rem plus its margin, against an average character of a bit under half
+   that. Approximate on purpose — it decides between rungs of a ladder, not a
+   pixel boundary. */
+const FLAG_CHARS = 3
+
+/* HOW MUCH OF A DOUBLES TEAM FITS ON ITS LINE.
+   A doubles side was always surnames and never a flag, whatever room the row
+   had — "PITER / TJEN" against "JIANG / ZHANG [2]" on a card with two thirds of
+   it empty, because a match that has not been played shows no set columns and
+   nothing was claiming the space they leave.
+   So: take the richest form that fits, flags first, then given names. Both
+   sides are tested TOGETHER and get the same answer — deciding per side would
+   put initials on one team and bare surnames on the other in the same match,
+   which reads as a bug rather than as a fit. */
+const DOUBLES_RUNGS = [
+  ['full', true], ['initial', true], ['surname', true],
+  ['full', false], ['initial', false], ['surname', false],
+]
+
+/** The team's seed: the sheet prints it against both partners, and it belongs
+ *  to neither of them separately. */
+function teamSeedOf(players) {
+  return players.map(p => (p.seed != null ? `[${p.seed}]` : splitPlayerName(p.name).seed))
+    .find(Boolean) ?? null
+}
+
+/** One partner, written as long as the chosen rung allows. */
+function partnerText(raw, form) {
+  const { first, last } = splitPlayerName(raw)
+  const surname = last || raw
+  if (form === 'surname' || !first) return surname
+  return form === 'full' ? `${first} ${surname}` : `${first.trim()[0]}. ${surname}`
+}
+
+function doublesLineOf(players, form) {
+  return players.map(p => partnerText(p.name, form)).join(' / ')
+    + (teamSeedOf(players) ? ` ${teamSeedOf(players)}` : '')
+}
+
+/* What a doubles line gains from a set column the row does not render. More
+   than the singles credit, because a doubles line is set at 0.78rem against the
+   singles name's ~0.95 — the same freed pixels buy more characters. The extra
+   two are the result mark, which disappears with the scores rather than
+   separately: a tick only exists where there is a result. */
+const DOUBLES_SET_CHARS = 3
+const DOUBLES_MARK_CHARS = 2
+
+function doublesPresentation(sides, sets) {
+  const fit = DOUBLES_FIT + Math.max(0, SET_SLOTS - sets) * DOUBLES_SET_CHARS
+    + (sets === 0 ? DOUBLES_MARK_CHARS : 0)
+  for (const [form, flags] of DOUBLES_RUNGS) {
+    const fits = sides.every(players => !players.length || (
+      doublesLineOf(players, form).length + (flags ? players.length * FLAG_CHARS : 0) <= fit))
+    if (fits) return { form, flags }
+  }
+  // Nothing fits: the shortest form, and the existing scale takes it from here.
+  return { form: 'surname', flags: false }
+}
+
 function courtScale(court) {
   /* Measured off the LONGEST WORD, not the whole string. The column wraps
      between words, so "P&G STADIUM COURT" needs no shrinking — it needs two
@@ -264,7 +324,7 @@ function seedNumber(player) {
  * anyway.
  */
 function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp, tight,
-                     sets = SET_SLOTS }) {
+                     sets = SET_SLOTS, form }) {
   const { seed: printedSeed, first, last, nat } = splitPlayerName(raw)
   // A seeding sent as a field beats one parsed out of the name: a resolved
   // player's name comes from the bracket and never carried brackets to parse.
@@ -321,11 +381,16 @@ function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp, t
      nobody and hides the score as well. */
   const seedPart = !hideSeed && seed ? ` ${seed}` : ''
   const lastOnly = last || full
-  const tightest = surnameOnly
+  // A doubles side has already been fitted as a whole — both partners, the
+  // slash and the team seed measured together, because no partner knows how
+  // long the other is. That answer wins over anything decided here for one
+  // name in isolation.
+  const decided = form ? partnerText(raw, form) : null
+  const tightest = decided ?? (surnameOnly
     ? last
     : (`${full}${seedPart}`.length <= fit ? `${full}${seedPart}`
        : `${initialled}${seedPart}`.length <= fit ? `${initialled}${seedPart}`
-       : `${lastOnly}${seedPart}`)
+       : `${lastOnly}${seedPart}`))
   /* AND THEN IT SHRINKS AS FAR AS IT HAS TO. The floor is 0.45, which is small
      enough to be barely readable and is deliberately not a compromise: a name
      that overlaps the score has destroyed two pieces of information, and one
@@ -353,7 +418,7 @@ function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp, t
         ? <span className={`fi fi-${iso2.toLowerCase()} sched-flag`} title={nat} />
         : <span className="sched-flag flag-blank" aria-hidden="true" />}
       <span className={clsx('sched-pname', { 'sched-pname--long': longName })}>
-        {surnameOnly ? last : longName ? (
+        {decided ?? (surnameOnly ? last : longName ? (
           <>
             <span className="sched-name-full">{full}</span>
             {/* The abbreviated form is whichever rung the scale above was
@@ -364,7 +429,7 @@ function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp, t
               {`${initialled}${seedPart}`.length <= fit ? initialled : lastOnly}
             </span>
           </>
-        ) : full}
+        ) : full)}
         {/* AFTER the name. Leading it, the seed was the first thing on the line
             and pushed every name to a different starting column depending on
             whether it had one — so the names never formed an edge to scan. It
@@ -375,7 +440,7 @@ function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp, t
   )
 }
 
-function Side({ players, doubles, tbd, tight, sets }) {
+function Side({ players, doubles, tbd, tight, sets, form = 'surname', flags = false }) {
   if (!players.length) return <span className="sched-side">TBD</span>
 
   // An unresolved side is a choice between two whole teams, not a list of
@@ -404,26 +469,20 @@ function Side({ players, doubles, tbd, tight, sets }) {
   }
   // A doubles seed belongs to the TEAM. The sheet repeats it against both
   // partners, which reads as two separately-seeded players.
-  const teamSeed = doubles
-    ? players.map(p => (p.seed != null ? `[${p.seed}]`
-                                       : splitPlayerName(p.name).seed)).find(Boolean) ?? null
-    : null
+  const teamSeed = doubles ? teamSeedOf(players) : null
 
   /* A DOUBLES SIDE IS ONE LINE, and its budget is the whole line: two surnames,
      the slash between them, and the team seed. Scaled here rather than inside
      each PlayerName, because no player knows how long the other one is — and
      because the SEED is a sibling of both, so it was in nobody's budget at all.
      That is how "[2]" came to sit on top of the result mark. */
-  const doublesLine = doubles
-    ? players.map(p => splitPlayerName(p.name).last || p.name).join(' / ')
-      + (teamSeed ? ` ${teamSeed}` : '')
-    : ''
+  const doublesLine = doubles ? doublesLineOf(players, form) : ''
   const teamScale = doubles && doublesLine.length > DOUBLES_FIT
     ? Math.max(0.72, DOUBLES_FIT / doublesLine.length)
     : 1
 
   return (
-    <span className="sched-side"
+    <span className={clsx('sched-side', { 'sched-side--flags': doubles && flags })}
           style={teamScale < 1 ? { '--name-scale': teamScale } : undefined}>
       {players.map((p, i) => (
         <Fragment key={`${p.side}${p.position}${i}`}>
@@ -433,7 +492,7 @@ function Side({ players, doubles, tbd, tight, sets }) {
           {i > 0 && <span className="sched-slash">/</span>}
           <PlayerName raw={p.name} surnameOnly={doubles} hideSeed={doubles}
                       nationality={p.nationality} seed={p.seed} tight={tight}
-                      sets={sets} />
+                      sets={sets} form={doubles ? form : undefined} />
         </Fragment>
       ))}
       {/* Same placement as a singles seed, and for the same reason. */}
@@ -657,6 +716,10 @@ function CompetitorRows({ e, a, b }) {
     { players: b, side: 1, tbd: !!e.tbd_side?.includes('b') },
   ]
 
+  // Both teams together, so they are written the same way as each other, and
+  // against the columns this row actually shows rather than a fixed guess.
+  const dbl = doubles ? doublesPresentation([a, b], n) : null
+
   return (
     <div className={clsx('sched-competitors', { 'sched-competitors--doubles': doubles })}>
       {rows.map(({ players, side, tbd }) => (
@@ -667,7 +730,8 @@ function CompetitorRows({ e, a, b }) {
              })}>
           <span className="sched-competitor-name">
             <Side players={players} doubles={doubles} tbd={tbd}
-                  tight={serving != null || point != null} sets={n} />
+                  tight={serving != null || point != null} sets={n}
+                  form={dbl?.form} flags={dbl?.flags} />
           </span>
           {/* A SLOT, always present, not a conditional element. The ball
               appears on one line only, so rendering it inline shifted that
