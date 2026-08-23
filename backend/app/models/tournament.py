@@ -294,6 +294,24 @@ class Draw(Base):
     def computed_status(self) -> str:
         today = date.today()
 
+        # MATCH-BY-MATCH DRAWS STAY "OPEN" WHILE THEY ARE STILL PICKABLE.
+        #
+        # Everything below decides "active" from the calendar and from play
+        # having begun, which is right when the whole bracket shuts at the first
+        # ball. Under this rule it is not: matches freeze one at a time and the
+        # rest of the bracket stays editable, so the draw went on reading
+        # "Active" while every remaining pick could still be changed — a label
+        # contradicting the buttons underneath it.
+        #
+        # picks_locked_at is the one fact that settles it, and draw_lock_state
+        # stamps it at the moment the first round is done (see is_locked). Until
+        # then the draw is open, whatever the date says.
+        if (self.pick_lock_mode == "r1_progressive"
+                and not self.picks_locked_at
+                and self.draw_released_direct_at
+                and self.status != "completed"):
+            return "open"
+
         # A draw that hasn't started yet can never be "active" or "completed",
         # no matter what got stamped on it (e.g. stale/garbled scraped results
         # from a bad start_date). Guard this before anything else below — but
