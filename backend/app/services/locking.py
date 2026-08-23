@@ -33,14 +33,30 @@ class LockState:
 def match_in_play(m: Match) -> bool:
     """
     True once a match can no longer be predicted: it is being played, or it is
-    over.
+    over. Started and finished are the SAME case here — a result is simply a
+    start that has run its course, and neither can be predicted after the fact.
 
     live_scores_json is what espn_monitor writes while a match is on court, and
     it is cleared when the result lands — so "playing" and "played" are two
     different fields and both have to be asked. A bye has a winner from the
     moment the draw is released, which is correct: there is nothing to predict.
+
+    ANY EVIDENCE OF PLAY COUNTS, whichever feed saw it. The Sofascore columns
+    are shadow columns while ESPN is still the authority for SCORING, but this
+    is not a question about scoring — it is about whether a ball has been
+    struck, and a match ESPN happens to have missed is no less under way for it.
+    Gating the lock on whoever currently owns the scoring would leave a real,
+    observed match editable, and the cutover moves that ownership on its own
+    (see sofa_cutover). Locking takes the union; authority decides the score.
     """
-    return m.winner_id is not None or m.live_scores_json is not None or m.status == "completed"
+    return (
+        m.winner_id is not None
+        or m.live_scores_json is not None
+        or m.status == "completed"
+        or m.sofa_started_at is not None
+        or m.sofa_live_json is not None
+        or m.sofa_winner_id is not None
+    )
 
 
 async def draw_lock_state(db, draw) -> LockState:
