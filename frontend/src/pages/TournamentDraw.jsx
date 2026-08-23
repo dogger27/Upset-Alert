@@ -777,7 +777,18 @@ function TournamentDraw() {
     // one box refuses and the reason is genuinely not visible.
     if (locked) return null
     if (lockedMatchIds.has(Number(matchId))) {
-      return 'This match has already started, so its prediction is locked.'
+      /* TWO REASONS WEAR THE SAME LOCK. A match is frozen either because IT is
+         under way, or because something upstream of it is — a player cannot be
+         moved out of a round they have already played, so every match their
+         path reaches is settled with it. Saying "this match has already
+         started" about a match that has not is simply wrong, and sends the
+         reader looking at the wrong row. */
+      const m = (data?.matches || []).find(x => x.id === Number(matchId))
+      const itselfStarted = !!m && (m.winner || m.live_scores || m.status === 'completed')
+      return itselfStarted
+        ? 'This match has already started, so its prediction is locked.'
+        : 'You can not change the result of a match involving a player who has '
+          + 'already started a previous match.'
     }
     return null
   }
