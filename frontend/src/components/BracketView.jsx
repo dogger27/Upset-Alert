@@ -630,6 +630,9 @@ export default function BracketView({ tournament, matches, players, picks, onPic
   return (
     <>
     {h2hPlayers && (
+      /* canPick takes the match's OWN lock as well as the draw's — see the
+         note at CombinedView's panel for what a match in progress looked like
+         without it. */
       <H2HPanel
         slug1={h2hPlayers.p1.te_slug}
         slug2={h2hPlayers.p2.te_slug}
@@ -645,7 +648,8 @@ export default function BracketView({ tournament, matches, players, picks, onPic
         picks={picks}
         onPick={onPick}
         pickPair={resolved[h2hPlayers.match?.id]}
-        canPick={mode === 'picks' && !locked}
+        canPick={mode === 'picks' && !locked
+                 && !lockedMatchIds.has(h2hPlayers.match?.id)}
         onPrev={h2hNav.prev ? () => setH2HPlayers(h2hNav.prev) : null}
         onNext={h2hNav.next ? () => setH2HPlayers(h2hNav.next) : null}
         onClose={() => setH2HPlayers(null)}
