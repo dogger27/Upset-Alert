@@ -72,7 +72,15 @@ async def stream(tournament_id: int, request: Request):
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache, no-transform",
-            "Connection": "keep-alive",
+            # NO "Connection: keep-alive". It is a hop-by-hop header, and HTTP/2
+            # and HTTP/3 forbid connection-specific headers outright — a
+            # receiver is required to treat the message as malformed. The site
+            # is served over HTTP/3 through Cloudflare, so this header was
+            # making an otherwise valid stream a protocol violation:
+            #   GET /stream/121 net::ERR_QUIC_PROTOCOL_ERROR 200 (OK)
+            # EventSource reconnects on its own, which is why it looked like it
+            # "resolved itself" rather than like a fault. It has no meaning on
+            # HTTP/1.1 here either — the connection is already persistent.
             # nginx and several proxies buffer a response until it completes,
             # which for a stream is never. This is the documented opt-out and is
             # honoured by more than nginx.
