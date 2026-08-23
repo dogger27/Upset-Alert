@@ -879,3 +879,42 @@ input:focus, select:focus { outline: none; border-color: var(--brand-line); }
   border: 1px solid var(--border-strong) !important;
   border-radius: 2px;
 }
+
+/* ── iOS zooms into a field it thinks is too small to read ────────────────────
+   Safari on iPhone auto-zooms the page when an input is focused whose font is
+   under 16px, and it does NOT zoom back out afterwards — the page simply stays
+   magnified, which is what kept happening on login and anywhere else with a
+   field. Our inputs are 0.875rem (14px), so every focus triggered it.
+
+   16px on touch devices is the fix Apple documents. The alternative,
+   maximum-scale=1 in the viewport tag, works by disabling pinch-zoom entirely
+   and takes the page's zoom away from people who need it — never that.
+
+   Stated LAST in this file and with !important so it also covers the fields
+   that set their own smaller size (admin search, log filters, the profile
+   editor, invite and delete confirmations); any one of them left under 16px
+   brings the zoom back on that screen only, which is exactly the sort of
+   thing that reads as random.
+   `pointer: coarse` rather than a width query: this is about touch input, and
+   a narrow desktop window neither zooms nor needs the larger text. */
+@media (pointer: coarse) {
+  input,
+  select,
+  textarea,
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="search"],
+  input[type="number"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="date"] {
+    font-size: 16px !important;
+  }
+  /* Checkboxes and radios have no text and are sized by width/height, so the
+     rule above must not inflate their box. */
+  input[type="checkbox"],
+  input[type="radio"] {
+    font-size: inherit !important;
+  }
+}
