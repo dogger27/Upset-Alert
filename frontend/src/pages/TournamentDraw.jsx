@@ -787,8 +787,8 @@ function TournamentDraw() {
       const itselfStarted = !!m && (m.winner || m.live_scores || m.status === 'completed')
       return itselfStarted
         ? 'This match has already started, so its prediction is locked.'
-        : 'You can not change the result of a match involving a player who has '
-          + 'already started a previous match.'
+        : 'You can not change the result of a match which stems from a match '
+          + 'which has already started.'
     }
     return null
   }
