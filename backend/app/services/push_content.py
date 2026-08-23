@@ -143,25 +143,23 @@ def draw_change(draws: list[dict], affects_your_picks: bool, event_seq: int = 0)
     # No tournament name in the title — it truncated ("Draw change — Cincin…").
     # The name is the body's first line instead, where it has the width to
     # survive alongside its tier.
-    title = "Draw Changes Made"
+    title = "Changes to Your Draw"
 
+    # NO "one of your picks was replaced" LINE. Any replacement in a draw you
+    # are competing in can reach your bracket — whoever comes in plays on, and
+    # everything downstream moves with them. Calling out the swaps that were
+    # literally your pick implied the rest were somebody else's problem, and it
+    # spent the collapsed notification's first line saying so.
     def header(d):
-        return f"{d['name']} · {tier_label(d.get('category'), d['gender'])}"
+        return f"{d['name']}:"
 
     lines, shown = [], 0
     if len(draws) == 1:
-        # Name first, then the warning: the reader needs to know WHICH draw
-        # before being told something in it moved.
         lines.append(header(draws[0]))
-        if affects_your_picks:
-            lines.append("⚠️ One of your picks was replaced.")
         for c in draws[0]["changes"][:MAX_LISTED_CHANGES]:
             lines.append(change_line(c))
             shown += 1
     else:
-        # Across several draws the warning belongs to no single one, so it leads.
-        if affects_your_picks:
-            lines.append("⚠️ One of your picks was replaced.")
         for d in draws:
             if shown >= MAX_LISTED_CHANGES:
                 break
