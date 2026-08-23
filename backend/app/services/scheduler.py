@@ -1445,6 +1445,7 @@ async def _sync_highest_rank_bot() -> None:
             synced = await highest_rank_bot.sync_open_draws(db)
         if synced:
             logger.info("Highest_Rank bot: synced picks for %d draw(s)", synced)
+
     except Exception as exc:
         logger.error("Highest_Rank bot sync failed: %s", exc)
         err = describe_exception(exc)

@@ -41,13 +41,27 @@ def _better(a: DrawEntry, b: DrawEntry) -> DrawEntry:
     return a if _rank_key(a) <= _rank_key(b) else b
 
 
-def simulate_highest_rank_picks(
-    entries: list[DrawEntry], matches: list[Match]
+def project_bracket(
+    entries: list[DrawEntry], matches: list[Match],
+    user_picks: Optional[dict[int, int]] = None,
 ) -> dict[int, int]:
-    """Returns {match_id: predicted_winner_entry_id} for every match that can
-    be resolved from the current entries/rankings. Matches where neither
-    branch has resolved to a real entry yet (e.g. an unnamed qualifier slot)
-    are simply omitted."""
+    """{match_id: winner_entry_id} for every match that can be resolved.
+
+    Advances the better-ranked entrant, EXCEPT where `user_picks` already says
+    otherwise — and then carries that choice forward. A user who picks an upset
+    in the first round must not meet the player they just knocked out in the
+    second: the projection has to follow their bracket, not the seeding's.
+
+    A stored pick for someone who cannot actually reach the match is ignored FOR
+    PROPAGATION only (the stored row is never touched here). That happens when
+    an earlier pick changes and a later one is left stranded behind it, and the
+    alternative — carrying a player forward out of a match they are not in —
+    invents a bracket nobody chose.
+
+    Matches where neither side has resolved to a real entry are omitted, which
+    is an unnamed qualifier slot: there is nobody to advance yet.
+    """
+    picks_in = user_picks or {}
     entries_by_id = {e.id: e for e in entries}
     by_round: dict[int, dict[int, Match]] = {}
     for m in matches:
@@ -57,19 +71,24 @@ def simulate_highest_rank_picks(
 
     rounds_sorted = sorted(by_round)
     picks: dict[int, int] = {}
-    # Simulated winner entry id, keyed by (round_number, match_number).
+    # Projected winner entry id, keyed by (round_number, match_number).
     winner_of: dict[tuple[int, int], Optional[int]] = {}
+
+    def decide(match, a, b):
+        """The user's choice where it is one of these two, else the favourite."""
+        chosen = picks_in.get(match.id)
+        if chosen is not None and chosen in {e.id for e in (a, b) if e}:
+            return entries_by_id.get(chosen)
+        if a and b:
+            return _better(a, b)
+        return a or b
 
     first_round = rounds_sorted[0]
     for match_number, match in by_round[first_round].items():
         p1 = entries_by_id.get(match.player1_id) if match.player1_id else None
         p2 = entries_by_id.get(match.player2_id) if match.player2_id else None
-        if match.is_bye:
-            winner = p1 or p2
-        elif p1 and p2:
-            winner = _better(p1, p2)
-        else:
-            winner = p1 or p2
+        # A bye is not a contest and cannot be upset: whoever is there advances.
+        winner = (p1 or p2) if match.is_bye else decide(match, p1, p2)
         winner_of[(first_round, match_number)] = winner.id if winner else None
         if winner:
             picks[match.id] = winner.id
@@ -80,7 +99,7 @@ def simulate_highest_rank_picks(
             id_b = winner_of.get((r - 1, match_number * 2))
             ea = entries_by_id.get(id_a) if id_a else None
             eb = entries_by_id.get(id_b) if id_b else None
-            winner = _better(ea, eb) if (ea and eb) else (ea or eb)
+            winner = decide(match, ea, eb)
             winner_of[(r, match_number)] = winner.id if winner else None
             if winner:
                 picks[match.id] = winner.id
@@ -88,68 +107,12 @@ def simulate_highest_rank_picks(
     return picks
 
 
-async def fill_locked_with_favourite(db, draw, user_id: int,
-                                     locked_match_ids: set) -> int:
-    """Give a user the better-ranked player on every locked match they never
-    picked. Returns how many were written. Caller commits.
-
-    WHY ANYONE HAS UNPICKED LOCKED MATCHES AT ALL. Under match-by-match locking
-    the bracket stays open through the first round, so somebody can join a draw
-    that is already under way — and the matches already played are exactly the
-    ones they are not allowed to pick. Left alone they score nothing on those,
-    and on everything downstream of them, which is most of a bracket: the entry
-    is unwinnable before it starts and the reason is invisible.
-
-    The default is the same projection the Highest_Rank account plays, and it is
-    a projection rather than the result: a completed match resolves to the
-    better-ranked player even where the better-ranked player LOST. That is the
-    point — the pick is what someone with no information would have chosen, not
-    a free correct answer handed out after the fact.
-
-    `simulate_highest_rank_picks` walks the tree advancing the favourite, so a
-    locked match's whole path to the final is filled consistently: the same
-    player the projection advanced out of the locked match is the one it carries
-    forward. That matters because `_locked_with_downstream` locks exactly that
-    path, so the two sets line up by construction rather than by coincidence.
-
-    Only fills what is MISSING. An existing pick is never overwritten, whether
-    it was made before the match started or is one of these defaults.
-    """
-    if not locked_match_ids:
-        return 0
-    stored = set((await db.execute(
-        select(UserPrediction.match_id).where(
-            UserPrediction.user_id == user_id,
-            UserPrediction.draw_id == draw.id))).scalars().all())
-    missing = set(locked_match_ids) - stored
-    if not missing:
-        return 0
-
-    entries = (await db.execute(
-        select(DrawEntry).where(DrawEntry.draw_id == draw.id))).scalars().all()
-    matches = (await db.execute(
-        select(Match).where(Match.draw_id == draw.id))).scalars().all()
-    projected = simulate_highest_rank_picks(entries, matches)
-
-    written = 0
-    for match_id in missing:
-        winner_id = projected.get(match_id)
-        # Omitted by the projection means neither side has resolved to a real
-        # entry yet — an unnamed qualifier slot. Nothing to default to, and a
-        # guess there would be a guess about who is even playing.
-        if winner_id is None:
-            continue
-        db.add(UserPrediction(user_id=user_id, draw_id=draw.id,
-                              match_id=match_id, predicted_winner_id=winner_id))
-        written += 1
-
-    if written:
-        await app_log(
-            "info", "predictions",
-            f"Filled {written} locked pick(s) with the better-ranked player for "
-            f"user {user_id} in draw {draw.id}",
-            {"draw_id": draw.id, "user_id": user_id, "filled": written})
-    return written
+def simulate_highest_rank_picks(
+    entries: list[DrawEntry], matches: list[Match]
+) -> dict[int, int]:
+    """The pure seeding projection, with nobody's opinion in it — what the
+    Highest_Rank account plays."""
+    return project_bracket(entries, matches)
 
 
 async def get_bot_user(db: AsyncSession) -> Optional[User]:
@@ -194,6 +157,65 @@ async def sync_draw_picks(db: AsyncSession, draw: Draw, bot_user_id: int) -> boo
         await db.delete(existing[match_id])
 
     return True
+
+
+async def fill_missing_picks(db, draw, user_id: int,
+                             restrict_to: Optional[set] = None) -> int:
+    """Give a user the favourite on every match they have not picked. Returns
+    how many were written; the caller commits.
+
+    NO MATCH IS EVER LEFT BLANK for someone who has entered a draw. An unpicked
+    match scores nothing and reads as an oversight rather than a decision, so
+    the default is the same projection the Highest_Rank account plays — the
+    better-ranked player advancing — and the only picks that differ from it are
+    the ones the user deliberately changed. An upset is a choice; a blank is
+    not.
+
+    Their own picks are read first and the projection is built AROUND them, so a
+    first-round upset carries through: the player they knocked out does not
+    reappear in the second round holding their pick. Nothing already stored is
+    ever overwritten, whether it was chosen or defaulted earlier.
+
+    `restrict_to` narrows this to particular matches. The save path uses it for
+    matches that are already LOCKED, which is the one case where the fill has to
+    happen before the request is validated: a user joining a draw that is under
+    way cannot pick those, and without a stored pick any value they submit reads
+    as a change to a locked match and is refused.
+
+    A match the projection omits is skipped — an unnamed qualifier slot, where a
+    default would be a guess about who is even playing.
+    """
+    stored = {p.match_id: p.predicted_winner_id for p in (await db.execute(
+        select(UserPrediction).where(
+            UserPrediction.user_id == user_id,
+            UserPrediction.draw_id == draw.id))).scalars().all()}
+
+    entries = (await db.execute(
+        select(DrawEntry).where(DrawEntry.draw_id == draw.id))).scalars().all()
+    matches = (await db.execute(
+        select(Match).where(Match.draw_id == draw.id))).scalars().all()
+    projected = project_bracket(entries, matches, stored)
+
+    written = 0
+    for match in matches:
+        if match.id in stored:
+            continue
+        if restrict_to is not None and match.id not in restrict_to:
+            continue
+        winner_id = projected.get(match.id)
+        if winner_id is None:
+            continue
+        db.add(UserPrediction(user_id=user_id, draw_id=draw.id,
+                              match_id=match.id, predicted_winner_id=winner_id))
+        written += 1
+
+    if written:
+        await app_log(
+            "info", "predictions",
+            f"Filled {written} unpicked match(es) with the better-ranked player "
+            f"for user {user_id} in draw {draw.id}",
+            {"draw_id": draw.id, "user_id": user_id, "filled": written})
+    return written
 
 
 async def sync_open_draws(db: AsyncSession) -> int:

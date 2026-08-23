@@ -1607,3 +1607,26 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
         tournament.status = "active"
     else:
         tournament.status = "upcoming"
+
+    # NO ENTRANT'S BRACKET IS LEFT WITH A HOLE IN IT.
+    #
+    # Every unpicked match defaults to the better-ranked player, and this is the
+    # other moment one can appear — not because anybody picked or failed to
+    # pick, but because the DRAW changed underneath them. A slot that was an
+    # unnamed qualifier when they entered had nobody to advance and was skipped;
+    # once the qualifier is named there is, so it is filled here rather than
+    # waiting for that user to come back. The same goes for a bracket that grows
+    # or is corrected by a re-parse.
+    #
+    # Idempotent and never overwrites, so re-scraping an unchanged draw writes
+    # nothing. A locked draw is left alone: its brackets are final, and adding
+    # picks to one after the fact would be inventing entries nobody made.
+    if not tournament.is_locked:
+        from app.models.prediction import UserPrediction
+        from app.services.highest_rank_bot import fill_missing_picks
+        await db.flush()
+        entrants = (await db.execute(
+            select(UserPrediction.user_id)
+            .where(UserPrediction.draw_id == tournament.id).distinct())).scalars().all()
+        for entrant_id in entrants:
+            await fill_missing_picks(db, tournament, entrant_id)

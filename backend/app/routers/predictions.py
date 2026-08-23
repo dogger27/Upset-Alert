@@ -98,6 +98,7 @@ async def save_predictions(
     # itself. They disagreeing is the failure that matters: a bracket that looks
     # editable and 403s, or one that looks locked while the server takes it.
     from app.services.locking import draw_lock_state, rejected_changes
+    from app.services.highest_rank_bot import fill_missing_picks
     lock = await draw_lock_state(db, tournament)
     if lock.draw_locked:
         raise HTTPException(403, f"Predictions are locked — {lock.reason}")
@@ -135,8 +136,7 @@ async def save_predictions(
     # have been a "change" to a locked match and refused. A client posting a
     # DIFFERENT winner there is still refused, which is the rule working.
     if lock.locked_match_ids:
-        from app.services.highest_rank_bot import fill_locked_with_favourite
-        if await fill_locked_with_favourite(db, tournament, uid, lock.locked_match_ids):
+        if await fill_missing_picks(db, tournament, uid, lock.locked_match_ids):
             await db.commit()
 
     # Under progressive locking the bracket is open but individual matches are
@@ -183,6 +183,14 @@ async def save_predictions(
                 predicted_winner_id=winner_id,
             )
             db.add(pred)
+
+    # AND NOW NOTHING IS LEFT BLANK. Every match this user still has no pick for
+    # takes the better-ranked player. After their own picks are applied, not
+    # before, so the projection is built around what they just chose: an upset
+    # in the first round carries through, and the player they knocked out does
+    # not come back in the second holding their pick.
+    await db.flush()
+    await fill_missing_picks(db, tournament, uid)
 
     await db.commit()
 
