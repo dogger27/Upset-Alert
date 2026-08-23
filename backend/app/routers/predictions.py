@@ -161,18 +161,32 @@ async def save_predictions(
                 f"{len(refused)} pick(s) could not be changed — those matches are under way",
             )
 
-    # Upsert predictions; null winner_id means the pick was cleared
-    for match_id, winner_id in body.picks.items():
-        existing = await db.execute(
+    # Upsert predictions; null winner_id means the pick was cleared.
+    #
+    # READ ONCE, NOT ONCE PER MATCH. This used to SELECT inside the loop, and
+    # each of those triggered an autoflush of everything already changed — so
+    # saving a 128-draw meant 127 round trips interleaved with 127 flushes, all
+    # inside one write transaction. On a busy database that is a long time to
+    # hold the writer, and it is where a user's save actually died:
+    #   OperationalError on PUT /predictions/120 ... database is locked
+    #   [SQL: UPDATE user_predictions SET predicted_winner_id=? WHERE id=?]
+    # One query up front, then plain attribute changes, and the flush happens
+    # once at commit.
+    existing_preds = {
+        p.match_id: p
+        for p in (await db.execute(
             select(UserPrediction).where(
                 UserPrediction.user_id == uid,
-                UserPrediction.match_id == match_id,
+                UserPrediction.draw_id == tournament_id,
             )
-        )
-        pred = existing.scalar_one_or_none()
+        )).scalars().all()
+    }
+    for match_id, winner_id in body.picks.items():
+        pred = existing_preds.get(match_id)
         if winner_id is None:
             if pred:
                 await db.delete(pred)
+                existing_preds.pop(match_id, None)
         elif pred:
             pred.predicted_winner_id = winner_id
         else:
@@ -183,6 +197,7 @@ async def save_predictions(
                 predicted_winner_id=winner_id,
             )
             db.add(pred)
+            existing_preds[match_id] = pred
 
     # AND NOW NOTHING IS LEFT BLANK. Every match this user still has no pick for
     # takes the better-ranked player. After their own picks are applied, not
