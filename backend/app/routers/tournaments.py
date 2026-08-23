@@ -1496,6 +1496,31 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
     # takes that slot arrives as an ordinary change on a later scrape.
     if pending_changes:
         from app.models.notification import DrawChangeEvent
+        # ONE EVENT PER CHANGE, however many times the scrape re-sees it.
+        #
+        # The dispatcher waits for a draw to stop moving — 90 minutes of quiet
+        # for a qualifier field — and measures that from the newest unnotified
+        # event. So a change recorded again on every scrape pushes the deadline
+        # forward every scrape and the announcement never goes out. Winston
+        # Salem's five qualifiers were recorded 33 times between 20:06 and
+        # 20:32 and nobody was ever told they had been placed.
+        #
+        # A slot that flaps — filled, blank, filled, as a page is edited or a
+        # parse wobbles — is exactly when this matters, and exactly when the
+        # naive version fails. Matching on the entry and the name it landed on
+        # means re-seeing the same outcome is free, while a genuinely new
+        # outcome still resets the clock, which is what the clock is for.
+        already = {
+            (e.entry_id, e.new_name)
+            for e in (await db.execute(
+                select(DrawChangeEvent).where(
+                    DrawChangeEvent.draw_id == tournament.id,
+                    DrawChangeEvent.notified_at.is_(None),
+                ))).scalars().all()
+        }
+        pending_changes = [c for c in pending_changes
+                           if (c["entry_id"], c["new_name"]) not in already]
+    if pending_changes:
         for c in pending_changes:
             db.add(DrawChangeEvent(draw_id=tournament.id, **c))
         from app.services.system_log import app_log
