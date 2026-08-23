@@ -592,14 +592,24 @@ def _resolves(tbd, settled) -> bool:
     cannot satisfy both sides of the QF slot it feeds, however much its names
     overlap.
     """
-    if not tbd.is_tbd or settled.is_tbd:
+    if not tbd.is_tbd:
+        return False
+    # `settled` need not be fully settled — only MORE settled. A sheet reissued
+    # while one feeder match is still on court decides one side and leaves the
+    # other, and that row is the same slot as the one that had both undecided.
+    # Requiring a strict subset is what keeps this from collapsing two genuinely
+    # different pending slots: one of them has to have decided something.
+    if not set(settled.tbd_side or "") < set(tbd.tbd_side or ""):
         return False
     alt = tbd.tbd_side or ''
     done = {s: set().union(set(), *_side_tokens(settled, s)) for s in ('a', 'b')}
+    still_open = set(settled.tbd_side or "")
     # Sides swap between revisions often enough to be worth trying both ways.
     for x, y in (('a', 'b'), ('b', 'a')):
-        if (_side_resolves(_side_tokens(tbd, 'a'), 'a' in alt, done[x])
-                and _side_resolves(_side_tokens(tbd, 'b'), 'b' in alt, done[y])):
+        # A side the other row has ALSO left open is compared as alternatives
+        # against alternatives, so one name landing is enough on both counts.
+        if (_side_resolves(_side_tokens(tbd, 'a'), 'a' in alt or x in still_open, done[x])
+                and _side_resolves(_side_tokens(tbd, 'b'), 'b' in alt or y in still_open, done[y])):
             return True
     return False
 
