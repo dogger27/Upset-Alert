@@ -34,7 +34,22 @@
   z-index: 30;
 }
 .draw-sidebar--overlay.draw-sidebar--collapsed { pointer-events: none; }
-.draw-sidebar--overlay.draw-sidebar--collapsed .sidebar-collapse-btn { pointer-events: auto; }
+.draw-sidebar--overlay/* Invisible height-setter sharing the glyph's grid cell and text metrics, so
+   the collapsed button keeps one footprint whatever the chevron is doing.
+   Vertical text, because its height is what is being set. */
+.sidebar-collapse-sizer {
+  grid-area: 1 / 1;
+  visibility: hidden;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  text-transform: uppercase;
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.09em;
+  white-space: nowrap;
+}
+
+.draw-sidebar--collapsed .sidebar-collapse-btn { pointer-events: auto; }
 .draw-sidebar--overlay:not(.draw-sidebar--collapsed) {
   background: var(--n-50);
   border-right: 1px solid var(--border);
@@ -133,13 +148,11 @@
 }
 
 /* Collapsed state: a larger edge button with the chevron filling it, a dark
-   border to make it obvious, and a 50%-transparent background. Matches the
-   round-nav pager button's exact footprint — same width/height (via the
-   same invisible "CHAMP" sizer trick, rendered in JSX; no hardcoded numbers
-   to keep in sync) and the same left offset (3px, mirroring
-   .round-nav--left's inline style) — in both regular and compact/overlay
-   draw modes, so the two floating buttons always read as one consistent
-   column. Colour/border stay this button's own (not round-nav's green). */
+   border to make it obvious, and a 50%-transparent background. Sized by an
+   invisible "CHAMP" sizer rendered in JSX rather than hardcoded numbers, and
+   offset 3px from the left edge. It used to be matched deliberately to the
+   round-pager button that sat in the same column; that button is gone and
+   dragging pages the draw now, so this is the only thing floating there. */
 .draw-sidebar--collapsed .sidebar-collapse-btn {
   top: 0.6rem;
   left: 3px;
