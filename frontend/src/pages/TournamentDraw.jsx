@@ -750,6 +750,60 @@ function TournamentDraw() {
   }
 
   // Cascade-clear: if switching picks, clear downstream picks for the old player
+  /* THE SAME PROJECTION THE SERVER APPLIES, RUN HERE TOO.
+     No match is ever left without a pick: whatever the user has not chosen
+     takes the better-ranked player (fill_missing_picks / project_bracket on the
+     backend). Waiting for the save to tell us that meant the bracket showed
+     either a blank or the player who had just been knocked out, for as long as
+     the round trip took.
+     Ordering is `ranking`, then `seed`, then id — the same _rank_key the
+     backend uses, and both fields are already on every draw entry here. The
+     seeding BADGE is not it: that is draw order, and reading it instead would
+     disagree with the server on exactly the matches people notice.
+     The user's own choices win wherever they are one of the two players in
+     front of them; a pick for someone who can no longer reach a match is
+     ignored for advancing, never rewritten. */
+  const projectPicks = (basePicks) => {
+    if (!data) return basePicks
+    const entryById = {}
+    for (const e of data.draw_entries) entryById[e.id] = e
+    const rankKey = (id) => {
+      const e = entryById[id]
+      return [e?.ranking ?? Infinity, e?.seed ?? Infinity, id ?? Infinity]
+    }
+    const better = (a, b) => {
+      if (a == null) return b
+      if (b == null) return a
+      const ka = rankKey(a), kb = rankKey(b)
+      for (let i = 0; i < 3; i++) if (ka[i] !== kb[i]) return ka[i] < kb[i] ? a : b
+      return a
+    }
+    const byKey = {}
+    for (const m of data.matches) byKey[`${m.round_number}:${m.match_number}`] = m
+    const rounds = [...new Set(data.matches.map(m => m.round_number))].sort((x, y) => x - y)
+    const out = { ...basePicks }
+    const winnerOf = {}
+    for (const r of rounds) {
+      for (const m of data.matches.filter(x => x.round_number === r)) {
+        let a, b
+        if (r === rounds[0]) {
+          a = m.player1?.id ?? null
+          b = m.player2?.id ?? null
+        } else {
+          a = winnerOf[`${r - 1}:${m.match_number * 2 - 1}`] ?? null
+          b = winnerOf[`${r - 1}:${m.match_number * 2}`] ?? null
+        }
+        const chosen = out[m.id]
+        const valid = chosen != null && (chosen === a || chosen === b)
+        // A bye is not a contest: whoever is there goes through.
+        const win = m.is_bye ? (a ?? b) : (valid ? chosen : better(a, b))
+        winnerOf[`${r}:${m.match_number}`] = win ?? null
+        if (!m.is_bye && win != null) out[m.id] = win
+      }
+    }
+    return out
+  }
+
   const computeNextPicks = (basePicks, matchId, playerId) => {
     const newPicks = { ...basePicks }
     const oldPlayerId = newPicks[matchId]
@@ -839,7 +893,9 @@ function TournamentDraw() {
        better-ranked player anyway — so showing the gap is showing a state that
        never really exists. Only the clicked match moves locally; the settled
        set arrives with the response (applySaved) a moment later. */
-    setPicks({ ...picks, [matchId]: playerId })
+    // Shown fully settled, exactly as the server will store it — so the
+    // bracket never displays a blank or a player who has just been beaten.
+    setPicks(projectPicks(newPicks))
     if (user && !locked) {
       saveMutation.mutate(newPicks)
     }
@@ -874,7 +930,7 @@ function TournamentDraw() {
       return
     }
     // Same as handlePick: cascaded to the server, un-cascaded on screen.
-    setOtherPicks({ ...otherPicks, [matchId]: playerId })
+    setOtherPicks(projectPicks(newPicks))
     saveOtherMutation.mutate(newPicks)
   }
 
