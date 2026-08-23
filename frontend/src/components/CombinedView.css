@@ -78,17 +78,6 @@
 .cv-box--bye     { background: var(--n-100); border-style: dashed; }
 .cv-box--tbd     { border-color: var(--pick-needs); box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2); }
 
-/* Highlight every box of the hovered player across all rounds (mirrors
-   BracketView's .player-row.highlight). Placed after --correct/--wrong so
-   equal-specificity source order lets the highlight fill win over theirs. */
-.cv-box--highlight,
-.cv-box--correct.cv-box--highlight,
-.cv-box--wrong.cv-box--highlight,
-.cv-box--clickable.cv-box--highlight:hover {
-  background: var(--row-highlight);
-  box-shadow: inset 2px 0 0 var(--row-highlight-bar);
-  border-color: var(--atp-500);
-}
 
 /* Light grey box grouping every match's two feeder boxes together; switches to
    red once both opponents are known but the user hasn't picked a winner yet. */
