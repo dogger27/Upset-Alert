@@ -1,3 +1,4 @@
+import asyncio
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -85,6 +86,49 @@ async def save_predictions(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """Save a bracket, retrying if SQLite hands the writer to somebody else.
+
+    A save reads the user's picks and then writes them, so its transaction
+    starts as a reader and has to upgrade. If any background job commits in
+    between — and several run on their own timers — SQLite fails the upgrade
+    IMMEDIATELY rather than waiting, because the snapshot the reads were made
+    against is gone. busy_timeout does not cover that case; only re-reading
+    does.
+
+    The user saw it as "Failed to save: Unknown error", which is a 500 with no
+    detail. Nothing was wrong with the bracket and nothing needed deciding — it
+    simply had to be tried again, which is what a person does by clicking a
+    second time. This does it for them.
+
+    Each retry gets a FRESH session, for the same reason the retry is needed at
+    all: the failed one still holds the snapshot that is no longer usable. And
+    if it really cannot get through, it says so instead of returning a bare 500.
+    """
+    from sqlalchemy.exc import OperationalError
+    from app.database import AsyncSessionLocal
+
+    last = None
+    for attempt in range(4):
+        try:
+            if attempt == 0:
+                return await _save_predictions_once(
+                    tournament_id, body, user_id, db, current_user)
+            async with AsyncSessionLocal() as fresh:
+                return await _save_predictions_once(
+                    tournament_id, body, user_id, fresh, current_user)
+        except OperationalError as exc:
+            if "locked" not in str(exc).lower():
+                raise
+            last = exc
+            await asyncio.sleep(0.15 * 2 ** attempt)
+    raise HTTPException(
+        503,
+        "The draw is busy being updated — your picks were not saved. "
+        "Please try again in a moment.",
+    ) from last
+
+
+async def _save_predictions_once(tournament_id, body, user_id, db, current_user):
     if user_id is not None and user_id != current_user.id:
         if not current_user.is_admin:
             raise HTTPException(403, "Only admins may edit another user's predictions")
