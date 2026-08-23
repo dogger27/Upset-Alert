@@ -29,12 +29,13 @@ one per pass forever.
 
 import asyncio
 import logging
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import func, or_, select
 
 from app.core.config import settings
 from app.database import AsyncSessionLocal
+from app.models.schedule import ScheduleEntry
 from app.models.tournament import Draw, DrawEntry, Match
 from app.services.sofascore import (RESOLVE_RETRY_HOURS, SofascoreBlocked,
                                     resolve_pending_draws)
@@ -59,6 +60,41 @@ BLOCKED_BACKOFF = 6 * 3600.0
 # after a bracket is published and comfortably before anyone needs a score from it,
 # so a warning here is actionable rather than merely early.
 COVERAGE_LEAD_DAYS = 2
+
+# How long after a match was due on court before its having no score is worth
+# saying out loud. Long enough to cover a rain delay or a five-setter running
+# over on the same court, short enough to still be "before play gets away".
+COVERAGE_GRACE = timedelta(hours=3)
+
+
+async def _play_was_due(db, draw, now: datetime) -> bool:
+    """Should a match on this draw have been on court by now?
+
+    `start_date` is a DATE and this clock is UTC, so a draw at an American venue
+    counts as having started from about 6pm the previous evening, local — hours
+    before the first ball. Both of Sunday's draws alerted eleven times on the
+    Saturday evening for having no scores, when their first match was still
+    twenty hours away. That is not a fault being caught early; it is a fault
+    being invented.
+
+    The order of play knows when play actually starts, so it is asked. Main-draw
+    singles only, because that is what `matches` holds and therefore what the
+    caller is looking for scores on.
+    """
+    earliest = (await db.execute(
+        select(func.min(ScheduleEntry.expected_start_at)).where(
+            ScheduleEntry.draw_id == draw.id,
+            ScheduleEntry.stage == "main",
+            ScheduleEntry.discipline == "singles",
+            ScheduleEntry.expected_start_at.isnot(None)))).scalar_one_or_none()
+    if earliest is not None:
+        if earliest.tzinfo is None:
+            earliest = earliest.replace(tzinfo=timezone.utc)
+        return now - earliest >= COVERAGE_GRACE
+    # No sheet to go on. A bare date cannot say anything sharper than a whole
+    # day, so wait one — still well inside a tournament, and never on the
+    # evening before it starts.
+    return draw.start_date < now.date()
 
 
 async def _once() -> int:
@@ -100,6 +136,7 @@ async def _coverage_check(db) -> None:
     nobody has thought of. Checked from the OUTCOME rather than from any of the
     steps, so it stays true if the steps are rewritten.
     """
+    now = datetime.now(timezone.utc)
     today = date.today()
     horizon = today + timedelta(days=COVERAGE_LEAD_DAYS)
     draws = (await db.execute(
@@ -111,7 +148,11 @@ async def _coverage_check(db) -> None:
         ))).scalars().all()
 
     for d in draws:
-        when = "under way" if d.start_date <= today else f"starts {d.start_date}"
+        # Whether play is actually DUE, not merely whether the calendar has
+        # reached the start date — the other branches still fire in advance, on
+        # purpose, but they should not claim a draw is under way while it isn't.
+        due = d.start_date <= today and await _play_was_due(db, d, now)
+        when = "under way" if due else f"starts {d.start_date}"
         problem = None
 
         if not (d.sofa_tournament_id and d.sofa_season_id):
@@ -125,7 +166,7 @@ async def _coverage_check(db) -> None:
             if stamped == 0:
                 problem = ("a tournament id but not one player resolved, so no "
                            "match on it can be joined to a live event")
-            elif d.start_date <= today:
+            elif due:
                 # Playing, joinable, and still nothing has arrived. That is the
                 # case no amount of retrying fixes by itself.
                 seen = (await db.execute(

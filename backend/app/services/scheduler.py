@@ -12,6 +12,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import case, func, select
+from sqlalchemy.exc import OperationalError
 
 from app.database import AsyncSessionLocal
 from app.models.tournament import Draw, DrawEntry, Match
@@ -1532,13 +1533,49 @@ async def _refresh_schedule_estimates() -> None:
             pairs = (await db.execute(
                 _select(ScheduleEntry.tournament_id, ScheduleEntry.play_date)
                 .where(ScheduleEntry.play_date.in_(days)).distinct())).all()
+        # RETRY EACH ONE, AND KEEP GOING PAST A FAILURE.
+        #
+        # "database is locked" here is not the timeout it reads like. There is
+        # already a 30s busy_timeout, and it does not apply to this case: this
+        # pass reads the day's rows and then updates them, so its transaction
+        # starts as a reader and has to upgrade. If any other writer commits in
+        # between, SQLite fails the upgrade IMMEDIATELY rather than waiting,
+        # because the snapshot the reads were made against is gone. Waiting
+        # longer cannot fix that — only re-reading can, which is what a fresh
+        # session on the next attempt does.
+        #
+        # And one tournament's conflict used to abort the whole loop, so every
+        # tournament after it silently kept a stale estimate.
+        stuck = []
         for tid, day in pairs:
-            async with AsyncSessionLocal() as db:
-                tz = (await db.execute(
-                    _select(Draw.venue_timezone).where(
-                        Draw.tournament_id == tid,
-                        Draw.venue_timezone.isnot(None)))).scalars().first()
-                await schedule_svc.recompute_expected_starts(db, tid, day, venue_tz=tz)
+            for attempt in range(4):
+                try:
+                    async with AsyncSessionLocal() as db:
+                        tz = (await db.execute(
+                            _select(Draw.venue_timezone).where(
+                                Draw.tournament_id == tid,
+                                Draw.venue_timezone.isnot(None)))).scalars().first()
+                        await schedule_svc.recompute_expected_starts(
+                            db, tid, day, venue_tz=tz)
+                    break
+                except OperationalError as exc:
+                    if "locked" not in str(exc).lower():
+                        raise
+                    if attempt == 3:
+                        logger.warning(
+                            "Estimate refresh gave up on tournament %s %s: %s",
+                            tid, day, exc)
+                        stuck.append(f"{tid}/{day}")
+                        break
+                    await asyncio.sleep(0.25 * 2 ** attempt)
+        if stuck:
+            # Only what retrying could not fix is worth anyone's attention.
+            await app_log(
+                "error", "order_of_play",
+                f"Estimate refresh still locked out after 4 attempts: "
+                f"{', '.join(stuck)}",
+                {"stuck": stuck}, dedup_key="sched_estimates_fail",
+                dedup_hours=6)
     except Exception as exc:
         logger.error("Schedule estimate refresh failed: %s", exc, exc_info=True)
         err = describe_exception(exc)
