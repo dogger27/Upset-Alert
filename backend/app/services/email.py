@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 import re as _re
 from typing import Optional
@@ -1307,6 +1308,35 @@ def _alert_card(issue: dict, tz, is_last: bool) -> str:
   </table>"""
 
 
+# SQLAlchemy writes long, and all of it after the first clause is boilerplate:
+# an autoflush advisory, the driver's own exception class, the full statement
+# with its parameters, and a link to the docs. Truncating the raw message at a
+# fixed character count therefore cut off INSIDE that boilerplate — the subject
+# line read "OperationalError on GET /tournaments/121/draw: (raised as a result
+# of …", which spends its whole width saying nothing.
+_NOISE = re.compile(
+    r"\(raised as a result of[^)]*\)"      # the autoflush advisory
+    r"|\[SQL:.*"                           # the statement, and everything after it
+    r"|\(Background on this error.*"       # the documentation link
+    r"|\(sqlite3\.\w+\)"                  # the driver's exception class
+    r"|\(psycopg2\.\w+\)",
+    re.S,
+)
+
+
+def _headline(message: str, limit: int = 90) -> str:
+    """A subject line that says what went wrong, in as few words as it takes.
+
+    The noise comes out first, so the width is spent on the fault rather than on
+    SQLAlchemy's preamble, and what is left is cut at a WORD boundary — a
+    subject ending mid-word reads as a broken email rather than a long one.
+    """
+    text = " ".join(_NOISE.sub(" ", message or "").split())
+    if len(text) <= limit:
+        return text
+    return text[:limit].rsplit(" ", 1)[0].rstrip(" ,;:") + "…"
+
+
 async def send_system_alert_digest(
     to_email: str,
     issues: list[dict],
@@ -1339,7 +1369,7 @@ async def send_system_alert_digest(
 
     if len(issues) == 1:
         one = issues[0]
-        headline = one["message"][:70] + ("…" if len(one["message"]) > 70 else "")
+        headline = _headline(one["message"])
         subject = f"Upset Alert {one['level']} in {one['category']} — {headline}"
         heading = "Something needs your attention"
     else:
