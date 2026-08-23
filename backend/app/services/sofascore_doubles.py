@@ -497,6 +497,17 @@ async def _doubles_ids(db, draw: Draw, tournament: Tournament) -> Optional[tuple
     return cand, season["id"]
 
 
+def _has_sets(snap) -> bool:
+    """Does this snapshot actually carry a score?
+
+    Sofascore numbers sets period1..period5 and _sets_and_tiebreak returns an
+    EMPTY list when the payload carries none of them. That happens between
+    updates on a match that is very much in progress — it is the feed having
+    nothing to say this second, not the score being nothing.
+    """
+    return bool((snap or {}).get("sets"))
+
+
 def _snapshot(event: dict) -> dict:
     """The live point state, in the same shape the singles poller produces."""
     home, away = event.get("homeScore") or {}, event.get("awayScore") or {}
@@ -724,11 +735,18 @@ async def sweep_once(db, day: Optional[date] = None) -> dict:
             # always writes — which is what keeps the stamp inside freshness for
             # a doubles row. The singles poller compares without the stamp and
             # has to refresh it deliberately; see the note there.
-            if e.live_scores_json != live or e.live_point_json != snap:
-                e.live_scores_json = live
-                e.live_point_json = snap
-                e.status = "live"
-                scored += 1
+            # A BLANK SNAPSHOT NEVER REPLACES A REAL ONE. An in-progress match
+            # whose payload carries no periods at all is the feed between
+            # updates; writing it through blanked the score on screen until the
+            # next sweep put it back, which is the "score disappears, comes back
+            # a moment later" everyone sees. Nothing is lost by keeping the last
+            # good one — the next sweep overwrites it with the real thing.
+            if _has_sets(snap) or not _has_sets(e.live_point_json):
+                if e.live_scores_json != live or e.live_point_json != snap:
+                    e.live_scores_json = live
+                    e.live_point_json = snap
+                    e.status = "live"
+                    scored += 1
         elif status == "finished" and wc in (1, 2):
             final = _final_scores(ev.get("homeScore") or {}, ev.get("awayScore") or {},
                                   code, wc)
