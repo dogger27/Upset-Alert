@@ -563,8 +563,10 @@ async def _resolve_against_field(draw: Draw, entries: list) -> Optional[tuple]:
         if not named:
             unpublished.append((cand["id"], season["id"]))
             continue
-        field = named
-        theirs = {_toks(t.get("name") or "") for t in field}
+        # Overlap is scored on the NAMES, but the raw cuptree is what gets
+        # handed back — the caller needs the unfilled slots to tell a
+        # half-published bracket from a complete one.
+        theirs = {_toks(t.get("name") or "") for t in named}
         overlap = sum(1 for ts, _ in ours if ts in theirs) / len(ours)
         if best is None or overlap > best[0]:
             best = (overlap, cand["id"], season["id"], field)
@@ -697,7 +699,12 @@ async def resolve_draw(db: AsyncSession, draw: Draw, *, force: bool = False) -> 
     if dirty:
         await db.commit()
 
-    if report["unresolved"]:
+    # A name we cannot place is only a problem once there is somewhere to place
+    # it. While Sofascore's bracket still has unfilled slots the missing players
+    # are the ones going INTO those slots, and saying so before the draw is even
+    # out is reporting the ordinary passage of time as a fault.
+    incomplete = any(_PLACEHOLDER_SLOT.match(str(t.get("name") or "")) for t in field)
+    if report["unresolved"] and not incomplete:
         await app_log(
             "warning", "sofascore",
             f"{len(report['unresolved'])} unresolved entries in {report['draw']}",
@@ -716,8 +723,15 @@ async def resolve_draw(db: AsyncSession, draw: Draw, *, force: bool = False) -> 
 # spending a request each time on an answer that will not change.
 RESOLVE_RETRY_HOURS = 6.0
 
-# "R16P1", "QFP3" — a bracket slot Sofascore has created but not yet filled.
-_PLACEHOLDER_SLOT = re.compile(r"^(?:R\d+|QF|SF|F)P\d+$", re.I)
+# A bracket slot Sofascore has created but not yet filled. It writes these in
+# more shapes than one — "R16P1" and "QFP3", but also "Qf1".."Qf8" for the eight
+# qualifier slots and "WQF1"/"WSF2" for a winner-of slot — and matching only the
+# P-form counted twelve empty slots in Monterrey as published players. That
+# makes a half-published bracket look complete, which matters twice: the field
+# reads fuller than it is, and a cuptree of nothing BUT placeholders is no
+# longer recognised as unpublished, which is the one case the fallback below
+# exists to catch.
+_PLACEHOLDER_SLOT = re.compile(r"^W?(?:R\d+|QF|SF|F|Q)P?\d+$", re.I)
 
 
 async def resolve_pending_draws(db: AsyncSession, *, force: bool = False,
