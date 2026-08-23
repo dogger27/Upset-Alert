@@ -832,7 +832,14 @@ function TournamentDraw() {
       window.alert(LIVE_PICK_MSG)
       return
     }
-    setPicks(newPicks)
+    /* SENT cascaded, SHOWN un-cascaded. The payload has to clear the path the
+       old player was carrying, or the server keeps a pick for someone who can
+       no longer get there. The SCREEN must not, because a cleared pick renders
+       as TBD and the server is about to fill every one of them with the
+       better-ranked player anyway — so showing the gap is showing a state that
+       never really exists. Only the clicked match moves locally; the settled
+       set arrives with the response (applySaved) a moment later. */
+    setPicks({ ...picks, [matchId]: playerId })
     if (user && !locked) {
       saveMutation.mutate(newPicks)
     }
@@ -866,7 +873,8 @@ function TournamentDraw() {
       window.alert(LIVE_PICK_MSG)
       return
     }
-    setOtherPicks(newPicks)
+    // Same as handlePick: cascaded to the server, un-cascaded on screen.
+    setOtherPicks({ ...otherPicks, [matchId]: playerId })
     saveOtherMutation.mutate(newPicks)
   }
 
