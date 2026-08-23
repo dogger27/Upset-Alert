@@ -10,6 +10,7 @@ import { useSearchParams, Link } from 'react-router-dom'
 import clsx from 'clsx'
 import { getScheduleDay, getScheduleDates } from '../api/schedule'
 import { updateMe } from '../api/auth'
+import { getPredictions } from '../api/predictions'
 import { useAuth } from '../store/auth'
 import { nationalityIso2, splitPlayerName } from '../utils/flags'
 import { rootFontPx, textWidth } from '../utils/text'
@@ -1030,6 +1031,31 @@ export default function Schedule() {
   // The panel is owned by the page, not the row: it is a full-screen overlay,
   // and one instance beats one per match.
   const [h2h, setH2H] = useState(null)
+  /* THE USER'S OWN PICK, ON THE ORDER OF PLAY'S H2H.
+     The draw page has always highlighted it; this panel was opened with
+     match={null} and no picks at all, so pickedId could only ever be null and
+     nothing was ever going to light up. The row carries everything needed —
+     the draw, the match and each player's draw_entry_id — so the picks are
+     fetched for the draw the open match belongs to.
+     Only main-draw singles has any of those: doubles and qualifying have no
+     bracket row and nobody predicts them, so the query stays disabled and the
+     panel behaves exactly as before. */
+  const h2hDrawId = h2h?.entry?.draw_id ?? null
+  const h2hMatchId = h2h?.entry?.match_id ?? null
+  const { data: h2hPreds } = useQuery({
+    queryKey: ['predictions', h2hDrawId],
+    queryFn: () => getPredictions(h2hDrawId),
+    enabled: h2hDrawId != null && h2hMatchId != null,
+    staleTime: 60_000,
+  })
+  const h2hPicks = useMemo(() => {
+    if (!h2hPreds) return null
+    const map = {}
+    for (const p of h2hPreds) {
+      if (p.predicted_winner_id != null) map[p.match_id] = p.predicted_winner_id
+    }
+    return map
+  }, [h2hPreds])
   /* The id of the row throwing a champion celebration, or null. Owned by the
      page rather than the row because the answer to "which match?" is about
      every OTHER row — they all have to recede for the one that is left lit to
@@ -1262,8 +1288,16 @@ export default function Schedule() {
    *
    * CSS does the same job without either failure: cards fill their column up
    * to a maximum, so every card in a column is identical by construction, and
-   * the name takes whatever is left after the fixed columns. No JavaScript
-   * measures anything, so there is nothing to oscillate.
+   * the name takes whatever is left after the fixed columns.
+   *
+   * ONE THING IS MEASURED NOW, and the difference is the whole reason it is
+   * safe. useNameBox reads the width of .sched-competitor-name, which is
+   * flex:1 1 auto with min-width:0 among fixed-width siblings — so its width is
+   * decided by THEM, not by what is inside it. Making the name narrower cannot
+   * widen the box, so the reading cannot change as a result of being acted on.
+   * The pass above measured a width that DEPENDED on the text it was sizing,
+   * which is what made it ratchet and vibrate. Nothing here writes a card
+   * width, and no observer watches a box whose size its own output can move.
    */
 
   return (
@@ -1276,15 +1310,24 @@ export default function Schedule() {
           deliberately prints the sheet's "[7] Iga SWIATEK POL". The panel is
           about the players; the row is about the sheet. */}
       {h2h && (
+        /* `id` is the DRAW ENTRY id, which is the space predictions are stored
+           in — a schedule player carries it as draw_entry_id and has no `id` of
+           its own, so without it the pick comparison has nothing to match.
+           `match` only needs its id here; the panel reads nothing else off it.
+           Picking stays OFF: the order of play shows what is happening, and a
+           bracket is edited on the draw page. */
         <H2HPanel
           slug1={h2h.p1.te_slug}
           slug2={h2h.p2.te_slug}
-          player1={{ ...h2h.p1, name: h2h.p1.entry_name || h2h.p1.name }}
-          player2={{ ...h2h.p2, name: h2h.p2.entry_name || h2h.p2.name }}
+          player1={{ ...h2h.p1, id: h2h.p1.draw_entry_id ?? null,
+                     name: h2h.p1.entry_name || h2h.p1.name }}
+          player2={{ ...h2h.p2, id: h2h.p2.draw_entry_id ?? null,
+                     name: h2h.p2.entry_name || h2h.p2.name }}
           tournSurface={h2h.entry?.surface}
           tournGender={h2h.entry?.gender || (h2h.entry?.tour === 'WTA' ? 'F' : 'M')}
           beforeDrawId={h2h.entry?.draw_id}
-          match={null}
+          match={h2hMatchId != null ? { id: h2hMatchId } : null}
+          picks={h2hPicks}
           canPick={false}
           onClose={() => setH2H(null)}
         />
