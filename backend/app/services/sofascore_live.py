@@ -475,7 +475,13 @@ async def poll_once(db) -> dict:
         # column, so it has to be the one that moves.
         if sofa_authoritative():
             live = _as_espn_shape(snap)
-            if match.live_scores_json != live:
+            # A blank snapshot never replaces a real one — see _has_sets in
+            # sofascore_doubles for why an in-progress match can report no
+            # periods at all, and what writing that through looks like on the
+            # page (the score vanishing, then returning a moment later).
+            blank_now = not (snap or {}).get("sets")
+            had_before = bool((match.live_scores_json or [[], []])[0])
+            if (not blank_now or not had_before) and match.live_scores_json != live:
                 match.live_scores_json = live
                 written += 1
                 touched_draws.add(draw_id)

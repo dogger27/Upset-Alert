@@ -749,7 +749,14 @@ function CompetitorRows({ e, a, b }) {
   // Games: prefer the snapshot's own, exactly as the draw page does.
   const g = lp?.games ?? null
   const fromLive = live ? (g ? [g[0], g[1]] : (e.live_scores ? [e.live_scores[0], e.live_scores[1]] : null)) : null
-  const fromFinal = !live && e.scores ? [e.scores[0], e.scores[1]] : null
+  /* The sets the row last had, whatever its status. A LIVE row reads its score
+     from the live snapshot alone, so a single empty payload rendered no cells
+     at all and the score vanished off the card until the next poll refilled it.
+     The feed having nothing to say for one poll is not the score being nothing,
+     and the completed sets on the row are still true. The blank is stopped at
+     source now (see _has_sets in sofascore_doubles); this is the safety net, so
+     a live row can never go blank again from a gap anywhere upstream. */
+  const fromFinal = e.scores ? [e.scores[0], e.scores[1]] : null
   const sets = fromLive ?? fromFinal
   const n = sets ? Math.max(sets[0]?.length ?? 0, sets[1]?.length ?? 0) : 0
 
