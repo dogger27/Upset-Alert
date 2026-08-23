@@ -186,7 +186,19 @@ def _classify(match, *, before_main: bool = False, resolved: bool = True,
     # now are.
     if stage == 'main' and not resolved and (before_main or seen_qualifying):
         stage = 'qualifying'
-    discipline = 'doubles' if match.is_doubles else 'singles'
+    # AN UNRESOLVED SINGLES SLOT IS NOT DOUBLES. The parser calls a row doubles
+    # when a side carries two names, which is true of a doubles team and equally
+    # true of "Pascual Ferra OR Suresh" — so every TBD singles slot came through
+    # as doubles. That is not cosmetic: discipline is part of pairing_key, and
+    # _dedupe_day refuses to merge rows of different disciplines, so when the
+    # slot settled the resolved row could never absorb the unresolved one. Both
+    # stayed, and the sheet showed a doubles match that does not exist.
+    #
+    # A doubles alternative names a PAIR — "O. Luz / R. Matos" — so the slash is
+    # what tells them apart, not the count.
+    tbd = bool(getattr(match, 'tbd', False))
+    two_up = any('/' in n for n in list(match.side_a) + list(match.side_b))
+    discipline = 'doubles' if (match.is_doubles and (not tbd or two_up)) else 'singles'
     return stage, discipline
 
 
@@ -670,7 +682,11 @@ async def _dedupe_day(db, tournament_id: int, play_date: date) -> int:
     for row in rows:
         twin = None
         for k in kept:
-            if k.discipline != row.discipline:
+            # Disciplines must agree — EXCEPT where one side is still
+            # unresolved, which is exactly the case that used to be
+            # misclassified. Rows stored before that fix still carry the wrong
+            # value, and refusing to look at them would strand them forever.
+            if k.discipline != row.discipline and not (k.is_tbd or row.is_tbd):
                 continue
             # Same bracket match on the same day is the same slot; only ever
             # non-null for singles that resolved.
