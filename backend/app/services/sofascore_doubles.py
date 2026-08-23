@@ -607,7 +607,7 @@ async def sweep_once(db, day: Optional[date] = None) -> dict:
             continue
         held = by_id.get(e.sofa_event_id)
         if held is not None and _match(e, held, sides_of[e.id]) is None:
-            app_log("sofascore_doubles", "warning",
+            await app_log("warning", "sofascore_doubles",
                     f"dropped event {e.sofa_event_id} from schedule row {e.id} "
                     f"({e.play_date} {e.round_label}) — it no longer identifies "
                     f"this match")
@@ -639,7 +639,7 @@ async def sweep_once(db, day: Optional[date] = None) -> dict:
             # Two events fit equally well, so neither is identified. Saying so
             # and waiting is right: one of them is the wrong match, and there is
             # nothing here to tell which.
-            app_log("sofascore_doubles", "warning",
+            await app_log("warning", "sofascore_doubles",
                     f"schedule row {e.id} ({e.play_date} {e.round_label}) "
                     f"matches more than one event equally well — left unresolved")
             continue
