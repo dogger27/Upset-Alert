@@ -175,10 +175,21 @@ const QUALI_ROUND = /^(q\d?|fq)$/i
    out first — and when it does it is the court that gives, not the player. */
 const COURT_FIT = 9
 
+/* Characters a DOUBLES side carries on its one line: two surnames, the slash,
+   and the team seed. Fewer than a singles name has, because the line holds two
+   people rather than one. */
+const DOUBLES_FIT = 22
+
 function courtScale(court) {
-  const n = (court || '').length
-  return n > COURT_FIT
-    ? { '--court-scale': Math.max(0.72, COURT_FIT / n) }
+  /* Measured off the LONGEST WORD, not the whole string. The column wraps
+     between words, so "P&G STADIUM COURT" needs no shrinking — it needs two
+     lines, which it has. What wrapping cannot help is a single word wider than
+     the column, and GRANDSTAND is one: there is no break to make, so the type
+     is all that is left to give. Measuring the whole string shrank the
+     multi-word names that were already fine and left this one alone. */
+  const longest = Math.max(0, ...String(court || '').split(/\s+/).map(w => w.length))
+  return longest > COURT_FIT
+    ? { '--court-scale': Math.max(0.7, COURT_FIT / longest) }
     : undefined
 }
 
@@ -231,9 +242,11 @@ function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp, t
   const shown = full + (!hideSeed && seed ? ` ${seed}` : '')
   /* A LIVE row is narrower than a finished one. It spends width on the serve
      ball and on the point column, and the name is what pays for both — which is
-     how the ball came to sit on top of "En-Shuo LIANG". Same ladder, three
-     characters less to work with. */
-  const fit = FIT_CHARS - (tight ? 3 : 0)
+     how the ball came to sit on top of "En-Shuo LIANG". Same ladder, two
+     characters less to work with — three was a guess and it spent room the row
+     did not need, leaving a visible gap between the name and the ball. The ball
+     and the point cell are about two characters' worth between them. */
+  const fit = FIT_CHARS - (tight ? 2 : 0)
   const longName = !surnameOnly && shown.length > fit
   const initialled = first ? `${first.trim()[0]}. ${last}` : last
 
@@ -256,8 +269,13 @@ function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp, t
      breakpoint decides whether. */
   const tightest = surnameOnly ? last : (longName ? initialled : full)
     + (!hideSeed && seed ? ` ${seed}` : '')
+  /* Floored at 0.82, not 0.74. The floor is what a name falls back on when no
+     amount of shrinking would have fitted it, so it should be the smallest size
+     still comfortable to read rather than the smallest that technically fits —
+     past that point the name is overflowing anyway and a smaller one only
+     costs legibility without buying room. */
   const scale = tightest.length > fit
-    ? Math.max(0.74, fit / tightest.length)
+    ? Math.max(0.82, fit / tightest.length)
     : 1
 
   return (
@@ -320,8 +338,23 @@ function Side({ players, doubles, tbd, tight }) {
     ? players.map(p => (p.seed != null ? `[${p.seed}]`
                                        : splitPlayerName(p.name).seed)).find(Boolean) ?? null
     : null
+
+  /* A DOUBLES SIDE IS ONE LINE, and its budget is the whole line: two surnames,
+     the slash between them, and the team seed. Scaled here rather than inside
+     each PlayerName, because no player knows how long the other one is — and
+     because the SEED is a sibling of both, so it was in nobody's budget at all.
+     That is how "[2]" came to sit on top of the result mark. */
+  const doublesLine = doubles
+    ? players.map(p => splitPlayerName(p.name).last || p.name).join(' / ')
+      + (teamSeed ? ` ${teamSeed}` : '')
+    : ''
+  const teamScale = doubles && doublesLine.length > DOUBLES_FIT
+    ? Math.max(0.72, DOUBLES_FIT / doublesLine.length)
+    : 1
+
   return (
-    <span className="sched-side">
+    <span className="sched-side"
+          style={teamScale < 1 ? { '--name-scale': teamScale } : undefined}>
       {players.map((p, i) => (
         <Fragment key={`${p.side}${p.position}${i}`}>
           {/* Partners are separated by a slash, the way every draw sheet writes
