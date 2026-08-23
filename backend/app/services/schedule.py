@@ -369,6 +369,37 @@ async def ingest_document(db, tournament, play_date: date, url: str,
                 printed_rounds.setdefault((stage, discipline), set()).add(m.round.upper())
     unanimous = {k: next(iter(v)) for k, v in printed_rounds.items() if len(v) == 1}
 
+    from app.services.system_log import app_log
+
+    # A DOUBLES MATCH IS TWO TEAMS OF TWO. Anything else is a parse that went
+    # wrong, and it used to be stored in silence: Winston-Salem's Monday sheet
+    # produced "Krajicek / Mektic vs Cabral" — two players who are not partners
+    # against one who had lost his — because the three court columns were read
+    # across instead of down, and nothing objected.
+    #
+    # Reported rather than dropped. The row still goes in, because a match that
+    # is really on court belongs on the page even mis-parsed, and the sheet is
+    # the only record of a doubles match this app has. But it can no longer
+    # happen quietly, which is what let this sit.
+    for slots in per_court.values():
+        for (m, stage, discipline, na, nb, _ids, _key) in slots:
+            if discipline != 'doubles':
+                continue
+            # A slot the sheet has not decided yet legitimately names fewer.
+            if _start_type_of(m) is None and not (na and nb):
+                continue
+            if len(na) != 2 or len(nb) != 2:
+                await app_log(
+                    "error", "order_of_play",
+                    f"Doubles slot in {tournament.name} on {play_date} is not "
+                    f"two teams of two: {len(na)} v {len(nb)} — "
+                    f"{' / '.join(na) or '(none)'} vs {' / '.join(nb) or '(none)'}",
+                    {"tournament_id": tournament.id, "play_date": str(play_date),
+                     "court": m.court, "side_a": na, "side_b": nb},
+                    dedup_key=f"oop_doubles_shape_{tournament.id}_{play_date}_{m.court}",
+                    dedup_hours=12,
+                )
+
     written = 0
     for court, slots in per_court.items():
         for order, (m, stage, discipline, na, nb, ids, key) in enumerate(slots, 1):

@@ -263,7 +263,15 @@ def _is_name(text):
     # Every player line in the corpus carries mixed case — "Marie BOUZKOVA",
     # "FEARNLEY, Jacob". Score and status fragments never do, which separates
     # them far more reliably than trying to enumerate score punctuation.
-    if not re.search(r'[a-z]', text):
+    #
+    # EXCEPT when the given name is itself initials. "JJ TRACY (USA)" has no
+    # lowercase letter anywhere, so this rejected him outright — and because he
+    # is a doubles player, the match kept his partner and lost him: Monday's
+    # Winston-Salem sheet showed "KRAJICEK / MEKTIC vs CABRAL", a team of one.
+    # A trailing three-letter country in brackets is the tell. Every player line
+    # on these sheets ends with one and no score, status or footer note does —
+    # "ANY MATCH ON ANY COURT MAY BE MOVED" is all caps too and still rejected.
+    if not re.search(r'[a-z]', text) and not re.search(r'\([A-Z]{3}\)\s*$', text):
         return False
     return bool(re.search(r'[A-Za-z]{2,}', text))
 
