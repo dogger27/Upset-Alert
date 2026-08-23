@@ -66,7 +66,20 @@ export function splitPlayerName(raw) {
 
   const words = s.split(/\s+/).filter(Boolean)
   const lastIdx = words.findIndex(w => w === w.toUpperCase() && /[A-Z]/.test(w))
-  if (lastIdx === -1) return { seed, first: '', last: s, nat }
+  if (lastIdx === -1) {
+    // NO CAPITALISED SURNAME, so this is not a sheet name. A slot resolved from
+    // the bracket carries the draw's spelling — "Frances Tiafoe", not the
+    // sheet's "Frances TIAFOE" — and returning the whole string as the surname
+    // left `first` empty, which quietly disabled the initial rung of the name
+    // ladder: full, initial and surname were all the same string, so a name too
+    // long for its column went straight to shrinking the type. That is why
+    // Tiafoe was set smaller than Gauff beside him with room to spare.
+    // Last word is the surname, the same reading the backend uses.
+    if (words.length > 1) {
+      return { seed, first: words.slice(0, -1).join(' '), last: words[words.length - 1], nat }
+    }
+    return { seed, first: '', last: s, nat }
+  }
 
   return {
     seed,

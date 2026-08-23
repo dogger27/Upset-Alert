@@ -202,6 +202,16 @@ const NO_SEED = 9999
    would leave a band of lengths that neither rung catches. */
 const FIT_CHARS = 15
 
+/* ...and that is the budget when the scores are there to compete with. A row
+   that has not been played shows no set columns at all, which is most of the
+   sheet the morning it is published, and the name was still being measured as
+   though three sets sat beside it — so a name with room to spare was set
+   smaller anyway. Each column the row does not render is handed back.
+   Still a pure function of the data: nothing is measured, so there is nothing
+   to oscillate, and CSS keeps the final say over whether any of it applies. */
+const SET_SLOTS = 3
+const SET_CHARS = 2
+
 /* A round label that already announces qualifying, so the separate "Q" chip
    beside it would only repeat itself. */
 const QUALI_ROUND = /^(q\d?|fq)$/i
@@ -253,7 +263,8 @@ function seedNumber(player) {
  * one row does not fit a phone, and the surname is what identifies a pair
  * anyway.
  */
-function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp, tight }) {
+function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp, tight,
+                     sets = SET_SLOTS }) {
   const { seed: printedSeed, first, last, nat } = splitPlayerName(raw)
   // A seeding sent as a field beats one parsed out of the name: a resolved
   // player's name comes from the bracket and never carried brackets to parse.
@@ -282,7 +293,7 @@ function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp, t
      characters less to work with — three was a guess and it spent room the row
      did not need, leaving a visible gap between the name and the ball. The ball
      and the point cell are about two characters' worth between them. */
-  const fit = FIT_CHARS - (tight ? 2 : 0)
+  const fit = FIT_CHARS + Math.max(0, SET_SLOTS - sets) * SET_CHARS - (tight ? 2 : 0)
   const longName = !surnameOnly && shown.length > fit
   const initialled = first ? `${first.trim()[0]}. ${last}` : last
 
@@ -328,9 +339,9 @@ function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp, t
   return (
     <span className="sched-player"
           style={scale < 1 ? { '--name-scale': scale } : undefined}>
-      {/* No placeholder when there is no flag. A missing nationality here is
-          not missing DATA — the tours list Russian and Belarusian players as
-          neutral athletes with no flag, and the sheet omits it deliberately.
+      {/* A missing nationality here is not missing DATA — the tours list
+          Russian and Belarusian players as neutral athletes with no flag, and
+          the sheet omits it deliberately.
           Tennis Explorer does hold a country for them, and we deliberately do
           not use it: the official order of play withholds it on purpose.
           An OUTLINED EMPTY BOX rather than nothing at all. Drawing nothing let
@@ -364,7 +375,7 @@ function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp, t
   )
 }
 
-function Side({ players, doubles, tbd, tight }) {
+function Side({ players, doubles, tbd, tight, sets }) {
   if (!players.length) return <span className="sched-side">TBD</span>
 
   // An unresolved side is a choice between two whole teams, not a list of
@@ -421,7 +432,8 @@ function Side({ players, doubles, tbd, tight }) {
               sat between them. */}
           {i > 0 && <span className="sched-slash">/</span>}
           <PlayerName raw={p.name} surnameOnly={doubles} hideSeed={doubles}
-                      nationality={p.nationality} seed={p.seed} tight={tight} />
+                      nationality={p.nationality} seed={p.seed} tight={tight}
+                      sets={sets} />
         </Fragment>
       ))}
       {/* Same placement as a singles seed, and for the same reason. */}
@@ -655,7 +667,7 @@ function CompetitorRows({ e, a, b }) {
              })}>
           <span className="sched-competitor-name">
             <Side players={players} doubles={doubles} tbd={tbd}
-                  tight={serving != null || point != null} />
+                  tight={serving != null || point != null} sets={n} />
           </span>
           {/* A SLOT, always present, not a conditional element. The ball
               appears on one line only, so rendering it inline shifted that
