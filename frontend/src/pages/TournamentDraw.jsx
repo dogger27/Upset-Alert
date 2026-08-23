@@ -574,10 +574,31 @@ function TournamentDraw() {
     setPicks(map)
   }
 
+  /* A FAILED SAVE SAYS SO AT ONCE. It used to appear only as a line of red
+     text above the bracket, which on a phone is off-screen while you are
+     picking — so a pick that did not save looked exactly like one that did,
+     until you scrolled up much later. The banner stays; this makes sure it is
+     not the first you hear of it. */
+  const reportSaveFailure = (err) => {
+    const detail = err?.response?.data?.detail
+    window.alert(
+      typeof detail === 'string' && detail
+        ? detail
+        : 'Your pick could not be saved. Please check your connection and try '
+          + 'again.'
+    )
+  }
+
   const saveMutation = useMutation({
     mutationFn: (latestPicks) => savePredictions(Number(id), latestPicks),
     onSuccess: (rows) => {
       applySaved(rows)
+      qc.invalidateQueries({ queryKey: ['predictions', id] })
+    },
+    onError: (err) => {
+      reportSaveFailure(err)
+      // Put the bracket back to what the server actually holds, so the screen
+      // stops showing a pick that was never stored.
       qc.invalidateQueries({ queryKey: ['predictions', id] })
     },
   })
@@ -592,6 +613,10 @@ function TournamentDraw() {
         }
         setOtherPicks(map)
       }
+      qc.invalidateQueries({ queryKey: ['predictions', id, viewedUserId] })
+    },
+    onError: (err) => {
+      reportSaveFailure(err)
       qc.invalidateQueries({ queryKey: ['predictions', id, viewedUserId] })
     },
   })
