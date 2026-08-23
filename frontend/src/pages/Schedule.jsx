@@ -317,7 +317,27 @@ function doublesLineOf(players, form) {
 const DOUBLES_SET_CHARS = 3
 const DOUBLES_MARK_CHARS = 2
 
-function doublesPresentation(sides, sets) {
+function doublesPresentation(sides, sets, box = null) {
+  /* MEASURED WHEN THE ROW HAS REPORTED ITS WIDTH, counted only before that.
+     The singles ladder stopped guessing some time ago; this one was still
+     comparing character counts to a constant, so a doubles line sat shrunk on a
+     card with two thirds of it empty. Same reasoning as PlayerName: characters
+     are not widths, and the column changes with the breakpoint and with how
+     many score cells the row is showing. */
+  if (box) {
+    const rem = rootFontPx()
+    const px = box.fontPx
+    for (const [form, flags] of DOUBLES_RUNGS) {
+      const fits = sides.every(players => {
+        if (!players.length) return true
+        const text = doublesLineOf(players, form)
+        const flagPx = flags ? players.length * (1.05 + 0.3) * rem : 0
+        return textWidth(text, px, 600) + flagPx + 2 <= box.avail
+      })
+      if (fits) return { form, flags }
+    }
+    return { form: 'surname', flags: false }
+  }
   const fit = DOUBLES_FIT + Math.max(0, SET_SLOTS - sets) * DOUBLES_SET_CHARS
     + (sets === 0 ? DOUBLES_MARK_CHARS : 0)
   for (const [form, flags] of DOUBLES_RUNGS) {
@@ -558,9 +578,19 @@ function Side({ players, doubles, tbd, tight, sets, form = 'surname', flags = fa
      because the SEED is a sibling of both, so it was in nobody's budget at all.
      That is how "[2]" came to sit on top of the result mark. */
   const doublesLine = doubles ? doublesLineOf(players, form) : ''
-  const teamScale = doubles && doublesLine.length > DOUBLES_FIT
-    ? Math.max(0.72, DOUBLES_FIT / doublesLine.length)
-    : 1
+  // Measured against the real column where we have it — see doublesPresentation.
+  let teamScale = 1
+  if (doubles && doublesLine) {
+    if (box) {
+      const rem = rootFontPx()
+      const flagPx = flags ? players.length * (1.05 + 0.3) * rem : 0
+      const budget = Math.max(0, box.avail - flagPx - 2)
+      const need = textWidth(doublesLine, box.fontPx, 600)
+      if (need > budget && budget > 0) teamScale = Math.max(0.72, budget / need)
+    } else if (doublesLine.length > DOUBLES_FIT) {
+      teamScale = Math.max(0.72, DOUBLES_FIT / doublesLine.length)
+    }
+  }
 
   return (
     <span className={clsx('sched-side', { 'sched-side--flags': doubles && flags })}
@@ -808,9 +838,9 @@ function CompetitorRows({ e, a, b }) {
 
   // Both teams together, so they are written the same way as each other, and
   // against the columns this row actually shows rather than a fixed guess.
-  const dbl = doubles ? doublesPresentation([a, b], n) : null
   // Both lines of a match share one geometry, so one measurement serves both.
   const [nameBoxRef, nameBox] = useNameBox()
+  const dbl = doubles ? doublesPresentation([a, b], n, nameBox) : null
 
   return (
     <div className={clsx('sched-competitors', { 'sched-competitors--doubles': doubles })}>
