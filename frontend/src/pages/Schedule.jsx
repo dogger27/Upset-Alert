@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import useFlashOnChange from '../hooks/useFlashOnChange'
@@ -12,6 +12,7 @@ import { getScheduleDay, getScheduleDates } from '../api/schedule'
 import { updateMe } from '../api/auth'
 import { useAuth } from '../store/auth'
 import { nationalityIso2, splitPlayerName } from '../utils/flags'
+import { rootFontPx, textWidth } from '../utils/text'
 import { parseSet } from '../utils/score'
 import './Schedule.css'
 
@@ -200,6 +201,47 @@ const NO_SEED = 9999
    the same threshold PlayerName uses to decide an initial is worth using, on
    purpose. They are one measurement of one column, and letting the two drift
    would leave a band of lengths that neither rung catches. */
+/* MEASURE THE COLUMN, DO NOT GUESS AT IT.
+   Every version of this before now counted CHARACTERS against a tuned constant.
+   That cannot work: "WWW" and "iii" are the same length and nothing like the
+   same width, the column's width changes with the breakpoint, the flag, the
+   serve ball, the point cell and how many sets are on the board — and
+   .sched-competitor-name is overflow:visible, so the moment the guess is wrong
+   by a few pixels the name paints straight over the ball and the score instead
+   of being clipped. "VANDECASTEELE [8]" sitting on the tennis ball is what a
+   wrong guess looks like.
+   So the row reports the width it actually has, the text is measured on a
+   canvas in the font it is actually drawn in, and the rung is chosen from those
+   two numbers. No characters, no constants, no breakpoint assumptions.
+   It cannot oscillate: .sched-competitor-name is flex:1 1 auto with min-width:0
+   among fixed-width siblings, so its width is decided by THEM. Making the name
+   inside it narrower does not widen the box, so a smaller name cannot feed back
+   into a new measurement. */
+
+/** The name column's usable width, and the font it draws in. */
+function useNameBox() {
+  const ref = useRef(null)
+  const [box, setBox] = useState(null)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const measure = () => {
+      const cs = getComputedStyle(el)
+      const px = parseFloat(cs.fontSize) || rootFontPx()
+      const w = el.clientWidth
+      if (w > 0) setBox(prev => (prev && prev.avail === w && prev.fontPx === px)
+        ? prev : { avail: w, fontPx: px })
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  return [ref, box]
+}
+
+/* Fallback only, for the first paint before the observer has reported. Kept
+   deliberately generous so nothing shrinks and then springs back. */
 const FIT_CHARS = 15
 
 /* ...and that is the budget when the scores are there to compete with. A row
@@ -324,7 +366,7 @@ function seedNumber(player) {
  * anyway.
  */
 function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp, tight,
-                     sets = SET_SLOTS, form }) {
+                     sets = SET_SLOTS, form, box = null, hasFlag = true }) {
   const { seed: printedSeed, first, last, nat } = splitPlayerName(raw)
   // A seeding sent as a field beats one parsed out of the name: a resolved
   // player's name comes from the bracket and never carried brackets to parse.
@@ -354,7 +396,29 @@ function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp, t
      did not need, leaving a visible gap between the name and the ball. The ball
      and the point cell are about two characters' worth between them. */
   const fit = FIT_CHARS + Math.max(0, SET_SLOTS - sets) * SET_CHARS - (tight ? 2 : 0)
-  const longName = !surnameOnly && shown.length > fit
+
+  /* THE MEASURED BUDGET, in pixels, in the font this row actually draws in.
+     Everything the name shares its box with is subtracted first: the flag and
+     its gap, and the seed — a sibling at 0.85em that no character count ever
+     included, which is precisely how "[8]" came to sit on the tennis ball.
+     Two pixels are held back so a name never finishes flush against whatever
+     follows it. `box` is null only on the very first paint, before the observer
+     has reported; the character estimate still covers that one frame. */
+  const px = box?.fontPx ?? 0
+  const rem = rootFontPx()
+  const seedText = !hideSeed && seed ? ` ${seed}` : ''
+  const extras = box
+    ? (hasFlag ? (1.05 + 0.3) * rem : 0)
+      + (seedText ? textWidth(seedText, px * 0.85, 700) + 0.28 * rem : 0)
+      + 2
+    : 0
+  const budget = box ? Math.max(0, box.avail - extras) : null
+  const wide = (text) => textWidth(text, px, 600)
+  /* The ladder is unchanged — full name, then an initial, then the surname
+     alone, then size — but each rung is now accepted or rejected by MEASURING
+     it rather than by counting its letters. */
+  const fitsPx = (text) => budget == null || wide(text) <= budget
+  const longName = !surnameOnly && (budget != null ? !fitsPx(shown) : shown.length > fit)
   const initialled = first ? `${first.trim()[0]}. ${last}` : last
 
   /* AND A RUNG BELOW THE INITIAL, because some surnames are longer than the
@@ -379,8 +443,11 @@ function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp, t
      one step of relief and then a floor, and the pair ran straight over the
      score. The surname alone still names the person; a name over a score names
      nobody and hides the score as well. */
-  const seedPart = !hideSeed && seed ? ` ${seed}` : ''
+  const seedPart = seedText
   const lastOnly = last || full
+  /* Same ladder as ever — full name, then an initial, then the surname alone,
+     then size — but each rung is now accepted or rejected by MEASURING it
+     rather than by counting its letters. */
   // A doubles side has already been fitted as a whole — both partners, the
   // slash and the team seed measured together, because no partner knows how
   // long the other is. That answer wins over anything decided here for one
@@ -388,18 +455,30 @@ function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp, t
   const decided = form ? partnerText(raw, form) : null
   const tightest = decided ?? (surnameOnly
     ? last
-    : (`${full}${seedPart}`.length <= fit ? `${full}${seedPart}`
-       : `${initialled}${seedPart}`.length <= fit ? `${initialled}${seedPart}`
-       : `${lastOnly}${seedPart}`))
+    : budget != null
+      ? (fitsPx(full) ? full : fitsPx(initialled) ? initialled : lastOnly)
+      : (`${full}${seedPart}`.length <= fit ? `${full}${seedPart}`
+         : `${initialled}${seedPart}`.length <= fit ? `${initialled}${seedPart}`
+         : `${lastOnly}${seedPart}`))
   /* AND THEN IT SHRINKS AS FAR AS IT HAS TO. The floor is 0.45, which is small
      enough to be barely readable and is deliberately not a compromise: a name
      that overlaps the score has destroyed two pieces of information, and one
      unreadably small name has destroyed less than that. It is also nearly
      unreachable — by this rung the text is a bare surname, and a surname long
      enough to need half size is not a real one. */
-  const scale = tightest.length > fit
-    ? Math.max(0.45, fit / tightest.length)
-    : 1
+  /* And then it shrinks by the ratio it is actually over by. The floor stays
+     0.45 and stays nearly unreachable — by this rung the text is a bare
+     surname. Below it a name would be illegible, and an illegible name that
+     fits still beats a legible one sitting on top of the score. */
+  const scale = decided
+    // A doubles partner shares the box with the other one, the slash and the
+    // team seed, so the whole LINE is fitted at once in Side() and carries the
+    // scale on .sched-side. Measuring one partner against the full box here
+    // would be measuring the wrong thing, and the two scales would compound.
+    ? 1
+    : budget != null
+      ? (wide(tightest) > budget ? Math.max(0.45, budget / wide(tightest)) : 1)
+      : (tightest.length > fit ? Math.max(0.45, fit / tightest.length) : 1)
 
   return (
     <span className="sched-player"
@@ -440,7 +519,8 @@ function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp, t
   )
 }
 
-function Side({ players, doubles, tbd, tight, sets, form = 'surname', flags = false }) {
+function Side({ players, doubles, tbd, tight, sets, form = 'surname', flags = false,
+               box = null }) {
   if (!players.length) return <span className="sched-side">TBD</span>
 
   // An unresolved side is a choice between two whole teams, not a list of
@@ -492,7 +572,9 @@ function Side({ players, doubles, tbd, tight, sets, form = 'surname', flags = fa
           {i > 0 && <span className="sched-slash">/</span>}
           <PlayerName raw={p.name} surnameOnly={doubles} hideSeed={doubles}
                       nationality={p.nationality} seed={p.seed} tight={tight}
-                      sets={sets} form={doubles ? form : undefined} />
+                      sets={sets} form={doubles ? form : undefined}
+                      box={box}
+                      hasFlag={!doubles || flags} />
         </Fragment>
       ))}
       {/* Same placement as a singles seed, and for the same reason. */}
@@ -719,6 +801,8 @@ function CompetitorRows({ e, a, b }) {
   // Both teams together, so they are written the same way as each other, and
   // against the columns this row actually shows rather than a fixed guess.
   const dbl = doubles ? doublesPresentation([a, b], n) : null
+  // Both lines of a match share one geometry, so one measurement serves both.
+  const [nameBoxRef, nameBox] = useNameBox()
 
   return (
     <div className={clsx('sched-competitors', { 'sched-competitors--doubles': doubles })}>
@@ -728,10 +812,13 @@ function CompetitorRows({ e, a, b }) {
                'sched-competitor--won': winnerSide === side,
                'sched-competitor--lost': winnerSide != null && winnerSide !== side,
              })}>
-          <span className="sched-competitor-name">
+          {/* The box the name actually has. Measured here, on the element that
+              owns the width, and handed down — see useNameBox for why this
+              cannot feed back on itself. */}
+          <span className="sched-competitor-name" ref={side === 0 ? nameBoxRef : undefined}>
             <Side players={players} doubles={doubles} tbd={tbd}
                   tight={serving != null || point != null} sets={n}
-                  form={dbl?.form} flags={dbl?.flags} />
+                  form={dbl?.form} flags={dbl?.flags} box={nameBox} />
           </span>
           {/* A SLOT, always present, not a conditional element. The ball
               appears on one line only, so rendering it inline shifted that

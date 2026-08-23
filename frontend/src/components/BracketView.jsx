@@ -644,6 +644,7 @@ export default function BracketView({ tournament, matches, players, picks, onPic
         matchTotal={matchIndex.total}
         picks={picks}
         onPick={onPick}
+        pickPair={resolved[h2hPlayers.match?.id]}
         canPick={mode === 'picks' && !locked}
         onPrev={h2hNav.prev ? () => setH2HPlayers(h2hNav.prev) : null}
         onNext={h2hNav.next ? () => setH2HPlayers(h2hNav.next) : null}

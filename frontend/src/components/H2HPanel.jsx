@@ -313,7 +313,8 @@ export default function H2HPanel({
   slug1: slug1In, slug2: slug2In, player1: player1In, player2: player2In,
   beforeDrawId: beforeDrawIdIn, beforeRound: beforeRoundIn, match: matchIn = null,
   tournSurface, tournGender, onClose,
-  picks = null, onPick = null, canPick = false, onPrev = null, onNext = null,
+  picks = null, onPick = null, canPick = false, pickPair = null,
+  onPrev = null, onNext = null,
   matchOrder = null, matchTotal = 0,
 }) {
   const [surfFilter, setSurfFilter] = useState('all') // 'all' | 'surface'
@@ -455,6 +456,22 @@ export default function H2HPanel({
   const teView = !!slug1 && !!slug2
   const noTeNames = [slug1 ? null : player1?.name, slug2 ? null : player2?.name].filter(Boolean)
   const pickedId = picks && match ? (picks[match.id] ?? null) : null
+  /* THE PICK CONTROL BELONGS TO THE USER'S BRACKET, NOT TO THIS PANEL'S PAIR.
+     The panel deliberately shows whoever ACTUALLY met once a round has been
+     played (see resolveRealFirst) — otherwise it would compare two people who
+     never played each other. The user's pick lives in their own cascade, and
+     the two part company the moment a prediction goes wrong: Cincinnati's
+     semi-final really was Cobolli v Fils while this user had picked Djokovic,
+     so their pick matched neither name on screen and nothing highlighted.
+     Worse, clicking would have written Cobolli into their bracket — a player
+     their own path never reaches, which getAdvancer then discards, so the pick
+     would be stored, shown here, and invisible everywhere else.
+     `pickPair` is the cascade's two players for this match. A name is pickable,
+     and can show as picked, only if it is one of them. Absent (the schedule's
+     panel passes none) it is not consulted. */
+  const inBracket = (p) => (
+    p?.id != null && (!pickPair || p.id === pickPair.p1 || p.id === pickPair.p2)
+  )
   const showForm = (form_p1?.length ?? 0) > 0 || (form_p2?.length ?? 0) > 0
 
   const slug1IsA = data ? slug1 === data.slug_a : true
@@ -510,15 +527,15 @@ export default function H2HPanel({
       <PickableName
         className="h2h-navname h2h-val-p1"
         player={player1} fallback={name_p1}
-        picked={pickedId != null && pickedId === player1?.id}
-        onPick={canPick && player1?.id != null ? () => onPick(match.id, player1.id) : null}
+        picked={pickedId != null && pickedId === player1?.id && inBracket(player1)}
+        onPick={canPick && inBracket(player1) ? () => onPick(match.id, player1.id) : null}
       />
       <span className="h2h-navvs">vs</span>
       <PickableName
         className="h2h-navname h2h-val-p2"
         player={player2} fallback={name_p2}
-        picked={pickedId != null && pickedId === player2?.id}
-        onPick={canPick && player2?.id != null ? () => onPick(match.id, player2.id) : null}
+        picked={pickedId != null && pickedId === player2?.id && inBracket(player2)}
+        onPick={canPick && inBracket(player2) ? () => onPick(match.id, player2.id) : null}
       />
     </div>
   )
