@@ -1552,7 +1552,11 @@ function TournamentDraw() {
               )}
             </div>
           ) : (
-            tournament.closing_time && (() => {
+            tournament.pick_lock_mode === 'r1_progressive' ? (
+              // No time: see the note in DrawSidebar. Picking closes when the
+              // first round finishes, which no clock can predict.
+              <span className="muted">Pick selection closes when round one is complete</span>
+            ) : tournament.closing_time && (() => {
               const dt = new Date(tournament.closing_time + 'Z')
               const userLocal = dt.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
               let venueLocal = null

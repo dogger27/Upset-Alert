@@ -107,11 +107,20 @@ export default function DrawSidebar({ tournamentId, tournament, selectedUserId, 
     }
     const status = tournament?.status
     if (!user?.is_admin && status !== 'active' && status !== 'completed') {
-      const lockStr = fmtLockTime(tournament?.closing_time)
+      /* NO CLOCK UNDER MATCH-BY-MATCH LOCKING. closing_time is a PREDICTION of
+         day one's first ball, which is when the whole bracket shuts under the
+         original rule. Under this one picking closes when the first round is
+         COMPLETE — an hour that depends on how the tennis goes and cannot be
+         named in advance — so printing that time promised something exact and
+         wrong. */
+      const progressive = tournament?.pick_lock_mode === 'r1_progressive'
+      const lockStr = progressive ? null : fmtLockTime(tournament?.closing_time)
       toastKey.current += 1
       setToast({
         key: toastKey.current,
-        msg: `Opponents' picks will be available after pick selection closes${lockStr ? ': ' + lockStr : ''}.`,
+        msg: progressive
+          ? "Opponents' picks will be available once the first round is complete."
+          : `Opponents' picks will be available after pick selection closes${lockStr ? ': ' + lockStr : ''}.`,
       })
       return
     }
