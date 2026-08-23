@@ -1029,6 +1029,13 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
   return (
     <>
       {h2h && (
+        /* canPick takes THE MATCH'S OWN LOCK, not just the draw's. Under
+           match-by-match locking a match freezes the moment it goes on court
+           while the rest of the bracket stays open, so `locked` — which is
+           about the whole draw — says nothing about this one. Without it the
+           panel offered a pick on a match already in progress: the server
+           refuses the write, so the bracket never changed, but the panel took
+           the click and lit the name up as though it had. */
         <H2HPanel
           slug1={h2h.p1.te_slug} slug2={h2h.p2.te_slug}
           player1={h2h.p1} player2={h2h.p2}
@@ -1040,7 +1047,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
           picks={picks}
           onPick={onPick}
           pickPair={resolved[h2h.match?.id]}
-          canPick={!locked}
+          canPick={!locked && !lockedMatchIds.has(h2h.match?.id)}
           onPrev={h2hNav.prev ? () => setH2H(h2hNav.prev) : null}
           onNext={h2hNav.next ? () => setH2H(h2hNav.next) : null}
           onClose={() => setH2H(null)}
