@@ -76,12 +76,48 @@ function splitTimeLine(text) {
    which applies at every width because those phrasings are too long
    everywhere. */
 const MOBILE_ABBR = {
-  'Followed by': 'Fol. By',
+  'followed by': 'Fol. by',
+}
+
+/* KEYED IN LOWER CASE, AND LOOKED UP THAT WAY. Anything added here must be a
+   lower-case key; see CANON for why. */
+function abbreviate(label) {
+  return MOBILE_ABBR[(label || '').toLowerCase()]
+}
+
+/* ONE WORDING PER PHRASE, whatever the tournament printed.
+   The sheets do not agree with each other, and in a single week printed all of:
+
+     "Followed by"  23   "Followed By"   8
+     "Not before"   26   "Not Before"    7
+     "Starting at"  19   "Starts At"     7
+
+   Read straight through, the page shows whichever the tournament happened to
+   use, so the same phrase changes shape from row to row — and an exact-string
+   abbreviation matched one spelling and silently did nothing to the other,
+   which reads as the setting having been reverted rather than as a difference
+   in the source. "Starts At" is a different PHRASING, not just different
+   capitals, so casing alone would not have made these the same.
+
+   Canonicalised at render only. `start_note` keeps what the tournament actually
+   printed, so the stored record stays faithful and this stays a display
+   decision — same rule as MOBILE_ABBR and SHORTEN. */
+const CANON = [
+  [/^followed\s+by$/i, 'Followed by'],
+  [/^not\s+before$/i, 'Not before'],
+  [/^starts?(?:ing)?\s+at$/i, 'Starting at'],
+]
+
+function canonLabel(label) {
+  const t = (label || '').trim()
+  for (const [re, canon] of CANON) if (re.test(t)) return canon
+  return t
 }
 
 function TimeLine({ text, className }) {
-  const { label, time } = splitTimeLine(text)
-  const short = MOBILE_ABBR[label]
+  const { label: printed, time } = splitTimeLine(text)
+  const label = canonLabel(printed)
+  const short = abbreviate(label)
   return (
     <span className={className}>
       {label && (
