@@ -103,6 +103,26 @@ async def lifespan(app: FastAPI):
         logging.getLogger("app").info(
             "Order-of-play refresh ENABLED without the rest of the scrapers")
 
+    # THE ESTIMATOR RUNS ON ITS OWN CLOCK, in production too.
+    #
+    # It used to run only as a tail of ingesting a fresh sheet, which ties
+    # "when do we re-estimate" to "did the tournament republish its PDF" — two
+    # unrelated things. A sheet that does not change, or a host that
+    # rate-limits us for a few hours, froze every estimate on the page: matches
+    # scheduled for today carried a "now plus remaining" figure computed
+    # yesterday evening, which is not merely stale but in the PAST, and sorted
+    # the whole day out of order because the list is ordered by the instant it
+    # shows.
+    #
+    # The estimator itself already knows a passed estimate is wrong on its face
+    # and rewrites it. It simply was not being asked. It talks to nobody — pure
+    # arithmetic over rows already stored — so there is no reason for it to
+    # wait on anything.
+    if not oop_only and settings.order_of_play_enabled:
+        from app.services.scheduler import run_schedule_estimates_only
+        asyncio.create_task(run_schedule_estimates_only())
+        logging.getLogger("app").info("Schedule estimate refresh ENABLED")
+
     doubles_on = settings.sofascore_doubles_enabled
     if doubles_on:
         from app.services.sofascore_doubles import monitor as sofa_doubles_monitor
