@@ -804,15 +804,16 @@ def _change_row(change: dict, is_last: bool) -> str:
     """
     from app.services.draw_changes import entry_suffix, slot_label
 
-    mine = change.get("affects_you")
+    # No "this was your pick" flag, and no highlight for the rows that were.
+    # Any replacement in a draw you are competing in can reach your bracket —
+    # whoever comes in plays on, and everything downstream moves with them.
+    # Marking two of the rows implied the rest were somebody else's problem.
+    mine = False
     src = (change["old_name"] if change["kind"] == "replaced"
            else slot_label(change.get("old_entry_type"), change["bracket_position"]))
     src_style = ("color:#6b7280;text-decoration:line-through" if change["kind"] == "replaced"
                  else "color:#6b7280;font-style:italic")
-    flag = (
-        '<div style="font-size:12px;font-weight:700;color:#b45309;padding-top:5px">'
-        '&#9888;&#65039; This was your pick</div>' if mine else ""
-    )
+    flag = ""
     return f"""
       <tr>
         <td style="padding:{'10px 14px' if is_last else '10px 14px 0'};">
@@ -864,47 +865,32 @@ async def send_draw_change_digest(
     if not draws:
         return
 
-    changes = [c for d in draws for c in d["changes"]]
-    n = len(changes)
-    yours = [c for c in changes if c.get("affects_you")]
     one_draw = draws[0] if len(draws) == 1 else None
 
-    if yours:
-        first = yours[0]
-        subject = (
-            f"Your pick was replaced: {first['new_name']} is in for {first['old_name']}"
-            if len(yours) == 1 and first["kind"] == "replaced"
-            else f"{len(yours)} of your picks changed"
-        )
-        heading = "One of your picks has changed" if len(yours) == 1 else "Some of your picks have changed"
-        intro = (
-            "A player you picked is no longer in the draw. Your bracket now backs "
-            "whoever took their place, so it's worth a look."
-        )
-    else:
-        subject = (
-            f"Draw change: {one_draw['name']}" if one_draw and n == 1
-            else f"{n} draw changes — {one_draw['name']}" if one_draw
-            else f"{n} draw changes across {len(draws)} draws"
-        )
-        heading = "The draw has changed" if n == 1 else "The draw has changed"
-        intro = (
-            "None of your picks are affected, but the bracket around them has moved."
-        )
+    # WHAT MATTERS IS THE DRAW, NOT WHOSE PICK IT WAS.
+    #
+    # This used to lead with "some of your picks have changed" and flag the rows
+    # that were yours. That is the wrong emphasis: a replacement anywhere in a
+    # draw you are competing in can reach your bracket, because whoever comes in
+    # plays on and everything downstream moves with them. Singling out the two
+    # rows that were literally your pick implies the others are none of your
+    # business, when they are exactly as capable of changing your result.
+    #
+    # So it is one neutral subject naming the event, and the swaps themselves —
+    # which is all the message ever needed to carry.
+    subject = (
+        f"Player Replacements in {one_draw['name']}" if one_draw
+        else f"Player Replacements in {len(draws)} draws"
+    )
 
     open_draws = [d for d in draws if not d.get("locked")]
     footer = (
-        "Picks are still open for "
-        + ", ".join(d["name"] for d in open_draws)
-        + " — you can change yours."
-        if open_draws else
+        "Predictions are still open" if open_draws else
         "Picks are locked for these draws, so nothing needs doing — this is just so "
         "you know who your bracket is backing."
     )
 
     sections = "".join(_draw_change_section(d, i == len(draws) - 1) for i, d in enumerate(draws))
-    cta_url = f"{BASE_URL}/tournaments/{draws[0]['id']}" if len(draws) == 1 else BASE_URL
-    cta_text = "Check Your Picks" if open_draws else "View Draw" if len(draws) == 1 else "View Draws"
     unsubscribe = (
         f'<p style="max-width:560px;margin:16px auto 0;text-align:center;font-size:12px;color:#9ca3af;'
         f'font-family:sans-serif">'
@@ -918,14 +904,6 @@ async def send_draw_change_digest(
         "to": [email],
         "subject": subject,
         "html": f"""{_WRAP_OPEN}{_LOGO_HEADER}
-          <div style="padding:28px 24px 22px;background:#ffffff;color:#111111">
-            <h1 style="font-size:22px;margin:0 0 8px">{heading}</h1>
-            <p style="color:#444;line-height:1.6;margin:0 0 18px;font-size:14px">{intro}</p>
-            <a href="{cta_url}" style="display:inline-block;padding:12px 24px;
-               background:#1b4332;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
-              {cta_text}
-            </a>
-          </div>
           {sections}
           <div style="padding:0 24px 24px;background:#ffffff">
             <p style="color:#9ca3af;line-height:1.6;margin:0;font-size:12px">{_esc(footer)}</p>
