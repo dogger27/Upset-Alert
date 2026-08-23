@@ -226,11 +226,12 @@ function PlayerRow({
       {walkover && <span className="ret-badge wo-badge">w/o</span>}
       {showTick && <span className="pick-result correct" title={correctPick ? 'Correct pick' : 'Winner'}>✓</span>}
       {wrongPick && <span className="pick-result wrong" title="Wrong pick">✗</span>}
-      {showFlag && player.nationality && (() => {
-        const iso2 = nationalityIso2(player.nationality)
+      {showFlag && (() => {
+        const iso2 = player.nationality && nationalityIso2(player.nationality)
+        // No flag still takes a flag's space — see .flag-blank in index.css.
         return iso2
           ? <span className={`fi fi-${iso2.toLowerCase()} player-flag`} title={player.nationality} />
-          : null
+          : <span className="player-flag flag-blank" aria-hidden="true" />
       })()}
       {showScores && scores && scores.length > 0 && (
         <span className="score-row">

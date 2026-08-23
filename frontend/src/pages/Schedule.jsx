@@ -330,11 +330,17 @@ function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp, t
           style={scale < 1 ? { '--name-scale': scale } : undefined}>
       {/* No placeholder when there is no flag. A missing nationality here is
           not missing DATA — the tours list Russian and Belarusian players as
-          neutral athletes with no flag, and the sheet omits it deliberately, so
-          reserving the space just indents those names forever. Tennis Explorer
-          does hold a country for them, and we deliberately do not use it: the
-          official order of play withholds it on purpose. */}
-      {iso2 && <span className={`fi fi-${iso2.toLowerCase()} sched-flag`} title={nat} />}
+          neutral athletes with no flag, and the sheet omits it deliberately.
+          Tennis Explorer does hold a country for them, and we deliberately do
+          not use it: the official order of play withholds it on purpose.
+          An OUTLINED EMPTY BOX rather than nothing at all. Drawing nothing let
+          those names start a flag's width to the left of every other name in
+          the column, which reads as a layout fault rather than as a country
+          being withheld. The box says the same thing the sheet does — there is
+          a flag's worth of nothing here — and keeps the column straight. */}
+      {iso2
+        ? <span className={`fi fi-${iso2.toLowerCase()} sched-flag`} title={nat} />
+        : <span className="sched-flag flag-blank" aria-hidden="true" />}
       <span className={clsx('sched-pname', { 'sched-pname--long': longName })}>
         {surnameOnly ? last : longName ? (
           <>

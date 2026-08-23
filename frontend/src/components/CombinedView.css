@@ -157,7 +157,9 @@
                                   :before content can't nudge baseline alignment */
   margin: 0 6px 0 4px;        /* small gap to the seed on the left, name on the right */
 }
-.cv-flag--empty { background: transparent; border-color: transparent; }
+/* The empty box is OUTLINED now, not hidden — see .flag-blank in index.css,
+   which this view shares with every other page that draws a flag. The space was
+   always reserved here; it was the border that was transparent. */
 
 .cv-name {
   flex: 1 1 auto;
