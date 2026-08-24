@@ -1120,7 +1120,14 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
         tournament.draw_size = parsed.draw_size
     if parsed.num_rounds:
         tournament.num_rounds = parsed.num_rounds
-    tournament.last_scraped_at = datetime.now(timezone.utc)
+    # last_scraped_at IS STAMPED AT THE EXITS, NOT HERE. Assigning it this
+    # early made it the first write of a ~600-line transaction, and the very
+    # next SELECT autoflushed it — so the scrape took SQLite's single write
+    # lock before it had anything to write and held it across everything that
+    # follows, including the entry and match upserts and the pick fill. Every
+    # other background writer queued behind that, and when the lock went the
+    # other way the whole scrape died on "UPDATE draws SET last_scraped_at".
+    # Stamping at the exits keeps the write window to the commit itself.
 
     # Update location from infobox if not already set
     if parsed.city and not tournament.city:
@@ -1413,6 +1420,10 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
                  "wiki_page_title": tournament.wiki_page_title},
                 dedup_key=f"misparse_{tournament.id}", dedup_hours=6.0,
             )
+            # Stamped even though the scrape is being abandoned: this bails
+            # BECAUSE the page is wrong, and leaving the draw unstamped would
+            # re-fetch and re-fail it on every tick.
+            tournament.last_scraped_at = datetime.now(timezone.utc)
             return
 
     # Upsert players — update in place to preserve any FK references
@@ -1725,3 +1736,8 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
             for entrant_id in entrants:
                 await fill_missing_picks(db, tournament, entrant_id,
                                          entries=fill_entries, matches=fill_matches)
+
+    # The scrape got here, so it worked. Last write before the caller's
+    # commit — see the note where this used to be stamped.
+    tournament.last_scraped_at = datetime.now(timezone.utc)
+
