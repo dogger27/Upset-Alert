@@ -1591,13 +1591,11 @@ function TournamentDraw() {
           )}
           {/* Saved-picks pill sits directly on top of Reset Selections, both
               stretched to one shared width (see .draw-picks-stack). */}
-          {(showPicksBadge || canReset) && (
+          {((showPicksBadge && pickedCount < totalPredictable) || canReset) && (
             <div className="draw-picks-stack">
-              {showPicksBadge && (
-                <span className={`saved-badge${pickedCount < totalPredictable ? ' saved-badge--incomplete' : ''}`}>
-                  {pickedCount < totalPredictable
-                    ? `⚠ ${pickedCount}/${totalPredictable} picks saved — complete all picks to COMPETE`
-                    : `✓ ${pickedCount}/${totalPredictable} picks saved`}
+              {showPicksBadge && pickedCount < totalPredictable && (
+                <span className="saved-badge saved-badge--incomplete">
+                  {`⚠ ${pickedCount}/${totalPredictable} picks saved — complete all picks to COMPETE`}
                 </span>
               )}
               {canReset && (
