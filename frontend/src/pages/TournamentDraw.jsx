@@ -890,22 +890,33 @@ function TournamentDraw() {
     // one box refuses and the reason is genuinely not visible.
     if (locked) return null
     if (lockedMatchIds.has(Number(matchId))) {
-      /* TWO REASONS WEAR THE SAME LOCK. A match is frozen either because IT is
-         under way, or because something upstream of it is — a player cannot be
+      /* ONLY THE UPSTREAM REASON REACHES HERE. A match frozen because IT is
+         under way never gets this far — scoreInsteadOfPick showed its score
+         and returned first. What is left is the case a click genuinely cannot
+         explain by itself: this match has not started, but a player cannot be
          moved out of a round they have already played, so every match their
-         path reaches is settled with it. Saying "this match has already
-         started" about a match that has not is simply wrong, and sends the
-         reader looking at the wrong row. */
-      const m = (data?.matches || []).find(x => x.id === Number(matchId))
-      return matchStarted(m)
-        ? 'This match has already started, so its prediction is locked.'
-        : 'You can not change the result of a match which stems from a match '
-          + 'which has already started.'
+         path reaches is settled with it. */
+      return 'You can not change the result of a match which stems from a match '
+        + 'which has already started.'
     }
     return null
   }
 
+  /* A STARTED MATCH ANSWERS WITH ITS SCORE, NOT A REFUSAL. Every way of
+     picking ends up in one of these two handlers — a draw box, the H2H panel,
+     the bracket's own rows — so the rule lives here rather than being spelled
+     out again at each of them, where the next new surface would miss it.
+     "This match has already started, so its prediction is locked" was telling
+     the reader something the score itself says better. */
+  const scoreInsteadOfPick = (matchId) => {
+    const m = (data?.matches || []).find(x => x.id === Number(matchId))
+    if (!matchStarted(m)) return false
+    setScoreMatch(m)
+    return true
+  }
+
   const handlePick = (matchId, playerId) => {
+    if (scoreInsteadOfPick(matchId)) return
     const refusal = pickRefusal(matchId)
     if (refusal) {
       window.alert(refusal)
@@ -945,6 +956,7 @@ function TournamentDraw() {
      person here — display names are often just a real name and two people can
      share one. */
   const handlePickForOther = (matchId, playerId) => {
+    if (scoreInsteadOfPick(matchId)) return
     const refusal = pickRefusal(matchId)
     if (refusal) {
       window.alert(refusal)
