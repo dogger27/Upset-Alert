@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { listTournaments } from '../api/tournaments'
-import { listAdminUsers, setUserAdmin } from '../api/auth'
+import { listAdminUsers, setUserAdmin, getUserFootprint, deleteUser } from '../api/auth'
 import { getLogs, clearLogs, getAdminPlayers, getRankingsWeeks, getAdminRankings } from '../api/admin'
 import { getEntryStatus } from '../api/predictions'
 import { useAuth } from '../store/auth'
@@ -88,6 +88,56 @@ function UsersPanel({ user }) {
     mutationFn: ({ userId, isAdmin }) => setUserAdmin(userId, isAdmin),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }),
   })
+
+  /* DELETING A USER ASKS THE SERVER WHAT THAT MEANS FIRST.
+     The confirmation names the picks, memberships and results about to go
+     with them, because "Delete user?" on its own does not tell an admin
+     whether they are removing a test account or a season of someone's
+     history. The footprint endpoint counts through the same table list the
+     delete walks, so the dialog cannot promise one thing and the delete do
+     another. */
+  const [busyId, setBusyId] = useState(null)
+  const deleteMutation = useMutation({
+    mutationFn: deleteUser,
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['admin-users'] })
+      const gone = Object.entries(res.removed || {})
+      window.alert(`Deleted @${res.deleted}.` + (gone.length
+        ? `\n\nAlso removed: ${gone.map(([t, n]) => `${n} ${t.replace(/_/g, ' ')}`).join(', ')}.`
+        : ''))
+    },
+    onError: (err) => window.alert(
+      err?.response?.data?.detail || 'Could not delete this user.'),
+  })
+
+  const confirmDelete = async (u) => {
+    setBusyId(u.id)
+    try {
+      const fp = await getUserFootprint(u.id)
+      const counts = Object.entries(fp.counts || {})
+      const blocked = fp.leagues_with_members || []
+      if (blocked.length) {
+        window.alert(
+          `@${u.username} owns ${blocked.map(l => `"${l.name}"`).join(', ')}, `
+          + `which ${blocked.length === 1 ? 'has' : 'have'} other members.\n\n`
+          + 'Transfer or delete those leagues first.')
+        return
+      }
+      const lines = [`Permanently delete @${u.username} (${u.email})?`, '']
+      if (fp.is_admin) lines.push('⚠ This user is an ADMIN.', '')
+      lines.push(counts.length
+        ? 'This also deletes:\n'
+          + counts.map(([t, n]) => `  • ${n} ${t.replace(/_/g, ' ')}`).join('\n')
+        : 'They have no picks, memberships or results.')
+      lines.push('', 'This cannot be undone.')
+      if (window.confirm(lines.join('\n'))) deleteMutation.mutate(u.id)
+    } catch {
+      window.alert('Could not read this user\u2019s data. Nothing was deleted.')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   return (
     <div className="card admin-section">
       <h2>
@@ -108,6 +158,7 @@ function UsersPanel({ user }) {
                 <th>Mobile</th>
                 <th>Admin</th>
                 <th>Joined</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -139,6 +190,19 @@ function UsersPanel({ user }) {
                     )}
                   </td>
                   <td className="td-muted td-nowrap">{u.created_at}</td>
+                  <td>
+                    {/* Never your own row — the server refuses it too, but an
+                        offered button that always fails is worse than none. */}
+                    {u.id !== user?.id && (
+                      <button
+                        className="settings-remove-btn"
+                        disabled={busyId === u.id || deleteMutation.isPending}
+                        onClick={() => confirmDelete(u)}
+                      >
+                        {busyId === u.id ? '…' : 'Delete'}
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -12,4 +12,8 @@ export const updateMe = (data) => client.patch('/auth/me', data).then(r => r.dat
 export const listUsers = () => client.get('/auth/users').then(r => r.data)
 export const listAdminUsers = () => client.get('/auth/admin/users').then(r => r.data)
 export const setUserAdmin = (userId, isAdmin) => client.patch(`/auth/admin/users/${userId}`, { is_admin: isAdmin }).then(r => r.data)
+export const getUserFootprint = (userId) =>
+  client.get(`/auth/admin/users/${userId}/footprint`).then(r => r.data)
+export const deleteUser = (userId) =>
+  client.delete(`/auth/admin/users/${userId}`).then(r => r.data)
 export const getDrawCounts = () => client.get('/auth/users/draw-counts').then(r => r.data)

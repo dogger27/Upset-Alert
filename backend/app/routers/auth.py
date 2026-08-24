@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy import delete, func, or_, select, and_
+from sqlalchemy import delete, func, or_, select, and_, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import get_current_user
@@ -111,6 +111,22 @@ async def record_app_open(
     await db.commit()
 
 
+# Every column in the LIVE schema that points at a user, in delete order:
+# children before the leagues they belong to. Built by walking the database
+# rather than the models, which is how tournament_results — a user_id with no
+# ForeignKey on it — got included. Re-check this list when a table gains a
+# user column; nothing enforces it, because nothing enforces foreign keys here.
+_USER_OWNED = (
+    ("user_predictions", "user_id"),
+    ("league_members", "user_id"),
+    ("tournament_results", "user_id"),
+    ("notification_preferences", "user_id"),
+    ("notification_opt_outs", "user_id"),
+    ("push_subscriptions", "user_id"),
+    ("leagues", "owner_id"),
+)
+
+
 @router.patch("/admin/users/{user_id}")
 async def set_user_admin(
     user_id: int,
@@ -129,6 +145,131 @@ async def set_user_admin(
     target.is_admin = bool(body.get("is_admin", False))
     await db.commit()
     return {"id": target.id, "is_admin": target.is_admin}
+
+
+@router.get("/admin/users/{user_id}/footprint")
+async def user_footprint(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """What deleting this user would destroy, so the confirmation can say it.
+
+    Read-only twin of delete_user below: it counts through the SAME table list,
+    so the dialog cannot promise one thing and the delete do another.
+    """
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin only")
+    target = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    counts = {}
+    for table, column in _USER_OWNED:
+        n = (await db.execute(
+            text(f"SELECT COUNT(*) FROM {table} WHERE {column} = :uid"),
+            {"uid": user_id})).scalar() or 0
+        if n:
+            counts[table] = n
+    owned = (await db.execute(
+        text("SELECT l.id, l.name, "
+             "(SELECT COUNT(*) FROM league_members m "
+             " WHERE m.league_id = l.id AND m.user_id != :uid) AS others "
+             "FROM leagues l WHERE l.owner_id = :uid"),
+        {"uid": user_id})).all()
+    return {
+        "id": target.id, "username": target.username, "email": target.email,
+        "is_admin": target.is_admin, "counts": counts,
+        "leagues_with_members": [
+            {"id": r[0], "name": r[1], "other_members": r[2]} for r in owned if r[2]],
+        "leagues_empty": [
+            {"id": r[0], "name": r[1]} for r in owned if not r[2]],
+    }
+
+
+@router.delete("/admin/users/{user_id}")
+async def delete_user(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Remove a user and everything hanging off them.
+
+    EVERY DEPENDENT ROW IS DELETED HERE, IN CODE. Three of these tables declare
+    ondelete="CASCADE" and it does nothing: this database runs with
+    PRAGMA foreign_keys=0, so SQLite enforces no constraint and honours no
+    cascade. Deleting the row alone would leave predictions, memberships and
+    push subscriptions pointing at an id that no longer exists — invisible
+    until something joined on it and got nothing.
+
+    tournament_results is the one to notice: it holds a user_id with no
+    ForeignKey declared at all, so it appears in no cascade and in no model
+    relationship. It is in the list below because the list was built from the
+    live schema rather than from the models.
+    """
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin only")
+    if current_user.id == user_id:
+        raise HTTPException(status_code=400, detail="You cannot delete your own account")
+
+    target = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # A league with other people in it outlives its owner's account, and this
+    # endpoint has no business guessing who should inherit it.
+    inhabited = (await db.execute(
+        text("SELECT l.name FROM leagues l WHERE l.owner_id = :uid AND EXISTS ("
+             "  SELECT 1 FROM league_members m"
+             "  WHERE m.league_id = l.id AND m.user_id != :uid)"),
+        {"uid": user_id})).scalars().all()
+    if inhabited:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{target.username} owns league(s) with other members "
+                   f"({', '.join(inhabited)}). Transfer or delete them first.")
+
+    # THE LIST CHECKS ITSELF AGAINST THE LIVE SCHEMA.
+    #
+    # A table added later with a user_id column would be missed silently, and
+    # the damage — rows pointing at a deleted user — is invisible until
+    # something joins on them. So the schema is asked what it holds, and
+    # anything this list does not cover is reported. The delete still runs:
+    # refusing would block admin work over a table that may not even matter,
+    # and an unowned table is a fixable oversight, not a reason to strand a
+    # user nobody can remove.
+    known = {t for t, _ in _USER_OWNED}
+    unowned = []
+    for (tbl,) in (await db.execute(text(
+            "SELECT name FROM sqlite_master WHERE type='table'"))).all():
+        for row in (await db.execute(text(f"PRAGMA table_info({tbl})"))).all():
+            if row[1] in ("user_id", "owner_id") and tbl not in known:
+                unowned.append(f"{tbl}.{row[1]}")
+
+    removed = {}
+    for table, column in _USER_OWNED:
+        res = await db.execute(
+            text(f"DELETE FROM {table} WHERE {column} = :uid"), {"uid": user_id})
+        if res.rowcount:
+            removed[table] = res.rowcount
+    await db.delete(target)
+    await db.commit()
+
+    if unowned:
+        from app.services.system_log import app_log as _app_log
+        await _app_log(
+            "error", "admin",
+            f"User delete does not cover {len(unowned)} user column(s): "
+            f"{', '.join(unowned)} — rows there now point at a deleted user",
+            {"unowned": unowned, "deleted_user_id": user_id},
+            dedup_key="user_delete_unowned", dedup_hours=24)
+
+    from app.services.system_log import app_log
+    await app_log("info", "admin",
+                  f"Admin {current_user.username} deleted user {target.username} "
+                  f"({target.email})",
+                  {"deleted_user_id": user_id, "username": target.username,
+                   "by": current_user.username, "removed": removed})
+    return {"deleted": target.username, "removed": removed}
 
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
