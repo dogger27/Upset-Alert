@@ -1173,7 +1173,30 @@ def _alert_ago(delta) -> str:
 # Multi-line and always long — a truncated first frame identifies nothing, so
 # it would cost the card's whole width to say "there was a traceback". The full
 # thing is in the admin panel, one click away via the button below.
-_ALERT_DETAIL_SKIP = {"traceback", "stack", "stacktrace"}
+_ALERT_DETAIL_SKIP = {"traceback", "stack", "stacktrace", "handoff"}
+
+
+def _alert_handoff(detail: dict) -> str:
+    """A paste-ready prompt, rendered whole.
+
+    When an automated repair gives up, its verdict carries `handoff`: the text
+    a human pastes into an interactive Claude Code session to continue the
+    fix. The compact strip above truncates values at 90 chars — useless for
+    this one field, whose entire job is to survive copy-paste intact — so it
+    is skipped there and rendered here as a <pre>, newlines and all.
+    """
+    text = (detail or {}).get("handoff")
+    if not text or not str(text).strip():
+        return ""
+    return (
+        '<div style="font-size:11px;font-weight:700;color:#6b7280;'
+        'text-transform:uppercase;letter-spacing:0.04em;margin:12px 0 4px">'
+        'Paste this into Claude Code</div>'
+        f'<pre style="font-size:12px;font-family:monospace;line-height:1.5;'
+        f'background:#f3f4f6;border:1px solid #e5e7eb;border-radius:6px;'
+        f'padding:10px 12px;margin:0;white-space:pre-wrap;word-break:break-word">'
+        f'{_esc(str(text).strip())}</pre>'
+    )
 
 
 def _alert_detail(detail: dict, message: str = "") -> str:
@@ -1279,6 +1302,7 @@ def _alert_card(issue: dict, tz, is_last: bool) -> str:
         <div style="font-size:14px;color:#111;line-height:1.5;margin:9px 0 0;
              word-break:break-word">{_esc(issue['message'])}</div>
         {_alert_detail(issue['detail'], issue['message'])}
+        {_alert_handoff(issue['detail'])}
         <div style="font-size:12px;color:#6b7280;margin:9px 0 0">{window}</div>
         {recurrence}
       </td>

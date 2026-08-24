@@ -1761,12 +1761,30 @@ async def _sweep_oop_verifications() -> None:
                           {"doc_id": doc_id, "fixed": fixed[:20]})
         else:
             # The one case a human still needs: the machine TRIED and could
-            # not finish the repair.
+            # not finish the repair. The email carries `handoff` — the text to
+            # paste into an interactive Claude Code session to continue the
+            # fix (rendered whole by _alert_handoff, not the truncating
+            # key/value strip). The verifier writes its own; a verdict without
+            # one (crashed run, old format) gets a synthesized version so the
+            # email NEVER arrives without something paste-able.
+            handoff = (r.get("handoff") or "").strip() or (
+                f"The automated OOP verifier could not fully repair schedule "
+                f"document {doc_id} (see /data/oop_pdfs/{doc_id}.pdf on "
+                f"jupiter, results in data/oop_pdfs/results/done/). "
+                f"Remaining problems: "
+                + ("; ".join(str(pr) for pr in problems[:10]) or "unknown — "
+                   "the verifier died without a verdict; read "
+                   "~/upsetalert/logs/verify_oop.log")
+                + ". Diagnose the root cause in backend/app/services/"
+                "oop_parser.py or schedule.py, fix the bug class so it "
+                "cannot recur, re-ingest the document, and verify the "
+                "schedule page matches the PDF.")
             await app_log("error", "oop_verify",
                           f"OOP verifier could not fix doc {doc_id}: "
                           f"{len(problems) or 'unknown'} problem(s) remain",
                           {"doc_id": doc_id, "problems": problems[:20],
-                           "fixed": fixed[:20], "summary": r.get("summary")},
+                           "fixed": fixed[:20], "summary": r.get("summary"),
+                           "handoff": handoff},
                           dedup_key=f"oop_verify_{doc_id}", dedup_hours=24)
         os.replace(path, f"{done_dir}/{name}")
 
