@@ -406,56 +406,6 @@ async def ingest_document(db, tournament, play_date: date, url: str,
                 printed_rounds.setdefault((stage, discipline), set()).add(m.round.upper())
     unanimous = {k: next(iter(v)) for k, v in printed_rounds.items() if len(v) == 1}
 
-    from app.services.system_log import app_log
-
-    # A DOUBLES MATCH IS TWO TEAMS OF TWO. Anything else is a parse that went
-    # wrong, and it used to be stored in silence: Winston-Salem's Monday sheet
-    # produced "Krajicek / Mektic vs Cabral" — two players who are not partners
-    # against one who had lost his — because the three court columns were read
-    # across instead of down, and nothing objected.
-    #
-    # Reported rather than dropped. The row still goes in, because a match that
-    # is really on court belongs on the page even mis-parsed, and the sheet is
-    # the only record of a doubles match this app has. But it can no longer
-    # happen quietly, which is what let this sit.
-    for slots in per_court.values():
-        for (m, stage, discipline, na, nb, _ids, _key) in slots:
-            if discipline == 'singles':
-                # The sibling of the doubles check: two names stacked on one
-                # side of a singles slot is EITHER an unresolved "A or B" —
-                # legitimate, and required to say so via tbd — or a parse that
-                # lost a flag and is about to render a phantom doubles team.
-                for side_names, side_key in ((na, 'a'), (nb, 'b')):
-                    if (len(side_names) > 1
-                            and side_key not in (getattr(m, 'tbd_side', '') or '')):
-                        await app_log(
-                            "error", "order_of_play",
-                            f"Singles slot in {tournament.name} on {play_date} "
-                            f"has {len(side_names)} names on side {side_key} "
-                            f"without tbd: {' / '.join(side_names)}",
-                            {"tournament_id": tournament.id,
-                             "play_date": str(play_date), "court": m.court,
-                             "names": side_names},
-                            dedup_key=f"oop_singles_shape_{tournament.id}_{play_date}_{m.court}",
-                            dedup_hours=12)
-                continue
-            if discipline != 'doubles':
-                continue
-            # A slot the sheet has not decided yet legitimately names fewer.
-            if _start_type_of(m) is None and not (na and nb):
-                continue
-            if len(na) != 2 or len(nb) != 2:
-                await app_log(
-                    "error", "order_of_play",
-                    f"Doubles slot in {tournament.name} on {play_date} is not "
-                    f"two teams of two: {len(na)} v {len(nb)} — "
-                    f"{' / '.join(na) or '(none)'} vs {' / '.join(nb) or '(none)'}",
-                    {"tournament_id": tournament.id, "play_date": str(play_date),
-                     "court": m.court, "side_a": na, "side_b": nb},
-                    dedup_key=f"oop_doubles_shape_{tournament.id}_{play_date}_{m.court}",
-                    dedup_hours=12,
-                )
-
     written = 0
     for court, slots in per_court.items():
         for order, (m, stage, discipline, na, nb, ids, key) in enumerate(slots, 1):
@@ -602,8 +552,17 @@ async def ingest_document(db, tournament, play_date: date, url: str,
     await _dedupe_day(db, tournament.id, play_date)
     await _renumber_courts(db, tournament.id, play_date)
     await db.commit()
-    # AFTER the commit: the verifier reads this day back through the public
-    # API, so queueing before the rows land would have it check stale data.
+    # AFTER the commit, in this order: the LAW first, then the verifier queue.
+    # The invariants (schedule_invariants.py) are the deterministic record of
+    # every schedule bug ever shipped; they run on what the day ACTUALLY
+    # stored, alert on their own, and the verifier's runner re-checks them
+    # after its verdict — so an LLM "clean" cannot stand against them.
+    try:
+        from app.services.schedule_invariants import check_and_log
+        await check_and_log(db, tournament, play_date)
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "invariant check failed for %s %s", tournament.id, play_date)
     _queue_verification(doc, tournament, play_date, url, pdf_bytes, written)
     return {'document_id': doc.id, 'entries': written, 'kind': meta.get('kind')}
 
