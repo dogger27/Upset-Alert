@@ -1199,6 +1199,66 @@ def _alert_handoff(detail: dict) -> str:
     )
 
 
+# The OOP verifier's own channel, so it is exempt from the alert digest's
+# caps and dedup (alerts.py excludes the category) — one PDF processed, one
+# email, per the owner's explicit request. Same recipient as ALERT_TO in
+# alerts.py; duplicated rather than imported because alerts.py imports this
+# module and the constant is two words.
+OOP_STATUS_TO = "pdwiens@gmail.com"
+
+
+async def send_oop_status(*, doc_id: int, tournament: str, play_date: str,
+                          ok: bool, fixed: list, problems: list,
+                          summary: str = "", handoff: str = "") -> None:
+    """One concise status email per processed PDF — every outcome, every time.
+
+    Three shapes: clean ("no problems found"), self-healed (each fix stated in
+    the owner's requested wording — found, fixed, and made unrepeatable), and
+    failed (what remains, plus the paste-ready handoff block)."""
+    if not ok or problems:
+        state, color = "needs attention", "#dc2626"
+    elif fixed:
+        state, color = f"{len(fixed)} fixed", "#d97706"
+    else:
+        state, color = "clean", "#16a34a"
+
+    lines = []
+    for f in fixed:
+        # The owner's phrasing, verbatim by request. The claim is earned: the
+        # verifier's orders require fixing the bug class, not the symptom.
+        lines.append(
+            f'<li style="margin:0 0 6px">{_esc(f)} — was found, and fixed. '
+            f'Future instances of this error will not occur again.</li>')
+    for pr in problems:
+        lines.append(
+            f'<li style="margin:0 0 6px;color:#dc2626">{_esc(pr)} — '
+            f'could NOT be fixed automatically.</li>')
+    body_list = (f'<ul style="margin:10px 0 0;padding-left:20px;font-size:14px;'
+                 f'line-height:1.5;color:#111">{"".join(lines)}</ul>'
+                 if lines else
+                 '<div style="font-size:14px;color:#111;margin:10px 0 0">'
+                 'All slots match the sheet. No problems found.</div>')
+
+    html = f"""
+    <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px">
+      <div style="font-size:13px;color:#6b7280">Order of play verified</div>
+      <div style="font-size:16px;font-weight:700;color:#111;margin:4px 0 0">
+        {_esc(tournament)} — {_esc(play_date)}
+        <span style="color:{color}">({state})</span></div>
+      {body_list}
+      {f'<div style="font-size:12px;color:#6b7280;margin:10px 0 0">{_esc(summary)}</div>' if summary else ''}
+      {_alert_handoff({"handoff": handoff}) if handoff else ''}
+      <div style="font-size:11px;color:#9ca3af;margin:14px 0 0">doc {doc_id} · automated verify-and-fix</div>
+    </div>"""
+
+    await send_async({
+        "from": FROM,
+        "to": [OOP_STATUS_TO],
+        "subject": f"OOP verified: {tournament} {play_date} — {state}",
+        "html": html,
+    })
+
+
 def _alert_detail(detail: dict, message: str = "") -> str:
     """Compact key/value strip from detail_json, so the facts you'd triage with
     (which tournament, which title, which status code) are in the email rather
