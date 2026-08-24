@@ -1628,6 +1628,11 @@ async def _refresh_schedule_estimates() -> None:
         stuck = []
         for tid, day in pairs:
             async def _one(db, tid=tid, day=day):
+                # First: fold away any "A or B" whose match has since been
+                # decided — winners land from three different feeds, and this
+                # 2-minute tick is the net under all of them. Cheap when there
+                # is nothing to do (one indexed query on is_tbd).
+                await schedule_svc.resolve_settled_alternatives(db, tid)
                 tz = (await db.execute(
                     _select(Draw.venue_timezone).where(
                         Draw.tournament_id == tid,

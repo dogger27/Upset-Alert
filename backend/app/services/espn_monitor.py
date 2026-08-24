@@ -1421,4 +1421,16 @@ class ESPNMonitor:
                     asyncio.create_task(notify_tournament_complete(tournament.id))
                     logger.info("Tournament %d fully complete — completion notification queued", tournament.id)
 
+                # INSTANT, not next-revision: a winner this cycle just wrote
+                # may be the decider of a schedule slot still offering
+                # "A or B" — fold it away in the same breath. `tournament`
+                # here is a DRAW row; the schedule keys on its tournament_id.
+                if updated and tournament.tournament_id:
+                    try:
+                        from app.services import schedule as _sched
+                        await _sched.resolve_settled_alternatives(
+                            db, tournament.tournament_id)
+                    except Exception:
+                        logger.exception("alt-collapse after ESPN results failed")
+
         return updated
