@@ -634,6 +634,14 @@ def _side_tokens(entry, side: str) -> list:
             if p.side == side]
 
 
+def _printed_pairing(entry) -> str:
+    """The row as the sheet printed it, for log lines a human has to read."""
+    by = {'a': [], 'b': []}
+    for p in sorted(entry.players or [], key=lambda x: (x.side, x.position)):
+        by[p.side].append(p.raw_name or '?')
+    return f"{' / '.join(by['a']) or '?'} vs {' / '.join(by['b']) or '?'}"
+
+
 def _side_resolves(printed: list, alternatives: bool, settled: set) -> bool:
     """Does this side of a TBD slot correspond to this side of a settled one?
 
@@ -723,6 +731,77 @@ def _same_pairing(a, b) -> bool:
             or (agree(A['a'], B['b']) and agree(A['b'], B['a'])))
 
 
+def _superseded(old, new, latest_pool: list) -> bool:
+    """True when `new` is `old`'s slot with one side replaced — a withdrawal.
+
+    A lucky loser stepping in for a late withdrawal reprints the slot with one
+    player swapped: Winston-Salem's Monday sheet turned "SONEGO vs KOPRIVA"
+    into "SONEGO vs [LL] HERBERT". That is the same slot, but no other
+    relation can see it: the pairing key moved (a player changed), neither row
+    is TBD, and the new row has no match_id because draw_entries still list
+    the player who withdrew — the bracket only learns of the substitution when
+    the wiki scrape catches up. So the dead pairing stayed on the page as a
+    sixteenth match and shifted the court order under every real one.
+
+    The look-alike to keep out is a player printed twice on one day (rain
+    backlog: R1 done, R2 to come). Three guards separate them:
+
+    * `old` must be strictly older by document — its pairing fell off a later
+      revision. Two rows on the same revision are never each other's
+      replacement.
+    * the caller must have established that `old` was never played (no start,
+      no result, bracket match undecided) — a backlog row that dropped off
+      the sheet dropped off because it FINISHED.
+    * the replaced player must appear nowhere on the latest revision. A
+      player still in the tournament is on the sheet somewhere; one who
+      withdrew is not.
+    """
+    if old.is_tbd or new.is_tbd:
+        return False
+    if (old.last_document_id or 0) >= (new.last_document_id or 0):
+        return False
+    # Two rows pinned to different bracket matches are different slots, full
+    # stop — no amount of name overlap overrides the draw.
+    if old.match_id and new.match_id and old.match_id != new.match_id:
+        return False
+    if old.stage != new.stage:
+        return False
+    # The generic preference in _dedupe_day keeps whichever row names more
+    # players. The newer row must win here, so never claim a supersede the
+    # preference would resolve the other way.
+    if len(old.players or []) > len(new.players or []):
+        return False
+
+    A = {s: _side_tokens(old, s) for s in ('a', 'b')}
+    B = {s: _side_tokens(new, s) for s in ('a', 'b')}
+
+    def union(sides):
+        return set().union(set(), *sides)
+
+    def agree(x, y):
+        # Same subset-or-equal test as _same_pairing, for the same reason:
+        # one revision abbreviates ("V. Kopriva") what another spells out.
+        return bool(x and y) and (x == y or x < y or y < x)
+
+    # Sides swap between revisions, and the replaced player can be on either
+    # side — so try both mappings, and within each let either pair be the one
+    # that stayed.
+    for pairs in ((('a', 'a'), ('b', 'b')), (('a', 'b'), ('b', 'a'))):
+        for (so, sn), (co, cn) in (pairs, pairs[::-1]):
+            if not agree(union(A[so]), union(B[sn])):
+                continue
+            old_gone, new_come = union(A[co]), union(B[cn])
+            # Wholly replaced, not partially: a doubles team that changed one
+            # partner shares tokens, and that case is not decided here.
+            if not old_gone or not new_come or (old_gone & new_come):
+                continue
+            if any(p and any(agree(p, q) for q in latest_pool)
+                   for p in A[co]):
+                continue
+            return True
+    return False
+
+
 async def _absorb(db, keep, drop) -> None:
     """Fold one row into another: the surviving row inherits the earlier
     first_seen_at (it is when the slot was first printed, and _renumber_courts
@@ -742,8 +821,15 @@ async def _absorb(db, keep, drop) -> None:
     # behind it stuck waiting on a match that finished hours ago. Singles is
     # unaffected either way: everything it shows comes through match_id.
     # Only fills gaps — whatever the survivor already knows about itself wins.
+    # Bracket linkage moves with the slot: a withdrawal's replacement row has
+    # match_id NULL (its new player is not in draw_entries yet), while the row
+    # it retires holds the link — and the bracket match is positional, so it
+    # will BE the replacement's match once the draw scrape catches up. Without
+    # the hand-over the surviving row has no live or completed scores until
+    # then, which is the whole feature.
     for field in ("sofa_event_id", "live_scores_json", "scores_json",
-                  "live_point_json", "winner_side", "started_at", "completed_at"):
+                  "live_point_json", "winner_side", "started_at", "completed_at",
+                  "match_id", "draw_id", "round_label"):
         if getattr(keep, field, None) is None and getattr(drop, field, None) is not None:
             setattr(keep, field, getattr(drop, field))
     await db.execute(
@@ -778,10 +864,35 @@ async def _dedupe_day(db, tournament_id: int, play_date: date) -> int:
         return 0
 
     rows.sort(key=lambda r: (r.last_document_id or 0, r.id), reverse=True)
+
+    # Context for _superseded. Both pieces exist to tell a withdrawn player
+    # (gone from the sheet, match never played) from a finished one (gone from
+    # the sheet because the match is over): every name the latest revision
+    # still prints, and whether each linked bracket match has a result.
+    latest_doc = rows[0].last_document_id or 0
+    latest_pool = [toks for r in rows
+                   if (r.last_document_id or 0) == latest_doc
+                   for s in ('a', 'b') for toks in _side_tokens(r, s)]
+    linked = [r.match_id for r in rows if r.match_id]
+    match_played: dict[int, bool] = {}
+    if linked:
+        for mid, winner, done in (await db.execute(
+                select(Match.id, Match.winner_id, Match.completed_at)
+                .where(Match.id.in_(linked)))).all():
+            match_played[mid] = bool(winner or done)
+
     kept: list = []
     dropped = 0
     for row in rows:
         twin = None
+        replaced = False
+        # Any trace of having been on court disqualifies a row from being a
+        # withdrawal ghost — a played match is history, however stale its
+        # document. This guard is what keeps _superseded off rain-backlog
+        # days, where a player legitimately appears on two rows at once.
+        row_played = bool(row.started_at or row.completed_at or row.winner_side
+                          or row.live_scores_json
+                          or match_played.get(row.match_id))
         for k in kept:
             # Disciplines must agree — EXCEPT where one side is still
             # unresolved, which is exactly the case that used to be
@@ -797,6 +908,13 @@ async def _dedupe_day(db, tournament_id: int, play_date: date) -> int:
             if _resolves(row, k) or _resolves(k, row) or _same_pairing(row, k):
                 twin = k
                 break
+            # `row` is the older of the two by construction — rows are sorted
+            # newest-first and `k` was kept on an earlier pass — so the
+            # direction is fixed: only the older row can be the ghost.
+            if not row_played and _superseded(row, k, latest_pool):
+                twin = k
+                replaced = True
+                break
         if twin is None:
             kept.append(row)
             continue
@@ -806,6 +924,8 @@ async def _dedupe_day(db, tournament_id: int, play_date: date) -> int:
         # letting document order decide would let a row that lost a player to
         # an old bug outlive the row that has them all, and the next sweep
         # would simply re-create the pair.
+        # Captured before _absorb deletes the loser's players.
+        gone, stays = _printed_pairing(row), _printed_pairing(twin)
         twin_n = len(twin.players or [])
         row_n = len(row.players or [])
         if (twin.is_tbd and not row.is_tbd) or (
@@ -815,6 +935,17 @@ async def _dedupe_day(db, tournament_id: int, play_date: date) -> int:
         else:
             await _absorb(db, keep=twin, drop=row)
         dropped += 1
+        if replaced:
+            # Info, not warning: a lucky loser stepping in is ordinary tennis
+            # and self-heals here — but the retired pairing should be on the
+            # record when someone asks where a match went.
+            from app.services.system_log import app_log
+            await app_log(
+                "info", "order_of_play",
+                f"Withdrawal supersede on {play_date}: retired '{gone}' "
+                f"for '{stays}'",
+                {"tournament_id": tournament_id, "play_date": str(play_date),
+                 "kept_entry_id": twin.id, "court": twin.court})
 
     if dropped:
         await db.flush()
