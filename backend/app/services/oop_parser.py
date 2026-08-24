@@ -253,6 +253,9 @@ def _split_players(text):
     return out
 
 
+ALLCAPS_NAME_RE = re.compile(r"(?:[A-Z][A-Za-z.'-]*\s+){2,}\(?[A-Z]{3}\)?\s*$")
+
+
 def _is_name(text):
     if not text or NOISE_RE.search(text):
         return False
@@ -268,10 +271,20 @@ def _is_name(text):
     # lowercase letter anywhere, so this rejected him outright — and because he
     # is a doubles player, the match kept his partner and lost him: Monday's
     # Winston-Salem sheet showed "KRAJICEK / MEKTIC vs CABRAL", a team of one.
-    # A trailing three-letter country in brackets is the tell. Every player line
-    # on these sheets ends with one and no score, status or footer note does —
-    # "ANY MATCH ON ANY COURT MAY BE MOVED" is all caps too and still rejected.
-    if not re.search(r'[a-z]', text) and not re.search(r'\([A-Z]{3}\)\s*$', text):
+    #
+    # THE TELL IS THE TRAILING NATIONALITY, AND IT MUST BE TESTED IN THE FORM
+    # THIS FUNCTION ACTUALLY RECEIVES. The first version of this exemption
+    # looked for "(USA)" with its parentheses — but _clean strips those to a
+    # bare code before any of this runs, so the exemption could never fire and
+    # Tracy went on being dropped. Both forms are accepted now.
+    #
+    # Two name-shaped tokens must precede the code, which is the "Given SURNAME
+    # NAT" shape every player line on these sheets has. That keeps the
+    # exemption from re-admitting the all-caps furniture the mixed-case rule
+    # exists to reject: "ANY MATCH ON ANY COURT MAY BE MOVED" ends in a
+    # five-letter word, not a country, and a bare "USA" continuation line has
+    # no name in front of it.
+    if not re.search(r'[a-z]', text) and not ALLCAPS_NAME_RE.search(text):
         return False
     return bool(re.search(r'[A-Za-z]{2,}', text))
 
