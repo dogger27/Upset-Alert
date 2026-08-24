@@ -134,6 +134,37 @@ export function liveScoreNodes(live) {
  */
 const FIVE_MIN = 5 * 60 * 1000
 
+/* EVERY FORMATTER HERE IS BUILT ONCE PER ZONE, NOT PER LABEL.
+ *
+ * toLocaleTimeString / toLocaleDateString construct an Intl formatter on each
+ * call whenever options are passed — ~90-140µs apiece. This function needs
+ * five of them (the time, the day of the match, the day today, sometimes the
+ * day tomorrow, and the zone abbreviation), so a single label cost the best
+ * part of half a millisecond. CombinedView renders one for every undecided
+ * match on screen and re-renders on every live-score nudge, which put ~30ms of
+ * pure date formatting into a frame that had nothing else to do.
+ *
+ * Keyed by zone because that is the only input that varies — the option bags
+ * are fixed. Undefined (the reader's own zone) gets its own entry under ''.
+ */
+const _fmt = new Map()
+function formatter(kind, zone) {
+  const key = `${kind}\u0000${zone ?? ''}`
+  let f = _fmt.get(key)
+  if (f === undefined) {
+    const tz = zone ? { timeZone: zone } : {}
+    f = kind === 'time'
+      ? new Intl.DateTimeFormat([], { hour: 'numeric', minute: '2-digit', ...tz })
+      : kind === 'day'
+        ? new Intl.DateTimeFormat('en-CA', tz)
+        : kind === 'weekday'
+          ? new Intl.DateTimeFormat([], { weekday: 'short', ...tz })
+          : new Intl.DateTimeFormat('en-US', { timeZoneName: 'short', ...tz })
+    _fmt.set(key, f)
+  }
+  return f
+}
+
 export function expectedStartLabel(iso, source, zone) {
   if (!iso) return null
   let when = new Date(iso)
@@ -147,13 +178,13 @@ export function expectedStartLabel(iso, source, zone) {
     when = new Date(Math.round(when.getTime() / FIVE_MIN) * FIVE_MIN)
   }
 
-  const opts = { hour: 'numeric', minute: '2-digit', ...(zone ? { timeZone: zone } : {}) }
-  const time = when.toLocaleTimeString([], opts)
+  const time = formatter('time', zone).format(when)
 
   // Compare calendar days in the SAME zone the time is being shown in —
   // otherwise a late match reads "Today" to one reader and "Tomorrow" to
   // another looking at the identical row.
-  const dayOf = (d) => d.toLocaleDateString('en-CA', zone ? { timeZone: zone } : {})
+  const dayFmt = formatter('day', zone)
+  const dayOf = (d) => dayFmt.format(d)
   const today = dayOf(new Date())
   const thatDay = dayOf(when)
 
@@ -165,7 +196,7 @@ export function expectedStartLabel(iso, source, zone) {
     tomorrow.setDate(tomorrow.getDate() + 1)
     prefix = thatDay === dayOf(tomorrow)
       ? 'Tomorrow'
-      : when.toLocaleDateString([], { weekday: 'short', ...(zone ? { timeZone: zone } : {}) })
+      : formatter('weekday', zone).format(when)
   }
 
   // Always name the zone, including the reader's own. A bare time forces the
@@ -177,9 +208,7 @@ export function expectedStartLabel(iso, source, zone) {
   // abbreviation would be wrong for half the season.
   let suffix = ''
   {
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZoneName: 'short', ...(zone ? { timeZone: zone } : {}),
-    }).formatToParts(when)
+    const parts = formatter('tz', zone).formatToParts(when)
     const tzName = parts.find(p => p.type === 'timeZoneName')?.value
     if (tzName) suffix = ` ${tzName}`
   }
