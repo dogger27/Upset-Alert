@@ -420,6 +420,25 @@ async def ingest_document(db, tournament, play_date: date, url: str,
     # happen quietly, which is what let this sit.
     for slots in per_court.values():
         for (m, stage, discipline, na, nb, _ids, _key) in slots:
+            if discipline == 'singles':
+                # The sibling of the doubles check: two names stacked on one
+                # side of a singles slot is EITHER an unresolved "A or B" —
+                # legitimate, and required to say so via tbd — or a parse that
+                # lost a flag and is about to render a phantom doubles team.
+                for side_names, side_key in ((na, 'a'), (nb, 'b')):
+                    if (len(side_names) > 1
+                            and side_key not in (getattr(m, 'tbd_side', '') or '')):
+                        await app_log(
+                            "error", "order_of_play",
+                            f"Singles slot in {tournament.name} on {play_date} "
+                            f"has {len(side_names)} names on side {side_key} "
+                            f"without tbd: {' / '.join(side_names)}",
+                            {"tournament_id": tournament.id,
+                             "play_date": str(play_date), "court": m.court,
+                             "names": side_names},
+                            dedup_key=f"oop_singles_shape_{tournament.id}_{play_date}_{m.court}",
+                            dedup_hours=12)
+                continue
             if discipline != 'doubles':
                 continue
             # A slot the sheet has not decided yet legitimately names fewer.
@@ -564,7 +583,12 @@ async def ingest_document(db, tournament, play_date: date, url: str,
             entry.start_type = start_type
             entry.start_time_local = m.time
             entry.start_note = getattr(m, 'start_raw', None)
-            if found is None or not m.tbd:
+            # A row created THIS pass always takes the sheet's word for it.
+            # The guard below protects an EXISTING row that already settled
+            # from being re-marked unresolved by a stale revision — but on a
+            # fresh row it meant a slot that resolved to a bracket match kept
+            # the default False, and an "A or B" side rendered as a team.
+            if entry.id is None or found is None or not m.tbd:
                 entry.is_tbd = bool(m.tbd)
                 entry.tbd_side = getattr(m, 'tbd_side', None)
             entry.round_label = (m.round or entry.round_label
