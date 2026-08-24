@@ -270,8 +270,23 @@ class EventStreamListener:
                         ):
                             continue
                     logger.info("Scraping draw for %s %s", tournament.year, tournament.name)
-                    await _do_scrape(tournament, db, force_refresh=True)
-                    await db.commit()
+                    # RETRIED ON A LOST SNAPSHOT. A live edit arrives while
+                    # every other background writer is also running, so this is
+                    # the scrape most likely to meet the write lock — and
+                    # losing it threw away the whole parse, not just the row
+                    # that collided. Retrying costs a re-parse and NOT a
+                    # re-fetch: the wikitext is already in the disk cache
+                    # (_WIKI_CACHE_DIR), so Wikipedia is not asked twice.
+                    from app.services.db_retry import with_write_retry
+
+                    async def _scrape(sdb, tid=tournament.id):
+                        t = await sdb.get(type(tournament), tid)
+                        if t is None:
+                            return
+                        await _do_scrape(t, sdb, force_refresh=True)
+                        await sdb.commit()
+
+                    await with_write_retry(_scrape, what=f"eventstream scrape {tournament.id}")
         except WikiPageNotFound as exc:
             # An edit to one title variant doesn't mean the variant this record
             # actually stores exists yet, so a still-missing page here is the
