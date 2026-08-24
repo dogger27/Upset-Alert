@@ -901,7 +901,7 @@ export default function Schedule() {
       <div className={clsx('sched-body', { 'sched-body--fit': view === 'time' })}>
       <div className="sched-filters">
         {fromDraw && (
-          <Link className="sched-back" to={`/tournaments/${fromDraw}`}>Back</Link>
+          <Link className="sched-back" to={`/tournaments/${fromDraw}`}>Draw</Link>
         )}
         {view === 'time' && tours.length > 1 && (
           <>
