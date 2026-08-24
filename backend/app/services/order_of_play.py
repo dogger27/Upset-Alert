@@ -489,14 +489,33 @@ async def refresh_order_of_play() -> int:
             if fresh and resp.status_code == 200:
                 try:
                     from app.services import schedule as schedule_svc
-                    async with AsyncSessionLocal() as sdb:
+                    from app.services.db_retry import with_write_retry
+
+                    # RETRIED, AND SEPARATELY. Both halves write, so both can
+                    # lose their snapshot to a competing writer — see
+                    # db_retry for why waiting cannot fix that and a fresh
+                    # session can. Losing this to a lock is not the small
+                    # miss it looks like: the sheet's rows go unwritten AND
+                    # the PDF never reaches the verifier, so a parse bug in
+                    # that revision goes unexamined too.
+                    #
+                    # Two calls, two retries, because they fail independently
+                    # and re-running the pair would re-enter an ingest that
+                    # already succeeded — which the sha256 guard would then
+                    # skip, silently costing the estimate pass its input.
+                    async def _ingest(sdb):
                         t = await sdb.get(type(tournament), tournament.id)
-                        await schedule_svc.ingest_document(
+                        return await schedule_svc.ingest_document(
                             sdb, t, oop_date, url, resp.content, tour=src_tour)
-                        await schedule_svc.recompute_expected_starts(
+
+                    async def _estimates(sdb):
+                        return await schedule_svc.recompute_expected_starts(
                             sdb, tournament.id, oop_date,
                             venue_tz=next((d.venue_timezone for d in draws
                                            if d.venue_timezone), None))
+
+                    await with_write_retry(_ingest, what=f"oop ingest {tournament.id}")
+                    await with_write_retry(_estimates, what=f"oop estimates {tournament.id}")
                 except Exception as exc:
                     await app_log("warning", "order_of_play",
                                   f"Schedule ingest failed for '{tournament.name}': "

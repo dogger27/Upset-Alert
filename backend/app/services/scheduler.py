@@ -1587,41 +1587,31 @@ async def _refresh_schedule_estimates() -> None:
             pairs = (await db.execute(
                 _select(ScheduleEntry.tournament_id, ScheduleEntry.play_date)
                 .where(ScheduleEntry.play_date.in_(days)).distinct())).all()
-        # RETRY EACH ONE, AND KEEP GOING PAST A FAILURE.
-        #
-        # "database is locked" here is not the timeout it reads like. There is
-        # already a 30s busy_timeout, and it does not apply to this case: this
-        # pass reads the day's rows and then updates them, so its transaction
-        # starts as a reader and has to upgrade. If any other writer commits in
-        # between, SQLite fails the upgrade IMMEDIATELY rather than waiting,
-        # because the snapshot the reads were made against is gone. Waiting
-        # longer cannot fix that — only re-reading can, which is what a fresh
-        # session on the next attempt does.
-        #
-        # And one tournament's conflict used to abort the whole loop, so every
-        # tournament after it silently kept a stale estimate.
+        # RETRY EACH ONE, AND KEEP GOING PAST A FAILURE. The retry doctrine
+        # — why a lock here is a lost snapshot rather than a timeout, and why
+        # each attempt needs a fresh session — now lives in db_retry, which
+        # the OOP ingest path shares. One tournament's conflict used to abort
+        # the whole loop, so every tournament after it silently kept a stale
+        # estimate; that is what the `continue` below is for.
+        from app.services.db_retry import with_write_retry
+
         stuck = []
         for tid, day in pairs:
-            for attempt in range(4):
-                try:
-                    async with AsyncSessionLocal() as db:
-                        tz = (await db.execute(
-                            _select(Draw.venue_timezone).where(
-                                Draw.tournament_id == tid,
-                                Draw.venue_timezone.isnot(None)))).scalars().first()
-                        await schedule_svc.recompute_expected_starts(
-                            db, tid, day, venue_tz=tz)
-                    break
-                except OperationalError as exc:
-                    if "locked" not in str(exc).lower():
-                        raise
-                    if attempt == 3:
-                        logger.warning(
-                            "Estimate refresh gave up on tournament %s %s: %s",
-                            tid, day, exc)
-                        stuck.append(f"{tid}/{day}")
-                        break
-                    await asyncio.sleep(0.25 * 2 ** attempt)
+            async def _one(db, tid=tid, day=day):
+                tz = (await db.execute(
+                    _select(Draw.venue_timezone).where(
+                        Draw.tournament_id == tid,
+                        Draw.venue_timezone.isnot(None)))).scalars().first()
+                await schedule_svc.recompute_expected_starts(
+                    db, tid, day, venue_tz=tz)
+            try:
+                await with_write_retry(_one, what=f"estimates {tid}/{day}")
+            except OperationalError as exc:
+                if "locked" not in str(exc).lower():
+                    raise
+                logger.warning("Estimate refresh gave up on tournament %s %s: %s",
+                               tid, day, exc)
+                stuck.append(f"{tid}/{day}")
         if stuck:
             # Only what retrying could not fix is worth anyone's attention.
             await app_log(
