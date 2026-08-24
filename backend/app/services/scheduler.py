@@ -12,7 +12,7 @@ import traceback
 from datetime import date, datetime, timedelta, timezone
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from sqlalchemy import case, func, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.exc import OperationalError
 
 from app.database import AsyncSessionLocal
@@ -672,6 +672,36 @@ async def _notify_pending_draw_changes() -> None:
                 .group_by(DrawChangeEvent.draw_id)
                 .having(func.max(DrawChangeEvent.detected_at) <= now - cooldown)
             )).scalars().all())
+
+            # THE CLOCK YIELDS TO A MATCH GOING ON COURT.
+            #
+            # Batching is worth minutes only while the news is still
+            # actionable. A lucky loser went into Winston-Salem at 18:55 and
+            # his match started at 18:56; the cooldown held the message until
+            # 19:16, so it arrived headed "picks still open" about a match a
+            # set old. Waiting cannot improve a message it has already made
+            # useless, so a draw with a pending change whose match is under
+            # way is ready NOW, however recently it was detected.
+            started = (await db.execute(
+                select(DrawChangeEvent.draw_id)
+                .join(Match, or_(Match.player1_id == DrawChangeEvent.entry_id,
+                                 Match.player2_id == DrawChangeEvent.entry_id))
+                .where(DrawChangeEvent.notified_at.is_(None),
+                       DrawChangeEvent.kind == kind,
+                       DrawChangeEvent.entry_id.isnot(None),
+                       Match.draw_id == DrawChangeEvent.draw_id,
+                       or_(Match.winner_id.isnot(None),
+                           Match.live_scores_json.isnot(None),
+                           Match.status == "completed",
+                           Match.sofa_started_at.isnot(None),
+                           Match.sofa_live_json.isnot(None),
+                           Match.sofa_winner_id.isnot(None)))
+                .distinct())).scalars().all()
+            for draw_id in started:
+                if draw_id not in ready_by_kind[kind]:
+                    ready_by_kind[kind].append(draw_id)
+                    logger.info("Draw %s change dispatched early: its match is "
+                                "already under way", draw_id)
 
         # A qualifying field is announced once, complete. A draw still carrying
         # an un-named slot is mid-transcription, so it waits however long that
