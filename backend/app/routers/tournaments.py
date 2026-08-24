@@ -1455,6 +1455,13 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
                 # it points the H2H panel at the player who was replaced.
                 player.te_player_id = None
                 player.te_slug = None
+                # And the Sofascore id goes with them, for the worse version
+                # of the same reason: a stale one does not just mislabel a
+                # panel, it makes the live poller require BOTH sides to match
+                # and silently skip the match — Gorzny played on Stadium Court
+                # carrying Prizmic's id, and his match recorded no history and
+                # showed no points. The resolver re-stamps within the hour.
+                player.sofa_player_id = None
             player.name = pe.name
             player.nationality = pe.nationality
             player.seed = pe.seed
