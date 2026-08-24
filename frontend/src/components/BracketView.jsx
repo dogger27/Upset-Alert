@@ -1,3 +1,4 @@
+import { matchStarted } from '../utils/score'
 /**
  * BracketView — full tournament bracket.
  *
@@ -149,7 +150,7 @@ function PlayerRow({
   playerId, playerById, drawRanks,
   isPicked, isWinner, isEliminated, isProjected, isDeadPick,
   scores, retired, walkover, onClick, locked,
-  showTypeSlot, showScores, markWinner, showRowBg, showFlag,
+  showTypeSlot, showScores, markWinner, showRowBg, showFlag, opensScore = false,
   qualifierNum, isServing, boldScores,
   livePoint, pointIsTiebreak,
 }) {
@@ -207,7 +208,10 @@ function PlayerRow({
         'wrong-pick': wrongPick,
         'dead-pick': isDeadPick,
         projected: isProjected && !isWinner,
-        clickable: !locked && onClick,
+        /* A locked row still looks clickable when the click OPENS A SCORE
+           rather than takes a pick — the lock has nothing to say about
+           looking at a match that has already been played. */
+        clickable: opensScore || (!locked && onClick),
         // Independent of `picked` (which is suppressed in live mode) — the
         // user's own pick should always render in black text, even in a
         // live/not-yet-started match where `picked`'s other styling doesn't apply.
@@ -265,6 +269,12 @@ function MatchBox({ match, resolvedPlayers, h2hPair, playerById, drawRanks, pick
   const { p1: p1id, p2: p2id } = resolvedPlayers || { p1: match.player1?.id, p2: match.player2?.id }
   const pickedId = picks[match.id]
   const actualWinnerId = match.winner?.id
+
+  /* A started or finished match answers a click with its score, in either
+     mode — the pick it would otherwise take is locked by then anyway. Held to
+     one derivation so both rows agree about what the click does. */
+  const showScore = onShowScore && matchStarted(match)
+    ? () => onShowScore(match) : null
 
   const bellRef = useRef(null)
   const [tipPos, setTipPos] = useState(null)
@@ -454,8 +464,10 @@ function MatchBox({ match, resolvedPlayers, h2hPair, playerById, drawRanks, pick
           scores={isWalkover ? null : p1Scores}
           walkover={wo.p1}
           retired={ret.p1}
-          onClick={mode === 'picks' && p1id != null ? () => onPick(match.id, p1id)
-                   : onShowScore ? () => onShowScore(match) : undefined}
+          onClick={showScore ? showScore
+                   : mode === 'picks' && p1id != null ? () => onPick(match.id, p1id)
+                   : undefined}
+          opensScore={!!showScore}
           locked={locked}
           showTypeSlot={showTypeSlot}
           showScores={showScores}
@@ -477,8 +489,10 @@ function MatchBox({ match, resolvedPlayers, h2hPair, playerById, drawRanks, pick
           scores={isWalkover ? null : p2Scores}
           walkover={wo.p2}
           retired={ret.p2}
-          onClick={mode === 'picks' && p2id != null ? () => onPick(match.id, p2id)
-                   : onShowScore ? () => onShowScore(match) : undefined}
+          onClick={showScore ? showScore
+                   : mode === 'picks' && p2id != null ? () => onPick(match.id, p2id)
+                   : undefined}
+          opensScore={!!showScore}
           locked={locked}
           showTypeSlot={showTypeSlot}
           showScores={showScores}
