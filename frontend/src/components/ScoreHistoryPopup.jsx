@@ -1,8 +1,10 @@
 /**
  * ScoreHistoryPopup — a match's score with a slider through its history.
  *
- * Opened by clicking a match on the draw page once the draw is no longer open
- * for picking. Each slider position is one CHANGE of the score — a point, in
+ * Opened by clicking any match on the draw page that has started or finished,
+ * whether or not the draw is still open for picking — a started match's pick
+ * is locked by then, so the click is free to mean "show me the score".
+ * Each slider position is one CHANGE of the score — a point, in
  * practice — rendered through MatchScoreCard, the same component the schedule
  * page draws every score with, so the two surfaces cannot drift apart.
  *

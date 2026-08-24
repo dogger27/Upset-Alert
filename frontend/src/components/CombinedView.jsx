@@ -23,7 +23,7 @@ import ScoreHistoryPopup from './ScoreHistoryPopup'
 import { buildH2HSequence, buildMatchIndex, h2hNeighbours, resolveRealFirst } from '../utils/h2hSequence'
 import useFlashOnChange from '../hooks/useFlashOnChange'
 import './CombinedView.css'
-import { parseSet, scoreNodes, liveScoreNodes, expectedStartLabel } from '../utils/score'
+import { parseSet, scoreNodes, liveScoreNodes, expectedStartLabel, matchStarted } from '../utils/score'
 import { useAuth } from '../store/auth'
 
 // Upset bell with the same hover tooltip as BracketView's (portal-rendered,
@@ -385,13 +385,13 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
      once the draw is past picking; while the draw is open the same click is a
      pick, which is why the two never coexist. */
   const [scoreMatchId, setScoreMatchId] = useState(null)
-  const scoresMode = tournament?.status !== 'open'
-  // Something to show: played, playing, or at least a recorded result. A
-  // scheduled match answers with nothing, so it does not open (the same
-  // silent-no-op the pick path uses for a closed draw).
-  const scoreOpenable = (m) => !!m && !m.is_bye
-    && (m.winner || m.live_scores || m.live_point || m.scores)
-  const scoreClick = (m) => (scoresMode && scoreOpenable(m)
+  /* PER MATCH, NOT PER DRAW. Any match that has started or finished offers its
+     score — including inside a draw still open for picking, where the started
+     ones are locked anyway. The two readings of matchStarted are exactly
+     complementary: a match you can no longer pick is one you can now look at,
+     and a scheduled match is the reverse. A scheduled match therefore does not
+     open, and in an open draw the click stays a pick. */
+  const scoreClick = (m) => (matchStarted(m)
     ? () => setScoreMatchId(m.id) : null)
   /* The scroll container. It has ONE owner while a gesture is running: the
      scrub, which holds the row under the finger.
@@ -1013,14 +1013,14 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
     // placeholder slot (isBye, handled above) NOR the opponent's own slot
     // should be clickable, so a click can never save a redundant "pick"
     // for a match that was always going to auto-advance regardless.
-    // Past picking, a click on either entrant shows the score of the match
-    // they contest — the same match the outline between them holds.
+    /* Once the match they contest is under way, a click on either entrant
+       shows that match's score — the same match the outline between them
+       holds. Before that the click is a pick, exactly as it always was. */
     const contested = R[0][Math.floor(i / 2)]
-    const onClick = scoresMode
-      ? scoreClick(contested)
-      : (match.is_bye ? null : nextMatchOnClick(0, i, pid))
-    const pickable = scoresMode
-      ? !!scoreClick(contested)
+    const onClick = scoreClick(contested)
+      ?? (match.is_bye ? null : nextMatchOnClick(0, i, pid))
+    const pickable = matchStarted(contested)
+      ? true
       : (!match.is_bye && nextMatchPickable(0, i, pid))
     return { key: `e${i}`, player, isBye, serving: !isBye && isServing(0, i), abbrev: true, kind: 'entrant', clickable: pickable, onClick }
   }
@@ -1044,12 +1044,12 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
     // nothing is shown here until the match is decided and match.scores lands.
     const score = match.is_bye || isLiveMatch(match) ? null : scoreNodes(match.scores)
 
-    const contested = c < N ? R[c][Math.floor(i / 2)] : null
-    const onClick = scoresMode
-      ? scoreClick(contested ?? match)
-      : nextMatchOnClick(c, i, displayId)
-    const pickable = scoresMode
-      ? !!scoreClick(contested ?? match)
+    // The match this box's occupant plays NEXT is the one their click means —
+    // and the one the champion's box holds is the final they just won.
+    const contested = c < N ? R[c][Math.floor(i / 2)] : match
+    const onClick = scoreClick(contested) ?? nextMatchOnClick(c, i, displayId)
+    const pickable = matchStarted(contested)
+      ? true
       : nextMatchPickable(c, i, displayId)
 
     return {

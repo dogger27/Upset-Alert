@@ -14,6 +14,7 @@ import BracketView, { COL_W as BV_COL_W, COL_W_SCORES as BV_COL_W_SCORES, COL_GA
 import CombinedView, { COL_W as CV_COL_W, COMPACT_COL_W as CV_COMPACT_COL_W, COL_GAP as CV_COL_GAP, H2H_X as CV_H2H_X } from '../components/CombinedView'
 import DrawSidebar from '../components/DrawSidebar'
 import ScoreHistoryPopup from '../components/ScoreHistoryPopup'
+import { matchStarted } from '../utils/score'
 import { rootFontPx, textWidth } from '../utils/text'
 import './TournamentDraw.css'
 
@@ -896,8 +897,7 @@ function TournamentDraw() {
          started" about a match that has not is simply wrong, and sends the
          reader looking at the wrong row. */
       const m = (data?.matches || []).find(x => x.id === Number(matchId))
-      const itselfStarted = !!m && (m.winner || m.live_scores || m.status === 'completed')
-      return itselfStarted
+      return matchStarted(m)
         ? 'This match has already started, so its prediction is locked.'
         : 'You can not change the result of a match which stems from a match '
           + 'which has already started.'
@@ -1734,9 +1734,7 @@ function TournamentDraw() {
               locked={!user || locked || (viewingOther && !canEditOther)}
               lockedMatchIds={lockedMatchIds}
               mode={viewMode}
-              onShowScore={tournament.status !== 'open'
-                ? (m) => { if (!m.is_bye && (m.winner || m.live_scores || m.scores)) setScoreMatch(m) }
-                : null}
+              onShowScore={(m) => setScoreMatch(m)}
               picksOwner={picksOwner}
               windowStart={windowPos}
               windowSize={DRAW_WINDOW}

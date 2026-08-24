@@ -30,6 +30,22 @@ function joinSets(sets) {
 }
 
 // One set cell → { g: games, tb: tiebreak points | null }
+/** Has this match started, or finished? — i.e. is there a score to look at.
+ *
+ * ONE definition, because two surfaces read it for opposite purposes and they
+ * must agree: the draw page refuses a PICK on a started match, and offers its
+ * SCORE HISTORY instead. If those two disagreed there would be a match that
+ * neither lets you pick nor lets you look at, or one that offers both.
+ *
+ * Byes are excluded here rather than at each call site: a bye never started,
+ * has no score, and is not a match anyone can predict.
+ */
+export function matchStarted(m) {
+  return !!m && !m.is_bye && !!(
+    m.winner || m.live_scores || m.live_point || m.scores || m.status === 'completed'
+  )
+}
+
 export function parseSet(cell) {
   const m = cell != null ? String(cell).replace(/r$/i, '').match(/^(\d+)(?:\((\d+)\))?/) : null
   return m ? { g: m[1], tb: m[2] ?? null } : { g: '', tb: null }
