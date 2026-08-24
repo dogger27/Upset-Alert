@@ -1,0 +1,550 @@
+/*
+ * The Schedule page's score card, extracted so the draw page's score-history
+ * popup renders a match EXACTLY as the schedule does — same rows, same set
+ * cells, same tick and cross, same serve ball, same name-fitting ladder.
+ * Everything here moved VERBATIM from pages/Schedule.jsx; the behaviour of the
+ * schedule page is unchanged by construction, and the sched-* styles stay in
+ * Schedule.css (imported below) because that file's cascade is order-dependent
+ * and splitting it invites regressions for zero benefit.
+ */
+
+import { Fragment, useLayoutEffect, useRef, useState } from 'react'
+import clsx from 'clsx'
+import useFlashOnChange from '../hooks/useFlashOnChange'
+import { nationalityIso2, splitPlayerName } from '../utils/flags'
+import { rootFontPx, textWidth } from '../utils/text'
+import { parseSet } from '../utils/score'
+import '../pages/Schedule.css'
+
+/* MEASURE THE COLUMN, DO NOT GUESS AT IT.
+   Every version of this before now counted CHARACTERS against a tuned constant.
+   That cannot work: "WWW" and "iii" are the same length and nothing like the
+   same width, the column's width changes with the breakpoint, the flag, the
+   serve ball, the point cell and how many sets are on the board — and
+   .sched-competitor-name is overflow:visible, so the moment the guess is wrong
+   by a few pixels the name paints straight over the ball and the score instead
+   of being clipped. "VANDECASTEELE [8]" sitting on the tennis ball is what a
+   wrong guess looks like.
+   So the row reports the width it actually has, the text is measured on a
+   canvas in the font it is actually drawn in, and the rung is chosen from those
+   two numbers. No characters, no constants, no breakpoint assumptions.
+   It cannot oscillate: .sched-competitor-name is flex:1 1 auto with min-width:0
+   among fixed-width siblings, so its width is decided by THEM. Making the name
+   inside it narrower does not widen the box, so a smaller name cannot feed back
+   into a new measurement. */
+
+function useNameBox() {
+  const ref = useRef(null)
+  const [box, setBox] = useState(null)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const measure = () => {
+      const cs = getComputedStyle(el)
+      const px = parseFloat(cs.fontSize) || rootFontPx()
+      const w = el.clientWidth
+      if (w > 0) setBox(prev => (prev && prev.avail === w && prev.fontPx === px)
+        ? prev : { avail: w, fontPx: px })
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  return [ref, box]
+}
+
+/* Fallback only, for the first paint before the observer has reported. Kept
+   deliberately generous so nothing shrinks and then springs back. */
+const FIT_CHARS = 15
+
+/* ...and that is the budget when the scores are there to compete with. A row
+   that has not been played shows no set columns at all, which is most of the
+   sheet the morning it is published, and the name was still being measured as
+   though three sets sat beside it — so a name with room to spare was set
+   smaller anyway. Each column the row does not render is handed back.
+   Still a pure function of the data: nothing is measured, so there is nothing
+   to oscillate, and CSS keeps the final say over whether any of it applies. */
+const SET_SLOTS = 3
+const SET_CHARS = 2
+
+/* A round label that already announces qualifying, so the separate "Q" chip
+   beside it would only repeat itself. */
+
+const DOUBLES_FIT = 22
+
+/* Roughly what one flag costs the line it sits on, in characters: the box is
+   1.05rem plus its margin, against an average character of a bit under half
+   that. Approximate on purpose — it decides between rungs of a ladder, not a
+   pixel boundary. */
+const FLAG_CHARS = 3
+
+/* HOW MUCH OF A DOUBLES TEAM FITS ON ITS LINE.
+   A doubles side was always surnames and never a flag, whatever room the row
+   had — "PITER / TJEN" against "JIANG / ZHANG [2]" on a card with two thirds of
+   it empty, because a match that has not been played shows no set columns and
+   nothing was claiming the space they leave.
+   So: take the richest form that fits, flags first, then given names. Both
+   sides are tested TOGETHER and get the same answer — deciding per side would
+   put initials on one team and bare surnames on the other in the same match,
+   which reads as a bug rather than as a fit. */
+const DOUBLES_RUNGS = [
+  ['full', true], ['initial', true], ['surname', true],
+  ['full', false], ['initial', false], ['surname', false],
+]
+
+/** The team's seed: the sheet prints it against both partners, and it belongs
+ *  to neither of them separately. */
+function teamSeedOf(players) {
+  return players.map(p => (p.seed != null ? `[${p.seed}]` : splitPlayerName(p.name).seed))
+    .find(Boolean) ?? null
+}
+
+/** One partner, written as long as the chosen rung allows. */
+function partnerText(raw, form) {
+  const { first, last } = splitPlayerName(raw)
+  const surname = last || raw
+  if (form === 'surname' || !first) return surname
+  return form === 'full' ? `${first} ${surname}` : `${first.trim()[0]}. ${surname}`
+}
+
+function doublesLineOf(players, form) {
+  return players.map(p => partnerText(p.name, form)).join(' / ')
+    + (teamSeedOf(players) ? ` ${teamSeedOf(players)}` : '')
+}
+
+/* What a doubles line gains from a set column the row does not render. More
+   than the singles credit, because a doubles line is set at 0.78rem against the
+   singles name's ~0.95 — the same freed pixels buy more characters. The extra
+   two are the result mark, which disappears with the scores rather than
+   separately: a tick only exists where there is a result. */
+const DOUBLES_SET_CHARS = 3
+const DOUBLES_MARK_CHARS = 2
+
+function doublesPresentation(sides, sets, box = null) {
+  /* MEASURED WHEN THE ROW HAS REPORTED ITS WIDTH, counted only before that.
+     The singles ladder stopped guessing some time ago; this one was still
+     comparing character counts to a constant, so a doubles line sat shrunk on a
+     card with two thirds of it empty. Same reasoning as PlayerName: characters
+     are not widths, and the column changes with the breakpoint and with how
+     many score cells the row is showing. */
+  if (box) {
+    const rem = rootFontPx()
+    const px = box.fontPx
+    for (const [form, flags] of DOUBLES_RUNGS) {
+      const fits = sides.every(players => {
+        if (!players.length) return true
+        const text = doublesLineOf(players, form)
+        const flagPx = flags ? players.length * (1.05 + 0.3) * rem : 0
+        return textWidth(text, px, 600) + flagPx + 2 <= box.avail
+      })
+      if (fits) return { form, flags }
+    }
+    return { form: 'surname', flags: false }
+  }
+  const fit = DOUBLES_FIT + Math.max(0, SET_SLOTS - sets) * DOUBLES_SET_CHARS
+    + (sets === 0 ? DOUBLES_MARK_CHARS : 0)
+  for (const [form, flags] of DOUBLES_RUNGS) {
+    const fits = sides.every(players => !players.length || (
+      doublesLineOf(players, form).length + (flags ? players.length * FLAG_CHARS : 0) <= fit))
+    if (fits) return { form, flags }
+  }
+  // Nothing fits: the shortest form, and the existing scale takes it from here.
+  return { form: 'surname', flags: false }
+}
+
+function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp, tight,
+                     sets = SET_SLOTS, form, box = null, hasFlag = true }) {
+  const { seed: printedSeed, first, last, nat } = splitPlayerName(raw)
+  // A seeding sent as a field beats one parsed out of the name: a resolved
+  // player's name comes from the bracket and never carried brackets to parse.
+  const seed = seedProp != null ? `[${seedProp}]` : printedSeed
+  // Our own record wins over whatever the sheet printed: it drops the country
+  // when space is tight, and a slot resolved from an "OR" carries the bracket's
+  // name, which never had one inline.
+  const iso2 = nationalityIso2(nationality || nat)
+
+  /* Two forms of a singles name, and CSS picks. On a phone the name column is
+     about 180px and a long one — "Amanda ANISIMOVA [9]" — ran under the result
+     mark and the score. An initial is how a draw sheet prints a name it has no
+     room for, and it still names the same person; a cut or shrunk one does not.
+     Whether it fits depends on the width, which only CSS knows, so both forms
+     are rendered and the breakpoint chooses. The length test is a pure function
+     of the string — nothing is measured, so there is nothing to oscillate.
+     THE SEED COUNTS. It is part of the same run of text — "Madison KEYS" fits
+     and "Madison KEYS [20]" does not, and measuring the name alone let exactly
+     that case through, with the seed sitting on top of the set score.
+     15 characters is where the column runs out, flag and three sets included. */
+  const full = [first, last].filter(Boolean).join(' ')
+  const shown = full + (!hideSeed && seed ? ` ${seed}` : '')
+  /* A LIVE row is narrower than a finished one. It spends width on the serve
+     ball and on the point column, and the name is what pays for both — which is
+     how the ball came to sit on top of "En-Shuo LIANG". Same ladder, two
+     characters less to work with — three was a guess and it spent room the row
+     did not need, leaving a visible gap between the name and the ball. The ball
+     and the point cell are about two characters' worth between them. */
+  const fit = FIT_CHARS + Math.max(0, SET_SLOTS - sets) * SET_CHARS - (tight ? 2 : 0)
+
+  /* THE MEASURED BUDGET, in pixels, in the font this row actually draws in.
+     Everything the name shares its box with is subtracted first: the flag and
+     its gap, and the seed — a sibling at 0.85em that no character count ever
+     included, which is precisely how "[8]" came to sit on the tennis ball.
+     Two pixels are held back so a name never finishes flush against whatever
+     follows it. `box` is null only on the very first paint, before the observer
+     has reported; the character estimate still covers that one frame. */
+  const px = box?.fontPx ?? 0
+  const rem = rootFontPx()
+  const seedText = !hideSeed && seed ? ` ${seed}` : ''
+  const extras = box
+    ? (hasFlag ? (1.05 + 0.3) * rem : 0)
+      + (seedText ? textWidth(seedText, px * 0.85, 700) + 0.28 * rem : 0)
+      + 2
+    : 0
+  const budget = box ? Math.max(0, box.avail - extras) : null
+  const wide = (text) => textWidth(text, px, 600)
+  /* The ladder is unchanged — full name, then an initial, then the surname
+     alone, then size — but each rung is now accepted or rejected by MEASURING
+     it rather than by counting its letters. */
+  const fitsPx = (text) => budget == null || wide(text) <= budget
+  const longName = !surnameOnly && (budget != null ? !fitsPx(shown) : shown.length > fit)
+  const initialled = first ? `${first.trim()[0]}. ${last}` : last
+
+  /* AND A RUNG BELOW THE INITIAL, because some surnames are longer than the
+     column on their own. "Q. VANDECASTEELE [8]" is already the abbreviated
+     form and still runs under the set scores — there is no shorter way to
+     write it that still names the person, so the type has to give instead.
+     Same order of sacrifice the draw page uses: full name, then an initial,
+     then size. Never a truncation — a cut surname names nobody.
+     Proportional to how far over it is, floored so it cannot shrink into
+     illegibility chasing a name no width would have held. Applied to the whole
+     player, so the seed shrinks with the name it belongs to rather than
+     staying full size beside a smaller one; the flag is sized in rem and holds
+     its own.
+     Handed to CSS as a custom property rather than a font-size, because
+     WHETHER to shrink is a question about width and only the stylesheet knows
+     the width. A desktop card is three times this column and shows the full
+     name anyway — shrinking there would be a regression bought for nothing.
+     Same division of labour as the initial above: JS decides how much, the
+     breakpoint decides whether. */
+  /* THE RUNG THAT WAS MISSING. full -> "A. Bondar" -> "Bondar" -> shrink.
+     Without the third, a long given name and a long surname together had only
+     one step of relief and then a floor, and the pair ran straight over the
+     score. The surname alone still names the person; a name over a score names
+     nobody and hides the score as well. */
+  const seedPart = seedText
+  const lastOnly = last || full
+  /* Same ladder as ever — full name, then an initial, then the surname alone,
+     then size — but each rung is now accepted or rejected by MEASURING it
+     rather than by counting its letters. */
+  // A doubles side has already been fitted as a whole — both partners, the
+  // slash and the team seed measured together, because no partner knows how
+  // long the other is. That answer wins over anything decided here for one
+  // name in isolation.
+  const decided = form ? partnerText(raw, form) : null
+  const tightest = decided ?? (surnameOnly
+    ? last
+    : budget != null
+      ? (fitsPx(full) ? full : fitsPx(initialled) ? initialled : lastOnly)
+      : (`${full}${seedPart}`.length <= fit ? `${full}${seedPart}`
+         : `${initialled}${seedPart}`.length <= fit ? `${initialled}${seedPart}`
+         : `${lastOnly}${seedPart}`))
+  /* AND THEN IT SHRINKS AS FAR AS IT HAS TO. The floor is 0.45, which is small
+     enough to be barely readable and is deliberately not a compromise: a name
+     that overlaps the score has destroyed two pieces of information, and one
+     unreadably small name has destroyed less than that. It is also nearly
+     unreachable — by this rung the text is a bare surname, and a surname long
+     enough to need half size is not a real one. */
+  /* And then it shrinks by the ratio it is actually over by. The floor stays
+     0.45 and stays nearly unreachable — by this rung the text is a bare
+     surname. Below it a name would be illegible, and an illegible name that
+     fits still beats a legible one sitting on top of the score. */
+  const scale = decided
+    // A doubles partner shares the box with the other one, the slash and the
+    // team seed, so the whole LINE is fitted at once in Side() and carries the
+    // scale on .sched-side. Measuring one partner against the full box here
+    // would be measuring the wrong thing, and the two scales would compound.
+    ? 1
+    : budget != null
+      ? (wide(tightest) > budget ? Math.max(0.45, budget / wide(tightest)) : 1)
+      : (tightest.length > fit ? Math.max(0.45, fit / tightest.length) : 1)
+
+  return (
+    <span className="sched-player"
+          style={scale < 1 ? { '--name-scale': scale } : undefined}>
+      {/* A missing nationality here is not missing DATA — the tours list
+          Russian and Belarusian players as neutral athletes with no flag, and
+          the sheet omits it deliberately.
+          Tennis Explorer does hold a country for them, and we deliberately do
+          not use it: the official order of play withholds it on purpose.
+          An OUTLINED EMPTY BOX rather than nothing at all. Drawing nothing let
+          those names start a flag's width to the left of every other name in
+          the column, which reads as a layout fault rather than as a country
+          being withheld. The box says the same thing the sheet does — there is
+          a flag's worth of nothing here — and keeps the column straight. */}
+      {iso2
+        ? <span className={`fi fi-${iso2.toLowerCase()} sched-flag`} title={nat} />
+        : <span className="sched-flag flag-blank" aria-hidden="true" />}
+      <span className={clsx('sched-pname', { 'sched-pname--long': longName })}>
+        {decided ?? (surnameOnly ? last : longName ? (
+          <>
+            <span className="sched-name-full">{full}</span>
+            {/* The abbreviated form is whichever rung the scale above was
+                computed against — an initial where that fits, the bare surname
+                where it does not. Rendering the initial while having sized the
+                surname is how a name ends up over the score. */}
+            <span className="sched-name-abbr">
+              {`${initialled}${seedPart}`.length <= fit ? initialled : lastOnly}
+            </span>
+          </>
+        ) : full)}
+        {/* AFTER the name. Leading it, the seed was the first thing on the line
+            and pushed every name to a different starting column depending on
+            whether it had one — so the names never formed an edge to scan. It
+            also read as the more important fact, which it is not. */}
+        {!hideSeed && seed && <span className="sched-seed">{seed}</span>}
+      </span>
+    </span>
+  )
+}
+
+function Side({ players, doubles, tbd, tight, sets, form = 'surname', flags = false,
+               box = null }) {
+  if (!players.length) return <span className="sched-side">TBD</span>
+
+  // An unresolved side is a choice between two whole teams, not a list of
+  // players — "O. Luz / R. Matos OR C. Harrison / N. Skupski". Rendering it as
+  // four names in a row says nothing about who partners whom. Each alternative
+  // is already one entry, so they only need separating.
+  if (tbd && players.length > 1) {
+    return (
+      <span className="sched-side sched-side--alt">
+        {players.map((p, i) => (
+          <span key={i} className="sched-altteam">
+            {i > 0 && <span className="sched-or">or</span>}
+            {/* Surnames for singles. Two candidates and a separator have to fit
+                the ONE line this side is given, and a slot that has not
+                resolved is by definition the least important thing on the card
+                — it is two names neither of which may turn out to be playing.
+                A doubles alternative is a whole team in one string
+                ("O. Luz / R. Matos"), which has no surname to take. */}
+            <span className="sched-pname">
+              {doubles ? p.name : (splitPlayerName(p.name).last || p.name)}
+            </span>
+          </span>
+        ))}
+      </span>
+    )
+  }
+  // A doubles seed belongs to the TEAM. The sheet repeats it against both
+  // partners, which reads as two separately-seeded players.
+  const teamSeed = doubles ? teamSeedOf(players) : null
+
+  /* A DOUBLES SIDE IS ONE LINE, and its budget is the whole line: two surnames,
+     the slash between them, and the team seed. Scaled here rather than inside
+     each PlayerName, because no player knows how long the other one is — and
+     because the SEED is a sibling of both, so it was in nobody's budget at all.
+     That is how "[2]" came to sit on top of the result mark. */
+  const doublesLine = doubles ? doublesLineOf(players, form) : ''
+  // Measured against the real column where we have it — see doublesPresentation.
+  let teamScale = 1
+  if (doubles && doublesLine) {
+    if (box) {
+      const rem = rootFontPx()
+      const flagPx = flags ? players.length * (1.05 + 0.3) * rem : 0
+      const budget = Math.max(0, box.avail - flagPx - 2)
+      const need = textWidth(doublesLine, box.fontPx, 600)
+      if (need > budget && budget > 0) teamScale = Math.max(0.72, budget / need)
+    } else if (doublesLine.length > DOUBLES_FIT) {
+      teamScale = Math.max(0.72, DOUBLES_FIT / doublesLine.length)
+    }
+  }
+
+  return (
+    <span className={clsx('sched-side', { 'sched-side--flags': doubles && flags })}
+          style={teamScale < 1 ? { '--name-scale': teamScale } : undefined}>
+      {players.map((p, i) => (
+        <Fragment key={`${p.side}${p.position}${i}`}>
+          {/* Partners are separated by a slash, the way every draw sheet writes
+              a pair. A bare space read as two unrelated names once the flags
+              sat between them. */}
+          {i > 0 && <span className="sched-slash">/</span>}
+          <PlayerName raw={p.name} surnameOnly={doubles} hideSeed={doubles}
+                      nationality={p.nationality} seed={p.seed} tight={tight}
+                      sets={sets} form={doubles ? form : undefined}
+                      box={box}
+                      hasFlag={!doubles || flags} />
+        </Fragment>
+      ))}
+      {/* Same placement as a singles seed, and for the same reason. */}
+      {teamSeed && <span className="sched-seed sched-seed--team">{teamSeed}</span>}
+    </span>
+  )
+}
+
+function ServeBall() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" className="sched-ball" aria-label="serving">
+      <circle cx="12" cy="12" r="11" fill="#7ba81f" />
+      <g fill="none" stroke="#fff" strokeWidth="2">
+        <path d="M12 1A12.04 12.04 0 0 1 1 12" />
+        <path d="M12 23A12.04 12.04 0 0 1 23 12" />
+      </g>
+      <circle cx="12" cy="12" r="11" fill="none" stroke="#1b4332" strokeWidth="2" />
+    </svg>
+  )
+}
+
+function SetCell({ cell, bold }) {
+  const { g, tb } = parseSet(cell)
+  // Before the early return, not after — a games count that goes from a number
+  // to nothing still has to run the hook. (See the note in Schedule.css on what
+  // the flash is for.)
+  const flash = useFlashOnChange(`${g}|${tb ?? ''}`)
+  if (g === '' && tb == null) return <span className="sched-set empty">·</span>
+  return (
+    <span className={clsx('sched-set', { 'sched-set--won': bold, 'sched-score--bump': flash })}>
+      {g}{tb != null && <sup>{tb}</sup>}
+    </span>
+  )
+}
+
+function PointCell({ point, tiebreak }) {
+  const flash = useFlashOnChange(point)
+  return (
+    <span className={clsx('sched-point', { 'sched-point--tb': tiebreak,
+                                           'sched-score--bump': flash })}
+          title={tiebreak ? 'Tiebreak points' : 'Current game'}>
+      {point}
+    </span>
+  )
+}
+
+function CompetitorRows({ e, a, b }) {
+  const doubles = e.discipline !== 'singles'
+  const lp = e.live_point ?? null
+  const live = e.status === 'live'
+
+  // Games: prefer the snapshot's own, exactly as the draw page does.
+  const g = lp?.games ?? null
+  const fromLive = live ? (g ? [g[0], g[1]] : (e.live_scores ? [e.live_scores[0], e.live_scores[1]] : null)) : null
+  /* The sets the row last had, whatever its status. A LIVE row reads its score
+     from the live snapshot alone, so a single empty payload rendered no cells
+     at all and the score vanished off the card until the next poll refilled it.
+     The feed having nothing to say for one poll is not the score being nothing,
+     and the completed sets on the row are still true. The blank is stopped at
+     source now (see _has_sets in sofascore_doubles); this is the safety net, so
+     a live row can never go blank again from a gap anywhere upstream. */
+  const fromFinal = e.scores ? [e.scores[0], e.scores[1]] : null
+  const sets = fromLive ?? fromFinal
+  const n = sets ? Math.max(sets[0]?.length ?? 0, sets[1]?.length ?? 0) : 0
+
+  // Who took each completed set, for the bolding. The set in play has no winner
+  // and must stay unbolded — that is what makes "in progress" legible.
+  const setWon = (i, side) => {
+    if (!sets) return false
+    // The last set present is normally the one being played, so it has no
+    // winner yet. In a match tiebreak it is not — the tiebreak stands in for
+    // the deciding set and is scored as a point, so every set in this list is
+    // finished and the second one keeps the bold it earned.
+    if (live && i === n - 1 && !lp?.match_tiebreak) return false
+    const x = Number(parseSet(sets[0]?.[i]).g), y = Number(parseSet(sets[1]?.[i]).g)
+    if (Number.isNaN(x) || Number.isNaN(y)) return false
+    return side === 0 ? x > y : y > x
+  }
+
+  const winnerSide = (() => {
+    if (e.status !== 'completed' || !e.scores) return null
+    let x = 0, y = 0
+    for (let i = 0; i < n; i++) { if (setWon(i, 0)) x++; if (setWon(i, 1)) y++ }
+    return x === y ? null : (x > y ? 0 : 1)
+  })()
+
+  const serving = live ? (lp?.serving ?? e.live_scores?.[2] ?? null) : null
+  const point = live && lp?.point ? lp.point : null
+
+  /* How the match ENDED, when it did not end normally.
+     parseSet strips the trailing "r" to read the games off a cell, so without
+     this the schedule showed a retirement as an ordinary 4-1 win — a different
+     match from the one that was played.
+
+     Read off whichever side carries the marker, matching the bracket: a
+     retirement marks the player who QUIT, a walkover marks the player who
+     ADVANCED ("won by walkover"). The two sit on opposite sides on purpose;
+     that is how they are stored. */
+  const endedWith = (side) => {
+    const cells = (e.scores || [])[side] || []
+    if (cells.some(c => /^w\/?o$/i.test(String(c ?? '').trim()))) return 'w/o'
+    if (cells.some(c => /r$/i.test(String(c ?? '')))) return 'ret.'
+    return null
+  }
+
+  const rows = [
+    { players: a, side: 0, tbd: !!e.tbd_side?.includes('a') },
+    { players: b, side: 1, tbd: !!e.tbd_side?.includes('b') },
+  ]
+
+  // Both teams together, so they are written the same way as each other, and
+  // against the columns this row actually shows rather than a fixed guess.
+  // Both lines of a match share one geometry, so one measurement serves both.
+  const [nameBoxRef, nameBox] = useNameBox()
+  const dbl = doubles ? doublesPresentation([a, b], n, nameBox) : null
+
+  return (
+    <div className={clsx('sched-competitors', { 'sched-competitors--doubles': doubles })}>
+      {rows.map(({ players, side, tbd }) => (
+        <div key={side}
+             className={clsx('sched-competitor', {
+               'sched-competitor--won': winnerSide === side,
+               'sched-competitor--lost': winnerSide != null && winnerSide !== side,
+             })}>
+          {/* The box the name actually has. Measured here, on the element that
+              owns the width, and handed down — see useNameBox for why this
+              cannot feed back on itself. */}
+          <span className="sched-competitor-name" ref={side === 0 ? nameBoxRef : undefined}>
+            <Side players={players} doubles={doubles} tbd={tbd}
+                  tight={serving != null || point != null} sets={n}
+                  form={dbl?.form} flags={dbl?.flags} box={nameBox} />
+          </span>
+          {/* A SLOT, always present, not a conditional element. The ball
+              appears on one line only, so rendering it inline shifted that
+              line's scores left of the other's and broke the column. */}
+          <span className="sched-ball-slot">
+            {serving === side + 1 && <ServeBall />}
+          </span>
+          {/* BEFORE the tick/cross, not between it and the scores.
+              Everything here is fixed-width and right-packed, so an element's
+              position depends on the total width of everything after it. With
+              "ret." sitting after the mark, the row that had one pushed its
+              cross left of the other row's tick — and the two stopped lining
+              up. In front of the mark it is absorbed by the flexible name
+              instead, and the marks stay in a column.
+              Still ahead of the scores, where it qualifies them; after the
+              numbers it read as another set. */}
+          {endedWith(side) && (
+            <span className={clsx('sched-end', { 'sched-end--wo': endedWith(side) === 'w/o' })}>
+              {endedWith(side)}
+            </span>
+          )}
+          {winnerSide != null && (
+            <span className={clsx('sched-mark', winnerSide === side ? 'sched-mark--win' : 'sched-mark--loss')}>
+              {winnerSide === side ? '\u2713' : '\u2717'}
+            </span>
+          )}
+          <span className="sched-sets">
+            {Array.from({ length: n }, (_, i) => (
+              <SetCell key={i} cell={sets?.[side]?.[i]} bold={setWon(i, side)} />
+            ))}
+            {/* The point last, tinted apart from the games — it is a different
+                kind of number and changes every few seconds. */}
+            {point && (
+              <PointCell point={point[side] ?? '0'} tiebreak={lp.tiebreak} />
+            )}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+export default CompetitorRows
+export { PlayerName, Side, ServeBall, SetCell, PointCell }

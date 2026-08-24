@@ -626,3 +626,13 @@
 .cv-body .in-progress-badge {
   transform: translate(-50%, -50%) translateY(calc(var(--d, 0) * var(--t, 0) * 1px));
 }
+
+/* Once the draw is past picking, a match's outline and its score pill open the
+   score-history popup. The layers they sit in are pointer-events:none so chips
+   underneath stay reachable; opting these two back in only when there is a
+   score to show keeps the dead areas dead. */
+.cv-match-outline--openable,
+.cv-live-score--openable {
+  pointer-events: auto;
+  cursor: pointer;
+}

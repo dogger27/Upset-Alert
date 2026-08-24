@@ -515,6 +515,52 @@ async def tournament_competitors(tournament_id: int, db: AsyncSession = Depends(
     return result.scalars().all()
 
 
+@router.get("/{tournament_id}/matches/{match_id}/score-history")
+async def match_score_history(
+    tournament_id: int,
+    match_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """How a match's score progressed, for the draw page's scrubber popup.
+
+    Public, like the draw itself — a score is not anyone's secret. Snapshots
+    come back ascending and already in the `live_point` shape the schedule
+    renderer reads (renderable_history), so the client renders each slider
+    position through the same component that draws every other score on the
+    site. `final` is matches.scores_json: the record, which the last live
+    snapshot can miss the closing point of.
+
+    An empty `snapshots` list is a normal answer, not an error — a match played
+    before the feature existed, or one whose draw finished more than a day ago
+    and was pruned. The popup shows the final score alone.
+    """
+    from app.models.score_history import MatchScoreSnapshot
+    from app.services.sofascore_live import renderable_history
+
+    match = await db.get(Match, match_id)
+    if not match or match.draw_id != tournament_id:
+        raise HTTPException(404, "Match not found")
+
+    rows = (await db.execute(
+        select(MatchScoreSnapshot)
+        .where(MatchScoreSnapshot.match_id == match_id)
+        .order_by(MatchScoreSnapshot.id)
+    )).scalars().all()
+
+    snapshots = []
+    for r in rows:
+        out = renderable_history(r.snap)
+        if out is not None:
+            snapshots.append(out)
+
+    return {
+        "status": match.status,
+        "completed_at": match.completed_at,
+        "snapshots": snapshots,
+        "final": match.scores_json,
+    }
+
+
 @router.get("/{tournament_id}/matches/{match_id}/predictors")
 async def match_predictors(
     tournament_id: int,

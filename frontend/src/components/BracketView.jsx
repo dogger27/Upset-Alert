@@ -261,7 +261,7 @@ function playerNeedsTypeSlot(p) {
   return !!p?.entry_type
 }
 
-function MatchBox({ match, resolvedPlayers, h2hPair, playerById, drawRanks, picks, onPick, locked, style, mode, lossRound, onH2H, qualifierNums, forceTypeSlot }) {
+function MatchBox({ match, resolvedPlayers, h2hPair, playerById, drawRanks, picks, onPick, locked, style, mode, lossRound, onH2H, onShowScore, qualifierNums, forceTypeSlot }) {
   const { p1: p1id, p2: p2id } = resolvedPlayers || { p1: match.player1?.id, p2: match.player2?.id }
   const pickedId = picks[match.id]
   const actualWinnerId = match.winner?.id
@@ -454,7 +454,8 @@ function MatchBox({ match, resolvedPlayers, h2hPair, playerById, drawRanks, pick
           scores={isWalkover ? null : p1Scores}
           walkover={wo.p1}
           retired={ret.p1}
-          onClick={mode === 'picks' && p1id != null ? () => onPick(match.id, p1id) : undefined}
+          onClick={mode === 'picks' && p1id != null ? () => onPick(match.id, p1id)
+                   : onShowScore ? () => onShowScore(match) : undefined}
           locked={locked}
           showTypeSlot={showTypeSlot}
           showScores={showScores}
@@ -476,7 +477,8 @@ function MatchBox({ match, resolvedPlayers, h2hPair, playerById, drawRanks, pick
           scores={isWalkover ? null : p2Scores}
           walkover={wo.p2}
           retired={ret.p2}
-          onClick={mode === 'picks' && p2id != null ? () => onPick(match.id, p2id) : undefined}
+          onClick={mode === 'picks' && p2id != null ? () => onPick(match.id, p2id)
+                   : onShowScore ? () => onShowScore(match) : undefined}
           locked={locked}
           showTypeSlot={showTypeSlot}
           showScores={showScores}
@@ -539,7 +541,7 @@ function ConnectorLines({ leftCenters, rightCenters, totalH }) {
 // Main component
 // ---------------------------------------------------------------------------
 
-export default function BracketView({ tournament, matches, players, picks, onPick, locked, mode = 'picks', picksOwner = null, windowStart = 0, windowSize = 4, labelsHidden = false, insetLeft = 0 , lockedMatchIds = new Set() }) {
+export default function BracketView({ tournament, matches, players, picks, onPick, locked, mode = 'picks', picksOwner = null, windowStart = 0, windowSize = 4, labelsHidden = false, insetLeft = 0 , lockedMatchIds = new Set(), onShowScore = null }) {
   const [h2hPlayers, setH2HPlayers] = useState(null) // { p1, p2, match }
 
   const playerById = Object.fromEntries(players.map(p => [p.id, p]))
@@ -695,6 +697,7 @@ export default function BracketView({ tournament, matches, players, picks, onPic
                       mode={mode}
                       lossRound={lossRound}
                       onH2H={(p1, p2, match) => setH2HPlayers({ p1, p2, match })}
+                      onShowScore={onShowScore}
                       qualifierNums={qualifierNums}
                       forceTypeSlot={roundHasTypeSlot[rn]}
                       style={{ position: 'absolute', top, left: 6, right: 6 }}

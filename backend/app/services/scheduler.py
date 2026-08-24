@@ -1714,6 +1714,29 @@ async def run_schedule_estimates_only() -> None:
         await asyncio.sleep(120)
 
 
+async def _prune_score_snapshots() -> None:
+    """Clear score histories nobody can scrub any more — a draw's snapshots go
+    one day after the draw completes. See services/score_history.py for the
+    retention decision and the two backstops behind it."""
+    from app.services import score_history
+    from app.services.system_log import app_log
+
+    try:
+        async with AsyncSessionLocal() as db:
+            removed = await score_history.prune(db)
+        if removed:
+            logger.info("Score history: pruned %d snapshot(s)", removed)
+            await app_log("info", "score_history",
+                          f"Pruned {removed} score snapshot(s) from completed draws",
+                          {"removed": removed})
+    except Exception as exc:
+        logger.error("Score-history prune failed: %s", exc)
+        err = describe_exception(exc)
+        await app_log("error", "score_history", f"Prune failed: {err}",
+                      {"error": err}, dedup_key="score_prune_fail", dedup_hours=24)
+
+
+
 def _on_shutdown_quietly(fn):
     """Wrap a scheduled job so being cancelled at shutdown is not an ERROR.
 
@@ -1755,6 +1778,14 @@ def start_scheduler() -> None:
         hour=0,
         minute=0,
         id="auto_discover",
+        misfire_grace_time=3600,
+    )
+    scheduler.add_job(
+        _on_shutdown_quietly(_prune_score_snapshots),
+        "cron",
+        hour=4,
+        minute=30,
+        id="prune_score_snapshots",
         misfire_grace_time=3600,
     )
     # Scrape active tournaments every 30 minutes so live scores update promptly.
