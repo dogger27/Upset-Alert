@@ -85,22 +85,23 @@ async def draw_lock_state(db, draw) -> LockState:
     rows = (await db.execute(
         select(Match).where(Match.draw_id == draw.id)
     )).scalars().all()
-    r1_done = _r1_complete(rows)
+    r1_done = _r1_all_started(rows)
 
     if draw.status == "completed" or r1_done:
-        # The moment the bracket closes under this rule, recorded where the rest
-        # of the app already looks for it. picks_locked_at means "picks are
-        # shut"; espn_monitor stamps it at the first ball for draw_start draws
-        # and deliberately does not for these, so this is the only thing that
-        # closes one — and without it Draw.is_locked, which every card and
-        # dashboard reads, would never agree with the answer being returned
-        # here. Stamped once and only when it is not already set.
+        # The moment the bracket closes under this rule — every R1 match
+        # under way — recorded where the rest of the app already looks for
+        # it. picks_locked_at means "picks are shut"; espn_monitor stamps it
+        # at the first ball for draw_start draws and deliberately does not
+        # for these, so this is the only thing that closes one — and it is
+        # also what flips computed_status from Open to Active, which is the
+        # dashboard move the owner asked to happen at exactly this moment.
+        # Stamped once and only when it is not already set.
         if draw.picks_locked_at is None:
             draw.picks_locked_at = datetime.now(timezone.utc)
             await db.commit()
         return LockState(
             mode=mode, draw_locked=True,
-            reason="every first-round match is complete",
+            reason="every first-round match has started",
         )
 
     return LockState(
@@ -162,17 +163,26 @@ def _locked_with_downstream(matches, num_rounds: int) -> set:
     }
 
 
-def _r1_complete(matches) -> bool:
-    """Every first-round contest decided.
+def _r1_all_started(matches) -> bool:
+    """Every first-round contest under way or over — the owner's rule for when
+    a match-by-match draw stops taking picks.
 
-    Byes are excluded — they carry a winner from the moment the draw is
-    released, so counting them would call the round complete before a ball was
-    struck in a draw that has any. An empty first round is NOT complete: no
-    matches means the draw is not out, and treating that as finished would lock
-    every unreleased draw and reveal every unreleased bracket.
+    STARTED, not completed: once the last R1 match goes on court there is no
+    pick left that could legally change (every R1 match is frozen by being in
+    play, and every later round stems from one of them), so holding the draw
+    "Open" until results landed was keeping a door open onto a room with
+    nothing in it — while also delaying the Open→Active flip the dashboard
+    keys on. match_in_play is the union of every feed's evidence, the same
+    test that freezes the individual match.
+
+    Byes are excluded — they carry a winner from release, so counting them
+    would close a draw before a ball was struck. An empty first round is NOT
+    "all started": no matches means the draw is not out, and treating that as
+    begun would lock every unreleased draw and reveal every unreleased
+    bracket.
     """
     r1 = [m for m in matches if m.round_number == 1 and not m.is_bye]
-    return bool(r1) and all(m.winner_id is not None for m in r1)
+    return bool(r1) and all(match_in_play(m) for m in r1)
 
 
 async def predictions_visible(db, draw) -> bool:
@@ -196,11 +206,11 @@ async def predictions_visible(db, draw) -> bool:
         return True
     if await resolve_draw_lock_mode(db, draw) != LOCK_PROGRESSIVE_R1:
         return True
+    # Same boundary as the lock: picks close when every R1 match has STARTED,
+    # and from that moment nothing is editable, so there is nothing left to
+    # crib and the brackets can show. Full rows, because match_in_play reads
+    # the play-evidence columns of every feed.
     matches = (await db.execute(
-        select(Match.round_number, Match.is_bye, Match.winner_id)
-        .where(Match.draw_id == draw.id)
-    )).all()
-    return _r1_complete([
-        type("M", (), {"round_number": r, "is_bye": b, "winner_id": w})()
-        for r, b, w in matches
-    ])
+        select(Match).where(Match.draw_id == draw.id)
+    )).scalars().all()
+    return _r1_all_started(matches)
