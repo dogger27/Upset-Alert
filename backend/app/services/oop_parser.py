@@ -466,6 +466,14 @@ def _parse_column(lines, pno):
             continue
         if alt and cur is not None:
             cur.tbd = True
+            # WITH ITS SIDE, exactly as _regroup_alternatives records it. This
+            # inline-"or" path set the flag alone, and a tbd with no side reads
+            # downstream as "nothing unresolved here": the ingest stored both
+            # alternatives as two players on one side of a SINGLES entry, and
+            # the schedule drew Medvedev against a doubles team called
+            # "DAMM / SHELBAYH".
+            side_key = 'b' if after_vs else 'a'
+            cur.tbd_side = ''.join(sorted(set((cur.tbd_side or '') + side_key)))
         if cur is not None and SCORE_RE.match(text) and re.search(r'\d', text):
             cur.printed_score = text
             st = re.search(r'\b(RET|W/?O|DEF|ABD|CONC|TBF)\b', text, re.I)
