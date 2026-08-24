@@ -34,3 +34,18 @@ frontend/dist/
 
 # Logs
 *.log
+
+# SQLite sidecars and backups — *.db alone does not match these, and a
+# .db.bak with real user rows sat committed in this PUBLIC repo for months
+# before anyone noticed. The -wal/-shm pair can hold recent row content too.
+*.db-wal
+*.db-shm
+*.bak
+
+# Local-only Claude Code state. Skills and project settings ARE tracked —
+# settings.local.json and the scheduler lock are per-machine.
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+
+# Vite's dep cache
+frontend/.vite/
