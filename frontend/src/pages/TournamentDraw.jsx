@@ -225,9 +225,19 @@ function TournamentDraw() {
   const resetToastTimerRef = useRef(null)
   const autoInitShownRef = useRef(false)
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch, isPlaceholderData } = useQuery({
     queryKey: ['draw', id],
     queryFn: () => getDraw(Number(id)),
+    /* KEEP THE LAST DRAW ON SCREEN WHILE THE NEXT ONE LOADS.
+       The sibling arrows change `id`, and without this every press unmounted
+       the entire page into "Loading draw…" — on a healthy network a blink, on
+       a stalled one (a deploy window, a tunnel reconnect) a freeze with
+       nothing to do but wait. A reader reported exactly that. With the
+       previous draw held as placeholder the page stays rendered and
+       interactive; picks are disabled below while the data is borrowed,
+       because a click on draw A must never save against draw B's id. */
+    placeholderData: (prev) => prev,
+    retry: 2,
     // Poll every 2 min for active tournaments (live scores) and any unlocked tournament
     // so non-admins see the unlock state change without a manual refresh
     refetchInterval: (query) => {
@@ -1022,13 +1032,28 @@ function TournamentDraw() {
   )
 
   if (isLoading) return <div className="page-loading">Loading draw…</div>
-  if (error) return <div className="page-error">Failed to load draw.</div>
+  if (error) {
+    /* A dead end with no verb was the freeze's other half: when a fetch
+       failed (deploys, tunnel blips) the page offered nothing but a reload.
+       The retry goes through the same query, so a recovered backend is one
+       tap away. */
+    return (
+      <div className="page-error">
+        Failed to load draw.
+        <button className="settings-admin-btn" style={{ marginLeft: '0.75rem' }}
+                onClick={() => refetch()}>
+          Retry
+        </button>
+      </div>
+    )
+  }
 
   const { tournament, matches, draw_entries: players } = data
   // Server truth, not a second derivation. draw_lock_state() decides this once
   // for the write path, this endpoint and the client — the three disagreeing is
   // the failure that matters (a bracket that looks editable and 403s).
-  const locked = data.draw_locked ?? (tournament.is_locked && !tournament.selections_unlocked)
+  const locked = isPlaceholderData
+    || (data.draw_locked ?? (tournament.is_locked && !tournament.selections_unlocked))
   const nonByeMatchIds = new Set(matches.filter(m => !m.is_bye).map(m => m.id))
   const pickedCount = Object.entries(picks).filter(([k, v]) => v != null && nonByeMatchIds.has(Number(k))).length
   const userHasPicks = savedPreds ? savedPreds.some(p => p.predicted_winner_id != null) : pickedCount > 0
