@@ -1733,6 +1733,18 @@ async def run_schedule_estimates_only() -> None:
         await asyncio.sleep(120)
 
 
+async def _sweep_schedule_invariants() -> None:
+    """The schedule's law, applied every 15 minutes to the days around now.
+    Detection is deterministic and alerting lives in the module; this job just
+    turns the crank. See services/schedule_invariants.py for the doctrine."""
+    try:
+        from app.services.schedule_invariants import sweep
+        async with AsyncSessionLocal() as db:
+            await sweep(db)
+    except Exception as exc:
+        logger.error("Schedule invariant sweep failed: %s", exc)
+
+
 async def _sweep_oop_verifications() -> None:
     """Carry the host verifier's verdicts into the alert pipeline.
 
@@ -1925,6 +1937,13 @@ def start_scheduler() -> None:
         minute=30,
         id="prune_score_snapshots",
         misfire_grace_time=3600,
+    )
+    scheduler.add_job(
+        _on_shutdown_quietly(_sweep_schedule_invariants),
+        "interval",
+        minutes=15,
+        id="sweep_schedule_invariants",
+        misfire_grace_time=600,
     )
     scheduler.add_job(
         _on_shutdown_quietly(_sweep_oop_verifications),
