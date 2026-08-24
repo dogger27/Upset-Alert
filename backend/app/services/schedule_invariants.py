@@ -28,6 +28,26 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
 
     v: list[dict] = []
 
+    # 2026-08-25, "CHOINSKI or ROTTGERING" beside a bracket that already knew
+    # Rottgering had won: an unresolved side whose deciding match is complete
+    # asserts an open question the draw has closed. The resolver
+    # (schedule.resolve_settled_alternatives) collapses these from every
+    # winner-writing path; this is the tripwire if any path forgets.
+    from app.models.tournament import Draw, DrawEntry, Match
+    from app.services.schedule import _fold
+    draw_ids = (await db.execute(
+        select(Draw.id).where(Draw.tournament_id == tournament_id))).scalars().all()
+    dents = (await db.execute(
+        select(DrawEntry).where(DrawEntry.draw_id.in_(draw_ids)))).scalars().all() if draw_ids else []
+    by_fold = {}
+    for de in dents:
+        by_fold.setdefault(_fold(de.name), []).append(de.id)
+    decided = {frozenset((m.player1_id, m.player2_id)): m.winner_id
+               for m in (await db.execute(
+                   select(Match).where(Match.draw_id.in_(draw_ids),
+                                       Match.winner_id.isnot(None)))).scalars().all()
+               if m.player1_id and m.player2_id} if draw_ids else {}
+
     def flag(code, entry, detail):
         v.append({"code": code, "entry_id": entry.id if entry else None,
                   "court": getattr(entry, "court", None), "detail": detail})
@@ -40,6 +60,26 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
         na = [p for p in players if p.side == "a"]
         nb = [p for p in players if p.side == "b"]
         tbd_side = e.tbd_side or ""
+
+        if e.is_tbd:
+            for side_key in (e.tbd_side or "ab"):
+                rows_side = [p for p in players if p.side == side_key]
+                if len(rows_side) < 2:
+                    continue
+                ids = []
+                for r in rows_side:
+                    if r.draw_entry_id:
+                        ids.append(r.draw_entry_id); continue
+                    cand = by_fold.get(_fold(r.raw_name)) or []
+                    if len(cand) == 1:
+                        ids.append(cand[0])
+                    else:
+                        ids = None; break
+                if ids and frozenset(ids) in decided:
+                    flag("alternatives_already_decided", e,
+                         f"side {side_key}: "
+                         + " or ".join(r.raw_name or "" for r in rows_side)
+                         + " — feeder match has a winner")
 
         # tbd_side must be one of a/b/ab — anything else means a writer
         # invented a value nothing downstream reads. (Defensive; no incident.)

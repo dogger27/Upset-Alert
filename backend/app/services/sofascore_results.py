@@ -32,7 +32,7 @@ from typing import Optional
 
 from sqlalchemy import select
 
-from app.models.tournament import Draw, DrawEntry, Match
+from app.models.tournament import Match
 from app.services.sofascore import SofascoreBlocked, SofascoreNotFound, _get
 from app.services.sofascore_live import _event_player_ids, _tracked
 from app.services.system_log import app_log
@@ -347,6 +347,24 @@ async def sweep_once(db) -> dict:
         from app.services.sofascore_live import _tournament_of
         for tid in {_tournament_of[d] for d in touched_draws if d in _tournament_of}:
             await broadcaster.publish(tid)
+
+    # A winner recorded this sweep may decide a schedule "A or B";
+    # collapse immediately rather than waiting for the next sheet.
+    try:
+        from datetime import date as _date, timedelta as _td
+
+        from sqlalchemy import select as _sel
+        from app.models.schedule import ScheduleEntry as _SE
+        from app.services import schedule as _sched
+        # Only tournaments that actually hold an unresolved slot right now —
+        # not every tournament ever recorded.
+        tids = (await db.execute(_sel(_SE.tournament_id).where(
+            _SE.is_tbd.is_(True),
+            _SE.play_date >= _date.today() - _td(days=1)).distinct())).scalars().all()
+        for _tid in tids:
+            await _sched.resolve_settled_alternatives(db, _tid)
+    except Exception:
+        logger.exception('alt-collapse after Sofascore results failed')
 
     return {"draws": len(by_tournament), "seen": seen,
             "written": written, "unmatched": unmatched}

@@ -40,6 +40,8 @@ from app.models.tournament import Draw, DrawEntry, Match
 from app.services.oop_parser import parse_pdf
 from app.services.rankings import _norm
 
+logger = logging.getLogger(__name__)
+
 # Seeds for the chain. No historical durations exist to fit these to —
 # `matches.completed_at` is populated but there is no start time to subtract —
 # so they are deliberate constants, replaceable once this feature has generated
@@ -558,6 +560,10 @@ async def ingest_document(db, tournament, play_date: date, url: str,
     # stored, alert on their own, and the verifier's runner re-checks them
     # after its verdict — so an LLM "clean" cannot stand against them.
     try:
+        # A sheet released AFTER a result must not print a choice the draw has
+        # already made — collapse before the law looks, so a PDF-release-time
+        # "or" over a decided match never even exists on the site.
+        await resolve_settled_alternatives(db, tournament.id)
         from app.services.schedule_invariants import check_and_log
         await check_and_log(db, tournament, play_date)
     except Exception:
@@ -933,6 +939,114 @@ async def _dedupe_day(db, tournament_id: int, play_date: date) -> int:
     if dropped:
         await db.flush()
     return dropped
+
+
+def _fold(name: str) -> frozenset:
+    """Name tokens under a plain ASCII fold, for matching a sheet's spelling
+    to a draw's.
+
+    NOT rankings._norm, deliberately: that maps o-umlaut to "oe" (the German
+    transliteration), while the sheets print plain ASCII — so "Roettgering"
+    vs "ROTTGERING" never matched, the draw_entry_id was never stamped, and
+    every downstream consumer that keyed on the id silently skipped the row.
+    NFD + drop-combining folds both spellings to "rottgering". Bracketed
+    prefixes ([Q], [7], [Alt]) and a trailing IOC code are stripped first.
+    """
+    import re as _re
+    import unicodedata
+    s = _re.sub(r"^(?:\[[^\]]*\]\s*)+", "", (name or "").strip())
+    s = _re.sub(r"\s+[A-Z]{3}$", "", s)
+    s = unicodedata.normalize("NFD", s)
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    return frozenset(t for t in s.lower().split() if t)
+
+
+async def resolve_settled_alternatives(db, tournament_id: int) -> int:
+    """Collapse every "A or B" slot whose deciding match is already over.
+
+    The moment a feeder match has a winner, a schedule row still offering the
+    choice is WRONG — it asserts an open question the draw has closed. Until
+    now the collapse only happened when a LATER sheet revision was ingested
+    and dedupe merged the rows; between the match ending and the next
+    revision (hours, sometimes a day) the site showed "CHOINSKI or
+    ROTTGERING" beside a bracket that already knew. This runs from every path
+    that writes winners — the ESPN and Sofascore sweeps, the ingest itself
+    for a PDF released after the result, and the 2-minute estimate tick as
+    the backstop — so the answer is minutes at worst, not revisions.
+
+    Strict on identity: a side collapses only when every alternative maps to
+    exactly one draw entry, those entries form exactly one real match, and
+    that match's winner is one of them. Anything ambiguous is left alone —
+    a wrong collapse would assert the WRONG player, which is far worse than
+    a stale "or".
+    """
+    from datetime import timedelta as _td
+
+    today = date.today()
+    entries = (await db.execute(
+        select(ScheduleEntry).where(
+            ScheduleEntry.tournament_id == tournament_id,
+            ScheduleEntry.is_tbd.is_(True),
+            ScheduleEntry.play_date >= today - _td(days=1),
+        ))).scalars().all()
+    if not entries:
+        return 0
+
+    draw_ids = (await db.execute(
+        select(Draw.id).where(Draw.tournament_id == tournament_id))).scalars().all()
+    if not draw_ids:
+        return 0
+    dents = (await db.execute(
+        select(DrawEntry).where(DrawEntry.draw_id.in_(draw_ids)))).scalars().all()
+    by_fold: dict[frozenset, list] = {}
+    for de in dents:
+        by_fold.setdefault(_fold(de.name), []).append(de)
+    matches = (await db.execute(
+        select(Match).where(Match.draw_id.in_(draw_ids),
+                            Match.winner_id.isnot(None)))).scalars().all()
+    by_pair = {frozenset((m.player1_id, m.player2_id)): m
+               for m in matches
+               if m.player1_id is not None and m.player2_id is not None}
+
+    collapsed = 0
+    for entry in entries:
+        sides_left = ""
+        for side_key in (entry.tbd_side or "ab"):
+            rows = [p for p in (entry.players or []) if p.side == side_key]
+            if len(rows) < 2:
+                continue
+            ids = []
+            for r in rows:
+                if r.draw_entry_id:
+                    ids.append(r.draw_entry_id)
+                    continue
+                cand = by_fold.get(_fold(r.raw_name)) or []
+                if len(cand) == 1:
+                    ids.append(cand[0].id)
+                else:
+                    ids = None
+                    break
+            feeder = by_pair.get(frozenset(ids)) if ids and len(set(ids)) == len(rows) else None
+            if feeder is None or feeder.winner_id not in (ids or []):
+                sides_left += side_key
+                continue
+            # The winner stays; the alternative that lost goes.
+            for r, rid in zip(rows, ids):
+                if rid == feeder.winner_id:
+                    r.draw_entry_id = rid
+                    r.position = 1
+                else:
+                    await db.delete(r)
+            collapsed += 1
+        new_side = sides_left or None
+        if new_side != entry.tbd_side or (not sides_left and entry.is_tbd):
+            entry.tbd_side = new_side
+            entry.is_tbd = bool(sides_left)
+    if collapsed:
+        await db.commit()
+        logger.info("Collapsed %d settled alternative side(s) for tournament %s",
+                    collapsed, tournament_id)
+    return collapsed
 
 
 def _start_type_of(m) -> str:
