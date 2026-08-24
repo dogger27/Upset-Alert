@@ -358,6 +358,7 @@ const ROW_SLOT = 41 // px per row slot (bar height 34px + gap 7px)
 
 export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMemberCount, showRealName, showGenderLabel }) {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [toast, setToast] = useState(null)
   const toastKey = useRef(0)
   // null = always follow the latest match (auto-max); number = user-set position
@@ -554,7 +555,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                   title={`View ${entry.username}'s bracket`}
                   onClick={e => {
                     e.stopPropagation()
-                    window.open(`/tournaments/${t.id}?user=${entry.user_id}${leagueId != null ? `&league=${leagueId}` : ''}`, '_blank')
+                    navigate(`/tournaments/${t.id}?user=${entry.user_id}${leagueId != null ? `&league=${leagueId}` : ''}`)
                   }}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
