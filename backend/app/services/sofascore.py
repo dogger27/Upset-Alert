@@ -642,10 +642,13 @@ async def resolve_draw(db: AsyncSession, draw: Draw, *, force: bool = False) -> 
     # eight "unresolved entries" were four real names and four blanks that could
     # never resolve and were never meant to — reported as failures every day
     # until the qualifiers came through.
-    entries = [e for e in (await db.execute(
+    all_rows = (await db.execute(
         select(DrawEntry).where(DrawEntry.draw_id == draw.id,
                                 DrawEntry.name.isnot(None)))).scalars().all()
-               if (e.name or "").strip()]
+    entries = [e for e in all_rows if (e.name or "").strip()]
+    # Slots the draw itself has not filled yet — qualifiers, mostly. Counted
+    # (not just filtered out) because the alert below gates on it: see there.
+    report["blank_slots"] = len(all_rows) - len(entries)
     report["total"] = len(entries)
     if not entries:
         report["error"] = "draw has no named entries yet"
@@ -703,7 +706,17 @@ async def resolve_draw(db: AsyncSession, draw: Draw, *, force: bool = False) -> 
     # it. While Sofascore's bracket still has unfilled slots the missing players
     # are the ones going INTO those slots, and saying so before the draw is even
     # out is reporting the ordinary passage of time as a fault.
-    incomplete = any(_PLACEHOLDER_SLOT.match(str(t.get("name") or "")) for t in field)
+    #
+    # OUR OWN blank slots gate it for the same reason, and this half was
+    # missing: while qualifier slots in our draw are still empty, Sofascore's
+    # bracket is settling too — the four Monterrey names this warned about at
+    # 24/28 entries all resolved on the next pass once the qualifiers landed,
+    # and the alert had spent itself announcing the retry ladder doing its job.
+    # When the draw is full and a name still cannot be placed, THAT is the
+    # state retrying does not fix, and it alerts as before.
+    incomplete = (report["blank_slots"] > 0
+                  or any(_PLACEHOLDER_SLOT.match(str(t.get("name") or ""))
+                         for t in field))
     if report["unresolved"] and not incomplete:
         await app_log(
             "warning", "sofascore",
