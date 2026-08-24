@@ -659,8 +659,28 @@ def _same_pairing(a, b) -> bool:
     B = {s: set().union(set(), *_side_tokens(b, s)) for s in ('a', 'b')}
     if not all((A['a'], A['b'], B['a'], B['b'])):
         return False
-    return ((A['a'] == B['a'] and A['b'] == B['b'])
-            or (A['a'] == B['b'] and A['b'] == B['a']))
+
+    def agree(x, y):
+        """Equal, or one a subset of the other.
+
+        A CORRECTED PARSER MAKES A ROW GAIN A PLAYER, and the old row is then a
+        strict subset of the new one rather than equal to it — so plain
+        equality could not see that they are the same slot, and both stayed on
+        the page. That is how "KRAJICEK / MEKTIC vs CABRAL" ended up printed
+        beside "KRAJICEK / MEKTIC vs CABRAL / TRACY" the moment the sheet was
+        re-read with the all-caps name fix in place.
+
+        Subset is safe here for the reason equality was: the same team cannot
+        meet the same opponents twice in a day. For two DIFFERENT matches to
+        satisfy this, one side would have to be a sub-team of the other and the
+        opposing side identical — which is a player entered twice against the
+        same opponents, in the same discipline (disciplines are checked by the
+        caller), on the same day.
+        """
+        return x == y or x < y or y < x
+
+    return ((agree(A['a'], B['a']) and agree(A['b'], B['b']))
+            or (agree(A['a'], B['b']) and agree(A['b'], B['a'])))
 
 
 async def _absorb(db, keep, drop) -> None:
@@ -741,8 +761,15 @@ async def _dedupe_day(db, tournament_id: int, play_date: date) -> int:
             kept.append(row)
             continue
         # Prefer whichever of the two is settled, regardless of which sheet
-        # confirmed it last.
-        if twin.is_tbd and not row.is_tbd:
+        # confirmed it last — and, between two settled rows, whichever NAMES
+        # MORE PLAYERS. The fuller row is the one parsed by the better parser;
+        # letting document order decide would let a row that lost a player to
+        # an old bug outlive the row that has them all, and the next sweep
+        # would simply re-create the pair.
+        twin_n = len(twin.players or [])
+        row_n = len(row.players or [])
+        if (twin.is_tbd and not row.is_tbd) or (
+                twin.is_tbd == row.is_tbd and row_n > twin_n):
             kept[kept.index(twin)] = row
             await _absorb(db, keep=row, drop=twin)
         else:
