@@ -431,19 +431,32 @@ async def get_h2h(slug1: str, slug2: str, db: AsyncSession) -> dict:
 
     cached = await db.get(H2HCache, (slug_a, slug_b))
     if cached and cached.fetched_at >= _week_start_utc():
-        data = cached.data_json
-    else:
-        data = await _scrape_h2h(slug_a, slug_b)
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
-        stmt = sqlite_insert(H2HCache).values(
-            slug_a=slug_a, slug_b=slug_b, fetched_at=now, data_json=data
-        ).on_conflict_do_update(
-            index_elements=["slug_a", "slug_b"],
-            set_={"fetched_at": now, "data_json": data},
-        )
-        await db.execute(stmt)
-        await db.commit()
+        return cached.data_json
 
+    # A MISS SCRAPES TENNIS EXPLORER INSIDE THE REQUEST, and the cache expires
+    # every Monday, so the first viewer of any pair each week pays for it and
+    # every pair is due at once. When that scrape is slow or refused, a stale
+    # copy is the right answer: a head-to-head record from last week is the same
+    # record, and the panel showing "Could not load H2H data" over a row we are
+    # holding is strictly worse than showing it.
+    try:
+        data = await _scrape_h2h(slug_a, slug_b)
+    except Exception as exc:
+        if cached is not None:
+            logger.warning("H2H scrape failed for %s/%s, serving the cached copy: %s",
+                           slug_a, slug_b, exc)
+            return cached.data_json
+        raise
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    stmt = sqlite_insert(H2HCache).values(
+        slug_a=slug_a, slug_b=slug_b, fetched_at=now, data_json=data
+    ).on_conflict_do_update(
+        index_elements=["slug_a", "slug_b"],
+        set_={"fetched_at": now, "data_json": data},
+    )
+    await db.execute(stmt)
+    await db.commit()
     return data
 
 
