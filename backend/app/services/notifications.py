@@ -14,7 +14,7 @@ from collections import defaultdict
 from datetime import datetime, timezone as tz
 from typing import Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, or_
 from sqlalchemy.orm import selectinload
 
 from app.core.security import create_unsubscribe_token
@@ -974,6 +974,24 @@ async def _gather_draw_change_payload(db, draw: Draw, events: list) -> Optional[
         db, draw.id, {e.entry_id for e in events if e.kind == "filled" and e.entry_id}
     )
 
+    # IS THE PICK THIS MESSAGE IS ABOUT STILL CHANGEABLE?
+    #
+    # draw.is_locked answers for the DRAW, and under match-by-match locking it
+    # stays False for hours after individual matches have started — so a swap
+    # whose match is already on court was announced as "picks still open",
+    # inviting a change the server would refuse. The honest question is about
+    # the matches these events actually touch.
+    from app.services.locking import match_in_play
+    changed_entry_ids = {e.entry_id for e in events if e.entry_id}
+    affected_open = False
+    if changed_entry_ids:
+        affected = (await db.execute(
+            select(Match).where(
+                Match.draw_id == draw.id,
+                or_(Match.player1_id.in_(changed_entry_ids),
+                    Match.player2_id.in_(changed_entry_ids))))).scalars().all()
+        affected_open = any(not match_in_play(m) for m in affected)
+
     changes = []
     for e in sorted(events, key=lambda e: e.bracket_position):
         opp_name, opp_status, opp_bye = opponents.get(e.entry_id, (None, "", False))
@@ -997,7 +1015,9 @@ async def _gather_draw_change_payload(db, draw: Draw, events: list) -> Optional[
         "category": draw.category,
         "label": _tournament_label(draw.name, draw.category or "", draw.gender or "M"),
         "tier": _tier_badge(draw.category or "", draw.gender),
-        "locked": draw.is_locked,
+        # Locked for this message's purposes when the draw is locked OR
+        # every match it names has already started.
+        "locked": draw.is_locked or not affected_open,
         "changes": changes,
         "competitors": set(picked_entries.keys()),
         "picked_entries": picked_entries,
