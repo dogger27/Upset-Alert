@@ -246,6 +246,12 @@ def renderable_history(snap: dict) -> Optional[dict]:
         return None
     out = _render_snapshot(snap)
     out["at"] = snap.get("at")
+    if snap.get("source") == "espn":
+        # _render_snapshot fills a missing point with love-all, which is right
+        # for Sofascore — a fresh snapshot with no point is a match between
+        # games. ESPN publishes GAME COUNTS ONLY and never a point, so the same
+        # blank means "unknown", and 0-0 would be a score it never reported.
+        out["point"] = None
     return out
 
 
