@@ -83,6 +83,40 @@ _PLAYER_MATCH_MIN_JACCARD = 0.25
 # Name normalisation & token-set matching
 # ---------------------------------------------------------------------------
 
+def _espn_snapshot(live_val):
+    """An ESPN live row in the snapshot shape the history endpoint reads.
+
+    live_scores_json is [p1_games, p2_games, serving, p1_set_wins, "suspended"?]
+    with games as strings; a snapshot wants sets as [[p1, p2], ...] pairs.
+
+    `point` is None and honestly so: ESPN publishes GAME counts only, never the
+    point within the game. The renderer already treats a missing point as
+    nothing to draw, so an ESPN-sourced timeline scrubs game by game where a
+    Sofascore one scrubs point by point — coarser, and the whole difference
+    between a slider and no slider for these matches.
+    """
+    a, b = live_val[0] or [], live_val[1] or []
+    sets = []
+    for i in range(max(len(a), len(b))):
+        pa = a[i] if i < len(a) else None
+        pb = b[i] if i < len(b) else None
+        sets.append([int(pa) if str(pa).isdigit() else pa,
+                     int(pb) if str(pb).isdigit() else pb])
+    return {
+        "sets": sets,
+        "point": None,
+        "tiebreak": False,
+        "match_tiebreak": False,
+        "serving": live_val[2] if len(live_val) > 2 else None,
+        "at": datetime.now(timezone.utc).isoformat(),
+        # Read by renderable_history to suppress the point cell entirely. A
+        # Sofascore snapshot with no point means "between games, love all";
+        # this one means the feed has no points to give, and rendering 0-0
+        # would put a score on screen ESPN never reported.
+        "source": "espn",
+    }
+
+
 def _tokenize(name: str) -> frozenset:
     return frozenset(_norm(name).split())
 
@@ -1202,6 +1236,28 @@ class ESPNMonitor:
                     if m.live_scores_json != new_val:
                         m.live_scores_json = new_val
                         changed += 1
+                        # SCORE HISTORY, WHERE SOFASCORE CANNOT PROVIDE IT.
+                        #
+                        # The scrubber's snapshots normally come from the
+                        # Sofascore poller, which carries the point score. But
+                        # Sofascore does not list every match — qualifying and
+                        # some outside courts are ESPN-only — and those matches
+                        # had no history at all, so their popup opened without
+                        # a slider while the match beside them had one.
+                        #
+                        # ONLY when Sofascore is absent for this match. The two
+                        # feeds must never be spliced into one timeline: ESPN
+                        # lags up to 60s and has no point score, so interleaving
+                        # them would produce states that never existed — the
+                        # same trap renderable_point documents. One match, one
+                        # source; whichever is actually watching it.
+                        if m.sofa_live_json is None:
+                            try:
+                                from app.services.score_history import record_snapshot
+                                record_snapshot(db, m.id, _espn_snapshot(new_val))
+                            except Exception:
+                                logger.exception(
+                                    "ESPN score history insert failed for match %s", m.id)
                     # First sighting on court. Only ever written once, so a
                     # suspension and resumption does not restart the clock —
                     # the elapsed time is what the schedule needs, not time
