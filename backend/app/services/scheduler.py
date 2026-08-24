@@ -1749,16 +1749,39 @@ async def _sweep_oop_verifications() -> None:
         doc_id = r.get("doc_id")
         problems = r.get("problems") or []
         fixed = r.get("fixed") or []
+        # One status email per processed PDF, every outcome — the owner's
+        # request, so this category has its OWN channel and alerts.py exempts
+        # it from the digest (whose caps and dedup would eat routine statuses,
+        # and whose failure alert would double the needs-attention email). If
+        # the send itself fails, send_async logs that under its own category,
+        # which still digests — the safety net survives.
+        meta = None
+        try:
+            from app.models.schedule import ScheduleDocument
+            from app.models.tournament import Tournament
+            async with AsyncSessionLocal() as db2:
+                doc = await db2.get(ScheduleDocument, doc_id) if doc_id else None
+                t = (await db2.get(Tournament, doc.tournament_id)) if doc else None
+                meta = (t.name if t else "Unknown tournament",
+                        str(doc.play_date) if doc else "?")
+        except Exception as exc:
+            logger.error("oop_verify: could not load doc %s meta: %s", doc_id, exc)
+            meta = ("Unknown tournament", "?")
+
         if r.get("ok") and not problems:
-            # Clean — or found-and-FIXED, which the user asked to hear about
-            # exactly as loudly: not at all. Info level never reaches the
-            # digest; the record lives in the admin logs.
             msg = (f"OOP PDF doc {doc_id}: verifier fixed "
                    f"{len(fixed)} problem(s) itself" if fixed else
                    f"OOP PDF verified clean: doc {doc_id}")
             await app_log("info", "oop_verify",
                           f"{msg} ({r.get('summary') or 'no notes'})",
                           {"doc_id": doc_id, "fixed": fixed[:20]})
+            try:
+                from app.services.email import send_oop_status
+                await send_oop_status(doc_id=doc_id, tournament=meta[0],
+                                      play_date=meta[1], ok=True, fixed=fixed,
+                                      problems=[], summary=r.get("summary") or "")
+            except Exception as exc:
+                logger.error("oop_verify status email failed: %s", exc)
         else:
             # The one case a human still needs: the machine TRIED and could
             # not finish the repair. The email carries `handoff` — the text to
@@ -1786,6 +1809,15 @@ async def _sweep_oop_verifications() -> None:
                            "fixed": fixed[:20], "summary": r.get("summary"),
                            "handoff": handoff},
                           dedup_key=f"oop_verify_{doc_id}", dedup_hours=24)
+            try:
+                from app.services.email import send_oop_status
+                await send_oop_status(doc_id=doc_id, tournament=meta[0],
+                                      play_date=meta[1], ok=False, fixed=fixed,
+                                      problems=problems,
+                                      summary=r.get("summary") or "",
+                                      handoff=handoff)
+            except Exception as exc:
+                logger.error("oop_verify status email failed: %s", exc)
         os.replace(path, f"{done_dir}/{name}")
 
     # Retention: a verified sheet's PDF has served its purpose after two weeks.

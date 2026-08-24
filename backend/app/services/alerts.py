@@ -123,6 +123,11 @@ async def scan_and_alert() -> None:
                 .where(
                     SystemLog.level.in_(ALERT_LEVELS),
                     SystemLog.category != ALERT_CATEGORY,
+                    # oop_verify has its own per-event email channel
+                    # (email.send_oop_status) — routing it through the digest
+                    # too would double every needs-attention message. Its send
+                    # FAILURES log under other categories and still digest.
+                    SystemLog.category != "oop_verify",
                     SystemLog.created_at >= lookback_start,
                 )
                 .order_by(SystemLog.created_at)
