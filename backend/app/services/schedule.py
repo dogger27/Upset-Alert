@@ -24,6 +24,9 @@ the day instead of drifting.
 """
 
 import hashlib
+import json
+import logging
+import os
 import re
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
@@ -273,6 +276,36 @@ def _candidates(draws, names) -> set:
     return out
 
 
+def _queue_verification(doc, tournament, play_date, url, pdf_bytes, entries):
+    """Drop the PDF and a work order where the host's verifier cron finds them.
+
+    The verifier is a headless Claude Code run OUTSIDE this container (the CLI
+    lives on the host, not in the image), so the handoff is the mounted data
+    dir: /data/oop_pdfs holds the PDF, queue/ the marker. Its verdict comes
+    back the same way — results/*.json, swept into app_log by the scheduler —
+    because this app has been burned by second writers on the DB before.
+
+    Best-effort by design: a verification that cannot be queued must never
+    cost the ingest, so failures land in the ordinary log and nothing raises.
+    """
+    try:
+        base = "/data/oop_pdfs"
+        os.makedirs(f"{base}/queue", exist_ok=True)
+        with open(f"{base}/{doc.id}.pdf", "wb") as f:
+            f.write(pdf_bytes)
+        marker = {
+            "doc_id": doc.id, "tournament_id": tournament.id,
+            "tournament": tournament.name, "play_date": str(play_date),
+            "url": url, "entries": entries,
+            "queued_at": datetime.now(timezone.utc).isoformat(),
+        }
+        with open(f"{base}/queue/{doc.id}.json", "w") as f:
+            json.dump(marker, f)
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "could not queue OOP verification for doc %s", doc.id)
+
+
 async def ingest_document(db, tournament, play_date: date, url: str,
                           pdf_bytes: bytes, tour: Optional[str] = None) -> dict:
     """Parse one PDF revision and reconcile it into schedule_entries."""
@@ -296,6 +329,10 @@ async def ingest_document(db, tournament, play_date: date, url: str,
     await db.flush()
 
     if not matches:
+        # An OOP revision that parsed to NOTHING is exactly the revision most
+        # worth independent eyes — a parser regression looks like this.
+        await db.commit()
+        _queue_verification(doc, tournament, play_date, url, pdf_bytes, 0)
         return {'document_id': doc.id, 'kind': meta.get('kind'), 'entries': 0}
 
     # Roster for resolution: every draw of this tournament.
@@ -541,6 +578,9 @@ async def ingest_document(db, tournament, play_date: date, url: str,
     await _dedupe_day(db, tournament.id, play_date)
     await _renumber_courts(db, tournament.id, play_date)
     await db.commit()
+    # AFTER the commit: the verifier reads this day back through the public
+    # API, so queueing before the rows land would have it check stale data.
+    _queue_verification(doc, tournament, play_date, url, pdf_bytes, written)
     return {'document_id': doc.id, 'entries': written, 'kind': meta.get('kind')}
 
 

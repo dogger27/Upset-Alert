@@ -1024,7 +1024,6 @@ async def _notify_pending_round_digests() -> None:
     # completion would otherwise hide that draw's Final for another cycle.
     await _record_missed_completions()
 
-    now = datetime.now(timezone.utc)
     async with AsyncSessionLocal() as db:
         await _record_completed_rounds(db)
         pending = (await db.execute(
@@ -1714,6 +1713,75 @@ async def run_schedule_estimates_only() -> None:
         await asyncio.sleep(120)
 
 
+async def _sweep_oop_verifications() -> None:
+    """Carry the host verifier's verdicts into the alert pipeline.
+
+    The verifier (a headless Claude Code cron on the host) writes one JSON per
+    checked document into /data/oop_pdfs/results. It cannot write to the DB
+    itself — every "database is locked" incident this app has had came from a
+    second writer — so this sweep, inside the app's own writer, is the only
+    path a verdict takes into system_logs. Problems alert (the digest mails
+    them); clean passes log quietly. Files then move to results/done, and
+    PDFs or verdicts older than 14 days are pruned.
+    """
+    import json as _json
+    import os
+    import time as _time
+
+    from app.services.system_log import app_log
+
+    base = "/data/oop_pdfs"
+    res_dir, done_dir = f"{base}/results", f"{base}/results/done"
+    try:
+        os.makedirs(done_dir, exist_ok=True)
+        names = [n for n in os.listdir(res_dir) if n.endswith(".json")]
+    except FileNotFoundError:
+        return
+    for name in sorted(names):
+        path = f"{res_dir}/{name}"
+        try:
+            with open(path) as f:
+                r = _json.load(f)
+        except Exception as exc:
+            logger.error("Unreadable verifier result %s: %s", name, exc)
+            os.replace(path, f"{done_dir}/{name}")
+            continue
+        doc_id = r.get("doc_id")
+        problems = r.get("problems") or []
+        fixed = r.get("fixed") or []
+        if r.get("ok") and not problems:
+            # Clean — or found-and-FIXED, which the user asked to hear about
+            # exactly as loudly: not at all. Info level never reaches the
+            # digest; the record lives in the admin logs.
+            msg = (f"OOP PDF doc {doc_id}: verifier fixed "
+                   f"{len(fixed)} problem(s) itself" if fixed else
+                   f"OOP PDF verified clean: doc {doc_id}")
+            await app_log("info", "oop_verify",
+                          f"{msg} ({r.get('summary') or 'no notes'})",
+                          {"doc_id": doc_id, "fixed": fixed[:20]})
+        else:
+            # The one case a human still needs: the machine TRIED and could
+            # not finish the repair.
+            await app_log("error", "oop_verify",
+                          f"OOP verifier could not fix doc {doc_id}: "
+                          f"{len(problems) or 'unknown'} problem(s) remain",
+                          {"doc_id": doc_id, "problems": problems[:20],
+                           "fixed": fixed[:20], "summary": r.get("summary")},
+                          dedup_key=f"oop_verify_{doc_id}", dedup_hours=24)
+        os.replace(path, f"{done_dir}/{name}")
+
+    # Retention: a verified sheet's PDF has served its purpose after two weeks.
+    cutoff = _time.time() - 14 * 86400
+    for d in (base, done_dir):
+        try:
+            for n in os.listdir(d):
+                fp = f"{d}/{n}"
+                if os.path.isfile(fp) and os.path.getmtime(fp) < cutoff:
+                    os.remove(fp)
+        except FileNotFoundError:
+            pass
+
+
 async def _prune_score_snapshots() -> None:
     """Clear score histories nobody can scrub any more — a draw's snapshots go
     one day after the draw completes. See services/score_history.py for the
@@ -1787,6 +1855,13 @@ def start_scheduler() -> None:
         minute=30,
         id="prune_score_snapshots",
         misfire_grace_time=3600,
+    )
+    scheduler.add_job(
+        _on_shutdown_quietly(_sweep_oop_verifications),
+        "interval",
+        minutes=5,
+        id="sweep_oop_verifications",
+        misfire_grace_time=240,
     )
     # Scrape active tournaments every 30 minutes so live scores update promptly.
     scheduler.add_job(
