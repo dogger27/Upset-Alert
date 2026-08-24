@@ -68,6 +68,7 @@ async def init_db():
     import app.models.push  # noqa: F401
     import app.models.rankings   # noqa: F401
     import app.models.schedule  # noqa: F401
+    import app.models.score_history  # noqa: F401
     import app.models.setting  # noqa: F401
     import app.models.system_log  # noqa: F401
     import app.models.tournament  # noqa: F401

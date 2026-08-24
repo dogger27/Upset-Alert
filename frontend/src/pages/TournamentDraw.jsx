@@ -13,6 +13,7 @@ import { useAuth } from '../store/auth'
 import BracketView, { COL_W as BV_COL_W, COL_W_SCORES as BV_COL_W_SCORES, COL_GAP as BV_COL_GAP } from '../components/BracketView'
 import CombinedView, { COL_W as CV_COL_W, COMPACT_COL_W as CV_COMPACT_COL_W, COL_GAP as CV_COL_GAP, H2H_X as CV_H2H_X } from '../components/CombinedView'
 import DrawSidebar from '../components/DrawSidebar'
+import ScoreHistoryPopup from '../components/ScoreHistoryPopup'
 import { rootFontPx, textWidth } from '../utils/text'
 import './TournamentDraw.css'
 
@@ -210,6 +211,10 @@ function TournamentDraw() {
   }, [bodyWidthRef, nativeTouchMove])
   const [viewedUserId, setViewedUserId] = useState(() => { const u = searchParams.get('user'); return u ? Number(u) : null })
   const [viewedUserName, setViewedUserName] = useState(null)
+  /* BracketView's score-history popup target. CombinedView hosts its own copy
+     of this state (its convention — h2h and predictors already live there);
+     this one exists because BracketView's popups are hosted by the page. */
+  const [scoreMatch, setScoreMatch] = useState(null)
   const initialModeSet = useRef(false)
   const [showUnlockConfirm, setShowUnlockConfirm] = useState(false)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
@@ -236,7 +241,7 @@ function TournamentDraw() {
   // Push updates. The 2-minute refetchInterval above stays as the safety net
   // for a dropped connection; this is what makes a live score arrive in about a
   // second instead of on the next tick.
-  useLiveUpdates(data?.tournament?.id, [['draw', id]])
+  useLiveUpdates(data?.tournament?.id, [['draw', id], ['score-history']])
 
   /*
    * Gated on the TOKEN, not on the resolved user.
@@ -1729,6 +1734,9 @@ function TournamentDraw() {
               locked={!user || locked || (viewingOther && !canEditOther)}
               lockedMatchIds={lockedMatchIds}
               mode={viewMode}
+              onShowScore={tournament.status !== 'open'
+                ? (m) => { if (!m.is_bye && (m.winner || m.live_scores || m.scores)) setScoreMatch(m) }
+                : null}
               picksOwner={picksOwner}
               windowStart={windowPos}
               windowSize={DRAW_WINDOW}
@@ -1738,6 +1746,14 @@ function TournamentDraw() {
           )}
 
         </div>
+
+        {scoreMatch != null && (
+          <ScoreHistoryPopup
+            drawId={tournament.id}
+            match={matches.find(x => x.id === scoreMatch.id) ?? scoreMatch}
+            onClose={() => setScoreMatch(null)}
+          />
+        )}
 
         {/* Big edge buttons to page the round just off-screen — POINTER ONLY.
             Dragging the draw does this on a touch device, which makes them

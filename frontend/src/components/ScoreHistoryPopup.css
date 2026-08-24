@@ -1,0 +1,99 @@
+/* Score-history popup — the match card plus a time scrubber.
+   Backdrop and shell copy PredictorsPopup (which copies .h2h-backdrop); the
+   slider copies .lt-scrubber-range, including the touch-action note there —
+   dragging the thumb must never read as a page pan or a pinch. */
+.shp-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100vh;
+  height: 100dvh;
+  background: var(--overlay);
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  overscroll-behavior: contain;
+}
+
+.shp-popup {
+  background: var(--surface-card);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
+  width: min(440px, 100%);
+  display: flex;
+  flex-direction: column;
+  padding: 0.8rem 1.1rem 1rem;
+}
+
+.shp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+.shp-when {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.shp-when--live { color: var(--info); }
+.shp-close {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.3rem 0.55rem;
+  cursor: pointer;
+}
+
+/* The card inside renders with the schedule's own sched-* classes; give it the
+   card surface those styles assume. */
+.shp-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.7rem 0.8rem;
+}
+
+.shp-scrub { margin-top: 0.85rem; }
+.shp-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 32px;
+  border: none;
+  border-radius: 0;
+  touch-action: none;      /* see .lt-scrubber-range — the slider owns its touches */
+  background: linear-gradient(to right,
+      var(--green-500) var(--fill-pct, 100%),
+      var(--border, var(--n-200)) var(--fill-pct, 100%))
+    center / 100% 4px no-repeat;
+  outline: none;
+  margin: 0;
+  padding: 0;
+}
+.shp-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  touch-action: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--brand-active);
+  border: 3px solid var(--on-brand);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+}
+.shp-range::-moz-range-thumb {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--brand-active);
+  border: 3px solid var(--on-brand);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+}

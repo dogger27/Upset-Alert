@@ -19,6 +19,7 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import H2HPanel from './H2HPanel'
 import PredictorsPopup from './PredictorsPopup'
+import ScoreHistoryPopup from './ScoreHistoryPopup'
 import { buildH2HSequence, buildMatchIndex, h2hNeighbours, resolveRealFirst } from '../utils/h2hSequence'
 import useFlashOnChange from '../hooks/useFlashOnChange'
 import './CombinedView.css'
@@ -378,6 +379,20 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
   const [h2h, setH2H] = useState(null)
   // Completed match whose predictors popup is open (the group chip's target).
   const [predictorsMatch, setPredictorsMatch] = useState(null)
+  /* The match whose score-history popup is open — the id, not the object, so
+     the popup always reads the CURRENT match off this render and a live score
+     keeps moving while it is up. Clicking a box means "show me this score"
+     once the draw is past picking; while the draw is open the same click is a
+     pick, which is why the two never coexist. */
+  const [scoreMatchId, setScoreMatchId] = useState(null)
+  const scoresMode = tournament?.status !== 'open'
+  // Something to show: played, playing, or at least a recorded result. A
+  // scheduled match answers with nothing, so it does not open (the same
+  // silent-no-op the pick path uses for a closed draw).
+  const scoreOpenable = (m) => !!m && !m.is_bye
+    && (m.winner || m.live_scores || m.live_point || m.scores)
+  const scoreClick = (m) => (scoresMode && scoreOpenable(m)
+    ? () => setScoreMatchId(m.id) : null)
   /* The scroll container. It has ONE owner while a gesture is running: the
      scrub, which holds the row under the finger.
 
@@ -998,8 +1013,15 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
     // placeholder slot (isBye, handled above) NOR the opponent's own slot
     // should be clickable, so a click can never save a redundant "pick"
     // for a match that was always going to auto-advance regardless.
-    const onClick = match.is_bye ? null : nextMatchOnClick(0, i, pid)
-    const pickable = !match.is_bye && nextMatchPickable(0, i, pid)
+    // Past picking, a click on either entrant shows the score of the match
+    // they contest — the same match the outline between them holds.
+    const contested = R[0][Math.floor(i / 2)]
+    const onClick = scoresMode
+      ? scoreClick(contested)
+      : (match.is_bye ? null : nextMatchOnClick(0, i, pid))
+    const pickable = scoresMode
+      ? !!scoreClick(contested)
+      : (!match.is_bye && nextMatchPickable(0, i, pid))
     return { key: `e${i}`, player, isBye, serving: !isBye && isServing(0, i), abbrev: true, kind: 'entrant', clickable: pickable, onClick }
   }
 
@@ -1022,8 +1044,13 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
     // nothing is shown here until the match is decided and match.scores lands.
     const score = match.is_bye || isLiveMatch(match) ? null : scoreNodes(match.scores)
 
-    const onClick = nextMatchOnClick(c, i, displayId)
-    const pickable = nextMatchPickable(c, i, displayId)
+    const contested = c < N ? R[c][Math.floor(i / 2)] : null
+    const onClick = scoresMode
+      ? scoreClick(contested ?? match)
+      : nextMatchOnClick(c, i, displayId)
+    const pickable = scoresMode
+      ? !!scoreClick(contested ?? match)
+      : nextMatchPickable(c, i, displayId)
 
     return {
       key: `w${match.id}`, player, correct, wrong, score, serving: isServing(c, i),
@@ -1068,6 +1095,15 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
           match={predictorsMatch}
           leagueId={leagueId}
           onClose={() => setPredictorsMatch(null)}
+        />
+      )}
+      {scoreMatchId != null && (
+        <ScoreHistoryPopup
+          drawId={tournament?.id}
+          /* Fresh by id off this render's matches, never the click-time object
+             — the live view must keep moving while the popup is open. */
+          match={matches.find(x => x.id === scoreMatchId) ?? null}
+          onClose={() => setScoreMatchId(null)}
         />
       )}
       {/* insetLeft's caller (NAV_INSET) is already tuned tight to the nav
@@ -1290,8 +1326,9 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                     return (
                       <Fragment key={`mo${m.id}`}>
                         <div
-                          className={`cv-match-outline${isMissingPick ? ' cv-match-outline--missing' : ''}`}
+                          className={`cv-match-outline${isMissingPick ? ' cv-match-outline--missing' : ''}${scoreClick(m) ? ' cv-match-outline--openable' : ''}`}
                           style={outlineTravel}
+                          onClick={scoreClick(m) ?? undefined}
                         />
                         {isLive && (
                           <span className={`in-progress-badge${isSuspended ? ' in-progress-badge--suspended' : ''}`}
@@ -1370,8 +1407,9 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                           const showPts = pts && pts.some(p => p != null)
                           return (
                             <span
-                              className={`cv-live-score cv-live-score--s${Math.min(nodes.length, 4)}${colIdx > 0 ? ' cv-live-score--roomy' : ''}${bell ? ' cv-live-score--bell' : ''}${isSuspended ? ' cv-live-score--suspended' : ''}`}
+                              className={`cv-live-score cv-live-score--s${Math.min(nodes.length, 4)}${colIdx > 0 ? ' cv-live-score--roomy' : ''}${bell ? ' cv-live-score--bell' : ''}${isSuspended ? ' cv-live-score--suspended' : ''}${scoreClick(m) ? ' cv-live-score--openable' : ''}`}
                               style={gapMidTravel}
+                              onClick={scoreClick(m) ?? undefined}
                             >
                               {nodes}
                               {showPts && <LivePoint pts={pts} tiebreak={lp.tiebreak} />}

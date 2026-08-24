@@ -3,7 +3,9 @@ Sofascore live-score polling — the point score ESPN structurally cannot give u
 
 WHAT THIS ADDS AND WHAT IT DOES NOT TOUCH. ESPN remains the source of record for
 who is playing, who won, and when a match started or finished. This service
-writes exactly one column, `matches.sofa_live_json`, and nothing else. It never
+writes exactly one column, `matches.sofa_live_json`, and nothing else. It never — plus, since the score-history
+feature, one INSERT per score change into match_score_snapshots (see
+services/score_history.py); that insert rides this poller's own commit
 sets winner_id, completed_at, live_scores_json or picks_locked_at. That boundary
 is deliberate: ESPN has been reliable for singles, and a second writer competing
 for the same fields is how two sources become one bug.
@@ -231,6 +233,22 @@ def _older_than(stamp, seconds: float) -> bool:
     return (datetime.now(timezone.utc) - at).total_seconds() > seconds
 
 
+def renderable_history(snap: dict) -> Optional[dict]:
+    """A stored history snapshot in the shape the schedule renderer reads.
+
+    renderable_point with its freshness and finished guards removed — a history
+    row is BY DEFINITION not fresh, that being the point — and the `at` stamp
+    kept, because the popup labels each slider position with when the score
+    stood that way. It delegates to the same body, so the judgement rules
+    cannot drift into a second copy, which is that helper's whole doctrine.
+    """
+    if not snap or not snap.get("sets"):
+        return None
+    out = _render_snapshot(snap)
+    out["at"] = snap.get("at")
+    return out
+
+
 def renderable_point(snap: Optional[dict], finished: bool) -> Optional[dict]:
     """The point score a reader should draw from this snapshot, or None.
 
@@ -271,7 +289,12 @@ def renderable_point(snap: Optional[dict], finished: bool) -> Optional[dict]:
     # every single game and came back for the next one. A gap that opens and
     # closes a dozen times a set reads as something broken, not as an absence.
     # The snapshot is fresh, which means the match is being played, and the
-    # score between two games is love all. Say so.
+    # score between two games is love all — _render_snapshot says so.
+    return _render_snapshot(snap)
+
+
+def _render_snapshot(snap: dict) -> dict:
+    """The formatting half, shared by renderable_point and renderable_history."""
     point = [p if p is not None else "0"
              for p in (snap.get("point") or [None, None])]
 
@@ -468,6 +491,19 @@ async def poll_once(db) -> dict:
             match.sofa_live_json = snap
             written += 1
             touched_draws.add(draw_id)
+            # HISTORY, on the content-change half of this condition ONLY. The
+            # stamp-refresh half fires every 22.5s per idle live match and would
+            # bank thousands of identical rows a day; a change is one row per
+            # point, which is the timeline the popup's slider scrubs. First
+            # sighting lands here too — `before` is {} then. Wrapped so a
+            # history failure can never cost the score write it rides beside.
+            if before != after:
+                try:
+                    from app.services.score_history import record_snapshot
+                    record_snapshot(db, match.id, snap)
+                except Exception:
+                    logger.exception("score history insert failed for match %s",
+                                     match.id)
 
         # Same promotion as the results sweep: when Sofascore is the record,
         # espn_monitor is not running and live_scores_json would sit frozen at
