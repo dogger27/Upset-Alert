@@ -304,8 +304,10 @@ class Draw(Base):
         # contradicting the buttons underneath it.
         #
         # picks_locked_at is the one fact that settles it, and draw_lock_state
-        # stamps it at the moment the first round is done (see is_locked). Until
-        # then the draw is open, whatever the date says.
+        # stamps it the moment every first-round match has STARTED (the
+        # owner's rule — see _r1_all_started). Until then the draw is open,
+        # whatever the date says, and anyone entering gets the favourite
+        # filled in for every match already frozen.
         if (self.pick_lock_mode == "r1_progressive"
                 and not self.picks_locked_at
                 and self.draw_released_direct_at
