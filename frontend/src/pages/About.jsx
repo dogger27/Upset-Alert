@@ -133,9 +133,13 @@ export default function About() {
                 <p className="about-card-body">
                   <a href="https://en.wikipedia.org" target="_blank" rel="noopener noreferrer">Wikipedia</a>: Tournament Data &amp; Draws
                   <br />
-                  <a href="https://www.espn.com" target="_blank" rel="noopener noreferrer">ESPN</a>: Match Results
+                  <a href="https://www.sofascore.com" target="_blank" rel="noopener noreferrer">Sofascore</a>: Live Point-by-Point Scores &amp; Match Results
                   <br />
-                  <a href="https://www.tennisexplorer.com" target="_blank" rel="noopener noreferrer">Tennis Explorer</a>: Weekly Rankings, Player Data, and H2H
+                  <a href="https://www.espn.com" target="_blank" rel="noopener noreferrer">ESPN</a>: Live Score &amp; Results Cross-Check
+                  <br />
+                  ATP/WTA Official Order of Play: Daily Schedules
+                  <br />
+                  <a href="https://www.tennisexplorer.com" target="_blank" rel="noopener noreferrer">Tennis Explorer</a>: Weekly Rankings, Elo &amp; Player Data
                 </p>
               </div>
               <div className="about-card">
@@ -143,7 +147,9 @@ export default function About() {
                 <h4 className="about-card-heading">Fully Autonomous</h4>
                 <p className="about-card-body">
                   The site runs itself. Draw results, tournament schedules, player seedings,
-                  and rankings all stay current automatically — no admin intervention required.
+                  and rankings all stay current automatically — and every published schedule
+                  is verified against the official sheet by an autonomous AI agent that
+                  repairs what it finds. No admin intervention required.
                 </p>
               </div>
             </div>
