@@ -188,9 +188,11 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
                 key={`${m.kind}${m.i}${m.adj ? 'a' : ''}`}
                 className={`shp-tick shp-tick--${m.kind} shp-tick--${
                   (m.side === 1) === topIsP1 ? 'up' : 'down'}`}
-                /* adj: a break that sealed the set/match rides 7px to the
-                   LEFT of the tick it sealed — beside, never underneath. */
-                style={{ left: `calc(var(--shp-thumb) / 2 + (100% - var(--shp-thumb)) * ${m.i / max}${m.adj ? ' - 7px' : ''})` }}
+                /* adj: a break that sealed the set/match sits FLUSH against
+                   the left edge of the tick it sealed — one tick width over,
+                   so the pair reads as a single two-coloured mark. The 3px
+                   must equal .shp-tick's width; drift and a seam opens. */
+                style={{ left: `calc(var(--shp-thumb) / 2 + (100% - var(--shp-thumb)) * ${m.i / max}${m.adj ? ' - 3px' : ''})` }}
               />
             ))}
             <input
