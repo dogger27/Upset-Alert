@@ -163,7 +163,8 @@ function doublesPresentation(sides, sets, box = null) {
 
 function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp, tight,
                      sets = SET_SLOTS, form, box = null, hasFlag = true }) {
-  const { seed: printedSeed, first, last, nat } = splitPlayerName(raw)
+  const { seed: printedSeed, first, last, nat, members } = splitPlayerName(raw)
+  const isTeam = !!members
   // A seeding sent as a field beats one parsed out of the name: a resolved
   // player's name comes from the bracket and never carried brackets to parse.
   const seed = seedProp != null ? `[${seedProp}]` : printedSeed
@@ -289,9 +290,17 @@ function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp, t
           the column, which reads as a layout fault rather than as a country
           being withheld. The box says the same thing the sheet does — there is
           a flag's worth of nothing here — and keeps the column straight. */}
+      {/* NOTHING AT ALL for a side that names a whole TEAM in one string. The
+          blank box means "this player's country was withheld", and a pair has
+          two countries and one box — so it would be saying something false,
+          about a row where the sheet in fact printed both. Nor is there a
+          column to keep straight: the alternatives beside it draw no flag
+          either. (Winston-Salem 2026-08-26, "ARRIBAGE / GUINARD".) */}
       {iso2
         ? <span className={`fi fi-${iso2.toLowerCase()} sched-flag`} title={nat} />
-        : <span className="sched-flag flag-blank" aria-hidden="true" />}
+        : isTeam
+          ? null
+          : <span className="sched-flag flag-blank" aria-hidden="true" />}
       <span className={clsx('sched-pname', { 'sched-pname--long': longName })}>
         {decided ?? (surnameOnly ? last : longName ? (
           <>
