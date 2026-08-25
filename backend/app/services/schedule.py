@@ -23,7 +23,6 @@ live or finished re-anchors the chain to reality, so estimates sharpen through
 the day instead of drifting.
 """
 
-import asyncio
 import hashlib
 import json
 import logging
@@ -500,10 +499,7 @@ async def ingest_document(db, tournament, play_date: date, url: str,
     if existing:
         return {'skipped': 'unchanged', 'document_id': existing.id}
 
-    # OFF THE EVENT LOOP, same incident as scraper.parse_draw: pdfplumber is
-    # seconds of sync CPU per sheet, and a burst of revisions parsed inline
-    # froze every request in flight.
-    matches, meta = await asyncio.to_thread(parse_pdf, pdf_bytes)
+    matches, meta = parse_pdf(pdf_bytes)
     doc = ScheduleDocument(
         tournament_id=tournament.id, play_date=play_date, source_url=url,
         tour=tour, sha256=digest, revision_label=meta.get('date_line'),

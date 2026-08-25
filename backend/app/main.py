@@ -54,11 +54,6 @@ from app.routers import admin, auth, contact, discovery, h2h, leagues, predictio
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
-    # The write-txn watchdog: names any transaction held >20s with the stack
-    # from its BEGIN. See database.py — installed after a day of lock storms
-    # whose holder no outside tool could identify.
-    from app.database import txn_watchdog
-    asyncio.create_task(txn_watchdog())
     # Only production runs the background scrapers (Wikipedia / Tennis Explorer /
     # ELO / ESPN / Wikimedia EventStreams). Local dev (environment=development)
     # leaves them off so it doesn't duplicate load / trip rate limits.
@@ -298,23 +293,3 @@ async def unsubscribe(token: str = ""):
         await db.commit()
     label = _UNSUB_PREF_LABELS.get(pref_key, "the selected email type")
     return HTMLResponse(_unsubscribe_page(f"You have been unsubscribed from {label}."))
-
-@app.get("/debug/tasks/{key}")
-async def debug_tasks(key: str):
-    """TEMPORARY forensic endpoint (2026-08-25 lock/hang storms): every asyncio
-    task's current stack. py-spy shows threads; the hangs live in tasks. Keyed
-    rather than admin-authed so it works even when the auth path itself hangs."""
-    if key != "wedge-hunt-7391":
-        from fastapi import HTTPException
-        raise HTTPException(404)
-    import traceback
-    out = []
-    for t in asyncio.all_tasks():
-        frames = t.get_stack(limit=8)
-        out.append({
-            "name": t.get_name(),
-            "stack": ["".join(traceback.format_stack(f, limit=1)).strip()
-                      for f in frames][-6:],
-        })
-    return out
-

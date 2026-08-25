@@ -647,27 +647,9 @@ function TournamentDraw() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['draw', id] }); setShowUnlockConfirm(false) },
   })
 
-  /* SEND THE DELTA, NOT THE WORLD. The save used to ship the full pick set
-     (~27 entries) on every click; the server upserts only what arrives, so
-     the changed keys alone are sufficient — and on 2026-08-25 they were also
-     NECESSARY: a reader's network path swallowed large request bodies while
-     probe-sized ones passed, so their every save timed out at the client
-     while a one-pick probe returned in 0.1s from the same server. Small
-     bodies align every user's saves with the packet size that provably
-     traverses hostile paths. The response still returns the full stored set,
-     so the screen resyncs identically. */
-  const diffPicks = (base, next) => {
-    const out = {}
-    for (const mid of Object.keys(next)) {
-      if (next[mid] !== base[mid]) out[mid] = next[mid]
-    }
-    return out
-  }
-
   const applyPicks = (newPicks) => {
-    const delta = diffPicks(picks, newPicks)
     setPicks(newPicks)
-    if (user && Object.keys(delta).length) saveMutation.mutate(delta)
+    if (user) saveMutation.mutate(newPicks)
   }
 
   const computeAutoPicks = () => {
@@ -955,11 +937,6 @@ function TournamentDraw() {
       window.alert(LIVE_PICK_MSG)
       return
     }
-    /* A TIMED-OUT SAVE RETRIES ITSELF ONCE. The request can die between the
-       browser and the edge with the server perfectly healthy — 2026-08-25's
-       desktop failures arrived nowhere while probes ran 200s in the same
-       seconds, on a line with a QUIC history. The payload is the full pick
-       set, so a retry is safe whether or not the first attempt landed. */
     /* SENT cascaded, SHOWN un-cascaded. The payload has to clear the path the
        old player was carrying, or the server keeps a pick for someone who can
        no longer get there. The SCREEN must not, because a cleared pick renders
@@ -969,10 +946,9 @@ function TournamentDraw() {
        set arrives with the response (applySaved) a moment later. */
     // Shown fully settled, exactly as the server will store it — so the
     // bracket never displays a blank or a player who has just been beaten.
-    const delta = diffPicks(picks, newPicks)
     setPicks(projectPicks(newPicks))
-    if (user && !locked && Object.keys(delta).length) {
-      saveMutation.mutate(delta)
+    if (user && !locked) {
+      saveMutation.mutate(newPicks)
     }
 
   }
@@ -1006,9 +982,8 @@ function TournamentDraw() {
       return
     }
     // Same as handlePick: cascaded to the server, un-cascaded on screen.
-    const delta = diffPicks(otherPicks, newPicks)
     setOtherPicks(projectPicks(newPicks))
-    if (Object.keys(delta).length) saveOtherMutation.mutate(delta)
+    saveOtherMutation.mutate(newPicks)
   }
 
   const everHadPicksRef = useRef(false)

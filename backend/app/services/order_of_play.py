@@ -400,7 +400,6 @@ async def refresh_order_of_play() -> int:
     today = date.today()
     updated = 0
 
-    pending: dict[int, dict] = {}
     async with AsyncSessionLocal() as db:
         rows = (await db.execute(
             select(Tournament, Draw)
@@ -552,35 +551,15 @@ async def refresh_order_of_play() -> int:
                     gender_ok = draw.gender == "F" or covers_atp
                 covered = fresh and gender_ok and _running(draw, today)
                 new_url = url if covered else None
-                # BUFFERED, NOT ASSIGNED. These draws are attached to the
-                # session that lives across this whole loop, and the loop
-                # fetches protennislive between iterations — the alert that
-                # broke this open showed 19 oop_checked_at stamps spaced 1.6s
-                # apart flushed as one batch. The first mid-loop autoflush
-                # took SQLite's only write lock and the job then held it for
-                # minutes of network time: the 2026-08-25 storm, whole and
-                # entire. The writer never waits on the network — stamps
-                # accumulate here and land in one short transaction below.
-                stamp = pending.setdefault(draw.id, {})
                 if covered and draw.oop_first_seen_at is None:
-                    stamp["oop_first_seen_at"] = datetime.now(timezone.utc)
+                    draw.oop_first_seen_at = datetime.now(timezone.utc)
                 if draw.oop_url != new_url or draw.oop_date != (oop_date if covered else None):
-                    stamp["oop_url"] = new_url
-                    stamp["oop_date"] = oop_date if covered else None
+                    draw.oop_url = new_url
+                    draw.oop_date = oop_date if covered else None
                     updated += 1
-                stamp["oop_checked_at"] = datetime.now(timezone.utc)
+                draw.oop_checked_at = datetime.now(timezone.utc)
 
-    # The write pass: everything the fetches learned, in one brief holder of
-    # the lock, on a session that has never touched the network.
-    if pending:
-        async with AsyncSessionLocal() as wdb:
-            for did, fields in pending.items():
-                d = await wdb.get(Draw, did)
-                if d is None:
-                    continue
-                for k, v in fields.items():
-                    setattr(d, k, v)
-            await wdb.commit()
+        await db.commit()
 
     await _alert_missing_schedule()
     return updated
