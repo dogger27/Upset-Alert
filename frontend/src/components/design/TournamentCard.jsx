@@ -361,7 +361,12 @@ export function TournamentCard({ tour = 'ATP', name, city, surface = 'grass', ti
           </div>
         )}
       </div>
-      {wikiUrl && (
+      {/* The globe is the fallback, not a sibling: once an Order of Play
+          button is live on the card, the corner it floats in belongs to that
+          — two links pressed together read as clutter, and the sheet is the
+          better answer to "what is happening at this tournament". The wiki
+          link keeps the corner only while there is no sheet to offer. */}
+      {wikiUrl && !oopTo && (
         <a
           href={wikiUrl}
           target="_blank"
