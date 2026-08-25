@@ -132,17 +132,20 @@
 .shp-tick {
   position: absolute;
   width: 3px;
-  height: 11px;
+  height: 21px;
   border-radius: 2px;
   transform: translateX(-50%);
   pointer-events: none;
 }
-/* Anchored at the 4px band's centre (16px of the 32px control): an up tick
-   grows from the band toward the top initials, a down tick toward the
-   bottom's. One pixel of overlap with the band so the join reads as one
-   mark, not a floating dash. */
-.shp-tick--up   { top: 6px; }
-.shp-tick--down { top: 15px; }
+/* Anchored at the 4px band's centre (16px of the 32px control) and TALLER
+   THAN THE THUMB'S REACH: the 28px thumb spans 2px..30px, and an 11px tick
+   vanished entirely underneath it — on a phone the thumb parks exactly where
+   the reader is looking. 21px from the band's centre runs to -5px above /
+   37px below, so every tick clears the thumb's edge by 5px and stays
+   readable with the head sitting on it. The bleed lives in the scrub row's
+   own margins (13px above, 5px to the legend), so nothing collides. */
+.shp-tick--up   { top: -5px; }
+.shp-tick--down { top: 16px; }
 .shp-tick--break { background: var(--warning); }
 .shp-tick--set   { background: var(--info); }
 
