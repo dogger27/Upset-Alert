@@ -178,8 +178,26 @@ def _classify(match, *, before_main: bool = False, resolved: bool = True,
     # the draw. Still requires the row to resolve to no main-draw entry, so a
     # qualifier who has since come through is read as the main-draw player they
     # now are.
-    if stage == 'main' and not resolved and (before_main or seen_qualifying):
-        stage = 'qualifying'
+    #
+    # SINGLES ONLY — hence discipline being settled first, below. Both signals
+    # are facts about the SINGLES draw and neither survives the trip to a
+    # doubles row. `resolved` asks whether these players are in `draw_entries`,
+    # which holds no doubles draw at all, so EVERY doubles slot ever printed is
+    # unresolved: the evidence half is vacuously true and the test collapses to
+    # the surname half alone. And that half is not a collision here, it is the
+    # ordinary case — losing singles qualifying on Saturday and playing
+    # main-draw doubles on Monday is what doubles players and qualifiers do,
+    # so "nobody plays qualifying after they are in the draw" is simply false
+    # across events. Winston-Salem 2026-08-24 printed three main-draw doubles
+    # matches and the page badged two of them "Q": the two holding Polmans and
+    # Oberleitner, both of whom had played singles qualifying that week.
+    # Krajicek/Mektic shared a surname with nobody and stayed main — so three
+    # identical rows off one sheet rendered two different ways.
+    #
+    # A doubles row can still BE qualifying: the event code (QD) and a printed
+    # Q round both say so above, and both are the sheet stating it rather than
+    # us guessing.
+
     # AN UNRESOLVED SINGLES SLOT IS NOT DOUBLES. The parser calls a row doubles
     # when a side carries two names, which is true of a doubles team and equally
     # true of "Pascual Ferra OR Suresh" — so every TBD singles slot came through
@@ -193,6 +211,10 @@ def _classify(match, *, before_main: bool = False, resolved: bool = True,
     tbd = bool(getattr(match, 'tbd', False))
     two_up = any('/' in n for n in list(match.side_a) + list(match.side_b))
     discipline = 'doubles' if (match.is_doubles and (not tbd or two_up)) else 'singles'
+
+    if (discipline == 'singles' and stage == 'main' and not resolved
+            and (before_main or seen_qualifying)):
+        stage = 'qualifying'
     return stage, discipline
 
 
