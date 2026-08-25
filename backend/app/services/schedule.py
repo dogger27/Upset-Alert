@@ -785,6 +785,76 @@ async def ingest_document(db, tournament, play_date: date, url: str,
     return {'document_id': doc.id, 'entries': written, 'kind': meta.get('kind')}
 
 
+async def describe_revision_changes(db, doc, prev_doc) -> list[str]:
+    """What this revision changed, as short lines for the status email.
+
+    Deterministic, from what the ingest already recorded: ScheduleChange rows
+    stamped with this document (court, order, time, start wording) plus slots
+    that appeared or disappeared between the two fetches. A player swap shows
+    as its removed/added pair, which reads plainly ("- Kopriva vs Machac /
+    + Herbert vs Machac") without any swap-detection cleverness. Capped by the
+    CALLER — this returns everything and the email keeps the first few.
+    """
+    lines: list[str] = []
+
+    def _who(entry) -> str:
+        names = []
+        for side in ("a", "b"):
+            ps = sorted((p for p in (entry.players or []) if p.side == side),
+                        key=lambda x: x.position or 0)
+            surnames = []
+            for pl in ps:
+                last = _clean_name(pl.raw_name or "").split()
+                surnames.append(next((w for w in reversed(last)
+                                      if w == w.upper() and len(w) > 1), last[-1] if last else "?"))
+            names.append("/".join(surnames) or "TBD")
+        return f"{names[0]} vs {names[1]}"
+
+    FIELD_WORDS = {"court": "court", "court_order": "order",
+                   "start_time_local": "time", "start_type": "start"}
+
+    rows = (await db.execute(
+        select(ScheduleChange, ScheduleEntry)
+        .join(ScheduleEntry, ScheduleEntry.id == ScheduleChange.schedule_entry_id)
+        .where(ScheduleChange.document_id == doc.id))).all()
+    by_entry: dict[int, list] = {}
+    entries_by_id: dict[int, ScheduleEntry] = {}
+    for ch, entry in rows:
+        by_entry.setdefault(entry.id, []).append(ch)
+        entries_by_id[entry.id] = entry
+    for eid, chs in by_entry.items():
+        entry = entries_by_id[eid]
+        # court+order together is just "moved"; the reader cares where to.
+        parts = []
+        courts = [c for c in chs if c.field == "court"]
+        if courts:
+            parts.append(f"{courts[0].old_value} \u2192 {courts[0].new_value}")
+        for c in chs:
+            if c.field in ("start_time_local", "start_type") and not courts:
+                parts.append(f"{FIELD_WORDS[c.field]} {c.old_value} \u2192 {c.new_value}")
+            elif c.field == "start_time_local" and courts:
+                parts.append(f"{c.old_value} \u2192 {c.new_value}")
+        if not parts and all(c.field == "court_order" for c in chs):
+            continue  # pure renumbering is a consequence, not news
+        if parts:
+            lines.append(f"{_who(entry)}: " + "; ".join(parts))
+
+    if prev_doc is not None:
+        prev_t = prev_doc.fetched_at
+        this_t = doc.fetched_at
+        day_rows = (await db.execute(
+            select(ScheduleEntry).where(
+                ScheduleEntry.tournament_id == doc.tournament_id,
+                ScheduleEntry.play_date == doc.play_date))).scalars().all()
+        for e in day_rows:
+            if e.first_seen_at and prev_t and e.first_seen_at > prev_t:
+                lines.append(f"+ {_who(e)}")
+            elif (e.last_seen_at and this_t and prev_t
+                  and prev_t <= e.last_seen_at < this_t):
+                lines.append(f"\u2212 {_who(e)}")
+    return lines
+
+
 async def _renumber_courts(db, tournament_id: int, play_date: date) -> None:
     """Give every slot on a court a distinct position, in running order.
 
