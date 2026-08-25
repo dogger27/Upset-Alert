@@ -381,7 +381,48 @@ async def _sync_players(db, entry, na: list, nb: list, ids: list) -> list:
     return changed
 
 
-def _printed_name(printed: dict, draw_names: dict, eid, fallback: str) -> str:
+# Order-of-play sheets print the SURNAME in capitals, every tour, every tier.
+# A stored name with no capitalised run therefore is not a sheet rendering.
+# `schedule_invariants` keeps its own copy of this deliberately — the law must
+# not be able to be blinded by a change made here to the code it polices.
+_SHEET_CAPS_RE = re.compile(r'(?<![A-Za-z])[A-Z]{2,}(?![a-z])')
+
+
+def _is_sheet_form(name: str) -> bool:
+    return bool(name and _SHEET_CAPS_RE.search(name))
+
+
+def _sheet_form(person, seeded: bool = True) -> Optional[str]:
+    """Render a draw entry the way a sheet prints a SETTLED row.
+
+    `(name, nationality, seed, entry_type)`, in the format every other row on
+    the page carries: "[8] Cristina BUCSA ESP". Only the last token of the
+    draw's name is capitalised — the surname is the last word, the same
+    reading `splitPlayerName` uses on the frontend. A two-word surname
+    ("BAUTISTA AGUT") loses its first word to the given names, which shortens
+    the name and never misidentifies it; capitalising everything after the
+    first token instead would turn "Juan Manuel Cerundolo" into the surname
+    "MANUEL CERUNDOLO".
+
+    `seeded=False` for anything but main-draw singles: a doubles player's
+    draw_entry_id points at their SINGLES row, so its seed belongs to a
+    different event (Siniakova is [1] in the doubles and [33] in the singles).
+    The name and the nationality are properties of the person and stay.
+    """
+    if person is None:
+        return None
+    name, nationality, seed, entry_type = person
+    words = (name or '').split()
+    if not words:
+        return None
+    words[-1] = words[-1].upper()
+    marker = None
+    if seeded:
+        marker = f"[{seed}]" if seed else (f"[{entry_type}]" if entry_type else None)
+    return ' '.join([p for p in (marker, ' '.join(words), nationality) if p])
+
+
+def _printed_name(printed: dict, people: dict, eid, fallback: str) -> str:
     """The sheet's own spelling of the player the bracket says came through.
 
     A settled slot must read like every other row on the page: SURNAME in
@@ -389,9 +430,30 @@ def _printed_name(printed: dict, draw_names: dict, eid, fallback: str) -> str:
     rendering of the same person and carries none of those. Only when the
     printed alternatives cannot be pinned to this player does the draw name
     stand in.
+
+    **A printed alternative is not automatically a settled rendering.** This
+    took the printed spelling whenever it identified one player, on the
+    assumption that "the alternatives are printed right here in the same form
+    as every settled row" — true of the ATP sheets it was written against,
+    false of the WTA's, which abbreviate: Monterrey 2026-08-25 printed the
+    7:30 PM Estadio slot as "D. Parry or D. Vekic", so resolving it stored
+    "D. Parry" and the live page showed an initial beside eight rows reading
+    "Firstname SURNAME NAT". It healed only because the WTA reissued the sheet
+    15 minutes later with the settled pair; on the last revision of a day,
+    which is the ordinary case once play starts, it would have stood all
+    evening. `name_not_sheet_form` in schedule_invariants.py alerted (06:00:35,
+    entry 162) and could not heal. So the printed form has to EARN its place:
+    keep it when it reads like a sheet row, otherwise build one from the draw.
+
+    Seeded by default because the only caller is a singles slot the BRACKET
+    matched, which is main draw by construction — the seed there is this
+    event's.
     """
     hits = printed.get(eid) or []
-    return hits[0] if len(hits) == 1 else (draw_names.get(eid) or fallback)
+    if len(hits) == 1 and _is_sheet_form(hits[0]):
+        return hits[0]
+    person = people.get(eid)
+    return _sheet_form(person) or (person[0] if person else None) or fallback
 
 
 def _queue_verification(doc, tournament, play_date, url, pdf_bytes, entries):
@@ -459,23 +521,27 @@ async def ingest_document(db, tournament, play_date: date, url: str,
     draws = []
     for d in draw_rows:
         ents = (await db.execute(
-            select(DrawEntry.id, DrawEntry.name).where(DrawEntry.draw_id == d.id))).all()
+            select(DrawEntry.id, DrawEntry.name, DrawEntry.nationality,
+                   DrawEntry.seed, DrawEntry.entry_type)
+            .where(DrawEntry.draw_id == d.id))).all()
         # Each entry carries BOTH folds — see _match_tokens. Built once here
         # rather than per name, because every slot on the sheet probes it.
         draws.append({'draw': d,
                       'entries': [(e[0], set(_norm(e[1] or '').split()),
                                    set(_ascii_fold(e[1] or '').split()))
                                   for e in ents],
-                      'names': {e[0]: e[1] for e in ents}})
+                      # Everything a sheet prints about a player, for a slot
+                      # the bracket settles — see _sheet_form.
+                      'people': {e[0]: (e[1], e[2], e[3], e[4]) for e in ents}})
 
     # entry id -> draw id, so a resolved player also tells us which draw the
     # slot belongs to.
     entry_draw = {}
     draw_by_id = {}
-    entry_name = {}
+    entry_people = {}
     for d in draws:
         draw_by_id[d['draw'].id] = d['draw']
-        entry_name.update(d['names'])
+        entry_people.update(d['people'])
         for eid, _tokens, _ascii in d['entries']:
             entry_draw[eid] = d['draw'].id
 
@@ -595,15 +661,17 @@ async def ingest_document(db, tournament, play_date: date, url: str,
                 # so replace the alternatives with the real pair rather than
                 # showing a choice whose answer we already hold.
                 if m.tbd:
-                    # Keep the SHEET's spelling of whoever came through: the
-                    # alternatives are printed right here in the same form as
-                    # every settled row, and the draw's rendering is not.
+                    # Keep the SHEET's spelling of whoever came through — but
+                    # only when the alternative was printed in the same form as
+                    # a settled row. The WTA abbreviates them ("D. Parry or
+                    # D. Vekic") and that is not a rendering this page can
+                    # show; see _printed_name.
                     printed: dict = {}
                     for nm, eid in zip(na + nb, ids):
                         if eid is not None:
                             printed.setdefault(eid, []).append(nm)
-                    na = [_printed_name(printed, entry_name, found.player1_id, na[0])]
-                    nb = [_printed_name(printed, entry_name, found.player2_id, nb[0])]
+                    na = [_printed_name(printed, entry_people, found.player1_id, na[0])]
+                    nb = [_printed_name(printed, entry_people, found.player2_id, nb[0])]
                     ids = [found.player1_id, found.player2_id]
                     entry.is_tbd = False
                     entry.tbd_side = None
@@ -1151,6 +1219,7 @@ async def resolve_settled_alternatives(db, tournament_id: int) -> int:
     by_fold: dict[frozenset, list] = {}
     for de in dents:
         by_fold.setdefault(_fold(de.name), []).append(de)
+    de_by_id = {de.id: de for de in dents}
     matches = (await db.execute(
         select(Match).where(Match.draw_id.in_(draw_ids),
                             Match.winner_id.isnot(None)))).scalars().all()
@@ -1185,6 +1254,31 @@ async def resolve_settled_alternatives(db, tournament_id: int) -> int:
                 if rid == feeder.winner_id:
                     r.draw_entry_id = rid
                     r.position = 1
+                    # ...and is now a SETTLED side, so it has to read like
+                    # one. The name still on it is the abbreviation the sheet
+                    # offered while the question was open, and the WTA
+                    # abbreviates: collapsing "D. Parry or D. Vekic" left
+                    # "D. Parry" on Monterrey's 7:30 PM Estadio slot on
+                    # 2026-08-25, an initial with no country beside eight rows
+                    # reading "Firstname SURNAME NAT". This is the same fault
+                    # as the one _printed_name carries on the ingest side —
+                    # both places turn alternatives into a settled row, and
+                    # only one of them had been taught what a settled row
+                    # looks like. `name_not_sheet_form` flagged it (06:00:35,
+                    # entry 162) and could not heal it; nothing else would
+                    # have, because a later revision printing the settled pair
+                    # is luck, not a mechanism.
+                    de = de_by_id.get(rid)
+                    if de is not None and not _is_sheet_form(r.raw_name or ''):
+                        # The seed is main-draw singles only: a doubles row's
+                        # draw_entry_id names their SINGLES entry, whose seed
+                        # is a different event's. See _sheet_form.
+                        form = _sheet_form(
+                            (de.name, de.nationality, de.seed, de.entry_type),
+                            seeded=(entry.discipline == 'singles'
+                                    and entry.stage == 'main'))
+                        if form:
+                            r.raw_name = form
                 else:
                     await db.delete(r)
             collapsed += 1
