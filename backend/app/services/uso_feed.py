@@ -24,7 +24,8 @@ when the SCHEDULE changes — same semantics as a PDF revision.
 from __future__ import annotations
 
 import json
-from datetime import datetime
+import re
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from app.services.oop_parser import Match
@@ -58,8 +59,24 @@ _EVENTS = {
 _VOLATILE = {"scores", "shortScore", "duration", "status", "statusCode"}
 
 
-def play_date_of(event_day: dict):
-    """The day's local calendar date, from its midnight-NY epoch."""
+# "Fan Week Day 3: Tue, Aug 25" / "Day 3: Tue, Sept 1" — the printed label is
+# the one field that states the sheet's own day. It has to be, because `epoch`
+# does NOT: day 3's epoch decoded to Aug 24 while its label said Tue, Aug 25,
+# and trusting it filed today's sheet under yesterday's date — where the
+# dedupe machinery then treated it as a REVISION of yesterday's sheet.
+_DAY_RE = re.compile(r"\b([A-Z][a-z]{2,3})\.?\s+(\d{1,2})\b")
+_MONTHS = {m[:3].lower(): i for i, m in enumerate(
+    ["January", "February", "March", "April", "May", "June", "July",
+     "August", "September", "October", "November", "December"], start=1)}
+
+
+def play_date_of(event_day: dict, year: int):
+    """The sheet's own day, from its printed label; epoch only as fallback."""
+    for text in (event_day.get("messageShort"), event_day.get("message")):
+        for mon, dd in _DAY_RE.findall(text or ""):
+            m = _MONTHS.get(mon[:3].lower())
+            if m:
+                return date(year, m, int(dd))
     epoch = event_day.get("epoch")
     if not epoch:
         return None
