@@ -17,11 +17,12 @@
  * Modal skeleton follows PredictorsPopup; the slider follows LeagueDetail's
  * timeline scrubber, including its "fully right = null = live" convention.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getMatchScoreHistory } from '../api/tournaments'
 import MatchScoreCard from './MatchScoreCard'
+import { timelineMarkers } from '../utils/scoreTimeline'
 import './ScoreHistoryPopup.css'
 
 /* Two callers, one popup. The draw page passes `match` (a bracket match);
@@ -43,6 +44,13 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
 
   // null = fully right = follow live / show final. An index otherwise.
   const [pos, setPos] = useState(null)
+
+  /* Breaks and set-ends, as coloured ticks on the track — the timeline as a
+     map instead of a blind scrubber. Derived per snapshot pair in
+     utils/scoreTimeline (a plain module, unit-tested under node); memoised
+     because a live match re-renders this popup on every point. */
+  const markers = useMemo(
+    () => timelineMarkers(data?.snapshots ?? []), [data?.snapshots])
 
   useEffect(() => {
     const root = document.documentElement
@@ -113,6 +121,17 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
         </div>
         {max > 0 && (
           <div className="shp-scrub">
+            {/* Ticks sit UNDER the input (z-index) and take no pointer events
+                — the slider owns every touch, exactly as before. Positioned
+                against the thumb's travel, not naive percent: the thumb is
+                28px wide, so its centre runs [14px, 100%-14px]. */}
+            {markers.map(m => (
+              <span
+                key={`${m.kind}${m.i}`}
+                className={`shp-tick shp-tick--${m.kind}`}
+                style={{ left: `calc(14px + (100% - 28px) * ${m.i / max})` }}
+              />
+            ))}
             <input
               type="range"
               min={0}
@@ -127,6 +146,16 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
               style={{ '--fill-pct': `${((atEnd ? max : pos) / max) * 100}%` }}
               aria-label="Scrub through the match's score history"
             />
+            {markers.length > 0 && (
+              <div className="shp-legend">
+                <span className="shp-legend-item">
+                  <span className="shp-legend-box shp-tick--break" /> break
+                </span>
+                <span className="shp-legend-item">
+                  <span className="shp-legend-box shp-tick--set" /> set
+                </span>
+              </div>
+            )}
           </div>
         )}
       </div>
