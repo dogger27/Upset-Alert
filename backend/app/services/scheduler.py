@@ -1776,6 +1776,15 @@ async def _sweep_oop_verifications() -> None:
         return
     for name in sorted(names):
         path = f"{res_dir}/{name}"
+        # A LIVE QUEUE MARKER MEANS THE RUN IS STILL GOING — leave its verdict
+        # alone. Doc 43's verifier wrote its (clean, 5-fixes) verdict a few
+        # minutes before its process exited; this sweep consumed it in that
+        # window, the runner then found no verdict, declared the run dead, and
+        # the owner got a false "needs attention" on top of the true "5 fixed".
+        # The marker is the runner's ownership token: it deletes it only after
+        # its own verdict check, so a verdict is only ours once it is gone.
+        if os.path.exists(f"{base}/queue/{name}"):
+            continue
         try:
             with open(path) as f:
                 r = _json.load(f)
