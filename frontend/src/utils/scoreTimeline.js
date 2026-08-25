@@ -46,6 +46,14 @@ export function timelineMarkers(snapshots) {
   const out = []
   if (!Array.isArray(snapshots) || snapshots.length < 2) return out
 
+  // High-water mark of set columns. A set tick fires only when the count
+  // exceeds the most EVER seen, not the previous snapshot's: at a set change
+  // Sofascore can flicker — three columns, briefly two again, then three —
+  // and pair-wise comparison marked the same set twice (Sonego-Herbert,
+  // 2026-08-24, two blue ticks for one set). A shrink never unmarks anything;
+  // it just cannot re-earn a tick on the way back up.
+  let maxCols = snapshots[0]?.games?.[0]?.length ?? 0
+
   for (let i = 1; i < snapshots.length; i++) {
     const prev = snapshots[i - 1]
     const cur = snapshots[i]
@@ -54,7 +62,8 @@ export function timelineMarkers(snapshots) {
     if (!pg?.[0] || !cg?.[0]) continue
 
     // ── Set finished ──
-    if (cg[0].length > pg[0].length) {
+    if (cg[0].length > pg[0].length && cg[0].length > maxCols) {
+      maxCols = cg[0].length
       // The finished set's final score sits in cur at the column that was
       // last in prev — read the winner off it. A feed that reorders columns
       // mid-match would misattribute here, but that would already be a
