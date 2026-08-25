@@ -9,7 +9,7 @@ import html
 import asyncio
 import re
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import date
 from typing import Optional
 
 import httpx
