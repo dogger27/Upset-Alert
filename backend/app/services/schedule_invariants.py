@@ -177,6 +177,31 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                          + f" is bracket match {pair_match[pair]}, "
                            "but match_id is NULL")
 
+        # 2026-08-25, Monterrey Oliynykova vs Parry: the check above fired for
+        # a second, unrelated cause — the bracket had not advanced the R32
+        # winners yet when the sheet was ingested, and `match_id` was written
+        # ONLY inside ingest, which returns early on an unchanged PDF. Nothing
+        # retried; the row was rescued by a reissued sheet 15 minutes later.
+        # `schedule.relink_bracket_matches` is the retry, and it writes
+        # match_id from a background sweep rather than from the parse — so the
+        # complement of the rule above now has to be law too. A slot pinned to
+        # a match that is NOT its own pairing shows ANOTHER match's live score,
+        # which is strictly worse than showing none. Exempt: a side naming
+        # nobody in the draw, which is the withdrawal hand-over in _absorb
+        # (the substitute reaches draw_entries only when the scrape catches up).
+        if (e.discipline == "singles" and e.stage == "main"
+                and e.match_id is not None and not e.is_tbd and na and nb):
+            sides = [{i for p in side
+                      for i in (by_fold.get(_fold(p.raw_name)) or [])}
+                     for side in (na, nb)]
+            if all(len(c) == 1 for c in sides):
+                pair = frozenset((next(iter(sides[0])), next(iter(sides[1]))))
+                if len(pair) == 2 and pair_match.get(pair) not in (None, e.match_id):
+                    flag("bracket_match_mismatch", e,
+                         " vs ".join(p.raw_name or "" for p in (na[0], nb[0]))
+                         + f" is bracket match {pair_match[pair]}, "
+                           f"but match_id is {e.match_id}")
+
         # 2026-08-25, Medvedev vs Damm: the row was created from a revision
         # that printed the slot unresolved, the bracket resolver replaced both
         # players with their DRAW names, and `raw_name` was write-once — so

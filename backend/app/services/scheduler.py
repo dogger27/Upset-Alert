@@ -1633,6 +1633,16 @@ async def _refresh_schedule_estimates() -> None:
                 # 2-minute tick is the net under all of them. Cheap when there
                 # is nothing to do (one indexed query on is_tbd).
                 await schedule_svc.resolve_settled_alternatives(db, tid)
+                # Then the mirror case: a slot the bracket could not identify
+                # when its sheet was ingested. The pairing appears only when
+                # the WIKI SCRAPE advances the round's winners, which is after
+                # the sheet is printed and usually after it was last ingested
+                # — and ingest was the only writer of match_id, so nothing
+                # retried. This tick is the retry; it is not hooked into
+                # _do_scrape itself because that function deliberately leaves
+                # committing to its caller. Cheap when there is nothing to do
+                # (one indexed query on match_id IS NULL).
+                await schedule_svc.relink_bracket_matches(db, tid)
                 tz = (await db.execute(
                     _select(Draw.venue_timezone).where(
                         Draw.tournament_id == tid,
