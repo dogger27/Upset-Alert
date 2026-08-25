@@ -937,6 +937,11 @@ function TournamentDraw() {
       window.alert(LIVE_PICK_MSG)
       return
     }
+    /* A TIMED-OUT SAVE RETRIES ITSELF ONCE. The request can die between the
+       browser and the edge with the server perfectly healthy — 2026-08-25's
+       desktop failures arrived nowhere while probes ran 200s in the same
+       seconds, on a line with a QUIC history. The payload is the full pick
+       set, so a retry is safe whether or not the first attempt landed. */
     /* SENT cascaded, SHOWN un-cascaded. The payload has to clear the path the
        old player was carrying, or the server keeps a pick for someone who can
        no longer get there. The SCREEN must not, because a cleared pick renders
