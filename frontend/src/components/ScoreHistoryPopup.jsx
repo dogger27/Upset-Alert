@@ -166,7 +166,7 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
                 key={`${m.kind}${m.i}`}
                 className={`shp-tick shp-tick--${m.kind} shp-tick--${
                   (m.side === 1) === topIsP1 ? 'up' : 'down'}`}
-                style={{ left: `calc(14px + (100% - 28px) * ${m.i / max})` }}
+                style={{ left: `calc(var(--shp-thumb) / 2 + (100% - var(--shp-thumb)) * ${m.i / max})` }}
               />
             ))}
             <input
