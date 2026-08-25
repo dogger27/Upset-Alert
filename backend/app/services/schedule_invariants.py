@@ -36,6 +36,14 @@ _SHEET_CAPS_RE = re.compile(r'(?<![A-Za-z])[A-Z]{2,}(?![a-z])')
 _INITIAL_RE = re.compile(r'^[A-Za-z]\.?$')
 # The qualifying round tokens, enumerated — "QF" starts with Q and is not one.
 _QUALI_ROUND_RE = re.compile(r'^(?:Q\d?|FQ)$', re.I)
+# A leading entry-status marker, "[LL] " / "[WC] " — the mirror of
+# _TRAILING_SEED_RE, which only strips the ones printed after the name.
+_LEADING_SEED_RE = re.compile(r'^(?:\[[^\]]*\]\s*)+')
+# Lone letters standing on their own where a name's letters belong. A name may
+# hold ONE ("Alex de Minaur" does not, but an initial-only rendering might);
+# three is not a name any tour prints. Measured over all 705 stored player
+# rows: fires on the four shredded ones below and on nothing else.
+_SHRED_MIN_SINGLES = 3
 
 
 async def check_day(db, tournament_id: int, play_date) -> list[dict]:
@@ -157,6 +165,24 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                 if any(w.isupper() and any(c.isalpha() for c in w) for w in before):
                     flag("name_trailing_noncountry", e,
                          f"side {p.side}: {raw!r} ends in {m.group(1)!r}, not a country")
+
+        # 2026-08-26, Winston-Salem "Ra p h a e l C O L L IG N O N ( B EL)or":
+        # a cell whose text the sheet had shrunk to fit was clustered into one
+        # line with the line BELOW it by pdfplumber's default y_tolerance, the
+        # chars of both were then sorted by x, and the two names came back
+        # interleaved letter by letter. Four rows across two courts published
+        # that way — data checks all passed (the letters really are the ones
+        # the sheet prints, in the right slot) and the page was unreadable and
+        # overflowing its card. A name is words; a scatter of lone letters is
+        # an extraction that came apart, whatever it spells.
+        for p in players:
+            raw = _LEADING_SEED_RE.sub(
+                "", _TRAILING_SEED_RE.sub("", (p.raw_name or "").strip()))
+            lone = sum(1 for t in raw.split() if len(t) == 1 and t.isalpha())
+            if lone >= _SHRED_MIN_SINGLES:
+                flag("name_letter_shredded", e,
+                     f"side {p.side}: {p.raw_name!r} has {lone} lone letters — "
+                     f"the text extraction came apart")
 
         # 2026-08-25, "Mees ROTTGERING vs Tomas MACHAC": the draw stores
         # "Mees Röttgering", `rankings._norm` expands the umlaut the German
@@ -283,7 +309,82 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
             else:
                 court_orders[ck] = e.id
 
+    # 2026-08-26, Winston-Salem: re-reading the same sheet through a fixed
+    # parser gave two courts a second row each — the clean names beside the
+    # unreadable ones, 14 rows for a 12-match sheet. `pairing_duplicated`
+    # above cannot see it: it compares whole pairings and exempts unresolved
+    # rows, and these rows were unresolved and disagreed on exactly the side
+    # the parser had mangled. `_dedupe_day` could not either — `_resolves`
+    # wants one row to be MORE decided than the other and both were equally
+    # pending, and `_superseded` was written for withdrawals and skipped TBD
+    # rows outright (both since fixed).
+    #
+    # The shape, stated once and for any kind of row: two slots on one day
+    # naming the SAME side and sharing NOBODY on the other, where one was last
+    # confirmed by an older revision and neither has been on court, are one
+    # slot printed twice. Both guards are load-bearing — a team really can play
+    # twice on a day (the US Open's mixed-doubles event does exactly that, and
+    # a rain backlog does it by accident), but both of those rows come off the
+    # SAME revision, and a match that dropped off a later revision because it
+    # finished has a result on it.
+    from app.services.schedule import _side_tokens
+    _opp = {"a": "b", "b": "a"}
+    fresh = [r for r in rows
+             if not (r.started_at or r.completed_at or r.winner_side
+                     or r.live_scores_json)]
+    for i, a in enumerate(fresh):
+        for b in fresh[i + 1:]:
+            if a.stage != b.stage:
+                continue
+            if (a.last_document_id or 0) == (b.last_document_id or 0):
+                continue
+            A = {s: set().union(set(), *_side_tokens(a, s)) for s in "ab"}
+            B = {s: set().union(set(), *_side_tokens(b, s)) for s in "ab"}
+            hit = next((
+                (sa, sb) for sa in "ab" for sb in "ab"
+                if A[sa] and A[sa] == B[sb] and not (A[_opp[sa]] & B[_opp[sb]])), None)
+            if hit:
+                old, new = (a, b) if (a.last_document_id or 0) < (b.last_document_id or 0) else (b, a)
+                flag("slot_restated", old,
+                     f"entry {old.id} (document {old.last_document_id}) and entry "
+                     f"{new.id} (document {new.last_document_id}) share side "
+                     f"{hit[0]}/{hit[1]} and no player on the other — one slot, "
+                     f"two rows")
+
     return v
+
+
+def check_parse(meta) -> list[dict]:
+    """The law applied to a PARSE, before a single row is stored.
+
+    Everything in check_day looks at rows the ingest wrote. That is blind to
+    the worst thing a parser can do, which is to write nothing: a slot the
+    sheet prints and the parse throws away leaves NO row to violate any rule,
+    and the day is simply one match short of the sheet with no error anywhere.
+
+    2026-08-26, Winston-Salem Court 3: the third slot's four lines were all
+    doubles pairs printed the way the ATP prints them — "ARRIBAGE (FRA) /
+    GUINARD (FRA)" — surname only, so `_is_name`'s all-caps exemption (which
+    wants two name-shaped tokens before the country) rejected every one of
+    them as the sheet's own furniture. The slot flushed empty, the site
+    published 11 matches for a 12-match sheet, and the only way anyone would
+    ever have known was by holding the PDF beside the page.
+
+    `oop_parser` now hands back every slot a marker opened that it could not
+    fill AND that swallowed words it could not read. Measured over the
+    285-file corpus: zero. An alarm this quiet is one worth believing.
+    """
+    out: list[dict] = []
+    for m in (meta or {}).get('dropped_slots') or []:
+        out.append({
+            "code": "slot_dropped", "entry_id": None,
+            "court": getattr(m, 'court', None),
+            "detail": f"{getattr(m, 'court', '') or '?'} "
+                      f"{getattr(m, 'start_raw', '') or '?'}: slot opened but no "
+                      f"players parsed; unread lines: "
+                      + "; ".join(repr(x) for x in (m.rejected or [])[:4]),
+        })
+    return out
 
 
 async def check_and_log(db, tournament, play_date) -> list[dict]:

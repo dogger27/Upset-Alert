@@ -163,6 +163,10 @@ class Match:
     nations_a: list = field(default_factory=list)
     nations_b: list = field(default_factory=list)
     page: int = 0
+    # INTERNAL. Lines this slot swallowed that no rule could read as a name,
+    # a score, a round or the sheet's furniture. Kept only so that a slot which
+    # ends up with no players can say WHY it is empty — see meta['dropped_slots'].
+    rejected: list = field(default_factory=list)
 
     @property
     def is_doubles(self):
@@ -308,6 +312,23 @@ def _split_players(text):
 
 
 ALLCAPS_NAME_RE = re.compile(r"(?:[A-Z][A-Za-z.'-]*\s+){2,}\(?[A-Z]{3}\)?\s*$")
+# A DOUBLES entrant as the ATP prints one: surname only, then a nationality —
+# "ARRIBAGE (FRA)", "[WC] LAMMONS (USA)". One name token, not two, so
+# ALLCAPS_NAME_RE cannot express it. What replaces the missing second token as
+# proof this is a person is the code itself: it must be a REAL country, which
+# is the same lock _is_continuation uses. "COURT TBA" has the shape and is a
+# court name; TBA is not a country, so it stays out.
+ALLCAPS_ONE_NAME_RE = re.compile(
+    r"^(?:\[[^\]]*\]\s*)*(?:[A-Z][A-Za-z.'-]*\s+)+\(?([A-Z]{3})\)?$")
+
+
+def _allcaps_name(seg):
+    """Is this all-caps fragment a player, in either shape the sheets print?"""
+    seg = seg.strip()
+    if ALLCAPS_NAME_RE.search(seg):
+        return True
+    m = ALLCAPS_ONE_NAME_RE.match(seg)
+    return bool(m and m.group(1) in COUNTRY_CODES)
 
 
 def _is_name(text):
@@ -338,8 +359,21 @@ def _is_name(text):
     # exists to reject: "ANY MATCH ON ANY COURT MAY BE MOVED" ends in a
     # five-letter word, not a country, and a bare "USA" continuation line has
     # no name in front of it.
-    if not re.search(r'[a-z]', text) and not ALLCAPS_NAME_RE.search(text):
-        return False
+    #
+    # AND THE TEST RUNS PER "/"-SEPARATED SEGMENT, because a doubles line names
+    # a TEAM: "[1] ARRIBAGE (FRA) / GUINARD (FRA)". Whole-line, the two-token
+    # rule can never be satisfied — the slash sits where the second token would
+    # be — so every all-caps doubles line was rejected as furniture. On
+    # Winston-Salem's 2026-08-26 sheet all four lines of Court 3's third slot
+    # were doubles pairs printed that way, so the slot lost every player, went
+    # out incomplete, and the day published 11 matches for a 12-match sheet:
+    # the Arribage/Guinard quarter-final simply was not on the site. Same class
+    # as JJ TRACY above — an all-caps name read as the sheet's own furniture —
+    # through the one shape that rule could not describe.
+    if not re.search(r'[a-z]', text):
+        segs = [s for s in (p.strip() for p in text.split('/')) if s]
+        if not segs or not all(_allcaps_name(s) for s in segs):
+            return False
     return bool(re.search(r'[A-Za-z]{2,}', text))
 
 
@@ -348,7 +382,10 @@ def parse_pdf(pdf_bytes):
     import pdfplumber
     import io
 
-    meta = {'pages': 0, 'kind': 'oop', 'reason': None, 'date_line': None}
+    meta = {'pages': 0, 'kind': 'oop', 'reason': None, 'date_line': None,
+            # Slots the sheet opened that this parse could not fill. The caller
+            # alerts on these — schedule_invariants.check_parse.
+            'dropped_slots': []}
     matches = []
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
         meta['pages'] = len(pdf.pages)
@@ -371,7 +408,27 @@ def parse_pdf(pdf_bytes):
             meta['date_line'] = m.group(1).strip()
 
         for pno, page in enumerate(pdf.pages, 1):
-            words = page.extract_words()
+            # y_tolerance=1, NOT pdfplumber's default 3. The default groups
+            # chars into lines by CHAINING tops within the tolerance, across
+            # the whole page — so two lines inside one court's cell can be
+            # joined into a single "line" by way of a neighbouring column's
+            # line whose top happens to fall between them. The chars of that
+            # merged line are then sorted by x, and the two names come out
+            # interleaved letter by letter, which the word splitter breaks into
+            # one word per letter. Winston-Salem 2026-08-26 published
+            # "Raphael COLLIGNON (BEL) or Rinky HIJIKATA (AUS)" as
+            # "Ra R p i h n a k e y l H C I O JI L K L A IG TA N O ...".
+            #
+            # A sheet shrinks a cell's text to fit (this one to a 0.5 text
+            # matrix — 8pt glyphs on a ~9pt pitch), so the tighter the box the
+            # likelier the chain: the shape appears on exactly the crowded
+            # slots, and only there, which is why no corpus file shows it.
+            #
+            # Tightening costs nothing here: line grouping for the parse is
+            # done by _cells below (rows bucketed on top, then sorted by x), so
+            # a visual line split into two clusters at this step is reassembled
+            # there. Measured over the 285-file corpus: identical output.
+            words = page.extract_words(y_tolerance=1)
             if not words:
                 continue
             cells = _cells(words)
@@ -405,7 +462,7 @@ def parse_pdf(pdf_bytes):
 
             for i in sorted(buckets):
                 rows = [(y, t) for y, t in sorted(buckets[i])]
-                matches += _parse_column(rows, pno)
+                matches += _parse_column(rows, pno, meta['dropped_slots'])
 
     if not matches and meta['reason'] is None:
         meta['reason'] = 'no matches found'
@@ -454,8 +511,13 @@ def _regroup_alternatives(match):
             match.tbd_side = ''.join(sorted(set((match.tbd_side or '') + side)))
 
 
-def _parse_column(lines, pno):
-    """One column, top to bottom: court header, then time-delimited match slots."""
+def _parse_column(lines, pno, dropped=None):
+    """One column, top to bottom: court header, then time-delimited match slots.
+
+    `dropped` collects slots that the sheet opened and this parse could not
+    fill — see the flush() comment. The caller surfaces them in meta so the
+    ingest can alert on a slot the site would otherwise be silently missing.
+    """
     out, court, cur, after_vs = [], '', None, False
 
     def flush():
@@ -463,6 +525,15 @@ def _parse_column(lines, pno):
         if cur and cur.complete:
             _regroup_alternatives(cur)
             out.append(cur)
+        elif cur is not None and cur.rejected and dropped is not None:
+            # A slot marker opened this match and lines followed it that no
+            # rule could read — yet it has no players. That is a slot the
+            # sheet prints and the site will not show, which is the single
+            # most invisible failure this parser has: nothing errors, the day
+            # is just one match short. Winston-Salem 2026-08-26 lost Court 3's
+            # doubles quarter-final exactly this way. An empty slot with NO
+            # unreadable lines is ordinary — sheets print blank numbered rows.
+            dropped.append(cur)
         cur = None
 
     for _, raw in lines:
@@ -547,7 +618,35 @@ def _parse_column(lines, pno):
             continue
 
         if _is_name(text):
-            side.extend(_split_players(text))
+            side_key = 'b' if after_vs else 'a'
+            if '/' in text and side_key in (cur.tbd_side or ''):
+                # On an UNRESOLVED side a "/" joins the two partners of ONE
+                # candidate team, not two players of this match — the sheet is
+                # offering a choice between two teams. Splitting it flattened
+                # "[1] ARRIBAGE / GUINARD or CASH / ERLER" into four loose
+                # names, and _side_size then counted one player a side and
+                # called the doubles quarter-final a singles match.
+                #
+                # _regroup_alternatives already keeps a side's alternatives
+                # whole, but only reaches slots whose "or" survived as a word.
+                # The ATP glues it to the nationality — "(FRA)or" — and _clean
+                # strips it, so this branch is the ONLY thing holding the team
+                # together on an ATP sheet. Same rule, both spellings.
+                side.append(re.sub(r'\s*/\s*', ' / ', text))
+            else:
+                side.extend(_split_players(text))
+        elif (not NOISE_RE.search(text)
+                and len(re.findall(r'[A-Za-z]{2,}', text)) >= 2):
+            # Words we could not place. Only recorded — never acted on — so
+            # that a slot ending up empty can report what it choked on.
+            #
+            # TWO word-shaped tokens at least, because a printed slot that is
+            # genuinely empty still carries one: the corpus has bare event
+            # codes over blank slots ("QS", "QD" — wta/2025_1111) and a bare
+            # "WO" where a walkover replaced the losing side (wta/2026_1017).
+            # Neither is a lost player, and an alarm that cries at those would
+            # be switched off by the second day.
+            cur.rejected.append(text)
 
     flush()
     return out

@@ -494,6 +494,28 @@ def _queue_verification(doc, tournament, play_date, url, pdf_bytes, entries):
             "could not queue OOP verification for doc %s", doc.id)
 
 
+async def _log_parse_violations(tournament, play_date, violations: list) -> None:
+    """A slot the parse threw away, in the admin log where a person will see it.
+
+    ERROR, not warning: this is a match the sheet prints and the site does not
+    show, which is the same severity as the whole ingest dying — and it is far
+    quieter, because nothing raises. Winston-Salem 2026-08-26 published 11 of
+    12 matches for a day and only the PDF-vs-page verifier noticed.
+    """
+    if not violations:
+        return
+    from app.services.system_log import app_log
+    await app_log(
+        "error", "order_of_play",
+        f"{len(violations)} order-of-play slot(s) printed on the "
+        f"{tournament.name} sheet for {play_date} were dropped by the parser: "
+        + "; ".join(x["detail"][:90] for x in violations[:4]),
+        {"tournament_id": tournament.id, "play_date": str(play_date),
+         "violations": violations[:20]},
+        dedup_key=f"sched_parse_dropped_{tournament.id}_{play_date}",
+        dedup_hours=6)
+
+
 async def ingest_document(db, tournament, play_date: date, url: str,
                           pdf_bytes: bytes, tour: Optional[str] = None,
                           parser=None, queue_verify: bool = True) -> dict:
@@ -521,6 +543,13 @@ async def ingest_document(db, tournament, play_date: date, url: str,
     # seconds of sync CPU per sheet, and a burst of revisions parsed inline
     # froze every request in flight.
     matches, meta = await asyncio.to_thread(parser or parse_pdf, pdf_bytes)
+    # The law, applied to the parse itself. Computed here and LOGGED AFTER THE
+    # COMMIT, both below: a slot the parse threw away leaves no row for
+    # check_day to judge, and `app_log` opens its own session — awaiting it
+    # while this one holds uncommitted writes deadlocks the ingest against
+    # itself on SQLite's single writer.
+    from app.services.schedule_invariants import check_parse
+    parse_violations = check_parse(meta)
     doc = ScheduleDocument(
         tournament_id=tournament.id, play_date=play_date, source_url=url,
         tour=tour, sha256=digest, revision_label=meta.get('date_line'),
@@ -533,6 +562,7 @@ async def ingest_document(db, tournament, play_date: date, url: str,
         # An OOP revision that parsed to NOTHING is exactly the revision most
         # worth independent eyes — a parser regression looks like this.
         await db.commit()
+        await _log_parse_violations(tournament, play_date, parse_violations)
         if queue_verify:
             _queue_verification(doc, tournament, play_date, url, pdf_bytes, 0)
         return {'document_id': doc.id, 'kind': meta.get('kind'), 'entries': 0}
@@ -802,6 +832,7 @@ async def ingest_document(db, tournament, play_date: date, url: str,
         await relink_bracket_matches(db, tournament.id)
         from app.services.schedule_invariants import check_and_log
         await check_and_log(db, tournament, play_date)
+        await _log_parse_violations(tournament, play_date, parse_violations)
     except Exception:
         logging.getLogger(__name__).exception(
             "invariant check failed for %s %s", tournament.id, play_date)
@@ -1051,8 +1082,20 @@ def _superseded(old, new, latest_pool: list) -> bool:
     * the replaced player must appear nowhere on the latest revision. A
       player still in the tournament is on the sheet somewhere; one who
       withdrew is not.
+
+    A WITHDRAWAL IS NOT THE ONLY WAY A SIDE GETS REPLACED. Re-reading the same
+    sheet with a CORRECTED PARSER does it too, and then the old row's side is
+    not a departed player but the old parse's mess. `_same_pairing` was taught
+    that for settled rows ("KRAJICEK / MEKTIC vs CABRAL" gaining Tracy); this
+    is the unresolved half, and nothing covered it — `_resolves` wants one row
+    to be strictly MORE decided than the other, and two printings of the same
+    pending slot are equally undecided. Winston-Salem 2026-08-26: the sheet's
+    condensed rows re-parsed into clean names, and the day went to 14 rows for
+    a 12-match sheet with the unreadable versions sitting beside their fixes.
+    So TBD rows are compared too, but only against a row that left EXACTLY the
+    same sides open — deciding one is `_resolves`' job, not this one's.
     """
-    if old.is_tbd or new.is_tbd:
+    if old.is_tbd != new.is_tbd or (old.tbd_side or '') != (new.tbd_side or ''):
         return False
     if (old.last_document_id or 0) >= (new.last_document_id or 0):
         return False
@@ -1089,7 +1132,15 @@ def _superseded(old, new, latest_pool: list) -> bool:
             old_gone, new_come = union(A[co]), union(B[cn])
             # Wholly replaced, not partially: a doubles team that changed one
             # partner shares tokens, and that case is not decided here.
-            if not old_gone or not new_come or (old_gone & new_come):
+            #
+            # `old_gone` may be EMPTY. A side whose names reduce to no usable
+            # token names nobody — which is what a name broken up by a failed
+            # text extraction looks like once _name_tokens has dropped its
+            # one- and two-letter debris ("R i n k y H I JI K A TA" -> {}).
+            # That is stronger evidence than a departed player, not weaker: a
+            # side naming nobody cannot be a real pairing of its own. The
+            # replacement side still has to name someone.
+            if not new_come or (old_gone & new_come):
                 continue
             if any(p and any(agree(p, q) for q in latest_pool)
                    for p in A[co]):
@@ -1234,11 +1285,15 @@ async def _dedupe_day(db, tournament_id: int, play_date: date) -> int:
         if replaced:
             # Info, not warning: a lucky loser stepping in is ordinary tennis
             # and self-heals here — but the retired pairing should be on the
-            # record when someone asks where a match went.
+            # record when someone asks where a match went. Says "supersede",
+            # not "withdrawal": the same relation now also retires a pairing a
+            # corrected parser re-read, and a log line that named a cause it
+            # cannot know would send the next reader looking for a player who
+            # never withdrew.
             from app.services.system_log import app_log
             await app_log(
                 "info", "order_of_play",
-                f"Withdrawal supersede on {play_date}: retired '{gone}' "
+                f"Slot supersede on {play_date}: retired '{gone}' "
                 f"for '{stays}'",
                 {"tournament_id": tournament_id, "play_date": str(play_date),
                  "kept_entry_id": twin.id, "court": twin.court})
