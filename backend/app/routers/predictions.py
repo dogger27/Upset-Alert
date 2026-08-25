@@ -202,7 +202,9 @@ async def _save_predictions_once(tournament_id, body, user_id, db, current_user)
                 )
             )).scalars().all()
         }
-        refused = rejected_changes(lock, body.picks, stored)
+        matches_by_id = {m.id: m for m in (await db.execute(
+            select(Match).where(Match.draw_id == tournament_id))).scalars().all()}
+        refused = rejected_changes(lock, body.picks, stored, matches_by_id)
         if refused:
             raise HTTPException(
                 403,

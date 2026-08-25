@@ -112,7 +112,8 @@ async def draw_lock_state(db, draw) -> LockState:
     )
 
 
-def rejected_changes(state: LockState, submitted: dict, existing: dict) -> list:
+def rejected_changes(state: LockState, submitted: dict, existing: dict,
+                     matches_by_id: dict | None = None) -> list:
     """
     Which submitted picks are not allowed, comparing against what is stored.
 
@@ -121,12 +122,40 @@ def rejected_changes(state: LockState, submitted: dict, existing: dict) -> list:
     unsavable in its entirety — the user edits an untouched later match and the
     request is rejected because it also carries their (unchanged) pick on the
     one in play.
+
+    THE ROUND-ONE EXEMPTION (owner's rule, match-by-match draws only): a
+    first-round match that has not started stays fully editable, whatever
+    else the lock set says — and the CLEARS its cascade forces on later
+    rounds pass with it. An unstarted R1 match is never propagation-locked
+    itself (nothing is upstream of round one); what used to refuse the change
+    was its cascade touching a downstream slot locked by a SIBLING match
+    being on court. Two lines hold the exemption to exactly that shape:
+
+    * only a CLEAR (winner None) passes on a locked downstream slot — a
+      direct re-pick there is still "made while watching the feeder", which
+      is the rule the stems-from refusal exists for;
+    * nothing passes on a match that is ITSELF in play, ever. A cleared slot
+      is refilled with the favourite by the same fill that runs on every
+      save, so the exemption costs nothing downstream but a recomputed
+      default.
     """
     if state.draw_locked:
         return list(submitted)
+
+    def _exempt(mid, winner_id) -> bool:
+        if state.mode != LOCK_PROGRESSIVE_R1 or not matches_by_id:
+            return False
+        m = matches_by_id.get(mid)
+        if m is None or match_in_play(m):
+            return False
+        if getattr(m, "round_number", None) == 1:
+            return True
+        return winner_id is None   # a cascade's clear, never a direct re-pick
+
     return [
         mid for mid, winner_id in submitted.items()
         if mid in state.locked_match_ids and existing.get(mid) != winner_id
+        and not _exempt(mid, winner_id)
     ]
 
 
