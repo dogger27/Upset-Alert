@@ -54,6 +54,11 @@ from app.routers import admin, auth, contact, discovery, h2h, leagues, predictio
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    # The write-txn watchdog: names any transaction held >20s with the stack
+    # from its BEGIN. See database.py — installed after a day of lock storms
+    # whose holder no outside tool could identify.
+    from app.database import txn_watchdog
+    asyncio.create_task(txn_watchdog())
     # Only production runs the background scrapers (Wikipedia / Tennis Explorer /
     # ELO / ESPN / Wikimedia EventStreams). Local dev (environment=development)
     # leaves them off so it doesn't duplicate load / trip rate limits.

@@ -1,4 +1,5 @@
 from sqlalchemy import event
+import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 
@@ -518,3 +519,44 @@ async def _migrate(conn):
 
 
 from sqlalchemy import text as _text
+
+# ── Write-transaction watchdog ───────────────────────────────────────────────
+# 2026-08-25: the write lock was held for minutes, repeatedly, and every
+# outside tool failed to name the holder — py-spy sees threads, the holder was
+# a suspended asyncio task. So the engine itself keeps the evidence: at every
+# BEGIN the current stack is recorded, and a background task logs any
+# transaction older than WATCHDOG_AGE with that stack, WHILE IT IS STILL
+# HOLDING. The next storm names its own line in the first thirty seconds.
+import time as _time
+import traceback as _tb
+
+_open_txns: dict = {}
+WATCHDOG_AGE = 20.0
+
+if _IS_SQLITE:
+    @event.listens_for(engine.sync_engine, "begin")
+    def _txn_begin(conn):
+        _open_txns[id(conn)] = (_time.monotonic(), "".join(_tb.format_stack()[-14:]))
+
+    @event.listens_for(engine.sync_engine, "commit")
+    def _txn_commit(conn):
+        _open_txns.pop(id(conn), None)
+
+    @event.listens_for(engine.sync_engine, "rollback")
+    def _txn_rollback(conn):
+        _open_txns.pop(id(conn), None)
+
+
+async def txn_watchdog() -> None:
+    """Started from app startup. Logs long-lived transactions with the stack
+    captured at their BEGIN — the one piece of evidence nothing external can
+    recover once the holder is suspended."""
+    import logging
+    log = logging.getLogger("app.txn_watchdog")
+    while True:
+        await asyncio.sleep(10)
+        now = _time.monotonic()
+        for cid, (t0, stack) in list(_open_txns.items()):
+            age = now - t0
+            if age > WATCHDOG_AGE:
+                log.error("WRITE TXN HELD %.0fs — begun at:\n%s", age, stack)
