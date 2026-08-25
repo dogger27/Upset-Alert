@@ -704,6 +704,10 @@ async def ingest_document(db, tournament, play_date: date, url: str,
         # already made — collapse before the law looks, so a PDF-release-time
         # "or" over a decided match never even exists on the site.
         await resolve_settled_alternatives(db, tournament.id)
+        # And the mirror case: a slot whose bracket match did not exist when
+        # the loop above looked for it. Run BEFORE the law, so a link the
+        # bracket can now support is made rather than merely reported.
+        await relink_bracket_matches(db, tournament.id)
         from app.services.schedule_invariants import check_and_log
         await check_and_log(db, tournament, play_date)
     except Exception:
@@ -1193,6 +1197,135 @@ async def resolve_settled_alternatives(db, tournament_id: int) -> int:
         logger.info("Collapsed %d settled alternative side(s) for tournament %s",
                     collapsed, tournament_id)
     return collapsed
+
+
+async def relink_bracket_matches(db, tournament_id: int) -> int:
+    """Attach a bracket match to slots the draw could not identify at ingest.
+
+    `ingest_document` is the ONLY place `match_id` was ever written, and it
+    returns early when the PDF has not changed — so the link was decided once,
+    against whatever the bracket happened to know at that second, and never
+    reconsidered. The sheet leads the bracket by hours: an R16 slot is printed
+    while its two feeder matches are still on court, and the next-round pairing
+    only exists in `matches` after the WIKI SCRAPE advances the winners
+    (routers/tournaments._do_scrape) — a result landing from ESPN or Sofascore
+    does not create it.
+
+    Monterrey 2026-08-25: Parry's R32 was recorded at 05:55, the Tuesday sheet
+    was ingested at 06:00 with the R16 pairing not yet in the bracket, and
+    Oliynykova vs Parry stored `match_id = NULL`. Without live scores, a final
+    score or a derived round the row is just a nicer PDF — the whole feature.
+    It was rescued only because the WTA happened to reissue the sheet at 06:15;
+    on the last revision of a day, which is the ordinary case once play starts,
+    nothing would ever have retried and the 7:30 PM match would have sat there
+    dead all evening. `bracket_match_missed` in schedule_invariants.py alerted
+    and could not heal. This is the retry.
+
+    Same shape and same call sites as `resolve_settled_alternatives`, which
+    closed the identical gap on the other side of the sheet/bracket race (a
+    slot still offering "A or B" the draw had already decided). Strict on
+    identity for the same reason: both sides must name exactly one draw entry
+    and that pair must be exactly one real match. A WRONG match_id is worse
+    than none — the row would show another match's live score.
+    """
+    from datetime import timedelta as _td
+
+    today = date.today()
+    entries = (await db.execute(
+        select(ScheduleEntry).where(
+            ScheduleEntry.tournament_id == tournament_id,
+            ScheduleEntry.match_id.is_(None),
+            # Only singles can resolve: qualifying has no rows in `matches`
+            # and doubles has no draw at all.
+            ScheduleEntry.discipline == 'singles',
+            ScheduleEntry.stage == 'main',
+            ScheduleEntry.is_tbd.is_(False),
+            ScheduleEntry.play_date >= today - _td(days=1),
+        ))).scalars().all()
+    if not entries:
+        return 0
+
+    draw_rows = (await db.execute(
+        select(Draw).where(Draw.tournament_id == tournament_id))).scalars().all()
+    if not draw_rows:
+        return 0
+    draw_by_id = {d.id: d for d in draw_rows}
+    dents = (await db.execute(
+        select(DrawEntry.id, DrawEntry.name)
+        .where(DrawEntry.draw_id.in_(list(draw_by_id))))).all()
+    # Keyed on `_fold`, the fold under which the draw's "Mees Röttgering" and
+    # the sheet's "ROTTGERING" finally agree — see _match_tokens.
+    by_fold: dict = {}
+    for eid, name in dents:
+        by_fold.setdefault(_fold(name), []).append(eid)
+    pair_match = {}
+    for m in (await db.execute(
+            select(Match).where(Match.draw_id.in_(list(draw_by_id)),
+                                Match.player1_id.isnot(None),
+                                Match.player2_id.isnot(None)))).scalars().all():
+        pair_match.setdefault(frozenset((m.player1_id, m.player2_id)), []).append(m)
+
+    healed = []
+    for entry in entries:
+        players = list(entry.players or [])
+        na = [p for p in players if p.side == 'a']
+        nb = [p for p in players if p.side == 'b']
+        if not na or not nb:
+            continue
+        sides = []
+        for side in (na, nb):
+            ids = set()
+            for p in side:
+                if p.draw_entry_id:
+                    ids.add(p.draw_entry_id)
+                else:
+                    ids |= set(by_fold.get(_fold(p.raw_name), ()))
+            sides.append(ids)
+        if not all(len(ids) == 1 for ids in sides):
+            # A side naming nobody in the draw is the withdrawal case — the
+            # substitute reaches `draw_entries` only when the scrape catches
+            # up, and _absorb hands the retired row's link over meanwhile.
+            continue
+        pair = frozenset((next(iter(sides[0])), next(iter(sides[1]))))
+        found = pair_match.get(pair) or []
+        if len(pair) != 2 or len(found) != 1:
+            continue
+        found = found[0]
+        # Ids are a ratchet: this pair just proved itself against the bracket,
+        # which is stronger evidence than the name match `_sync_players` had at
+        # ingest. A player row still holding NULL — their draw_entries row
+        # arrived after the sheet did — gets stamped here rather than waiting
+        # for a revision, because everything downstream (ranking, seed,
+        # nationality, H2H) keys on that id and silently skips the row without.
+        for side, ids in zip((na, nb), sides):
+            if len(side) == 1 and side[0].draw_entry_id is None:
+                side[0].draw_entry_id = next(iter(ids))
+        entry.match_id = found.id
+        entry.draw_id = found.draw_id
+        derived = _round_label(found.round_number,
+                               draw_by_id[found.draw_id].num_rounds
+                               if found.draw_id in draw_by_id else None)
+        if derived:
+            entry.round_label = derived
+        healed.append((entry, found.id))
+
+    if not healed:
+        return 0
+    await db.commit()
+    # AFTER the commit: app_log opens its own session and SQLite allows one
+    # writer, so logging while this one still held writes blocked on a lock
+    # the same task was holding. Same rule as the ingest tail.
+    from app.services.system_log import app_log
+    await app_log(
+        "info", "order_of_play",
+        f"Linked {len(healed)} schedule slot(s) to a bracket match that did "
+        f"not exist at ingest time: "
+        + "; ".join(f"entry {e.id} -> match {mid}" for e, mid in healed[:5]),
+        {"tournament_id": tournament_id,
+         "linked": [[e.id, str(e.play_date), mid] for e, mid in healed[:20]]})
+    logger.info("Relinked %d schedule slot(s) for tournament %s",
+                len(healed), tournament_id)
+    return len(healed)
 
 
 def _start_type_of(m) -> str:
