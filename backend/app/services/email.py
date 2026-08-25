@@ -1210,7 +1210,8 @@ OOP_STATUS_TO = "pdwiens@gmail.com"
 async def send_oop_status(*, doc_id: int, tournament: str, play_date: str,
                           ok: bool, fixed: list, problems: list,
                           summary: str = "", handoff: str = "",
-                          revision: int | None = None) -> None:
+                          revision: int | None = None,
+                          changes: list | None = None) -> None:
     """One concise status email per processed PDF — every outcome, every time.
 
     Three shapes: clean ("no problems found"), self-healed (each fix stated in
@@ -1259,6 +1260,7 @@ async def send_oop_status(*, doc_id: int, tournament: str, play_date: str,
         OOP {_esc(rev)}, {_esc(pretty)}: {_esc(tournament)}
         <span style="color:{color}">({state})</span></div>
       {body_list}
+      {_oop_changes_block(revision, changes)}
       {f'<div style="font-size:12px;color:#6b7280;margin:10px 0 0">{_esc(summary)}</div>' if summary else ''}
       {_alert_handoff({"handoff": handoff}) if handoff else ''}
       <div style="font-size:11px;color:#9ca3af;margin:14px 0 0">doc {doc_id} · automated verify-and-fix</div>
@@ -1270,6 +1272,28 @@ async def send_oop_status(*, doc_id: int, tournament: str, play_date: str,
         "subject": subject,
         "html": html,
     })
+
+
+def _oop_changes_block(revision, changes) -> str:
+    """What moved since the previous revision — terse, capped, or one quiet
+    line. rev.1 needs no diff; a re-release with nothing moved says so in
+    five words rather than omitting the answer to the obvious question."""
+    if not revision or revision <= 1:
+        return ""
+    head = (f'<div style="font-size:11px;font-weight:700;color:#6b7280;'
+            f'text-transform:uppercase;letter-spacing:0.04em;margin:10px 0 2px">'
+            f'Since rev.{revision - 1}</div>')
+    items = [c for c in (changes or []) if str(c).strip()]
+    if not items:
+        return head + ('<div style="font-size:13px;color:#4b5563">'
+                       'No slot changes.</div>')
+    shown = items[:6]
+    more = len(items) - len(shown)
+    lis = "".join(f'<li style="margin:0 0 3px">{_esc(c)}</li>' for c in shown)
+    if more > 0:
+        lis += f'<li style="margin:0 0 3px;color:#6b7280">+{more} more</li>'
+    return (head + f'<ul style="margin:2px 0 0;padding-left:18px;'
+                   f'font-size:13px;line-height:1.45;color:#111">{lis}</ul>')
 
 
 def _alert_detail(detail: dict, message: str = "") -> str:

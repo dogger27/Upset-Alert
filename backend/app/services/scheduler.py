@@ -1823,6 +1823,7 @@ async def _sweep_oop_verifications() -> None:
                 t = (await db2.get(Tournament, doc.tournament_id)) if doc else None
                 meta = (t.name if t else "Unknown tournament",
                         str(doc.play_date) if doc else "?")
+                changes = []
                 if doc:
                     # WHICH REVISION OF THE DAY'S SHEET THIS IS, for the email
                     # subject. Real revisions only: a verifier force-reparse
@@ -1838,6 +1839,20 @@ async def _sweep_oop_verifications() -> None:
                             ScheduleDocument.parse_status == "oop",
                             ScheduleDocument.sha256.notlike("forced%"),
                         ))).scalar() or None
+                    # ...and what it changed. Deterministic, from the change
+                    # rows the ingest already stamps — no prose generator.
+                    if revision and revision > 1:
+                        prev_doc = (await db2.execute(
+                            _sel(ScheduleDocument).where(
+                                ScheduleDocument.tournament_id == doc.tournament_id,
+                                ScheduleDocument.play_date == doc.play_date,
+                                ScheduleDocument.id < doc.id,
+                                ScheduleDocument.parse_status == "oop",
+                                ScheduleDocument.sha256.notlike("forced%"),
+                            ).order_by(ScheduleDocument.id.desc()).limit(1)
+                        )).scalars().first()
+                        from app.services.schedule import describe_revision_changes
+                        changes = await describe_revision_changes(db2, doc, prev_doc)
         except Exception as exc:
             logger.error("oop_verify: could not load doc %s meta: %s", doc_id, exc)
             meta = ("Unknown tournament", "?")
@@ -1854,7 +1869,7 @@ async def _sweep_oop_verifications() -> None:
                 await send_oop_status(doc_id=doc_id, tournament=meta[0],
                                       play_date=meta[1], ok=True, fixed=fixed,
                                       problems=[], summary=r.get("summary") or "",
-                                      revision=revision)
+                                      revision=revision, changes=changes)
             except Exception as exc:
                 logger.error("oop_verify status email failed: %s", exc)
         else:
@@ -1890,7 +1905,8 @@ async def _sweep_oop_verifications() -> None:
                                       play_date=meta[1], ok=False, fixed=fixed,
                                       problems=problems,
                                       summary=r.get("summary") or "",
-                                      handoff=handoff, revision=revision)
+                                      handoff=handoff, revision=revision,
+                                      changes=changes)
             except Exception as exc:
                 logger.error("oop_verify status email failed: %s", exc)
         os.replace(path, f"{done_dir}/{name}")

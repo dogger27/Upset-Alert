@@ -19,7 +19,7 @@ import asyncio
 import logging
 from typing import Awaitable, Callable, TypeVar
 
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import OperationalError, PendingRollbackError
 
 from app.database import AsyncSessionLocal
 
@@ -43,7 +43,14 @@ async def with_write_retry(work: Callable[..., Awaitable[T]], *,
         try:
             async with AsyncSessionLocal() as db:
                 return await work(db)
-        except OperationalError as exc:
+        except (OperationalError, PendingRollbackError) as exc:
+            # PendingRollbackError is a lock wearing a different class: the
+            # flush hit "database is locked", the session poisoned itself, and
+            # the NEXT query in the same attempt raised the wrapper — which an
+            # OperationalError-only except let straight through (EventStream,
+            # Udvardy row, 2026-08-24). The message still names the lock, and
+            # the fresh session the next attempt takes is precisely the cure
+            # the wrapper is demanding.
             if "locked" not in str(exc).lower() or attempt == attempts - 1:
                 raise
             logger.info("write locked%s, retry %d/%d",
