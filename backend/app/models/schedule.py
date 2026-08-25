@@ -194,6 +194,12 @@ class ScheduleEntryPlayer(Base):
     side: Mapped[str] = mapped_column(String, nullable=False)      # a | b
     position: Mapped[int] = mapped_column(Integer, default=1)      # 1 | 2
     raw_name: Mapped[str] = mapped_column(String, nullable=False)
+    # IOC code as the SOURCE states it (feed nationA/nationB, or a sheet's
+    # country column). Null means the source printed none — which for a
+    # neutral athlete is a fact, not a gap. Display prefers the resolved
+    # draw entry's nationality; this is the answer before resolution exists,
+    # e.g. Slam qualifiers days before the draw is released.
+    nationality: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     draw_entry_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("draw_entries.id"), nullable=True, index=True)
 

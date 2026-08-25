@@ -118,6 +118,7 @@ async def _migrate(conn):
     """Apply additive schema migrations that create_all won't handle."""
     migrations = [
         "ALTER TABLE matches ADD COLUMN scores_json JSON",
+        "ALTER TABLE schedule_entry_players ADD COLUMN nationality VARCHAR",
         "ALTER TABLE players ADD COLUMN ranking INTEGER",
         "ALTER TABLE tournaments ADD COLUMN category VARCHAR",
         "ALTER TABLE tournaments ADD COLUMN draw_release_direct DATE",

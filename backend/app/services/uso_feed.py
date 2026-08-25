@@ -143,17 +143,20 @@ def _person(team: dict, suffix: str) -> str | None:
     return f"{given} {rest.upper()}" if rest else d
 
 
-def _side_names(teams: list) -> list[str]:
-    """A side as the sheet prints it: one name per PLAYER. A doubles side is
-    two rows, never one 'A/B' string — doubles_side_not_two exists precisely
-    because a pair collapsed into one row breaks every per-player join."""
-    names = []
+def _side_names(teams: list) -> tuple[list[str], list]:
+    """A side as the sheet prints it: one name per PLAYER, with that player's
+    IOC code alongside. A doubles side is two rows, never one 'A/B' string —
+    doubles_side_not_two exists precisely because a pair collapsed into one
+    row breaks every per-player join. A null code is the feed's own statement
+    (neutral athletes carry none) and is preserved as null."""
+    names, nations = [], []
     for t in teams or []:
         for suffix in ("A", "B"):
             n = _person(t, suffix)
             if n:
                 names.append(n)
-    return names
+                nations.append(t.get(f"nation{suffix}") or None)
+    return names, nations
 
 
 def parse_uso_day(raw: bytes):
@@ -168,8 +171,8 @@ def parse_uso_day(raw: bytes):
             if ev is None:
                 continue
             tour, discipline = ev
-            side_a = _side_names(m.get("team1"))
-            side_b = _side_names(m.get("team2"))
+            side_a, nations_a = _side_names(m.get("team1"))
+            side_b, nations_b = _side_names(m.get("team2"))
             # A slot the feed has not filled in yet (tomorrow's R2 before
             # today's winners are known) settles on a later refresh; until
             # then there is nothing to pair it to.
@@ -193,6 +196,8 @@ def parse_uso_day(raw: bytes):
                 printed_status=m.get("status"),
                 side_a=side_a,
                 side_b=side_b,
+                nations_a=nations_a,
+                nations_b=nations_b,
             ))
     meta = {"date_line": d.get("displayDate") or d.get("shortDate"), "kind": "ok"}
     return matches, meta

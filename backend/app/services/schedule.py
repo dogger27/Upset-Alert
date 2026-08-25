@@ -328,7 +328,8 @@ def _candidates(draws, names) -> set:
     return out
 
 
-async def _sync_players(db, entry, na: list, nb: list, ids: list) -> list:
+async def _sync_players(db, entry, na: list, nb: list, ids: list,
+                        nats: Optional[list] = None) -> list:
     """Make a slot's stored players say exactly what THIS sheet prints.
 
     Write-once was the bug. `raw_name` used to be written only in the
@@ -361,16 +362,22 @@ async def _sync_players(db, entry, na: list, nb: list, ids: list) -> list:
     for side, names in (('a', na), ('b', nb)):
         base = 0 if side == 'a' else len(na)
         for pos, nm in enumerate(names, 1):
-            eid = ids[base + pos - 1] if base + pos - 1 < len(ids) else None
+            i = base + pos - 1
+            eid = ids[i] if i < len(ids) else None
+            nat = nats[i] if nats and i < len(nats) else None
             row = by_slot.pop((side, pos), None)
             if row is None:
                 db.add(ScheduleEntryPlayer(
                     schedule_entry_id=entry.id, side=side, position=pos,
-                    raw_name=nm, draw_entry_id=eid))
+                    raw_name=nm, draw_entry_id=eid, nationality=nat))
                 continue
             if row.raw_name != nm:
                 changed.append((row.raw_name, nm))
                 row.raw_name = nm
+            # Like draw_entry_id below: a code the source states wins, a
+            # None never erases one already known.
+            if nat is not None:
+                row.nationality = nat
             # Never trade an id already proved for a None this pass could not
             # resolve: a qualifier reaches draw_entries days after the sheet
             # first names them.
@@ -638,7 +645,9 @@ async def ingest_document(db, tournament, play_date: date, url: str,
 
             # ONE path for players, new row or old — see _sync_players for why
             # the create-only version froze a stale rendering into four rows.
-            renamed += await _sync_players(db, entry, na, nb, ids)
+            renamed += await _sync_players(
+                db, entry, na, nb, ids,
+                nats=(getattr(m, 'nations_a', None) or []) + (getattr(m, 'nations_b', None) or []) or None)
 
             # Link the slot to the draw and the bracket match. This is what the
             # whole feature turns on: without match_id there are no live scores
