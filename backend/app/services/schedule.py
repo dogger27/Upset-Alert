@@ -494,6 +494,28 @@ def _queue_verification(doc, tournament, play_date, url, pdf_bytes, entries):
             "could not queue OOP verification for doc %s", doc.id)
 
 
+async def _log_parse_violations(tournament, play_date, violations: list) -> None:
+    """A slot the parse threw away, in the admin log where a person will see it.
+
+    ERROR, not warning: this is a match the sheet prints and the site does not
+    show, which is the same severity as the whole ingest dying — and it is far
+    quieter, because nothing raises. Winston-Salem 2026-08-26 published 11 of
+    12 matches for a day and only the PDF-vs-page verifier noticed.
+    """
+    if not violations:
+        return
+    from app.services.system_log import app_log
+    await app_log(
+        "error", "order_of_play",
+        f"{len(violations)} order-of-play slot(s) printed on the "
+        f"{tournament.name} sheet for {play_date} were dropped by the parser: "
+        + "; ".join(x["detail"][:90] for x in violations[:4]),
+        {"tournament_id": tournament.id, "play_date": str(play_date),
+         "violations": violations[:20]},
+        dedup_key=f"sched_parse_dropped_{tournament.id}_{play_date}",
+        dedup_hours=6)
+
+
 async def ingest_document(db, tournament, play_date: date, url: str,
                           pdf_bytes: bytes, tour: Optional[str] = None,
                           parser=None, queue_verify: bool = True) -> dict:
@@ -521,6 +543,13 @@ async def ingest_document(db, tournament, play_date: date, url: str,
     # seconds of sync CPU per sheet, and a burst of revisions parsed inline
     # froze every request in flight.
     matches, meta = await asyncio.to_thread(parser or parse_pdf, pdf_bytes)
+    # The law, applied to the parse itself. Computed here and LOGGED AFTER THE
+    # COMMIT, both below: a slot the parse threw away leaves no row for
+    # check_day to judge, and `app_log` opens its own session — awaiting it
+    # while this one holds uncommitted writes deadlocks the ingest against
+    # itself on SQLite's single writer.
+    from app.services.schedule_invariants import check_parse
+    parse_violations = check_parse(meta)
     doc = ScheduleDocument(
         tournament_id=tournament.id, play_date=play_date, source_url=url,
         tour=tour, sha256=digest, revision_label=meta.get('date_line'),
@@ -533,6 +562,7 @@ async def ingest_document(db, tournament, play_date: date, url: str,
         # An OOP revision that parsed to NOTHING is exactly the revision most
         # worth independent eyes — a parser regression looks like this.
         await db.commit()
+        await _log_parse_violations(tournament, play_date, parse_violations)
         if queue_verify:
             _queue_verification(doc, tournament, play_date, url, pdf_bytes, 0)
         return {'document_id': doc.id, 'kind': meta.get('kind'), 'entries': 0}
@@ -802,6 +832,7 @@ async def ingest_document(db, tournament, play_date: date, url: str,
         await relink_bracket_matches(db, tournament.id)
         from app.services.schedule_invariants import check_and_log
         await check_and_log(db, tournament, play_date)
+        await _log_parse_violations(tournament, play_date, parse_violations)
     except Exception:
         logging.getLogger(__name__).exception(
             "invariant check failed for %s %s", tournament.id, play_date)
