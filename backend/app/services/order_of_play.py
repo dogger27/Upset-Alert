@@ -414,7 +414,7 @@ async def _refresh_slam_feed(tournament, draws, season_year: int, today: date):
         r.raise_for_status()
         days = []
         for e in r.json().get("eventDays") or []:
-            pd = uso_feed.play_date_of(e)
+            pd = uso_feed.play_date_of(e, season_year)
             if (e.get("released") and e.get("feedUrl") and pd is not None
                     and pd >= today - timedelta(days=1)):
                 days.append((pd, e))
