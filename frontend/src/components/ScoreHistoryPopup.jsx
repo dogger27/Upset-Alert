@@ -21,6 +21,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getMatchScoreHistory } from '../api/tournaments'
+import { getEntryScoreHistory } from '../api/schedule'
 import MatchScoreCard from './MatchScoreCard'
 import { pointStats, sanitizeSnapshots, timelineMarkers } from '../utils/scoreTimeline'
 import { splitPlayerName } from '../utils/flags'
@@ -36,10 +37,17 @@ import './ScoreHistoryPopup.css'
 export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
   const histDrawId = entry ? entry.draw_id : drawId
   const histMatchId = entry ? entry.match_id : match?.id
+  // A row with no bracket match — qualifying singles, doubles — keeps its
+  // history under its own schedule-entry id; the response shape is identical.
+  const entryOnly = !!entry && !entry.match_id
   const { data } = useQuery({
-    queryKey: ['score-history', histDrawId, histMatchId],
-    queryFn: () => getMatchScoreHistory(histDrawId, histMatchId),
-    enabled: !!histDrawId && !!histMatchId,
+    queryKey: entryOnly
+      ? ['score-history-entry', entry.id]
+      : ['score-history', histDrawId, histMatchId],
+    queryFn: () => entryOnly
+      ? getEntryScoreHistory(entry.id)
+      : getMatchScoreHistory(histDrawId, histMatchId),
+    enabled: entryOnly ? !!entry.id : (!!histDrawId && !!histMatchId),
     staleTime: 15_000,
   })
 
