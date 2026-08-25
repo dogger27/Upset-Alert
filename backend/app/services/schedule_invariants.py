@@ -13,9 +13,21 @@ what makes the system converge on "never again" instead of on a longer
 checklist.
 """
 
+import re
+
 from sqlalchemy import select
 
 from app.models.schedule import ScheduleEntry
+from app.services.oop_parser import COUNTRY_CODES
+
+# The sheet's own words, in the places a name can pick them up. A slot wording
+# printed on its own line sits directly above or below a name and has been
+# absorbed by both ends of the parse before now.
+_SLOT_WORDING_RE = re.compile(
+    r'\b(?:TB[ACD]|followed\s+by|not\s+bef|start(?:s|ing)?\s+at|'
+    r'to\s+be\s+(?:arranged|confirmed|announced|advised|determined))\b', re.I)
+_TRAILING_SEED_RE = re.compile(r'(?:\s*\[[^\]]*\])+\s*$')
+_TRAILING_CODE_RE = re.compile(r'\s([A-Z]{3})$')
 
 
 async def check_day(db, tournament_id: int, play_date) -> list[dict]:
@@ -106,6 +118,29 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                     flag("doubles_side_not_two", e,
                          f"side {side_key} has {len(side)}: "
                          + " / ".join(p.raw_name or "" for p in side))
+
+        # 2026-08-25, Monterrey "Alexandra PANOVA TBC": Cancha 4's last slot
+        # printed a bare "TBC" where a start time would go, one line below the
+        # doubles pair above it. Three capitals on their own line is also how
+        # the layout wraps a nationality, so the parser read it as one and gave
+        # Panova a country nobody has. The sheet's own words are never part of
+        # a name, and where a name ends in a country code it has to BE a
+        # country — LUZ, GUO and TBC all have the shape.
+        for p in players:
+            raw = (p.raw_name or "").strip()
+            if _SLOT_WORDING_RE.search(raw):
+                flag("name_holds_slot_wording", e,
+                     f"side {p.side}: {raw!r} contains a slot wording")
+            stripped = _TRAILING_SEED_RE.sub("", raw)
+            m = _TRAILING_CODE_RE.search(stripped)
+            if m and m.group(1) not in COUNTRY_CODES:
+                before = stripped[:m.start()].split()
+                # Only where a country would stand: after a SURNAME, which the
+                # sheets print in capitals. "Orlando LUZ" ends in three
+                # capitals too and is a whole name.
+                if any(w.isupper() and any(c.isalpha() for c in w) for w in before):
+                    flag("name_trailing_noncountry", e,
+                         f"side {p.side}: {raw!r} ends in {m.group(1)!r}, not a country")
 
         # An entry with no players on either side describes nothing; it can
         # only be parser debris. (Defensive; near-miss during the Winston-Salem
