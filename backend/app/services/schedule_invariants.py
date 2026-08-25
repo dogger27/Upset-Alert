@@ -31,6 +31,8 @@ _TRAILING_CODE_RE = re.compile(r'\s([A-Z]{3})$')
 # Order-of-play sheets print the SURNAME in capitals, every tour, every tier.
 # A stored name with no capitalised run therefore did not come from the sheet.
 _SHEET_CAPS_RE = re.compile(r'(?<![A-Za-z])[A-Z]{2,}(?![a-z])')
+# The qualifying round tokens, enumerated — "QF" starts with Q and is not one.
+_QUALI_ROUND_RE = re.compile(r'^(?:Q\d?|FQ)$', re.I)
 
 
 async def check_day(db, tournament_id: int, play_date) -> list[dict]:
@@ -190,6 +192,20 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                 flag("name_not_sheet_form", e,
                      f"side {p.side}: {raw!r} has no capitalised surname — "
                      f"not the sheet's rendering")
+
+        # 2026-08-24, Winston-Salem's three main-draw doubles matches, two of
+        # them badged "Q": _classify's last-resort qualifying inference is
+        # evidence about the SINGLES draw (not in `draw_entries`; surname seen
+        # on a qualifying row this week) and it was being applied to doubles
+        # rows, where the first half is vacuously true — we store no doubles
+        # draw — and the second is the ordinary career of a doubles player who
+        # also entered singles qualifying. A doubles row may only be qualifying
+        # when the SHEET said so, which reaches us as a qualifying round label.
+        if (e.discipline == "doubles" and e.stage == "qualifying"
+                and not _QUALI_ROUND_RE.match((e.round_label or "").strip())):
+            flag("doubles_qualifying_unstated", e,
+                 f"doubles row filed stage=qualifying with round_label="
+                 f"{e.round_label!r} — nothing on the sheet says qualifying")
 
         # An entry with no players on either side describes nothing; it can
         # only be parser debris. (Defensive; near-miss during the Winston-Salem
