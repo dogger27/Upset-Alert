@@ -176,14 +176,21 @@
    owner's spec, and the tick travel math follows through the variable. */
 @media (min-width: 900px) {
   .shp-popup {
-    --shp-thumb: 18px;
-    /* 1.75 on a 440px popup is ~770px visual — a real centrepiece. The
-       backdrop centres it, so tall screens keep it whole; 1050px height is
-       roughly where 1.75x of this popup stops fitting with margin, so
-       shorter desktop windows get a step down instead of a clipped top. */
-    transform: scale(1.55);
+    --shp-thumb: 14px;
+    /* "EVEN BIGGER": ~792px visual on any desktop, ~900px on tall windows.
+       transform scale does not scroll, so a popup scaled past the viewport
+       clips its top unreachably — the height gate steps up only where the
+       window can hold it. The thumb's pre-scale size drops with each step so
+       its VISUAL size stays a touch under the original 28px, per the earlier
+       spec; the tick travel math follows through the variable. */
+    transform: scale(1.8);
   }
 }
 @media (min-width: 900px) and (min-height: 1050px) {
-  .shp-popup { transform: scale(1.75); }
+  .shp-popup { --shp-thumb: 13px; transform: scale(2.05); }
 }
+
+/* The match's end: red, at the timeline's last stop. Hidden beneath the
+   thumb while the slider rests at Final — it shows the moment you scrub
+   away, which is exactly when a reader is looking for where it ended. */
+.shp-tick--match { background: var(--danger); }
