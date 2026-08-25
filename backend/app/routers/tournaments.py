@@ -553,9 +553,19 @@ async def match_score_history(
         if out is not None:
             snapshots.append(out)
 
+    # Which draw entry the snapshots' side 1 is. Snapshots are stored in the
+    # MATCH's orientation (games[0] = player1 — the poller flips Sofascore's
+    # home/away to guarantee it), and the draw page shows player1 on top — but
+    # the SCHEDULE popup shows the sheet's order, which need not agree. The
+    # timeline hangs each tick beside the player who earned it, so the client
+    # has to be able to line the two orientations up; id for the stamped case,
+    # name for the rows the resolver has not reached.
+    p1 = await db.get(DrawEntry, match.player1_id) if match.player1_id else None
     return {
         "status": match.status,
         "completed_at": match.completed_at,
+        "player1_id": match.player1_id,
+        "player1_name": p1.name if p1 else None,
         "snapshots": snapshots,
         "final": match.scores_json,
     }

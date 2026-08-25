@@ -17,11 +17,14 @@ const num = (v) => {
 }
 
 /**
- * Markers for a snapshot list, as [{ i, kind: 'set' | 'break' }].
+ * Markers for a snapshot list, as [{ i, kind: 'set' | 'break', side: 1|2 }].
  *
  * `i` is the SLIDER POSITION where the event first shows — the snapshot in
  * which the new state is visible — so clicking the tick lands on the moment
- * just after the break was sealed or the set closed.
+ * just after the break was sealed or the set closed. `side` is WHO did it,
+ * in the snapshot's own orientation (1 = games[0] = the bracket's player1):
+ * the breaker for a break, the set's winner for a set — so the popup can
+ * hang the tick above or below the track next to that player's initials.
  *
  * Rules, and why:
  * - A SET ends when the games array gains a column: the feeds append the new
@@ -52,7 +55,13 @@ export function timelineMarkers(snapshots) {
 
     // ── Set finished ──
     if (cg[0].length > pg[0].length) {
-      out.push({ i, kind: 'set' })
+      // The finished set's final score sits in cur at the column that was
+      // last in prev — read the winner off it. A feed that reorders columns
+      // mid-match would misattribute here, but that would already be a
+      // corrupted history everywhere else too.
+      const col = pg[0].length - 1
+      const side = num(cg[0][col]) > num(cg[1]?.[col]) ? 1 : 2
+      out.push({ i, kind: 'set', side })
       continue // a break sealing the set is subsumed by the set tick
     }
 
@@ -70,7 +79,7 @@ export function timelineMarkers(snapshots) {
     // happened.
     if (dA + dB !== 1 || dA < 0 || dB < 0) continue
     const winner = dA === 1 ? 1 : 2
-    if (winner !== server) out.push({ i, kind: 'break' })
+    if (winner !== server) out.push({ i, kind: 'break', side: winner })
   }
   return out
 }

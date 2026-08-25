@@ -23,6 +23,7 @@ import { useQuery } from '@tanstack/react-query'
 import { getMatchScoreHistory } from '../api/tournaments'
 import MatchScoreCard from './MatchScoreCard'
 import { timelineMarkers } from '../utils/scoreTimeline'
+import { splitPlayerName } from '../utils/flags'
 import './ScoreHistoryPopup.css'
 
 /* Two callers, one popup. The draw page passes `match` (a bracket match);
@@ -103,6 +104,33 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
   const a = players.filter(p => p.side === 'a')
   const b = players.filter(p => p.side === 'b')
 
+  /* WHICH SNAPSHOT SIDE IS THE TOP ROW. Snapshots read in the match's own
+     orientation (side 1 = bracket player1). The draw caller shows player1 on
+     top by construction; the schedule caller shows the SHEET's order, which
+     need not agree — so line them up by draw_entry_id where the row is
+     stamped, by surname where it is not, and only then assume. Getting this
+     wrong flips every tick to the wrong player, which is worse than no
+     ticks. */
+  const topIsP1 = (() => {
+    if (!entry) return true
+    const top = a[0]
+    if (!top) return true
+    if (top.draw_entry_id != null && data?.player1_id != null) {
+      return top.draw_entry_id === data.player1_id
+    }
+    if (data?.player1_name) {
+      const last = (splitPlayerName(top.name).last || '').toLowerCase()
+      if (last) return data.player1_name.toLowerCase().includes(last)
+    }
+    return true
+  })()
+
+  const initials = (row) => {
+    const { first, last } = splitPlayerName(row?.name || '')
+    const ini = `${(first || '').charAt(0)}${(last || '').charAt(0)}`.toUpperCase()
+    return ini || (row?.name || '').slice(0, 2).toUpperCase()
+  }
+
   const when = atEnd
     ? (completed ? 'Final' : 'Live')
     : (snap?.at
@@ -121,6 +149,14 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
         </div>
         {max > 0 && (
           <div className="shp-scrub">
+            {/* The gutter names the rows: top player's initials above the
+                track's level, bottom player's below — the same order as the
+                card. Each tick then hangs toward whoever earned it. */}
+            <div className="shp-scrub-names">
+              <span>{initials(a[0])}</span>
+              <span>{initials(b[0])}</span>
+            </div>
+            <div className="shp-track">
             {/* Ticks sit UNDER the input (z-index) and take no pointer events
                 — the slider owns every touch, exactly as before. Positioned
                 against the thumb's travel, not naive percent: the thumb is
@@ -128,7 +164,8 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
             {markers.map(m => (
               <span
                 key={`${m.kind}${m.i}`}
-                className={`shp-tick shp-tick--${m.kind}`}
+                className={`shp-tick shp-tick--${m.kind} shp-tick--${
+                  (m.side === 1) === topIsP1 ? 'up' : 'down'}`}
                 style={{ left: `calc(14px + (100% - 28px) * ${m.i / max})` }}
               />
             ))}
@@ -146,6 +183,7 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
               style={{ '--fill-pct': `${((atEnd ? max : pos) / max) * 100}%` }}
               aria-label="Scrub through the match's score history"
             />
+            </div>
             {markers.length > 0 && (
               <div className="shp-legend">
                 <span className="shp-legend-item">

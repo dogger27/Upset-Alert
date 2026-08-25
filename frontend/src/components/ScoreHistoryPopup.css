@@ -99,24 +99,50 @@
 }
 
 /* ── Timeline markers ─────────────────────────────────────────────────────
-   Breaks of serve and set-ends as ticks on the track. Under the input (the
-   thumb must pass over them) and inert to the pointer — the slider's 32px
-   hit area is load-bearing on phones and nothing may sit on top of it. */
-.shp-scrub { position: relative; }
+   Breaks of serve and set-ends as ticks hanging off the track: UP toward the
+   top player's initials for their events, DOWN toward the bottom player's.
+   Under the input in z-order (the thumb passes over them) and inert to the
+   pointer — the slider's 32px hit area is load-bearing on phones and nothing
+   may sit on top of it. Grid: initials gutter | track, legend spanning both. */
+.shp-scrub {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 0.55rem;
+  align-items: center;
+}
+.shp-scrub-names {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 32px;            /* the control's height: labels bracket the band */
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  line-height: 1;
+  text-align: right;
+  min-width: 1.4em;
+}
+.shp-track { position: relative; }
 .shp-range { position: relative; z-index: 1; }
 .shp-tick {
   position: absolute;
-  top: 11px;               /* centred on the 4px band of the 32px control */
   width: 3px;
-  height: 10px;
+  height: 11px;
   border-radius: 2px;
   transform: translateX(-50%);
   pointer-events: none;
 }
+/* Anchored at the 4px band's centre (16px of the 32px control): an up tick
+   grows from the band toward the top initials, a down tick toward the
+   bottom's. One pixel of overlap with the band so the join reads as one
+   mark, not a floating dash. */
+.shp-tick--up   { top: 6px; }
+.shp-tick--down { top: 15px; }
 .shp-tick--break { background: var(--warning); }
 .shp-tick--set   { background: var(--info); }
 
 .shp-legend {
+  grid-column: 1 / -1;
   display: flex;
   gap: 1.1rem;
   margin-top: 0.35rem;
