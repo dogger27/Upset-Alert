@@ -97,3 +97,38 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
   cursor: pointer;
 }
+
+/* ── Timeline markers ─────────────────────────────────────────────────────
+   Breaks of serve and set-ends as ticks on the track. Under the input (the
+   thumb must pass over them) and inert to the pointer — the slider's 32px
+   hit area is load-bearing on phones and nothing may sit on top of it. */
+.shp-scrub { position: relative; }
+.shp-range { position: relative; z-index: 1; }
+.shp-tick {
+  position: absolute;
+  top: 11px;               /* centred on the 4px band of the 32px control */
+  width: 3px;
+  height: 10px;
+  border-radius: 2px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.shp-tick--break { background: var(--warning); }
+.shp-tick--set   { background: var(--info); }
+
+.shp-legend {
+  display: flex;
+  gap: 1.1rem;
+  margin-top: 0.35rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+.shp-legend-item { display: inline-flex; align-items: center; gap: 0.35rem; }
+.shp-legend-box {
+  position: static;        /* reuses the tick colour classes, not their layout */
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  transform: none;
+}
