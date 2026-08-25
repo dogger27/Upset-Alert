@@ -122,6 +122,13 @@ async def save_predictions(
             if "locked" not in str(exc).lower():
                 raise
             last = exc
+            # RELEASE BEFORE RETRYING. A failed attempt may already have
+            # flushed, and a session holding the write lock while it sleeps
+            # is itself the storm everyone else queues behind.
+            try:
+                await db.rollback()
+            except Exception:
+                pass
             # Short, because somebody is watching the screen. Four tries inside
             # about a second beats one try and a shrug.
             await asyncio.sleep(0.1 * 2 ** attempt)

@@ -536,7 +536,7 @@ WATCHDOG_AGE = 20.0
 if _IS_SQLITE:
     @event.listens_for(engine.sync_engine, "begin")
     def _txn_begin(conn):
-        _open_txns[id(conn)] = [_time.monotonic(), "", False]
+        _open_txns[id(conn)] = [_time.monotonic(), "", False, None]
 
     @event.listens_for(engine.sync_engine, "before_cursor_execute")
     def _txn_dml(conn, cursor, statement, parameters, context, executemany):
@@ -549,6 +549,14 @@ if _IS_SQLITE:
                 rec[2] = True
                 rec[1] = statement[:120]
                 rec[0] = _time.monotonic()
+                # The sync listener runs in a greenlet on the loop's own
+                # thread, so the driving task IS the current task. Grab it
+                # now, while it is running — once it suspends, nothing
+                # outside can tell which task owns this connection.
+                try:
+                    rec[3] = asyncio.current_task()
+                except Exception:
+                    pass
 
     @event.listens_for(engine.sync_engine, "commit")
     def _txn_commit(conn):
@@ -580,20 +588,30 @@ async def txn_watchdog() -> None:
                 # from the loop side and keep the app-level frames. The
                 # holder is whichever task sits in a commit/flush/session
                 # frame of ours.
-                suspects = []
-                for t in asyncio.all_tasks():
-                    # limit counts from the OUTERMOST frame, so v2's limit=12
-                    # truncated exactly the frames that mattered — every task
-                    # looked parked at its loop. Full stacks, app frames only.
-                    frames = t.get_stack()
-                    app_frames = [
-                        f"{f.f_code.co_filename.rsplit('/app/', 1)[-1]}:"
-                        f"{f.f_lineno} {f.f_code.co_name}"
-                        for f in frames if "/app/app/" in f.f_code.co_filename
-                    ]
-                    if app_frames:
-                        suspects.append(f"  task {t.get_name()}: "
-                                        + " <- ".join(app_frames[-6:]))
+                # Task.get_stack() does not follow cr_await, so every
+                # suspect in v3 showed only its outermost loop frame. The
+                # holder task was captured at its first DML; walking its
+                # coroutine chain from there reaches the exact line it is
+                # suspended on, library frames included.
+                holder = rec[3]
+                lines = []
+                coro = holder.get_coro() if holder is not None else None
+                for _ in range(60):
+                    if coro is None:
+                        break
+                    fr = (getattr(coro, "cr_frame", None)
+                          or getattr(coro, "gi_frame", None))
+                    if fr is not None:
+                        fn = fr.f_code.co_filename.rsplit("/app/", 1)[-1]
+                        lines.append(
+                            f"{fn}:{fr.f_lineno} {fr.f_code.co_name}")
+                    nxt = (getattr(coro, "cr_await", None)
+                           or getattr(coro, "gi_yieldfrom", None))
+                    if nxt is None and fr is None:
+                        lines.append(f"(awaiting {type(coro).__name__})")
+                    coro = nxt
                 log.error("WRITE TXN HELD %.0fs — first write: %s\n"
-                          "app-frame tasks:\n%s",
-                          age, first_dml, "\n".join(suspects) or "  (none found)")
+                          "holder %s awaiting:\n  %s",
+                          age, first_dml,
+                          holder.get_name() if holder else "(task unknown)",
+                          "\n  ".join(lines[-14:]) or "(no frames)")
