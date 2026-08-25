@@ -31,7 +31,7 @@ import re
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
 
-from sqlalchemy import and_, delete, or_, select, update
+from sqlalchemy import and_, or_, select, update
 
 from app.services.sofascore_doubles import _sheet_surnames
 from app.models.schedule import (ScheduleChange, ScheduleDocument,
@@ -228,6 +228,36 @@ def _pairing_key(tournament_id: int, play_date: date, discipline: str,
     return hashlib.sha256(raw.encode()).hexdigest()[:32]
 
 
+def _match_tokens(raw: str) -> tuple[set, set]:
+    """The two token sets one name may be matched under, in priority order.
+
+    The sheet and the draw do not spell umlauts the same way and neither is
+    wrong. `rankings._norm` expands them the German way (o-umlaut -> "oe"),
+    which is how Wikipedia and Tennis Explorer write them and therefore how
+    `draw_entries.name` is stored; the ATP/WTA order-of-play sheets print
+    plain ASCII. So "Mees Roettgering" in the draw and "ROTTGERING" on the
+    sheet never met: no draw_entry_id, no match_id, and on 2026-08-25 a
+    main-draw R32 sat on the live page with no round badge, no player links
+    and no scores, while the bracket had known the pairing for a day.
+    `_ascii_fold` is the fold under which both spellings agree. It already
+    existed here as half of `_fold`, whose own docstring names this bug —
+    the ingest's two matchers were simply never moved onto it, which is the
+    usual shape of a fix applied to one copy of two.
+
+    The ASCII fold is a FALLBACK, never the first test, because it is
+    strictly looser: a draw holding both "Mueller" and "Muller" folds them
+    together, so the exact spelling has to get first refusal.
+    """
+    cleaned = _clean_name(raw or '')
+    # `_clean_name`, NOT `_fold`, owns the stripping — it gates the trailing
+    # code on _COUNTRY_CODES, and _fold takes any three capitals. Folding a
+    # cleaned name stripped twice and turned "[WC] Luca POW GBR" into "Luca",
+    # which is a subset of "Luca Van Assche": a confidently wrong player.
+    # Three capitals are a surname as often as a country — LUZ, GUO, POW.
+    return ({t for t in _norm(cleaned).split() if len(t) > 2},
+            {t for t in _ascii_fold(cleaned).split() if len(t) > 2})
+
+
 async def _resolve_players(db, draws: list, tour: Optional[str], names: list) -> list:
     """Map printed names onto draw_entries. Closed-set matching, not extraction:
     the entrants are already known, so every token from the sheet must appear in
@@ -235,13 +265,17 @@ async def _resolve_players(db, draws: list, tour: Optional[str], names: list) ->
     resolve at all, because losing qualifiers never reach draw_entries."""
     out = []
     for raw in names:
-        tokens = {t for t in _norm(_clean_name(raw)).split() if len(t) > 2}
+        probes = _match_tokens(raw)
         found = None
-        if tokens:
+        for idx, probe in enumerate(probes):
+            if not probe:
+                continue
             for draw in draws:
-                for entry in draw['entries']:
-                    if tokens <= entry[1]:
-                        found = entry[0] if found is None else found
+                for eid, ent_tokens in ((e[0], e[1 + idx]) for e in draw['entries']):
+                    if probe <= ent_tokens:
+                        found = eid if found is None else found
+            if found is not None:
+                break
         out.append(found)
     return out
 
@@ -257,14 +291,85 @@ def _candidates(draws, names) -> set:
     """
     out = set()
     for raw in names:
-        tokens = {t for t in _norm(_clean_name(raw)).split() if len(t) > 2}
-        if not tokens:
-            continue
-        for draw in draws:
-            for eid, ent_tokens in draw['entries']:
-                if tokens <= ent_tokens:
-                    out.add(eid)
+        for idx, probe in enumerate(_match_tokens(raw)):
+            if not probe:
+                continue
+            # Same two-fold priority as _resolve_players: take the ASCII fold
+            # only when the exact one names nobody, so the looser test can
+            # never widen a set the strict one had already narrowed.
+            hits = {e[0] for draw in draws for e in draw['entries']
+                    if probe <= e[1 + idx]}
+            if hits:
+                out |= hits
+                break
     return out
+
+
+async def _sync_players(db, entry, na: list, nb: list, ids: list) -> list:
+    """Make a slot's stored players say exactly what THIS sheet prints.
+
+    Write-once was the bug. `raw_name` used to be written only in the
+    `if entry is None` branch, so whatever the FIRST revision printed was
+    frozen into the row for good — and the bracket resolution in
+    `ingest_document` deliberately rewrites the names of a slot it settles.
+    Winston-Salem 2026-08-25: an early sheet printed the Medvedev slot as an
+    unresolved choice, the resolver replaced both players with their DRAW
+    names, and when the next two revisions printed the settled pair the way
+    every other row is printed ("[WC] Martin DAMM USA") the matched row kept
+    "Martin Damm" — Title Case, so no country, so no flag, and no [WC] badge,
+    beside sixteen rows carrying all three. Four rows across three
+    tournaments were stuck that way. Anything re-derived from the sheet on
+    every pass belongs in the UPDATE path too, exactly like `stage` and
+    `start_note`.
+
+    Safe against undoing `resolve_settled_alternatives`, which deletes the
+    losing alternative of a side the bracket has already decided: a revision
+    that still prints "A or B" re-adds it here, and that same resolver runs
+    again at the end of this ingest and collapses it again before anything
+    reads the day.
+
+    Returns the (old, new) pairs that actually changed, for the log.
+    """
+    rows = (await db.execute(
+        select(ScheduleEntryPlayer).where(
+            ScheduleEntryPlayer.schedule_entry_id == entry.id))).scalars().all()
+    by_slot = {(p.side, p.position): p for p in rows}
+    changed = []
+    for side, names in (('a', na), ('b', nb)):
+        base = 0 if side == 'a' else len(na)
+        for pos, nm in enumerate(names, 1):
+            eid = ids[base + pos - 1] if base + pos - 1 < len(ids) else None
+            row = by_slot.pop((side, pos), None)
+            if row is None:
+                db.add(ScheduleEntryPlayer(
+                    schedule_entry_id=entry.id, side=side, position=pos,
+                    raw_name=nm, draw_entry_id=eid))
+                continue
+            if row.raw_name != nm:
+                changed.append((row.raw_name, nm))
+                row.raw_name = nm
+            # Never trade an id already proved for a None this pass could not
+            # resolve: a qualifier reaches draw_entries days after the sheet
+            # first names them.
+            if eid is not None:
+                row.draw_entry_id = eid
+    # A side that SHRANK — the phantom "DAMM / SHELBAYH" settling to one name.
+    for row in by_slot.values():
+        await db.delete(row)
+    return changed
+
+
+def _printed_name(printed: dict, draw_names: dict, eid, fallback: str) -> str:
+    """The sheet's own spelling of the player the bracket says came through.
+
+    A settled slot must read like every other row on the page: SURNAME in
+    capitals, nationality, seeding marker. The draw's name is a different
+    rendering of the same person and carries none of those. Only when the
+    printed alternatives cannot be pinned to this player does the draw name
+    stand in.
+    """
+    hits = printed.get(eid) or []
+    return hits[0] if len(hits) == 1 else (draw_names.get(eid) or fallback)
 
 
 def _queue_verification(doc, tournament, play_date, url, pdf_bytes, entries):
@@ -333,8 +438,12 @@ async def ingest_document(db, tournament, play_date: date, url: str,
     for d in draw_rows:
         ents = (await db.execute(
             select(DrawEntry.id, DrawEntry.name).where(DrawEntry.draw_id == d.id))).all()
+        # Each entry carries BOTH folds — see _match_tokens. Built once here
+        # rather than per name, because every slot on the sheet probes it.
         draws.append({'draw': d,
-                      'entries': [(e[0], set(_norm(e[1] or '').split())) for e in ents],
+                      'entries': [(e[0], set(_norm(e[1] or '').split()),
+                                   set(_ascii_fold(e[1] or '').split()))
+                                  for e in ents],
                       'names': {e[0]: e[1] for e in ents}})
 
     # entry id -> draw id, so a resolved player also tells us which draw the
@@ -345,7 +454,7 @@ async def ingest_document(db, tournament, play_date: date, url: str,
     for d in draws:
         draw_by_id[d['draw'].id] = d['draw']
         entry_name.update(d['names'])
-        for eid, _tokens in d['entries']:
+        for eid, _tokens, _ascii in d['entries']:
             entry_draw[eid] = d['draw'].id
 
     seen_keys = []
@@ -398,6 +507,7 @@ async def ingest_document(db, tournament, play_date: date, url: str,
     unanimous = {k: next(iter(v)) for k, v in printed_rounds.items() if len(v) == 1}
 
     written = 0
+    renamed: list = []
     for court, slots in per_court.items():
         for order, (m, stage, discipline, na, nb, ids, key) in enumerate(slots, 1):
             entry = (await db.execute(
@@ -414,13 +524,6 @@ async def ingest_document(db, tournament, play_date: date, url: str,
                 )
                 db.add(entry)
                 await db.flush()
-                for side, names in (('a', na), ('b', nb)):
-                    base = 0 if side == 'a' else len(na)
-                    for pos, nm in enumerate(names, 1):
-                        db.add(ScheduleEntryPlayer(
-                            schedule_entry_id=entry.id, side=side, position=pos,
-                            raw_name=nm, draw_entry_id=ids[base + pos - 1]
-                                if base + pos - 1 < len(ids) else None))
             else:
                 for field, new in (('court', court), ('court_order', order),
                                    ('start_time_local', m.time), ('start_type', start_type)):
@@ -429,6 +532,10 @@ async def ingest_document(db, tournament, play_date: date, url: str,
                         db.add(ScheduleChange(
                             schedule_entry_id=entry.id, document_id=doc.id,
                             field=field, old_value=str(old), new_value=str(new)))
+
+            # ONE path for players, new row or old — see _sync_players for why
+            # the create-only version froze a stale rendering into four rows.
+            renamed += await _sync_players(db, entry, na, nb, ids)
 
             # Link the slot to the draw and the bracket match. This is what the
             # whole feature turns on: without match_id there are no live scores
@@ -466,18 +573,19 @@ async def ingest_document(db, tournament, play_date: date, url: str,
                 # so replace the alternatives with the real pair rather than
                 # showing a choice whose answer we already hold.
                 if m.tbd:
-                    na = [entry_name.get(found.player1_id) or na[0]]
-                    nb = [entry_name.get(found.player2_id) or nb[0]]
+                    # Keep the SHEET's spelling of whoever came through: the
+                    # alternatives are printed right here in the same form as
+                    # every settled row, and the draw's rendering is not.
+                    printed: dict = {}
+                    for nm, eid in zip(na + nb, ids):
+                        if eid is not None:
+                            printed.setdefault(eid, []).append(nm)
+                    na = [_printed_name(printed, entry_name, found.player1_id, na[0])]
+                    nb = [_printed_name(printed, entry_name, found.player2_id, nb[0])]
                     ids = [found.player1_id, found.player2_id]
                     entry.is_tbd = False
                     entry.tbd_side = None
-                    await db.execute(
-                        delete(ScheduleEntryPlayer).where(
-                            ScheduleEntryPlayer.schedule_entry_id == entry.id))
-                    for side, nm, eid in (('a', na[0], ids[0]), ('b', nb[0], ids[1])):
-                        db.add(ScheduleEntryPlayer(
-                            schedule_entry_id=entry.id, side=side, position=1,
-                            raw_name=nm, draw_entry_id=eid))
+                    renamed += await _sync_players(db, entry, na, nb, ids)
                     # The row's identity has to move with its content. This key
                     # was derived from the alternatives just replaced ("Tien OR
                     # Tiafoe"); leaving it there means the NEXT revision, which
@@ -538,6 +646,20 @@ async def ingest_document(db, tournament, play_date: date, url: str,
             entry.last_seen_at = datetime.now(timezone.utc)
             entry.last_document_id = doc.id
             written += 1
+
+    if renamed:
+        # A slot's printed identity changing is worth a line: it is either the
+        # tournament substituting a player, or a stale rendering healing.
+        # Imported here, not at module scope, like every other app_log in this
+        # file — system_log imports back into the model layer.
+        from app.services.system_log import app_log
+        await app_log(
+            "info", "order_of_play",
+            f"{len(renamed)} schedule player name(s) re-stamped from the sheet "
+            f"for {tournament.name} on {play_date}: "
+            + "; ".join(f"{o!r}->{n!r}" for o, n in renamed[:5]),
+            {"tournament_id": tournament.id, "play_date": str(play_date),
+             "renamed": [[o, n] for o, n in renamed[:20]]})
 
     await db.flush()
     await _dedupe_day(db, tournament.id, play_date)
@@ -930,6 +1052,15 @@ async def _dedupe_day(db, tournament_id: int, play_date: date) -> int:
     return dropped
 
 
+def _ascii_fold(s: str) -> str:
+    """Lowercase, combining marks dropped. The character half of `_fold`,
+    split out so a caller that has already stripped the seeding and country
+    (via `_clean_name`) can fold without stripping a second time."""
+    import unicodedata
+    s = unicodedata.normalize("NFD", s or "")
+    return "".join(c for c in s if not unicodedata.combining(c)).lower()
+
+
 def _fold(name: str) -> frozenset:
     """Name tokens under a plain ASCII fold, for matching a sheet's spelling
     to a draw's.
@@ -942,12 +1073,9 @@ def _fold(name: str) -> frozenset:
     prefixes ([Q], [7], [Alt]) and a trailing IOC code are stripped first.
     """
     import re as _re
-    import unicodedata
     s = _re.sub(r"^(?:\[[^\]]*\]\s*)+", "", (name or "").strip())
     s = _re.sub(r"\s+[A-Z]{3}$", "", s)
-    s = unicodedata.normalize("NFD", s)
-    s = "".join(c for c in s if not unicodedata.combining(c))
-    return frozenset(t for t in s.lower().split() if t)
+    return frozenset(t for t in _ascii_fold(s).split() if t)
 
 
 async def resolve_settled_alternatives(db, tournament_id: int) -> int:

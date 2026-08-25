@@ -28,6 +28,9 @@ _SLOT_WORDING_RE = re.compile(
     r'to\s+be\s+(?:arranged|confirmed|announced|advised|determined))\b', re.I)
 _TRAILING_SEED_RE = re.compile(r'(?:\s*\[[^\]]*\])+\s*$')
 _TRAILING_CODE_RE = re.compile(r'\s([A-Z]{3})$')
+# Order-of-play sheets print the SURNAME in capitals, every tour, every tier.
+# A stored name with no capitalised run therefore did not come from the sheet.
+_SHEET_CAPS_RE = re.compile(r'(?<![A-Za-z])[A-Z]{2,}(?![a-z])')
 
 
 async def check_day(db, tournament_id: int, play_date) -> list[dict]:
@@ -59,6 +62,14 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                    select(Match).where(Match.draw_id.in_(draw_ids),
                                        Match.winner_id.isnot(None)))).scalars().all()
                if m.player1_id and m.player2_id} if draw_ids else {}
+    # Every real bracket pairing, decided or not. `decided` above only holds
+    # finished matches; linking a slot is about the pairing existing at all.
+    pair_match = {frozenset((m.player1_id, m.player2_id)): m.id
+                  for m in (await db.execute(
+                      select(Match).where(Match.draw_id.in_(draw_ids),
+                                          Match.player1_id.isnot(None),
+                                          Match.player2_id.isnot(None)))).scalars().all()
+                  } if draw_ids else {}
 
     def flag(code, entry, detail):
         v.append({"code": code, "entry_id": entry.id if entry else None,
@@ -141,6 +152,44 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                 if any(w.isupper() and any(c.isalpha() for c in w) for w in before):
                     flag("name_trailing_noncountry", e,
                          f"side {p.side}: {raw!r} ends in {m.group(1)!r}, not a country")
+
+        # 2026-08-25, "Mees ROTTGERING vs Tomas MACHAC": the draw stores
+        # "Mees Röttgering", `rankings._norm` expands the umlaut the German
+        # way to "roettgering", and the sheets print plain ASCII — so the
+        # ingest's two matchers never met the draw and a main-draw R32 sat on
+        # the live page with no round badge, no player links and no scores
+        # while the bracket had held the pairing for a day. `schedule._fold`
+        # existed for exactly this and only one caller had been moved onto it.
+        # A settled main-draw singles slot whose sides each name exactly one
+        # draw entry, and whose pair IS a bracket match, must be linked to it.
+        if (e.discipline == "singles" and e.stage == "main"
+                and e.match_id is None and not e.is_tbd and na and nb):
+            sides = [{i for p in side
+                      for i in (by_fold.get(_fold(p.raw_name)) or [])}
+                     for side in (na, nb)]
+            if all(len(c) == 1 for c in sides):
+                pair = frozenset((next(iter(sides[0])), next(iter(sides[1]))))
+                if len(pair) == 2 and pair in pair_match:
+                    flag("bracket_match_missed", e,
+                         " vs ".join(p.raw_name or "" for p in (na[0], nb[0]))
+                         + f" is bracket match {pair_match[pair]}, "
+                           "but match_id is NULL")
+
+        # 2026-08-25, Medvedev vs Damm: the row was created from a revision
+        # that printed the slot unresolved, the bracket resolver replaced both
+        # players with their DRAW names, and `raw_name` was write-once — so
+        # two later revisions printing "[WC] Martin DAMM USA" could not undo
+        # it. The page showed one line in Title Case with no flag and no [WC]
+        # beside sixteen carrying both. Four rows across three tournaments
+        # were frozen that way. A settled side must read as the sheet prints
+        # it; an unresolved side is exempt, because sheets abbreviate the
+        # alternatives they offer ("D. Parry or D. Vekic").
+        for p in players:
+            raw = (p.raw_name or "").strip()
+            if raw and p.side not in tbd_side and not _SHEET_CAPS_RE.search(raw):
+                flag("name_not_sheet_form", e,
+                     f"side {p.side}: {raw!r} has no capitalised surname — "
+                     f"not the sheet's rendering")
 
         # An entry with no players on either side describes nothing; it can
         # only be parser debris. (Defensive; near-miss during the Winston-Salem
