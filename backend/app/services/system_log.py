@@ -39,6 +39,23 @@ async def app_log(
             return
         _dedup_cache[dedup_key] = now
 
+    # FIRE-AND-FORGET, ALWAYS. On 2026-08-25 a save died 20s after every
+    # click on a partially-picked draw, and the holder of the write lock was
+    # the save itself: it had flushed (taking SQLite's one write slot), then
+    # awaited app_log, whose own session sat blocked on that very lock for
+    # the full 30s busy_timeout — four times over, thanks to the retry loop
+    # below. An awaited app_log inside ANY write transaction is a
+    # self-deadlock, and callers cannot be trusted to know whether they hold
+    # the lock (fill_missing_picks had no idea it ran post-flush). So the DB
+    # write always happens in its own task, after the caller's transaction is
+    # off the loop. The entry may land after the caller commits — for a log
+    # that is fine; for the caller, 30 seconds of held writer is not.
+    asyncio.create_task(_write_entry(level, category, message, detail))
+
+
+async def _write_entry(
+    level: str, category: str, message: str, detail: Optional[dict],
+) -> None:
     from app.database import AsyncSessionLocal
     from app.models.system_log import SystemLog
 
