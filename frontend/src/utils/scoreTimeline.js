@@ -16,6 +16,87 @@ const num = (v) => {
   return Number.isFinite(n) ? n : 0
 }
 
+const RANK = { '0': 0, '15': 1, '30': 2, '40': 3, 'A': 4 }
+
+/**
+ * History with the feed's own corrections erased.
+ *
+ * Sofascore's scoreboard is typed by a human, and a point posted early gets
+ * corrected back: the stored stream holds 0-40, 0-30, 0-40 (Parks-Marcinko,
+ * 2026-08-25) and the scrubber replayed the mistake as if the score had
+ * travelled back in time. Within a game, tennis points move one way — the
+ * ONLY legal backward step is A -> 40, which is deuce, and games never
+ * decrease at all. So any transition that breaks those rules convicts the
+ * EARLIER snapshot (the premature value), not the later one (the
+ * correction): pop it and re-test, so a run of premature states collapses
+ * until the stream reads as tennis again.
+ *
+ * What survives untouched, by construction:
+ * - deuce battles: A-40 -> 40-40 -> A-40 is legal in both directions
+ * - new games and new sets: points reset when games advance, which the
+ *   games-must-not-decrease rule permits
+ * - ESPN rows: no point to compare (null), games rules still apply
+ * - tiebreaks: numeric points, same one-way rule
+ */
+export function sanitizeSnapshots(snapshots) {
+  if (!Array.isArray(snapshots)) return []
+  const out = []
+  for (const cur of snapshots) {
+    while (out.length) {
+      const prev = out[out.length - 1]
+      if (!_illegalRegression(prev, cur)) break
+      out.pop()
+    }
+    // Erasing a premature run can leave the state it regressed TO sitting
+    // beside its own earlier copy — two identical 40-30s where the feed went
+    // 40-30, (phantom game), 40-30. One state, one snapshot: keep the
+    // earlier, whose timestamp is when it first became true.
+    const top = out[out.length - 1]
+    if (top && _sameState(top, cur)) continue
+    out.push(cur)
+  }
+  return out
+}
+
+function _sameState(a, b) {
+  return JSON.stringify(a.games) === JSON.stringify(b.games)
+    && JSON.stringify(a.point ?? null) === JSON.stringify(b.point ?? null)
+    && !!a.tiebreak === !!b.tiebreak
+    && !!a.match_tiebreak === !!b.match_tiebreak
+    && (a.serving ?? null) === (b.serving ?? null)
+}
+
+function _illegalRegression(prev, cur) {
+  const pg = prev?.games
+  const cg = cur?.games
+  if (!pg?.[0] || !cg?.[0]) return false
+  // A set column vanishing, or games shrinking inside a column, is never
+  // tennis — compare per shared column.
+  if (cg[0].length < pg[0].length) return true
+  for (let c = 0; c < pg[0].length; c++) {
+    if (num(cg[0][c]) < num(pg[0][c]) || num(cg[1]?.[c]) < num(pg[1]?.[c])) return true
+  }
+  // Points, only when the game itself did not advance.
+  const col = pg[0].length - 1
+  const sameGame = cg[0].length === pg[0].length
+    && num(cg[0][col]) === num(pg[0][col])
+    && num(cg[1]?.[col]) === num(pg[1]?.[col])
+    && !!prev.tiebreak === !!cur.tiebreak
+  if (!sameGame || !prev.point || !cur.point) return false
+  if (prev.tiebreak) {
+    // tiebreak points are plain numbers and only count up
+    return num(cur.point[0]) < num(prev.point[0]) || num(cur.point[1]) < num(prev.point[1])
+  }
+  for (const side of [0, 1]) {
+    const a = RANK[String(prev.point[side])]
+    const b = RANK[String(cur.point[side])]
+    if (a == null || b == null) continue
+    if (b < a && !(a === 4 && b === 3)) return true   // only A -> 40 may fall
+  }
+  return false
+}
+
+
 /**
  * Markers for a snapshot list, as [{ i, kind: 'set' | 'break', side: 1|2 }].
  *
