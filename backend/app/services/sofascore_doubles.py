@@ -748,6 +748,21 @@ async def sweep_once(db, day: Optional[date] = None) -> dict:
             # good one — the next sweep overwrites it with the real thing.
             if _has_sets(snap) or not _has_sets(e.live_point_json):
                 if e.live_scores_json != live or e.live_point_json != snap:
+                    # HISTORY, on real change only. `snap.at` differs on every
+                    # sweep so the outer condition always fires; comparing
+                    # without it is what separates "the score moved" from "the
+                    # stamp was refreshed" — same split the singles poller
+                    # documents. Wrapped so a history failure can never cost
+                    # the score write it rides beside.
+                    prev = dict(e.live_point_json or {}); prev.pop("at", None)
+                    cur = dict(snap); cur.pop("at", None)
+                    if prev != cur:
+                        try:
+                            from app.services.score_history import record_entry_snapshot
+                            record_entry_snapshot(db, e.id, snap)
+                        except Exception:
+                            logger.exception(
+                                "entry score history insert failed for %s", e.id)
                     e.live_scores_json = live
                     e.live_point_json = snap
                     e.status = "live"

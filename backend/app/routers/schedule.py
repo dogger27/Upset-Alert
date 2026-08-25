@@ -14,14 +14,14 @@ from datetime import date, datetime, time, timezone, timedelta
 from zoneinfo import ZoneInfo
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import get_optional_user
 from app.database import get_db
-from app.models.schedule import ScheduleEntry
+from app.models.schedule import ScheduleEntry, ScheduleEntryPlayer
 from app.models.rankings import TePlayer, TeRankingsSnapshot
 from app.services.sofascore_doubles import _sheet_surnames
 from app.services.rankings import _norm
@@ -703,6 +703,48 @@ async def schedule_day(
                       "venue_timezone": tzs.get(i)}
                      for i in sorted(t_ids)],
     )
+
+
+@router.get("/entries/{entry_id}/score-history")
+async def entry_score_history(entry_id: int, db: AsyncSession = Depends(get_db)):
+    """The match endpoint's twin for rows with no bracket match — qualifying
+    singles and doubles, whose only record is the schedule entry itself.
+    Same response shape, so the popup renders both through one path.
+    Snapshots are stored in the SHEET's orientation: side 1 IS side a, and
+    player1_name is side a's first printed name so the client's orientation
+    check lines up. An empty list is a normal answer, not an error."""
+    from app.models.score_history import ScheduleScoreSnapshot
+    from app.services.sofascore_live import renderable_history
+
+    entry = await db.get(ScheduleEntry, entry_id)
+    if not entry:
+        raise HTTPException(404, "Schedule entry not found")
+
+    rows = (await db.execute(
+        select(ScheduleScoreSnapshot)
+        .where(ScheduleScoreSnapshot.schedule_entry_id == entry_id)
+        .order_by(ScheduleScoreSnapshot.id)
+    )).scalars().all()
+    snapshots = []
+    for r in rows:
+        out = renderable_history(r.snap)
+        if out is not None:
+            snapshots.append(out)
+
+    side_a = (await db.execute(
+        select(ScheduleEntryPlayer.raw_name)
+        .where(ScheduleEntryPlayer.schedule_entry_id == entry_id,
+               ScheduleEntryPlayer.side == "a")
+        .order_by(ScheduleEntryPlayer.position)
+    )).scalars().first()
+    return {
+        "status": entry.status,
+        "completed_at": None,
+        "player1_id": None,
+        "player1_name": side_a,
+        "snapshots": snapshots,
+        "final": entry.scores_json,
+    }
 
 
 @router.get("/dates")

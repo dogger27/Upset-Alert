@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import delete, func, select
 
-from app.models.score_history import MatchScoreSnapshot
+from app.models.score_history import MatchScoreSnapshot, ScheduleScoreSnapshot
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +33,16 @@ def record_snapshot(db, match_id: int, snap: dict) -> None:
     """Append one score moment. The caller owns the commit."""
     db.add(MatchScoreSnapshot(
         match_id=match_id,
+        at=datetime.now(timezone.utc).replace(tzinfo=None),
+        snap=snap,
+    ))
+
+
+def record_entry_snapshot(db, schedule_entry_id: int, snap: dict) -> None:
+    """record_snapshot for a row that exists only as a schedule entry.
+    Same contract: adds to the caller's session, never commits or queries."""
+    db.add(ScheduleScoreSnapshot(
+        schedule_entry_id=schedule_entry_id,
         at=datetime.now(timezone.utc).replace(tzinfo=None),
         snap=snap,
     ))
@@ -83,6 +93,39 @@ async def prune(db) -> int:
     # The backstop for matches that never resolved at all.
     res = await db.execute(delete(MatchScoreSnapshot).where(
         MatchScoreSnapshot.at < now - timedelta(days=ABSOLUTE_MAX_DAYS)))
+    removed += res.rowcount or 0
+
+    # Entry-keyed history (qualifying singles, doubles): no draw to complete,
+    # so the day itself is the clock — scrubbed while the sheet is current,
+    # gone KEEP_AFTER_DRAW_DAYS after its play date passes. Same per-row cap
+    # and absolute backstop as the match table.
+    from app.models.schedule import ScheduleEntry
+    old_entries = (await db.execute(
+        select(ScheduleEntry.id).where(
+            ScheduleEntry.play_date < (now - timedelta(days=KEEP_AFTER_DRAW_DAYS)).date())
+    )).scalars().all()
+    if old_entries:
+        res = await db.execute(delete(ScheduleScoreSnapshot).where(
+            ScheduleScoreSnapshot.schedule_entry_id.in_(old_entries)))
+        removed += res.rowcount or 0
+    over = (await db.execute(
+        select(ScheduleScoreSnapshot.schedule_entry_id)
+        .group_by(ScheduleScoreSnapshot.schedule_entry_id)
+        .having(func.count() > PER_MATCH_CAP)
+    )).scalars().all()
+    for eid in over:
+        keep_from = (await db.execute(
+            select(ScheduleScoreSnapshot.id)
+            .where(ScheduleScoreSnapshot.schedule_entry_id == eid)
+            .order_by(ScheduleScoreSnapshot.id.desc())
+            .offset(PER_MATCH_CAP - 1).limit(1))).scalar_one_or_none()
+        if keep_from is not None:
+            res = await db.execute(delete(ScheduleScoreSnapshot).where(
+                ScheduleScoreSnapshot.schedule_entry_id == eid,
+                ScheduleScoreSnapshot.id < keep_from))
+            removed += res.rowcount or 0
+    res = await db.execute(delete(ScheduleScoreSnapshot).where(
+        ScheduleScoreSnapshot.at < now - timedelta(days=ABSOLUTE_MAX_DAYS)))
     removed += res.rowcount or 0
 
     if removed:
