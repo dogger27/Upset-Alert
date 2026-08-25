@@ -152,6 +152,16 @@ def _classify(match, *, before_main: bool = False, resolved: bool = True,
         if first == 'X':
             discipline = 'mixed'
         return stage, discipline
+    # The PARSE's own word is next. Both parsers state a discipline in
+    # canonical form when their source does — the PDF's slot line ("Doubles /
+    # Not Before 7:00 PM"), the US Open feed's event code mapped by uso_feed —
+    # and the text fallbacks below exist for sheets that say NOTHING. Running
+    # a stated 'mixed' through those fallbacks filed Williams/Alcaraz as
+    # main-draw singles: the blob regex knows event codes, not words.
+    if match.discipline in ('doubles', 'mixed'):
+        stage = 'qualifying' if _QUALI_ROUND_RE.match(
+            (match.round or '').strip()) else 'main'
+        return stage, match.discipline
     stage = 'qualifying' if _QUALI_ROUND_RE.match((match.round or '').strip()) else 'main'
     # Some sheets carry NEITHER an event code nor a round. A tournament whose
     # qualifying has a day to itself has nothing to disambiguate, so it prints
