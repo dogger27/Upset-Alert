@@ -19,6 +19,11 @@
 }
 
 .shp-popup {
+  /* Thumb diameter. A VARIABLE because the tick positions are computed
+     against the thumb's travel (centre runs [thumb/2, 100% - thumb/2]) in
+     the JSX — one number, or desktop's smaller thumb silently misaligns
+     every marker. */
+  --shp-thumb: 28px;
   background: var(--surface-card);
   border-radius: 12px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
@@ -80,8 +85,8 @@
 .shp-range::-webkit-slider-thumb {
   -webkit-appearance: none;
   touch-action: none;
-  width: 28px;
-  height: 28px;
+  width: var(--shp-thumb);
+  height: var(--shp-thumb);
   border-radius: 50%;
   background: var(--brand-active);
   border: 3px solid var(--on-brand);
@@ -89,8 +94,8 @@
   cursor: pointer;
 }
 .shp-range::-moz-range-thumb {
-  width: 28px;
-  height: 28px;
+  width: var(--shp-thumb);
+  height: var(--shp-thumb);
   border-radius: 50%;
   background: var(--brand-active);
   border: 3px solid var(--on-brand);
@@ -157,4 +162,21 @@
   height: 10px;
   border-radius: 3px;
   transform: none;
+}
+
+
+/* ── Desktop ──────────────────────────────────────────────────────────────
+   Room to spare, so the whole popup grows. A uniform transform: scale rather
+   than per-element font bumps, deliberately: the score card inside fits
+   names by MEASURING its own boxes (useNameBox + canvas), and scaling after
+   layout leaves every measurement consistent at 1x — restyling the card's
+   rem sizes would send the fitting ladder chasing numbers that no longer
+   mean what they meant. The thumb is set slightly SMALLER pre-scale (20px ->
+   27px visual vs 28px before): everything grows but the slider head, per the
+   owner's spec, and the tick travel math follows through the variable. */
+@media (min-width: 900px) {
+  .shp-popup {
+    --shp-thumb: 20px;
+    transform: scale(1.35);
+  }
 }
