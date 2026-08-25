@@ -898,7 +898,12 @@ export default function Schedule() {
           {(data?.tournaments ?? []).filter(t => t.oop_url).slice(0, 1).map(t => (
             <a key={t.id} className="sched-pdf" href={t.oop_url}
                target="_blank" rel="noopener noreferrer"
-               title={`${t.name} — official order of play (PDF)`}>
+               /* The revision ordinal matches the status emails ("OOP rev.3")
+                  — same count, same meaning: which correction of the day's
+                  sheet the site currently reflects. Absent on old days the
+                  document table no longer covers. */
+               title={`${t.name} — official order of play (PDF)${
+                 t.oop_revision ? ` — rev.${t.oop_revision}` : ''}`}>
               PDF
             </a>
           ))}
