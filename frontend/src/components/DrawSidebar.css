@@ -34,7 +34,9 @@
   z-index: 30;
 }
 .draw-sidebar--overlay.draw-sidebar--collapsed { pointer-events: none; }
-.draw-sidebar--overlay/* Invisible height-setter sharing the glyph's grid cell and text metrics, so
+.draw-sidebar--overlay.draw-sidebar--collapsed .sidebar-collapse-btn { pointer-events: auto; }
+
+/* Invisible height-setter sharing the glyph's grid cell and text metrics, so
    the collapsed button keeps one footprint whatever the chevron is doing.
    Vertical text, because its height is what is being set. */
 .sidebar-collapse-sizer {
