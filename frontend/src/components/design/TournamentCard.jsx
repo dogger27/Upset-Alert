@@ -236,16 +236,21 @@ function renderFooter({ section, pickState, drawDates, oopPill }) {
     )
   }
 
-  if (section === 'upcoming' && drawDates) {
+  if (section === 'upcoming') {
     const item = (k, v) => (
       <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
         <span style={{ fontWeight: 700, color: 'var(--text-soft)' }}>{k}:</span> {v}
       </span>
     )
+    // The OOP button belongs here too — the 'open' card learned this from
+    // Winston-Salem's qualifying Saturday, and a Slam is the harder case: its
+    // qualifying is PLAYED while the card still says "draw not yet released",
+    // so 'upcoming' is exactly when someone wants the US Open's order of play.
     return (
-      <div style={{ display: 'flex', gap: 14 }}>
-        {drawDates.da && item('Draw', drawDates.da)}
-        {drawDates.qual && item('Qual', drawDates.qual)}
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 14 }}>
+        {drawDates?.da && item('Draw', drawDates.da)}
+        {drawDates?.qual && item('Qual', drawDates.qual)}
+        <span style={{ marginLeft: 'auto' }}>{oopPill}</span>
       </div>
     )
   }
