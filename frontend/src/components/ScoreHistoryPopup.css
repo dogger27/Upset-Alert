@@ -179,6 +179,10 @@
    owner's spec, and the tick travel math follows through the variable. */
 @media (min-width: 900px) {
   .shp-popup {
+    /* Wider, fonts untouched: width is PRE-scale, type rides the scale — so
+       growing this widens the box and the track while every letter stays
+       exactly as it was. 490 x 1.8 = 882px fits the 900px gate. */
+    width: min(490px, 100%);
     --shp-thumb: 14px;
     /* "Even LARGER", round three. transform scale does not scroll, so a
        popup scaled past the viewport clips its top unreachably — the height

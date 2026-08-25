@@ -22,7 +22,7 @@ import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getMatchScoreHistory } from '../api/tournaments'
 import MatchScoreCard from './MatchScoreCard'
-import { timelineMarkers } from '../utils/scoreTimeline'
+import { sanitizeSnapshots, timelineMarkers } from '../utils/scoreTimeline'
 import { splitPlayerName } from '../utils/flags'
 import './ScoreHistoryPopup.css'
 
@@ -64,7 +64,11 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
      with the memo below them — a hook after a conditional return is React
      #310, the exact trap this codebase's own draw page documents. Hooks
      first, guards after, always. */
-  const snapshots = data?.snapshots ?? []
+  /* The feed's own corrections are erased before anything reads the list —
+     display and markers both, so a premature point neither replays in the
+     scrub nor mints a phantom break tick. See sanitizeSnapshots. */
+  const snapshots = useMemo(
+    () => sanitizeSnapshots(data?.snapshots ?? []), [data?.snapshots])
   const max = snapshots.length            // rightmost notch = live/final
   const atEnd = pos == null || pos >= max
   const completed = entry
