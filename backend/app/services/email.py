@@ -1209,7 +1209,8 @@ OOP_STATUS_TO = "pdwiens@gmail.com"
 
 async def send_oop_status(*, doc_id: int, tournament: str, play_date: str,
                           ok: bool, fixed: list, problems: list,
-                          summary: str = "", handoff: str = "") -> None:
+                          summary: str = "", handoff: str = "",
+                          revision: int | None = None) -> None:
     """One concise status email per processed PDF — every outcome, every time.
 
     Three shapes: clean ("no problems found"), self-healed (each fix stated in
@@ -1221,6 +1222,18 @@ async def send_oop_status(*, doc_id: int, tournament: str, play_date: str,
         state, color = f"{len(fixed)} fixed", "#d97706"
     else:
         state, color = "clean", "#16a34a"
+
+    # "OOP #3, Aug 08: Winston-Salem Open" — the owner's subject format. The
+    # revision ordinal tells at a glance whether this is the day's first sheet
+    # or the third correction of it; a date that fails to parse falls back to
+    # the ISO string rather than losing the email.
+    try:
+        from datetime import date as _date
+        pretty = _date.fromisoformat(play_date).strftime("%b %d")
+    except (ValueError, TypeError):
+        pretty = play_date
+    rev = f"rev.{revision}" if revision else f"doc {doc_id}"
+    subject = f"OOP {rev}, {pretty}: {tournament} — {state}"
 
     lines = []
     for f in fixed:
@@ -1243,7 +1256,7 @@ async def send_oop_status(*, doc_id: int, tournament: str, play_date: str,
     <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px">
       <div style="font-size:13px;color:#6b7280">Order of play verified</div>
       <div style="font-size:16px;font-weight:700;color:#111;margin:4px 0 0">
-        {_esc(tournament)} — {_esc(play_date)}
+        OOP {_esc(rev)}, {_esc(pretty)}: {_esc(tournament)}
         <span style="color:{color}">({state})</span></div>
       {body_list}
       {f'<div style="font-size:12px;color:#6b7280;margin:10px 0 0">{_esc(summary)}</div>' if summary else ''}
@@ -1254,7 +1267,7 @@ async def send_oop_status(*, doc_id: int, tournament: str, play_date: str,
     await send_async({
         "from": FROM,
         "to": [OOP_STATUS_TO],
-        "subject": f"OOP verified: {tournament} {play_date} — {state}",
+        "subject": subject,
         "html": html,
     })
 

@@ -1802,7 +1802,10 @@ async def _sweep_oop_verifications() -> None:
         # the send itself fails, send_async logs that under its own category,
         # which still digests — the safety net survives.
         meta = None
+        revision = None
         try:
+            from sqlalchemy import func as _f, select as _sel
+
             from app.models.schedule import ScheduleDocument
             from app.models.tournament import Tournament
             async with AsyncSessionLocal() as db2:
@@ -1810,6 +1813,21 @@ async def _sweep_oop_verifications() -> None:
                 t = (await db2.get(Tournament, doc.tournament_id)) if doc else None
                 meta = (t.name if t else "Unknown tournament",
                         str(doc.play_date) if doc else "?")
+                if doc:
+                    # WHICH REVISION OF THE DAY'S SHEET THIS IS, for the email
+                    # subject. Real revisions only: a verifier force-reparse
+                    # renames the superseded doc's sha to 'forced-*' and stores
+                    # one row with the true sha, so excluding forced rows
+                    # leaves exactly one document per content version — the
+                    # count is the revision ordinal, not the ingest count.
+                    revision = (await db2.execute(
+                        _sel(_f.count()).where(
+                            ScheduleDocument.tournament_id == doc.tournament_id,
+                            ScheduleDocument.play_date == doc.play_date,
+                            ScheduleDocument.id <= doc.id,
+                            ScheduleDocument.parse_status == "oop",
+                            ScheduleDocument.sha256.notlike("forced%"),
+                        ))).scalar() or None
         except Exception as exc:
             logger.error("oop_verify: could not load doc %s meta: %s", doc_id, exc)
             meta = ("Unknown tournament", "?")
@@ -1825,7 +1843,8 @@ async def _sweep_oop_verifications() -> None:
                 from app.services.email import send_oop_status
                 await send_oop_status(doc_id=doc_id, tournament=meta[0],
                                       play_date=meta[1], ok=True, fixed=fixed,
-                                      problems=[], summary=r.get("summary") or "")
+                                      problems=[], summary=r.get("summary") or "",
+                                      revision=revision)
             except Exception as exc:
                 logger.error("oop_verify status email failed: %s", exc)
         else:
@@ -1861,7 +1880,7 @@ async def _sweep_oop_verifications() -> None:
                                       play_date=meta[1], ok=False, fixed=fixed,
                                       problems=problems,
                                       summary=r.get("summary") or "",
-                                      handoff=handoff)
+                                      handoff=handoff, revision=revision)
             except Exception as exc:
                 logger.error("oop_verify status email failed: %s", exc)
         os.replace(path, f"{done_dir}/{name}")
