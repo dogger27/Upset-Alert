@@ -682,10 +682,24 @@ async def schedule_day(
             Draw.tournament_id.in_(t_ids), Draw.oop_url.isnot(None)))).all()
     pdfs = {r[0]: r[1] for r in pdf_rows}
 
+    # Which revision of THIS DAY's sheet the site currently reflects — the
+    # same ordinal the status emails carry ("OOP rev.3"), counted the same
+    # way: real revisions only, a force-reparse's 'forced-*' leftovers
+    # excluded, so re-ingests of identical content never inflate it.
+    from app.models.schedule import ScheduleDocument
+    rev_rows = (await db.execute(
+        select(ScheduleDocument.tournament_id, func.count()).where(
+            ScheduleDocument.tournament_id.in_(t_ids),
+            ScheduleDocument.play_date == day,
+            ScheduleDocument.parse_status == "oop",
+            ScheduleDocument.sha256.notlike("forced%"),
+        ).group_by(ScheduleDocument.tournament_id))).all()
+    revs = {r[0]: r[1] for r in rev_rows}
 
     return ScheduleDayOut(
         play_date=day, entries=out, courts=courts,
         tournaments=[{"id": i, "name": t_names.get(i), "oop_url": pdfs.get(i),
+                      "oop_revision": revs.get(i),
                       "venue_timezone": tzs.get(i)}
                      for i in sorted(t_ids)],
     )
