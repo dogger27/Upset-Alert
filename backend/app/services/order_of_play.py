@@ -389,6 +389,77 @@ async def refresh_wta_ids() -> int:
     return stamped
 
 
+# Slams the tours' file hosts do not cover. wtafiles 404s the US Open and
+# protennislive serves a permanent "-Tournament Information Not Yet
+# Available-" placeholder (2025's STILL says that), so the tournament's own
+# IBM feed is the only order of play there is — see uso_feed.
+_SLAM_FEEDS = {"US Open"}
+
+
+async def _refresh_slam_feed(tournament, draws, season_year: int, today: date):
+    """Ingest the US Open's own schedule feed; returns the chip payload.
+
+    Fetches the day index, ingests every released day from yesterday on
+    (capped at three — today, tomorrow, and a venue-midnight straggler), and
+    returns {date, url, atp, wta} for the day the OOP chip should carry:
+    today's sheet when there is one, else the next released day.
+    """
+    from app.services import uso_feed
+    from app.services import schedule as schedule_svc
+    from app.services.db_retry import with_write_retry
+
+    async with httpx.AsyncClient(timeout=30,
+                                 headers=uso_feed.BROWSER_HEADERS) as client:
+        r = await client.get(uso_feed.FEED_DAYS.format(year=season_year))
+        r.raise_for_status()
+        days = []
+        for e in r.json().get("eventDays") or []:
+            pd = uso_feed.play_date_of(e)
+            if (e.get("released") and e.get("feedUrl") and pd is not None
+                    and pd >= today - timedelta(days=1)):
+                days.append((pd, e))
+        days.sort(key=lambda t: t[0])
+
+        ingested = []
+        for pd, e in days[:3]:
+            await asyncio.sleep(_FETCH_GAP_SECONDS)
+            fr = await client.get(e["feedUrl"])
+            if fr.status_code != 200:
+                continue
+            # Normalized bytes are what gets stored and hashed — the raw feed
+            # re-serializes its live scores on every publish, and hashing that
+            # would call every score change a schedule revision.
+            norm = uso_feed.normalize(fr.content)
+            matches, _meta = uso_feed.parse_uso_day(norm)
+            if not matches:
+                continue
+            day_url = uso_feed.WEBVIEW_DAY.format(day=e.get("tournDay") or "")
+
+            async def _ingest(sdb, _pd=pd, _doc=norm, _u=day_url):
+                t = await sdb.get(type(tournament), tournament.id)
+                return await schedule_svc.ingest_document(
+                    sdb, t, _pd, _u, _doc,
+                    parser=uso_feed.parse_uso_day, queue_verify=False)
+
+            async def _estimates(sdb, _pd=pd):
+                return await schedule_svc.recompute_expected_starts(
+                    sdb, tournament.id, _pd,
+                    venue_tz=next((d.venue_timezone for d in draws
+                                   if d.venue_timezone), None))
+
+            await with_write_retry(_ingest, what=f"uso feed ingest {tournament.id}")
+            await with_write_retry(_estimates, what=f"uso feed estimates {tournament.id}")
+            ingested.append((pd, day_url, matches))
+
+    if not ingested:
+        return None
+    pd, day_url, matches = next((x for x in ingested if x[0] >= today),
+                                ingested[-1])
+    return {"date": pd, "url": day_url,
+            "atp": sum(1 for m in matches if m.tour == "ATP"),
+            "wta": sum(1 for m in matches if m.tour == "WTA")}
+
+
 async def refresh_order_of_play() -> int:
     """
     Point every eligible draw at today's OOP, or at nothing.
@@ -461,6 +532,27 @@ async def refresh_order_of_play() -> int:
                                   f"{describe_exception(exc)}",
                                   dedup_key=f"oop_fetch_{tournament.id}", dedup_hours=6)
                 continue  # leave yesterday's value; the next tick re-checks
+
+            # THE SLAMS HOST THEIR OWN SHEET. When neither tour file yielded a
+            # dated order of play and this tournament is one the tours never
+            # cover, ingest its own feed instead. Everything downstream is the
+            # normal path: the chip URL is the day's human-readable schedule
+            # page, and the label counts drive the same gender coverage rule.
+            if oop_date is None and tournament.name in _SLAM_FEEDS:
+                try:
+                    fed = await _refresh_slam_feed(
+                        tournament, draws, season_year, today)
+                except Exception as exc:
+                    if not is_transient_http_error(exc):
+                        await app_log(
+                            "warning", "order_of_play",
+                            f"Slam schedule feed failed for "
+                            f"'{tournament.name}': {describe_exception(exc)}",
+                            dedup_key=f"oop_feed_{tournament.id}", dedup_hours=6)
+                    fed = None
+                if fed:
+                    oop_date, url, src_tour = fed["date"], fed["url"], "ATP"
+                    atp_labels, wta_labels = fed["atp"], fed["wta"]
 
             # WHAT COUNTS AS A SHEET WORTH STORING.
             #

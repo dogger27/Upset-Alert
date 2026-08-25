@@ -488,8 +488,18 @@ def _queue_verification(doc, tournament, play_date, url, pdf_bytes, entries):
 
 
 async def ingest_document(db, tournament, play_date: date, url: str,
-                          pdf_bytes: bytes, tour: Optional[str] = None) -> dict:
-    """Parse one PDF revision and reconcile it into schedule_entries."""
+                          pdf_bytes: bytes, tour: Optional[str] = None,
+                          parser=None, queue_verify: bool = True) -> dict:
+    """Parse one document revision and reconcile it into schedule_entries.
+
+    `parser` defaults to the PDF parser; the US Open's JSON feed passes its
+    own (uso_feed.parse_uso_day) with the same (matches, meta) contract, and
+    hands NORMALIZED bytes here so the sha256 revision check keeps meaning
+    "the schedule changed" rather than "a live score moved". Those JSON docs
+    also pass queue_verify=False — the verifier's whole toolchain (pdfplumber,
+    the PDF-vs-page prompt) assumes a PDF, and a queued JSON would only make
+    every run fail its parse step.
+    """
     digest = hashlib.sha256(pdf_bytes).hexdigest()
     existing = (await db.execute(
         select(ScheduleDocument).where(
@@ -503,7 +513,7 @@ async def ingest_document(db, tournament, play_date: date, url: str,
     # OFF THE EVENT LOOP, same incident as scraper.parse_draw: pdfplumber is
     # seconds of sync CPU per sheet, and a burst of revisions parsed inline
     # froze every request in flight.
-    matches, meta = await asyncio.to_thread(parse_pdf, pdf_bytes)
+    matches, meta = await asyncio.to_thread(parser or parse_pdf, pdf_bytes)
     doc = ScheduleDocument(
         tournament_id=tournament.id, play_date=play_date, source_url=url,
         tour=tour, sha256=digest, revision_label=meta.get('date_line'),
@@ -516,7 +526,8 @@ async def ingest_document(db, tournament, play_date: date, url: str,
         # An OOP revision that parsed to NOTHING is exactly the revision most
         # worth independent eyes — a parser regression looks like this.
         await db.commit()
-        _queue_verification(doc, tournament, play_date, url, pdf_bytes, 0)
+        if queue_verify:
+            _queue_verification(doc, tournament, play_date, url, pdf_bytes, 0)
         return {'document_id': doc.id, 'kind': meta.get('kind'), 'entries': 0}
 
     # Roster for resolution: every draw of this tournament.
@@ -785,7 +796,8 @@ async def ingest_document(db, tournament, play_date: date, url: str,
     except Exception:
         logging.getLogger(__name__).exception(
             "invariant check failed for %s %s", tournament.id, play_date)
-    _queue_verification(doc, tournament, play_date, url, pdf_bytes, written)
+    if queue_verify:
+        _queue_verification(doc, tournament, play_date, url, pdf_bytes, written)
     return {'document_id': doc.id, 'entries': written, 'kind': meta.get('kind')}
 
 
