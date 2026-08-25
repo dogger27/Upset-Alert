@@ -217,3 +217,159 @@ function _gameWon(pg, cg, col, prev) {
   if (dA + dB !== 1 || dA < 0 || dB < 0) return null
   return { winner: dA === 1 ? 1 : 2, server }
 }
+
+
+/**
+ * Point-by-point statistics, cumulative at every slider position.
+ *
+ * Derived from the same snapshots the scrubber walks — no new data source:
+ * every transition names who was serving (prev.serving) and the scoring rules
+ * of tennis name who won the point. Feed the SANITIZED list, or corrections
+ * count as points.
+ *
+ * Returns { at: [per-index {svcWon,svcTot,retWon,retTot,totWon,totTot} x2],
+ *           counted, transitions } — `at[i]` is the state THROUGH snapshot i,
+ * so the popup can show the match's stats at the scrubbed moment. Sides are
+ * the snapshot's own orientation (1 = player1), like everything else here.
+ *
+ * Attribution rules, in the order they are tested:
+ * - rank rise (0->15->30->40->A): that side won that many points
+ * - the deuce drops: A->40 with the game unchanged means the OTHER side won
+ *   the point — the one transition where the winner's own number stands still
+ * - a game/set ending: the winner is the side whose games advanced, credited
+ *   with the MINIMUM points the score demanded (40-30 -> game is one point;
+ *   30-30 -> game is two; 40-A -> game is three: deuce, advantage, game).
+ *   A poll gap across a long deuce run undercounts by construction rather
+ *   than inventing points nobody saw.
+ * - tiebreaks: plain numeric deltas; the set-sealing point is one point
+ * - a transition with no serving info counts toward nothing, and `counted`
+ *   lets the caller judge whether enough of the match was attributable
+ */
+export function pointStats(snapshots) {
+  const zero = () => [
+    { svcWon: 0, svcTot: 0, retWon: 0, retTot: 0, totWon: 0, totTot: 0, bpConv: 0, bpChances: 0 },
+    { svcWon: 0, svcTot: 0, retWon: 0, retTot: 0, totWon: 0, totTot: 0, bpConv: 0, bpChances: 0 },
+  ]
+  const at = []
+  let cur = zero()
+  let counted = 0
+  const credit = (winner, server, n = 1) => {
+    if (n <= 0) return
+    const w = cur[winner - 1]
+    const l = cur[2 - winner - 0 === winner ? winner - 1 : 2 - winner]
+    void l
+    for (let k = 0; k < n; k++) {
+      cur[winner - 1].totWon += 1
+      cur[0].totTot += 0 // totals tracked via both sides below
+    }
+    // service/return split
+    if (winner === server) {
+      cur[winner - 1].svcWon += n
+    } else {
+      cur[winner - 1].retWon += n
+    }
+    // denominators: every credited point was served by `server`
+    cur[server - 1].svcTot += n
+    cur[2 - server].retTot += n
+    cur[0].totTot += n
+    cur[1].totTot += n
+    counted += n
+  }
+
+  at.push(JSON.parse(JSON.stringify(cur)))
+  for (let i = 1; i < snapshots.length; i++) {
+    const prev = snapshots[i - 1]
+    const c = snapshots[i]
+    const pg = prev?.games, cg = c?.games
+    const server = prev?.serving
+    if (pg?.[0] && cg?.[0] && (server === 1 || server === 2)) {
+      const col = pg[0].length - 1
+      const grewCols = cg[0].length > pg[0].length
+      const dA = !grewCols && col < cg[0].length ? num(cg[0][col]) - num(pg[0][col]) : 0
+      const dB = !grewCols && col < cg[0].length ? num(cg[1]?.[col]) - num(pg[1]?.[col]) : 0
+      const gameEnded = grewCols || dA > 0 || dB > 0
+
+      // ── Break points ── a chance exists whenever the RECEIVER stands one
+      // point from the game (40 against less, or advantage). Each such point
+      // PLAYED is one chance; the receiver winning it is a conversion. "Saved"
+      // needs no counter of its own: saved = opponent's chances minus their
+      // conversions, which is also how the two rows are guaranteed to agree.
+      const receiver = 3 - server
+      const bpNow = (() => {
+        if (prev.tiebreak || !prev.point) return 0
+        const r = RANK[String(prev.point[receiver - 1])]
+        const sv = RANK[String(prev.point[server - 1])]
+        if (r === 4) return 1                       // receiver advantage
+        if (r === 3 && sv != null && sv < 3) return 1
+        return 0
+      })()
+
+      if (gameEnded) {
+        // who won the game: the side whose games rose (or the set's winner)
+        let winner = null
+        if (grewCols) {
+          winner = num(cg[0][col]) > num(cg[1]?.[col]) ? 1 : 2
+        } else {
+          winner = dA > 0 ? 1 : 2
+        }
+        credit(winner, server, _closingPoints(prev, winner))
+        if (winner === receiver) {
+          // the game fell to the receiver: their final point converted a
+          // break point, whether prev showed it (30-40) or a poll gap hid
+          // the climb (30-30 -> game still passed through one).
+          cur[receiver - 1].bpChances += 1
+          cur[receiver - 1].bpConv += 1
+        } else if (bpNow) {
+          // server won the game FROM a break point: the minimal path back
+          // runs through consecutive break points until deuce — 15-40 to a
+          // held game is two chances survived, advantage-out is one.
+          const sv = RANK[String(prev.point[server - 1])]
+          cur[receiver - 1].bpChances +=
+            RANK[String(prev.point[receiver - 1])] === 4 ? 1 : Math.max(1, 3 - (sv ?? 2))
+        }
+      } else if (prev.point && c.point && !!prev.tiebreak === !!c.tiebreak) {
+        if (prev.tiebreak) {
+          const da = num(c.point[0]) - num(prev.point[0])
+          const db = num(c.point[1]) - num(prev.point[1])
+          if (da > 0) credit(1, server, da)
+          if (db > 0) credit(2, server, db)
+        } else {
+          const a0 = RANK[String(prev.point[0])], a1 = RANK[String(c.point[0])]
+          const b0 = RANK[String(prev.point[1])], b1 = RANK[String(c.point[1])]
+          if ([a0, a1, b0, b1].every(v => v != null)) {
+            if (a1 > a0) credit(1, server, a1 - a0)
+            if (b1 > b0) credit(2, server, b1 - b0)
+            // deuce drops: the winner's own number stands still
+            if (a0 === 4 && a1 === 3 && b1 <= b0) credit(2, server, 1)
+            if (b0 === 4 && b1 === 3 && a1 <= a0) credit(1, server, 1)
+            if (bpNow) {
+              // the game did not end, so the server won this stretch: every
+              // point until the receiver falls off 40/adv was a chance
+              // survived. Rank arithmetic caps it at the climb to deuce.
+              const sGained = (server === 1 ? a1 - a0 : b1 - b0)
+              const rRank = RANK[String(prev.point[receiver - 1])]
+              const burned = rRank === 4 ? 1 : Math.max(0, Math.min(sGained, 3 - (server === 1 ? a0 : b0)))
+              cur[receiver - 1].bpChances += Math.max(bpNow && sGained > 0 ? 1 : 0, burned)
+            }
+          }
+        }
+      }
+    }
+    at.push(JSON.parse(JSON.stringify(cur)))
+  }
+  return { at, counted, transitions: Math.max(0, snapshots.length - 1) }
+}
+
+/* Minimum points the game's winner needed from `prev`'s score to close it. */
+function _closingPoints(prev, winner) {
+  if (prev.tiebreak) return 1
+  if (!prev.point) return 1
+  const w = RANK[String(prev.point[winner - 1])]
+  const l = RANK[String(prev.point[2 - winner])]
+  if (w == null || l == null) return 1
+  if (w === 4) return 1                 // advantage in: one point
+  if (l === 4) return 3                 // advantage against: deuce, adv, game
+  if (w === 3 && l === 3) return 2      // deuce: adv, game
+  if (w === 3) return 1                 // 40 with no deuce: game point
+  return (3 - w) + 1                    // climb to 40, then game
+}
