@@ -180,17 +180,31 @@
 @media (min-width: 900px) {
   .shp-popup {
     --shp-thumb: 14px;
-    /* "EVEN BIGGER": ~792px visual on any desktop, ~900px on tall windows.
-       transform scale does not scroll, so a popup scaled past the viewport
-       clips its top unreachably — the height gate steps up only where the
-       window can hold it. The thumb's pre-scale size drops with each step so
-       its VISUAL size stays a touch under the original 28px, per the earlier
-       spec; the tick travel math follows through the variable. */
+    /* "Even LARGER", round three. transform scale does not scroll, so a
+       popup scaled past the viewport clips its top unreachably — the height
+       gates step up only where the window can hold it: 1.8x (~792px) as the
+       floor, 2.0x (~880px) on ordinary desktop heights, 2.35x (~1034px) on
+       tall monitors. The thumb's pre-scale size drops per step so its
+       VISUAL size stays near the original; the tick travel math follows
+       through the variable. */
     transform: scale(1.8);
   }
+  /* The card's own type, bumped BEYOND the uniform scale — the owner asked
+     for the names and score especially. Safe with the measured name-fitting:
+     the fit hook reads each element's computed fontSize (MatchScoreCard :44),
+     so a bigger face re-measures and the ladder does its job at the new
+     size rather than fighting a stale number. */
+  .shp-card .sched-competitor-name { font-size: 1.22rem; }
+  .shp-card .sched-competitors--doubles .sched-competitor-name { font-size: 1.02rem; }
+  .shp-card .sched-sets { font-size: 1.28rem; }
+  .shp-card .sched-point { font-size: 1.15rem; min-width: 2.1rem; }
+  .shp-card .sched-seed { font-size: 0.95rem; }
+}
+@media (min-width: 900px) and (min-height: 760px) {
+  .shp-popup { --shp-thumb: 13px; transform: scale(2.0); }
 }
 @media (min-width: 900px) and (min-height: 1050px) {
-  .shp-popup { --shp-thumb: 13px; transform: scale(2.05); }
+  .shp-popup { --shp-thumb: 12px; transform: scale(2.35); }
 }
 
 /* The match's end: red, at the timeline's last stop. Hidden beneath the
