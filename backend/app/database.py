@@ -559,4 +559,23 @@ async def txn_watchdog() -> None:
         for cid, (t0, stack) in list(_open_txns.items()):
             age = now - t0
             if age > WATCHDOG_AGE:
-                log.error("WRITE TXN HELD %.0fs — begun at:\n%s", age, stack)
+                # The begin-stack is worker-thread plumbing (the caller's
+                # coroutine is not on that C stack), so name the holder the
+                # only way a suspended task can be named: walk every task
+                # from the loop side and keep the app-level frames. The
+                # holder is whichever task sits in a commit/flush/session
+                # frame of ours.
+                suspects = []
+                for t in asyncio.all_tasks():
+                    frames = t.get_stack(limit=12)
+                    app_frames = [
+                        f"{f.f_code.co_filename.rsplit('/app/', 1)[-1]}:"
+                        f"{f.f_lineno} {f.f_code.co_name}"
+                        for f in frames if "/app/app/" in f.f_code.co_filename
+                    ]
+                    if app_frames:
+                        suspects.append(f"  task {t.get_name()}: "
+                                        + " <- ".join(app_frames[-4:]))
+                log.error("WRITE TXN HELD %.0fs — app-frame tasks:\n%s\n"
+                          "begin plumbing:\n%s",
+                          age, "\n".join(suspects) or "  (none found)", stack)
