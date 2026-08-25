@@ -647,11 +647,22 @@ async def ingest_document(db, tournament, play_date: date, url: str,
             entry.last_document_id = doc.id
             written += 1
 
+    await db.flush()
+    await _dedupe_day(db, tournament.id, play_date)
+    await _renumber_courts(db, tournament.id, play_date)
+    await db.commit()
+
     if renamed:
         # A slot's printed identity changing is worth a line: it is either the
         # tournament substituting a player, or a stale rendering healing.
-        # Imported here, not at module scope, like every other app_log in this
-        # file — system_log imports back into the model layer.
+        #
+        # AFTER the commit, and that is not a style choice. `app_log` opens its
+        # OWN session, and SQLite allows exactly one writer: called while this
+        # ingest still held uncommitted writes it blocked on the lock the same
+        # task was holding, so the log either failed with "database is locked"
+        # or stalled the whole ingest waiting for itself. Every other writer in
+        # this function's tail — the resolver, the invariants — is here for the
+        # same reason.
         from app.services.system_log import app_log
         await app_log(
             "info", "order_of_play",
@@ -661,10 +672,6 @@ async def ingest_document(db, tournament, play_date: date, url: str,
             {"tournament_id": tournament.id, "play_date": str(play_date),
              "renamed": [[o, n] for o, n in renamed[:20]]})
 
-    await db.flush()
-    await _dedupe_day(db, tournament.id, play_date)
-    await _renumber_courts(db, tournament.id, play_date)
-    await db.commit()
     # AFTER the commit, in this order: the LAW first, then the verifier queue.
     # The invariants (schedule_invariants.py) are the deterministic record of
     # every schedule bug ever shipped; they run on what the day ACTUALLY
