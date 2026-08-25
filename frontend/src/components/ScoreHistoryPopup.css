@@ -264,3 +264,16 @@
 /* outward from the centre: left bar anchors right, right bar anchors left */
 .shp-stat-bar--l i { right: 0; background: var(--h2h-p1); }
 .shp-stat-bar--r i { left: 0; background: var(--h2h-p2); }
+
+
+/* Who each column belongs to, in that column's own bar colour. */
+.shp-stat-names {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  margin-bottom: 0.1rem;
+}
+.shp-stat-name--l { color: var(--h2h-p1); }
+.shp-stat-name--r { color: var(--h2h-p2); text-align: right; }

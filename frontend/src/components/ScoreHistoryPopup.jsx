@@ -253,8 +253,19 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
                  bot.bpChances - bot.bpConv, bot.bpChances,
                  top.bpChances - top.bpConv, top.bpChances],
               ]
+              /* The card's names, cleaned of sheet furniture ([WC], IOC
+                 codes) by the same splitter everything else uses — in the
+                 side's own bar colour, so name, bar and column read as one. */
+              const statName = (row) => {
+                const { first, last } = splitPlayerName(row?.name || '')
+                return [first, last].filter(Boolean).join(' ') || row?.name || ''
+              }
               return (
                 <div className="shp-stats">
+                  <div className="shp-stat-names">
+                    <span className="shp-stat-name--l">{statName(a[0])}</span>
+                    <span className="shp-stat-name--r">{statName(b[0])}</span>
+                  </div>
                   {rows.map(([label, lw, lt, rw, rt]) => (
                     <div className="shp-stat-row" key={label}>
                       <span className="shp-stat-num">{lt ? `${pct(lw, lt)}%` : '—'}
