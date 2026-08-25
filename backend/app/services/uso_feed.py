@@ -58,6 +58,37 @@ _EVENTS = {
 # a change to what is PLANNED — court, order, slot, pairing, round.
 _VOLATILE = {"scores", "shortScore", "duration", "status", "statusCode"}
 
+# Entrants per event, for translating the feed's positional rounds ("R2",
+# roundCode 2) into the app's size-based vocabulary (R64, QF...). The feed
+# numbers rounds from 1 however big the draw is, so its R2 means different
+# things in different events — in the 16-team mixed doubles it is a
+# quarterfinal. Slam draw sizes are fixed by format: 128 singles main,
+# 128 qualifying (3 rounds to qualify), 64 doubles, 16 mixed (2026 format).
+_DRAW_SIZE = {"MS": 128, "WS": 128, "MD": 64, "WD": 64, "XD": 16}
+
+
+def _round_label(event_code: str, m: dict) -> str | None:
+    """The feed's round, translated into the app's own vocabulary."""
+    if event_code in ("MQ", "WQ"):
+        code = str(m.get("roundCode") or "").strip()
+        if code.isdigit():
+            return f"Q{code}"
+    name = (m.get("roundName") or "").lower()
+    if "final" in name and "semi" not in name and "quarter" not in name:
+        return "F"
+    if "semi" in name:
+        return "SF"
+    if "quarter" in name:
+        return "QF"
+    code = str(m.get("roundCode") or "").strip()
+    size = _DRAW_SIZE.get(event_code)
+    if size and code.isdigit():
+        players = size >> (int(code) - 1)
+        if players >= 16:
+            return f"R{players}"
+        return {8: "QF", 4: "SF", 2: "F"}.get(players)
+    return m.get("roundNameShort") or m.get("roundName")
+
 
 # "Fan Week Day 3: Tue, Aug 25" / "Day 3: Tue, Sept 1" — the printed label is
 # the one field that states the sheet's own day. It has to be, because `epoch`
@@ -123,15 +154,6 @@ def parse_uso_day(raw: bytes):
             # then there is nothing to pair it to.
             if not side_a or not side_b:
                 continue
-            # THE APP'S QUALIFYING VOCABULARY IS Q1/Q2/Q3, and the round
-            # token is how the classifier (_QUALI_ROUND_RE) and the schedule
-            # page both recognise a qualifying row. The feed says "R1" for a
-            # qualifying first round, which rendered as a main-draw round tag.
-            round_label = m.get("roundNameShort") or m.get("roundName")
-            if m.get("eventCode") in ("MQ", "WQ"):
-                code = str(m.get("roundCode") or "").strip()
-                if code.isdigit():
-                    round_label = f"Q{code}"
             not_before = m.get("notBefore")
             if not_before:
                 start_raw, slot_time = f"Not Before {not_before}", not_before
@@ -143,7 +165,7 @@ def parse_uso_day(raw: bytes):
                 court=court_name,
                 time=slot_time,
                 tour=tour,
-                round=round_label,
+                round=_round_label(m.get("eventCode"), m),
                 discipline=discipline,
                 start_raw=start_raw,
                 printed_score=m.get("shortScore"),
