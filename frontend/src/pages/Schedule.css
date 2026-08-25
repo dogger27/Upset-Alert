@@ -1457,3 +1457,8 @@
     10%, 78% { opacity: 1; }
   }
 }
+
+/* A started row's card is clickable — it opens the score-history popup. The
+   affordance is the cursor alone: a border or hover tint on every live row
+   would shout on a page whose whole body is these cards. */
+.sched-row-main--openable { cursor: pointer; }

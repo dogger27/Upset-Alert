@@ -6,6 +6,7 @@ import useScoreEvent from '../hooks/useScoreEvent'
 import useServiceBreak from '../hooks/useServiceBreak'
 import ChampionFanfare from '../components/ChampionFanfare'
 import H2HPanel from '../components/H2HPanel'
+import ScoreHistoryPopup from '../components/ScoreHistoryPopup'
 import MatchScoreCard from '../components/MatchScoreCard'
 import { useSearchParams, Link } from 'react-router-dom'
 import clsx from 'clsx'
@@ -367,7 +368,7 @@ function arrivalTier(e, marks) {
    Built from ONE source per render — the live snapshot when a match is under
    way, the final scores when it is over. Mixing them is what put a point score
    beside a set score that had already moved on. */
-function MatchRow({ e, showCourt, zone, venueMode, onH2H, onChampion, dimmed }) {
+function MatchRow({ e, showCourt, zone, venueMode, onH2H, onChampion, onHistory, dimmed }) {
   const rowRef = useRef(null)
   const a = e.players.filter(p => p.side === 'a')
   const b = e.players.filter(p => p.side === 'b')
@@ -483,7 +484,18 @@ function MatchRow({ e, showCourt, zone, venueMode, onH2H, onChampion, dimmed }) 
           <TimeLine className="sched-est" text={expectedStart(e, zone, venueMode)} />
         )}
       </div>
-      <div className="sched-row-main">
+      {/* A started match answers a click with its history — the same popup,
+          slider and card the draw page opens, because the two surfaces
+          describe the same match. Scheduled rows stay inert: nothing to show,
+          and a dead click reading as a broken page is the draw page's own
+          documented lesson. The H2H strip is a sibling, unaffected. */}
+      <div
+        className={clsx('sched-row-main',
+                        (e.status === 'live' || e.status === 'completed')
+                          && onHistory && 'sched-row-main--openable')}
+        onClick={(e.status === 'live' || e.status === 'completed') && onHistory
+          ? () => onHistory(e.id) : undefined}
+      >
         <div className="sched-tags">
           {e.tour && <span className={clsx('sched-tag', `sched-tag--${e.tour.toLowerCase()}`)}>{e.tour}</span>}
           {e.round_label && <span className="sched-tag sched-tag--round">{e.round_label}</span>}
@@ -529,6 +541,10 @@ export default function Schedule() {
   // The panel is owned by the page, not the row: it is a full-screen overlay,
   // and one instance beats one per match.
   const [h2h, setH2H] = useState(null)
+  /* The id, not the row: the popup must read the CURRENT entry off each
+     render so a live score keeps moving while it is open — the draw page's
+     convention exactly. */
+  const [scoreHistId, setScoreHistId] = useState(null)
   /* THE USER'S OWN PICK, ON THE ORDER OF PLAY'S H2H.
      The draw page has always highlighted it; this panel was opened with
      match={null} and no picks at all, so pickedId could only ever be null and
@@ -807,6 +823,12 @@ export default function Schedule() {
       {/* entry_name is the BRACKET's spelling — "Iga Świątek" — where the row
           deliberately prints the sheet's "[7] Iga SWIATEK POL". The panel is
           about the players; the row is about the sheet. */}
+      {scoreHistId != null && (() => {
+        const cur = (data?.entries ?? []).find(x => x.id === scoreHistId)
+        return cur ? (
+          <ScoreHistoryPopup entry={cur} onClose={() => setScoreHistId(null)} />
+        ) : null
+      })()}
       {h2h && (
         /* `id` is the DRAW ENTRY id, which is the space predictions are stored
            in — a schedule player carries it as draw_entry_id and has no `id` of
@@ -935,7 +957,7 @@ export default function Schedule() {
       {!isLoading && entries.length > 0 && view === 'time' && (
         <div className="sched-list sched-list--time">
           {timeEntries.map(e => <MatchRow key={e.id} e={e} showCourt zone={zone} venueMode={tzMode === 'venue'}
-                                onH2H={setH2H} onChampion={setChampion}
+                                onH2H={setH2H} onChampion={setChampion} onHistory={setScoreHistId}
                                 dimmed={champion != null && champion !== e.id} />)}
         </div>
       )}
@@ -947,7 +969,7 @@ export default function Schedule() {
               <h2 className="sched-courthead">{name}</h2>
               <div className="sched-list">
                 {list.map(e => <MatchRow key={e.id} e={e} showCourt={false} zone={zone} venueMode={tzMode === 'venue'}
-                                onH2H={setH2H} onChampion={setChampion}
+                                onH2H={setH2H} onChampion={setChampion} onHistory={setScoreHistId}
                                 dimmed={champion != null && champion !== e.id} />)}
               </div>
             </section>
