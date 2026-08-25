@@ -536,7 +536,19 @@ WATCHDOG_AGE = 20.0
 if _IS_SQLITE:
     @event.listens_for(engine.sync_engine, "begin")
     def _txn_begin(conn):
-        _open_txns[id(conn)] = (_time.monotonic(), "".join(_tb.format_stack()[-14:]))
+        _open_txns[id(conn)] = [_time.monotonic(), "", False]
+
+    @event.listens_for(engine.sync_engine, "before_cursor_execute")
+    def _txn_dml(conn, cursor, statement, parameters, context, executemany):
+        # Only a WRITE holds the lock that blocks saves. Read transactions
+        # tripped v2 into naming innocents all evening.
+        rec = _open_txns.get(id(conn))
+        if rec is not None and not rec[2]:
+            head = statement.lstrip()[:6].upper()
+            if head.startswith(("INSERT", "UPDATE", "DELETE", "REPLAC")):
+                rec[2] = True
+                rec[1] = statement[:120]
+                rec[0] = _time.monotonic()
 
     @event.listens_for(engine.sync_engine, "commit")
     def _txn_commit(conn):
@@ -556,7 +568,10 @@ async def txn_watchdog() -> None:
     while True:
         await asyncio.sleep(10)
         now = _time.monotonic()
-        for cid, (t0, stack) in list(_open_txns.items()):
+        for cid, rec in list(_open_txns.items()):
+            t0, first_dml, is_write = rec
+            if not is_write:
+                continue
             age = now - t0
             if age > WATCHDOG_AGE:
                 # The begin-stack is worker-thread plumbing (the caller's
@@ -567,7 +582,10 @@ async def txn_watchdog() -> None:
                 # frame of ours.
                 suspects = []
                 for t in asyncio.all_tasks():
-                    frames = t.get_stack(limit=12)
+                    # limit counts from the OUTERMOST frame, so v2's limit=12
+                    # truncated exactly the frames that mattered — every task
+                    # looked parked at its loop. Full stacks, app frames only.
+                    frames = t.get_stack()
                     app_frames = [
                         f"{f.f_code.co_filename.rsplit('/app/', 1)[-1]}:"
                         f"{f.f_lineno} {f.f_code.co_name}"
@@ -575,7 +593,7 @@ async def txn_watchdog() -> None:
                     ]
                     if app_frames:
                         suspects.append(f"  task {t.get_name()}: "
-                                        + " <- ".join(app_frames[-4:]))
-                log.error("WRITE TXN HELD %.0fs — app-frame tasks:\n%s\n"
-                          "begin plumbing:\n%s",
-                          age, "\n".join(suspects) or "  (none found)", stack)
+                                        + " <- ".join(app_frames[-6:]))
+                log.error("WRITE TXN HELD %.0fs — first write: %s\n"
+                          "app-frame tasks:\n%s",
+                          age, first_dml, "\n".join(suspects) or "  (none found)")
