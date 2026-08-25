@@ -48,6 +48,31 @@ export function splitPlayerName(raw) {
   const seed = seedMatch ? seedMatch[1].trim() : null
   if (seedMatch) s = s.slice(seedMatch[0].length).trim()
 
+  // A WHOLE TEAM IN ONE STRING. An unresolved doubles side offers a choice
+  // between two pairs, and each pair reaches us as a single printed name:
+  // "[1] ARRIBAGE FRA / GUINARD FRA". Read as one person it is nonsense — the
+  // country strip only ever reaches the END of the string, so Winston-Salem
+  // 2026-08-26 published "ARRIBAGE FRA / GUINARD", with Arribage's nationality
+  // marooned inside his partner's name and Guinard's flag flown for the pair.
+  // Everything below assumes one person, so split first and let each partner
+  // answer for themselves — the same per-segment rule the backend uses.
+  //
+  // `nat` is deliberately null for a team: two people, and a side can carry
+  // one flag. Better none than one partner's flown for both.
+  if (s.includes('/')) {
+    const parts = s.split('/').map(x => x.trim()).filter(Boolean)
+    if (parts.length > 1) {
+      const members = parts.map(p => splitPlayerName(p))
+      return {
+        seed,
+        first: '',
+        last: members.map(m => m.last || m.first).filter(Boolean).join(' / '),
+        nat: null,
+        members,
+      }
+    }
+  }
+
   // A trailing three-letter capital is only a country when a SURNAME precedes
   // it, because the format is "Firstname SURNAME NAT" and the surname is in
   // caps too. Shape alone cannot tell "Orlando LUZ" from "Nuno BORGES POR",
