@@ -31,6 +31,9 @@ _TRAILING_CODE_RE = re.compile(r'\s([A-Z]{3})$')
 # Order-of-play sheets print the SURNAME in capitals, every tour, every tier.
 # A stored name with no capitalised run therefore did not come from the sheet.
 _SHEET_CAPS_RE = re.compile(r'(?<![A-Za-z])[A-Z]{2,}(?![a-z])')
+# One letter standing in for a given name — "D." or a bare "D". Two letters is
+# a name the sheets really print (JJ TRACY), so the count matters.
+_INITIAL_RE = re.compile(r'^[A-Za-z]\.?$')
 # The qualifying round tokens, enumerated — "QF" starts with Q and is not one.
 _QUALI_ROUND_RE = re.compile(r'^(?:Q\d?|FQ)$', re.I)
 
@@ -217,6 +220,27 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                 flag("name_not_sheet_form", e,
                      f"side {p.side}: {raw!r} has no capitalised surname — "
                      f"not the sheet's rendering")
+
+        # 2026-08-25, Monterrey "Oleksandra OLIYNYKOVA vs D. Parry": the same
+        # class as the rule above, through the door it leaves open. The sheet
+        # abbreviates the alternatives it offers, and BOTH paths that turn a
+        # set of alternatives into a settled side — schedule._printed_name at
+        # ingest and schedule.resolve_settled_alternatives on every winner —
+        # kept the abbreviation. The rule above only caught it because this
+        # sheet prints "D. Parry" in title case; a tour that prints
+        # "D. PARRY or D. VEKIC" satisfies the capitalised-surname test and
+        # would have gone by unseen. An initial is a whole rendering short of
+        # a settled row, however it is capitalised, so test the SHAPE: a lone
+        # first letter where a given name belongs.
+        for p in players:
+            raw = _TRAILING_SEED_RE.sub("", (p.raw_name or "").strip())
+            raw = re.sub(r"^(?:\[[^\]]*\]\s*)+", "", raw).strip()
+            words = raw.split()
+            if (len(words) > 1 and p.side not in tbd_side
+                    and _INITIAL_RE.match(words[0])):
+                flag("name_abbreviated_given", e,
+                     f"side {p.side}: {p.raw_name!r} gives an initial where a "
+                     f"settled row prints a name")
 
         # 2026-08-24, Winston-Salem's three main-draw doubles matches, two of
         # them badged "Q": _classify's last-resort qualifying inference is
