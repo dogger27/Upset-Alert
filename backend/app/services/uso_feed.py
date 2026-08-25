@@ -51,7 +51,7 @@ _EVENTS = {
     "MQ": ("ATP", "singles"), "WQ": ("WTA", "singles"),
     "MS": ("ATP", "singles"), "WS": ("WTA", "singles"),
     "MD": ("ATP", "doubles"), "WD": ("WTA", "doubles"),
-    "XD": (None, "doubles"),
+    "XD": (None, "mixed"),
 }
 
 # Volatile per-match fields: results and clocks, not schedule. A revision is
@@ -200,7 +200,7 @@ def parse_uso_day(raw: bytes):
             if ev is None:
                 continue
             tour, discipline = ev
-            doubles = discipline == "doubles"
+            doubles = discipline in ("doubles", "mixed")
             side_a, nations_a, tbd_a = _side_names(m.get("team1"), doubles)
             side_b, nations_b, tbd_b = _side_names(m.get("team2"), doubles)
             # A slot the feed has not filled in yet (tomorrow's R2 before
