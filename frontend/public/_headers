@@ -6,14 +6,32 @@
   Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
   Content-Security-Policy: default-src 'self'; connect-src 'self' https://upsetalert-api.upsetalert.ca; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; script-src 'self' https://static.cloudflareinsights.com; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests;
 
+# Asset filenames are content-hashed, so a given URL's bytes never change.
+# A YEAR is still the wrong TTL, though, and not because of staleness: if a
+# request for /assets/x.js arrives while a deploy is mid-flight, Pages answers
+# the SPA fallback — index.html, at 200 — and that HTML is what gets cached
+# under an immutable header. The bundle then serves as text/html until the TTL
+# expires, and the whole app fails to boot with a MIME type error.
+#
+# It happened on 2026-08-19, self-inflicted by a deploy-verification loop
+# requesting /assets/* during the deploy. Never fetch a hashed asset to check a
+# deploy — poll a fixed path like /sw.js instead. A day bounds the blast radius
+# to a day while keeping essentially all of the caching benefit, since these
+# URLs are replaced by a new hash on every deploy anyway.
 /assets/*
   Cache-Control: public, max-age=86400
 
+# index.html maps names to the current hashes, so a cached copy is how a browser
+# ends up asking for a bundle that no longer exists. Always revalidate.
 /
   Cache-Control: public, max-age=0, must-revalidate
 /index.html
   Cache-Control: public, max-age=0, must-revalidate
+# The service worker decides when the app updates; a cached one pins it.
 /sw.js
   Cache-Control: public, max-age=0, must-revalidate
+# Paints the theme before first paint. Not content-hashed (index.html refers to
+# it by a fixed name), so it has to revalidate like index.html or a stale copy
+# pins the boot logic.
 /theme.js
   Cache-Control: public, max-age=0, must-revalidate

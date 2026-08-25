@@ -1650,21 +1650,7 @@ async def _refresh_schedule_estimates() -> None:
                 await schedule_svc.recompute_expected_starts(
                     db, tid, day, venue_tz=tz)
             try:
-                # HARD-BOUNDED. On 2026-08-25 this job started at 15:35:37 and
-                # never returned — a suspended await inside it held SQLite's
-                # write lock for the whole site, and py-spy could only show
-                # idle threads because the holder was an asyncio task, not a
-                # thread. A wedge we cannot yet name must at least be one we
-                # cannot keep: the timeout turns it into a 2-minute blip whose
-                # TimeoutError traceback names the exact awaiting line, so the
-                # next occurrence diagnoses itself in the log.
-                async with asyncio.timeout(120):
-                    await with_write_retry(_one, what=f"estimates {tid}/{day}")
-            except TimeoutError:
-                logger.error("Estimate refresh WEDGED on %s/%s — cancelled at "
-                             "120s; traceback above names the await", tid, day,
-                             exc_info=True)
-                stuck.append(f"{tid}/{day} (wedged)")
+                await with_write_retry(_one, what=f"estimates {tid}/{day}")
             except OperationalError as exc:
                 if "locked" not in str(exc).lower():
                     raise

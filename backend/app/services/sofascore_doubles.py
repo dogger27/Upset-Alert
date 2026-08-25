@@ -578,11 +578,6 @@ async def sweep_once(db, day: Optional[date] = None) -> dict:
                                                            d.sofa_season_id)
     for ut, season in set(by_season.values()):
         for kind in ("last", "next"):
-            # Same rule as sofascore_results: the writer never waits at the
-            # pacing gate. _doubles_ids ratchets ids back onto entries above,
-            # and holding those dirty rows through a queued fetch is the
-            # write-lock storm of 2026-08-25 in a second costume.
-            await db.commit()
             try:
                 payload = await _get(
                     f"/unique-tournament/{ut}/season/{season}/events/{kind}/0")

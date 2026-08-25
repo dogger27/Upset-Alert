@@ -112,8 +112,7 @@ async def draw_lock_state(db, draw) -> LockState:
     )
 
 
-def rejected_changes(state: LockState, submitted: dict, existing: dict,
-                     matches_by_id: dict | None = None) -> list:
+def rejected_changes(state: LockState, submitted: dict, existing: dict) -> list:
     """
     Which submitted picks are not allowed, comparing against what is stored.
 
@@ -122,13 +121,9 @@ def rejected_changes(state: LockState, submitted: dict, existing: dict,
     unsavable in its entirety — the user edits an untouched later match and the
     request is rejected because it also carries their (unchanged) pick on the
     one in play.
-
     """
     if state.draw_locked:
         return list(submitted)
-    # (A round-one exemption lived here for one day — 2026-08-25 — and was
-    # reverted at the owner's request the same day. matches_by_id stays: the
-    # refusal wording in predictions.py reads it to say WHICH lock refused.)
     return [
         mid for mid, winner_id in submitted.items()
         if mid in state.locked_match_ids and existing.get(mid) != winner_id

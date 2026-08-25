@@ -202,25 +202,12 @@ async def _save_predictions_once(tournament_id, body, user_id, db, current_user)
                 )
             )).scalars().all()
         }
-        matches_by_id = {m.id: m for m in (await db.execute(
-            select(Match).where(Match.draw_id == tournament_id))).scalars().all()}
-        refused = rejected_changes(lock, body.picks, stored, matches_by_id)
+        refused = rejected_changes(lock, body.picks, stored)
         if refused:
-            # SAY THE RIGHT REASON. Two lock classes share the refusal: a
-            # match actually being played, and a slot frozen because matches
-            # upstream of it have been. "Under way" was claimed for both, and
-            # the owner — refused on a propagation-locked QF slot at an hour
-            # when nothing was on court — rightly called it wrong.
-            from app.services.locking import match_in_play as _mip
-            live = [m for m in refused
-                    if (x := matches_by_id.get(m)) is not None and _mip(x)]
-            if live:
-                detail = (f"{len(refused)} pick(s) could not be changed — "
-                          f"those matches are under way")
-            else:
-                detail = (f"{len(refused)} pick(s) could not be changed — "
-                          f"they depend on matches that have already been played")
-            raise HTTPException(403, detail)
+            raise HTTPException(
+                403,
+                f"{len(refused)} pick(s) could not be changed — those matches are under way",
+            )
 
     # Upsert predictions; null winner_id means the pick was cleared.
     #
