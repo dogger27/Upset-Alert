@@ -215,3 +215,52 @@
    thumb while the slider rests at Final — it shows the moment you scrub
    away, which is exactly when a reader is looking for where it ended. */
 .shp-tick--match { background: var(--danger); }
+
+/* ── Point stats ──────────────────────────────────────────────────────────
+   The broadcast mirror: number+count | bar | label | bar | number+count,
+   bars growing OUTWARD from the centre label. Identity colours, not
+   valence — --h2h-p1/--h2h-p2 are the tokens documented for "which player",
+   and they match nothing else on the popup so the two sides read apart at a
+   glance. Spans the full grid row, beneath the legend's territory. */
+.shp-stats {
+  grid-column: 1 / -1;
+  margin-top: 0.6rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.45rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.shp-stat-row {
+  display: grid;
+  grid-template-columns: 4.6em 1fr auto 1fr 4.6em;
+  align-items: center;
+  column-gap: 0.5rem;
+  font-size: 0.72rem;
+}
+.shp-stat-num { font-weight: 700; color: var(--text); white-space: nowrap; }
+.shp-stat-num small { font-weight: 400; color: var(--text-muted); }
+.shp-stat-num--r { text-align: right; }
+.shp-stat-label {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  white-space: nowrap;
+  text-align: center;
+}
+.shp-stat-bar {
+  height: 5px;
+  border-radius: 3px;
+  background: var(--surface-sunken);
+  overflow: hidden;
+  position: relative;
+}
+.shp-stat-bar i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: block;
+  border-radius: 3px;
+}
+/* outward from the centre: left bar anchors right, right bar anchors left */
+.shp-stat-bar--l i { right: 0; background: var(--h2h-p1); }
+.shp-stat-bar--r i { left: 0; background: var(--h2h-p2); }

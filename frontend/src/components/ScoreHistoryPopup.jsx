@@ -22,7 +22,7 @@ import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getMatchScoreHistory } from '../api/tournaments'
 import MatchScoreCard from './MatchScoreCard'
-import { sanitizeSnapshots, timelineMarkers } from '../utils/scoreTimeline'
+import { pointStats, sanitizeSnapshots, timelineMarkers } from '../utils/scoreTimeline'
 import { splitPlayerName } from '../utils/flags'
 import './ScoreHistoryPopup.css'
 
@@ -149,6 +149,15 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
     () => timelineMarkers(snapshots, { completed, winnerSide }),
     [data?.snapshots, completed, winnerSide])
 
+  /* Point statistics, derived from the same snapshots — no second data
+     source. Cumulative per position, so the numbers WIND BACK as you scrub:
+     the stats panel always describes the moment under the thumb, which the
+     broadcast graphic this mirrors cannot do. Hidden when too little of the
+     match carried point data (ESPN-only histories) — a stats panel built on
+     scraps would state percentages it cannot back. */
+  const stats = useMemo(() => pointStats(snapshots), [data?.snapshots])
+  const statsUsable = stats.counted >= 20 && stats.counted / Math.max(1, stats.transitions) >= 0.7
+
   if (!match && !entry) return null
 
   const initials = (row) => {
@@ -214,6 +223,39 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
               aria-label="Scrub through the match's score history"
             />
             </div>
+            {statsUsable && (() => {
+              const snap = stats.at[Math.min(atEnd ? stats.at.length - 1 : pos, stats.at.length - 1)]
+              const top = snap[topIsP1 ? 0 : 1]
+              const bot = snap[topIsP1 ? 1 : 0]
+              const pct = (w, t) => (t ? Math.round((100 * w) / t) : 0)
+              const rows = [
+                ['Service Points Won', top.svcWon, top.svcTot, bot.svcWon, bot.svcTot],
+                ['Return Points Won', top.retWon, top.retTot, bot.retWon, bot.retTot],
+                ['Total Points Won', top.totWon, top.totTot, bot.totWon, bot.totTot],
+                ['Break Points Converted', top.bpConv, top.bpChances, bot.bpConv, bot.bpChances],
+                // saved = the opponent's chances that did not convert
+                ['Break Points Saved',
+                 bot.bpChances - bot.bpConv, bot.bpChances,
+                 top.bpChances - top.bpConv, top.bpChances],
+              ]
+              return (
+                <div className="shp-stats">
+                  {rows.map(([label, lw, lt, rw, rt]) => (
+                    <div className="shp-stat-row" key={label}>
+                      <span className="shp-stat-num">{lt ? `${pct(lw, lt)}%` : '—'}
+                        <small>{lt ? ` (${lw}/${lt})` : ''}</small></span>
+                      <span className="shp-stat-bar shp-stat-bar--l">
+                        <i style={{ width: `${lt ? pct(lw, lt) : 0}%` }} /></span>
+                      <span className="shp-stat-label">{label}</span>
+                      <span className="shp-stat-bar shp-stat-bar--r">
+                        <i style={{ width: `${rt ? pct(rw, rt) : 0}%` }} /></span>
+                      <span className="shp-stat-num shp-stat-num--r">{rt ? `${pct(rw, rt)}%` : '—'}
+                        <small>{rt ? ` (${rw}/${rt})` : ''}</small></span>
+                    </div>
+                  ))}
+                </div>
+              )
+            })()}
             {markers.length > 0 && (
               <div className="shp-legend">
                 <span className="shp-legend-item">
