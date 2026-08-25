@@ -877,25 +877,8 @@ function TournamentDraw() {
      So the whole change is tested before any of it is applied. It is the same
      question the server asks (rejected_changes) with the same answer, just
      asked early enough to be useful. Nothing is written and nothing moves. */
-  /* THE ROUND-ONE EXEMPTION mirrors the server (locking.rejected_changes):
-     in a match-by-match draw, a change ORIGINATING at an unstarted round-one
-     match passes even where its cascade clears picks in propagation-locked
-     slots — but never where a touched match is itself under way. Without the
-     mirror the server would accept what the client refuses to send. */
-  const r1Origin = (originId) => {
-    if (tournament?.pick_lock_mode !== 'r1_progressive') return false
-    const m = (data?.matches || []).find(x => x.id === Number(originId))
-    return !!m && m.round_number === 1 && !matchStarted(m)
-  }
-  const blockedByLive = (basePicks, nextPicks, originId = null) => {
-    const exemptCascade = originId != null && r1Origin(originId)
-    return Object.keys(nextPicks).some(mid => {
-      if (nextPicks[mid] === basePicks[mid]) return false
-      const m = (data?.matches || []).find(x => x.id === Number(mid))
-      if (exemptCascade) return !!m && matchStarted(m)   // only real play blocks
-      return lockedMatchIds.has(Number(mid))
-    })
-  }
+  const blockedByLive = (basePicks, nextPicks) => Object.keys(nextPicks)
+    .some(mid => nextPicks[mid] !== basePicks[mid] && lockedMatchIds.has(Number(mid)))
 
   const LIVE_PICK_MSG =
     'This change is not possible because it may have been made based on the '
@@ -916,7 +899,7 @@ function TournamentDraw() {
     // The messages below are for the opposite case: a draw still open, where
     // one box refuses and the reason is genuinely not visible.
     if (locked) return null
-    if (lockedMatchIds.has(Number(matchId)) && !r1Origin(matchId)) {
+    if (lockedMatchIds.has(Number(matchId))) {
       /* ONLY THE UPSTREAM REASON REACHES HERE. A match frozen because IT is
          under way never gets this far — scoreInsteadOfPick showed its score
          and returned first. What is left is the case a click genuinely cannot
@@ -950,7 +933,7 @@ function TournamentDraw() {
       return
     }
     const newPicks = computeNextPicks(picks, matchId, playerId)
-    if (blockedByLive(picks, newPicks, matchId)) {
+    if (blockedByLive(picks, newPicks)) {
       window.alert(LIVE_PICK_MSG)
       return
     }
@@ -994,7 +977,7 @@ function TournamentDraw() {
     const newPicks = computeNextPicks(otherPicks, matchId, playerId)
     // Same test as your own bracket — an admin cannot rewrite a started match
     // either, and finding out from a failed save is no better here.
-    if (blockedByLive(otherPicks, newPicks, matchId)) {
+    if (blockedByLive(otherPicks, newPicks)) {
       window.alert(LIVE_PICK_MSG)
       return
     }
