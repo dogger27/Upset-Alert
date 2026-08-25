@@ -46,12 +46,7 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
   // null = fully right = follow live / show final. An index otherwise.
   const [pos, setPos] = useState(null)
 
-  /* Breaks and set-ends, as coloured ticks on the track — the timeline as a
-     map instead of a blind scrubber. Derived per snapshot pair in
-     utils/scoreTimeline (a plain module, unit-tested under node); memoised
-     because a live match re-renders this popup on every point. */
-  const markers = useMemo(
-    () => timelineMarkers(data?.snapshots ?? []), [data?.snapshots])
+
 
   useEffect(() => {
     const root = document.documentElement
@@ -64,14 +59,17 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  if (!match && !entry) return null
-
+  /* EVERYTHING THE MEMO NEEDS IS DERIVED ABOVE THE EARLY RETURN, null-safe.
+     The first version computed these after `if (!match && !entry) return`
+     with the memo below them — a hook after a conditional return is React
+     #310, the exact trap this codebase's own draw page documents. Hooks
+     first, guards after, always. */
   const snapshots = data?.snapshots ?? []
   const max = snapshots.length            // rightmost notch = live/final
   const atEnd = pos == null || pos >= max
   const completed = entry
     ? (entry.status === 'completed' || entry.winner_side != null)
-    : (match.winner != null || data?.status === 'completed')
+    : (match?.winner != null || data?.status === 'completed')
 
   /* The row MatchScoreCard reads. History positions render as a live row at
      that moment; the end position renders exactly what the draw page holds
@@ -85,17 +83,17 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
         ? entry
         : (completed
             ? { discipline, status: 'completed',
-                scores: data?.final ?? match.scores ?? null }
+                scores: data?.final ?? match?.scores ?? null }
             : { discipline, status: 'live',
-                live_point: match.live_point ?? null,
-                live_scores: match.live_scores ?? null,
-                scores: match.scores ?? null }))
+                live_point: match?.live_point ?? null,
+                live_scores: match?.live_scores ?? null,
+                scores: match?.scores ?? null }))
     : { discipline, status: 'live', live_point: snap,
         live_scores: null, scores: null }
 
   const players = entry
     ? entry.players || []
-    : [match.player1, match.player2]
+    : [match?.player1, match?.player2]
         .map((p, i) => (p ? {
           side: i === 0 ? 'a' : 'b', position: 1,
           name: p.name, seed: p.seed, nationality: p.nationality,
@@ -124,6 +122,30 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
     }
     return true
   })()
+
+  /* WHO WON, in the SNAPSHOT's orientation, for the match tick. Handed to
+     the detector rather than read off the games, because a retirement
+     decides a match from behind and the games would name the wrong side.
+     Draw caller: compare winner to player1. Schedule caller: winner_side is
+     sheet-oriented, so route it through topIsP1. */
+  const winnerSide = (() => {
+    if (!completed) return null
+    if (entry) {
+      if (entry.winner_side !== 'a' && entry.winner_side !== 'b') return null
+      return (entry.winner_side === 'a') === topIsP1 ? 1 : 2
+    }
+    if (match?.winner?.id == null || match?.player1?.id == null) return null
+    return match.winner.id === match.player1.id ? 1 : 2
+  })()
+
+  /* Breaks, set-ends and the match's end as coloured ticks — the timeline
+     as a map. Derived in utils/scoreTimeline (plain module, node-tested);
+     memoised because a live match re-renders this popup on every point. */
+  const markers = useMemo(
+    () => timelineMarkers(snapshots, { completed, winnerSide }),
+    [data?.snapshots, completed, winnerSide])
+
+  if (!match && !entry) return null
 
   const initials = (row) => {
     const { first, last } = splitPlayerName(row?.name || '')
@@ -163,10 +185,12 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
                 28px wide, so its centre runs [14px, 100%-14px]. */}
             {markers.map(m => (
               <span
-                key={`${m.kind}${m.i}`}
+                key={`${m.kind}${m.i}${m.adj ? 'a' : ''}`}
                 className={`shp-tick shp-tick--${m.kind} shp-tick--${
                   (m.side === 1) === topIsP1 ? 'up' : 'down'}`}
-                style={{ left: `calc(var(--shp-thumb) / 2 + (100% - var(--shp-thumb)) * ${m.i / max})` }}
+                /* adj: a break that sealed the set/match rides 7px to the
+                   LEFT of the tick it sealed — beside, never underneath. */
+                style={{ left: `calc(var(--shp-thumb) / 2 + (100% - var(--shp-thumb)) * ${m.i / max}${m.adj ? ' - 7px' : ''})` }}
               />
             ))}
             <input
@@ -192,6 +216,11 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
                 <span className="shp-legend-item">
                   <span className="shp-legend-box shp-tick--set" /> set
                 </span>
+                {markers.some(m => m.kind === 'match') && (
+                  <span className="shp-legend-item">
+                    <span className="shp-legend-box shp-tick--match" /> match
+                  </span>
+                )}
               </div>
             )}
           </div>

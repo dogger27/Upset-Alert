@@ -42,9 +42,10 @@ const num = (v) => {
  *   before its serving inference warms up) contributes no break tick: saying
  *   nothing beats guessing, exactly the draw page's own rule for scores.
  */
-export function timelineMarkers(snapshots) {
+export function timelineMarkers(snapshots, opts = {}) {
   const out = []
   if (!Array.isArray(snapshots) || snapshots.length < 2) return out
+  const { completed = false, winnerSide = null } = opts
 
   // High-water mark of set columns. A set tick fires only when the count
   // exceeds the most EVER seen, not the previous snapshot's: at a set change
@@ -71,24 +72,67 @@ export function timelineMarkers(snapshots) {
       const col = pg[0].length - 1
       const side = num(cg[0][col]) > num(cg[1]?.[col]) ? 1 : 2
       out.push({ i, kind: 'set', side })
-      continue // a break sealing the set is subsumed by the set tick
+      // BROKE TO WIN IT: when the set's closing game was a break, the break
+      // rides BESIDE the set tick (adj) rather than being swallowed by it —
+      // sealing a set on the opponent's serve is exactly the moment a reader
+      // scrubs for. Same reading as the break rule below, on the finished
+      // column; a tiebreak'd set never qualifies (mini-breaks aren't breaks).
+      const g = _gameWon(pg, cg, col, prev)
+      if (g && g.winner !== g.server) {
+        out.push({ i, kind: 'break', side: g.winner, adj: true })
+      }
+      continue
     }
 
     // ── Break of serve ──
-    if (prev.tiebreak) continue
-    const server = prev.serving
-    if (server !== 1 && server !== 2) continue
-    const col = pg[0].length - 1
-    if (col < 0 || col >= cg[0].length) continue
-    const dA = num(cg[0][col]) - num(pg[0][col])
-    const dB = num(cg[1]?.[col]) - num(pg[1]?.[col])
-    // Exactly one side gained exactly one game — anything else is a feed
-    // correction (a rewound or double-counted score), not a game we watched
-    // finish, and inventing a break from it would mark a moment that never
-    // happened.
-    if (dA + dB !== 1 || dA < 0 || dB < 0) continue
-    const winner = dA === 1 ? 1 : 2
-    if (winner !== server) out.push({ i, kind: 'break', side: winner })
+    const g = _gameWon(pg, cg, pg[0].length - 1, prev)
+    if (g && g.winner !== g.server) {
+      out.push({ i, kind: 'break', side: g.winner })
+    }
+  }
+
+  /* ── Match finished ── a red tick at the timeline's very end, only once
+     the match IS over (the popup says so — a live match's history simply
+     has no end yet). Its side is the match's real winner, HANDED IN by the
+     popup where it knows one (retirements decide matches from behind, so
+     reading the winner off the games can lie); the last column's games are
+     only the fallback. If the closing game was a break — broke to win the
+     match — the break tick rides beside it, same as a set. */
+  if (completed && snapshots.length >= 2) {
+    const iEnd = snapshots.length
+    const last = snapshots[snapshots.length - 1]
+    const lg = last?.games
+    let side = winnerSide
+    if (side !== 1 && side !== 2) {
+      const col = (lg?.[0]?.length ?? 0) - 1
+      side = col >= 0 && num(lg[0][col]) > num(lg[1]?.[col]) ? 1 : 2
+    }
+    out.push({ i: iEnd, kind: 'match', side })
+    const prev = snapshots[snapshots.length - 2]
+    const pg = prev?.games
+    if (pg?.[0] && lg?.[0] && pg[0].length === lg[0].length) {
+      const g = _gameWon(pg, lg, pg[0].length - 1, prev)
+      if (g && g.winner !== g.server && g.winner === side) {
+        out.push({ i: iEnd, kind: 'break', side, adj: true })
+      }
+    }
   }
   return out
+}
+
+
+/* One game, completed between two snapshots in a given column — or null.
+   The shared reading behind every break judgement: exactly one side gained
+   exactly one game (anything else is a feed correction, not a game we
+   watched finish), the server is PREV's — who held the ball while it was
+   played — and a tiebreak in progress disqualifies the pair outright. */
+function _gameWon(pg, cg, col, prev) {
+  if (prev.tiebreak) return null
+  const server = prev.serving
+  if (server !== 1 && server !== 2) return null
+  if (col < 0 || col >= cg[0].length) return null
+  const dA = num(cg[0][col]) - num(pg[0][col])
+  const dB = num(cg[1]?.[col]) - num(pg[1]?.[col])
+  if (dA + dB !== 1 || dA < 0 || dB < 0) return null
+  return { winner: dA === 1 ? 1 : 2, server }
 }
