@@ -209,6 +209,16 @@ async def sweep_once(db) -> dict:
     # something new — a page that adds nothing means we have caught up.
     for (ut_id, season_id), draw_id in by_tournament.items():
         for page in range(MAX_PAGES):
+            # THE WRITER NEVER WAITS AT THE GATE. _get queues behind the
+            # global pacing lock shared with the 10-second live poller, and a
+            # fetch can sit there for many seconds — during which any dirty
+            # rows from the PREVIOUS page held SQLite's one write lock for
+            # the whole site. On 2026-08-25 that stacked into a four-minute
+            # lock storm: saves failed as "Unknown error", the estimate jobs
+            # and even system_log bounced. Same class as the H2H prefetch
+            # incident, same cure: everything committed before the network
+            # is allowed to make us wait.
+            await db.commit()
             try:
                 payload = await _get(
                     f"/unique-tournament/{ut_id}/season/{season_id}/events/last/{page}")

@@ -6,9 +6,10 @@ Supports 16TeamBracket-Compact-Tennis5/3 sections (R1→R4) and the
 """
 
 import html
+import asyncio
 import re
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import date
 from typing import Optional
 
 import httpx
@@ -1105,7 +1106,14 @@ async def scrape_tournament(
                 "Title-based page_id correction retry failed for %r: %s", wiki_page_title, exc
             )
 
-    parsed = parse_draw(wikitext)
+    # OFF THE EVENT LOOP. parse_draw is seconds of pure-CPU regex over a
+    # large page, and it used to run inline — during a live-play edit storm
+    # (the bracket page is edited every game) the scrapes queued and the loop
+    # went dark for tens of seconds at a stretch: 2026-08-25's "everything
+    # hangs, even the debug endpoint" windows, caught by the hang trap when
+    # every other tool (py-spy, the txn watchdog, the raw writer probe) came
+    # back clean — the loop they needed was the thing that was blocked.
+    parsed = await asyncio.to_thread(parse_draw, wikitext)
     parsed.wiki_page_id = resolved_id or None
     if effective_title != wiki_page_title:
         parsed.resolved_title = effective_title
