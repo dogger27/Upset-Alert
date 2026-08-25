@@ -123,6 +123,15 @@ def parse_uso_day(raw: bytes):
             # then there is nothing to pair it to.
             if not side_a or not side_b:
                 continue
+            # THE APP'S QUALIFYING VOCABULARY IS Q1/Q2/Q3, and the round
+            # token is how the classifier (_QUALI_ROUND_RE) and the schedule
+            # page both recognise a qualifying row. The feed says "R1" for a
+            # qualifying first round, which rendered as a main-draw round tag.
+            round_label = m.get("roundNameShort") or m.get("roundName")
+            if m.get("eventCode") in ("MQ", "WQ"):
+                code = str(m.get("roundCode") or "").strip()
+                if code.isdigit():
+                    round_label = f"Q{code}"
             not_before = m.get("notBefore")
             if not_before:
                 start_raw, slot_time = f"Not Before {not_before}", not_before
@@ -134,7 +143,7 @@ def parse_uso_day(raw: bytes):
                 court=court_name,
                 time=slot_time,
                 tour=tour,
-                round=m.get("roundNameShort") or m.get("roundName"),
+                round=round_label,
                 discipline=discipline,
                 start_raw=start_raw,
                 printed_score=m.get("shortScore"),
