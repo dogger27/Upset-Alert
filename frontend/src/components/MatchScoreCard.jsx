@@ -324,8 +324,25 @@ function Side({ players, doubles, tbd, tight, sets, form = 'surname', flags = fa
   // four names in a row says nothing about who partners whom. Each alternative
   // is already one entry, so they only need separating.
   if (tbd && players.length > 1) {
+    /* AND IT IS FITTED LIKE EVERY OTHER LINE ON THIS CARD. This branch had no
+       ladder at all — it drew at full size and let the text run — which held
+       only while every alternative was a single surname ("CERUNDOLO or
+       SURESH"). A doubles alternative is a whole pair, so the line is twice
+       as long: "SCHNAITTER / WALLNER or LAMMONS / WITHROW" ran off the right
+       edge of a 390px card on 2026-08-26 and the last name was cut in half.
+       Same measured budget and same 0.72 floor as the doubles line below, and
+       the media query decides whether it applies at all. */
+    const altText = players.map(p => splitPlayerName(p.name).last || p.name).join(' or ')
+    let altScale = 1
+    if (box && box.avail > 0) {
+      const need = textWidth(altText, box.fontPx, 600)
+      if (need > box.avail - 2) altScale = Math.max(0.72, (box.avail - 2) / need)
+    } else if (altText.length > DOUBLES_FIT) {
+      altScale = Math.max(0.72, DOUBLES_FIT / altText.length)
+    }
     return (
-      <span className="sched-side sched-side--alt">
+      <span className="sched-side sched-side--alt"
+            style={altScale < 1 ? { '--name-scale': altScale } : undefined}>
         {players.map((p, i) => (
           <span key={i} className="sched-altteam">
             {i > 0 && <span className="sched-or">or</span>}
