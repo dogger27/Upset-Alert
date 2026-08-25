@@ -102,10 +102,18 @@ function teamSeedOf(players) {
 
 /** One partner, written as long as the chosen rung allows. */
 function partnerText(raw, form) {
-  const { first, last } = splitPlayerName(raw)
-  const surname = last || raw
-  if (form === 'surname' || !first) return surname
-  return form === 'full' ? `${first} ${surname}` : `${first.trim()[0]}. ${surname}`
+  const { first, last, members } = splitPlayerName(raw)
+  // The "partner" may be a WHOLE TEAM: an unresolved doubles side names two
+  // PAIRS, and each pair arrives as one printed string. Every rung applies to
+  // each member, or the ladder would offer the same string at all three and a
+  // line too long for the card would go straight to shrinking the type.
+  if (members) return members.map(m => oneName(m, form)).join(' / ')
+  return oneName({ first, last: last || raw }, form)
+}
+
+function oneName({ first, last }, form) {
+  if (form === 'surname' || !first) return last
+  return form === 'full' ? `${first} ${last}` : `${first.trim()[0]}. ${last}`
 }
 
 function doublesLineOf(players, form) {
@@ -321,14 +329,20 @@ function Side({ players, doubles, tbd, tight, sets, form = 'surname', flags = fa
         {players.map((p, i) => (
           <span key={i} className="sched-altteam">
             {i > 0 && <span className="sched-or">or</span>}
-            {/* Surnames for singles. Two candidates and a separator have to fit
-                the ONE line this side is given, and a slot that has not
-                resolved is by definition the least important thing on the card
-                — it is two names neither of which may turn out to be playing.
-                A doubles alternative is a whole team in one string
-                ("O. Luz / R. Matos"), which has no surname to take. */}
+            {/* Surnames, singles or doubles. Two candidates and a separator
+                have to fit the ONE line this side is given, and a slot that has
+                not resolved is by definition the least important thing on the
+                card — names neither of which may turn out to be playing.
+                A doubles alternative is a whole team in one string, and it USED
+                to be printed raw here on the grounds that a team has no surname
+                to take. It does: splitPlayerName reads a "/" as two people and
+                returns both surnames. Printing it raw was fine while only the
+                WTA's abbreviated form reached this branch ("O. Luz / R. Matos")
+                and broke the moment the ATP's did — "SCHNAITTER GER / WALLNER
+                GER or [WC] LAMMONS USA / WITHROW USA" ran clean off the side of
+                the card on a phone, seeds, countries and all. */}
             <span className="sched-pname">
-              {doubles ? p.name : (splitPlayerName(p.name).last || p.name)}
+              {splitPlayerName(p.name).last || p.name}
             </span>
           </span>
         ))}
