@@ -119,6 +119,8 @@ async def _migrate(conn):
     migrations = [
         "ALTER TABLE matches ADD COLUMN scores_json JSON",
         "ALTER TABLE schedule_entry_players ADD COLUMN nationality VARCHAR",
+        "ALTER TABLE tournaments ADD COLUMN sofa_mixed_tournament_id INTEGER",
+        "ALTER TABLE tournaments ADD COLUMN sofa_mixed_season_id INTEGER",
         "ALTER TABLE players ADD COLUMN ranking INTEGER",
         "ALTER TABLE tournaments ADD COLUMN category VARCHAR",
         "ALTER TABLE tournaments ADD COLUMN draw_release_direct DATE",

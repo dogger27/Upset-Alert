@@ -506,7 +506,7 @@ function MatchRow({ e, showCourt, zone, venueMode, onH2H, onChampion, onHistory,
               all (see _classify). */}
           {e.stage === 'qualifying' && !QUALI_ROUND.test(String(e.round_label ?? '').trim())
             && <span className="sched-tag sched-tag--quali">Q</span>}
-          {e.discipline !== 'singles' && <span className="sched-tag">{e.discipline === 'mixed' ? 'Mixed' : 'Doubles'}</span>}
+          {e.discipline !== 'singles' && <span className="sched-tag">{e.discipline === 'mixed' ? 'XDoubles' : 'Doubles'}</span>}
         </div>
         {/* One competitor per line, with that competitor's own set scores in
             columns beside them — the same statement the draw page makes.

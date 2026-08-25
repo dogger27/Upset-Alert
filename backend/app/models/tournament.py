@@ -87,6 +87,13 @@ class Tournament(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
+    # Sofascore's MIXED doubles event — a third uniqueTournament beside the
+    # gendered pairs the draws carry, so it lives on the tournament: one mixed
+    # championship per event, not one per gender. Same contract as the draws'
+    # doubles pointers: no bracket, no draw — a pointer used to find scores
+    # for schedule rows, nothing more. Resolved by sofascore_doubles.
+    sofa_mixed_tournament_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    sofa_mixed_season_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # WTA's own event id, which is also the path segment for their order-of-play
     # PDF. Sits on the tournament rather than the draw because one event id
     # covers both draws when the tours share a site — see order_of_play.py.

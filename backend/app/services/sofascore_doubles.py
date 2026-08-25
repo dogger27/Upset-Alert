@@ -497,6 +497,50 @@ async def _doubles_ids(db, draw: Draw, tournament: Tournament) -> Optional[tuple
     return cand, season["id"]
 
 
+async def _mixed_ids(db, tournament: Tournament, draw: Draw) -> Optional[tuple]:
+    """_doubles_ids for the MIXED event — a third uniqueTournament beside the
+    gendered pairs ("US Open Mixed Doubles"), stored on the tournament since
+    there is one mixed championship per event. `draw` is any resolved draw of
+    the tournament: its singles id supplies Sofascore's own name to search by,
+    and its year picks the season, exactly as the doubles resolver does. No
+    tour-category filter here — mixed is neither ATP nor WTA."""
+    if tournament.sofa_mixed_tournament_id and tournament.sofa_mixed_season_id:
+        return tournament.sofa_mixed_tournament_id, tournament.sofa_mixed_season_id
+    from urllib.parse import quote
+    try:
+        meta = await _get(f"/unique-tournament/{draw.sofa_tournament_id}")
+        their_name = ((meta.get("uniqueTournament") or {}).get("name")
+                      or (tournament.name or ""))
+    except Exception:
+        their_name = tournament.name or ""
+    base = their_name.split("(")[0].strip()
+    if not base:
+        return None
+    payload = await _get(f"/search/unique-tournaments?q={quote(base)}")
+    cand = None
+    for row in payload.get("results", []):
+        ent = row.get("entity", {})
+        name = (ent.get("name") or "").lower()
+        if "mixed" in name and "doubles" in name:
+            cand = ent.get("id")
+            break
+    if not cand:
+        return None
+    seasons = await _get(f"/unique-tournament/{cand}/seasons")
+    season = next((s for s in seasons.get("seasons", [])
+                   if str(s.get("year")) == str(draw.year)), None)
+    if not season:
+        return None
+    tournament.sofa_mixed_tournament_id = cand
+    tournament.sofa_mixed_season_id = season["id"]
+    await db.commit()
+    await app_log("info", "sofascore_doubles",
+                  f"Resolved mixed doubles event for {tournament.name}: "
+                  f"ut={cand} season={season['id']}",
+                  detail={"tournament_id": tournament.id})
+    return cand, season["id"]
+
+
 def _has_sets(snap) -> bool:
     """Does this snapshot actually carry a score?
 
@@ -568,6 +612,10 @@ async def sweep_once(db, day: Optional[date] = None) -> dict:
     # surname match sorts out which event belongs to which row.
     quali_tournaments = {e.tournament_id for e in entries
                          if e.discipline == "singles" and e.stage == "qualifying"}
+    # Mixed is a third event again — one per TOURNAMENT, resolved through any
+    # draw that already knows its Sofascore singles id.
+    mixed_tournaments = {e.tournament_id for e in entries
+                         if e.discipline == "mixed"}
     for d in draws:
         ids = await _doubles_ids(db, d, tourns.get(d.tournament_id))
         if ids:
@@ -576,6 +624,12 @@ async def sweep_once(db, day: Optional[date] = None) -> dict:
                 and d.sofa_tournament_id and d.sofa_season_id):
             by_season[(d.tournament_id, d.gender, "q")] = (d.sofa_tournament_id,
                                                            d.sofa_season_id)
+        if d.tournament_id in mixed_tournaments and d.sofa_tournament_id:
+            t = tourns.get(d.tournament_id)
+            if t is not None and (d.tournament_id, "x") not in by_season:
+                ids = await _mixed_ids(db, t, d)
+                if ids:
+                    by_season[(d.tournament_id, "x")] = ids
     for ut, season in set(by_season.values()):
         for kind in ("last", "next"):
             # Same rule as sofascore_results: the writer never waits at the
