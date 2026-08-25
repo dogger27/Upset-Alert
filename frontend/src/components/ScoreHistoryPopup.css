@@ -176,7 +176,14 @@
    owner's spec, and the tick travel math follows through the variable. */
 @media (min-width: 900px) {
   .shp-popup {
-    --shp-thumb: 20px;
-    transform: scale(1.35);
+    --shp-thumb: 18px;
+    /* 1.75 on a 440px popup is ~770px visual — a real centrepiece. The
+       backdrop centres it, so tall screens keep it whole; 1050px height is
+       roughly where 1.75x of this popup stops fitting with margin, so
+       shorter desktop windows get a step down instead of a clipped top. */
+    transform: scale(1.55);
   }
+}
+@media (min-width: 900px) and (min-height: 1050px) {
+  .shp-popup { transform: scale(1.75); }
 }
