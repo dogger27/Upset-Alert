@@ -125,14 +125,35 @@ def normalize(raw: bytes) -> bytes:
     return json.dumps(d, sort_keys=True, separators=(",", ":")).encode()
 
 
-def _team_name(team: dict) -> str | None:
-    """One side entry in the sheet's own vocabulary: 'A. Sabalenka' for a
-    singles slot, 'K. Siniakova/H. Patten' for a pair."""
-    a = team.get("displayNameA")
-    b = team.get("displayNameB")
-    if a and b:
-        return f"{a}/{b}"
-    return a or b
+def _person(team: dict, suffix: str) -> str | None:
+    """One player in SHEET FORM — full given name, capitalised surname
+    ("Aryna SABALENKA"), because that is the shape every downstream consumer
+    expects: the invariants check for it (name_not_sheet_form,
+    name_abbreviated_given), and _sheet_form/_match_tokens resolve against
+    it. The feed hands the parts over separately, so build the form rather
+    than passing its abbreviated displayName through."""
+    fn = team.get(f"firstName{suffix}")
+    ln = team.get(f"lastName{suffix}")
+    if fn and ln:
+        return f"{fn} {ln.upper()}"
+    d = team.get(f"displayName{suffix}")
+    if not d:
+        return None
+    given, _, rest = d.partition(" ")
+    return f"{given} {rest.upper()}" if rest else d
+
+
+def _side_names(teams: list) -> list[str]:
+    """A side as the sheet prints it: one name per PLAYER. A doubles side is
+    two rows, never one 'A/B' string — doubles_side_not_two exists precisely
+    because a pair collapsed into one row breaks every per-player join."""
+    names = []
+    for t in teams or []:
+        for suffix in ("A", "B"):
+            n = _person(t, suffix)
+            if n:
+                names.append(n)
+    return names
 
 
 def parse_uso_day(raw: bytes):
@@ -147,8 +168,8 @@ def parse_uso_day(raw: bytes):
             if ev is None:
                 continue
             tour, discipline = ev
-            side_a = [n for n in (_team_name(t) for t in m.get("team1") or []) if n]
-            side_b = [n for n in (_team_name(t) for t in m.get("team2") or []) if n]
+            side_a = _side_names(m.get("team1"))
+            side_b = _side_names(m.get("team2"))
             # A slot the feed has not filled in yet (tomorrow's R2 before
             # today's winners are known) settles on a later refresh; until
             # then there is nothing to pair it to.

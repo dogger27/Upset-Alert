@@ -105,6 +105,7 @@ async def save_predictions(
     if it really cannot get through, it says so instead of returning a bare 500.
     """
     from sqlalchemy.exc import OperationalError, PendingRollbackError
+    from sqlalchemy.orm.exc import StaleDataError
     from app.database import AsyncSessionLocal
 
     # EVERY attempt gets its own session, including the first. Reusing the
@@ -118,8 +119,11 @@ async def save_predictions(
             async with AsyncSessionLocal() as fresh:
                 return await _save_predictions_once(
                     tournament_id, body, user_id, fresh, current_user)
-        except (OperationalError, PendingRollbackError) as exc:
-            if "locked" not in str(exc).lower():
+        except (OperationalError, PendingRollbackError, StaleDataError) as exc:
+            # StaleDataError: a row this save updated was deleted underneath
+            # it (scraper orphan cleanup racing a save). A fresh attempt
+            # re-reads what exists now and succeeds — same medicine as a lock.
+            if not isinstance(exc, StaleDataError) and "locked" not in str(exc).lower():
                 raise
             last = exc
             # RELEASE BEFORE RETRYING. A failed attempt may already have
