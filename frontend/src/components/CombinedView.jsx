@@ -22,6 +22,10 @@ import PredictorsPopup from './PredictorsPopup'
 import ScoreHistoryPopup from './ScoreHistoryPopup'
 import { buildH2HSequence, buildMatchIndex, h2hNeighbours, resolveRealFirst } from '../utils/h2hSequence'
 import useFlashOnChange from '../hooks/useFlashOnChange'
+// The one country table — see utils/flags.js. This file kept its own copy
+// until 2026-08-25, when a code added for the schedule page (UZB) left the
+// combined view still drawing a blank box for the same player.
+import { nationalityIso2 } from '../utils/flags'
 import './CombinedView.css'
 import { parseSet, scoreNodes, liveScoreNodes, expectedStartLabel, matchStarted } from '../utils/score'
 import { useAuth } from '../store/auth'
@@ -91,26 +95,6 @@ function GroupIcon() {
       <path d="M13.1 12.1c.6-.2 1.2-.3 1.9-.3 2.6 0 4.6 1.6 4.6 4h-4.9c0-1.5-.6-2.8-1.6-3.7z" opacity="0.75" />
     </svg>
   )
-}
-
-// IOC 3-letter → ISO 2-letter for flag classes (mirror of BracketView)
-const IOC_TO_ISO2 = {
-  AUS:'AU', USA:'US', GBR:'GB', FRA:'FR', GER:'DE', ESP:'ES', ITA:'IT',
-  RUS:'RU', CAN:'CA', JPN:'JP', CHN:'CN', KOR:'KR', ARG:'AR', BRA:'BR',
-  SUI:'CH', AUT:'AT', BEL:'BE', NED:'NL', DEN:'DK', NOR:'NO', SWE:'SE',
-  FIN:'FI', POL:'PL', CZE:'CZ', SVK:'SK', HUN:'HU', ROU:'RO', BUL:'BG',
-  SRB:'RS', CRO:'HR', SLO:'SI', BIH:'BA', MKD:'MK', GRE:'GR', TUR:'TR',
-  POR:'PT', GEO:'GE', KAZ:'KZ', UKR:'UA', BLR:'BY', LAT:'LV', LTU:'LT',
-  EST:'EE', ISR:'IL', RSA:'ZA', EGY:'EG', MAR:'MA', TUN:'TN', NGR:'NG',
-  CHI:'CL', COL:'CO', PER:'PE', URU:'UY', VEN:'VE', ECU:'EC', BOL:'BO',
-  PAR:'PY', MEX:'MX', IND:'IN', PAK:'PK', THA:'TH', VIE:'VN', INA:'ID',
-  MAS:'MY', PHI:'PH', TPE:'TW', HKG:'HK', NZL:'NZ', BAH:'BS', DOM:'DO',
-  HAI:'HT', PUR:'PR', TTO:'TT', JAM:'JM', BAR:'BB', GUA:'GT', CRC:'CR',
-  MON:'MC', LUX:'LU', ISL:'IS', IRL:'IE', CYP:'CY', MLT:'MT',
-}
-function nationalityIso2(nat) {
-  if (!nat) return null
-  return IOC_TO_ISO2[nat.toUpperCase()] ?? (nat.length === 2 ? nat.toUpperCase() : null)
 }
 
 // Inferred seed/rank: seeds keep their seed number; unseeded ranked after the

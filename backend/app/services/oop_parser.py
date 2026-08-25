@@ -37,10 +37,59 @@ CLOCK_RE = re.compile(r'\d{1,2}[:.]\d{2}\s*(?:am|pm)?', re.I)
 DISC_RE = re.compile(r'\b(singles|doubles)\b', re.I)
 # A bare clock time on its own line is also a slot ("7:00 PM").
 BARE_TIME_RE = re.compile(r'^\d{1,2}[:.]\d{2}\s*(?:am|pm)?$', re.I)
+# A slot whose start time is not settled yet prints only "TBC" in the header
+# band where "Followed by" would go — Monterrey 2026-08-25 held its last
+# doubles quarter-final that way. It has to open a slot like any other wording,
+# or everything printed under it is read as more players for the match above.
+#
+# ANCHORED, unlike SLOT_RE: these tokens are also ordinary words on a sheet.
+# "COURT TBA" is a court NAME (2025_741) and "AFTER REST, TIME TBA" is already
+# a slot by its first three words; matching either as a marker would lose the
+# court and split a slot in two. Only a line that is nothing but the token.
+TBX_RE = re.compile(
+    r'^(?:TB[ACD]|to\s+be\s+(?:confirmed|announced|advised|determined))$', re.I)
 VS_RE = re.compile(r'^(?:vs\.?|v\.?|contre)$', re.I)
 TOUR_RE = re.compile(r'^(ATP|WTA)$', re.I)
 ROUND_RE = re.compile(r'^(F|SF|QF|R\d{1,3}|Q\d?|FQ|1R|2R|3R|4R)$', re.I)
 CONT_RE = re.compile(r'^(?:\[[^\]]*\]|[A-Z]{3})$')
+
+# IOC codes as the tours print them, plus the ISO variants that turn up in
+# their place (DEU for Germany, and RUS/BLR which persist on some sheets
+# despite the neutral-athlete rules). Lives HERE, and schedule.py imports it,
+# because two copies of a country table drift and the failure is silent.
+COUNTRY_CODES = frozenset("""
+AFG AHO ALB ALG AND ANG ANT ARG ARM ARU ASA AUS AUT AZE BAH BAN BAR BDI BEL BEN
+BER BHU BIH BIZ BLR BOL BOT BRA BRN BRU BUL BUR CAF CAM CAN CAY CGO CHA CHI CHN
+CIV CMR COD COK COL COM CPV CRC CRO CUB CYP CZE DEN DEU DJI DMA DOM ECU EGY ERI
+ESA ESP EST ETH FIJ FIN FRA FSM GAB GAM GBR GBS GEO GEQ GER GHA GRE GRN GUA GUI
+GUM GUY HAI HKG HON HUN INA IND IRI IRL IRQ ISL ISR ISV ITA IVB JAM JOR JPN KAZ
+KEN KGZ KIR KOR KOS KSA KUW LAO LAT LBA LBN LBR LCA LES LIE LTU LUX MAD MAR MAS
+MAW MDA MDV MEX MGL MHL MKD MLI MLT MNE MON MOZ MRI MTN MYA NAM NCA NED NEP NGR
+NIG NOR NRU NZL OMA PAK PAN PAR PER PHI PLE PLW PNG POL POR PRK PUR QAT ROU RSA
+RUS RWA SAM SEN SEY SIN SKN SLE SLO SMR SOL SOM SRB SRI SSD STP SUD SUI SUR SVK
+SWE SWZ SYR TAN TCH TGA THA TJK TKM TLS TOG TPE TTO TUN TUR TUV UAE UGA UKR URU
+USA UZB VAN VEN VIE VIN YEM ZAM ZIM
+""".split())
+
+
+def _is_continuation(text):
+    """Is this line the wrapped tail of the name above — or the sheet's own furniture?
+
+    THREE CAPITALS IS NOT A COUNTRY BY SHAPE. The layout wraps a name's seed or
+    nationality onto its own line, so a lone "[Q]" or "CZE" belongs to the
+    player above; but the sheet prints its own words in caps too. Monterrey's
+    2026-08-25 sheet ended Cancha 4 with a "TBC" slot header, which is exactly
+    this shape, and it was glued onto the last name printed above it: the
+    doubles quarter-final went out as "Magali KEMPEN / Alexandra PANOVA TBC",
+    a country nobody has and a name no search matches. TBC also opens a slot
+    now (TBX_RE), so this is the second lock on the same door — the next such
+    word will not have a slot rule waiting for it.
+    """
+    if not CONT_RE.match(text):
+        return False
+    if text.startswith('['):
+        return True
+    return text.upper() in COUNTRY_CODES
 NOISE_RE = re.compile(
     r'sign-?in|deadline|supervisor|referee|tournament director|order of play|'
     r'ceremony|presentation|trophy|approximately|interview|practice|mins?\)|'
@@ -204,7 +253,7 @@ def _slot_of(text):
     """-> (time, discipline) when this line opens a match slot, else None."""
     if not text:
         return None
-    if SLOT_RE.search(text) or BARE_TIME_RE.match(text):
+    if SLOT_RE.search(text) or BARE_TIME_RE.match(text) or TBX_RE.match(text):
         times = CLOCK_RE.findall(text)
         d = DISC_RE.search(text)
         return (times[-1].strip() if times else None,
@@ -425,6 +474,17 @@ def _parse_column(lines, pno):
 
         slot = _slot_of(text)
         if slot:
+            # "TBA" under a time that has already been printed QUALIFIES that
+            # slot; it does not open another. Cincinnati's combined sheet
+            # (2026-08-19, Court 10) prints "Not Before 3:00 PM" and then "TBA"
+            # on the line below, in the band where the neighbouring columns
+            # print ATP/WTA — and reading the second line as a new slot threw
+            # away a printed 3:00 PM, which is the one kind of time allowed to
+            # veto a live-score match. A slot that would open with the current
+            # one still empty is furniture in the same header band; Monterrey's
+            # standalone "TBC" (2026-08-25) comes after a full slot and opens.
+            if TBX_RE.match(text) and cur is not None and not (cur.side_a or cur.side_b):
+                continue
             flush()
             cur = Match(court=court, time=slot[0], discipline=slot[1],
                         start_raw=text, page=pno)
@@ -460,7 +520,7 @@ def _parse_column(lines, pno):
         # A bare country code or seed is the tail of the name on the line above,
         # wrapped by the layout — not a second player. Treating it as one made
         # 274 of 278 matches look like doubles.
-        if CONT_RE.match(text):
+        if _is_continuation(text):
             if side:
                 side[-1] = f'{side[-1]} {text}'
             continue

@@ -37,7 +37,7 @@ from app.services.sofascore_doubles import _sheet_surnames
 from app.models.schedule import (ScheduleChange, ScheduleDocument,
                                  ScheduleEntry, ScheduleEntryPlayer)
 from app.models.tournament import Draw, DrawEntry, Match
-from app.services.oop_parser import parse_pdf
+from app.services.oop_parser import COUNTRY_CODES, parse_pdf
 from app.services.rankings import _norm
 
 logger = logging.getLogger(__name__)
@@ -80,22 +80,11 @@ _CLOCK_RE = re.compile(r'^(\d{1,2})[:.](\d{2})\s*(am|pm)?$', re.I)
 # as "Orlando", which then matched every other Orlando in the draw. Any
 # three-letter surname hits this: LUZ, KIM, LEE, WOO, ONS.
 #
-# IOC codes as the tours print them, plus the ISO variants that turn up in
-# their place (DEU for Germany, and RUS/BLR which persist on some sheets
-# despite the neutral-athlete rules).
-_COUNTRY_CODES = frozenset("""
-AFG AHO ALB ALG AND ANG ANT ARG ARM ARU ASA AUS AUT AZE BAH BAN BAR BDI BEL BEN
-BER BHU BIH BIZ BLR BOL BOT BRA BRN BRU BUL BUR CAF CAM CAN CAY CGO CHA CHI CHN
-CIV CMR COD COK COL COM CPV CRC CRO CUB CYP CZE DEN DEU DJI DMA DOM ECU EGY ERI
-ESA ESP EST ETH FIJ FIN FRA FSM GAB GAM GBR GBS GEO GEQ GER GHA GRE GRN GUA GUI
-GUM GUY HAI HKG HON HUN INA IND IRI IRL IRQ ISL ISR ISV ITA IVB JAM JOR JPN KAZ
-KEN KGZ KIR KOR KOS KSA KUW LAO LAT LBA LBN LBR LCA LES LIE LTU LUX MAD MAR MAS
-MAW MDA MDV MEX MGL MHL MKD MLI MLT MNE MON MOZ MRI MTN MYA NAM NCA NED NEP NGR
-NIG NOR NRU NZL OMA PAK PAN PAR PER PHI PLE PLW PNG POL POR PRK PUR QAT ROU RSA
-RUS RWA SAM SEN SEY SIN SKN SLE SLO SMR SOL SOM SRB SRI SSD STP SUD SUI SUR SVK
-SWE SWZ SYR TAN TCH TGA THA TJK TKM TLS TOG TPE TTO TUN TUR TUV UAE UGA UKR URU
-USA UZB VAN VEN VIE VIN YEM ZAM ZIM
-""".split())
+# The list itself lives in oop_parser, which needs the same one to tell a
+# wrapped nationality from the sheet's own furniture. One copy: two country
+# tables drift, and a name keeps its country on one screen and loses it on the
+# next with nothing logged either way.
+_COUNTRY_CODES = COUNTRY_CODES
 
 # "QS" is qualifying singles, "MD" men's doubles — the sheet states both
 # dimensions in one code, which is exactly how they are filtered.

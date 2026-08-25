@@ -17,6 +17,13 @@ export const IOC_TO_ISO2 = {
   MAS:'MY', PHI:'PH', TPE:'TW', HKG:'HK', NZL:'NZ', BAH:'BS', DOM:'DO',
   HAI:'HT', PUR:'PR', TTO:'TT', JAM:'JM', BAR:'BB', GUA:'GT', CRC:'CR',
   MON:'MC', LUX:'LU', ISL:'IS', IRL:'IE', CYP:'CY', MLT:'MT',
+  // Added 2026-08-25: every code our own data carries had to be in here, and
+  // these were not — Maria TIMOFEEVA (UZB) sat on the Monterrey order of play
+  // beside an outlined empty box, which is the marker for a country the sheet
+  // WITHHELD. A missing row in this table says the same thing as a withheld
+  // nationality and cannot be told apart on the page.
+  UZB:'UZ', ARM:'AM', JOR:'JO', LBN:'LB', QAT:'QA', MNE:'ME', AND:'AD',
+  BDI:'BI', ESA:'SV', VAN:'VU', DEU:'DE',
 }
 
 export function nationalityIso2(nat) {
