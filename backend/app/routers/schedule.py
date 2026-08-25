@@ -280,7 +280,7 @@ def _player_out(p, nats: dict, seeds: dict, types: dict, from_bracket: bool,
         side=p.side, position=p.position,
         name=p.raw_name,
         draw_entry_id=p.draw_entry_id,
-        nationality=nats.get(p.draw_entry_id),
+        nationality=nats.get(p.draw_entry_id) or p.nationality,
         seed=seed,
         entry_type=etype,
         # By draw entry where there is one; by NAME where there is not.

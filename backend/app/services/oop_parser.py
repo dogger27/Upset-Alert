@@ -157,6 +157,11 @@ class Match:
     printed_status: Optional[str] = None
     side_a: list = field(default_factory=list)
     side_b: list = field(default_factory=list)
+    # IOC codes aligned index-for-index with side_a/side_b, where the source
+    # states them per player (the US Open feed does; PDF text leaves these
+    # empty and nationality rides inside the printed name instead).
+    nations_a: list = field(default_factory=list)
+    nations_b: list = field(default_factory=list)
     page: int = 0
 
     @property
