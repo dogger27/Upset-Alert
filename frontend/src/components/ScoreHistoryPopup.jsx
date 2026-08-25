@@ -223,6 +223,21 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
               aria-label="Scrub through the match's score history"
             />
             </div>
+            {markers.length > 0 && (
+              <div className="shp-legend">
+                <span className="shp-legend-item">
+                  <span className="shp-legend-box shp-tick--break" /> break
+                </span>
+                <span className="shp-legend-item">
+                  <span className="shp-legend-box shp-tick--set" /> set
+                </span>
+                {markers.some(m => m.kind === 'match') && (
+                  <span className="shp-legend-item">
+                    <span className="shp-legend-box shp-tick--match" /> match
+                  </span>
+                )}
+              </div>
+            )}
             {statsUsable && (() => {
               const snap = stats.at[Math.min(atEnd ? stats.at.length - 1 : pos, stats.at.length - 1)]
               const top = snap[topIsP1 ? 0 : 1]
@@ -256,21 +271,6 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
                 </div>
               )
             })()}
-            {markers.length > 0 && (
-              <div className="shp-legend">
-                <span className="shp-legend-item">
-                  <span className="shp-legend-box shp-tick--break" /> break
-                </span>
-                <span className="shp-legend-item">
-                  <span className="shp-legend-box shp-tick--set" /> set
-                </span>
-                {markers.some(m => m.kind === 'match') && (
-                  <span className="shp-legend-item">
-                    <span className="shp-legend-box shp-tick--match" /> match
-                  </span>
-                )}
-              </div>
-            )}
           </div>
         )}
       </div>
