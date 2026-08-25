@@ -309,6 +309,48 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
             else:
                 court_orders[ck] = e.id
 
+    # 2026-08-26, Winston-Salem: re-reading the same sheet through a fixed
+    # parser gave two courts a second row each — the clean names beside the
+    # unreadable ones, 14 rows for a 12-match sheet. `pairing_duplicated`
+    # above cannot see it: it compares whole pairings and exempts unresolved
+    # rows, and these rows were unresolved and disagreed on exactly the side
+    # the parser had mangled. `_dedupe_day` could not either — `_resolves`
+    # wants one row to be MORE decided than the other and both were equally
+    # pending, and `_superseded` was written for withdrawals and skipped TBD
+    # rows outright (both since fixed).
+    #
+    # The shape, stated once and for any kind of row: two slots on one day
+    # naming the SAME side and sharing NOBODY on the other, where one was last
+    # confirmed by an older revision and neither has been on court, are one
+    # slot printed twice. Both guards are load-bearing — a team really can play
+    # twice on a day (the US Open's mixed-doubles event does exactly that, and
+    # a rain backlog does it by accident), but both of those rows come off the
+    # SAME revision, and a match that dropped off a later revision because it
+    # finished has a result on it.
+    from app.services.schedule import _side_tokens
+    _opp = {"a": "b", "b": "a"}
+    fresh = [r for r in rows
+             if not (r.started_at or r.completed_at or r.winner_side
+                     or r.live_scores_json)]
+    for i, a in enumerate(fresh):
+        for b in fresh[i + 1:]:
+            if a.stage != b.stage:
+                continue
+            if (a.last_document_id or 0) == (b.last_document_id or 0):
+                continue
+            A = {s: set().union(set(), *_side_tokens(a, s)) for s in "ab"}
+            B = {s: set().union(set(), *_side_tokens(b, s)) for s in "ab"}
+            hit = next((
+                (sa, sb) for sa in "ab" for sb in "ab"
+                if A[sa] and A[sa] == B[sb] and not (A[_opp[sa]] & B[_opp[sb]])), None)
+            if hit:
+                old, new = (a, b) if (a.last_document_id or 0) < (b.last_document_id or 0) else (b, a)
+                flag("slot_restated", old,
+                     f"entry {old.id} (document {old.last_document_id}) and entry "
+                     f"{new.id} (document {new.last_document_id}) share side "
+                     f"{hit[0]}/{hit[1]} and no player on the other — one slot, "
+                     f"two rows")
+
     return v
 
 
