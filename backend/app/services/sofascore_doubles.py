@@ -514,6 +514,10 @@ async def _mixed_ids(db, tournament: Tournament, draw: Draw) -> Optional[tuple]:
     except Exception:
         their_name = tournament.name or ""
     base = their_name.split("(")[0].strip()
+    # Sofascore's own singles name is GENDERED — "US Open, Men" — and a search
+    # for that never returns the mixed event at all. The family name is what
+    # indexes it ("US Open" finds "US Open, Mixed Doubles").
+    base = re.sub(r",\s*(?:Men|Women)$", "", base).strip()
     if not base:
         return None
     payload = await _get(f"/search/unique-tournaments?q={quote(base)}")
@@ -521,7 +525,10 @@ async def _mixed_ids(db, tournament: Tournament, draw: Draw) -> Optional[tuple]:
     for row in payload.get("results", []):
         ent = row.get("entity", {})
         name = (ent.get("name") or "").lower()
-        if "mixed" in name and "doubles" in name:
+        # Anchored on the family name, or the 2018 wheelchair edition
+        # ("US Open (WT) 2018, Mixed Doubles") is one list position away.
+        if (name.startswith(base.lower())
+                and "mixed" in name and "doubles" in name):
             cand = ent.get("id")
             break
     if not cand:
