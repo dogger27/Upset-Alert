@@ -574,6 +574,25 @@ async def compare_picks(
                    UserPrediction.match_id.in_(list(late))))
     rows = (await db.execute(stmt)).all()
 
+    # The verdict on each pick, WITHOUT naming winners: green needs the pick's
+    # own match decided, red only needs the picked player to have lost
+    # anywhere already — a QF pick is dead the moment its player goes out in
+    # R2, long before the QF exists.
+    winner_of = {}
+    eliminated: set = set()
+    for m in matches:
+        if m.status == "completed" and m.winner_id is not None:
+            winner_of[m.id] = m.winner_id
+            for pid in (m.player1_id, m.player2_id):
+                if pid is not None and pid != m.winner_id:
+                    eliminated.add(pid)
+
+    def _state(match_id: int, picked: int) -> str:
+        w = winner_of.get(match_id)
+        if w is not None:
+            return "correct" if w == picked else "out"
+        return "out" if picked in eliminated else "open"
+
     # Structured, not a string: the client renders the same pos-badge the
     # draw page uses. `seed` is the real one (grey box); `implied` is the
     # draw-order rank BracketView derives for unseeded players — seeds keep
@@ -602,7 +621,8 @@ async def compare_picks(
         })
         name = entry_names.get(pred.predicted_winner_id)
         if name:
-            u["picks"][tier].append((match_number, name))
+            u["picks"][tier].append((match_number, {
+                **name, "state": _state(pred.match_id, pred.predicted_winner_id)}))
 
     users = []
     for u in by_user.values():
