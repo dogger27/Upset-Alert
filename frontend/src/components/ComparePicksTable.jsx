@@ -38,7 +38,8 @@ export default function ComparePicksTable({ drawId, leagueId }) {
                   {(u.picks[r] ?? []).map((pk, i) => (
                     <div key={i} className={`compare-pick-name${
                       pk.state === 'correct' ? ' compare-pick-name--correct'
-                      : pk.state === 'out' ? ' compare-pick-name--out' : ''}`}>
+                      : pk.state === 'out' ? ' compare-pick-name--out'
+                      : ' compare-pick-name--open'}`}>
                       {/* Exactly the draw page's rules: a real seed is the
                           grey box, an implied draw-order rank the coloured
                           one, and the entry token (WC/Q/LL...) sits flush
