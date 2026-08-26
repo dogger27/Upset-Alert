@@ -276,8 +276,16 @@
    red = it no longer can (its player already lost), plain = still alive.
    The actual winner is deliberately never shown here. */
 .compare-pick-name--correct,
-.compare-pick-name--out {
+.compare-pick-name--out,
+.compare-pick-name--open {
   border-radius: 7px; padding: 1px 7px;
+}
+/* A pick still in play gets a box too — neutral grey, so every line reads
+   as a slot and the three states differ only in colour: green settled,
+   red dead, grey undecided. */
+.compare-pick-name--open {
+  border: 1px solid var(--border-strong);
+  background: transparent;
 }
 .compare-pick-name--correct {
   background: var(--pick-correct-bg);
