@@ -1,45 +1,16 @@
-.username-hover {
-  position: relative;
-  cursor: default;
-}
+.username-hover { cursor: default; }
 
-.username-hover::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  bottom: calc(100% + 6px);
-  left: 50%;
-  transform: translateX(-50%);
+/* Portaled to <body>, fixed-positioned — never clipped by an ellipsis or
+   overflow ancestor (see UserName.jsx for the trap this replaces). */
+.username-hover-tip {
   background: var(--tooltip-bg);
   color: var(--on-brand);
   font-size: 0.78rem;
-  font-weight: 400;
-  white-space: pre-line;
-  width: max-content;
-  max-width: 220px;
-  text-align: center;
+  font-weight: 500;
+  white-space: nowrap;
   padding: 0.3rem 0.6rem;
   border-radius: 5px;
   pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-  z-index: 100;
-}
-
-.username-hover::before {
-  content: '';
-  position: absolute;
-  bottom: calc(100% + 1px);
-  left: 50%;
-  transform: translateX(-50%);
-  border: 5px solid transparent;
-  border-top-color: var(--ink-800);
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-  z-index: 100;
-}
-
-.username-hover:hover::after,
-.username-hover:hover::before {
-  opacity: 1;
+  z-index: 3000;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
 }
