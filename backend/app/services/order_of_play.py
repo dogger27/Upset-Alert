@@ -39,6 +39,7 @@ import re
 from datetime import date, datetime, timedelta, timezone
 from io import BytesIO
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 import httpx
 from sqlalchemy import func, or_, select
@@ -303,6 +304,37 @@ async def refresh_atp_ids() -> int:
     return stamped
 
 
+def _venue_today(venue_tz: str | None) -> date:
+    """The date it is AT THE VENUE — the only date a schedule question is about.
+
+    `date.today()` is the SERVER's date, and the server is UTC while venues are
+    not. Every question below is about a tennis day: has play started, is the
+    tournament over, is there a sheet for the day being played. All three are
+    answered by the venue's calendar, never by ours.
+
+    Monterrey, 2026-08-26 00:12 and 01:13 UTC: it was 6pm Tuesday at the court
+    and Tuesday's night session was on Grandstand, with nine slots stored for
+    2026-08-25 and the WTA quite reasonably not having published Wednesday's
+    sheet yet. `_alert_missing_schedule` asked for a sheet dated "today", read
+    its own UTC clock, got Wednesday, found nothing and warned that a fetch or
+    a parse was failing quietly. Nothing was failing. Every UTC-negative venue
+    does this for the last six hours of every playing day.
+
+    `refresh_order_of_play` already knew — its freshness window accepts
+    yesterday's sheet for exactly this reason — but the two alert gates were
+    written against the server clock and never got the same treatment.
+
+    Falls back to the server's date when a draw has no timezone: an alert that
+    is a few hours out beats an alert that never fires.
+    """
+    if venue_tz:
+        try:
+            return datetime.now(ZoneInfo(venue_tz)).date()
+        except Exception:
+            pass                          # unknown zone name; server date it is
+    return date.today()
+
+
 async def _alert_missing_oop() -> None:
     """Say so when a tournament is under way and we still have no order of play.
 
@@ -310,8 +342,11 @@ async def _alert_missing_oop() -> None:
     a renamed file, a changed URL scheme all present identically — as a
     tournament that simply never shows a schedule. Once play has started, that
     is unambiguous enough to be worth an email.
+
+    Dated at the VENUE, per draw — see `_venue_today`. "Play started" is a fact
+    about the court, and reading it off a UTC clock made it true up to a day
+    early in Asia and up to a day late in the Americas.
     """
-    today = date.today()
     async with AsyncSessionLocal() as db:
         rows = (await db.execute(
             select(Tournament, Draw)
@@ -323,6 +358,7 @@ async def _alert_missing_oop() -> None:
             ))).all()
 
     for tournament, draw in rows:
+        today = _venue_today(draw.venue_timezone)
         start = _as_date(draw.start_date)
         end = _as_date(draw.end_date)
         if not start or start > today:
@@ -693,18 +729,24 @@ async def _alert_missing_schedule() -> None:
     than of any step that produces it. It stays true if the fetching, the
     parsing or the freshness rule are rewritten, and it catches causes nobody
     has thought of yet.
+
+    Asked of the VENUE's day, not the server's — see `_venue_today`. A sheet is
+    about a tennis day, and at a UTC-negative venue the server rolls into
+    tomorrow while tonight's matches are still on court, so "nothing on or
+    after today" was true of a day nobody had played yet.
     """
-    today = date.today()
     async with AsyncSessionLocal() as db:
         rows = (await db.execute(
             select(Tournament.id, Tournament.name,
-                   func.min(Draw.start_date), func.max(Draw.end_date))
+                   func.min(Draw.start_date), func.max(Draw.end_date),
+                   func.max(Draw.venue_timezone))
             .join(Draw, Draw.tournament_id == Tournament.id)
             .where(Draw.status != "completed",
                    Draw.start_date.isnot(None))
             .group_by(Tournament.id))).all()
 
-        for tid, name, start, end in rows:
+        for tid, name, start, end, venue_tz in rows:
+            today = _venue_today(venue_tz)
             # Under way, or starting tomorrow — the point by which a sheet
             # exists in the real world, so its absence here is ours.
             if start is None or start > today + timedelta(days=1):
