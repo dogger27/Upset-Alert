@@ -574,7 +574,13 @@ async def compare_picks(
                    UserPrediction.match_id.in_(list(late))))
     rows = (await db.execute(stmt)).all()
 
-    entry_names = {e.id: e.name for e in (await db.execute(
+    # The name as the bracket prints it — seed or entry token in front
+    # ("[6] Donna Vekić", "[WC] Alycia Parks", "[Q] Maria Timofeeva"), so the
+    # comparison carries the same at-a-glance context as the draw page.
+    def _tagged(e) -> str:
+        tag = e.seed if e.seed is not None else e.entry_type
+        return f"[{tag}] {e.name}" if tag else e.name
+    entry_names = {e.id: _tagged(e) for e in (await db.execute(
         select(DrawEntry).where(DrawEntry.draw_id == tournament_id))).scalars()}
 
     by_user: dict[int, dict] = {}
