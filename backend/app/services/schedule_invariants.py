@@ -201,6 +201,19 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
         if e.tbd_side not in (None, "", "a", "b", "ab"):
             flag("tbd_side_invalid", e, f"tbd_side={e.tbd_side!r}")
 
+        # 2026-08-26, Winston-Salem COURT 4: a doubles row carrying draw 121,
+        # the men's SINGLES draw. We store no doubles draw at all, so a
+        # non-singles row has nothing it could legitimately point at — but its
+        # players resolve to draw_entries (their singles rows), and the ingest
+        # fallback took a draw off the first one that matched. draw_id is what
+        # `surface` and `gender` are served from, so the row published three
+        # facts about somebody else's event. The seed leaked through the same
+        # doorway once and was gated at serve time; this gates the field.
+        if e.discipline != "singles" and e.draw_id is not None:
+            flag("nonsingles_row_carries_draw", e,
+                 f"{e.discipline} row points at draw {e.draw_id}; "
+                 "only singles rows have a draw")
+
         # 2026-08-25, Medvedev vs "DAMM / SHELBAYH": a singles slot stored an
         # unresolved "A or B" as two players on one side with no tbd flag, and
         # the site rendered a phantom doubles team. Two names on a singles
