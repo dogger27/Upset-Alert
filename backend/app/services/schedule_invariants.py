@@ -478,6 +478,33 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
     # a rain backlog does it by accident), but both of those rows come off the
     # SAME revision, and a match that dropped off a later revision because it
     # finished has a result on it.
+    # 2026-08-26, Monterrey ESTADIO: the revised sheet moved Timofeeva's
+    # walked-over R16 out of the time bands and printed it with no start
+    # wording at all, above the column's first "Starting at". Everything above
+    # the first marker was court-header furniture to the parser, so the sheet's
+    # 8 slots came back as 7 — and NOTHING said so. The match stayed on the
+    # page only because an earlier revision had created its row, still wearing
+    # the 3:00 PM that revision printed; had the walkover been in the day's
+    # first sheet the match would never have appeared at all.
+    #
+    # The tell is cheap and general: rows are restated by every revision, so a
+    # row that the newest document of the day did NOT restate is a slot that
+    # revision either dropped or the parse could not see. Measured over every
+    # tournament-day in the database: six rows, three days — this one, a
+    # Winston-Salem row whose player withdrew and whose replacement was printed
+    # on a different DAY (so `_dedupe_day`, which is per-day, could never
+    # absorb it), and four rows from the first Cincinnati sheet. No noise.
+    # `_absorb` hands the newer document id to a merge's survivor so that
+    # collapsing two rows cannot look like this.
+    latest_doc = max((r.last_document_id or 0) for r in rows) if rows else 0
+    if latest_doc:
+        for e in rows:
+            if (e.last_document_id or 0) < latest_doc:
+                flag("slot_unconfirmed", e,
+                     f"last confirmed by document {e.last_document_id}, but the "
+                     f"day's newest document is {latest_doc} — the current sheet "
+                     f"does not print this slot")
+
     from app.services.schedule import _side_tokens
     _opp = {"a": "b", "b": "a"}
     fresh = [r for r in rows
@@ -505,7 +532,7 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
     return v
 
 
-def check_parse(meta) -> list[dict]:
+def check_parse(meta, match_count: int | None = None) -> list[dict]:
     """The law applied to a PARSE, before a single row is stored.
 
     Everything in check_day looks at rows the ingest wrote. That is blind to
@@ -534,6 +561,32 @@ def check_parse(meta) -> list[dict]:
                       f"{getattr(m, 'start_raw', '') or '?'}: slot opened but no "
                       f"players parsed; unread lines: "
                       + "; ".join(repr(x) for x in (m.rejected or [])[:4]),
+        })
+
+    # COUNT THE SHEET'S OWN "vs", not the parser's opinion of it.
+    #
+    # `slot_dropped` above only sees a slot a MARKER opened — so it was blind
+    # to Monterrey 2026-08-26, where the walkover box had no marker at all and
+    # the whole match evaporated between the sheet and the site (8 printed, 7
+    # parsed, nothing logged). A standalone "vs" is the one line only a match
+    # box produces: a page title, a date, a court name and a footer cannot,
+    # and every box in the corpus prints exactly one. So the sheet states its
+    # own match count, independently of every rule in the parser, and a parse
+    # that comes back with fewer has lost a slot HOWEVER it lost it.
+    #
+    # One-sided on purpose: some sheets print "A vs B" inline on a single line
+    # and those are not counted, so fewer "vs" than matches is ordinary.
+    # Measured over the 285-file corpus, more "vs" than matches happens in
+    # exactly two files — this incident, and a 2025 Eastbourne finals sheet
+    # whose two courts print on one line and are being merged into one match.
+    # An alarm that quiet is one worth believing.
+    vs_lines = (meta or {}).get('vs_lines')
+    if vs_lines is not None and match_count is not None and vs_lines > match_count:
+        out.append({
+            "code": "vs_lines_exceed_matches", "entry_id": None, "court": None,
+            "detail": f"the sheet prints {vs_lines} match boxes ('vs' on its own "
+                      f"line) but the parse produced {match_count} — "
+                      f"{vs_lines - match_count} slot(s) lost",
         })
     return out
 

@@ -559,7 +559,7 @@ async def ingest_document(db, tournament, play_date: date, url: str,
     # while this one holds uncommitted writes deadlocks the ingest against
     # itself on SQLite's single writer.
     from app.services.schedule_invariants import check_parse
-    parse_violations = check_parse(meta)
+    parse_violations = check_parse(meta, len(matches))
 
     # A REPUBLISH IS NOT A REVISION. The tours' systems regenerate the sheet
     # continuously — the only diff between two of Winston-Salem's overnight
@@ -688,6 +688,23 @@ async def ingest_document(db, tournament, play_date: date, url: str,
             entry = (await db.execute(
                 select(ScheduleEntry).where(ScheduleEntry.pairing_key == key))).scalars().first()
             start_type = _start_type_of(m)
+            printed_start = getattr(m, 'start_raw', None)
+            # THE SHEET SAYING NOTHING IS NOT THE SHEET SAYING "NO TIME".
+            # A box whose match is over loses its time band on the next
+            # revision while keeping its place on the court — Monterrey's
+            # 2026-08-26 walkover sat at the top of ESTADIO with the band
+            # removed and a bare "WO" in it. Re-stamping that silence would
+            # replace the 3:00 PM an earlier revision printed with "TBA" on a
+            # row the reader can still see, losing the only record of when the
+            # slot was called for. A slot that says "TBC" is the opposite case
+            # — it HAS wording, so it comes through here and clears the clock
+            # like any other change.
+            keep_start = bool(entry is not None and not printed_start
+                              and entry.start_note)
+            if keep_start:
+                start_type, printed_time = entry.start_type, entry.start_time_local
+            else:
+                printed_time = m.time
             if entry is None:
                 entry = ScheduleEntry(
                     # NOT `or tour`: the source is where the file is hosted, not
@@ -701,7 +718,8 @@ async def ingest_document(db, tournament, play_date: date, url: str,
                 await db.flush()
             else:
                 for field, new in (('court', court), ('court_order', order),
-                                   ('start_time_local', m.time), ('start_type', start_type)):
+                                   ('start_time_local', printed_time),
+                                   ('start_type', start_type)):
                     old = getattr(entry, field)
                     if str(old) != str(new) and old is not None:
                         db.add(ScheduleChange(
@@ -827,8 +845,12 @@ async def ingest_document(db, tournament, play_date: date, url: str,
             # stage is free to be re-derived from the sheet on every pass.
             entry.stage = stage
             entry.start_type = start_type
-            entry.start_time_local = m.time
-            entry.start_note = getattr(m, 'start_raw', None)
+            entry.start_time_local = printed_time
+            # Not written back when the sheet printed no wording at all — see
+            # keep_start above. `start_note` is the flag that says so, so it
+            # has to be the one field the silent pass leaves alone.
+            if not keep_start:
+                entry.start_note = printed_start
             # A row created THIS pass always takes the sheet's word for it.
             # The guard below protects an EXISTING row that already settled
             # from being re-marked unresolved by a stale revision — but on a
@@ -1283,6 +1305,17 @@ async def _absorb(db, keep, drop) -> None:
                   "match_id", "draw_id", "round_label"):
         if getattr(keep, field, None) is None and getattr(drop, field, None) is not None:
             setattr(keep, field, getattr(drop, field))
+    # The survivor was restated by whichever revision restated EITHER row: the
+    # two are one slot, so the newest sheet that printed it printed this. The
+    # keep/drop choice above is made on how settled and how full a row is, not
+    # on document order, so without this a merge can leave the survivor wearing
+    # a document id older than every other row on the day — which is exactly
+    # what `slot_unconfirmed` reads as a slot the parse lost.
+    if (drop.last_document_id or 0) > (keep.last_document_id or 0):
+        keep.last_document_id = drop.last_document_id
+    drop_seen, keep_seen = _aware(drop.last_seen_at), _aware(keep.last_seen_at)
+    if drop_seen and (not keep_seen or drop_seen > keep_seen):
+        keep.last_seen_at = drop.last_seen_at
     await db.execute(
         update(ScheduleChange)
         .where(ScheduleChange.schedule_entry_id == drop.id)
