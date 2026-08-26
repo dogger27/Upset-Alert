@@ -14,6 +14,7 @@ checklist.
 """
 
 import re
+from datetime import timezone as _tz
 
 from sqlalchemy import select
 
@@ -44,6 +45,40 @@ _LEADING_SEED_RE = re.compile(r'^(?:\[[^\]]*\]\s*)+')
 # three is not a name any tour prints. Measured over all 705 stored player
 # rows: fires on the four shredded ones below and on nothing else.
 _SHRED_MIN_SINGLES = 3
+
+
+_CLOCK_RE = re.compile(r'^(\d{1,2})[:.](\d{2})\s*(am|pm)?$', re.I)
+
+
+def _printed_instant(entry, tz_name):
+    """The slot's printed venue-local clock as a UTC instant, or None.
+
+    Its OWN parse, like _SHEET_CAPS_RE above and for the same reason: this is
+    the independent reading that `expected_contradicts_printed` measures
+    recompute_expected_starts against. Sharing the zone handling with the code
+    under test is exactly how the law goes blind.
+    """
+    from datetime import datetime as _dt, time as _time
+    from zoneinfo import ZoneInfo
+
+    if not entry.start_time_local or not tz_name or not entry.play_date:
+        return None
+    m = _CLOCK_RE.match(entry.start_time_local.strip())
+    if not m:
+        return None
+    hour, minute, ampm = int(m.group(1)), int(m.group(2)), (m.group(3) or "").lower()
+    if ampm == "pm" and hour != 12:
+        hour += 12
+    elif ampm == "am" and hour == 12:
+        hour = 0
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return None
+    try:
+        tz = ZoneInfo(tz_name)
+    except Exception:
+        return None
+    return _dt.combine(entry.play_date, _time(hour, minute),
+                       tzinfo=tz).astimezone(_tz.utc)
 
 
 async def check_day(db, tournament_id: int, play_date) -> list[dict]:
@@ -90,6 +125,10 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
     from datetime import date as _date, timedelta as _td
     from app.services.schedule import settle_from_result_rows, settled_sides_index
     _pd = _date.fromisoformat(play_date) if isinstance(play_date, str) else play_date
+    venue_tz = (await db.execute(
+        select(Draw.venue_timezone).where(
+            Draw.tournament_id == tournament_id,
+            Draw.venue_timezone.isnot(None)))).scalars().first()
     settled_idx: dict = {}
     if any(e.is_tbd for e in rows):
         settled_idx = settled_sides_index((await db.execute(
@@ -132,6 +171,30 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                          f"side {side_key}: "
                          + " or ".join(r.raw_name or "" for r in rows_side)
                          + " — feeder match has a winner")
+
+        # 2026-08-26, Winston-Salem: every expected start on the day sat four
+        # hours early. `recompute_expected_starts` took the venue timezone as
+        # an OPTIONAL argument and fell back to UTC, so a caller that omitted
+        # it read "Starts At 2:00 PM" as 14:00Z. Nothing errored, nothing was
+        # logged, and `printed_start_at` — derived at serve time from the same
+        # venue_timezone — stayed correct right beside the wrong estimate.
+        #
+        # A row whose start is PRINTED has no estimating to do: the sheet
+        # states the moment, so expected_start_at must BE that moment. When
+        # the two disagree, whoever wrote expected_start_at was reading the
+        # clock in the wrong zone — which is the only way they can disagree,
+        # and the reason this catches the whole family rather than one caller.
+        if e.expected_source == "printed" and e.expected_start_at is not None:
+            want = _printed_instant(e, venue_tz)
+            got = e.expected_start_at
+            if want is not None:
+                if got.tzinfo is None:
+                    got = got.replace(tzinfo=_tz.utc)
+                if abs((got - want).total_seconds()) > 60:
+                    flag("expected_contradicts_printed", e,
+                         f"printed {e.start_time_local!r} is {want.isoformat()} "
+                         f"at {venue_tz}, but expected_start_at is "
+                         f"{got.isoformat()}")
 
         # tbd_side must be one of a/b/ab — anything else means a writer
         # invented a value nothing downstream reads. (Defensive; no incident.)
