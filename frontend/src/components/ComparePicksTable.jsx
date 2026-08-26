@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { getComparePicks } from '../api/tournaments'
+import UserName from './UserName'
 
 /** Everyone's late-round picks side by side — the "Compare Picks" tab of a
     draw's card. Users down the side, QF/SF/F across, one predicted winner
@@ -32,7 +33,7 @@ export default function ComparePicksTable({ drawId, leagueId }) {
         <tbody>
           {data.users.map(u => (
             <tr key={u.user_id}>
-              <td className="compare-table-user">{u.username}</td>
+              <td className="compare-table-user"><UserName user={u} /></td>
               {data.rounds.map(r => (
                 <td key={r}>
                   {(u.picks[r] ?? []).map((pk, i) => (

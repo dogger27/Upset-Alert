@@ -273,7 +273,7 @@ export default function LeagueDetail() {
                                 </svg>
                               </a>
                               <span className="lmt-name-link">
-                                <span className="lmt-name-text">{m.username}</span>
+                                <UserName className="lmt-name-text" user={{ username: m.username, full_name: (!isGlobal && league.show_real_name) ? m.full_name : null }} />
                               </span>
                               {m.is_admin && <span className="lmt-admin-badge" title="Admin">A</span>}
                             </td>
@@ -535,7 +535,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                     </svg>
                   </a>
                   <span className={`lt-progress-name${entry.user_id === user?.id ? ' lt-progress-name--me' : ''}`}>
-                    <span className="lt-progress-name-text">{entry.username}</span>
+                    <UserName className="lt-progress-name-text" user={{ username: entry.username, full_name: showRealName ? entry.full_name : null }} />
                   </span>
                 </div>
               ))}
@@ -598,7 +598,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                 </a>
                 <span className={`lt-progress-name${entry.user_id === user?.id ? ' lt-progress-name--me' : ''}`}>
                   {finalPlayed && rank < 3 && <span className="lt-place-icon">{PLACE_ICONS[rank]}</span>}
-                  <span className="lt-progress-name-text">{entry.username}</span>
+                  <UserName className="lt-progress-name-text" user={{ username: entry.username, full_name: showRealName ? entry.full_name : null }} />
                 </span>
                 <div className="lt-bar-track">
                   {activeRounds.map((i, col) => {
@@ -816,7 +816,7 @@ function LeagueSettings({ league, onDone, currentUserId }) {
           return (
             <div key={m.id} className="settings-member-row">
               <span className="settings-member-name">
-                @{m.username}
+                @<UserName user={{ username: m.username, full_name: league.show_real_name ? m.full_name : null }} />
                 {isOwner && <span className="settings-member-badge owner">Owner</span>}
                 {!isOwner && m.is_admin && <span className="settings-member-badge admin">Admin</span>}
               </span>
