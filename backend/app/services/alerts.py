@@ -48,6 +48,12 @@ ALERT_CATEGORY = "alerts"
 
 ALERT_LOOKBACK_HOURS = 48.0
 ALERT_RECURRENCE_HOURS = 24.0
+# A signature quiet for longer than this is not re-alerted when its 24h gate
+# expires. Without it, one straggler row logged a minute after an alert sat
+# in the lookback window and re-armed the whole alert a day later — for a
+# problem whose own email said "nothing since". Quiet means resolved or
+# already-handled; only a problem still producing rows is worth a re-send.
+ALERT_QUIET_HOURS = 6.0
 ALERT_MAX_PER_DAY = 3
 ALERT_MIN_GAP_HOURS = 4.0
 ALERT_MAX_ISSUES_PER_EMAIL = 20
@@ -169,6 +175,9 @@ async def scan_and_alert() -> None:
             fresh = [o for o in occurrences if _as_utc(o.created_at) > since]
             if not fresh:
                 continue  # Already-alerted problem with nothing new in the window.
+            newest = _as_utc(fresh[-1].created_at)
+            if newest and (now - newest) > timedelta(hours=ALERT_QUIET_HOURS):
+                continue  # The tail of an alerted incident, long gone quiet.
 
             latest = fresh[-1]
             pending.append({
