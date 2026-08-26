@@ -255,3 +255,18 @@
 }
 .compare-pick-label { flex: 1 1 auto; }
 .compare-pick-entry { margin-left: auto; }
+/* Verdicts in the draw page's own colours: green = the pick came true,
+   red = it no longer can (its player already lost), plain = still alive.
+   The actual winner is deliberately never shown here. */
+.compare-pick-name--correct,
+.compare-pick-name--out {
+  border-radius: 7px; padding: 1px 7px;
+}
+.compare-pick-name--correct {
+  background: var(--pick-correct-bg);
+  border: 1px solid var(--pick-correct);
+}
+.compare-pick-name--out {
+  background: var(--pick-wrong-bg);
+  border: 1px solid var(--pick-wrong);
+}
