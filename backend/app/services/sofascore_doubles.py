@@ -703,11 +703,24 @@ async def sweep_once(db, day: Optional[date] = None) -> dict:
         if not e.sofa_event_id:
             continue
         held = by_id.get(e.sofa_event_id)
-        if held is not None and _match(e, held, sides_of[e.id]) is None:
+        if held is None:
+            continue
+        # ONLY A POSITIVE DISAGREEMENT DROPS A CLAIM. Between updates the feed
+        # lists an event without its team payload; _match cannot verify a row
+        # against nothing and returned None, and that None was read as "wrong
+        # match". The claim was dropped, re-proved on the next full payload,
+        # dropped again on the next empty one — row 511 logged that loop 73
+        # times in an evening. No names is no verdict: keep the claim and let
+        # a sweep that can actually see the teams be the judge.
+        if not (_sofa_people(held.get("homeTeam") or {})
+                and _sofa_people(held.get("awayTeam") or {})):
+            continue
+        if _match(e, held, sides_of[e.id]) is None:
             await app_log("warning", "sofascore_doubles",
                     f"dropped event {e.sofa_event_id} from schedule row {e.id} "
                     f"({e.play_date} {e.round_label}) — it no longer identifies "
-                    f"this match")
+                    f"this match",
+                    dedup_key=f"sofa_drop_{e.id}", dedup_hours=6)
             _unclaim(e)
 
     # ONE EVENT, ONE ROW. Three of Saturday's events were each being scored
