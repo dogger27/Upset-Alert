@@ -575,12 +575,20 @@ async def compare_picks(
     rows = (await db.execute(stmt)).all()
 
     # Structured, not a string: the client renders the same pos-badge the
-    # draw page uses (colour box for a seed, tinted box for WC/Q/LL...), so
-    # a pick reads identically wherever it appears.
+    # draw page uses. `seed` is the real one (grey box); `implied` is the
+    # draw-order rank BracketView derives for unseeded players — seeds keep
+    # their number, everyone else is ordered by world ranking after the
+    # highest seed number present, so withdrawn seeds cannot collide.
+    all_entries = (await db.execute(
+        select(DrawEntry).where(DrawEntry.draw_id == tournament_id))).scalars().all()
+    offset = max((e.seed for e in all_entries if e.seed is not None), default=0)
+    unseeded = sorted((e for e in all_entries if e.seed is None),
+                      key=lambda e: (e.ranking is None, e.ranking or 0))
+    implied = {e.id: offset + i + 1 for i, e in enumerate(unseeded)}
     entry_names = {e.id: {"name": e.name, "seed": e.seed,
+                          "implied": implied.get(e.id),
                           "entry_type": e.entry_type}
-                   for e in (await db.execute(
-        select(DrawEntry).where(DrawEntry.draw_id == tournament_id))).scalars()}
+                   for e in all_entries}
 
     by_user: dict[int, dict] = {}
     for pred, username in rows:

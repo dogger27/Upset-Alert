@@ -37,15 +37,19 @@ export default function ComparePicksTable({ drawId, leagueId }) {
                 <td key={r}>
                   {(u.picks[r] ?? []).map((pk, i) => (
                     <div key={i} className="compare-pick-name">
-                      {/* The draw page's own badges, same classes, same
-                          colours — a seed box or a WC/Q/LL entry box. */}
-                      {pk.seed != null && (
+                      {/* Exactly the draw page's rules: a real seed is the
+                          grey box, an implied draw-order rank the coloured
+                          one, and the entry token (WC/Q/LL...) sits flush
+                          right — same classes, same colours, both themes. */}
+                      {pk.seed != null ? (
                         <span className="pos-badge seeded">{pk.seed}</span>
+                      ) : pk.implied != null ? (
+                        <span className="pos-badge unseeded">{pk.implied}</span>
+                      ) : null}
+                      <span className="compare-pick-label">{pk.name}</span>
+                      {pk.entry_type && (
+                        <span className={`pos-badge entry entry-${pk.entry_type.toLowerCase()} compare-pick-entry`}>{pk.entry_type}</span>
                       )}
-                      {pk.seed == null && pk.entry_type && (
-                        <span className={`pos-badge entry entry-${pk.entry_type.toLowerCase()}`}>{pk.entry_type}</span>
-                      )}
-                      <span>{pk.name}</span>
                     </div>
                   ))}
                 </td>
