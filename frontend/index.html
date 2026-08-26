@@ -24,8 +24,11 @@
          links at all, so these only control how a Home Screen launch looks.
          apple-mobile-web-app-capable is the legacy spelling of display:standalone
          and is still what older iOS reads; mobile-web-app-capable is the standard
-         one. apple-mobile-web-app-title stops iOS falling back to <title>, which
-         is long enough to be truncated under the icon. -->
+         one. apple-mobile-web-app-title stops iOS falling back to the page
+         title, which is long enough to be truncated under the icon. Never
+         write a literal title tag inside a comment here: WhatsApp's link
+         scraper does not parse comments, found one, and rendered the rest of
+         this paragraph as the site's preview text. -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -35,6 +38,17 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=Saira+Condensed:wght@500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <title>Upset Alert</title>
+
+    <!-- Link previews (WhatsApp, iMessage, Slack, X). Absolute URLs only:
+         scrapers resolve nothing. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Upset Alert" />
+    <meta property="og:title" content="Upset Alert — Your Wildest Fantasy Tennis" />
+    <meta property="og:description" content="Pick every match of ATP and WTA draws, score points for calling upsets, and follow live scores with your league." />
+    <meta property="og:url" content="https://upsetalert.ca/" />
+    <meta property="og:image" content="https://upsetalert.ca/email-logo-hd.png" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="description" content="Pick every match of ATP and WTA draws, score points for calling upsets, and follow live scores with your league." />
 
     <!-- Paint the theme before the first frame.
          Doing this from React would mean the light palette renders once and is
