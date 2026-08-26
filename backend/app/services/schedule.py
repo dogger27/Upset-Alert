@@ -560,10 +560,35 @@ async def ingest_document(db, tournament, play_date: date, url: str,
     # itself on SQLite's single writer.
     from app.services.schedule_invariants import check_parse
     parse_violations = check_parse(meta)
+
+    # A REPUBLISH IS NOT A REVISION. The tours' systems regenerate the sheet
+    # continuously — the only diff between two of Winston-Salem's overnight
+    # "revisions" was the footer clock ("8:17:57 PM Keith Crossland" →
+    # "8:34:03 PM"). Byte identity (above) still short-circuits an unchanged
+    # file; content identity here stops a changed file whose SLOTS are
+    # unchanged from minting a document, a rev.N email that says "No slot
+    # changes", and a verifier run. Everything a reader would call a change —
+    # court, order, wording, round, tour, sides — is in the fingerprint;
+    # printed scores and statuses are deliberately not.
+    content_fp = hashlib.sha256(repr([
+        (m.court, m.time, m.start_raw, m.tour, m.round, m.discipline,
+         m.tbd, m.tbd_side, tuple(m.side_a), tuple(m.side_b))
+        for m in matches
+    ]).encode()).hexdigest()
+    prev = (await db.execute(
+        select(ScheduleDocument).where(
+            ScheduleDocument.tournament_id == tournament.id,
+            ScheduleDocument.play_date == play_date,
+        ).order_by(ScheduleDocument.id.desc()))).scalars().first()
+    if (matches and prev is not None and prev.content_sha == content_fp
+            and not str(prev.sha256 or '').startswith('forced')):
+        return {'skipped': 'republished', 'document_id': prev.id}
+
     doc = ScheduleDocument(
         tournament_id=tournament.id, play_date=play_date, source_url=url,
         tour=tour, sha256=digest, revision_label=meta.get('date_line'),
         parse_status=meta.get('kind') or 'ok', match_count=len(matches),
+        content_sha=content_fp,
     )
     db.add(doc)
     await db.flush()
