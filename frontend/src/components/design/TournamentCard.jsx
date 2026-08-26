@@ -247,9 +247,11 @@ function renderFooter({ section, pickState, drawDates, oopPill }) {
     // qualifying is PLAYED while the card still says "draw not yet released",
     // so 'upcoming' is exactly when someone wants the US Open's order of play.
     return (
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 14 }}>
-        {drawDates?.da && item('Draw', drawDates.da)}
-        {drawDates?.qual && item('Qual', drawDates.qual)}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {drawDates?.da && item('Draw', drawDates.da)}
+          {drawDates?.qual && item('Qual', drawDates.qual)}
+        </div>
         <span style={{ marginLeft: 'auto' }}>{oopPill}</span>
       </div>
     )
