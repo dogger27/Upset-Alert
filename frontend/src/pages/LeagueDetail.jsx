@@ -148,8 +148,12 @@ export default function LeagueDetail() {
   if (!isGlobal && leagueLoading) return <div className="page-loading">Loading…</div>
   if (!isGlobal && !league) return null
 
-  // Site admins can manage any league's settings, not just the ones they own.
-  const canManageSettings = !isGlobal && (user?.id === league.owner.id || user?.is_admin)
+  // Owner, league-admin member, or site admin — mirrors the server's
+  // _can_manage, which gates both update and delete.
+  const canManageSettings = !isGlobal && (
+    user?.id === league.owner.id
+    || (league.members ?? []).some(m => m.id === user?.id && m.is_admin)
+    || user?.is_admin)
   const memberCount = isGlobal ? (gsData?.members?.length ?? 0) : league.member_count
 
   return (

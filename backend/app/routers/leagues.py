@@ -61,6 +61,18 @@ def _league_out(league: League, member_count: int = 0) -> LeagueOut:
     )
 
 
+async def _can_manage(db, league, user) -> bool:
+    """Who runs a league: its owner, any member it made admin, or a site
+    admin. One answer for update and delete — the settings panel is one
+    surface, and a person who can reach it can use all of it."""
+    if league.owner_id == user.id or user.is_admin:
+        return True
+    m = (await db.execute(
+        select(LeagueMember).where(LeagueMember.league_id == league.id,
+                                   LeagueMember.user_id == user.id))).scalar_one_or_none()
+    return bool(m and m.is_admin)
+
+
 @router.get("", response_model=list[LeagueOut])
 async def list_leagues(
     db: AsyncSession = Depends(get_db),
@@ -156,8 +168,8 @@ async def delete_league(
     league = await db.get(League, league_id)
     if not league:
         raise HTTPException(404, "League not found")
-    if league.owner_id != current_user.id and not current_user.is_admin:
-        raise HTTPException(403, "Only the league owner can delete this league")
+    if not await _can_manage(db, league, current_user):
+        raise HTTPException(403, "Only a league admin can delete this league")
     await db.delete(league)
     await db.commit()
 
@@ -177,8 +189,8 @@ async def update_league(
     league = result.scalar_one_or_none()
     if not league:
         raise HTTPException(404, "League not found")
-    if league.owner_id != current_user.id and not current_user.is_admin:
-        raise HTTPException(403, "Only the league owner can update settings")
+    if not await _can_manage(db, league, current_user):
+        raise HTTPException(403, "Only a league admin can update settings")
 
     if body.name is not None:
         league.name = body.name
