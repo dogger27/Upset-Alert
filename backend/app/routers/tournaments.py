@@ -544,8 +544,11 @@ async def compare_picks(
     if not matches:
         return {"hidden": False, "rounds": [], "users": []}
     max_round = max(m.round_number for m in matches)
+    # Labelled by what the pick MEANS, not which round the match is in: the
+    # winner of a quarterfinal is your predicted SEMIFINALIST, and the
+    # final's winner is your champion — so the columns read SF, F, W.
     tiers = [(rn, label) for rn, label in
-             ((max_round - 2, "QF"), (max_round - 1, "SF"), (max_round, "F"))
+             ((max_round - 2, "SF"), (max_round - 1, "F"), (max_round, "W"))
              if rn >= 1]
     tier_of = {rn: label for rn, label in tiers}
     late = {m.id: (tier_of[m.round_number], m.match_number)
