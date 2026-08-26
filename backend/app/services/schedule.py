@@ -867,6 +867,7 @@ async def ingest_document(db, tournament, play_date: date, url: str,
             written += 1
 
     await db.flush()
+    await _fill_tbd_rounds(db, tournament.id, play_date, entry_draw, draw_by_id)
     await _dedupe_day(db, tournament.id, play_date)
     await _renumber_courts(db, tournament.id, play_date)
     await db.commit()
@@ -984,6 +985,65 @@ async def describe_revision_changes(db, doc, prev_doc) -> list[str]:
                   and prev_t <= e.last_seen_at < this_t):
                 lines.append(f"\u2212 {_who(e)}")
     return lines
+
+
+async def _fill_tbd_rounds(db, tournament_id: int, play_date: date,
+                           entry_draw: dict, draw_by_id: dict) -> None:
+    """The round of a slot the sheet leaves unresolved AND unlabelled.
+
+    Winston-Salem's sheets print no round on any slot; settled rows get theirs
+    from the bracket match they link to, but a "KOVACEVIC or TSITSIPAS" slot
+    links to nothing yet and sat with no round chip at all. The candidates
+    themselves say what it is: an alternative side's two players are exactly
+    the two players of one pending bracket match in round k, so the slot is
+    k+1 — and a settled side's player has already been propagated into their
+    pending next-round row, which IS the slot, so their furthest match's round
+    is the answer directly. Where both sides answer, they agree; take the max
+    so a settled side's direct placement wins over a feeder's +1.
+    """
+    rows = (await db.execute(
+        select(ScheduleEntry).where(
+            ScheduleEntry.tournament_id == tournament_id,
+            ScheduleEntry.play_date == play_date,
+            ScheduleEntry.round_label.is_(None),
+            ScheduleEntry.discipline == 'singles',
+        ))).scalars().all()
+    if not rows:
+        return
+    players = {}
+    for pl in (await db.execute(
+            select(ScheduleEntryPlayer).where(
+                ScheduleEntryPlayer.schedule_entry_id.in_([e.id for e in rows])
+            ))).scalars().all():
+        players.setdefault(pl.schedule_entry_id, []).append(pl)
+    for e in rows:
+        side_rounds = []
+        for side in ('a', 'b'):
+            ids = [pl.draw_entry_id for pl in players.get(e.id, [])
+                   if pl.side == side and pl.draw_entry_id]
+            if not ids:
+                continue
+            ms = (await db.execute(
+                select(Match).where(
+                    or_(Match.player1_id.in_(ids), Match.player2_id.in_(ids)),
+                    Match.is_bye == False,
+                ))).scalars().all()
+            if not ms:
+                continue
+            top = max(m.round_number for m in ms)
+            top_matches = [m for m in ms if m.round_number == top]
+            both_in_one = len(ids) >= 2 and any(
+                m.player1_id in ids and m.player2_id in ids for m in top_matches)
+            side_rounds.append(top + 1 if both_in_one else top)
+        if not side_rounds:
+            continue
+        draw = draw_by_id.get(entry_draw.get(
+            next((pl.draw_entry_id for pl in players.get(e.id, [])
+                  if pl.draw_entry_id), None)))
+        label = _round_label(max(side_rounds),
+                             getattr(draw, 'num_rounds', None))
+        if label:
+            e.round_label = label
 
 
 async def _renumber_courts(db, tournament_id: int, play_date: date) -> None:
