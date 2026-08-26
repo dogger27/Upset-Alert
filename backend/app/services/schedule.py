@@ -1908,7 +1908,26 @@ async def recompute_expected_starts(db, tournament_id: int, play_date: date,
     changeover, samples = await _observed_changeover(db, tournament_id)
     gap = timedelta(minutes=changeover)
 
+    # LOOKED UP, not defaulted. `venue_tz` used to fall back to UTC when the
+    # caller left it out, and that silently reads every printed clock on the
+    # sheet as a UTC one: Winston-Salem's "Starts At 2:00 PM" became 14:00Z
+    # instead of 18:00Z and the whole day's expected starts — printed rows and
+    # the chain behind them alike — moved four hours early, with nothing
+    # logged and printed_start_at (computed at serve time from the same
+    # venue_timezone) still correct beside them. The three production callers
+    # all pass it; a manual re-ingest from a console does not, which is
+    # exactly when nobody is watching the clocks.
+    #
+    # The zone is a property of the tournament, not of the call, so ask the
+    # draws for it rather than assuming. UTC remains the last resort for a
+    # tournament whose draws carry no zone at all — there the printed time is
+    # the only reading available.
     tz = None
+    if not venue_tz:
+        venue_tz = (await db.execute(
+            select(Draw.venue_timezone).where(
+                Draw.tournament_id == tournament_id,
+                Draw.venue_timezone.isnot(None)))).scalars().first()
     if venue_tz:
         try:
             tz = ZoneInfo(venue_tz)
