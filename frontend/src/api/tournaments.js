@@ -23,3 +23,7 @@ export const getGlobalRoundScores = (id) => client.get(`/tournaments/${id}/globa
 export const getGlobalDraws = () => client.get('/tournaments/global-draws').then(r => r.data)
 export const getGlobalGSTotals = () => client.get('/tournaments/global-gs-totals').then(r => r.data)
 export const toggleUnlockSelections = (id) => client.post(`/tournaments/${id}/toggle-unlock`).then(r => r.data)
+
+export const getComparePicks = (tournamentId, leagueId) =>
+  client.get(`/tournaments/${tournamentId}/compare-picks`,
+    { params: leagueId != null ? { league_id: leagueId } : {} }).then(r => r.data)
