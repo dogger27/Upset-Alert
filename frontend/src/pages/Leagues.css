@@ -249,4 +249,7 @@
 }
 .compare-table th { color: var(--text-muted); font-weight: 700; letter-spacing: 0.05em; }
 .compare-table-user { font-weight: 600; white-space: nowrap; }
-.compare-pick-name { white-space: nowrap; line-height: 1.45; }
+.compare-pick-name {
+  white-space: nowrap; line-height: 1.45;
+  display: flex; align-items: center; gap: 6px; padding: 1px 0;
+}
