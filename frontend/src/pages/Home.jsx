@@ -180,7 +180,16 @@ export function CreateLeagueModal({ onClose }) {
 
   const mutation = useMutation({
     mutationFn: createLeague,
-    onSuccess: (lg) => { qc.invalidateQueries({ queryKey: ['leagues'] }); navigate(`/leagues/${lg.id}`) },
+    // CLOSE EXPLICITLY, before navigating. From Home the navigation unmounts
+    // this modal as a side effect — but Leagues renders this same modal, and
+    // /leagues → /leagues/{id} are nested routes of one component, so there
+    // the navigation happened BEHIND the dialog and it simply stayed up,
+    // reading as "nothing happened" over the very league it had created.
+    onSuccess: (lg) => {
+      qc.invalidateQueries({ queryKey: ['leagues'] })
+      onClose?.()
+      navigate(`/leagues/${lg.id}`)
+    },
     onError: (e) => setError(e.response?.data?.detail || 'Failed to create'),
   })
 
