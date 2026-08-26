@@ -33,6 +33,12 @@ export default function Leagues() {
   const myLeagues = (allLeagues ?? []).filter(lg =>
     lg.members?.some(m => m.id === user?.id)
   )
+  // The API hands a site admin every league; the dropdown's membership
+  // filter was quietly hiding the ones they are not in. Grouped after their
+  // own so oversight does not bury participation.
+  const otherLeagues = user?.is_admin
+    ? (allLeagues ?? []).filter(lg => !lg.members?.some(m => m.id === user?.id))
+    : []
 
   const isGlobal = id === undefined
   const currentLeague = !isGlobal ? (allLeagues ?? []).find(lg => lg.id === Number(id)) : null
@@ -70,6 +76,13 @@ export default function Leagues() {
               {myLeagues.map(lg => (
                 <option key={lg.id} value={String(lg.id)}>{lg.name}</option>
               ))}
+              {otherLeagues.length > 0 && (
+                <optgroup label="All leagues (site admin)">
+                  {otherLeagues.map(lg => (
+                    <option key={lg.id} value={String(lg.id)}>{lg.name}</option>
+                  ))}
+                </optgroup>
+              )}
             </select>
             <span className="leagues-selector-arrow" aria-hidden="true">▾</span>
           </div>
