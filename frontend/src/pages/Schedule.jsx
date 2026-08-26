@@ -10,6 +10,7 @@ import ScoreHistoryPopup from '../components/ScoreHistoryPopup'
 import MatchScoreCard from '../components/MatchScoreCard'
 import { useSearchParams, Link } from 'react-router-dom'
 import clsx from 'clsx'
+import { listTournaments } from '../api/tournaments'
 import { getScheduleDay, getScheduleDates } from '../api/schedule'
 import { updateMe } from '../api/auth'
 import { getPredictions } from '../api/predictions'
@@ -639,6 +640,18 @@ export default function Schedule() {
   // The draw we arrived from, if any. Drives both the back link and which tour
   // the time view opens on.
   const fromDraw = params.get('draw') ? Number(params.get('draw')) : undefined
+  // Grey the Draw button when its draw has nothing to show — the US Open's
+  // qualifying schedule is live days before its bracket is released, and a
+  // live link to an empty draw reads as a broken page. Same released rule
+  // the dashboard cards use; enabled while the list is still loading so a
+  // released draw's button never flashes disabled.
+  const { data: allDrawsList } = useQuery({
+    queryKey: ['tournaments'], queryFn: listTournaments,
+    staleTime: 300_000, enabled: !!fromDraw,
+  })
+  const fromDrawRow = (allDrawsList ?? []).find(d => d.id === fromDraw)
+  const drawReady = !allDrawsList || !fromDrawRow
+    || fromDrawRow.status === 'completed' || !!fromDrawRow.draw_released_direct_at
   // A SET of tours, not one. Any combination shows, so ATP+WTA is expressible
   // and is the default on a combined event. null until the day's data has
   // arrived and the default can be worked out.
@@ -927,9 +940,12 @@ export default function Schedule() {
           leaving them stranded at the page edges. */}
       <div className={clsx('sched-body', { 'sched-body--fit': view === 'time' })}>
       <div className="sched-filters">
-        {fromDraw && (
+        {fromDraw && (drawReady ? (
           <Link className="sched-back" to={`/tournaments/${fromDraw}`}>Draw</Link>
-        )}
+        ) : (
+          <span className="sched-back sched-back--disabled"
+                title="Draw not released yet" aria-disabled="true">Draw</span>
+        ))}
         {view === 'time' && tours.length > 1 && (
           <>
             {tours.map(t => (
