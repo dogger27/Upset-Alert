@@ -841,3 +841,18 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 @media (max-width: 400px) {
   .lmt-pts { padding-left: 0.55rem; }
 }
+
+
+/* ── Standings / Compare Picks tabs, under each draw's identity line ── */
+.lt-tabs { display: flex; gap: 6px; margin: 6px 0 10px; }
+.lt-tab {
+  background: none; border: 1px solid var(--border); border-radius: 999px;
+  padding: 4px 14px; cursor: pointer;
+  font-family: var(--font-display); font-weight: 700; font-size: 0.8rem;
+  letter-spacing: 0.04em; color: var(--text-muted);
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.lt-tab:hover { color: var(--text-strong); }
+.lt-tab--active {
+  background: var(--green, #2d6a4f); border-color: transparent; color: #fff;
+}
