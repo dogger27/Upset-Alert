@@ -771,7 +771,25 @@ async def ingest_document(db, tournament, play_date: date, url: str,
                             ScheduleEntry.id != entry.id))).scalars().first()
                     if taken is None:
                         entry.pairing_key = settled_key
+            elif discipline != 'singles':
+                # A doubles row can never belong to a draw, because we store no
+                # doubles draw: `draws` holds singles only. Its players still
+                # resolve to draw_entries — their SINGLES rows — so the fallback
+                # below happily filed a men's doubles match under the men's
+                # singles draw (Winston-Salem 2026-08-26, FRANTZEN/HAASE vs
+                # HALYS/HERBERT, draw 121; 31 rows across four tournaments).
+                # `surface` and `gender` are served straight off draw_id, so the
+                # row asserted a draw, a surface and a gender belonging to a
+                # different event. Same leak the seed had, one field over — see
+                # _player_out's `discipline == "singles" and stage == "main"`.
+                #
+                # Cleared, not merely skipped: draw_id is written nowhere else,
+                # so a row stamped before this gate existed would carry the
+                # wrong draw for the life of the tournament.
+                entry.draw_id = None
             elif side_a_ids or side_b_ids:
+                # Singles that matched no bracket row — qualifying, which has
+                # draw entries but no rows in `matches`.
                 any_id = (side_a_ids + side_b_ids)[0]
                 entry.draw_id = entry_draw.get(any_id)
 
