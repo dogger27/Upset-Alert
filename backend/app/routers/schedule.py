@@ -23,7 +23,7 @@ from app.core.auth import get_optional_user
 from app.database import get_db
 from app.models.schedule import ScheduleEntry, ScheduleEntryPlayer
 from app.models.rankings import TePlayer, TeRankingsSnapshot
-from app.services.sofascore_doubles import _sheet_surnames
+from app.services.schedule import settle_from_result_rows, settled_sides_index
 from app.services.rankings import _norm
 from app.models.tournament import Draw, DrawEntry, Match, Tournament
 from app.services.sofascore_live import live_point_for
@@ -546,46 +546,23 @@ async def schedule_day(
     # So the feeder is found the same way, by identity rather than by id: the
     # four surnames on a TBD side are the four surnames of the match that
     # decides it. Keyed on that set, the answer is which pair won.
-    dbl_settled: dict[frozenset, frozenset] = {}
+    # The lookup and the rule both live in services/schedule.py, because
+    # schedule_invariants runs them too: the settled side exists only in what
+    # is SERVED — the stored row stays honestly unresolved — so a law that
+    # cannot run this code cannot see the shape it produces. One
+    # implementation, policed rather than mirrored.
+    dbl_settled: dict = {}
     if any(e.is_tbd for e in entries):
         since = day - timedelta(days=14)
-        # Every row that recorded a result, of any discipline and any stage.
-        # Filtering this by kind is what made the resolver need fixing once per
-        # kind; a result is a result.
-        rows = (await db.execute(
+        dbl_settled = settled_sides_index((await db.execute(
             select(ScheduleEntry).where(
                 ScheduleEntry.tournament_id.in_(t_ids),
                 ScheduleEntry.winner_side.isnot(None),
                 ScheduleEntry.play_date >= since,
-                ScheduleEntry.play_date <= day))).scalars().all()
-        for r in rows:
-            sides = {}
-            for p in r.players:
-                sides.setdefault(p.side, []).append(p.raw_name)
-            a, b = _sheet_surnames(sides.get("a", [])), _sheet_surnames(sides.get("b", []))
-            if not a or not b:
-                continue
-            dbl_settled[frozenset(a | b)] = frozenset(a if r.winner_side == "a" else b)
+                ScheduleEntry.play_date <= day))).scalars().all())
 
     def _settle_rows(side_players):
-        """(players, resolved) — who came through, from the row that recorded it.
-
-        Discipline-agnostic and stage-agnostic by construction: it knows only
-        that two candidates met and that some row says who won. A doubles final,
-        a qualifying second round, and anything not yet invented resolve through
-        the same lookup.
-        """
-        if len(side_players) != 2:
-            return side_players, False
-        teams = [_sheet_surnames([p.raw_name]) for p in side_players]
-        if not all(teams):
-            return side_players, False
-        won = dbl_settled.get(frozenset(teams[0] | teams[1]))
-        if won is None:
-            return side_players, False
-        keep = [p for p, t in zip(side_players, teams) if t & won]
-        # Exactly one of the two, or we have not identified anything.
-        return (keep, True) if len(keep) == 1 else (side_players, False)
+        return settle_from_result_rows(side_players, dbl_settled)
 
     def _settle(side_players):
         """(players, resolved) — the winner alone once the candidates have met.
