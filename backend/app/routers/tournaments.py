@@ -515,6 +515,92 @@ async def tournament_competitors(tournament_id: int, db: AsyncSession = Depends(
     return result.scalars().all()
 
 
+@router.get("/{tournament_id}/compare-picks")
+async def compare_picks(
+    tournament_id: int,
+    league_id: Optional[int] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Everyone's late-round picks side by side — who each user has winning
+    the quarterfinals, semifinals and final of one draw.
+
+    Scoped to a league's members when league_id is given, else to every user
+    with a pick in the draw (the Global view). Gated by the same
+    predictions_visible rule as the draw itself: before picks lock, another
+    user's bracket is not yours to read."""
+    from app.models.league import League, LeagueMember
+    from app.services.locking import predictions_visible
+
+    tournament = await db.get(Draw, tournament_id)
+    if not tournament:
+        raise HTTPException(404, "Tournament not found")
+    if not await predictions_visible(db, tournament):
+        return {"hidden": True, "rounds": [], "users": []}
+
+    matches = (await db.execute(
+        select(Match).where(Match.draw_id == tournament_id,
+                            Match.is_bye == False))).scalars().all()
+    if not matches:
+        return {"hidden": False, "rounds": [], "users": []}
+    max_round = max(m.round_number for m in matches)
+    tiers = [(rn, label) for rn, label in
+             ((max_round - 2, "QF"), (max_round - 1, "SF"), (max_round, "F"))
+             if rn >= 1]
+    tier_of = {rn: label for rn, label in tiers}
+    late = {m.id: (tier_of[m.round_number], m.match_number)
+            for m in matches if m.round_number in tier_of}
+
+    scope_ids = None
+    usernames: dict[int, str] = {}
+    if league_id is not None:
+        league = (await db.execute(
+            select(League).options(
+                selectinload(League.members).selectinload(LeagueMember.user))
+            .where(League.id == league_id))).scalar_one_or_none()
+        if not league:
+            raise HTTPException(404, "League not found")
+        if (not league.is_public and not current_user.is_admin
+                and league.owner_id != current_user.id
+                and not any(m.user_id == current_user.id for m in league.members)):
+            raise HTTPException(403, "Not a member of this league")
+        scope_ids = {m.user_id for m in league.members}
+        usernames = {m.user_id: m.user.username for m in league.members}
+
+    stmt = (select(UserPrediction, User.username)
+            .join(User, User.id == UserPrediction.user_id)
+            .where(UserPrediction.draw_id == tournament_id,
+                   UserPrediction.predicted_winner_id.isnot(None),
+                   UserPrediction.match_id.in_(list(late))))
+    rows = (await db.execute(stmt)).all()
+
+    entry_names = {e.id: e.name for e in (await db.execute(
+        select(DrawEntry).where(DrawEntry.draw_id == tournament_id))).scalars()}
+
+    by_user: dict[int, dict] = {}
+    for pred, username in rows:
+        if scope_ids is not None and pred.user_id not in scope_ids:
+            continue
+        tier, match_number = late[pred.match_id]
+        u = by_user.setdefault(pred.user_id, {
+            "user_id": pred.user_id,
+            "username": usernames.get(pred.user_id, username),
+            "picks": {label: [] for _, label in tiers},
+        })
+        name = entry_names.get(pred.predicted_winner_id)
+        if name:
+            u["picks"][tier].append((match_number, name))
+
+    users = []
+    for u in by_user.values():
+        u["picks"] = {k: [n for _, n in sorted(v)] for k, v in u["picks"].items()}
+        users.append(u)
+    users.sort(key=lambda x: (x["username"] or "").lower())
+    return {"hidden": False,
+            "rounds": [label for _, label in tiers],
+            "users": users}
+
+
 @router.get("/{tournament_id}/matches/{match_id}/score-history")
 async def match_score_history(
     tournament_id: int,

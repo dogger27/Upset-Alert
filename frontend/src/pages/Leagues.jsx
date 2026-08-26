@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Outlet } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { listLeagues } from '../api/leagues'
+import { listLeagues, getLeagueTournaments } from '../api/leagues'
+import { getGlobalDraws, getComparePicks } from '../api/tournaments'
 import { useAuth } from '../store/auth'
 import { CreateLeagueModal, JoinLeagueModal } from './Home'
 import './Home.css'
@@ -98,6 +99,8 @@ export default function Leagues() {
         </div>
       </div>
 
+      <ComparePicks leagueId={isGlobal ? null : Number(id)} isGlobal={isGlobal} />
+
       {/* Its own row below leagues-page-top entirely (not nested under the
           title) — previously lived inside .leagues-title-col, which made
           that column as wide as these buttons and pushed the league name
@@ -121,6 +124,89 @@ export default function Leagues() {
       <Outlet context={{ editing, setEditing, showInvite, setShowInvite }} />
       {modal === 'create' && <CreateLeagueModal onClose={() => setModal(null)} />}
       {modal === 'join'   && <JoinLeagueModal   onClose={() => setModal(null)} />}
+    </div>
+  )
+}
+
+
+/** Everyone's late-round picks side by side. Collapsed by default: the
+    expand arrow sits far left under the league selector, and the table only
+    fetches once opened. One table per draw still in play; picks stay hidden
+    (server-enforced) until the draw's own visibility rule opens them. */
+function ComparePicks({ leagueId, isGlobal }) {
+  const [open, setOpen] = useState(false)
+  const { data: draws } = useQuery({
+    queryKey: isGlobal ? ['global-draws'] : ['league-tournaments', String(leagueId)],
+    queryFn: () => isGlobal ? getGlobalDraws() : getLeagueTournaments(leagueId),
+    enabled: open,
+  })
+  const active = (draws ?? [])
+    .map(d => d.tournament ?? d)
+    .filter(d => d.status !== 'completed')
+  return (
+    <div className="compare-picks">
+      <button
+        className="compare-picks-toggle"
+        aria-expanded={open}
+        onClick={() => setOpen(o => !o)}
+      >
+        <span className={open ? 'cp-arrow cp-arrow--open' : 'cp-arrow'} aria-hidden="true">▸</span>
+        Compare Picks
+      </button>
+      {open && active.map(d => (
+        <CompareTable key={d.id} draw={d} leagueId={leagueId} />
+      ))}
+      {open && active.length === 0 && (
+        <p className="compare-picks-empty">No draws in play.</p>
+      )}
+    </div>
+  )
+}
+
+function CompareTable({ draw, leagueId }) {
+  const { data } = useQuery({
+    queryKey: ['compare-picks', draw.id, leagueId ?? 'global'],
+    queryFn: () => getComparePicks(draw.id, leagueId),
+    staleTime: 60_000,
+  })
+  if (!data) return null
+  const title = `${draw.name}${draw.gender === 'M' ? ' (ATP)' : draw.gender === 'F' ? ' (WTA)' : ''}`
+  if (data.hidden) {
+    return (
+      <div className="compare-table-card card">
+        <h3 className="compare-table-title">{title}</h3>
+        <p className="compare-picks-empty">Picks are hidden until the draw locks.</p>
+      </div>
+    )
+  }
+  if (!data.users.length) return null
+  return (
+    <div className="compare-table-card card">
+      <h3 className="compare-table-title">{title}</h3>
+      <div className="compare-table-scroll">
+        <table className="compare-table">
+          <thead>
+            <tr>
+              <th className="compare-table-user">User</th>
+              {data.rounds.map(r => <th key={r}>{r}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {data.users.map(u => (
+              <tr key={u.user_id}>
+                <td className="compare-table-user">{u.username}</td>
+                {data.rounds.map(r => (
+                  <td key={r}>
+                    {(u.picks[r] ?? []).map((n, i) => (
+                      <div key={i} className="compare-pick-name">{n}</div>
+                    ))}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
