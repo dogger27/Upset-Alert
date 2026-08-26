@@ -48,6 +48,13 @@ class ScheduleDocument(Base):
     http_last_modified: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     etag: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     sha256: Mapped[Optional[str]] = mapped_column(String, nullable=True, index=True)
+    # Fingerprint of the PARSED slots (courts, order, wordings, rounds, sides)
+    # — what "a revision" means to a reader. The tournaments' systems
+    # regenerate the PDF continuously with only the footer's sign-off clock
+    # moving, so raw bytes mint revisions that honestly report "no slot
+    # changes". A republish whose content_sha matches the previous document
+    # is not a revision and creates no row.
+    content_sha: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     revision_label: Mapped[Optional[str]] = mapped_column(String, nullable=True)  # "REVISED 2"
     parse_status: Mapped[str] = mapped_column(String, default="ok")   # ok|empty|not-an-oop|slam|error
     match_count: Mapped[int] = mapped_column(Integer, default=0)
