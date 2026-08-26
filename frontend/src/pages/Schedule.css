@@ -1462,3 +1462,15 @@
    affordance is the cursor alone: a border or hover tint on every live row
    would shout on a page whose whole body is these cards. */
 .sched-row-main--openable { cursor: pointer; }
+
+/* The Draw link while its draw has not been released. Disabled here means
+   hollowed out — no fill, a dashed outline, clearly muted text — because
+   opacity alone vanishes on the dark pill. !important matches the base
+   rule, which pins its colours the same way. */
+.sched-back--disabled {
+  pointer-events: none; cursor: default;
+  background: transparent !important;
+  border: 1.5px dashed var(--border) !important;
+  color: var(--text-muted) !important;
+  opacity: 0.6;
+}
