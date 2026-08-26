@@ -3,6 +3,7 @@ import { useParams, useNavigate, useOutletContext } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getLeague, getLeagueTournaments, getRoundScores, updateLeague, setMemberAdmin, removeMember, deleteLeague, shareLeagueByEmail, getGrandSlamTotals } from '../api/leagues'
 import { getGlobalRoundScores, getGlobalDraws, getGlobalGSTotals, listTournaments } from '../api/tournaments'
+import ComparePicksTable from '../components/ComparePicksTable'
 import { useAuth } from '../store/auth'
 import UserName from '../components/UserName'
 import { computeCohortInfo, getDisplayStatus, DISPLAY_STATUS_LABELS } from '../utils/drawStatus.js'
@@ -367,6 +368,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
   const toastKey = useRef(0)
   // null = always follow the latest match (auto-max); number = user-set position
   const [scrubPos, setScrubPos] = useState(null)
+  const [tab, setTab] = useState('standings')
   const [flashMatch, setFlashMatch] = useState(null)
   const flashKey = useRef(0)
   const flashTimer = useRef(null)
@@ -495,8 +497,20 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
         {t.surface && <span className="lt-progress-meta">{t.surface}</span>}
       </div>
 
+      {/* The identity line above never moves; these switch only the body. */}
+      <div className="lt-tabs" role="tablist">
+        <button type="button" role="tab" aria-selected={tab === 'standings'}
+          className={`lt-tab${tab === 'standings' ? ' lt-tab--active' : ''}`}
+          onClick={() => setTab('standings')}>Standings</button>
+        <button type="button" role="tab" aria-selected={tab === 'compare'}
+          className={`lt-tab${tab === 'compare' ? ' lt-tab--active' : ''}`}
+          onClick={() => setTab('compare')}>Compare Picks</button>
+      </div>
+
       {toast && <LgToast key={toast.key} message={toast.msg} onDone={() => setToast(null)} />}
-      {entries.length === 0 ? (
+      {tab === 'compare' ? (
+        <ComparePicksTable drawId={t.id} leagueId={leagueId} />
+      ) : entries.length === 0 ? (
         <p className="lt-progress-empty">No picks submitted yet.</p>
       ) : t.status === 'open' ? (
         <>
