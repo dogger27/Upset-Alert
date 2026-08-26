@@ -385,7 +385,12 @@ def parse_pdf(pdf_bytes):
     meta = {'pages': 0, 'kind': 'oop', 'reason': None, 'date_line': None,
             # Slots the sheet opened that this parse could not fill. The caller
             # alerts on these — schedule_invariants.check_parse.
-            'dropped_slots': []}
+            'dropped_slots': [],
+            # How many times the sheet printed "vs" on a line of its own — one
+            # per match box, independent of every rule below it. The caller
+            # compares it against the match count, which is how a slot lost by
+            # any means at all reports itself. See check_parse.
+            'vs_lines': 0}
     matches = []
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
         meta['pages'] = len(pdf.pages)
@@ -437,6 +442,11 @@ def parse_pdf(pdf_bytes):
                 cutoff = min(foot)
                 cells = [c for c in cells if c[0] < cutoff]
                 words = [w for w in words if w['top'] < cutoff]
+            # Counted off the CELLS, before any column is assigned or any slot
+            # is opened, so that nothing this parser gets wrong can change the
+            # number. Footer lines are already gone above.
+            meta['vs_lines'] += sum(1 for _y, _m, t in cells if VS_RE.match(_clean(t)))
+
             origins = _column_origins(cells)
             if not origins:
                 continue
@@ -511,6 +521,34 @@ def _regroup_alternatives(match):
             match.tbd_side = ''.join(sorted(set((match.tbd_side or '') + side)))
 
 
+# The sheet's own word for how a match ended, printed on a line of its own
+# where the start wording would go — "WO" over the box Monterrey's walkover
+# left behind. Never a player, always part of the match box above the names.
+_STATUS_TOKEN_RE = re.compile(r'^(?:W/?O|RET|DEF|ABD|CONC|TBF|BYE)$', re.I)
+
+
+def _slot_head(pre):
+    """The tail of `pre` that belongs to the match its "vs" just proved.
+
+    Walk back from the "vs" while the lines still look like the inside of a
+    match box — the round label, a status word, a player, and the pieces of a
+    player the layout wrapped onto their own lines — and stop at the first
+    line that does not. Everything above that is the page's own furniture (the
+    title, the dates, a court header the all-caps test did not recognise) and
+    replaying it into the slot would put the tournament's name on a side.
+    """
+    keep = 0
+    for text, _alt in reversed(pre):
+        if not (ROUND_RE.match(text) or TOUR_RE.match(text)
+                or _STATUS_TOKEN_RE.match(text) or DISC_RE.fullmatch(text)
+                or _is_continuation(text)
+                or (SCORE_RE.match(text) and re.search(r'\d', text))
+                or _is_name(text)):
+            break
+        keep += 1
+    return pre[len(pre) - keep:] if keep else []
+
+
 def _parse_column(lines, pno, dropped=None):
     """One column, top to bottom: court header, then time-delimited match slots.
 
@@ -519,6 +557,10 @@ def _parse_column(lines, pno, dropped=None):
     ingest can alert on a slot the site would otherwise be silently missing.
     """
     out, court, cur, after_vs = [], '', None, False
+    # Lines seen since the court header with no slot marker yet. Usually the
+    # sheet's furniture — but a match can be printed up there, so they are
+    # kept until something decides which. See the headless-slot branch below.
+    pre: list = []
 
     def flush():
         nonlocal cur
@@ -536,54 +578,23 @@ def _parse_column(lines, pno, dropped=None):
             dropped.append(cur)
         cur = None
 
-    for _, raw in lines:
-        alt = bool(re.search(r'\)or\b|\bor\s*$|\bOR\s*$', raw))
-        text = _clean(raw)
-        if not text:
-            continue
+    def consume(text, alt):
+        """One line INSIDE an open slot: a name, a round, a score, furniture.
 
-        # Only after play has started: the header carries "CITY, GER", which an
-        # over-broad footer pattern matched, breaking the column before it had
-        # parsed anything at all.
-        if (out or cur) and FOOTER_RE.search(text):
-            break          # nothing below this is play
-
-        slot = _slot_of(text)
-        if slot:
-            # "TBA" under a time that has already been printed QUALIFIES that
-            # slot; it does not open another. Cincinnati's combined sheet
-            # (2026-08-19, Court 10) prints "Not Before 3:00 PM" and then "TBA"
-            # on the line below, in the band where the neighbouring columns
-            # print ATP/WTA — and reading the second line as a new slot threw
-            # away a printed 3:00 PM, which is the one kind of time allowed to
-            # veto a live-score match. A slot that would open with the current
-            # one still empty is furniture in the same header band; Monterrey's
-            # standalone "TBC" (2026-08-25) comes after a full slot and opens.
-            if TBX_RE.match(text) and cur is not None and not (cur.side_a or cur.side_b):
-                continue
-            flush()
-            cur = Match(court=court, time=slot[0], discipline=slot[1],
-                        start_raw=text, page=pno)
-            after_vs = False
-            continue
-
-        if cur is None:
-            # Before the first time marker, an all-caps line is the court name.
-            if (text.isupper() and not NOISE_RE.search(text)
-                    and not TOUR_RE.match(text) and not ROUND_RE.match(text)
-                    and len(text) > 2 and not DISC_RE.fullmatch(text)):
-                court = text
-            continue
-
+        Its own function because the headless-slot branch below has to replay
+        lines through it after the fact — the "vs" that proves a match is
+        being printed arrives AFTER the round label and the first player.
+        """
+        nonlocal after_vs
         if VS_RE.match(text):
             after_vs = True
-            continue
+            return
         if TOUR_RE.match(text):
             cur.tour = text.upper()
-            continue
+            return
         if ROUND_RE.match(text):
             cur.round = text.upper()
-            continue
+            return
         # Strip leading round/tour tokens the layout parks on the name line.
         text = re.sub(r'^(?:F|SF|QF|R\d{1,3}|ATP|WTA)\s+(?=[A-Za-z\[])', '', text).strip()
         # A trailing round marker on a name line ("... USA F")
@@ -599,8 +610,8 @@ def _parse_column(lines, pno, dropped=None):
         if _is_continuation(text):
             if side:
                 side[-1] = f'{side[-1]} {text}'
-            continue
-        if alt and cur is not None:
+            return
+        if alt:
             cur.tbd = True
             # WITH ITS SIDE, exactly as _regroup_alternatives records it. This
             # inline-"or" path set the flag alone, and a tbd with no side reads
@@ -610,12 +621,12 @@ def _parse_column(lines, pno, dropped=None):
             # "DAMM / SHELBAYH".
             side_key = 'b' if after_vs else 'a'
             cur.tbd_side = ''.join(sorted(set((cur.tbd_side or '') + side_key)))
-        if cur is not None and SCORE_RE.match(text) and re.search(r'\d', text):
+        if SCORE_RE.match(text) and re.search(r'\d', text):
             cur.printed_score = text
             st = re.search(r'\b(RET|W/?O|DEF|ABD|CONC|TBF)\b', text, re.I)
             if st:
                 cur.printed_status = st.group(1).upper()
-            continue
+            return
 
         if _is_name(text):
             side_key = 'b' if after_vs else 'a'
@@ -647,6 +658,80 @@ def _parse_column(lines, pno, dropped=None):
             # Neither is a lost player, and an alarm that cries at those would
             # be switched off by the second day.
             cur.rejected.append(text)
+
+    for _, raw in lines:
+        alt = bool(re.search(r'\)or\b|\bor\s*$|\bOR\s*$', raw))
+        text = _clean(raw)
+        if not text:
+            continue
+
+        # Only after play has started: the header carries "CITY, GER", which an
+        # over-broad footer pattern matched, breaking the column before it had
+        # parsed anything at all.
+        if (out or cur) and FOOTER_RE.search(text):
+            break          # nothing below this is play
+
+        slot = _slot_of(text)
+        if slot:
+            # "TBA" under a time that has already been printed QUALIFIES that
+            # slot; it does not open another. Cincinnati's combined sheet
+            # (2026-08-19, Court 10) prints "Not Before 3:00 PM" and then "TBA"
+            # on the line below, in the band where the neighbouring columns
+            # print ATP/WTA — and reading the second line as a new slot threw
+            # away a printed 3:00 PM, which is the one kind of time allowed to
+            # veto a live-score match. A slot that would open with the current
+            # one still empty is furniture in the same header band; Monterrey's
+            # standalone "TBC" (2026-08-25) comes after a full slot and opens.
+            if TBX_RE.match(text) and cur is not None and not (cur.side_a or cur.side_b):
+                continue
+            flush()
+            pre = []
+            cur = Match(court=court, time=slot[0], discipline=slot[1],
+                        start_raw=text, page=pno)
+            after_vs = False
+            continue
+
+        if cur is None:
+            # Before the first time marker, an all-caps line is the court name.
+            if (text.isupper() and not NOISE_RE.search(text)
+                    and not TOUR_RE.match(text) and not ROUND_RE.match(text)
+                    and len(text) > 2 and not DISC_RE.fullmatch(text)):
+                court = text
+                pre = []
+                continue
+
+            # A MATCH PRINTED WITH NO START WORDING AT ALL, above the column's
+            # first time band. Monterrey revised its 2026-08-26 sheet after
+            # Timofeeva walked over: her R16 box stayed at the top of ESTADIO
+            # with the time band removed and a bare "WO" in its place, and the
+            # next box became "Starting at 3:30 PM". Everything above the first
+            # marker was court-header furniture to this loop, so the match was
+            # read as nothing — the sheet printed 8 slots and the parse
+            # returned 7. Nothing errored: the row survived on the site only
+            # because an EARLIER revision had created it, still wearing the
+            # 3:00 PM that revision printed. Had the walkover been in the
+            # day's first sheet, the match would simply never have appeared.
+            #
+            # A standalone "vs" is what proves a match rather than furniture:
+            # it is the one line a page title, a date or a court name cannot
+            # produce, and every match box on every sheet in the corpus has
+            # exactly one. Inline "X vs Y" is deliberately NOT enough — that is
+            # how the exhibitions and wheelchair lines are printed
+            # (atp/2025_558, wta/2025_405), and they are not on this schedule.
+            if VS_RE.match(text) and any(_is_name(t) for t, _a in pre):
+                cur = Match(court=court, time=None, discipline=None,
+                            start_raw=None, page=pno)
+                after_vs = False
+                for t, a in _slot_head(pre):
+                    consume(t, a)
+                pre = []
+                consume(text, alt)
+                continue
+
+            pre.append((text, alt))
+            continue
+
+        consume(text, alt)
 
     flush()
     return out
