@@ -579,43 +579,65 @@ async def txn_watchdog() -> None:
     log = logging.getLogger("app.txn_watchdog")
     while True:
         await asyncio.sleep(10)
-        now = _time.monotonic()
-        for cid, rec in list(_open_txns.items()):
-            t0, first_dml, is_write = rec
-            if not is_write:
-                continue
-            age = now - t0
-            if age > WATCHDOG_AGE:
-                # The begin-stack is worker-thread plumbing (the caller's
-                # coroutine is not on that C stack), so name the holder the
-                # only way a suspended task can be named: walk every task
-                # from the loop side and keep the app-level frames. The
-                # holder is whichever task sits in a commit/flush/session
-                # frame of ours.
-                # Task.get_stack() does not follow cr_await, so every
-                # suspect in v3 showed only its outermost loop frame. The
-                # holder task was captured at its first DML; walking its
-                # coroutine chain from there reaches the exact line it is
-                # suspended on, library frames included.
-                holder = rec[3]
-                lines = []
-                coro = holder.get_coro() if holder is not None else None
-                for _ in range(60):
-                    if coro is None:
-                        break
-                    fr = (getattr(coro, "cr_frame", None)
-                          or getattr(coro, "gi_frame", None))
-                    if fr is not None:
-                        fn = fr.f_code.co_filename.rsplit("/app/", 1)[-1]
-                        lines.append(
-                            f"{fn}:{fr.f_lineno} {fr.f_code.co_name}")
-                    nxt = (getattr(coro, "cr_await", None)
-                           or getattr(coro, "gi_yieldfrom", None))
-                    if nxt is None and fr is None:
-                        lines.append(f"(awaiting {type(coro).__name__})")
-                    coro = nxt
-                log.error("WRITE TXN HELD %.0fs — first write: %s\n"
-                          "holder %s awaiting:\n  %s",
-                          age, first_dml,
-                          holder.get_name() if holder else "(task unknown)",
-                          "\n  ".join(lines[-14:]) or "(no frames)")
+        try:
+            _txn_tick(log)
+        except Exception:
+            # A WATCHDOG THAT CAN DIE IS NOT A WATCHDOG. The ValueError below
+            # ended this task outright and took the diagnostic with it for
+            # every container generation after; whatever the next mistake in
+            # here is, it costs one log line and the next tick runs.
+            log.exception("txn watchdog tick failed")
+
+
+def _txn_tick(log) -> None:
+    """One pass over the open transactions — split out of the loop above
+    so the loop can catch whatever it raises."""
+    now = _time.monotonic()
+    for cid, rec in list(_open_txns.items()):
+        # SLICED, NOT UNPACKED. v4 appended a fourth slot to the
+        # record — the holder task, grabbed at the first DML — and
+        # this line still expected three, so the watchdog died with
+        # ValueError on its very first tick in every container
+        # generation since. The one diagnostic written to name the
+        # holder of a stuck write lock has not run since v4 shipped
+        # (537 "WRITE TXN HELD" lines in the v3 log, none after);
+        # nothing said so, because a dead asyncio task only whispers
+        # "Task exception was never retrieved" once at startup.
+        t0, first_dml, is_write = rec[0], rec[1], rec[2]
+        if not is_write:
+            continue
+        age = now - t0
+        if age > WATCHDOG_AGE:
+            # The begin-stack is worker-thread plumbing (the caller's
+            # coroutine is not on that C stack), so name the holder the
+            # only way a suspended task can be named: walk every task
+            # from the loop side and keep the app-level frames. The
+            # holder is whichever task sits in a commit/flush/session
+            # frame of ours.
+            # Task.get_stack() does not follow cr_await, so every
+            # suspect in v3 showed only its outermost loop frame. The
+            # holder task was captured at its first DML; walking its
+            # coroutine chain from there reaches the exact line it is
+            # suspended on, library frames included.
+            holder = rec[3]
+            lines = []
+            coro = holder.get_coro() if holder is not None else None
+            for _ in range(60):
+                if coro is None:
+                    break
+                fr = (getattr(coro, "cr_frame", None)
+                      or getattr(coro, "gi_frame", None))
+                if fr is not None:
+                    fn = fr.f_code.co_filename.rsplit("/app/", 1)[-1]
+                    lines.append(
+                        f"{fn}:{fr.f_lineno} {fr.f_code.co_name}")
+                nxt = (getattr(coro, "cr_await", None)
+                       or getattr(coro, "gi_yieldfrom", None))
+                if nxt is None and fr is None:
+                    lines.append(f"(awaiting {type(coro).__name__})")
+                coro = nxt
+            log.error("WRITE TXN HELD %.0fs — first write: %s\n"
+                      "holder %s awaiting:\n  %s",
+                      age, first_dml,
+                      holder.get_name() if holder else "(task unknown)",
+                      "\n  ".join(lines[-14:]) or "(no frames)")
