@@ -1068,6 +1068,57 @@ def _same_pairing(a, b) -> bool:
             or (agree(A['a'], B['b']) and agree(A['b'], B['a'])))
 
 
+def _same_pending(a, b) -> bool:
+    """Two rows that are BOTH still unresolved and print the same slot.
+
+    The hole this closes sat exactly between the other three relations.
+    `_resolves` only fires when one row is MORE decided than the other (a
+    strict subset of the alternatives), `_same_pairing` returns False the
+    moment either row is `is_tbd`, and `_superseded` wants one side wholly
+    replaced by new players. So two revisions that BOTH printed a slot
+    unresolved — the ordinary case for a sheet reissued while the feeder match
+    is still on court — were matched by nothing, and the later revision
+    inserted a second row beside the first.
+
+    Winston-Salem 2026-08-26: document 77 reprinted "DAMM vs KECMANOVIC or
+    MAROZSAN", "CERUNDOLO vs GRENIER or BAEZ" and "MANNARINO or SONEGO vs
+    DUCKWORTH" exactly as document 61 had — same players, same undecided side
+    — and all three hashed to a NEW pairing_key anyway, because `_pairing_key`
+    switches from names to draw-entry ids the moment every printed alternative
+    resolves to the bracket. Identical printed rows, different identity. All
+    three matches were published twice, and each phantom slot pushed every
+    estimated start behind it on that court about two hours late.
+
+    Requiring the undecided side to AGREE is what keeps this off two genuinely
+    different pending slots: `_resolves` owns the case where one row decided
+    something, and this owns only the case where neither did.
+    """
+    if not (a.is_tbd and b.is_tbd):
+        return False
+    A = {s: set().union(set(), *_side_tokens(a, s)) for s in ('a', 'b')}
+    B = {s: set().union(set(), *_side_tokens(b, s)) for s in ('a', 'b')}
+    if not all((A['a'], A['b'], B['a'], B['b'])):
+        return False
+
+    def agree(x, y):
+        # Same subset-or-equal test as _same_pairing, for the same reason: a
+        # corrected parser makes a row GAIN a player, so the row stored before
+        # the fix is a strict subset of the one stored after it rather than
+        # equal to it, and plain equality would leave both on the page.
+        return x == y or x < y or y < x
+
+    alt_a, alt_b = set(a.tbd_side or ''), set(b.tbd_side or '')
+    # Sides swap between revisions often enough to be worth trying both ways,
+    # and when they swap the undecided side travels with them — so each
+    # orientation has to carry its own tbd_side comparison.
+    if agree(A['a'], B['a']) and agree(A['b'], B['b']) and alt_a == alt_b:
+        return True
+    swapped = {'b' if s == 'a' else 'a' for s in alt_b}
+    if agree(A['a'], B['b']) and agree(A['b'], B['a']) and alt_a == swapped:
+        return True
+    return False
+
+
 def _superseded(old, new, latest_pool: list) -> bool:
     """True when `new` is `old`'s slot with one side replaced — a withdrawal.
 
@@ -1262,7 +1313,8 @@ async def _dedupe_day(db, tournament_id: int, play_date: date) -> int:
             if k.match_id and row.match_id and k.match_id == row.match_id:
                 twin = k
                 break
-            if _resolves(row, k) or _resolves(k, row) or _same_pairing(row, k):
+            if (_resolves(row, k) or _resolves(k, row)
+                    or _same_pairing(row, k) or _same_pending(row, k)):
                 twin = k
                 break
             # `row` is the older of the two by construction — rows are sorted

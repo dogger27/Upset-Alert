@@ -89,6 +89,7 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                   "court": getattr(entry, "court", None), "detail": detail})
 
     seen_pairings: dict[frozenset, int] = {}
+    seen_pending: dict[tuple, int] = {}
     court_orders: dict[tuple, int] = {}
 
     for e in rows:
@@ -298,6 +299,34 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                      f"same players as entry {seen_pairings[key]}")
             else:
                 seen_pairings[key] = e.id
+
+        # 2026-08-26, Winston-Salem: document 77 reprinted three slots
+        # unresolved exactly as document 61 had — "DAMM vs KECMANOVIC or
+        # MAROZSAN" and two more — and every one hashed to a fresh
+        # pairing_key anyway, because _pairing_key switches from names to
+        # draw-entry ids once every printed alternative resolves to the
+        # bracket. All three were published twice and each phantom slot pushed
+        # every estimated start behind it on its court about two hours late.
+        # Neither neighbouring check could see it: `pairing_duplicated` above
+        # exempts unresolved rows outright, and `slot_restated` below requires
+        # the two rows to share NOBODY on the other side, while these agreed
+        # on both sides. Two pending rows printing the same alternatives on
+        # the same undecided side are one slot, whatever they hash to.
+        if e.is_tbd and na and nb:
+            # Keyed per side and sorted, so it survives the sides swapping
+            # between revisions while still recording WHICH side was open —
+            # "A or B vs C" and "A vs B or C" share every name and are not
+            # the same slot.
+            pending_key = tuple(sorted(
+                (tuple(sorted((p.raw_name or "").strip().lower()
+                              for p in players if p.side == side_key)),
+                 side_key in tbd_side)
+                for side_key in ("a", "b")))
+            if pending_key in seen_pending:
+                flag("pending_pairing_duplicated", e,
+                     f"same unresolved slot as entry {seen_pending[pending_key]}")
+            else:
+                seen_pending[pending_key] = e.id
 
         # Two entries at one court_order on one court means the renumber pass
         # broke; the schedule page would show them in arbitrary order.
