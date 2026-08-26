@@ -39,8 +39,11 @@ export default function Leagues() {
   const currentLeagueName = isGlobal ? 'Global' : (currentLeague?.name ?? '…')
   const isOwner = !isGlobal && user?.id === currentLeague?.owner?.id
   const canInvite = !isGlobal && (isOwner || currentLeague?.allow_member_invites)
-  // Site admins can manage any league's settings, not just the ones they own.
-  const canManageSettings = !isGlobal && (isOwner || user?.is_admin)
+  // Who runs a league: its owner, any member it made admin, or a site admin —
+  // the same three the server's _can_manage accepts for update and delete.
+  const isLeagueAdmin = !isGlobal
+    && (currentLeague?.members ?? []).some(m => m.id === user?.id && m.is_admin)
+  const canManageSettings = !isGlobal && (isOwner || isLeagueAdmin || user?.is_admin)
 
   const selectValue = id != null ? String(id) : 'global'
 
