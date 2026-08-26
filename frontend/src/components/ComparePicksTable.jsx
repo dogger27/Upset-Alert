@@ -35,8 +35,18 @@ export default function ComparePicksTable({ drawId, leagueId }) {
               <td className="compare-table-user">{u.username}</td>
               {data.rounds.map(r => (
                 <td key={r}>
-                  {(u.picks[r] ?? []).map((n, i) => (
-                    <div key={i} className="compare-pick-name">{n}</div>
+                  {(u.picks[r] ?? []).map((pk, i) => (
+                    <div key={i} className="compare-pick-name">
+                      {/* The draw page's own badges, same classes, same
+                          colours — a seed box or a WC/Q/LL entry box. */}
+                      {pk.seed != null && (
+                        <span className="pos-badge seeded">{pk.seed}</span>
+                      )}
+                      {pk.seed == null && pk.entry_type && (
+                        <span className={`pos-badge entry entry-${pk.entry_type.toLowerCase()}`}>{pk.entry_type}</span>
+                      )}
+                      <span>{pk.name}</span>
+                    </div>
                   ))}
                 </td>
               ))}
