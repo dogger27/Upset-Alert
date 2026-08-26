@@ -1391,6 +1391,118 @@ def _fold(name: str) -> frozenset:
     return frozenset(t for t in _ascii_fold(s).split() if t)
 
 
+class SettledPlayer:
+    """A player on a side that has just been decided, detached from the ORM.
+
+    The serve path resolves alternatives WITHOUT writing them back (the row
+    keeps what the sheet printed, so the next revision still reconciles
+    against the sheet). It therefore cannot re-point `raw_name` or `side` on
+    the stored rows to say who came through — a read that assigns to an ORM
+    row autoflushes and a GET takes the write lock. This carries the answer
+    instead: same five attributes `_player_out` reads, none of them mapped.
+    """
+
+    __slots__ = ("side", "position", "raw_name", "nationality", "draw_entry_id")
+
+    def __init__(self, side, position, raw_name, nationality, draw_entry_id):
+        self.side = side
+        self.position = position
+        self.raw_name = raw_name
+        self.nationality = nationality
+        self.draw_entry_id = draw_entry_id
+
+
+def settled_sides_index(rows) -> dict:
+    """{every surname in a finished match} -> that match's WINNING side's rows.
+
+    Built from schedule entries that carry a `winner_side`, of any discipline
+    and any stage — a result is a result, and filtering this by kind is what
+    made the resolver need fixing once per kind. Doubles has no bracket row,
+    so for a doubles slot this is the only record of who came through.
+    """
+    idx: dict = {}
+    for r in rows:
+        sides: dict = {}
+        for p in r.players:
+            sides.setdefault(p.side, []).append(p)
+        a = _sheet_surnames([p.raw_name for p in sides.get("a", [])])
+        b = _sheet_surnames([p.raw_name for p in sides.get("b", [])])
+        if not a or not b:
+            continue
+        win = sides.get("a" if r.winner_side == "a" else "b", [])
+        if win:
+            idx[frozenset(a | b)] = sorted(win, key=lambda p: p.position or 1)
+    return idx
+
+
+def _as_settled_side(kept, win_rows) -> list:
+    """The winning alternative, rendered the way a SETTLED side is rendered.
+
+    An alternative is stored as ONE row even when it names two people: on an
+    unresolved side a "/" joins the partners of one candidate TEAM, and the
+    parser deliberately keeps that team whole so the side can read "team or
+    team". The moment the question is answered that row is no longer an
+    alternative — it is the side — and a doubles side is two players, each
+    with their own name, nationality and flag.
+
+    Nothing taught this path that. Winston-Salem 2026-08-26, Court 3: once
+    Schnaitter/Wallner beat Lammons/Withrow the page served Arribage/Guinard
+    against a single player called "SCHNAITTER / WALLNER" — surnames only, no
+    flags, one player row on a doubles side — while every other doubles row on
+    the day showed two flagged players. Invisible to the law, because the
+    STORED row is honestly unresolved and `doubles_side_not_two` exempts a
+    declared-TBD side; the defect existed only in what was served. It is the
+    twin of the fault `resolve_settled_alternatives` already carries a
+    `_sheet_form` fix for: both places turn alternatives into a settled side,
+    and only one of them had been taught what a settled side looks like.
+
+    The deciding row's own players are the source, not a split of the
+    abbreviated string, because they carry the full sheet form ("Jakob
+    SCHNAITTER GER") and their `draw_entry_id`. Substituted only when that is
+    an improvement and names the same people: every replacement must be one
+    person, in the sheet's rendering, and the surnames must agree with the
+    alternative being replaced. Anything else keeps what we had.
+    """
+    if not win_rows:
+        return [kept]
+    names = [(p.raw_name or "").strip() for p in win_rows]
+    if not all(names) or any("/" in n for n in names):
+        return [kept]
+    if not all(_is_sheet_form(n) for n in names):
+        return [kept]
+    if _sheet_surnames(names) != _sheet_surnames([kept.raw_name]):
+        return [kept]
+    return [SettledPlayer(kept.side, i, p.raw_name, p.nationality, p.draw_entry_id)
+            for i, p in enumerate(win_rows, 1)]
+
+
+def settle_from_result_rows(side_players, index) -> tuple:
+    """(players, resolved) — who came through, from the row that recorded it.
+
+    Discipline-agnostic and stage-agnostic by construction: it knows only that
+    two candidates met and that some row says who won. A doubles final, a
+    qualifying second round, and anything not yet invented resolve through the
+    same lookup.
+
+    Shared with schedule_invariants so the law tests the shape this actually
+    serves rather than a second copy of the rule that can drift from it.
+    """
+    if len(side_players) != 2:
+        return side_players, False
+    teams = [_sheet_surnames([p.raw_name]) for p in side_players]
+    if not all(teams):
+        return side_players, False
+    win_rows = index.get(frozenset(teams[0] | teams[1]))
+    if not win_rows:
+        return side_players, False
+    won = _sheet_surnames([p.raw_name for p in win_rows])
+    keep = [p for p, t in zip(side_players, teams) if t & won]
+    # Exactly one of the two, or we have not identified anything.
+    if len(keep) != 1:
+        return side_players, False
+    return _as_settled_side(keep[0], win_rows), True
+
+
 async def resolve_settled_alternatives(db, tournament_id: int) -> int:
     """Collapse every "A or B" slot whose deciding match is already over.
 

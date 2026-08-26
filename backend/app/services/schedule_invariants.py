@@ -84,6 +84,21 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                                           Match.player2_id.isnot(None)))).scalars().all()
                   } if draw_ids else {}
 
+    # The SERVE path's own resolver, run here so the law can see the shape the
+    # API actually hands out. See settled_side_not_two below for why a check
+    # over the stored rows cannot.
+    from datetime import date as _date, timedelta as _td
+    from app.services.schedule import settle_from_result_rows, settled_sides_index
+    _pd = _date.fromisoformat(play_date) if isinstance(play_date, str) else play_date
+    settled_idx: dict = {}
+    if any(e.is_tbd for e in rows):
+        settled_idx = settled_sides_index((await db.execute(
+            select(ScheduleEntry).where(
+                ScheduleEntry.tournament_id == tournament_id,
+                ScheduleEntry.winner_side.isnot(None),
+                ScheduleEntry.play_date >= _pd - _td(days=14),
+                ScheduleEntry.play_date <= _pd))).scalars().all())
+
     def flag(code, entry, detail):
         v.append({"code": code, "entry_id": entry.id if entry else None,
                   "court": getattr(entry, "court", None), "detail": detail})
@@ -143,6 +158,37 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                     flag("doubles_side_not_two", e,
                          f"side {side_key} has {len(side)}: "
                          + " / ".join(p.raw_name or "" for p in side))
+
+        # 2026-08-26, Winston-Salem Court 3: once Schnaitter/Wallner beat
+        # Lammons/Withrow, the page served "[1] ARRIBAGE / GUINARD" against a
+        # single player called "SCHNAITTER / WALLNER" — a two-person team in
+        # one player row, surnames only, no flags, on a doubles side where
+        # every other row that day showed two flagged players.
+        #
+        # NOTHING ABOVE COULD SEE IT. The stored row is honestly unresolved —
+        # "team or team" is the right way to hold an open side, and an
+        # alternative that names two people is one row on purpose — so
+        # `doubles_side_not_two` exempts it via `side_key not in tbd_side`.
+        # That is the same exemption that blinded `pairing_duplicated` the day
+        # before: when a rule about sides carves out is_tbd, check whether the
+        # bug simply moved into the carve-out. Here the defect existed ONLY in
+        # what was served, so the law runs the serve path's resolver
+        # (routers/schedule.py calls the same two functions) and judges the
+        # side it returns. A settled side is a side: one player for singles,
+        # two for doubles, whatever it looked like while the question was open.
+        if e.is_tbd and settled_idx:
+            for side_key in (e.tbd_side or "ab"):
+                sp = sorted((p for p in players if p.side == side_key),
+                            key=lambda x: x.position or 1)
+                served, resolved = settle_from_result_rows(sp, settled_idx)
+                if not resolved:
+                    continue
+                want = 2 if e.discipline == "doubles" else 1
+                if len(served) != want:
+                    flag("settled_side_not_two", e,
+                         f"side {side_key} resolves to {len(served)} player row(s), "
+                         f"expected {want} for {e.discipline}: "
+                         + " / ".join(p.raw_name or "" for p in served))
 
         # 2026-08-25, Monterrey "Alexandra PANOVA TBC": Cancha 4's last slot
         # printed a bare "TBC" where a start time would go, one line below the
