@@ -556,6 +556,7 @@ async def compare_picks(
 
     scope_ids = None
     usernames: dict[int, str] = {}
+    fullnames: dict[int, str] = {}
     if league_id is not None:
         league = (await db.execute(
             select(League).options(
@@ -569,6 +570,10 @@ async def compare_picks(
             raise HTTPException(403, "Not a member of this league")
         scope_ids = {m.user_id for m in league.members}
         usernames = {m.user_id: m.user.username for m in league.members}
+        # Real names travel ONLY when this league opted in — the flag is the
+        # league's, so the gate lives here, not in any client.
+        if league.show_real_name:
+            fullnames = {m.user_id: m.user.full_name for m in league.members}
 
     stmt = (select(UserPrediction, User.username)
             .join(User, User.id == UserPrediction.user_id)
@@ -620,6 +625,7 @@ async def compare_picks(
         u = by_user.setdefault(pred.user_id, {
             "user_id": pred.user_id,
             "username": usernames.get(pred.user_id, username),
+            "full_name": fullnames.get(pred.user_id),
             "picks": {label: [] for _, label in tiers},
         })
         name = entry_names.get(pred.predicted_winner_id)

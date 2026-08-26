@@ -100,6 +100,15 @@ export default function DrawSidebar({ tournamentId, tournament, selectedUserId, 
   // The user whose draw is currently displayed — always shown dark green
   const activeDrawUserId = selectedUserId ?? user?.id
 
+  // The one answer to "what do we call this member here": the full name when
+  // THIS league turned show_real_name on, the username everywhere else —
+  // including the Global list, which is not a league and never shows real
+  // names. Also the fix for titles that used display_name, which is often
+  // the real name regardless of any league's setting.
+  const realNames = !isGlobal
+    && !!(leagues?.find(l => l.id === leagueId)?.show_real_name)
+  const nameFor = (m) => (realNames && m.full_name) ? m.full_name : m.username
+
   function handleMemberClick(memberId, username) {
     if (memberId === user?.id) {
       onSelectUser(memberId === selectedUserId ? null : memberId, username)
@@ -248,7 +257,7 @@ export default function DrawSidebar({ tournamentId, tournament, selectedUserId, 
                         key={m.id}
                         className={['sidebar-member sidebar-member--standing sidebar-member--global', isActive && 'sidebar-member--selected', noUpset && 'sidebar-member--no-upset'].filter(Boolean).join(' ')}
                         onClick={() => handleMemberClick(m.id, m.username)}
-                        title={noUpset ? `${m.display_name} (must pick at least 1 upset to compete)` : m.display_name}
+                        title={noUpset ? `${nameFor(m)} (must pick at least 1 upset to compete)` : nameFor(m)}
                       >
                         <span className="sidebar-rank">{i + 1}</span>
                         <span className="sidebar-points">{entry.total_points % 1 === 0 ? entry.total_points : entry.total_points.toFixed(1)}</span>
@@ -291,7 +300,7 @@ export default function DrawSidebar({ tournamentId, tournament, selectedUserId, 
                         key={m.id}
                         className={['sidebar-member sidebar-member--standing sidebar-member--global', isActive && 'sidebar-member--selected', noUpset && 'sidebar-member--no-upset'].filter(Boolean).join(' ')}
                         onClick={() => handleMemberClick(m.id, m.username)}
-                        title={noUpset ? `${m.display_name} (must pick at least 1 upset to compete)` : m.display_name}
+                        title={noUpset ? `${nameFor(m)} (must pick at least 1 upset to compete)` : nameFor(m)}
                       >
                         <span className="sidebar-rank">{i + 1}</span>
                         <span className="sidebar-points">{entry.total_points % 1 === 0 ? entry.total_points : entry.total_points.toFixed(1)}</span>
