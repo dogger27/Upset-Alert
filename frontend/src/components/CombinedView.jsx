@@ -1192,15 +1192,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
             const nextCenters = isLastVisible ? afterCenters : centers[nextC]
 
             return (
-              // DESCENDING z per column-pair: during a drag the incoming
-              // right column overlaps the left one's gap accessories (H2H
-              // chips at gap z0, the bell inside a z1 column losing a
-              // sibling tie) and painted OVER them. Left-above-right fixes
-              // exactly the overlap case and changes nothing at rest, when
-              // nothing overlaps. Inside each wrapper the col(1)/gap(0)
-              // order is untouched — boxes still beat their own connectors.
-              <div key={c} style={{ display: 'flex', flexShrink: 0,
-                                    position: 'relative', zIndex: 100 - colIdx }}>
+              <div key={c} style={{ display: 'flex', flexShrink: 0 }}>
                 <div className={`cv-col${leaving ? ' cv-col--leaving' : ''}`}
                      style={{ width: colW, height: totalH }}>
                   {/* Light grey box grouping every match's two feeder boxes together;
@@ -1488,7 +1480,12 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
               child of cv-body — painted after (on top of) every column, so
               they're never subject to a column's own stacking level (which is
               what keeps each connector line tucked behind its box edges). */}
-          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+          {/* zIndex, not just DOM order: paint order alone loses to any
+              stacking context a column picks up — the drag's transform being
+              the one that put these chips and bells under the incoming
+              column. z5 outranks every column's internal levels (boxes 1,
+              outlines/chips 2, bell 3) in every state. */}
+          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 5 }}>
             {visible.map((c, colIdx) => {
               const isLastVisible = colIdx === visible.length - 1
               const nextC = isLastVisible ? afterC : visible[colIdx + 1]
