@@ -1158,15 +1158,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
             const state = scrubbing && i === (backward ? visible.length - 1 : 0)
               ? ' cv-label--leaving' : ''
             return (
-              // DESCENDING z per column-pair: during a drag the incoming
-              // right column overlaps the left one's gap accessories (H2H
-              // chips at gap z0, the bell inside a z1 column losing a
-              // sibling tie) and painted OVER them. Left-above-right fixes
-              // exactly the overlap case and changes nothing at rest, when
-              // nothing overlaps. Inside each wrapper the col(1)/gap(0)
-              // order is untouched — boxes still beat their own connectors.
-              <div key={c} style={{ display: 'flex', flexShrink: 0,
-                                    position: 'relative', zIndex: 100 - colIdx }}>
+              <div key={c} style={{ display: 'flex', flexShrink: 0 }}>
                 <div className={`cv-label${state}`} style={{ width: colW }}>{label}</div>
                 {i < visible.length - 1 && <div style={{ width: COL_GAP }} />}
               </div>
@@ -1200,7 +1192,15 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
             const nextCenters = isLastVisible ? afterCenters : centers[nextC]
 
             return (
-              <div key={c} style={{ display: 'flex', flexShrink: 0 }}>
+              // DESCENDING z per column-pair: during a drag the incoming
+              // right column overlaps the left one's gap accessories (H2H
+              // chips at gap z0, the bell inside a z1 column losing a
+              // sibling tie) and painted OVER them. Left-above-right fixes
+              // exactly the overlap case and changes nothing at rest, when
+              // nothing overlaps. Inside each wrapper the col(1)/gap(0)
+              // order is untouched — boxes still beat their own connectors.
+              <div key={c} style={{ display: 'flex', flexShrink: 0,
+                                    position: 'relative', zIndex: 100 - colIdx }}>
                 <div className={`cv-col${leaving ? ' cv-col--leaving' : ''}`}
                      style={{ width: colW, height: totalH }}>
                   {/* Light grey box grouping every match's two feeder boxes together;
