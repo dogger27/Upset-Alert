@@ -1841,6 +1841,20 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
     # first-round byes for top seeds hits this immediately on release).
     real_completed = sum(1 for m in parsed.matches if m.winner_position is not None and not m.is_bye)
 
+    # THE FIELD WIKIPEDIA HAS NOT FINISHED WRITING DOWN. Its draw pages fill
+    # over hours; the tournament publishes the same draw complete. Only empty
+    # first-round sides are touched, so this can add nothing that contradicts
+    # the page — and it self-cancels once the page catches up.
+    if "US Open" in (tournament.name or ""):
+        try:
+            from app.services.uso_draw import fill_missing_slots
+            added = await fill_missing_slots(db, tournament)
+            if added:
+                logger.info("US Open %s: filled %d slot(s) from the official draw",
+                            tournament.gender, added)
+        except Exception:
+            logger.exception("official draw fill failed for draw %s", tournament.id)
+
     # Snap start_date to today on first detected REAL match activity.
     # Qualifying rounds begin before the Wikipedia-reported main-draw start date,
     # so use the real play date rather than Wikipedia's potentially lagging value.
