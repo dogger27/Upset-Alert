@@ -51,6 +51,10 @@ from app.services.system_log import app_log
 logger = logging.getLogger(__name__)
 
 POLL_INTERVAL = 60.0
+# How many claimed-but-unlisted events one sweep will fetch individually. A
+# Slam qualifying day needs a few dozen; the cap keeps a pathological day from
+# becoming a request storm against a host that answers a burst with a ban.
+_MAX_DIRECT_EVENTS = 40
 
 # "[WC]" and "[2]" are the sheet's own annotations and never part of a name.
 _SHEET_TAGS = re.compile(r"\[[^\]]*\]")
@@ -695,6 +699,37 @@ async def sweep_once(db, day: Optional[date] = None) -> dict:
             for side, rows in grouped.items()}
 
     by_id = {ev["id"]: ev for ev in events}
+
+    # CLAIMED EVENTS THE SEASON PAGES NO LONGER CARRY. Page 0 of last/next
+    # holds about thirty events between them; a Slam qualifying day plays a
+    # hundred and twenty-eight, so once enough of them finish the live ones
+    # fall off the page and simply stop updating — on 2026-08-27 seven of the
+    # thirteen matches on court were invisible to this sweep and their scores
+    # sat frozen for an hour. A claim names its event exactly, so those are
+    # fetched one by one: only for rows already proved, only while they are
+    # unfinished, and capped so a busy day cannot turn into a request storm.
+    stale_claims = [e for e in entries
+                    if e.sofa_event_id and e.sofa_event_id not in by_id
+                    and e.winner_side is None]
+    for e in stale_claims[:_MAX_DIRECT_EVENTS]:
+        # The writer never waits at the pacing gate — see the note in the
+        # season-page loop above.
+        await db.commit()
+        try:
+            payload = await _get(f"/event/{e.sofa_event_id}")
+        except SofascoreBlocked:
+            raise
+        except Exception as exc:  # noqa: BLE001 — one missing event is not the sweep
+            logger.debug("direct event %s failed: %s", e.sofa_event_id, exc)
+            continue
+        ev = (payload or {}).get("event")
+        if ev and ev.get("id"):
+            by_id[ev["id"]] = ev
+            events.append(ev)
+    if stale_claims:
+        logger.info("doubles sweep: refreshed %d claimed event(s) missing from "
+                    "the season pages", min(len(stale_claims), _MAX_DIRECT_EVENTS))
+
     resolved = scored = 0
 
     # A claim is re-checked, never trusted. A row holding an event that no
