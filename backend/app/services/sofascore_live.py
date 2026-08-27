@@ -292,6 +292,15 @@ def renderable_point(snap: Optional[dict], finished: bool,
     """
     if not snap or finished:
         return None
+    # Play stopped: the games on the board are true, the point is not — it is
+    # whatever stood when the covers came on. Callers render the set score and
+    # a suspended label instead of a live-looking point.
+    if snap.get("suspended"):
+        out = _render_snapshot(snap)
+        if out is not None:
+            out["point"] = None
+            out["suspended"] = True
+        return out
     try:
         at = datetime.fromisoformat(snap["at"])
     except (KeyError, TypeError, ValueError):
