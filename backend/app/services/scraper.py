@@ -608,6 +608,12 @@ def _parse_seed(raw: str) -> tuple[Optional[int], Optional[str]]:
 # Section parsing helpers
 # ---------------------------------------------------------------------------
 
+# Draw sizes that are an exact power of two hold the whole field, so no player
+# can receive a bye. Any smaller field (48, 56, 96...) pads the bracket with
+# them. Keyed rather than computed so the intent is legible at the call site.
+_BYES_POSSIBLE = {32: False, 64: False, 128: False}
+
+
 def _parse_16team_section(
     params: dict[str, str],
     section_index: int,   # 0-based, determines global bracket positions
@@ -733,8 +739,21 @@ def _parse_16team_section(
 
             rd_occupant[rd + 1][match_idx + 1] = winner_pos
 
-            # Determine bye
-            is_bye = (
+            # Determine bye.
+            #
+            # AN EMPTY SLOT IS NOT A BYE IN A DRAW THAT HAS NO BYES. Byes exist
+            # only when the field is smaller than the bracket — 2**rounds minus
+            # draw_size of them — so a 128 draw (2**7) has exactly zero, and a
+            # blank RD1-team there means "not filled in yet": a qualifier the
+            # tournament has not produced, or an editor mid-edit. The US Open
+            # 2026 draws published with 24 blank slots while qualifying was
+            # still being played, and reading those as byes invented 27 free
+            # walkovers across the two draws, advanced players who had not
+            # played, and — because the pick filler deliberately skips byes —
+            # left every one of those slots without a default pick.
+            bye_capacity = (1 << (draw_size.bit_length() - 1)) != draw_size \
+                or _BYES_POSSIBLE.get(draw_size, True)
+            is_bye = bye_capacity and (
                 (bool(raw_a) != bool(raw_b) and not (a_wins or b_wins))
                 or (rd == 1 and not raw_a and not raw_b and slot_a in bye_positions)
             )
