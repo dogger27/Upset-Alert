@@ -703,6 +703,13 @@ def _parse_16team_section(
         pos = base_pos + local
         rd_occupant[1][local] = pos
 
+    # CAN THIS DRAW PRODUCE A BYE AT ALL? Only a field smaller than its
+    # bracket needs padding, so 32/64/128 have none. Computed once: it gates
+    # both halves of the same inference — the bye flag AND the advancement,
+    # which is the half missed on the first pass and put nine men and
+    # fourteen women into round two of the 2026 US Open without playing.
+    byes_possible = _BYES_POSSIBLE.get(draw_size, True)
+
     # Process RD1..RD4 (or RD1..RD3 when the section's own final round is
     # actually handled by an external finals bracket — see docstring).
     max_local_round = 4 if include_section_final else 3
@@ -728,10 +735,11 @@ def _parse_16team_section(
                 winner_pos = pos_a
             elif b_wins and not a_wins:
                 winner_pos = pos_b
-            elif raw_a and not raw_b:
-                # Only one player present → bye or walkover
+            elif raw_a and not raw_b and byes_possible:
+                # Only one player present → bye or walkover. In a full draw
+                # this is an unfilled slot instead, and nobody advances.
                 winner_pos = pos_a
-            elif raw_b and not raw_a:
+            elif raw_b and not raw_a and byes_possible:
                 winner_pos = pos_b
             elif rd == 1 and not raw_a and not raw_b and slot_a in bye_positions:
                 # Seed placed directly in RD2 — first-round bye
@@ -751,9 +759,7 @@ def _parse_16team_section(
             # walkovers across the two draws, advanced players who had not
             # played, and — because the pick filler deliberately skips byes —
             # left every one of those slots without a default pick.
-            bye_capacity = (1 << (draw_size.bit_length() - 1)) != draw_size \
-                or _BYES_POSSIBLE.get(draw_size, True)
-            is_bye = bye_capacity and (
+            is_bye = byes_possible and (
                 (bool(raw_a) != bool(raw_b) and not (a_wins or b_wins))
                 or (rd == 1 and not raw_a and not raw_b and slot_a in bye_positions)
             )
