@@ -33,6 +33,12 @@ import '../pages/Schedule.css'
    inside it narrower does not widen the box, so a smaller name cannot feed back
    into a new measurement. */
 
+// Pixels held back from the measured name box: canvas text measurement and
+// the browser's own rendering disagree by a hair, and an unclipped name pays
+// for that by overflowing onto the serve ball beside it.
+const NAME_SAFETY = 6
+
+
 function useNameBox() {
   const ref = useRef(null)
   const [box, setBox] = useState(null)
@@ -207,7 +213,13 @@ function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp, t
   const extras = box
     ? (hasFlag ? (1.05 + 0.3) * rem : 0)
       + (seedText ? textWidth(seedText, px * 0.85, 700) + 0.28 * rem : 0)
-      + 2
+      // A REAL GAP, not a rounding allowance. The name does not clip by
+      // design, so a canvas measurement a few pixels under the rendered
+      // width does not truncate — it overflows, and the serve ball sitting
+      // immediately after the name is what it lands on ("C. BRANSTINE" with
+      // the ball over the final letter). Six pixels covers the measurement
+      // error and keeps the ball clear of the longest name.
+      + NAME_SAFETY
     : 0
   const budget = box ? Math.max(0, box.avail - extras) : null
   const wide = (text) => textWidth(text, px, 600)
@@ -391,7 +403,7 @@ function Side({ players, doubles, tbd, tight, sets, form = 'surname', flags = fa
     if (box) {
       const rem = rootFontPx()
       const flagPx = flags ? players.length * (1.05 + 0.3) * rem : 0
-      const budget = Math.max(0, box.avail - flagPx - 2)
+      const budget = Math.max(0, box.avail - flagPx - NAME_SAFETY)
       const need = textWidth(doublesLine, box.fontPx, 600)
       if (need > budget && budget > 0) teamScale = Math.max(0.72, budget / need)
     } else if (doublesLine.length > DOUBLES_FIT) {
