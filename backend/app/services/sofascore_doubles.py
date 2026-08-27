@@ -364,7 +364,7 @@ def _rounds_agree(event: dict, entry) -> bool:
 
 
 
-def _match(entry, event: dict, sides: dict):
+def _match(entry, event: dict, sides: dict, held: bool = False):
     """Is this event this row's match? Every gate, or nothing.
 
     Each of the wrong matches that prompted this satisfied the names and broke
@@ -376,10 +376,20 @@ def _match(entry, event: dict, sides: dict):
       the shape      one side pairing off against a team of a different size
       one-to-one     both people on our side being the same person on theirs
     """
-    if not _event_near(event, entry):
-        return None
-    if not _rounds_agree(event, entry):
-        return None
+    # A CLAIM ALREADY PROVED IS IDENTITY, NOT A GUESS. The clock gates exist to
+    # stop a wrong event being claimed in the first place; re-applying them to
+    # an event we already matched revokes the truth when the tournament moves
+    # the match. A rain delay does exactly that: Sofascore restamps
+    # startTimestamp to the resumption, hours past the printed slot, and the
+    # re-check then failed, _unclaim wiped the score and the row fell back to
+    # "scheduled" mid-match (Zheng/Pridankina, 2026-08-27). For a held claim
+    # only the PLAYERS may disqualify the event — if those still pair off
+    # one-to-one it is the same match, whenever it is being played.
+    if not held:
+        if not _event_near(event, entry):
+            return None
+        if not _rounds_agree(event, entry):
+            return None
 
     teams = (_sofa_people(event.get("homeTeam") or {}),
              _sofa_people(event.get("awayTeam") or {}))
@@ -750,7 +760,7 @@ async def sweep_once(db, day: Optional[date] = None) -> dict:
         if not (_sofa_people(held.get("homeTeam") or {})
                 and _sofa_people(held.get("awayTeam") or {})):
             continue
-        if _match(e, held, sides_of[e.id]) is None:
+        if _match(e, held, sides_of[e.id], held=True) is None:
             await app_log("warning", "sofascore_doubles",
                     f"dropped event {e.sofa_event_id} from schedule row {e.id} "
                     f"({e.play_date} {e.round_label}) — it no longer identifies "
