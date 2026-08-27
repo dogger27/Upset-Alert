@@ -530,11 +530,21 @@ async def compare_picks(
     predictions_visible rule as the draw itself: before picks lock, another
     user's bracket is not yours to read."""
     from app.models.league import League, LeagueMember
-    from app.services.locking import predictions_visible
+    from app.services.locking import draw_lock_state, predictions_visible
 
     tournament = await db.get(Draw, tournament_id)
     if not tournament:
         raise HTTPException(404, "Tournament not found")
+    # STRICTER THAN THE DRAW PAGE, DELIBERATELY. predictions_visible answers
+    # "may one user see another's picks", and under draw-start locking it says
+    # yes because nothing can change after the first ball. That reasoning holds
+    # AFTER the lock; before it, every bracket is still editable, and a table
+    # of everyone's semifinalists is a bracket to copy. So this view waits for
+    # the picks to actually close: while a draw is open it shows nothing, for
+    # any lock mode.
+    lock = await draw_lock_state(db, tournament)
+    if not lock.draw_locked and tournament.status != "completed":
+        return {"hidden": True, "rounds": [], "users": []}
     if not await predictions_visible(db, tournament):
         return {"hidden": True, "rounds": [], "users": []}
 
