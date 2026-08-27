@@ -383,8 +383,14 @@ def _winner_side(entry, match, players) -> Optional[int]:
     walkover or a retirement may not have.
     """
     if match is not None and getattr(match, "winner_id", None) is not None:
-        a_ids = {p.get("draw_entry_id") for p in players
-                 if p.get("side") == "a" and p.get("draw_entry_id")}
+        # `players` are SchedulePlayerOut models here, not dicts — reading them
+        # with .get() raised AttributeError and 500'd the whole day endpoint
+        # the moment a linked singles match finished. Attribute access works
+        # for either shape.
+        def _field(p, key):
+            return p.get(key) if isinstance(p, dict) else getattr(p, key, None)
+        a_ids = {_field(p, "draw_entry_id") for p in players
+                 if _field(p, "side") == "a" and _field(p, "draw_entry_id")}
         if a_ids:
             return 0 if match.winner_id in a_ids else 1
         return None
