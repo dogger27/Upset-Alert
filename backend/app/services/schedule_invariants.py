@@ -228,7 +228,10 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
         # because an all-caps given name was dropped by the parser. A doubles
         # side that is neither empty (slot not yet decided) nor declared
         # unresolved must hold exactly two.
-        if e.discipline == "doubles":
+        # "mixed" is a pair like any doubles — the law learned the word the
+        # night a settled Bencic/Cobolli side was flagged for being two
+        # people (2026-08-26, expected 1 for mixed).
+        if e.discipline in ("doubles", "mixed"):
             for side_key, side in (("a", na), ("b", nb)):
                 if side and len(side) != 2 and side_key not in tbd_side:
                     flag("doubles_side_not_two", e,
@@ -259,7 +262,7 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                 served, resolved = settle_from_result_rows(sp, settled_idx)
                 if not resolved:
                     continue
-                want = 2 if e.discipline == "doubles" else 1
+                want = 2 if e.discipline in ("doubles", "mixed") else 1
                 if len(served) != want:
                     flag("settled_side_not_two", e,
                          f"side {side_key} resolves to {len(served)} player row(s), "
