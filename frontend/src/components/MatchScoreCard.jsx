@@ -492,8 +492,34 @@ function CompetitorRows({ e, a, b }) {
     return side === 0 ? x > y : y > x
   }
 
+  const endedWith = (side) => {
+    const cells = (e.scores || [])[side] || []
+    if (cells.some(c => /^w\/?o$/i.test(String(c ?? '').trim()))) return 'w/o'
+    if (cells.some(c => /r$/i.test(String(c ?? '')))) return 'ret.'
+    return null
+  }
+
+  /* WHO WON, in order of how much each source actually knows.
+
+     1. The server says so. It reads the bracket match's winner (singles) or
+        the row's own stamped winner_side (doubles, qualifying) — a recorded
+        fact, not a reconstruction.
+     2. The end marker. "w/o" marks the player who ADVANCED and "ret." the
+        player who QUIT, so each names a winner outright — and both describe
+        matches a scoreline cannot: a walkover has no sets at all.
+     3. Only then, counting sets. This is the fallback of last resort because
+        it is WRONG on the case tennis produces every week: a player who
+        retires while ahead (6-4, 3-0 ret.) has more sets and lost the match.
+        Reached only for an ordinary completed row whose winner the server
+        has not stated, where it agrees with the record by construction. */
   const winnerSide = (() => {
-    if (e.status !== 'completed' || !e.scores) return null
+    if (e.winner_side === 0 || e.winner_side === 1) return e.winner_side
+    if (e.status !== 'completed') return null
+    if (endedWith(0) === 'w/o') return 0
+    if (endedWith(1) === 'w/o') return 1
+    if (endedWith(0) === 'ret.') return 1
+    if (endedWith(1) === 'ret.') return 0
+    if (!e.scores) return null
     let x = 0, y = 0
     for (let i = 0; i < n; i++) { if (setWon(i, 0)) x++; if (setWon(i, 1)) y++ }
     return x === y ? null : (x > y ? 0 : 1)
@@ -511,12 +537,6 @@ function CompetitorRows({ e, a, b }) {
      retirement marks the player who QUIT, a walkover marks the player who
      ADVANCED ("won by walkover"). The two sit on opposite sides on purpose;
      that is how they are stored. */
-  const endedWith = (side) => {
-    const cells = (e.scores || [])[side] || []
-    if (cells.some(c => /^w\/?o$/i.test(String(c ?? '').trim()))) return 'w/o'
-    if (cells.some(c => /r$/i.test(String(c ?? '')))) return 'ret.'
-    return null
-  }
 
   const rows = [
     { players: a, side: 0, tbd: !!e.tbd_side?.includes('a') },
