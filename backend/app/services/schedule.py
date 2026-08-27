@@ -1005,7 +1005,11 @@ async def _fill_tbd_rounds(db, tournament_id: int, play_date: date,
         select(ScheduleEntry).where(
             ScheduleEntry.tournament_id == tournament_id,
             ScheduleEntry.play_date == play_date,
-            ScheduleEntry.round_label.is_(None),
+            # Either derivation missing re-qualifies the row: gating on the
+            # label alone left a slot that got its round in one pass
+            # invisible to the match-linking added later.
+            or_(ScheduleEntry.round_label.is_(None),
+                ScheduleEntry.match_id.is_(None)),
             ScheduleEntry.discipline == 'singles',
         ))).scalars().all()
     if not rows:
@@ -1078,10 +1082,11 @@ async def _fill_tbd_rounds(db, tournament_id: int, play_date: date,
         draw = draw_by_id.get(entry_draw.get(
             next((pl.draw_entry_id for pl in players.get(e.id, [])
                   if pl.draw_entry_id), None)))
-        label = _round_label(max(side_rounds),
-                             getattr(draw, 'num_rounds', None))
-        if label:
-            e.round_label = label
+        if e.round_label is None:
+            label = _round_label(max(side_rounds),
+                                 getattr(draw, 'num_rounds', None))
+            if label:
+                e.round_label = label
         # Link only on an unambiguous answer: every side that named a parent
         # named the same one. A disagreement means a mis-resolution somewhere,
         # and a wrong link is worse than a missing time.
