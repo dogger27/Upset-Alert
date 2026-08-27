@@ -1052,9 +1052,27 @@ async def _fill_tbd_rounds(db, tournament_id: int, play_date: date,
                 if parent is not None:
                     parents.append(parent)
             else:
-                side_rounds.append(top)
-                if len(top_matches) == 1:
-                    parents.append(top_matches[0])
+                m_top = top_matches[0] if len(top_matches) == 1 else None
+                if (m_top is not None and m_top.winner_id is not None
+                        and m_top.winner_id not in ids):
+                    # A LOST alternative — the sheet still names them because
+                    # it printed before their feeder finished (Parry on the
+                    # Monterrey QF slot after Vekic beat her). They were
+                    # playing INTO the slot, so their match's parent is the
+                    # slot, not the match they lost.
+                    side_rounds.append(top + 1)
+                    parent = (await db.execute(
+                        select(Match).where(
+                            Match.draw_id == m_top.draw_id,
+                            Match.round_number == top + 1,
+                            Match.match_number == (m_top.match_number + 1) // 2,
+                        ))).scalars().first()
+                    if parent is not None:
+                        parents.append(parent)
+                else:
+                    side_rounds.append(top)
+                    if m_top is not None:
+                        parents.append(m_top)
         if not side_rounds:
             continue
         draw = draw_by_id.get(entry_draw.get(
