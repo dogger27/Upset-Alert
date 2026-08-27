@@ -38,6 +38,17 @@ EVENT_CODE = {"M": "MS", "F": "WS"}
 ENTRY_STATUS = {"Q/LL": "Q", "Q": "Q", "LL": "LL", "WC": "WC", "PR": "PR", "SE": "SE"}
 
 
+# The feed names an undetermined slot rather than leaving it blank. Ours is a
+# Q entry with an empty name — the rendering convention the bracket already
+# uses for a qualifier nobody has won yet ("Qualifier", not clickable) — so
+# these become that instead of a player called "Qualifier/Lucky Loser".
+_PLACEHOLDER = ("qualifier", "lucky loser", "qualifier/lucky loser", "bye", "tbd")
+
+
+def _is_placeholder(name: str) -> bool:
+    return (name or "").strip().casefold() in _PLACEHOLDER
+
+
 def _person(team) -> Optional[dict]:
     """The singles player on one side of a feed match, or None if unnamed."""
     if isinstance(team, list):
@@ -108,15 +119,27 @@ async def fill_missing_slots(db, draw: Draw) -> int:
             person = sides[idx]
             if not person:
                 continue        # The feed has no name either.
-            entry = by_key.get(_key(person["name"]))
+            placeholder = _is_placeholder(person["name"])
+            # bracket_position is NOT NULL and is the slot itself: two per
+            # first-round match, in order. Omitting it aborted the whole fill
+            # mid-transaction and left one half of the draw populated.
+            position = (m.match_number - 1) * 2 + idx + 1
+            entry = None if placeholder else by_key.get(_key(person["name"]))
             if entry is None:
                 entry = DrawEntry(
-                    draw_id=draw.id, name=person["name"],
-                    nationality=person["nationality"], seed=person["seed"],
-                    entry_type=person["entry_type"])
+                    draw_id=draw.id,
+                    # Empty name + Q is how this bracket says "a qualifier,
+                    # not yet known". Each such slot gets its own row: they
+                    # are different positions, not one shared player.
+                    name="" if placeholder else person["name"],
+                    nationality=None if placeholder else person["nationality"],
+                    seed=None if placeholder else person["seed"],
+                    entry_type="Q" if placeholder else person["entry_type"],
+                    bracket_position=position)
                 db.add(entry)
                 await db.flush()
-                by_key[_key(person["name"])] = entry
+                if not placeholder:
+                    by_key[_key(person["name"])] = entry
             setattr(m, attr, entry.id)
             filled += 1
     return filled
