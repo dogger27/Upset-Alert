@@ -110,6 +110,10 @@ class ScheduleEntryOut(BaseModel):
     # ESPN only. Absent for doubles and qualifying, which it does not cover.
     live_scores: Optional[list] = None
     scores: Optional[list] = None
+    # WHO WON, stated rather than inferred. The client used to count sets, so
+    # a result with no sets to count — a walkover — showed no winner at all.
+    # Singles reads it off the bracket match, doubles off the row.
+    winner_side: Optional[int] = None
     # The point score, on the same terms as the draw page — and from the same
     # helper, so this page and the bracket can never disagree about a match they
     # are both showing. Carries its own `games`, which the client prefers over
@@ -367,6 +371,25 @@ def _status_of(entry, match) -> str:
         if getattr(entry, "live_scores_json", None):
             return "live"
     return entry.status or "scheduled"
+
+
+def _winner_side(entry, match, players) -> Optional[int]:
+    """0 or 1 — the side that won, or None while undecided.
+
+    Singles carries the result on its bracket match, so the winning draw
+    entry is matched against the row's own side-a players; doubles and
+    qualifying carry `winner_side` on the row itself. Either way the answer
+    is stated by the record, not reconstructed from a scoreline that a
+    walkover or a retirement may not have.
+    """
+    if match is not None and getattr(match, "winner_id", None) is not None:
+        a_ids = {p.get("draw_entry_id") for p in players
+                 if p.get("side") == "a" and p.get("draw_entry_id")}
+        if a_ids:
+            return 0 if match.winner_id in a_ids else 1
+        return None
+    ws = getattr(entry, "winner_side", None)
+    return {"a": 0, "b": 1}.get(ws) if isinstance(ws, str) else None
 
 
 @router.get("/day", response_model=ScheduleDayOut)
@@ -649,6 +672,7 @@ async def schedule_day(
             live_scores=(m.live_scores_json if m else e.live_scores_json),
             live_point=(live_point_for(m) if m else _doubles_point(e)),
             scores=(m.scores_json if m else e.scores_json),
+            winner_side=_winner_side(e, m, players),
             surface=(draw_meta.get(e.draw_id) or (None, None))[0],
             gender=(draw_meta.get(e.draw_id) or (None, None))[1],
         ))
