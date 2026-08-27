@@ -1028,6 +1028,10 @@
    lines stopped forming a column — the whole point of this layout. */
 .sched-ball-slot {
   flex: 0 0 auto;
+  /* Clear of the name whatever the fitter decides — the belt to the
+     measurement's braces, since an overlong name overflows rather than
+     clipping and would otherwise land on the ball. */
+  margin-left: 4px;
   /* A hair over the ball itself. The slot only has to hold it, and its width is
      reserved on both lines whether or not anyone is serving. */
   width: 13px;
