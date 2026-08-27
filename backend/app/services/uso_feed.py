@@ -114,6 +114,33 @@ def play_date_of(event_day: dict, year: int):
     return datetime.fromtimestamp(epoch, tz=_TZ).date()
 
 
+async def fetch_main_draw_window(year: int):
+    """(day 1, last day) of the MAIN DRAW, from the tournament's day index.
+
+    The index labels qualifying days "Fan Week Day N" and main-draw days
+    plainly "Day N", so the first plain day is day one of the event proper.
+    This is the authority on when the tournament starts: the 2026 main draw
+    opens Sunday 30 August, a day earlier than the Monday every week-based
+    guess assumes, and the pick deadline is derived from that date.
+    """
+    import httpx
+    async with httpx.AsyncClient(timeout=30, headers=BROWSER_HEADERS) as client:
+        r = await client.get(FEED_DAYS.format(year=year))
+        r.raise_for_status()
+        days = r.json().get("eventDays") or []
+    main = []
+    for e in days:
+        label = (e.get("messageShort") or e.get("message") or "")
+        if "fan week" in label.lower():
+            continue
+        pd = play_date_of(e, year)
+        if pd is not None and re.match(r"^Day\s+\d+", label.strip()):
+            main.append(pd)
+    if not main:
+        return None, None
+    return min(main), max(main)
+
+
 def normalize(raw: bytes) -> bytes:
     """Canonical bytes for revision hashing: volatile fields out, keys sorted."""
     d = json.loads(raw)
