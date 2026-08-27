@@ -1474,3 +1474,7 @@
   color: var(--text-muted) !important;
   opacity: 0.6;
 }
+
+/* A live row whose point the feed has not refreshed: the column keeps its
+   place, dimmed, rather than vanishing and shifting everything. */
+.sched-point--stale { opacity: 0.3; font-weight: 500; }

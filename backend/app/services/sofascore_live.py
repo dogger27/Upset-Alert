@@ -82,6 +82,16 @@ GONE_AFTER = 180.0
 # Comfortably more than POLL_INTERVAL so an ordinary late response does not
 # flicker the UI, comfortably less than a game so nothing lingers when we stop.
 FRESH_SECONDS = 45
+# FRESHNESS IS A PROPERTY OF THE SOURCE, NOT OF TENNIS. 45s suits this poller,
+# which refreshes every 10s and re-stamps at FRESH_SECONDS/2. Rows scored by
+# the sofascore_doubles SWEEP — qualifying singles and every doubles — are
+# refreshed once per sweep, nominally 60s and about 88s in practice, so a 45s
+# window blacked out every one of them for half of each cycle, together: on a
+# US Open qualifying morning all eleven live scores vanished and returned in
+# lockstep, which reads as an outage rather than as a quiet moment. Two full
+# sweeps of headroom keeps a genuinely dead feed from lingering while never
+# punishing a row for its source's cadence.
+ENTRY_FRESH_SECONDS = 180
 
 
 class _State:
@@ -255,7 +265,8 @@ def renderable_history(snap: dict) -> Optional[dict]:
     return out
 
 
-def renderable_point(snap: Optional[dict], finished: bool) -> Optional[dict]:
+def renderable_point(snap: Optional[dict], finished: bool,
+                     max_age: float = None) -> Optional[dict]:
     """The point score a reader should draw from this snapshot, or None.
 
     ONE copy of these rules, because they are judgement calls rather than
@@ -287,7 +298,7 @@ def renderable_point(snap: Optional[dict], finished: bool) -> Optional[dict]:
         return None
     if at.tzinfo is None:
         at = at.replace(tzinfo=timezone.utc)
-    if (datetime.now(timezone.utc) - at).total_seconds() > FRESH_SECONDS:
+    if (datetime.now(timezone.utc) - at).total_seconds() > (max_age or FRESH_SECONDS):
         return None
 
     # BETWEEN GAMES SOFASCORE SENDS NO POINT AT ALL, and this used to return
