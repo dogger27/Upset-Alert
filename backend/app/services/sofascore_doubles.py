@@ -824,8 +824,17 @@ async def sweep_once(db, day: Optional[date] = None) -> dict:
         code = (ev.get("status") or {}).get("code", 100)
         wc = ev.get("winnerCode")
 
-        if status == "inprogress":
+        # A SUSPENDED MATCH IS STILL A MATCH WITH A SCORE. Sofascore calls a
+        # rain delay "interrupted", and this branch used to accept only
+        # "inprogress" — so a suspended match got no write at all, its sets
+        # froze at whatever we last saw and its point aged out of freshness.
+        # Twelve of thirteen US Open qualifying matches read as dead that way
+        # during one delay. The SET score is true while play is stopped; only
+        # the point is meaningless, and the snapshot says which state it is in
+        # so the page can label it rather than imply play is going on.
+        if status in ("inprogress", "interrupted"):
             snap = _snapshot(ev)
+            snap["suspended"] = status == "interrupted"
             # First sighting of play, on the same terms as the singles poller:
             # `startTimestamp` is the announced slot rather than the first
             # point, so it is only used when games are already on the board and

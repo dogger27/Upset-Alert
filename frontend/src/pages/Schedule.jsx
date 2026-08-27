@@ -464,7 +464,15 @@ function MatchRow({ e, showCourt, zone, venueMode, onH2H, onChampion, onHistory,
       {/* Shouted across the whole card, because what just happened is about the
           match rather than about either line of it. */}
       {broke && <span className="sched-shout" aria-hidden="true">BREAK</span>}
-      {e.status === 'live' && <span className="in-progress-badge sched-status">In progress</span>}
+      {e.status === 'live' && (
+        /* Say when play has STOPPED. A rain delay left rows reading "In
+           progress" beside a score that could not move, which is the state
+           people read as the site being broken. */
+        e.live_point?.suspended
+          ? <span className="in-progress-badge in-progress-badge--suspended sched-status"
+                  title="Play is suspended — the score is where it stood">Suspended</span>
+          : <span className="in-progress-badge sched-status">In progress</span>
+      )}
       {e.status === 'completed' && <span className="sched-status sched-status--done">Completed</span>}
 
       <div className="sched-row-when">

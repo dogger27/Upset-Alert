@@ -1478,3 +1478,11 @@
 /* A live row whose point the feed has not refreshed: the column keeps its
    place, dimmed, rather than vanishing and shifting everything. */
 .sched-point--stale { opacity: 0.3; font-weight: 500; }
+
+/* Play stopped — rain, light, anything. Amber rather than the live blue, so
+   a glance down the page separates "being played" from "waiting". */
+.in-progress-badge--suspended {
+  background: var(--warning-bg) !important;
+  color: var(--warning) !important;
+  border-color: var(--warning) !important;
+}
