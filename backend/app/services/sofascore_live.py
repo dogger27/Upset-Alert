@@ -292,13 +292,12 @@ def renderable_point(snap: Optional[dict], finished: bool,
     """
     if not snap or finished:
         return None
-    # Play stopped: the games on the board are true, the point is not — it is
-    # whatever stood when the covers came on. Callers render the set score and
-    # a suspended label instead of a live-looking point.
+    # Play stopped: the games and the point are BOTH the last true state —
+    # the score the match will resume from. The row says "Suspended" beside
+    # them, so nothing here implies the ball is in play.
     if snap.get("suspended"):
         out = _render_snapshot(snap)
         if out is not None:
-            out["point"] = None
             out["suspended"] = True
         return out
     try:

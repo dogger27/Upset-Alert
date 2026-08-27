@@ -835,6 +835,15 @@ async def sweep_once(db, day: Optional[date] = None) -> dict:
         if status in ("inprogress", "interrupted"):
             snap = _snapshot(ev)
             snap["suspended"] = status == "interrupted"
+            if snap["suspended"]:
+                # THE FEED FORGETS THE POINT, WE DO NOT. An interrupted event
+                # reports point 0-0 — not the score when the covers came on,
+                # just an absence. The last point we recorded IS that score,
+                # so it is carried forward for as long as play is stopped;
+                # the games beside it are the feed's own and stay exact.
+                prev = e.live_point_json or {}
+                if prev.get("point"):
+                    snap["point"] = prev["point"]
             # First sighting of play, on the same terms as the singles poller:
             # `startTimestamp` is the announced slot rather than the first
             # point, so it is only used when games are already on the board and

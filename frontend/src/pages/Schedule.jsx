@@ -668,7 +668,7 @@ export default function Schedule() {
   useEffect(() => { try { localStorage.setItem(VIEW_KEY, view) } catch {} }, [view])
   useEffect(() => { try { localStorage.setItem(TZ_KEY, tzMode) } catch {} }, [tzMode])
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['schedule', day, tournamentId ?? 'all'],
     queryFn: () => getScheduleDay({ date: day, tournamentId }),
     staleTime: 30_000,
@@ -974,7 +974,23 @@ export default function Schedule() {
 
       {isLoading && <div className="sched-empty">Loading…</div>}
 
-      {!isLoading && entries.length === 0 && (
+      {/* A FAILED FETCH IS NOT AN EMPTY SCHEDULE. One dropped request used to
+          render "No order of play published for this day" — a confident claim
+          about the tournament, made from no information — on a day whose
+          order of play was in fact published and on screen a minute earlier.
+          Say what actually happened and offer the retry. */}
+      {!isLoading && isError && (
+        <div className="sched-empty">
+          Couldn’t load the schedule just now.
+          <div style={{ marginTop: 12 }}>
+            <button className="sched-chip sched-chip--on" onClick={() => refetch()}>
+              Try again
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!isLoading && !isError && entries.length === 0 && (
         <div className="sched-empty">
           No order of play published for this day.
           <div className="sched-empty-sub">
