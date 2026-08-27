@@ -51,6 +51,14 @@ from app.services.system_log import app_log
 logger = logging.getLogger(__name__)
 
 POLL_INTERVAL = 60.0
+# STOPPED IS MORE THAN ONE WORD. Sofascore says "interrupted" for a short
+# halt and "suspended" once play is properly off — and a match sitting in the
+# second was matched by nothing here, so it took no writes at all and its row
+# eventually fell back to "scheduled" with the score dropped. Both mean the
+# same thing to a reader: the match is real, the score stands, nobody is
+# playing right now. "willcontinue" is the same state after a scheduled break.
+_STOPPED = ("interrupted", "suspended", "willcontinue")
+_PLAYING_OR_STOPPED = ("inprogress",) + _STOPPED
 # How many claimed-but-unlisted events one sweep will fetch individually. A
 # Slam qualifying day needs a few dozen; the cap keeps a pathological day from
 # becoming a request storm against a host that answers a burst with a ban.
@@ -842,9 +850,9 @@ async def sweep_once(db, day: Optional[date] = None) -> dict:
         # during one delay. The SET score is true while play is stopped; only
         # the point is meaningless, and the snapshot says which state it is in
         # so the page can label it rather than imply play is going on.
-        if status in ("inprogress", "interrupted"):
+        if status in _PLAYING_OR_STOPPED:
             snap = _snapshot(ev)
-            snap["suspended"] = status == "interrupted"
+            snap["suspended"] = status in _STOPPED
             if snap["suspended"]:
                 # THE FEED FORGETS THE POINT, WE DO NOT. An interrupted event
                 # reports point 0-0 — not the score when the covers came on,
