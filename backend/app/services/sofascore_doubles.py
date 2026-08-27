@@ -828,12 +828,17 @@ async def sweep_once(db, day: Optional[date] = None) -> dict:
         ev = by_id.get(e.sofa_event_id) if e.sofa_event_id else None
         if ev is None:
             continue
+        # Every row reaching here HOLDS this event — it was looked up by the
+        # row's own claim. So the clock gates must not run again: they belong
+        # to claiming, not to scoring, and re-applying them here silently
+        # skipped the write for a match the tournament had rescheduled. Line
+        # 771 learned this first; this call is the same fact one loop later.
         # Which side of OUR row is Sofascore's home team? The sheet's order and
         # theirs need not agree, and getting it backwards would credit the win
         # to the wrong pair. This comes out of the match itself now rather than
         # being guessed at separately — it is the orientation that made the two
         # sides pair off one-to-one.
-        got = _match(e, ev, sides_of[e.id])
+        got = _match(e, ev, sides_of[e.id], held=True)
         if got is None:
             continue
         flip = got.flip
