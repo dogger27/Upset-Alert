@@ -1303,11 +1303,17 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
         # release day carrying 24 August — its qualifying Monday — while the
         # main draw had not begun. Forward corrections still apply; so does
         # every change while the draw is unreleased.
+        # Refused only when the move would make the draw look STARTED — that
+        # is the harm (computed_status flips to active and picks close). An
+        # earlier date still in the future is an ordinary correction: the 2026
+        # US Open main draw opens on the Sunday, not the Monday, and that
+        # correction has to be able to land.
         released = tournament.draw_released_direct_at is not None
         proposed = parsed.start_date or (
             snap_to_monday(tournament.start_date) if tournament.start_date else None)
         if proposed and not (released and tournament.start_date
-                             and proposed < tournament.start_date):
+                             and proposed < tournament.start_date
+                             and proposed <= date.today()):
             tournament.start_date = proposed
         elif proposed:
             logger.warning(
@@ -1846,6 +1852,22 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
     # first-round sides are touched, so this can add nothing that contradicts
     # the page — and it self-cancels once the page catches up.
     if "US Open" in (tournament.name or ""):
+        try:
+            # The tournament's own day index states when play begins; every
+            # week-based guess puts a Slam on the Monday, and this one starts
+            # Sunday. The deadline follows from it.
+            from app.services.uso_feed import fetch_main_draw_window
+            from app.services.tournament_schedule import sync_closing_time
+            d1, dN = await fetch_main_draw_window(tournament.year)
+            if d1 and tournament.start_date != d1:
+                logger.info("US Open %s: start_date %s -> %s (official day index)",
+                            tournament.gender, tournament.start_date, d1)
+                tournament.start_date = d1
+                if dN:
+                    tournament.end_date = dN
+                sync_closing_time(tournament)
+        except Exception:
+            logger.exception("official date window failed for draw %s", tournament.id)
         try:
             from app.services.uso_draw import fill_missing_slots
             added = await fill_missing_slots(db, tournament)
