@@ -1158,7 +1158,15 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
             const state = scrubbing && i === (backward ? visible.length - 1 : 0)
               ? ' cv-label--leaving' : ''
             return (
-              <div key={c} style={{ display: 'flex', flexShrink: 0 }}>
+              // DESCENDING z per column-pair: during a drag the incoming
+              // right column overlaps the left one's gap accessories (H2H
+              // chips at gap z0, the bell inside a z1 column losing a
+              // sibling tie) and painted OVER them. Left-above-right fixes
+              // exactly the overlap case and changes nothing at rest, when
+              // nothing overlaps. Inside each wrapper the col(1)/gap(0)
+              // order is untouched — boxes still beat their own connectors.
+              <div key={c} style={{ display: 'flex', flexShrink: 0,
+                                    position: 'relative', zIndex: 100 - colIdx }}>
                 <div className={`cv-label${state}`} style={{ width: colW }}>{label}</div>
                 {i < visible.length - 1 && <div style={{ width: COL_GAP }} />}
               </div>
@@ -1575,7 +1583,8 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                 )
               })
               return chipsLeaving
-                ? <div key={c} className="cv-col--leaving">{chips}</div>
+                ? <div key={c} className="cv-col--leaving"
+                       style={{ position: 'relative', zIndex: 200 }}>{chips}</div>
                 : chips
             })}
           </div>
