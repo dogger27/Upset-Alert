@@ -1296,10 +1296,24 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
     # Skip date updates once the tournament is active/completed: qualifying can
     # start a day before the Wikipedia-reported date, and Wikipedia lags real play.
     if tournament.status not in ("active", "completed"):
-        if parsed.start_date:
-            tournament.start_date = parsed.start_date
-        elif tournament.start_date:
-            tournament.start_date = snap_to_monday(tournament.start_date)
+        # A RELEASED DRAW'S START DATE NEVER MOVES BACKWARDS. Moving it earlier
+        # is the one date change that can close a draw people are picking:
+        # Draw.computed_status calls any draw whose start has passed "active",
+        # which locks picks with nothing logged. The 2026 US Open sat locked on
+        # release day carrying 24 August — its qualifying Monday — while the
+        # main draw had not begun. Forward corrections still apply; so does
+        # every change while the draw is unreleased.
+        released = tournament.draw_released_direct_at is not None
+        proposed = parsed.start_date or (
+            snap_to_monday(tournament.start_date) if tournament.start_date else None)
+        if proposed and not (released and tournament.start_date
+                             and proposed < tournament.start_date):
+            tournament.start_date = proposed
+        elif proposed:
+            logger.warning(
+                "Refused to move %s %s start_date back from %s to %s on a "
+                "released draw", tournament.year, tournament.name,
+                tournament.start_date, proposed)
         if parsed.end_date:
             tournament.end_date = parsed.end_date
 
