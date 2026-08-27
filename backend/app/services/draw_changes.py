@@ -49,6 +49,34 @@ def normalize_name(name: str) -> str:
     return " ".join(s.split()).casefold()
 
 
+def _within_one_edit(a: str, b: str) -> bool:
+    """True when one single-character edit turns a into b.
+
+    Wikipedia editors fix spellings, and a fixed spelling is not a new player:
+    'Francis Tiafoe' became 'Frances Tiafoe' and everyone holding him was told
+    his slot had been replaced — by himself. One insertion, deletion or
+    substitution is the shape of a typo; anything larger is left to the caller
+    to treat as news.
+    """
+    if abs(len(a) - len(b)) > 1:
+        return False
+    if len(a) > len(b):
+        a, b = b, a
+    i = j = edits = 0
+    while i < len(a) and j < len(b):
+        if a[i] == b[j]:
+            i += 1
+            j += 1
+            continue
+        edits += 1
+        if edits > 1:
+            return False
+        if len(a) == len(b):
+            i += 1
+        j += 1
+    return edits + (len(b) - j) + (len(a) - i) <= 1
+
+
 def same_person(old: str, new: str) -> bool:
     """
     True when two names are the same player written differently.
@@ -73,7 +101,12 @@ def same_person(old: str, new: str) -> bool:
         return True
     if a[-1] != b[-1]:
         return False
-    return a[0].startswith(b[0]) or b[0].startswith(a[0])
+    if a[0].startswith(b[0]) or b[0].startswith(a[0]):
+        return True
+    # Same surname, and the given name off by a single character: a correction,
+    # not a substitution. The surname still has to match exactly, which is what
+    # keeps a real swap from being swallowed.
+    return _within_one_edit(a[0], b[0])
 
 
 def classify_change(old_name: str, new_name: str) -> Optional[str]:
