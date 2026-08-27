@@ -1018,6 +1018,12 @@ async def _fill_tbd_rounds(db, tournament_id: int, play_date: date,
         players.setdefault(pl.schedule_entry_id, []).append(pl)
     for e in rows:
         side_rounds = []
+        # The PARENT each side implies: bracket arithmetic makes the slot's
+        # own match certain before its players are — the feeder at
+        # (k, n) feeds exactly (k+1, ceil(n/2)), and a settled side's player
+        # is already propagated into that very row. With the match known, the
+        # draw can show the slot's time even though an opponent is not.
+        parents = []
         for side in ('a', 'b'):
             ids = [pl.draw_entry_id for pl in players.get(e.id, [])
                    if pl.side == side and pl.draw_entry_id]
@@ -1032,9 +1038,23 @@ async def _fill_tbd_rounds(db, tournament_id: int, play_date: date,
                 continue
             top = max(m.round_number for m in ms)
             top_matches = [m for m in ms if m.round_number == top]
-            both_in_one = len(ids) >= 2 and any(
-                m.player1_id in ids and m.player2_id in ids for m in top_matches)
-            side_rounds.append(top + 1 if both_in_one else top)
+            feeder = next((m for m in top_matches
+                           if len(ids) >= 2
+                           and m.player1_id in ids and m.player2_id in ids), None)
+            if feeder is not None:
+                side_rounds.append(top + 1)
+                parent = (await db.execute(
+                    select(Match).where(
+                        Match.draw_id == feeder.draw_id,
+                        Match.round_number == top + 1,
+                        Match.match_number == (feeder.match_number + 1) // 2,
+                    ))).scalars().first()
+                if parent is not None:
+                    parents.append(parent)
+            else:
+                side_rounds.append(top)
+                if len(top_matches) == 1:
+                    parents.append(top_matches[0])
         if not side_rounds:
             continue
         draw = draw_by_id.get(entry_draw.get(
@@ -1044,6 +1064,13 @@ async def _fill_tbd_rounds(db, tournament_id: int, play_date: date,
                              getattr(draw, 'num_rounds', None))
         if label:
             e.round_label = label
+        # Link only on an unambiguous answer: every side that named a parent
+        # named the same one. A disagreement means a mis-resolution somewhere,
+        # and a wrong link is worse than a missing time.
+        if e.match_id is None and parents and len({m.id for m in parents}) == 1:
+            e.match_id = parents[0].id
+            if e.draw_id is None:
+                e.draw_id = parents[0].draw_id
 
 
 async def _renumber_courts(db, tournament_id: int, play_date: date) -> None:
