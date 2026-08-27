@@ -576,8 +576,18 @@ function CompetitorRows({ e, a, b }) {
             ))}
             {/* The point last, tinted apart from the games — it is a different
                 kind of number and changes every few seconds. */}
-            {point && (
+            {point ? (
               <PointCell point={point[side] ?? '0'} tiebreak={lp.tiebreak} />
+            ) : live && (
+              /* SAY "NO POINT RIGHT NOW", DON'T SILENTLY DROP THE COLUMN.
+                 A live row with no fresh point used to render nothing, so
+                 the whole score column shifted and it read as the match
+                 losing its scores. A dim dash holds the place and the
+                 tooltip says why. */
+              <span className="sched-point sched-point--stale"
+                    title="Live point unavailable right now — set scores are current">
+                –
+              </span>
             )}
           </span>
         </div>

@@ -341,10 +341,11 @@ def _doubles_point(entry):
     Same rules as singles, and literally the same code — see renderable_point.
     The two were separate copies until the doubles one fell behind by a field.
     """
-    from app.services.sofascore_live import renderable_point
+    from app.services.sofascore_live import ENTRY_FRESH_SECONDS, renderable_point
 
     return renderable_point(getattr(entry, "live_point_json", None),
-                            bool(getattr(entry, "winner_side", None)))
+                            bool(getattr(entry, "winner_side", None)),
+                            max_age=ENTRY_FRESH_SECONDS)
 
 
 def _status_of(entry, match) -> str:
