@@ -116,6 +116,24 @@ def _clean_name(raw: str) -> str:
     return ' / '.join(p for p in parts if p).strip()
 
 
+def _played(scores) -> bool:
+    """Did this result take court time?
+
+    A WALKOVER DID NOT. Nobody hit a ball: the slot is announced, the winner
+    advances, and the court is free at the moment the previous match ends. The
+    chain treated one as an ordinary completed match and pushed everything
+    after it back by its supposed finish — Stadium 17's next match read
+    "Fol. by ~11:35 AM" off a walkover that never occupied the court.
+    A retirement is the opposite case and IS play: it used the court until the
+    moment it stopped.
+    """
+    for side in (scores or []):
+        for cell in (side or []):
+            if re.fullmatch(r"w/?o", str(cell or "").strip(), re.I):
+                return False
+    return True
+
+
 def _duration_for(discipline: str, best_of: int = 3) -> int:
     return _DURATION_MIN.get((discipline, best_of), _DEFAULT_DURATION)
 
@@ -2186,9 +2204,17 @@ async def recompute_expected_starts(db, tournament_id: int, play_date: date,
                 # the match.
                 live_json = (getattr(m, 'live_scores_json', None) if m is not None
                              else s.live_scores_json)
-                prev_end = (finished_at if finished_at else now + timedelta(
-                    minutes=_remaining_minutes(live_json, s.discipline))) + gap
-                s.estimated_duration_min = dur
+                walkover = finished_at is not None and not _played(
+                    (getattr(m, 'scores_json', None) if m is not None
+                     else s.scores_json))
+                if walkover:
+                    # The court was never occupied, so it is freed by whatever
+                    # came BEFORE this row: prev_end is left exactly as it was.
+                    s.estimated_duration_min = 0
+                else:
+                    prev_end = (finished_at if finished_at else now + timedelta(
+                        minutes=_remaining_minutes(live_json, s.discipline))) + gap
+                    s.estimated_duration_min = dur
                 if before != (s.expected_start_at, s.expected_source):
                     touched += 1
                 continue
