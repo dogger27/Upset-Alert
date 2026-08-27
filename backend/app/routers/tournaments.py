@@ -1704,8 +1704,22 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
         logger.warning("Ignored a parse of %s %s that dropped %d entrant(s)",
                      tournament.year, tournament.name, len(missing_positions))
     else:
+        # AN ENTRY SOMEBODY HAS PICKED IS NOT DELETABLE. Deleting it orphans
+        # the prediction silently: the pick survives pointing at a row that no
+        # longer exists, the bracket shows no selection, and the user's next
+        # round reads TBD. The 2026 US Open qualifier slots hit this on every
+        # scrape — Wikipedia does not list them, so the cleanup removed them
+        # and the official-draw fill recreated them under new ids.
+        from app.models.prediction import UserPrediction
+        picked_ids = set((await db.execute(
+            select(UserPrediction.predicted_winner_id).where(
+                UserPrediction.draw_id == tournament.id,
+                UserPrediction.predicted_winner_id.isnot(None)))).scalars().all())
         for pos in missing_positions:
-            await db.delete(existing_players[pos])
+            entry = existing_players[pos]
+            if entry.id in picked_ids:
+                continue
+            await db.delete(entry)
     await db.flush()
 
     # Queue the swaps for notification. Written in the same transaction as the

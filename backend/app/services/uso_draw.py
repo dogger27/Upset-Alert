@@ -107,6 +107,11 @@ async def fill_missing_slots(db, draw: Draw) -> int:
     # player Wikipedia has already placed elsewhere is reused rather than
     # duplicated under a slightly different rendering.
     by_key = {_key(e.name): e for e in entries if e.name}
+    # IDS MUST BE STABLE ACROSS SCRAPES. A placeholder recreated under a new id
+    # every pass orphans every pick made on it, so an existing unnamed-Q row
+    # standing at this slot is reused rather than replaced.
+    holders = {e.bracket_position: e for e in entries
+               if not e.name and e.entry_type == "Q"}
 
     filled = 0
     for m in matches:
@@ -124,7 +129,8 @@ async def fill_missing_slots(db, draw: Draw) -> int:
             # first-round match, in order. Omitting it aborted the whole fill
             # mid-transaction and left one half of the draw populated.
             position = (m.match_number - 1) * 2 + idx + 1
-            entry = None if placeholder else by_key.get(_key(person["name"]))
+            entry = (holders.get(position) if placeholder
+                     else by_key.get(_key(person["name"])))
             if entry is None:
                 entry = DrawEntry(
                     draw_id=draw.id,
@@ -138,7 +144,9 @@ async def fill_missing_slots(db, draw: Draw) -> int:
                     bracket_position=position)
                 db.add(entry)
                 await db.flush()
-                if not placeholder:
+                if placeholder:
+                    holders[position] = entry
+                else:
                     by_key[_key(person["name"])] = entry
             setattr(m, attr, entry.id)
             filled += 1
