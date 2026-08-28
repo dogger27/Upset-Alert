@@ -1206,3 +1206,13 @@ html.h2h-modal-open body {
      of when they were sharing the bar with two buttons and a counter. */
   .h2h-namebar .h2h-name-last { font-size: 1.05rem; }
 }
+
+/* Tiebreak points ride high on the loser's games, the same way the schedule
+   and draw write a set. Smaller and lifted, never shrinking the line. */
+.h2h-score sup,
+.h2h-form-popup-row sup {
+  font-size: 0.72em;
+  vertical-align: super;
+  line-height: 0;
+  margin-left: 0.05em;
+}

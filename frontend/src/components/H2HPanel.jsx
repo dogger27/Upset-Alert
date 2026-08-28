@@ -183,6 +183,37 @@ function flipScore(score) {
   }).join(', ')
 }
 
+/* "6(8)-7" reads like a footnote; "6⁸-7" reads like a tennis score — and it
+   is how every other score on the site is already written (see SetCell). The
+   bracketed number belongs to the player who LOST the set, so it hangs off
+   their games, which is exactly where the parentheses were. */
+function ScoreLine({ score }) {
+  if (!score) return '—'
+  const sets = String(score).split(',')
+  return (
+    <>
+      {sets.map((set, i) => {
+        const sides = set.trim().split('-')
+        if (sides.length !== 2) return <span key={i}>{i ? ', ' : ''}{set.trim()}</span>
+        return (
+          <span key={i}>
+            {i ? ', ' : ''}
+            {sides.map((side, j) => {
+              const m = /^(\d+)\((\d+)\)$/.exec(side.trim())
+              return (
+                <span key={j}>
+                  {j ? '-' : ''}
+                  {m ? <>{m[1]}<sup>{m[2]}</sup></> : side.trim()}
+                </span>
+              )
+            })}
+          </span>
+        )
+      })}
+    </>
+  )
+}
+
 function fmtFormDate(iso) {
   if (!iso) return '—'
   const d = new Date(iso + 'T00:00:00')
@@ -264,7 +295,7 @@ function FormBox({ m, boxKey, openKey, onOpen }) {
         <div className="h2h-form-popup" style={{ position: 'fixed', left: pos.x, top: pos.y - 8, transform: 'translate(-50%, -100%)' }}>
           <div className="h2h-form-popup-event">{[m.event, m.round].filter(Boolean).join(' · ')}</div>
           <div className="h2h-form-popup-row"><span>vs</span><strong>{m.opponent}</strong></div>
-          <div className="h2h-form-popup-row"><span>Score</span><strong>{m.score || '—'}</strong></div>
+          <div className="h2h-form-popup-row"><span>Score</span><strong><ScoreLine score={m.score} /></strong></div>
           <div className="h2h-form-popup-row"><span>Date</span><strong>{fmtFormDate(m.date)}</strong></div>
         </div>,
         document.body
@@ -741,7 +772,7 @@ export default function H2HPanel({
                       : (player2?.name ?? fmtName(data.name_b))
                     return (
                       <tr key={idx} className={isWin ? 'h2h-row-win' : 'h2h-row-loss'}>
-                        <td className="h2h-score">{displayScore || '—'}</td>
+                        <td className="h2h-score"><ScoreLine score={displayScore} /></td>
                         <td className="h2h-winner">{winnerName}</td>
                         <td className="h2h-surface">{surfaceLabel(m.surface)}</td>
                         <td className="h2h-year">{m.year ?? '—'}</td>
