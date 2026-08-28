@@ -269,6 +269,42 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                          f"expected {want} for {e.discipline}: "
                          + " / ".join(p.raw_name or "" for p in served))
 
+        # 2026-08-28, Monterrey ESTADIO: the doubles semi-final printed a choice
+        # between two whole PAIRS — "M. Chwalinska / S. Kraus OR S. Aoyama /
+        # E. Liang" — against a settled Joint/Xu. The rows were right, and
+        # nothing above judged them: `doubles_side_not_two` exempts a declared-
+        # unresolved side outright, and `settled_side_not_two` waits for the
+        # side to settle, which for a semi-final printed at teatime is hours
+        # away. So for as long as the question is OPEN — which is exactly when
+        # the slot is on the page and being read — the shape of each
+        # alternative is unchecked. That is the third time this is_tbd carve-out
+        # has hidden something (see the two notes above); the shape of an
+        # alternative is the part of it that had never been stated.
+        #
+        # An alternative names ONE COMPETITOR of the row's shape: one player for
+        # singles, a pair for doubles. A doubles alternative that lost a partner
+        # would read on the page as a lone player entering a doubles match, and
+        # a singles alternative that GAINED a slash is the Medvedev phantom team
+        # ("DAMM / SHELBAYH", 2026-08-25) reappearing inside the carve-out
+        # instead of beside it, where `singles_side_stacked` is watching.
+        #
+        # Only a side actually offering a choice is judged. A side holding one
+        # alternative is the whole side and is already covered above.
+        if e.is_tbd:
+            want_alt = 2 if e.discipline in ("doubles", "mixed") else 1
+            for side_key in (e.tbd_side or "ab"):
+                alts = [p for p in players if p.side == side_key]
+                if len(alts) < 2:
+                    continue
+                for p in alts:
+                    people = [x.strip() for x in (p.raw_name or "").split("/")
+                              if x.strip()]
+                    if len(people) != want_alt:
+                        flag("alt_side_shape", e,
+                             f"side {side_key} alternative {p.raw_name!r} names "
+                             f"{len(people)} player(s), expected {want_alt} "
+                             f"for {e.discipline}")
+
         # 2026-08-25, Monterrey "Alexandra PANOVA TBC": Cancha 4's last slot
         # printed a bare "TBC" where a start time would go, one line below the
         # doubles pair above it. Three capitals on their own line is also how
