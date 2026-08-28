@@ -352,6 +352,22 @@ def _doubles_point(entry):
                             max_age=ENTRY_FRESH_SECONDS)
 
 
+def _has_games(live_scores) -> bool:
+    """Has anybody won a game in this match yet?
+
+    live_scores is [p1 games, p2 games, serving, set winners]; a match that
+    has begun has a non-zero entry in one of the first two.
+    """
+    for side in (live_scores or [])[:2]:
+        for cell in (side or []):
+            try:
+                if int(str(cell).strip() or 0) > 0:
+                    return True
+            except (TypeError, ValueError):
+                continue
+    return False
+
+
 def _carried_point(src: dict):
     """The abandoned day's point, rendered for a row that is inheriting it.
 
@@ -621,20 +637,33 @@ async def schedule_day(
         siblings = elsewhere.get(
             (e.tournament_id, frozenset(names_by_row.get(e.id, ()))), [])
         later = [r for r in siblings if r["date"] > e.play_date]
+        earlier = [r for r in siblings if r["date"] < e.play_date]
         # ONLY A MATCH THAT ACTUALLY STARTED is "to be completed" — one that
         # never got on court is simply playing today, and saying otherwise
         # would put a resumption badge on a match with nothing to resume.
-        earlier_started = [r for r in siblings
-                           if r["date"] < e.play_date and r["started"]]
+        #
+        # Evidence of a start can sit on either row. Usually it is the
+        # abandoned day's; but once the new day's row claims the event itself
+        # it carries the games, while its started_at is stamped with TODAY's
+        # announced slot — so a match resuming at 3-6, 6-6 looked like a
+        # fresh one and read "Suspended" instead of "To be completed".
+        earlier_started = [r for r in earlier if r["started"]]
+        started_before = bool(earlier_started) or (
+            bool(earlier) and _has_games(e.live_scores_json))
+        # A row being PLAYED right now says so; the resumption is over.
+        playing_now = (statuses[e.id] == "live"
+                       and not (_doubles_point(e) or {}).get("suspended"))
         if later:
             statuses[e.id] = "postponed"
-        elif earlier_started:
+        elif started_before and not playing_now:
             statuses[e.id] = "to_be_completed"
             # The score stands where play stopped. It lives on the row for the
             # day it was abandoned — that row holds the claim, and an event can
             # only be claimed once — so this row shows it rather than owning it.
-            src = max(earlier_started, key=lambda r: r["date"])
-            carried_from[e.id] = src
+            if earlier_started and not _has_games(e.live_scores_json):
+                # Nothing of its own to show, so it borrows the abandoned
+                # day's score; a row holding its own claim already has it.
+                carried_from[e.id] = max(earlier_started, key=lambda r: r["date"])
         elif e.play_date < (venue_today.get(e.tournament_id) or date.today()):
             # No later sheet yet — but this day is over at the venue, so
             # whatever is still unfinished did not get played.
