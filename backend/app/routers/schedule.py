@@ -381,7 +381,13 @@ def _carried_point(src: dict):
         return None
     out = _render_snapshot(snap)
     if out is not None:
-        out["suspended"] = True
+        # Normally this score is frozen at the abandonment — but the moment the
+        # source row's claim sees play restart, the very same borrowed score is
+        # a LIVE one. Take the source's word for it instead of asserting it:
+        # hardcoding True left resumed matches reading "Suspended" over a score
+        # that was visibly ticking. Absent flag keeps the old meaning, so
+        # payloads written before the flag existed still read as suspended.
+        out["suspended"] = bool(snap.get("suspended", True))
     return out
 
 
@@ -611,6 +617,12 @@ async def schedule_day(
         select(ScheduleEntry.id, ScheduleEntry.play_date,
                ScheduleEntry.tournament_id, ScheduleEntry.live_scores_json,
                ScheduleEntry.live_point_json, ScheduleEntry.started_at,
+               # A FINISHED match empties its live columns — the final score
+               # moves to scores_json and the result to winner_side. Reading
+               # only the live ones made a completed match indistinguishable
+               # from one that never got on court.
+               ScheduleEntry.scores_json, ScheduleEntry.status,
+               ScheduleEntry.winner_side, ScheduleEntry.completed_at,
                ScheduleEntryPlayer.raw_name)
         .join(ScheduleEntryPlayer,
               ScheduleEntryPlayer.schedule_entry_id == ScheduleEntry.id)
@@ -619,18 +631,27 @@ async def schedule_day(
                                             day + timedelta(days=1)])))).all()
     names_by_row: dict = {}
     row_meta: dict = {}
-    for rid, pd, tid, live_scores, live_point, started, raw in sig_rows:
+    for (rid, pd, tid, live_scores, live_point, started,
+         final, st, winner, done_at, raw) in sig_rows:
         names_by_row.setdefault(rid, set()).add(_pairing_surname(raw))
-        row_meta[rid] = (tid, pd, live_scores, live_point, started)
+        row_meta[rid] = (tid, pd, live_scores, live_point, started,
+                         final, st, winner, done_at)
     elsewhere: dict = {}
     for rid, names in names_by_row.items():
-        tid, pd, live_scores, live_point, started = row_meta[rid]
+        (tid, pd, live_scores, live_point, started,
+         final, st, winner, done_at) = row_meta[rid]
         elsewhere.setdefault((tid, frozenset(names)), []).append(
             {"date": pd, "scores": live_scores, "point": live_point,
-             "started": started is not None or bool(live_scores)})
+             "final": final, "winner": winner, "done_at": done_at,
+             "done": st == "completed" or done_at is not None,
+             # A finished match plainly started, even though completion has
+             # since emptied the live column that used to prove it.
+             "started": (started is not None or bool(live_scores)
+                         or bool(final))})
 
     venue_today = {tid: _venue_today(tzs.get(tid)) for tid in t_ids}
     carried_from: dict = {}
+    carried_done: dict = {}
     for e in entries:
         if statuses[e.id] == "completed":
             continue
@@ -653,6 +674,21 @@ async def schedule_day(
         # A row being PLAYED right now says so; the resumption is over.
         playing_now = (statuses[e.id] == "live"
                        and not (_doubles_point(e) or {}).get("suspended"))
+        # THE MATCH IS OVER, WHEREVER IT FINISHED. A sheet printed before the
+        # resumption still lists the match today, and it goes on saying so
+        # after it has been won. The result is a fact and the sheet is only a
+        # plan, so the result wins — including over a `later` row, which is
+        # just another sheet printed even earlier.
+        earlier_done = [r for r in earlier if r["done"]]
+        if earlier_done:
+            statuses[e.id] = "completed"
+            src = max(earlier_done, key=lambda r: r["date"])
+            # Its score and result live on the row that owned the claim, so
+            # this row shows them the same way it would show a carried
+            # suspension — from scores_json, where completion put them.
+            if not (e.scores_json or _has_games(e.live_scores_json)):
+                carried_done[e.id] = src
+            continue
         if later:
             statuses[e.id] = "postponed"
         elif started_before and not playing_now:
@@ -792,6 +828,15 @@ async def schedule_day(
                         ent_slugs, ent_extra, slugs_by_name, extra_by_name)
             for p in ordered
         ]
+        # A row whose match finished on another day holds no result of its
+        # own; what it borrows is the only true answer it has.
+        ws = _winner_side(e, m, players)
+        done_at = _utc(getattr(m, "completed_at", None) if m else e.completed_at)
+        if e.id in carried_done:
+            if ws is None:
+                ws = {"a": 0, "b": 1}.get(carried_done[e.id]["winner"])
+            if done_at is None:
+                done_at = _utc(carried_done[e.id]["done_at"])
         out.append(ScheduleEntryOut(
             id=e.id, tournament_id=e.tournament_id,
             tournament_name=t_names.get(e.tournament_id),
@@ -807,7 +852,7 @@ async def schedule_day(
             started_at=_utc(getattr(m, "started_at", None) if m else e.started_at),
             # Same read-through as started_at: singles carries the result on the
             # match, doubles on the row itself.
-            completed_at=_utc(getattr(m, "completed_at", None) if m else e.completed_at),
+            completed_at=done_at,
             # What is STILL unresolved after the substitution above, so a slot
             # settled by the bracket renders as the ordinary match it now is —
             # H2H included, which is gated on the row naming one player a side.
@@ -825,8 +870,10 @@ async def schedule_day(
             live_point=(_carried_point(carried_from[e.id])
                         if e.id in carried_from
                         else (live_point_for(m) if m else _doubles_point(e))),
-            scores=(m.scores_json if m else e.scores_json),
-            winner_side=_winner_side(e, m, players),
+            scores=((carried_done[e.id]["final"] if e.id in carried_done
+                     else None)
+                    or (m.scores_json if m else e.scores_json)),
+            winner_side=ws,
             surface=(draw_meta.get(e.draw_id) or (None, None))[0],
             gender=(draw_meta.get(e.draw_id) or (None, None))[1],
         ))
