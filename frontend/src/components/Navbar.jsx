@@ -714,7 +714,6 @@ export default function Navbar() {
                       value={username}
                       onChange={e => setUsername(e.target.value)}
                       placeholder="Username"
-                      autoFocus
                     />
                     <label className="profile-edit-label">Full Name</label>
                     <input
