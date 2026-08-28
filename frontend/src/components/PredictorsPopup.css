@@ -137,5 +137,23 @@
   font-style: italic;
 }
 
-/* The player a wrong pick backed: present but subordinate to the handle. */
-.pp-picked { color: var(--text-muted); font-size: 0.88em; }
+/* The player a wrong pick backed gets its OWN column, so every pick starts on
+   the same left edge and the split in the room is one vertical scan rather
+   than a hunt through ragged parentheses. `display: contents` on the row lets
+   the handle and the pick land in the list's grid instead of nesting. */
+.pp-names--wrong {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 14px;
+  align-items: baseline;
+}
+.pp-names--wrong li { display: contents; }
+.pp-picked {
+  color: var(--text-muted);
+  font-size: 0.88em;
+  text-align: left;
+  white-space: nowrap;
+}
+
+/* "Nobody" is one statement, not a handle and a pick. */
+.pp-names--wrong .pp-none { grid-column: 1 / -1; }

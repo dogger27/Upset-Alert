@@ -813,6 +813,18 @@ async def match_predictors(
             out["picked"] = picked_names.get(picked_winner.get(u.id))
         (correct if got_it else incorrect).append(out)
 
+    # Wrong picks group by WHO they backed, so the split in the room reads at a
+    # glance — five names under one player, two under another — rather than
+    # being interleaved alphabetically by handle. Surname first, since that is
+    # what the column shows; handle breaks ties.
+    def _by_pick(u):
+        name = u.get("picked") or ""
+        parts = name.split()
+        surname = parts[-1].casefold() if parts else ""
+        return (surname, name.casefold(),
+                (u.get("username") or u.get("display_name") or "").casefold())
+    incorrect.sort(key=_by_pick)
+
     return {"correct": correct, "incorrect": incorrect, "league_name": league_name}
 
 
