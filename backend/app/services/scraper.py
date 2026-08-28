@@ -608,12 +608,6 @@ def _parse_seed(raw: str) -> tuple[Optional[int], Optional[str]]:
 # Section parsing helpers
 # ---------------------------------------------------------------------------
 
-# Draw sizes that are an exact power of two hold the whole field, so no player
-# can receive a bye. Any smaller field (48, 56, 96...) pads the bracket with
-# them. Keyed rather than computed so the intent is legible at the call site.
-_BYES_POSSIBLE = {32: False, 64: False, 128: False}
-
-
 def _parse_16team_section(
     params: dict[str, str],
     section_index: int,   # 0-based, determines global bracket positions
@@ -622,6 +616,7 @@ def _parse_16team_section(
     matches_out: list[MatchResult],
     draw_size: int,
     include_section_final: bool = True,
+    byes_allowed: bool = True,
 ) -> Optional[list[Optional[int]]]:
     """
     Parse one {{16TeamBracket-Compact-Tennis5/3}} (or ...-Byes) section.
@@ -708,7 +703,9 @@ def _parse_16team_section(
     # both halves of the same inference — the bye flag AND the advancement,
     # which is the half missed on the first pass and put nine men and
     # fourteen women into round two of the 2026 US Open without playing.
-    byes_possible = _BYES_POSSIBLE.get(draw_size, True)
+    # The page's own template decides; bye_positions is the same fact seen
+    # from inside a section (a seed sitting in RD2 with both RD1 slots empty).
+    byes_possible = byes_allowed and bool(bye_positions)
 
     # Process RD1..RD4 (or RD1..RD3 when the section's own final round is
     # actually handled by an external finals bracket — see docstring).
@@ -916,6 +913,15 @@ def parse_draw(wikitext: str) -> ParsedDraw:
 
     # Find all 16TeamBracket sections
     sections_16 = _extract_templates(wikitext, "16TeamBracket-Compact-Tennis")
+    # THE PAGE SAYS WHETHER THIS DRAW HAS BYES. Wikipedia renders a field
+    # smaller than its bracket with the "-Byes" template variant, seeds placed
+    # directly in RD2 — Winston-Salem is 48 players in a 64 bracket and uses
+    # it; the US Open, 128 in 128, does not. Reading that instead of guessing
+    # from the bracket SIZE is the difference between the two: a size rule
+    # called every 64 bracket bye-less and wiped sixteen real byes off
+    # Winston-Salem's first round, which then rendered as "TBD".
+    byes_allowed = bool(re.search(r"16TeamBracket-Compact-Tennis[\w\-]*-Byes",
+                                  wikitext, re.I))
     # Find the 8TeamBracket finals section
     sections_8 = _extract_templates(wikitext, "8TeamBracket-Tennis")
 
@@ -950,6 +956,7 @@ def parse_draw(wikitext: str) -> ParsedDraw:
     for idx, (_, body) in enumerate(sections_16):
         params = _parse_params(body)
         round3_survivors = _parse_16team_section(
+            byes_allowed=byes_allowed,
             params=params,
             section_index=idx,
             global_round_offset=1,
