@@ -475,10 +475,19 @@ function CompetitorRows({ e, a, b }) {
   const doubles = e.discipline !== 'singles'
   const lp = e.live_point ?? null
   const live = e.status === 'live'
+  /* A postponed or carried-over match has a score even though nobody is
+     playing: it is exactly the score play stopped at. It reads from the live
+     snapshot like a live row — otherwise the row falls through to the
+     completed scores, finds none, and shows an empty card for a match that
+     is half played. Nobody is serving, though, so the ball stays off. */
+  const stopped = e.status === 'postponed' || e.status === 'to_be_completed'
+  const hasLiveScore = live || stopped
 
   // Games: prefer the snapshot's own, exactly as the draw page does.
   const g = lp?.games ?? null
-  const fromLive = live ? (g ? [g[0], g[1]] : (e.live_scores ? [e.live_scores[0], e.live_scores[1]] : null)) : null
+  const fromLive = hasLiveScore
+    ? (g ? [g[0], g[1]] : (e.live_scores ? [e.live_scores[0], e.live_scores[1]] : null))
+    : null
   /* The sets the row last had, whatever its status. A LIVE row reads its score
      from the live snapshot alone, so a single empty payload rendered no cells
      at all and the score vanished off the card until the next poll refilled it.
@@ -538,7 +547,8 @@ function CompetitorRows({ e, a, b }) {
   })()
 
   const serving = live ? (lp?.serving ?? e.live_scores?.[2] ?? null) : null
-  const point = live && lp?.point ? lp.point : null
+  // The point stands too — it is where the game was when play stopped.
+  const point = hasLiveScore && lp?.point ? lp.point : null
 
   /* How the match ENDED, when it did not end normally.
      parseSet strips the trailing "r" to read the games off a cell, so without
@@ -610,7 +620,7 @@ function CompetitorRows({ e, a, b }) {
                 kind of number and changes every few seconds. */}
             {point ? (
               <PointCell point={point[side] ?? '0'} tiebreak={lp.tiebreak} />
-            ) : live && (
+            ) : live && !stopped && (
               /* SAY "NO POINT RIGHT NOW", DON'T SILENTLY DROP THE COLUMN.
                  A live row with no fresh point used to render nothing, so
                  the whole score column shifted and it read as the match

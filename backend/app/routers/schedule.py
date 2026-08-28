@@ -352,6 +352,23 @@ def _doubles_point(entry):
                             max_age=ENTRY_FRESH_SECONDS)
 
 
+def _aware_dt(dt):
+    """SQLite hands datetimes back naive; treat them as the UTC they were."""
+    if dt is None:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def _venue_today(tz_name: Optional[str]) -> date:
+    """Today's date AT THE VENUE. A UTC date would call a night session's
+    matches postponed from 8pm local, while they are still being played."""
+    now = datetime.now(timezone.utc)
+    try:
+        return now.astimezone(ZoneInfo(tz_name)).date() if tz_name else now.date()
+    except Exception:
+        return now.date()
+
+
 def _status_of(entry, match) -> str:
     """Live state comes from the MATCH, not from the schedule row.
 
@@ -536,6 +553,28 @@ async def schedule_day(
         for e in slots:
             if e.court_order < highest_started and statuses[e.id] == "scheduled":
                 statuses[e.id] = "completed"
+
+    # ── A DAY THAT RAN OUT, AND THE DAY THAT INHERITS IT ─────────────────────
+    # Rain takes matches off the schedule without finishing them, and the two
+    # days involved need different words. On the day it was ABANDONED the match
+    # is postponed — whether it was mid-set or never called at all; on the day
+    # it is picked up again it is a match to be completed, not a fresh one.
+    # Without this the old day kept showing "In progress" for matches nobody
+    # was playing, and the new day showed its carried-over matches as if they
+    # were starting from love.
+    # Each tournament's own date: a match is postponed when ITS venue has moved
+    # on, not when UTC has.
+    today_by_tournament = {tid: _venue_today(tzs.get(tid)) for tid in t_ids}
+    for e in entries:
+        if statuses[e.id] == "completed":
+            continue
+        venue_today = today_by_tournament.get(e.tournament_id) or date.today()
+        started = _aware_dt(getattr(e, "started_at", None)) or _aware_dt(
+            getattr(matches.get(e.match_id) if e.match_id else None, "started_at", None))
+        if e.play_date < venue_today:
+            statuses[e.id] = "postponed"
+        elif started is not None and started.date() < e.play_date:
+            statuses[e.id] = "to_be_completed"
 
     # ── Who actually came through ────────────────────────────────────────────
     # The sheet is printed before the matches feeding it have been played, so a
