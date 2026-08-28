@@ -663,7 +663,7 @@ a.profile-dropdown-item:visited {
    form, when most of the time this is just a list. */
 .passkey-name-input:hover { border-color: var(--border); }
 .passkey-name-input:focus {
-  border-color: var(--primary, var(--accent));
+  border-color: var(--clay);
   outline: none;
   background: var(--surface-sunken, transparent);
 }
@@ -679,7 +679,39 @@ a.profile-dropdown-item:visited {
   flex-shrink: 0;
 }
 .passkey-remove:disabled { opacity: 0.5; cursor: default; }
-.passkey-add { width: 100%; margin-top: 0.35rem; }
+/* Reads as "make a new one of these", so it is dashed — an empty slot to fill
+   — and centred, which .btn-secondary does not do on its own (it is an
+   inline-flex with no justify-content, so a full-width button left-aligns its
+   label). Distinct from the solid Save/Cancel pair below it on purpose: they
+   commit the form, this one adds a row to the list above. */
+.passkey-add {
+  width: 100%;
+  margin-top: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 42px;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-style: dashed;
+  color: var(--text-muted);
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.passkey-add::before {
+  content: '+';
+  font-size: 1.1rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.passkey-add:hover:not(:disabled) {
+  border-color: var(--clay);
+  color: var(--clay);
+}
+/* While enrolling, the label says what is happening; a plus beside it would
+   contradict that. */
+.passkey-add:disabled::before { content: none; }
 
 
 /* THE EDIT PANEL MUST SCROLL. .profile-dropdown is overflow:hidden to keep its
@@ -687,7 +719,45 @@ a.profile-dropdown-item:visited {
    off — on a phone that hid the Save button entirely. Same bounded height the
    notifications panel uses, and dvh rather than vh because mobile browser
    chrome changes the viewport as it hides. */
-.profile-edit-form {
-  max-height: min(560px, calc(100dvh - 8.5rem));
+/* ── Profile modal ───────────────────────────────────────────────────────
+   Backdrop and shell follow .shp-backdrop / .shp-popup so this behaves like
+   every other overlay in the app. The SHELL owns the height limit and the
+   form scrolls inside it, which keeps Save on screen instead of below the
+   fold — the reason this stopped being a drop-down. */
+.profile-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  height: 100vh;
+  height: 100dvh;
+  background: var(--overlay);
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  overscroll-behavior: contain;
+}
+
+.profile-modal {
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
+  width: min(440px, 100%);
+  max-height: calc(100dvh - 2rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.profile-modal .profile-edit-form {
   overflow-y: auto;
+  padding: 1rem 1.15rem 1.15rem;
+}
+
+/* The dialog's own title, larger than it was as a drop-down heading. */
+.profile-modal .profile-edit-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 0 0 0.75rem;
 }

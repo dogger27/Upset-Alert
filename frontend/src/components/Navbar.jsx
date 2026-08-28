@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import clsx from 'clsx'
 import { useAuth } from '../store/auth'
@@ -111,6 +112,9 @@ export default function Navbar() {
     setError('')
     setPkError('')
     setEditing(true)
+    // The modal is its own surface now, so the menu that launched it should
+    // not stay open behind the backdrop.
+    setMenuOpen(false)
     if (pkSupported) listPasskeys().then(setPasskeys).catch(() => setPasskeys([]))
   }
 
@@ -162,6 +166,14 @@ export default function Navbar() {
     setEditing(false)
     setError('')
   }
+
+  // Escape closes the profile modal, matching the score and predictors popups.
+  useEffect(() => {
+    if (!editing) return
+    const onKey = (e) => { if (e.key === 'Escape') cancelEdit() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [editing])
 
   const openNotifications = async () => {
     setNotifying(true)
@@ -514,7 +526,7 @@ export default function Navbar() {
               </button>
               {menuOpen && (
                 <div className="profile-dropdown">
-                  {!editing && !notifying ? (
+                  {!notifying ? (
                     <>
                       <div className="profile-dropdown-header">
                         <span className="profile-dropdown-name">{user.display_name}</span>
@@ -522,7 +534,7 @@ export default function Navbar() {
                       </div>
                       <div className="profile-dropdown-divider" />
                       <button className="profile-dropdown-item" onClick={openEdit}>
-                        Edit profile
+                        Profile
                       </button>
                       <Link
                         className="profile-dropdown-item"
@@ -563,7 +575,7 @@ export default function Navbar() {
                         })}
                       </div>
                     </>
-                  ) : notifying ? (
+                  ) : (
                     <div className="notif-form">
                       <div className="notif-form-header">
                         <button className="notif-back-btn" onClick={cancelNotif}>←</button>
@@ -680,104 +692,118 @@ export default function Navbar() {
                         </>
                       )}
                     </div>
-                  ) : (
-                    <div className="profile-edit-form">
-                      <p className="profile-edit-title">Edit profile</p>
-                      <label className="profile-edit-label">User Name</label>
-                      <input
-                        className="profile-edit-input"
-                        value={username}
-                        onChange={e => setUsername(e.target.value)}
-                        placeholder="Username"
-                        autoFocus
-                      />
-                      <label className="profile-edit-label">Full Name</label>
-                      <input
-                        className="profile-edit-input"
-                        value={fullName}
-                        onChange={e => setFullName(e.target.value)}
-                        placeholder="Full name"
-                      />
-                      {pkSupported && (
-                        <>
-                          <div className="profile-dropdown-divider" style={{ margin: '0.75rem 0 0.5rem' }} />
-                          <p className="profile-edit-label" style={{ fontWeight: 700, marginBottom: '0.35rem' }}>Passkeys</p>
-                          <p className="profile-edit-hint">
-                            Sign in with Face ID, a fingerprint or your screen lock — no password to type.
-                          </p>
-                          {passkeys.map(pk => (
-                            <div className="passkey-row" key={pk.id}>
-                              {/* Editable in place: renaming is the whole point,
-                                  so it should not need a second screen. */}
-                              <input
-                                className="passkey-name-input"
-                                defaultValue={pk.name}
-                                aria-label={`Name for ${pk.name}`}
-                                onBlur={e => { if (e.target.value !== pk.name) renameKey(pk.id, e.target.value) }}
-                                onKeyDown={e => { if (e.key === 'Enter') e.target.blur() }}
-                              />
-                              <button className="passkey-remove" onClick={() => removePasskey(pk.id)}
-                                      disabled={pkBusy} aria-label={`Remove ${pk.name}`}>
-                                Remove
-                              </button>
-                            </div>
-                          ))}
-                          {pkError && <p className="profile-edit-error">{pkError}</p>}
-                          <input
-                            className="profile-edit-input"
-                            value={pkName}
-                            onChange={e => setPkName(e.target.value)}
-                            placeholder="Name this device (e.g. iPhone Chrome)"
-                          />
-                          <button className="btn-secondary profile-edit-btn passkey-add"
-                                  onClick={addPasskey} disabled={pkBusy}>
-                            {pkBusy ? 'Waiting for your device…' : 'Add a passkey'}
-                          </button>
-                        </>
-                      )}
-                      <div className="profile-dropdown-divider" style={{ margin: '0.75rem 0 0.5rem' }} />
-                      <p className="profile-edit-label" style={{ fontWeight: 700, marginBottom: '0.5rem' }}>Change Password</p>
-                      <label className="profile-edit-label">Current Password</label>
-                      <input
-                        className="profile-edit-input"
-                        type="password"
-                        value={currentPassword}
-                        onChange={e => setCurrentPassword(e.target.value)}
-                        placeholder="Current password"
-                        autoComplete="current-password"
-                      />
-                      <label className="profile-edit-label">New Password</label>
-                      <input
-                        className="profile-edit-input"
-                        type="password"
-                        value={newPassword}
-                        onChange={e => setNewPassword(e.target.value)}
-                        placeholder="New password (min 8 chars)"
-                        autoComplete="new-password"
-                      />
-                      <label className="profile-edit-label">Confirm New Password</label>
-                      <input
-                        className="profile-edit-input"
-                        type="password"
-                        value={confirmPassword}
-                        onChange={e => setConfirmPassword(e.target.value)}
-                        placeholder="Confirm new password"
-                        autoComplete="new-password"
-                      />
-                      {error && <p className="profile-edit-error">{error}</p>}
-                      <div className="profile-edit-actions">
-                        <button className="btn-secondary profile-edit-btn" onClick={cancelEdit} disabled={saving}>
-                          Cancel
-                        </button>
-                        <button className="btn-primary profile-edit-btn" onClick={saveEdit} disabled={saving}>
-                          {saving ? 'Saving…' : 'Save'}
-                        </button>
-                      </div>
-                    </div>
+
                   )}
                 </div>
               )}
             </div>
+            {/* A PAGE, NOT A DROP-DOWN. This panel outgrew the menu it hung
+                off: on a phone it ran past the bottom of the screen with its
+                Save button below the fold, and a 320px column is the wrong
+                shape for a form. Same backdrop/shell as the score and
+                predictors popups, so it behaves the way every other overlay
+                here already does — Escape, backdrop click, centred. */}
+            {editing && createPortal(
+              <div className="profile-modal-backdrop" onClick={cancelEdit}>
+                <div className="profile-modal" onClick={e => e.stopPropagation()}
+                     role="dialog" aria-modal="true" aria-label="Profile">
+                  <div className="profile-edit-form">
+                    <p className="profile-edit-title">Profile</p>
+                    <label className="profile-edit-label">User Name</label>
+                    <input
+                      className="profile-edit-input"
+                      value={username}
+                      onChange={e => setUsername(e.target.value)}
+                      placeholder="Username"
+                      autoFocus
+                    />
+                    <label className="profile-edit-label">Full Name</label>
+                    <input
+                      className="profile-edit-input"
+                      value={fullName}
+                      onChange={e => setFullName(e.target.value)}
+                      placeholder="Full name"
+                    />
+                    {pkSupported && (
+                      <>
+                        <div className="profile-dropdown-divider" style={{ margin: '0.75rem 0 0.5rem' }} />
+                        <p className="profile-edit-label" style={{ fontWeight: 700, marginBottom: '0.35rem' }}>Passkeys</p>
+                        <p className="profile-edit-hint">
+                          Sign in with Face ID, a fingerprint or your screen lock — no password to type.
+                        </p>
+                        {passkeys.map(pk => (
+                          <div className="passkey-row" key={pk.id}>
+                            {/* Editable in place: renaming is the whole point,
+                                so it should not need a second screen. */}
+                            <input
+                              className="passkey-name-input"
+                              defaultValue={pk.name}
+                              aria-label={`Name for ${pk.name}`}
+                              onBlur={e => { if (e.target.value !== pk.name) renameKey(pk.id, e.target.value) }}
+                              onKeyDown={e => { if (e.key === 'Enter') e.target.blur() }}
+                            />
+                            <button className="passkey-remove" onClick={() => removePasskey(pk.id)}
+                                    disabled={pkBusy} aria-label={`Remove ${pk.name}`}>
+                              Remove
+                            </button>
+                          </div>
+                        ))}
+                        {pkError && <p className="profile-edit-error">{pkError}</p>}
+                        <input
+                          className="profile-edit-input"
+                          value={pkName}
+                          onChange={e => setPkName(e.target.value)}
+                          placeholder="Name this device (e.g. iPhone Chrome)"
+                        />
+                        <button className="btn-secondary profile-edit-btn passkey-add"
+                                onClick={addPasskey} disabled={pkBusy}>
+                          {pkBusy ? 'Waiting for your device…' : 'Add a passkey'}
+                        </button>
+                      </>
+                    )}
+                    <div className="profile-dropdown-divider" style={{ margin: '0.75rem 0 0.5rem' }} />
+                    <p className="profile-edit-label" style={{ fontWeight: 700, marginBottom: '0.5rem' }}>Change Password</p>
+                    <label className="profile-edit-label">Current Password</label>
+                    <input
+                      className="profile-edit-input"
+                      type="password"
+                      value={currentPassword}
+                      onChange={e => setCurrentPassword(e.target.value)}
+                      placeholder="Current password"
+                      autoComplete="current-password"
+                    />
+                    <label className="profile-edit-label">New Password</label>
+                    <input
+                      className="profile-edit-input"
+                      type="password"
+                      value={newPassword}
+                      onChange={e => setNewPassword(e.target.value)}
+                      placeholder="New password (min 8 chars)"
+                      autoComplete="new-password"
+                    />
+                    <label className="profile-edit-label">Confirm New Password</label>
+                    <input
+                      className="profile-edit-input"
+                      type="password"
+                      value={confirmPassword}
+                      onChange={e => setConfirmPassword(e.target.value)}
+                      placeholder="Confirm new password"
+                      autoComplete="new-password"
+                    />
+                    {error && <p className="profile-edit-error">{error}</p>}
+                    <div className="profile-edit-actions">
+                      <button className="btn-secondary profile-edit-btn" onClick={cancelEdit} disabled={saving}>
+                        Cancel
+                      </button>
+                      <button className="btn-primary profile-edit-btn" onClick={saveEdit} disabled={saving}>
+                        {saving ? 'Saving…' : 'Save'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>,
+              document.body,
+            )}
           </>
         ) : null}
       </div>
