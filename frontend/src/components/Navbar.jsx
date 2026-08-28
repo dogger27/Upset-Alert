@@ -32,11 +32,6 @@ export default function Navbar() {
   const [passkeys, setPasskeys] = useState([])
   const [pkBusy, setPkBusy] = useState(false)
   const [pkError, setPkError] = useState('')
-  // What the NEXT passkey will be called. The server cannot tell a browser's
-  // key from the system password manager's — attestation is "none", so there
-  // is no authenticator identity to read — and on one phone both would
-  // otherwise arrive as "iPhone".
-  const [pkName, setPkName] = useState('')
   const pkSupported = passkeysSupported()
 
   // Notification panel state
@@ -126,8 +121,10 @@ export default function Navbar() {
       const guess = /iPhone|iPad/.test(navigator.userAgent) ? 'iPhone'
         : /Android/.test(navigator.userAgent) ? 'Android phone'
         : /Mac/.test(navigator.userAgent) ? 'Mac' : 'This device'
-      await enrolPasskey(pkName.trim() || guess)
-      setPkName('')
+      // Named for the device by default; the row is renameable afterwards, and
+      // the server numbers a duplicate so two keys on one phone never look
+      // identical even if nobody renames anything.
+      await enrolPasskey(guess)
       setPasskeys(await listPasskeys())
     } catch (err) {
       if (err?.name !== 'NotAllowedError' && err?.name !== 'AbortError') {
@@ -730,6 +727,7 @@ export default function Navbar() {
                         <p className="profile-edit-label" style={{ fontWeight: 700, marginBottom: '0.35rem' }}>Passkeys</p>
                         <p className="profile-edit-hint">
                           Sign in with Face ID, a fingerprint or your screen lock — no password to type.
+                          {passkeys.length > 0 && ' Tap a name to rename it.'}
                         </p>
                         {passkeys.map(pk => (
                           <div className="passkey-row" key={pk.id}>
@@ -749,12 +747,6 @@ export default function Navbar() {
                           </div>
                         ))}
                         {pkError && <p className="profile-edit-error">{pkError}</p>}
-                        <input
-                          className="profile-edit-input"
-                          value={pkName}
-                          onChange={e => setPkName(e.target.value)}
-                          placeholder="Name this device (e.g. iPhone Chrome)"
-                        />
                         <button className="btn-secondary profile-edit-btn passkey-add"
                                 onClick={addPasskey} disabled={pkBusy}>
                           {pkBusy ? 'Waiting for your device…' : 'Add a passkey'}

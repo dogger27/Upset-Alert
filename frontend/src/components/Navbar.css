@@ -695,9 +695,15 @@ a.profile-dropdown-item:visited {
   padding: 0.5rem 0.9rem;
   font-size: 0.85rem;
   font-weight: 600;
+  /* Visible AT REST, not only on hover — dashed --border against a card is
+     nearly invisible, and a control nobody can see is not a control.
+     --border-strong draws the slot and --surface-sunken fills it, so it reads
+     as a well waiting to be filled rather than as a ghost. */
   border-style: dashed;
-  color: var(--text-muted);
-  transition: color 0.15s ease, border-color 0.15s ease;
+  border-color: var(--border-strong);
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
 .passkey-add::before {
   content: '+';
@@ -707,6 +713,7 @@ a.profile-dropdown-item:visited {
 }
 .passkey-add:hover:not(:disabled) {
   border-color: var(--clay);
+  background: var(--surface-card);
   color: var(--clay);
 }
 /* While enrolling, the label says what is happening; a plus beside it would
