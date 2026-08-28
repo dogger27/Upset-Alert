@@ -605,6 +605,12 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   text-decoration: none;
   display: inline-flex;
   align-items: center;
+  /* A BUTTON CENTRES ITS LABEL. Without this the flex box left-aligns, which
+     is invisible while the button hugs its text and obvious the moment one is
+     stretched — Cancel in the profile modal, "Add a passkey", "Sign in with a
+     passkey" all sat hard against their left edge. A no-op for every
+     content-width button, since there is no free space to distribute. */
+  justify-content: center;
 }
 .btn-secondary:hover:not(:disabled) { background: var(--bg); text-decoration: none; }
 
