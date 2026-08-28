@@ -5,7 +5,12 @@ class Settings(BaseSettings):
     database_url: str = "sqlite+aiosqlite:///./tennis_fantasy.db"
     secret_key: str = "change-me-to-a-long-random-string"
     algorithm: str = "HS256"
-    access_token_expire_minutes: int = 60 * 24 * 7  # 1 week
+    # A YEAR. Signing in is friction with no security dividend here: the token
+    # lives in one person's browser, the site holds no payment details, and a
+    # weekly expiry only ever logged out people who were using the site daily.
+    # The client renews a half-spent token on open (see /auth/refresh), so
+    # anyone who visits within the window effectively never signs in again.
+    access_token_expire_minutes: int = 60 * 24 * 365  # 1 year
     wiki_api_url: str = "https://en.wikipedia.org/w/api.php"
     resend_api_key: str = ""
     environment: str = "development"
