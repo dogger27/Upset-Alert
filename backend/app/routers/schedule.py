@@ -643,6 +643,10 @@ async def schedule_day(
         elsewhere.setdefault((tid, frozenset(names)), []).append(
             {"date": pd, "scores": live_scores, "point": live_point,
              "final": final, "winner": winner, "done_at": done_at,
+             # The instant a poller first saw it on court. For a match picked
+             # up on a later day this is restamped to the RESUMPTION, so a
+             # borrowing row can print "Started at" instead of "In progress".
+             "started_at": started,
              "done": st == "completed" or done_at is not None,
              # A finished match plainly started, even though completion has
              # since emptied the live column that used to prove it.
@@ -838,6 +842,15 @@ async def schedule_day(
         # own; what it borrows is the only true answer it has.
         ws = _winner_side(e, m, players)
         done_at = _utc(getattr(m, "completed_at", None) if m else e.completed_at)
+        # A carried row owns no claim, so nothing ever stamped it as started —
+        # and the time column fell back to the literal words "In progress"
+        # while every other live row named an hour. The row it borrows its
+        # score from was stamped when play restarted; borrow that too.
+        began = _utc(getattr(m, "started_at", None) if m else e.started_at)
+        if began is None:
+            src_row = carried_from.get(e.id) or carried_done.get(e.id)
+            if src_row and src_row.get("started_at"):
+                began = _utc(src_row["started_at"])
         if e.id in carried_done:
             if ws is None:
                 ws = {"a": 0, "b": 1}.get(carried_done[e.id]["winner"])
@@ -855,7 +868,7 @@ async def schedule_day(
             expected_start_at=_utc(e.expected_start_at), expected_source=e.expected_source,
             # Singles reads it off the match; doubles has none and carries its
             # own, so the field means the same thing either way.
-            started_at=_utc(getattr(m, "started_at", None) if m else e.started_at),
+            started_at=began,
             # Same read-through as started_at: singles carries the result on the
             # match, doubles on the row itself.
             completed_at=done_at,
