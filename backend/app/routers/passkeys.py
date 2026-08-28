@@ -155,11 +155,50 @@ async def register_verify(body: dict,
         sign_count=verified.sign_count or 0,
         transports=",".join(
             (credential.get("response", {}).get("transports") or [])) or None,
-        name=(str(body.get("name") or "").strip()[:60] or "Passkey"),
+        name=await _unique_name(db, current_user.id,
+                                str(body.get("name") or "").strip()[:60] or "Passkey"),
     ))
     await db.commit()
     await app_log("info", "auth", f"Passkey added for {current_user.username}")
     return {"ok": True}
+
+
+async def _unique_name(db: AsyncSession, user_id: int, wanted: str) -> str:
+    """A name that is not already in this account's list.
+
+    Two passkeys on the same phone — one in the browser, one in the system
+    password manager — are genuinely different keys, and the server cannot tell
+    them apart: attestation is deliberately "none", so there is no authenticator
+    identity to read. Rather than show two identical rows, the second gets a
+    number and the owner can rename it to whatever it actually is.
+    """
+    taken = set((await db.execute(
+        select(UserPasskey.name).where(UserPasskey.user_id == user_id))).scalars().all())
+    if wanted not in taken:
+        return wanted
+    for n in range(2, 100):
+        candidate = f"{wanted} {n}"
+        if candidate not in taken:
+            return candidate
+    return wanted
+
+
+@router.patch("/{passkey_id}")
+async def rename_passkey(passkey_id: int, body: dict,
+                         current_user: User = Depends(get_current_user),
+                         db: AsyncSession = Depends(get_db)):
+    """The owner knows where the key actually lives; the server never can."""
+    name = str(body.get("name") or "").strip()[:60]
+    if not name:
+        raise HTTPException(400, "A passkey needs a name.")
+    row = (await db.execute(select(UserPasskey).where(
+        UserPasskey.id == passkey_id,
+        UserPasskey.user_id == current_user.id))).scalars().first()
+    if not row:
+        raise HTTPException(404, "No such passkey.")
+    row.name = name
+    await db.commit()
+    return {"id": row.id, "name": row.name}
 
 
 @router.get("")

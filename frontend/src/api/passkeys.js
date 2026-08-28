@@ -46,6 +46,8 @@ export const conditionalUIAvailable = async () => {
 export const listPasskeys = () => client.get('/auth/passkeys').then(r => r.data)
 export const deletePasskey = (id) =>
   client.delete(`/auth/passkeys/${id}`).then(r => r.data)
+export const renamePasskey = (id, name) =>
+  client.patch(`/auth/passkeys/${id}`, { name }).then(r => r.data)
 
 export async function enrolPasskey(name) {
   const { options } = await client.post('/auth/passkeys/register/options')
