@@ -86,6 +86,13 @@
   --surface-raised: #ffffff;
   --border: #e2e7ea;
   --border-strong: #cdd5d9;
+  /* A CONTROL MUST NOT BE THE COLOUR OF WHAT IT SITS ON. Secondary buttons
+     were --surface-card, which on a card or in a modal is exactly the surface
+     behind them, leaving only a hairline border to say a button was there.
+     This steps AWAY from the card in whichever direction the theme has room
+     for: down into grey on light, up towards the light on dark. */
+  --control-fill: #e9eef2;
+  --control-fill-hover: #dde5ea;
 
   /* ── Semantic ── */
   --text: var(--ink-900);
@@ -365,6 +372,11 @@
   --surface: var(--surface-card);
   --border: #253430;
   --border-strong: #3a4b45;
+  /* Lifted off --surface-card (#182521) rather than sunk below it: on a dark
+     theme a darker fill reads as a hole through to the page, which is exactly
+     how the add-passkey button looked. */
+  --control-fill: #22322c;
+  --control-fill-hover: #2b3d36;
 
   /* Off-white, not #fff — pure white on a dark field haloes badly at text
      sizes. 13:1 on a card, so it clears AAA with room to spare. */
@@ -599,7 +611,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-primary:hover:not(:disabled) { background: var(--brand-fill-hover); }
 
 .btn-secondary {
-  background: var(--surface-card);
+  background: var(--control-fill);
   color: var(--text);
   border-color: var(--border);
   text-decoration: none;
@@ -612,7 +624,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
      content-width button, since there is no free space to distribute. */
   justify-content: center;
 }
-.btn-secondary:hover:not(:disabled) { background: var(--bg); text-decoration: none; }
+.btn-secondary:hover:not(:disabled) { background: var(--control-fill-hover); text-decoration: none; }
 
 .btn-clay {
   background: var(--clay);
