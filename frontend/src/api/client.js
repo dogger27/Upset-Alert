@@ -45,4 +45,13 @@ client.interceptors.response.use(
   }
 )
 
+/* NEVER PROBE /assets/<hash>.js TO VERIFY A DEPLOY.
+   Mid-deploy, Cloudflare Pages answers an asset that has not landed yet with
+   the SPA's index.html and a 200 — and _headers lets that response be cached
+   under the asset's URL, so a verification request can leave every visitor on
+   that edge downloading HTML where the bundle should be. It happened on
+   2026-08-28 and took a rebuild to clear, because the cached copy carried a
+   24-hour max-age and there is no purge token on this box.
+   Verify with a UNIQUE QUERY STRING (`?cb=$RANDOM`), which caches under its own
+   key and cannot poison the real one. */
 export default client
