@@ -663,7 +663,16 @@ async def schedule_day(
             if earlier_started and not _has_games(e.live_scores_json):
                 # Nothing of its own to show, so it borrows the abandoned
                 # day's score; a row holding its own claim already has it.
-                carried_from[e.id] = max(earlier_started, key=lambda r: r["date"])
+                src = max(earlier_started, key=lambda r: r["date"])
+                carried_from[e.id] = src
+                # AND IF PLAY HAS RESTARTED, SAY SO. The claim stays with the
+                # abandoned day's row, so this row learns the match is back on
+                # only through what it is borrowing: a source whose point is
+                # no longer flagged suspended is a match being played now.
+                # Without this the resumed match would sit under "To be
+                # completed" for the rest of the afternoon.
+                if (src.get("point") or {}).get("suspended") is False:
+                    statuses[e.id] = "live"
         elif e.play_date < (venue_today.get(e.tournament_id) or date.today()):
             # No later sheet yet — but this day is over at the venue, so
             # whatever is still unfinished did not get played.
