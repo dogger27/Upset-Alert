@@ -653,8 +653,6 @@ async def schedule_day(
     carried_from: dict = {}
     carried_done: dict = {}
     for e in entries:
-        if statuses[e.id] == "completed":
-            continue
         siblings = elsewhere.get(
             (e.tournament_id, frozenset(names_by_row.get(e.id, ()))), [])
         later = [r for r in siblings if r["date"] > e.play_date]
@@ -688,6 +686,14 @@ async def schedule_day(
             # suspension — from scores_json, where completion put them.
             if not (e.scores_json or _has_games(e.live_scores_json)):
                 carried_done[e.id] = src
+            continue
+        # Only NOW may an already-completed row bow out. This guard used to sit
+        # at the top of the loop, where it swallowed the branch above: the
+        # court heuristic ("everything before a started match has finished")
+        # marks a carried row completed the moment the next match on its court
+        # gets on, and the row then skipped the very code that fetches the
+        # score it should be showing — Completed, with nothing under it.
+        if statuses[e.id] == "completed":
             continue
         if later:
             statuses[e.id] = "postponed"
