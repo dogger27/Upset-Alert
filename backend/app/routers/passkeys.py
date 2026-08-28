@@ -49,6 +49,48 @@ router = APIRouter(prefix="/auth/passkeys", tags=["passkeys"])
 # left on a screen is not a standing invitation.
 CHALLENGE_TTL = timedelta(minutes=5)
 
+# WHO IS HOLDING THE KEY. The AAGUID names the authenticator's make, which is
+# the only way to tell a passkey saved in the browser from one saved in the
+# system password manager on the same phone. These identifiers are published by
+# their vendors for exactly this purpose (the FIDO/passkeys.dev community list).
+# An unknown or zeroed value simply falls through to the device name — several
+# browsers zero it deliberately, and a wrong guess is worse than a plain one.
+_AAGUID_NAMES = {
+    "fbfc3007-154e-4ecc-8c0b-6e020557d7bd": "iCloud Passwords",
+    "adce0002-35bc-c60a-648b-0b25f1f05503": "Chrome",
+    "b5397666-4885-aa6b-cebf-e52262a439a2": "Chromium",
+    "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4": "Google Password Manager",
+    "08987058-cadc-4b81-b6e1-30de50dcbe96": "Windows Hello",
+    "9ddd1817-af5a-4672-a2b9-3e3dd95000a9": "Windows Hello",
+    "6028b017-b1d4-4c02-b4b3-afcdafc96bb2": "Windows Hello",
+    "bada5566-a7aa-401f-bd96-45619a55120d": "1Password",
+    "d548826e-79b4-db40-a3d8-11116f7e8349": "Bitwarden",
+    "531126d6-e717-415c-9320-3d9aa6981239": "Dashlane",
+    "0ea242b4-43c4-4a1b-8b17-dd6d0b6baec6": "Keeper",
+    "f3809540-7f14-49c1-a8b3-8f813b225541": "Enpass",
+    "b84e4048-15dc-4dd0-8640-f4f60813c8af": "NordPass",
+    "22248c4c-7a12-46e2-9a41-44291b373a4d": "LastPass",
+    "de1e552d-db1d-4423-a619-566b625cdc84": "Proton Pass",
+}
+_ZERO_AAGUID = "00000000-0000-0000-0000-000000000000"
+
+
+def _describe(aaguid: Optional[str], device: str) -> str:
+    """The best name we can produce without asking.
+
+    A site cannot read a phone's name — no web API exposes it — so "Paul's
+    iPhone" is out of reach. What IS knowable is which password manager saved
+    the key and, from the browser, what kind of machine it was saved on:
+    "iCloud Passwords on iPhone" answers the question the device name was
+    standing in for.
+    """
+    provider = _AAGUID_NAMES.get((aaguid or "").lower()) if aaguid and \
+        aaguid.lower() != _ZERO_AAGUID else None
+    device = (device or "").strip()[:40]
+    if provider and device:
+        return f"{provider} on {device}"
+    return provider or device or "Passkey"
+
 
 def _origins() -> list[str]:
     return [o.strip() for o in settings.webauthn_origins.split(",") if o.strip()]
@@ -155,8 +197,13 @@ async def register_verify(body: dict,
         sign_count=verified.sign_count or 0,
         transports=",".join(
             (credential.get("response", {}).get("transports") or [])) or None,
+        aaguid=str(verified.aaguid) if verified.aaguid else None,
+        # An explicit name always wins; otherwise say who is holding it and
+        # where, which is what the owner was trying to tell the two apart by.
         name=await _unique_name(db, current_user.id,
-                                str(body.get("name") or "").strip()[:60] or "Passkey"),
+                                str(body.get("name") or "").strip()[:60]
+                                or _describe(str(verified.aaguid or ""),
+                                             str(body.get("device") or ""))),
     ))
     await db.commit()
     await app_log("info", "auth", f"Passkey added for {current_user.username}")

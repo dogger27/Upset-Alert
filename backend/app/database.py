@@ -143,6 +143,7 @@ async def _migrate(conn):
         ),
         ("CREATE INDEX IF NOT EXISTS ix_user_passkeys_user_id "
          "ON user_passkeys(user_id)"),
+        "ALTER TABLE user_passkeys ADD COLUMN aaguid VARCHAR",
         (
             "CREATE TABLE IF NOT EXISTS webauthn_challenges "
             "(id INTEGER PRIMARY KEY, challenge VARCHAR NOT NULL UNIQUE, "

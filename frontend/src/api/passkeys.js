@@ -49,7 +49,11 @@ export const deletePasskey = (id) =>
 export const renamePasskey = (id, name) =>
   client.patch(`/auth/passkeys/${id}`, { name }).then(r => r.data)
 
-export async function enrolPasskey(name) {
+/* `device` is what KIND of machine this is — the browser knows that much. It
+   cannot know the machine's NAME ("Paul's iPhone"): no web API exposes it, by
+   design. The server pairs this with the authenticator's AAGUID to produce
+   "iCloud Passwords on iPhone". */
+export async function enrolPasskey(device) {
   const { options } = await client.post('/auth/passkeys/register/options')
     .then(r => r.data)
   const publicKey = JSON.parse(options)
@@ -61,7 +65,7 @@ export async function enrolPasskey(name) {
   const cred = await navigator.credentials.create({ publicKey })
   if (!cred) throw new Error('No passkey was created.')
   await client.post('/auth/passkeys/register/verify', {
-    name,
+    device,
     credential: {
       id: cred.id,
       rawId: bufToB64u(cred.rawId),

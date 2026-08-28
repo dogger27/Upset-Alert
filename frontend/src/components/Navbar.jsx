@@ -118,13 +118,15 @@ export default function Navbar() {
     try {
       // Named for the device it will live on, since that is how the owner will
       // recognise it in the list later.
-      const guess = /iPhone|iPad/.test(navigator.userAgent) ? 'iPhone'
-        : /Android/.test(navigator.userAgent) ? 'Android phone'
-        : /Mac/.test(navigator.userAgent) ? 'Mac' : 'This device'
-      // Named for the device by default; the row is renameable afterwards, and
-      // the server numbers a duplicate so two keys on one phone never look
-      // identical even if nobody renames anything.
-      await enrolPasskey(guess)
+      // The KIND of device only. Its name is not available to any website, so
+      // the server pairs this with the authenticator's AAGUID to work out
+      // "iCloud Passwords on iPhone" rather than a second row saying "iPhone".
+      const device = /iPhone/.test(navigator.userAgent) ? 'iPhone'
+        : /iPad/.test(navigator.userAgent) ? 'iPad'
+        : /Android/.test(navigator.userAgent) ? 'Android'
+        : /Mac/.test(navigator.userAgent) ? 'Mac'
+        : /Windows/.test(navigator.userAgent) ? 'Windows' : ''
+      await enrolPasskey(device)
       setPasskeys(await listPasskeys())
     } catch (err) {
       if (err?.name !== 'NotAllowedError' && err?.name !== 'AbortError') {
