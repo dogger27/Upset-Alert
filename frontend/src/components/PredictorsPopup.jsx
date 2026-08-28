@@ -93,7 +93,7 @@ export default function PredictorsPopup({ drawId, match, leagueId, onClose }) {
                 <span className="pp-badge pp-badge--square" />
                 <span className="pp-count">{incorrect.length}</span>
               </div>
-              <ul className="pp-names">
+              <ul className="pp-names pp-names--wrong">
                 {/* Name the player they backed. The handle alone says a pick
                     missed; the name says what they believed — and whether the
                     room split or everyone backed the same loser. Initial and
@@ -102,7 +102,7 @@ export default function PredictorsPopup({ drawId, match, leagueId, onClose }) {
                 {incorrect.map(u => (
                   <li key={u.id}>
                     <UserName user={u} />
-                    {u.picked && <span className="pp-picked"> ({shortName(u.picked)})</span>}
+                    <span className="pp-picked">{u.picked ? `(${shortName(u.picked)})` : ''}</span>
                   </li>
                 ))}
                 {incorrect.length === 0 && <li className="pp-none">Nobody</li>}
