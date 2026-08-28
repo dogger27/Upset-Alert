@@ -352,6 +352,12 @@ def _doubles_point(entry):
                             max_age=ENTRY_FRESH_SECONDS)
 
 
+def _pairing_surname(raw_name: str) -> str:
+    """The surname as both sheets spell it, so one day's row and the next
+    day's row for the same match produce the same signature."""
+    return _norm(raw_name or "").split()[-1] if (raw_name or "").strip() else ""
+
+
 def _aware_dt(dt):
     """SQLite hands datetimes back naive; treat them as the UTC they were."""
     if dt is None:
@@ -562,19 +568,43 @@ async def schedule_day(
     # Without this the old day kept showing "In progress" for matches nobody
     # was playing, and the new day showed its carried-over matches as if they
     # were starting from love.
-    # Each tournament's own date: a match is postponed when ITS venue has moved
-    # on, not when UTC has.
-    today_by_tournament = {tid: _venue_today(tzs.get(tid)) for tid in t_ids}
+    # THE TOURNAMENT'S OWN ANSWER, NOT THE CLOCK'S. Waiting for the venue's
+    # date to roll over would leave a rained-off evening reading "in progress"
+    # for hours. The sheet says it plainly instead: a match that reappears on a
+    # LATER day was abandoned on this one, and a match that appeared on an
+    # EARLIER day is being picked up rather than started. Both sides of that
+    # come from one query over the neighbouring days.
+    sig_rows = (await db.execute(
+        select(ScheduleEntry.id, ScheduleEntry.play_date,
+               ScheduleEntry.tournament_id, ScheduleEntryPlayer.raw_name)
+        .join(ScheduleEntryPlayer,
+              ScheduleEntryPlayer.schedule_entry_id == ScheduleEntry.id)
+        .where(ScheduleEntry.tournament_id.in_(t_ids),
+               ScheduleEntry.play_date.in_([day - timedelta(days=1), day,
+                                            day + timedelta(days=1)])))).all()
+    names_by_row: dict = {}
+    row_meta: dict = {}
+    for rid, pd, tid, raw in sig_rows:
+        names_by_row.setdefault(rid, set()).add(_pairing_surname(raw))
+        row_meta[rid] = (tid, pd)
+    elsewhere: dict = {}
+    for rid, names in names_by_row.items():
+        tid, pd = row_meta[rid]
+        elsewhere.setdefault((tid, frozenset(names)), set()).add(pd)
+
+    venue_today = {tid: _venue_today(tzs.get(tid)) for tid in t_ids}
     for e in entries:
         if statuses[e.id] == "completed":
             continue
-        venue_today = today_by_tournament.get(e.tournament_id) or date.today()
-        started = _aware_dt(getattr(e, "started_at", None)) or _aware_dt(
-            getattr(matches.get(e.match_id) if e.match_id else None, "started_at", None))
-        if e.play_date < venue_today:
+        days = elsewhere.get((e.tournament_id, frozenset(names_by_row.get(e.id, ()))), set())
+        if any(d > e.play_date for d in days):
             statuses[e.id] = "postponed"
-        elif started is not None and started.date() < e.play_date:
+        elif any(d < e.play_date for d in days):
             statuses[e.id] = "to_be_completed"
+        elif e.play_date < (venue_today.get(e.tournament_id) or date.today()):
+            # No later sheet yet — but this day is over at the venue, so
+            # whatever is still unfinished did not get played.
+            statuses[e.id] = "postponed"
 
     # ── Who actually came through ────────────────────────────────────────────
     # The sheet is printed before the matches feeding it have been played, so a
