@@ -13,6 +13,7 @@ import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getMatchPredictors } from '../api/tournaments'
 import UserName from './UserName'
+import { splitPlayerName } from '../utils/flags'
 import './PredictorsPopup.css'
 
 function CheckMark() {
