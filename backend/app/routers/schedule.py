@@ -352,6 +352,23 @@ def _doubles_point(entry):
                             max_age=ENTRY_FRESH_SECONDS)
 
 
+def _carried_point(src: dict):
+    """The abandoned day's point, rendered for a row that is inheriting it.
+
+    Same shape the live path produces, minus the freshness test: this score is
+    deliberately old — it is where play stopped — so ageing it out would empty
+    the very row the reader came to see.
+    """
+    from app.services.sofascore_live import _render_snapshot
+    snap = src.get("point")
+    if not snap:
+        return None
+    out = _render_snapshot(snap)
+    if out is not None:
+        out["suspended"] = True
+    return out
+
+
 def _pairing_surname(raw_name: str) -> str:
     """The surname as both sheets spell it, so one day's row and the next
     day's row for the same match produce the same signature."""
@@ -576,7 +593,9 @@ async def schedule_day(
     # come from one query over the neighbouring days.
     sig_rows = (await db.execute(
         select(ScheduleEntry.id, ScheduleEntry.play_date,
-               ScheduleEntry.tournament_id, ScheduleEntryPlayer.raw_name)
+               ScheduleEntry.tournament_id, ScheduleEntry.live_scores_json,
+               ScheduleEntry.live_point_json, ScheduleEntry.started_at,
+               ScheduleEntryPlayer.raw_name)
         .join(ScheduleEntryPlayer,
               ScheduleEntryPlayer.schedule_entry_id == ScheduleEntry.id)
         .where(ScheduleEntry.tournament_id.in_(t_ids),
@@ -584,23 +603,38 @@ async def schedule_day(
                                             day + timedelta(days=1)])))).all()
     names_by_row: dict = {}
     row_meta: dict = {}
-    for rid, pd, tid, raw in sig_rows:
+    for rid, pd, tid, live_scores, live_point, started, raw in sig_rows:
         names_by_row.setdefault(rid, set()).add(_pairing_surname(raw))
-        row_meta[rid] = (tid, pd)
+        row_meta[rid] = (tid, pd, live_scores, live_point, started)
     elsewhere: dict = {}
     for rid, names in names_by_row.items():
-        tid, pd = row_meta[rid]
-        elsewhere.setdefault((tid, frozenset(names)), set()).add(pd)
+        tid, pd, live_scores, live_point, started = row_meta[rid]
+        elsewhere.setdefault((tid, frozenset(names)), []).append(
+            {"date": pd, "scores": live_scores, "point": live_point,
+             "started": started is not None or bool(live_scores)})
 
     venue_today = {tid: _venue_today(tzs.get(tid)) for tid in t_ids}
+    carried_from: dict = {}
     for e in entries:
         if statuses[e.id] == "completed":
             continue
-        days = elsewhere.get((e.tournament_id, frozenset(names_by_row.get(e.id, ()))), set())
-        if any(d > e.play_date for d in days):
+        siblings = elsewhere.get(
+            (e.tournament_id, frozenset(names_by_row.get(e.id, ()))), [])
+        later = [r for r in siblings if r["date"] > e.play_date]
+        # ONLY A MATCH THAT ACTUALLY STARTED is "to be completed" — one that
+        # never got on court is simply playing today, and saying otherwise
+        # would put a resumption badge on a match with nothing to resume.
+        earlier_started = [r for r in siblings
+                           if r["date"] < e.play_date and r["started"]]
+        if later:
             statuses[e.id] = "postponed"
-        elif any(d < e.play_date for d in days):
+        elif earlier_started:
             statuses[e.id] = "to_be_completed"
+            # The score stands where play stopped. It lives on the row for the
+            # day it was abandoned — that row holds the claim, and an event can
+            # only be claimed once — so this row shows it rather than owning it.
+            src = max(earlier_started, key=lambda r: r["date"])
+            carried_from[e.id] = src
         elif e.play_date < (venue_today.get(e.tournament_id) or date.today()):
             # No later sheet yet — but this day is over at the venue, so
             # whatever is still unfinished did not get played.
@@ -744,8 +778,15 @@ async def schedule_day(
             # Singles reads through the match; doubles has none and carries its
             # own result on the row. Same field names either way, so the client
             # needs no idea which kind of match it is looking at.
-            live_scores=(m.live_scores_json if m else e.live_scores_json),
-            live_point=(live_point_for(m) if m else _doubles_point(e)),
+            # A carried-over row shows the abandoned day's score — see
+            # carried_from. Its own columns are empty because the claim, and
+            # therefore the scoring, belongs to the row that was abandoned.
+            live_scores=((carried_from[e.id]["scores"] if e.id in carried_from
+                          else None)
+                         or (m.live_scores_json if m else e.live_scores_json)),
+            live_point=(_carried_point(carried_from[e.id])
+                        if e.id in carried_from
+                        else (live_point_for(m) if m else _doubles_point(e))),
             scores=(m.scores_json if m else e.scores_json),
             winner_side=_winner_side(e, m, players),
             surface=(draw_meta.get(e.draw_id) or (None, None))[0],
