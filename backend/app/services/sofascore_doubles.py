@@ -105,8 +105,21 @@ def _event_near(event, entry) -> bool:
     when = datetime.fromtimestamp(ts, tz=timezone.utc)
 
     day = datetime.combine(entry.play_date, time(0, 0), tzinfo=timezone.utc)
-    if not (day - _DAY_FROM <= when <= day + _DAY_TO):
+
+    # A MATCH THAT HAS NOT FINISHED IS NOT JUDGED ON ITS CLOCK. Two things
+    # move an unfinished event's stamp away from the row that owns it: a rain
+    # delay restamps it to the resumption, and a match suspended overnight is
+    # replayed on the NEXT day's sheet while the event still carries the day
+    # it began. Both were fatal — the US Open carried three matches into
+    # 2026-08-28 and none could claim its event, so tomorrow's rows showed no
+    # score at all. The players and the round still have to agree; those are
+    # what identify a match, and two players meet once in a knockout draw.
+    unfinished = (event.get("status") or {}).get("type") in _PLAYING_OR_STOPPED
+    back = _DAY_FROM + timedelta(days=1) if unfinished else _DAY_FROM
+    if not (day - back <= when <= day + _DAY_TO):
         return False
+    if unfinished:
+        return True
 
     # Only a PRINTED time may veto. `expected_start_at` is our own estimate
     # whenever the sheet gave no time, and an estimate is derived from the very
