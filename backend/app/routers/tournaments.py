@@ -1083,6 +1083,29 @@ async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
             if row.elo_rank:
                 te_elo_rank_map[row.player_id] = row.elo_rank
 
+        # A LATE ENTRANT HAS NO SNAPSHOT AT THAT WEEK AT ALL. The week above is
+        # pinned to the tournament's reference date so a historical draw shows
+        # the Elo of its own era — but a qualifier who first appeared in the
+        # rankings after the cutoff has nothing on or before it, and fell
+        # through as a dash beside her WTA rank. Fill only those, from the most
+        # recent snapshot she does have; every player already resolved keeps
+        # the era-correct value. Mirrors the same fallback in
+        # services/rankings.py, for the same reason.
+        missing_elo = [tid for tid in te_ids if tid not in te_elo_rank_map]
+        if missing_elo:
+            latest_res = await db.execute(
+                select(TeRankingsSnapshot.player_id, TeRankingsSnapshot.week_date,
+                       TeRankingsSnapshot.elo_rank)
+                .where(TeRankingsSnapshot.player_id.in_(missing_elo),
+                       TeRankingsSnapshot.elo_rank.isnot(None))
+            )
+            newest: dict[int, tuple] = {}
+            for pid, wk, elo in latest_res:
+                if wk is not None and (pid not in newest or wk > newest[pid][0]):
+                    newest[pid] = (wk, elo)
+            for pid, (_wk, elo) in newest.items():
+                te_elo_rank_map[pid] = elo
+
     matches_result = await db.execute(
         select(Match)
         .where(Match.draw_id == tournament_id)
