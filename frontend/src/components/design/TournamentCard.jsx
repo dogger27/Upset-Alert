@@ -259,11 +259,14 @@ function renderFooter({ section, pickState, drawDates, oopPill }) {
 
   if (section === 'lastweek') {
     const competed = pickState === 'complete'
+    // THE SAME THREE TRACKS AS `active`, and the same compact star. A wide
+    // "★ Competed" pill in the middle track left no room for the order-of-play
+    // button, which wrapped onto a second line — so a finished tournament's
+    // card was a different shape from a running one's, for no reason a reader
+    // could see. The star carries its meaning in a tooltip, as it does above.
     return centredRow(
       <span style={{ ...pillBase, background: 'var(--n-150)', color: 'var(--text-muted)' }}>Completed</span>,
-      competed
-        ? <span style={{ ...pillBase, background: 'var(--success-bg)', color: 'var(--success)' }}>★ Competed</span>
-        : null
+      competed ? <InfoStar label="Competed" /> : null
     )
   }
 
