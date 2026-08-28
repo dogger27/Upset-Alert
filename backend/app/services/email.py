@@ -832,7 +832,6 @@ def _change_row(change: dict, is_last: bool) -> str:
     # Any replacement in a draw you are competing in can reach your bracket —
     # whoever comes in plays on, and everything downstream moves with them.
     # Marking two of the rows implied the rest were somebody else's problem.
-    mine = False
     src = (change["old_name"] if change["kind"] == "replaced"
            else slot_label(change.get("old_entry_type"), change["bracket_position"]))
     src_style = ("color:#6b7280;text-decoration:line-through" if change["kind"] == "replaced"
@@ -842,8 +841,8 @@ def _change_row(change: dict, is_last: bool) -> str:
       <tr>
         <td style="padding:{'10px 14px' if is_last else '10px 14px 0'};">
           <table width="100%" cellpadding="0" cellspacing="0" border="0"
-                 style="border-collapse:separate;border:1px solid {'#fcd34d' if mine else '#e5e7eb'};
-                        border-radius:6px;background:{'#fffbeb' if mine else '#ffffff'}">
+                 style="border-collapse:separate;border:1px solid #e5e7eb;
+                        border-radius:6px;background:#ffffff">
             <tr><td style="padding:11px 13px">
               <div style="font-size:14px;{src_style}">{_esc(src)}</div>
               <div style="font-size:15px;font-weight:700;color:#111;padding-top:3px">
@@ -880,11 +879,10 @@ async def send_draw_change_digest(
     """
     A draw this reader has entered changed after they picked from it.
 
-    draws is already sliced to this recipient: only draws they compete in, and
-    each change carries affects_you. That flag drives the subject line as well
-    as the card styling — "your pick was replaced" is a different message from
-    "the draw moved around you", and putting both behind one neutral subject
-    would bury the one that needs acting on.
+    draws is already sliced to this recipient: only draws they compete in. Each
+    change still carries affects_you for the push copy, but nothing in THIS
+    email reads it any more: a full bracket picks every match, so marking the
+    rows that were "yours" implied the rest were somebody else's problem.
     """
     if not draws:
         return
@@ -938,7 +936,6 @@ async def send_draw_change_digest(
 
 def _matchup_row(change: dict, is_last: bool) -> str:
     """One placed qualifier and the first-round match it creates."""
-    mine = change.get("affects_you")
     opp = change.get("opponent")
     status = change.get("opponent_status")
     if change.get("opponent_bye"):
@@ -950,10 +947,11 @@ def _matchup_row(change: dict, is_last: bool) -> str:
         right = f'{_esc(opp)}{badge}'
     else:
         right = '<span style="color:#6b7280">opponent to be confirmed</span>'
-    flag = (
-        '<div style="font-size:12px;font-weight:700;color:#b45309;padding-top:5px">'
-        'You picked this slot</div>' if mine else ""
-    )
+    # NO "you picked this slot". Everyone picks every match in their bracket,
+    # so the label was true of roughly half these rows by construction and told
+    # the reader nothing. The highlight goes with it: a tint driven by the same
+    # flag is the same non-fact, drawn in colour.
+    flag = ""
     # Marks which of the two names on the card is the qualifier. Read from the
     # entry, so a slot that resolved to something else is labelled accurately.
     entry_type = (change.get("new_entry_type") or "").strip()
@@ -966,8 +964,8 @@ def _matchup_row(change: dict, is_last: bool) -> str:
       <tr>
         <td style="padding:{'10px 14px' if is_last else '10px 14px 0'};">
           <table width="100%" cellpadding="0" cellspacing="0" border="0"
-                 style="border-collapse:separate;border:1px solid {'#fcd34d' if mine else '#e5e7eb'};
-                        border-radius:6px;background:{'#fffbeb' if mine else '#ffffff'}">
+                 style="border-collapse:separate;border:1px solid #e5e7eb;
+                        border-radius:6px;background:#ffffff">
             <tr><td style="padding:11px 13px">
               <div style="font-size:15px;font-weight:700;color:#111">
                 {_esc(change['new_name'])}{qual_badge}
@@ -1024,7 +1022,6 @@ async def send_qualifiers_added_digest(
 
     changes = [c for d in draws for c in d["changes"]]
     n = len(changes)
-    yours = [c for c in changes if c.get("affects_you")]
     one_draw = draws[0] if len(draws) == 1 else None
 
     subject = (
@@ -1037,12 +1034,6 @@ async def send_qualifiers_added_digest(
         "The qualifying slots in your draw now have players. Here's who came "
         "through and who they face first."
     )
-    if yours:
-        intro += (
-            f" {'One' if len(yours) == 1 else str(len(yours))} of them "
-            f"{'is' if len(yours) == 1 else 'are'} in a slot you picked, so your "
-            f"bracket now backs a real player rather than a placeholder."
-        )
 
     open_draws = [d for d in draws if not d.get("locked")]
     footer = (
