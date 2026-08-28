@@ -674,6 +674,43 @@ async def assign_rankings(
             player.te_slug = id_to_slug.get(player.te_player_id)
         player.ranking = rank_by_te_id.get(player.te_player_id) if player.te_player_id else None
 
+    # A REFERENCE WEEK CAN PREDATE A PLAYER'S FIRST RANKING.
+    #
+    # The week above is the draw's entry cutoff, which is the right basis for
+    # the field that entered on it — but a QUALIFIER did not. Kristina Liutova
+    # broke into the top 130 three weeks after the US Open's cutoff, so she had
+    # no snapshot that week, the lookup stored nothing, and the site showed a
+    # dash for someone ranked 129 who had just won a 250.
+    #
+    # Blanks only: a player who HAS a rank at the reference week keeps it, so
+    # the draw still reads as of its cutoff and nothing already correct moves.
+    #
+    # The blank is filled from their MOST RECENT week, not the one nearest the
+    # cutoff. Nearest-forward looked more principled and gave Liutova 229 — the
+    # ranking she held before the title that got her into this draw — which is
+    # both stale and not the number anyone means by "her ranking". A player
+    # with no rank at the cutoff has no cutoff-era ranking to show, so the
+    # honest substitute is the one she holds while playing the event.
+    need_rank = [p for p in players if p.te_player_id and p.ranking is None]
+    if need_rank:
+        from app.models.rankings import TeRankingsSnapshot
+        snap_rows = (await db.execute(
+            select(TeRankingsSnapshot.player_id, TeRankingsSnapshot.week_date,
+                   TeRankingsSnapshot.rank)
+            .where(TeRankingsSnapshot.player_id.in_(
+                {p.te_player_id for p in need_rank}))
+        )).all()
+        best: dict[int, tuple] = {}
+        for pid, wk, rank in snap_rows:
+            if rank is None or wk is None:
+                continue
+            if pid not in best or wk > best[pid][0]:
+                best[pid] = (wk, rank)
+        for p in need_rank:
+            hit = best.get(p.te_player_id)
+            if hit:
+                p.ranking = hit[1]
+
     # Wikipedia lists Russian/Belarusian players as "neutral" → blank nationality.
     # Fill it from the linked TE player's country so their flag still shows.
     need_nat = [p for p in players if not p.nationality and p.te_player_id]
