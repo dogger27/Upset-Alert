@@ -248,6 +248,7 @@ async def join_league_by_code(
                 league_name=league.name,
                 league_id=league.id,
                 new_username=current_user.username,
+                new_full_name=current_user.full_name,
             )
 
         # Push is opted into separately from the email, so it is checked on its

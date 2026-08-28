@@ -200,22 +200,46 @@ async def send_password_reset(email: str, reset_token: str) -> None:
     })
 
 
+def who_joined(username: str, full_name: Optional[str]) -> str:
+    """'Mariano1234 (Chris M)' — the handle, then the person behind it.
+
+    A username on its own rarely tells an owner who has actually turned up.
+    Handle first here, unlike the admin signup ping, because the owner knows
+    their league by its usernames and the real name is what qualifies it.
+
+    Falls back to the username alone when there is no name, or when the name
+    is the username again — some accounts have neither set separately, and
+    "bob (bob)" is worse than "bob".
+    """
+    uname = (username or "").strip()
+    real = (full_name or "").strip()
+    return f"{uname} ({real})" if real and real.casefold() != uname.casefold() else uname
+
+
 async def send_member_joined(
     owner_email: str,
     owner_username: str,
     league_name: str,
     league_id: int,
     new_username: str,
+    new_full_name: Optional[str] = None,
 ) -> None:
+    from html import escape
+
     league_url = f"{BASE_URL}/leagues/{league_id}"
+    who = who_joined(new_username, new_full_name)
+    # Escaped in the body, raw in the subject: a real name is typed by the
+    # person who registered, so an ampersand or angle bracket would land as
+    # markup — while a subject line is plain text, where an escaped apostrophe
+    # arrives as a literal &#x27;. Same split the signup ping documents.
     await send_async({
         "from": FROM,
         "to": [owner_email],
-        "subject": f'{new_username} joined "{league_name}"',
+        "subject": f'{who} joined "{league_name}"',
         "html": f"""{_WRAP_OPEN}{_LOGO_HEADER}{_BODY_OPEN}
           <h1 style="font-size:22px;margin:0 0 12px">New member in {league_name}!</h1>
           <p style="color:#444;line-height:1.6;margin:0 0 24px">
-            <strong>{new_username}</strong> just joined your league <strong>{league_name}</strong>.
+            <strong>{escape(who)}</strong> just joined your league <strong>{league_name}</strong>.
           </p>
           <a href="{league_url}" style="display:inline-block;padding:12px 24px;
              background:#1b4332;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
