@@ -24,6 +24,14 @@ function CheckMark() {
   )
 }
 
+/** "Sho Shimabukuro" → "S. Shimabukuro"; a two-word surname stays whole. */
+function shortName(raw) {
+  const { first, last } = splitPlayerName(raw)
+  if (!last) return raw
+  return first ? `${first[0]}. ${last}` : last
+}
+
+
 export default function PredictorsPopup({ drawId, match, leagueId, onClose }) {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['match-predictors', drawId, match?.id, leagueId ?? 'global'],
@@ -85,7 +93,17 @@ export default function PredictorsPopup({ drawId, match, leagueId, onClose }) {
                 <span className="pp-count">{incorrect.length}</span>
               </div>
               <ul className="pp-names">
-                {incorrect.map(u => <li key={u.id}><UserName user={u} /></li>)}
+                {/* Name the player they backed. The handle alone says a pick
+                    missed; the name says what they believed — and whether the
+                    room split or everyone backed the same loser. Initial and
+                    surname only: the column is narrow and the full name would
+                    wrap under every handle. */}
+                {incorrect.map(u => (
+                  <li key={u.id}>
+                    <UserName user={u} />
+                    {u.picked && <span className="pp-picked"> ({shortName(u.picked)})</span>}
+                  </li>
+                ))}
                 {incorrect.length === 0 && <li className="pp-none">Nobody</li>}
               </ul>
             </div>

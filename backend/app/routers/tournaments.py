@@ -792,10 +792,26 @@ async def match_predictors(
         .where(User.id.in_(participant_ids))
         .order_by(func.lower(func.coalesce(User.username, User.display_name)))
     )
+    # WHO THEY PICKED, for the ones who got it wrong. "dogger27" alone says a
+    # pick missed; "dogger27 (S. Shimabukuro)" says what they believed, which
+    # is the interesting half — and on a match nobody watched it is the only
+    # way to see whether the room split or everyone backed the same loser.
+    # Only the losers need naming: a correct pick is the winner, already in
+    # the title.
+    wrong_ids = {wid for uid, wid in picked_winner.items()
+                 if wid is not None and wid != match.winner_id}
+    picked_names = {}
+    if wrong_ids:
+        picked_names = {e.id: e.name for e in (await db.execute(
+            select(DrawEntry).where(DrawEntry.id.in_(wrong_ids)))).scalars()}
+
     correct, incorrect = [], []
     for u in users_res.scalars().all():
         got_it = picked_winner.get(u.id) == match.winner_id
-        (correct if got_it else incorrect).append(UserPublicOut.model_validate(u))
+        out = UserPublicOut.model_validate(u).model_dump()
+        if not got_it:
+            out["picked"] = picked_names.get(picked_winner.get(u.id))
+        (correct if got_it else incorrect).append(out)
 
     return {"correct": correct, "incorrect": incorrect, "league_name": league_name}
 
