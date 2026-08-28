@@ -85,6 +85,16 @@ const DOUBLES_FIT = 22
    pixel boundary. */
 const FLAG_CHARS = 3
 
+/* WHICH SIDES THE LADDER BELOW GOVERNS.
+   An unresolved side offering a CHOICE is drawn by Side's alternatives branch,
+   which fits itself and never reads `form` or `flags`. Every other side is
+   written by the rungs. Stated once, and used by both, because the fit and the
+   render have to mean the same sides — when they did not, the ladder was sized
+   against a line the page never drew. See the call site in MatchScoreCard. */
+function isAltSide(players, tbd) {
+  return !!tbd && players.length > 1
+}
+
 /* HOW MUCH OF A DOUBLES TEAM FITS ON ITS LINE.
    A doubles side was always surnames and never a flag, whatever room the row
    had — "PITER / TJEN" against "JIANG / ZHANG [2]" on a card with two thirds of
@@ -344,7 +354,7 @@ function Side({ players, doubles, tbd, tight, sets, form = 'surname', flags = fa
   // players — "O. Luz / R. Matos OR C. Harrison / N. Skupski". Rendering it as
   // four names in a row says nothing about who partners whom. Each alternative
   // is already one entry, so they only need separating.
-  if (tbd && players.length > 1) {
+  if (isAltSide(players, tbd)) {
     /* AND IT IS FITTED LIKE EVERY OTHER LINE ON THIS CARD. This branch had no
        ladder at all — it drew at full size and let the text run — which held
        only while every alternative was a single surname ("CERUNDOLO or
@@ -569,7 +579,25 @@ function CompetitorRows({ e, a, b }) {
   // against the columns this row actually shows rather than a fixed guess.
   // Both lines of a match share one geometry, so one measurement serves both.
   const [nameBoxRef, nameBox] = useNameBox()
-  const dbl = doubles ? doublesPresentation([a, b], n, nameBox) : null
+  /* ONLY A SIDE THAT USES THE ANSWER MAY CONSTRAIN IT.
+     An unresolved side opts out of the ladder — it draws itself, at its own
+     scale — so measuring it here charged the row for a line nobody renders:
+     doublesLineOf joins the alternatives with " / " while the page shows
+     "A or B", and every rung returns a printed alternative UNCHANGED (each
+     arrives with no given name to give up), so no rung could ever fit and the
+     ladder fell to its floor for the settled side beside it.
+     Monterrey 2026-08-28 ESTADIO, the doubles semi-final: "M. Chwalinska /
+     S. Kraus or S. Aoyama / E. Liang" took Joint/Xu down to a bare
+     "JOINT / XU" on a phone — no flags, no given names — on a line with half
+     the card free, while the LONGER "M. CHWALINSKA / S. KRAUS" had kept both
+     the day before. It also broke the promise DOUBLES_RUNGS makes: the row
+     ended up showing initials on one side and bare surnames on the other,
+     which is the exact thing testing the sides together exists to prevent. */
+  const dbl = doubles
+    ? doublesPresentation(
+        rows.filter(r => !isAltSide(r.players, r.tbd)).map(r => r.players),
+        n, nameBox)
+    : null
 
   return (
     <div className={clsx('sched-competitors', { 'sched-competitors--doubles': doubles })}>
