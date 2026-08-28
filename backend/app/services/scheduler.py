@@ -627,15 +627,22 @@ async def _notify_pending_draw_releases() -> None:
 # Longer than the draw-release cooldown because the failure modes differ. There
 # the cost of waiting is a late "you can pick now"; here it is a late "your pick
 # moved", and the batching is worth more than the minutes.
-DRAW_CHANGE_NOTIFY_COOLDOWN = timedelta(minutes=20)
+DRAW_CHANGE_NOTIFY_COOLDOWN = timedelta(minutes=10)
 
-# Qualifiers get a longer wait than replacements, because their notification is
-# once-per-draw and therefore unfixable: a qualifying draw finishes and its
-# sixteen winners are transcribed in one sitting, but an editor can break off
-# halfway and come back. Twenty minutes of quiet would call that done and
-# announce half a field. Ninety is long enough to cover a break and still lands
-# well inside the day between the qualifying final and the first main-draw match.
-QUALIFIERS_SETTLE_COOLDOWN = timedelta(minutes=90)
+# Ten minutes of quiet, the same as a replacement. This was ninety, on the
+# reasoning that a qualifiers message is once-per-draw and unfixable, so it had
+# to outlast an editor breaking off halfway through transcribing sixteen
+# winners. In practice that made the news old: the US Open field sat announced
+# to nobody for over an hour after it was complete, and the men's draw waited
+# another 47 minutes on its sibling's clock.
+#
+# THE CLOCK WAS NEVER THE REAL GUARD. draw_is_fully_transcribed is: it refuses
+# to announce while any slot in the draw still has a blank name, which is
+# exactly what a half-transcribed field looks like. A long wait only helps in
+# the narrower case where an editor adds entries progressively rather than
+# filling blanks, and buying that with an hour of staleness on every normal
+# release is the wrong trade.
+QUALIFIERS_SETTLE_COOLDOWN = timedelta(minutes=10)
 
 
 async def _notify_pending_draw_changes() -> None:
