@@ -994,20 +994,34 @@ html.h2h-modal-open body {
 
   .h2h-table td { display: block; }
 
+  /* The NAME gives way, not the score. Both were nowrap, so a four-set line
+     with tiebreak counts — "4(30)-6, 6(0)-3, 3(15)-6, 2(15)-6" — ran straight
+     out of its cell and printed on top of "Jenson Brooksby". The score is the
+     row's payload and stays whole; the name truncates, which still identifies
+     the winner because the coloured bar beside it says which player it is. */
   .h2h-winner {
     grid-area: 1 / 1 / 2 / 3;
     font-size: var(--h2h-row-size);
     font-weight: 700;
     color: var(--text);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .h2h-score {
     grid-area: 1 / 3 / 2 / -1;
     justify-self: end;
+    text-align: right;
     font-size: var(--h2h-row-size);
     font-weight: 600;
     color: var(--text-muted);
     font-variant-numeric: tabular-nums;
+    /* Wraps between sets when it has to — the sets are comma-separated, so a
+       break lands where a reader would put one, never inside "6(0)-3". */
+    white-space: normal;
+    min-width: 0;
   }
 
   /* Surface holds the left of the second line — it is the one fact you scan a
