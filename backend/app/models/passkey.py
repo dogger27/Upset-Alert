@@ -31,6 +31,11 @@ class UserPasskey(Base):
     # zero it was given twice.
     sign_count: Mapped[int] = mapped_column(Integer, default=0)
     transports: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    # WHICH PASSWORD MANAGER holds this key. The AAGUID identifies the
+    # authenticator's make — iCloud Passwords, Chrome, Windows Hello — and is
+    # the only thing distinguishing two keys enrolled from the same phone.
+    # Zeroed by some browsers, so every reader must cope with it being absent.
+    aaguid: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     # What the owner will recognise in a list: "iPhone", "MacBook". Supplied by
     # the client at enrolment, because the server cannot see the device.
     name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
