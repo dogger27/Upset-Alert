@@ -133,6 +133,21 @@ async def _migrate(conn):
         "ALTER TABLE users ADD COLUMN username VARCHAR",
         "ALTER TABLE users ADD COLUMN full_name VARCHAR",
         "ALTER TABLE leagues ADD COLUMN show_real_name BOOLEAN DEFAULT 0",
+        # Passkeys (WebAuthn)
+        (
+            "CREATE TABLE IF NOT EXISTS user_passkeys "
+            "(id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, "
+            "credential_id VARCHAR NOT NULL UNIQUE, public_key VARCHAR NOT NULL, "
+            "sign_count INTEGER DEFAULT 0, transports VARCHAR, name VARCHAR, "
+            "created_at DATETIME, last_used_at DATETIME)"
+        ),
+        ("CREATE INDEX IF NOT EXISTS ix_user_passkeys_user_id "
+         "ON user_passkeys(user_id)"),
+        (
+            "CREATE TABLE IF NOT EXISTS webauthn_challenges "
+            "(id INTEGER PRIMARY KEY, challenge VARCHAR NOT NULL UNIQUE, "
+            "user_id INTEGER, kind VARCHAR NOT NULL, expires_at DATETIME NOT NULL)"
+        ),
         # Rankings cache tables
         (
             "CREATE TABLE IF NOT EXISTS te_players "

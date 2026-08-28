@@ -633,3 +633,37 @@ a.profile-dropdown-item:visited {
   accent-color: var(--green-mid, var(--brand-fill));
 }
 
+
+/* ── Passkeys, in the profile panel ──────────────────────────────────────── */
+.profile-edit-hint {
+  margin: 0 0 0.5rem;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+.passkey-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.35rem 0;
+}
+.passkey-name {
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A destructive action, so it reads as a link rather than competing with the
+   panel's real buttons. */
+.passkey-remove {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--danger);
+  font-size: 0.78rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.passkey-remove:disabled { opacity: 0.5; cursor: default; }
+.passkey-add { width: 100%; margin-top: 0.35rem; }

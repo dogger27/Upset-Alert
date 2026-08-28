@@ -21,3 +21,4 @@ pywebpush>=2.0.0
 # plain curl included, on the website as well as the API. This replays a real
 # Chrome fingerprint and is the only way services/sofascore.py can reach it.
 curl_cffi>=0.7.0
+webauthn>=3.0.0,<4

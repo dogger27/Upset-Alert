@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import clsx from 'clsx'
 import { useAuth } from '../store/auth'
+import { deletePasskey, enrolPasskey, listPasskeys, passkeysSupported } from '../api/passkeys'
 import { useTheme } from '../store/theme'
 import './Navbar.css'
 
@@ -25,6 +26,12 @@ export default function Navbar() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  // Passkeys live in the profile panel beside the password: both answer the
+  // same question, which is how this person proves who they are.
+  const [passkeys, setPasskeys] = useState([])
+  const [pkBusy, setPkBusy] = useState(false)
+  const [pkError, setPkError] = useState('')
+  const pkSupported = passkeysSupported()
 
   // Notification panel state
   const [notifSelected, setNotifSelected] = useState(new Set())
@@ -97,7 +104,40 @@ export default function Navbar() {
     setNewPassword('')
     setConfirmPassword('')
     setError('')
+    setPkError('')
     setEditing(true)
+    if (pkSupported) listPasskeys().then(setPasskeys).catch(() => setPasskeys([]))
+  }
+
+  const addPasskey = async () => {
+    setPkError(''); setPkBusy(true)
+    try {
+      // Named for the device it will live on, since that is how the owner will
+      // recognise it in the list later.
+      const guess = /iPhone|iPad/.test(navigator.userAgent) ? 'iPhone'
+        : /Android/.test(navigator.userAgent) ? 'Android phone'
+        : /Mac/.test(navigator.userAgent) ? 'Mac' : 'This device'
+      await enrolPasskey(guess)
+      setPasskeys(await listPasskeys())
+    } catch (err) {
+      if (err?.name !== 'NotAllowedError' && err?.name !== 'AbortError') {
+        setPkError(err.response?.data?.detail || 'Could not add that passkey.')
+      }
+    } finally {
+      setPkBusy(false)
+    }
+  }
+
+  const removePasskey = async (id) => {
+    setPkError(''); setPkBusy(true)
+    try {
+      await deletePasskey(id)
+      setPasskeys(await listPasskeys())
+    } catch (err) {
+      setPkError(err.response?.data?.detail || 'Could not remove that passkey.')
+    } finally {
+      setPkBusy(false)
+    }
   }
 
   const cancelEdit = () => {
@@ -640,6 +680,29 @@ export default function Navbar() {
                         onChange={e => setFullName(e.target.value)}
                         placeholder="Full name"
                       />
+                      {pkSupported && (
+                        <>
+                          <div className="profile-dropdown-divider" style={{ margin: '0.75rem 0 0.5rem' }} />
+                          <p className="profile-edit-label" style={{ fontWeight: 700, marginBottom: '0.35rem' }}>Passkeys</p>
+                          <p className="profile-edit-hint">
+                            Sign in with Face ID, a fingerprint or your screen lock — no password to type.
+                          </p>
+                          {passkeys.map(pk => (
+                            <div className="passkey-row" key={pk.id}>
+                              <span className="passkey-name">{pk.name}</span>
+                              <button className="passkey-remove" onClick={() => removePasskey(pk.id)}
+                                      disabled={pkBusy} aria-label={`Remove ${pk.name}`}>
+                                Remove
+                              </button>
+                            </div>
+                          ))}
+                          {pkError && <p className="profile-edit-error">{pkError}</p>}
+                          <button className="btn-secondary profile-edit-btn passkey-add"
+                                  onClick={addPasskey} disabled={pkBusy}>
+                            {pkBusy ? 'Waiting for your device…' : 'Add a passkey'}
+                          </button>
+                        </>
+                      )}
                       <div className="profile-dropdown-divider" style={{ margin: '0.75rem 0 0.5rem' }} />
                       <p className="profile-edit-label" style={{ fontWeight: 700, marginBottom: '0.5rem' }}>Change Password</p>
                       <label className="profile-edit-label">Current Password</label>

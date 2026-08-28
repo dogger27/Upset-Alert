@@ -46,3 +46,24 @@
   font-size: 0.85rem;
   color: var(--text-muted);
 }
+
+
+/* "or" rule between the password form and the passkey button. The line is
+   drawn by the pseudo-elements either side of the word rather than a border on
+   the container, so the label sits IN the rule instead of on top of it. */
+.auth-or {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1rem 0 0.75rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+.auth-or::before,
+.auth-or::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.auth-passkey-btn { width: 100%; }

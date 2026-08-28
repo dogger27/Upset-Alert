@@ -14,6 +14,17 @@ class Settings(BaseSettings):
     wiki_api_url: str = "https://en.wikipedia.org/w/api.php"
     resend_api_key: str = ""
     environment: str = "development"
+    # ── Passkeys (WebAuthn) ─────────────────────────────────────────────────
+    # The RP ID is the DOMAIN a credential is bound to, and it must be a
+    # registrable suffix of the page's origin. "upsetalert.ca" therefore covers
+    # the live site and staging.upsetalert.ca with one set of credentials,
+    # while the API's own hostname is irrelevant — the browser only ever
+    # compares against the page it is on.
+    webauthn_rp_id: str = "upsetalert.ca"
+    webauthn_rp_name: str = "Upset Alert"
+    # Exact origins, comma separated. Unlike the RP ID these are matched whole,
+    # so every site that may sign in has to be listed.
+    webauthn_origins: str = "https://upsetalert.ca,https://staging.upsetalert.ca"
     # Web Push (VAPID). Empty keys disable push entirely rather than erroring,
     # so dev and any environment without them configured just skips the channel.
     vapid_public_key: str = ""
