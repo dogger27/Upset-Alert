@@ -304,14 +304,37 @@ async def login(
     form: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(User).where(User.email == form.username.lower().strip()))
-    user = result.scalar_one_or_none()
+    # EMAIL OR USERNAME. People remember the name they picked long after they
+    # have forgotten which address they signed up with, and refusing a correct
+    # password because the wrong identifier was typed is friction with nothing
+    # to show for it. Email is tried first so it stays authoritative if an
+    # address and someone else's username ever collide.
+    ident = (form.username or "").lower().strip()
+    result = await db.execute(select(User).where(func.lower(User.email) == ident))
+    user = result.scalars().first()
+    if not user:
+        result = await db.execute(
+            select(User).where(func.lower(User.username) == ident))
+        user = result.scalars().first()
     if not user or not verify_password(form.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Incorrect email or password")
     if not user.email_verified:
         raise HTTPException(status_code=403, detail="Please verify your email address before logging in")
     token = create_access_token(str(user.id))
     return Token(access_token=token)
+
+
+@router.post("/refresh", response_model=Token)
+async def refresh(current_user: User = Depends(get_current_user)):
+    """A new token for a session that is still good.
+
+    This is what makes the long expiry a ROLLING one: the client calls it when
+    its token is more than half spent, so a person who keeps using the site
+    keeps a full window and never meets the login form again. It proves nothing
+    new — the dependency already required a valid token — so it cannot extend a
+    session that has lapsed, only refresh one that has not.
+    """
+    return Token(access_token=create_access_token(str(current_user.id)))
 
 
 @router.get("/me", response_model=UserOut)
