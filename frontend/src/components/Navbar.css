@@ -648,11 +648,24 @@ a.profile-dropdown-item:visited {
   gap: 0.5rem;
   padding: 0.35rem 0;
 }
-.passkey-name {
+.passkey-name-input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 0.2rem 0.3rem;
+  color: var(--text, var(--n-950));
+  font: inherit;
   font-size: 0.85rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+/* Only shows itself as a field on interaction — a row of boxes would read as a
+   form, when most of the time this is just a list. */
+.passkey-name-input:hover { border-color: var(--border); }
+.passkey-name-input:focus {
+  border-color: var(--primary, var(--accent));
+  outline: none;
+  background: var(--surface-sunken, transparent);
 }
 /* A destructive action, so it reads as a link rather than competing with the
    panel's real buttons. */
@@ -667,3 +680,14 @@ a.profile-dropdown-item:visited {
 }
 .passkey-remove:disabled { opacity: 0.5; cursor: default; }
 .passkey-add { width: 100%; margin-top: 0.35rem; }
+
+
+/* THE EDIT PANEL MUST SCROLL. .profile-dropdown is overflow:hidden to keep its
+   rounded corners, so a panel taller than the screen simply had its bottom cut
+   off — on a phone that hid the Save button entirely. Same bounded height the
+   notifications panel uses, and dvh rather than vh because mobile browser
+   chrome changes the viewport as it hides. */
+.profile-edit-form {
+  max-height: min(560px, calc(100dvh - 8.5rem));
+  overflow-y: auto;
+}
