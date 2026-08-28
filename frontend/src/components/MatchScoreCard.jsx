@@ -556,7 +556,13 @@ function CompetitorRows({ e, a, b }) {
     return x === y ? null : (x > y ? 0 : 1)
   })()
 
-  const serving = live ? (lp?.serving ?? e.live_scores?.[2] ?? null) : null
+  /* WHOSE SERVE IT IS WHEN THEY COME BACK. A suspended row already shows the
+     ball; a match carried to another day is the same fact one night later —
+     the player who was about to serve still is, and it is the first thing you
+     want to know about a resumption. Shown on the abandoned day's row too, so
+     the two halves of one match do not disagree. */
+  const serving = (live || stopped)
+    ? (lp?.serving ?? e.live_scores?.[2] ?? null) : null
   // The point stands too — it is where the game was when play stopped.
   const point = hasLiveScore && lp?.point ? lp.point : null
 
