@@ -754,12 +754,16 @@ export default function H2HPanel({
               <table className="h2h-table">
                 <thead>
                   <tr>
-                    <th>Score</th>
+                    {/* Reading order: who won, on what, where, when, at what
+                        stage, by how much. The mobile card below keeps its own
+                        arrangement through CSS `order`, so this is the table
+                        view only. */}
                     <th>Winner</th>
                     <th>Surface</th>
-                    <th>Year</th>
                     <th>Tournament</th>
+                    <th>Year</th>
                     <th>Rnd</th>
+                    <th>Score</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -772,12 +776,12 @@ export default function H2HPanel({
                       : (player2?.name ?? fmtName(data.name_b))
                     return (
                       <tr key={idx} className={isWin ? 'h2h-row-win' : 'h2h-row-loss'}>
-                        <td className="h2h-score"><ScoreLine score={displayScore} /></td>
                         <td className="h2h-winner">{winnerName}</td>
                         <td className="h2h-surface">{surfaceLabel(m.surface)}</td>
-                        <td className="h2h-year">{m.year ?? '—'}</td>
                         <td className="h2h-tourn">{m.tournament ?? '—'}</td>
+                        <td className="h2h-year">{m.year ?? '—'}</td>
                         <td className="h2h-round">{fmtRound(m.round)}</td>
+                        <td className="h2h-score"><ScoreLine score={displayScore} /></td>
                       </tr>
                     )
                   })}
