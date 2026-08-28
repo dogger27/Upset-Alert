@@ -7,6 +7,7 @@ export const login = (email, password) => {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
   }).then(r => r.data)
 }
+export const refreshToken = () => client.post('/auth/refresh').then(r => r.data)
 export const getMe = () => client.get('/auth/me').then(r => r.data)
 export const updateMe = (data) => client.patch('/auth/me', data).then(r => r.data)
 export const listUsers = () => client.get('/auth/users').then(r => r.data)
