@@ -32,8 +32,12 @@ export default function Login() {
         <h2>Log in</h2>
         {successMessage && <p style={{ color: 'var(--success, green)', marginBottom: '0.5rem' }}>{successMessage}</p>}
         <form onSubmit={submit} autoComplete="on">
-          <label>Email</label>
-          <input type="email" autoComplete="username" value={email} onChange={e => setEmail(e.target.value)} required />
+          <label>Email or username</label>
+          {/* NOT type="email": the browser's own validation would reject a
+              username before the form could be submitted at all. */}
+          <input type="text" autoComplete="username" inputMode="email"
+                 autoCapitalize="none" autoCorrect="off"
+                 value={email} onChange={e => setEmail(e.target.value)} required />
           <label>Password</label>
           <input type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} required />
           {error && <p className="error">{error}</p>}
