@@ -99,6 +99,20 @@ def same_person(old: str, new: str) -> bool:
         return False
     if a == b:
         return True
+    # THE SAME WORDS IN A DIFFERENT ORDER ARE THE SAME PERSON. Sources disagree
+    # about which half of a Chinese, Japanese or Korean name comes first, and
+    # the draw sheet can be re-published the other way round at any point:
+    # "Qinwen Zheng" and "Zheng Qinwen" are one player, and telling everyone
+    # their pick had been replaced was the second false alarm of this kind.
+    #
+    # The subset form covers the other half of the family — a name gaining or
+    # losing a middle name or a second surname ("Camila Osorio" /
+    # "Maria Camila Osorio Serrano") — while still refusing two players who
+    # merely share a surname, since neither {alexander, zverev} nor
+    # {mischa, zverev} contains the other.
+    sa, sb = set(a), set(b)
+    if sa <= sb or sb <= sa:
+        return True
     if a[-1] != b[-1]:
         return False
     if a[0].startswith(b[0]) or b[0].startswith(a[0]):
