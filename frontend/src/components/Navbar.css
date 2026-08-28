@@ -357,16 +357,27 @@ a.profile-dropdown-item:visited {
   margin: 0.1rem 0;
 }
 
+/* The commit row, set off from the fields it applies to — in a modal there is
+   no menu edge to end the form, so the rule does that job. */
 .profile-edit-actions {
   display: flex;
-  gap: 0.5rem;
-  margin-top: 0.4rem;
+  gap: 0.6rem;
+  margin-top: 1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border);
 }
 
 .profile-edit-btn {
   flex: 1;
-  padding: 0.4rem 0;
-  font-size: 0.82rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* Same 42px as the add-passkey button above it: one tap-target height down
+     the whole panel, and comfortable on a phone. */
+  min-height: 42px;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.88rem;
+  font-weight: 600;
 }
 
 .navbar-links .btn-secondary {
