@@ -1490,3 +1490,11 @@
   color: var(--warning) !important;
   border-color: var(--warning) !important;
 }
+
+/* Carried into a later day: neutral blue, distinct from both the live badge
+   and the amber of play that has stopped. */
+.in-progress-badge--carried {
+  background: var(--info-bg) !important;
+  color: var(--info) !important;
+  border-color: var(--info) !important;
+}

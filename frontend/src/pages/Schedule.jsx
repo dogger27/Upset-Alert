@@ -473,6 +473,19 @@ function MatchRow({ e, showCourt, zone, venueMode, onH2H, onChampion, onHistory,
                   title="Play is suspended — the score is where it stood">Suspended</span>
           : <span className="in-progress-badge sched-status">In progress</span>
       )}
+      {/* The two halves of a washed-out day: abandoned here, resumed there. */}
+      {e.status === 'postponed' && (
+        <span className="in-progress-badge in-progress-badge--suspended sched-status"
+              title="Play was abandoned for the day — this match did not finish">
+          Postponed
+        </span>
+      )}
+      {e.status === 'to_be_completed' && (
+        <span className="in-progress-badge in-progress-badge--carried sched-status"
+              title="Carried over from an earlier day — the score stands where play stopped">
+          To be completed
+        </span>
+      )}
       {e.status === 'completed' && <span className="sched-status sched-status--done">Completed</span>}
 
       <div className="sched-row-when">
@@ -500,10 +513,11 @@ function MatchRow({ e, showCourt, zone, venueMode, onH2H, onChampion, onHistory,
           documented lesson. The H2H strip is a sibling, unaffected. */}
       <div
         className={clsx('sched-row-main',
-                        (e.status === 'live' || e.status === 'completed')
+                        (['live', 'completed', 'postponed', 'to_be_completed']
+                          .includes(e.status))
                           && onHistory && 'sched-row-main--openable')}
-        onClick={(e.status === 'live' || e.status === 'completed') && onHistory
-          ? () => onHistory(e.id) : undefined}
+        onClick={['live', 'completed', 'postponed', 'to_be_completed'].includes(e.status)
+          && onHistory ? () => onHistory(e.id) : undefined}
       >
         <div className="sched-tags">
           {e.tour && <span className={clsx('sched-tag', `sched-tag--${e.tour.toLowerCase()}`)}>{e.tour}</span>}
