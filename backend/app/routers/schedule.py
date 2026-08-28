@@ -368,6 +368,25 @@ def _has_games(live_scores) -> bool:
     return False
 
 
+def _flip_sides(out: dict) -> dict:
+    """The same snapshot read from the other end of the sheet.
+
+    Snapshots are stored in the orientation of the ROW that recorded them, and
+    two days' sheets are free to print a pairing in opposite order. Merging a
+    match's days without this would hand the popup a timeline that swaps ends
+    partway through.
+    """
+    g = out.get("games")
+    if isinstance(g, list) and len(g) == 2:
+        out["games"] = [g[1], g[0]]
+    p = out.get("point")
+    if isinstance(p, list) and len(p) == 2:
+        out["point"] = [p[1], p[0]]
+    if out.get("serving") in (1, 2):
+        out["serving"] = 3 - out["serving"]
+    return out
+
+
 def _carried_point(src: dict):
     """The abandoned day's point, rendered for a row that is inheriting it.
 
@@ -942,16 +961,58 @@ async def entry_score_history(entry_id: int, db: AsyncSession = Depends(get_db))
     if not entry:
         raise HTTPException(404, "Schedule entry not found")
 
+    # EVERY SNAPSHOT OF THIS MATCH, whichever row recorded it. A match picked
+    # up on a later day is scored against the row holding the claim — the day
+    # it was abandoned — so the carried row has none of its own, and its popup
+    # opened on a bare current score with no timeline to scrub. The same
+    # pairing signature that carries the score across days finds them here.
+    day = entry.play_date
+    cand = (await db.execute(
+        select(ScheduleEntry.id, ScheduleEntryPlayer.raw_name,
+               ScheduleEntryPlayer.side, ScheduleEntryPlayer.position)
+        .join(ScheduleEntryPlayer,
+              ScheduleEntryPlayer.schedule_entry_id == ScheduleEntry.id)
+        .where(ScheduleEntry.tournament_id == entry.tournament_id,
+               ScheduleEntry.play_date.in_(
+                   [day - timedelta(days=1), day,
+                    day + timedelta(days=1)])))).all()
+    sig: dict = {}
+    lead: dict = {}
+    for rid, raw, side, pos in cand:
+        sig.setdefault(rid, set()).add(_pairing_surname(raw))
+        if side == "a" and (rid not in lead or (pos or 0) < lead[rid][0]):
+            lead[rid] = ((pos or 0), _pairing_surname(raw))
+    mine = sig.get(entry_id) or set()
+    my_lead = (lead.get(entry_id) or (0, ""))[1]
+    # Same tournament, same surnames: in a knockout draw two players meet at
+    # most once, so that is this match on whatever day the sheet gave it.
+    kin = {rid for rid, names in sig.items() if names == mine and names} or {entry_id}
+    flipped = {rid for rid in kin if (lead.get(rid) or (0, ""))[1] != my_lead}
+
     rows = (await db.execute(
         select(ScheduleScoreSnapshot)
-        .where(ScheduleScoreSnapshot.schedule_entry_id == entry_id)
-        .order_by(ScheduleScoreSnapshot.id)
+        .where(ScheduleScoreSnapshot.schedule_entry_id.in_(kin))
+        .order_by(ScheduleScoreSnapshot.at, ScheduleScoreSnapshot.id)
     )).scalars().all()
     snapshots = []
     for r in rows:
         out = renderable_history(r.snap)
         if out is not None:
-            snapshots.append(out)
+            snapshots.append(_flip_sides(out)
+                             if r.schedule_entry_id in flipped else out)
+
+    # The result lives with the claim too, so a finished carried match would
+    # otherwise scrub through its whole timeline to a blank final score.
+    final = entry.scores_json
+    if final is None and len(kin) > 1:
+        sib = (await db.execute(
+            select(ScheduleEntry.id, ScheduleEntry.scores_json)
+            .where(ScheduleEntry.id.in_(kin - {entry_id}),
+                   ScheduleEntry.scores_json.isnot(None)))).first()
+        if sib:
+            final = sib[1]
+            if sib[0] in flipped and isinstance(final, list) and len(final) == 2:
+                final = [final[1], final[0]]
 
     side_a = (await db.execute(
         select(ScheduleEntryPlayer.raw_name)
@@ -965,7 +1026,7 @@ async def entry_score_history(entry_id: int, db: AsyncSession = Depends(get_db))
         "player1_id": None,
         "player1_name": side_a,
         "snapshots": snapshots,
-        "final": entry.scores_json,
+        "final": final,
     }
 
 
