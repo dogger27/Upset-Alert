@@ -98,6 +98,17 @@ export const useAuth = create((set) => ({
     set({ user: await syncTimezone(user) })
   },
 
+  /* A passkey sign-in ends in exactly the same place a password one does: a
+     token in storage and a loaded user. Everything different about it happened
+     in the browser before this point. */
+  adoptToken: async (accessToken) => {
+    localStorage.setItem('token', accessToken)
+    const user = await getMe()
+    useTheme.getState().adoptAccountTheme(user.theme)
+    queryClient.clear()
+    set({ user: await syncTimezone(user) })
+  },
+
   register: async (email, username, fullName, password) => {
     await apiRegister({ email, username, full_name: fullName, display_name: fullName, password })
   },

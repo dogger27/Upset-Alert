@@ -40,6 +40,7 @@ def _setup_logging() -> None:
 _setup_logging()
 # Import models in dependency order so SQLAlchemy can resolve relationships
 import app.models.user  # noqa: F401
+import app.models.passkey  # noqa: F401
 import app.models.prediction  # noqa: F401
 import app.models.league  # noqa: F401
 import app.models.tournament  # noqa: F401
@@ -48,7 +49,7 @@ import app.models.h2h  # noqa: F401
 import app.models.system_log  # noqa: F401
 from app.services.scheduler import start_scheduler, stop_scheduler
 from app.core.config import settings
-from app.routers import admin, auth, contact, discovery, h2h, leagues, predictions, push, schedule, stream, tournaments
+from app.routers import admin, auth, contact, discovery, h2h, leagues, passkeys, predictions, push, schedule, stream, tournaments
 
 
 @asynccontextmanager
@@ -171,6 +172,7 @@ app.add_middleware(
 
 app.include_router(admin.router)
 app.include_router(auth.router)
+app.include_router(passkeys.router)
 app.include_router(contact.router)
 app.include_router(tournaments.router)
 app.include_router(discovery.router)
