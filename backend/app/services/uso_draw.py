@@ -112,6 +112,18 @@ async def fill_missing_slots(db, draw: Draw) -> int:
     # standing at this slot is reused rather than replaced.
     holders = {e.bracket_position: e for e in entries
                if not e.name and e.entry_type == "Q"}
+    # ONE ENTRY PER BRACKET POSITION, always. A slot that already holds a row
+    # must never gain a second one: predictions point at entry ids, so the
+    # row left behind takes every pick made on it out of the match, and its
+    # blank name also makes the draw read as half-transcribed, which holds the
+    # qualifiers-added announcement for a field that is actually complete.
+    # This happened for real — 11 slots, 30 orphaned picks across both US Open
+    # draws — because the reuse below only looked at `holders`, and `holders`
+    # is consulted only while the FEED still calls the slot a placeholder. The
+    # moment it published the real name, the lookup moved to `by_key`, missed,
+    # and inserted alongside the placeholder standing at that very position.
+    by_position = {e.bracket_position: e for e in entries
+                   if e.bracket_position is not None}
 
     filled = 0
     for m in matches:
@@ -131,6 +143,17 @@ async def fill_missing_slots(db, draw: Draw) -> int:
             position = (m.match_number - 1) * 2 + idx + 1
             entry = (holders.get(position) if placeholder
                      else by_key.get(_key(person["name"])))
+            # Nothing found by name, but this slot is occupied: that row IS
+            # this slot, so rename it rather than inserting a twin.
+            if entry is None:
+                entry = by_position.get(position)
+            if entry is not None and not placeholder and not entry.name:
+                entry.name = person["name"]
+                entry.nationality = person["nationality"]
+                entry.seed = person["seed"]
+                entry.entry_type = person["entry_type"]
+                by_key[_key(person["name"])] = entry
+                holders.pop(position, None)
             if entry is None:
                 entry = DrawEntry(
                     draw_id=draw.id,
@@ -144,6 +167,7 @@ async def fill_missing_slots(db, draw: Draw) -> int:
                     bracket_position=position)
                 db.add(entry)
                 await db.flush()
+                by_position[position] = entry
                 if placeholder:
                     holders[position] = entry
                 else:
