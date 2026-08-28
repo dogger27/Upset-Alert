@@ -179,6 +179,40 @@ def _apply_rules(wiki_ts: frozenset, te_index: dict[frozenset, list[int]]) -> Op
     if len(rule3) == 1:
         return rule3[0]
 
+    # Rule 3b: INITIALS. A player written "J.J. Wolf" carries the tokens
+    # {j, wolf} while Tennis Explorer holds {jeffrey, john, wolf} — no subset
+    # relation exists, and rule 4's guard rejects them because a one-letter
+    # token shares no three-character prefix with "jeffrey". So the player got
+    # a name-only stub, and with no slug there was no head-to-head and no
+    # form. Match when every full token agrees and each initial is the first
+    # letter of a DIFFERENT remaining TE name — "J.J." against Jeffrey John,
+    # never against Jeffrey alone.
+    # THE DOTS SURVIVE NORMALISATION: "J.J. Wolf" tokenises to ["j.j.", "wolf"]
+    # and "J. J. Wolf" to ["j.", "j.", "wolf"]. So an initial is any token that
+    # is letters-and-dots with at most two letters, and it stands for each of
+    # those letters.
+    blobs = {t for t in wiki_ts
+             if t.replace(".", "") and set(t) <= set("abcdefghijklmnopqrstuvwxyz.")
+             and 1 <= len(t.replace(".", "")) <= 2 and "." in t}
+    letters = [ch for t in sorted(blobs) for ch in t.replace(".", "")]
+    if letters:
+        rest = wiki_ts - blobs
+        rule3b: list[int] = []
+        for te_ts, ids in te_index.items():
+            if not rest or not rest <= te_ts:
+                continue
+            spare = list(te_ts - rest)
+            unused = list(letters)  # one TE name per initial, no reuse
+            for tok in spare:
+                for ltr in list(unused):
+                    if tok.startswith(ltr):
+                        unused.remove(ltr)
+                        break
+            if not unused and len(spare) >= len(letters):
+                rule3b.extend(ids)
+        if len(rule3b) == 1:
+            return rule3b[0]
+
     # Rule 4: unique identifying token — handles first-name spelling variants
     # (Kasatkina/Darya vs Daria, Minnen/Greetje vs Greet, Starodubtseva/Yulia vs Yuliia).
     # If exactly one TE player has a given wiki token, that token uniquely identifies them.
