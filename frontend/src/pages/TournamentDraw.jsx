@@ -289,12 +289,13 @@ function TournamentDraw() {
     retry: 2,
   })
 
-  // Which of this reader's picks the field got wrong. Only their OWN bracket
-  // is ever marked: the animation says "you saw this", which is meaningless
-  // over somebody else's picks.
+  // Standouts belong to the bracket ON SCREEN, not to the reader: opening
+  // somebody else's draw shows the calls THEY got right when the field did
+  // not. Keyed on the viewed user so switching brackets refetches rather than
+  // decorating one person's picks with another's.
   const { data: standouts } = useQuery({
-    queryKey: ['my-standouts', id],
-    queryFn: () => getMyStandouts(Number(id)),
+    queryKey: ['my-standouts', id, viewedUserId ?? 'me'],
+    queryFn: () => getMyStandouts(Number(id), viewedUserId ?? undefined),
     enabled: hasToken,
     staleTime: 60_000,
   })
@@ -1789,7 +1790,7 @@ function TournamentDraw() {
               labelsHidden={headerHidden}
               insetLeft={drawInsetLeft}
               compact={compactDraw}
-              standoutIds={viewingOther ? null : standoutSet}
+              standoutIds={standoutSet}
               zoom={drawZoom}
               scrubRef={scrubApi}
               leagueId={activeLeagueId}
