@@ -712,10 +712,15 @@ async def match_score_history(
 @router.get("/{tournament_id}/my-standouts")
 async def my_standout_picks(
     tournament_id: int,
+    # Whose bracket is being read. The draw page already lets you open somebody
+    # else's, and a standout is a fact about a finished match rather than a
+    # secret — if you can see their picks you can see which of them the field
+    # missed. Defaults to the reader's own.
+    user_id: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_user),
 ):
-    """Match ids in this draw where the reader called a result the field missed.
+    """Match ids in this draw where that bracket called a result the field missed.
 
     Same test the standout notification used before it was retired, so the
     bracket marks exactly what used to be emailed: the reader picked the
@@ -734,6 +739,7 @@ async def my_standout_picks(
 
     if current_user is None:
         return {"match_ids": []}
+    subject_id = user_id if user_id is not None else current_user.id
 
     rows = (await db.execute(
         select(UserPrediction.match_id, UserPrediction.user_id,
@@ -752,7 +758,7 @@ async def my_standout_picks(
         picked[match_id] += 1
         if guess == winner:
             correct[match_id] += 1
-            if uid == current_user.id:
+            if uid == subject_id:
                 mine.add(match_id)
 
     out = [mid for mid in mine
