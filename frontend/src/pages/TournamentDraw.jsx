@@ -275,7 +275,7 @@ function TournamentDraw() {
   const hasToken = (() => {
     try { return !!localStorage.getItem('token') } catch { return false }
   })()
-  const { data: savedPreds } = useQuery({
+  const { data: savedPreds, error: picksError, refetch: refetchPicks } = useQuery({
     queryKey: ['predictions', id],
     queryFn: () => getPredictions(Number(id)),
     enabled: hasToken,
@@ -1031,6 +1031,27 @@ function TournamentDraw() {
     [data?.matches]
   )
 
+  // A FAILED PICKS FETCH MUST NOT RENDER AS AN EMPTY BRACKET.
+  // The query above already refuses to serve this stale, for the reason in its
+  // comment: an empty result is indistinguishable from having picked nothing.
+  // But only `data` was read, so after its retries were exhausted savedPreds
+  // was undefined, the effect that seeds the bracket never ran, and the page
+  // drew all 127 matches unpicked. A reader who opened the draw during a
+  // backend restart saw their entire bracket apparently wiped — reported as
+  // "it reset the whole draw" — while every pick sat safely in the database.
+  // Their picks are not ours to misrepresent: say so, and offer the retry.
+  if (hasToken && picksError) {
+    return (
+      <div className="page-error">
+        Couldn’t load your picks. Your bracket is safe — this page just can’t
+        read it right now, so it is not showing one.
+        <button className="settings-admin-btn" style={{ marginLeft: '0.75rem' }}
+                onClick={() => { refetchPicks(); refetch() }}>
+          Retry
+        </button>
+      </div>
+    )
+  }
   if (isLoading) return <div className="page-loading">Loading draw…</div>
   if (error) {
     /* A dead end with no verb was the freeze's other half: when a fetch
