@@ -932,8 +932,24 @@ async def ingest_document(db, tournament, play_date: date, url: str,
             # fresh row it meant a slot that resolved to a bracket match kept
             # the default False, and an "A or B" side rendered as a team.
             if entry.id is None or found is None or not m.tbd:
-                entry.is_tbd = bool(m.tbd)
-                entry.tbd_side = getattr(m, 'tbd_side', None)
+                # TWO NAMES ON A SINGLES SIDE MEAN THAT SIDE IS UNRESOLVED.
+                # The sheet writes a pending semi-final winner as "Parry / Li",
+                # and the parser only reads a slash as "or" on a side it has
+                # ALREADY marked unresolved — so a final with both semis still
+                # to play stored one side as a phantom doubles pairing (and
+                # tripped singles_side_stacked; Monterrey, 2026-08-29). The law
+                # says two names are legal only on a declared-unresolved side,
+                # so declare it here rather than only complain about it later.
+                tbd_side = getattr(m, 'tbd_side', None)
+                if discipline == "singles":
+                    stacked = "".join(
+                        k for k, side in (("a", getattr(m, "side_a", None)),
+                                          ("b", getattr(m, "side_b", None)))
+                        if side and len(side) > 1)
+                    if stacked:
+                        tbd_side = "".join(sorted(set((tbd_side or "") + stacked)))
+                entry.is_tbd = bool(m.tbd) or bool(tbd_side)
+                entry.tbd_side = tbd_side or None
             entry.round_label = (m.round or entry.round_label
                                  or unanimous.get((stage, discipline)))
             entry.printed_score = getattr(m, 'printed_score', None)
