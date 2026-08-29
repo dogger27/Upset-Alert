@@ -709,6 +709,58 @@ async def match_score_history(
     }
 
 
+@router.get("/{tournament_id}/my-standouts")
+async def my_standout_picks(
+    tournament_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
+):
+    """Match ids in this draw where the reader called a result the field missed.
+
+    Same test the standout notification used before it was retired, so the
+    bracket marks exactly what used to be emailed: the reader picked the
+    winner, at least STANDOUT_MIN_PREDICTIONS people predicted the match, and
+    strictly fewer than half of them got it right. Strict, so a field split
+    down the middle is not flattered into "you saw something they didn't".
+
+    Computed live rather than read from standout_pick_notifications: that table
+    is the notifier's claim ledger, one row per match measured once, and it
+    stops being written the moment nothing schedules the measurement. The
+    numbers behind it are cheap to recount from the picks themselves.
+    """
+    from app.services.notifications import (STANDOUT_MAX_SHARE,
+                                            STANDOUT_MIN_PREDICTIONS)
+    from collections import defaultdict
+
+    if current_user is None:
+        return {"match_ids": []}
+
+    rows = (await db.execute(
+        select(UserPrediction.match_id, UserPrediction.user_id,
+               UserPrediction.predicted_winner_id, Match.winner_id)
+        .join(Match, Match.id == UserPrediction.match_id)
+        .where(Match.draw_id == tournament_id,
+               Match.winner_id.isnot(None),
+               Match.is_bye == False,  # noqa: E712
+               UserPrediction.predicted_winner_id.isnot(None))
+    )).all()
+
+    picked: dict[int, int] = defaultdict(int)
+    correct: dict[int, int] = defaultdict(int)
+    mine: set[int] = set()
+    for match_id, uid, guess, winner in rows:
+        picked[match_id] += 1
+        if guess == winner:
+            correct[match_id] += 1
+            if uid == current_user.id:
+                mine.add(match_id)
+
+    out = [mid for mid in mine
+           if picked[mid] >= STANDOUT_MIN_PREDICTIONS
+           and correct[mid] / picked[mid] < STANDOUT_MAX_SHARE]
+    return {"match_ids": sorted(out)}
+
+
 @router.get("/{tournament_id}/matches/{match_id}/predictors")
 async def match_predictors(
     tournament_id: int,

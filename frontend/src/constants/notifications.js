@@ -16,7 +16,6 @@ export const ALL_NOTIFICATION_KEYS = [
   'draw_released',
   'draw_changed',
   'qualifiers_added',
-  'standout_pick',
   'round_standings',
   // Kept alongside round_standings rather than treated as covered by it. The
   // settings grid greys this row out while Round completion is on, but the

@@ -18,7 +18,6 @@ ALL_EMAIL_KEYS = (
     "draw_released",
     "draw_changed",
     "qualifiers_added",
-    "standout_pick",
     "round_standings",
     "tournament_end",
     "league_member_joined",
