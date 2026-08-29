@@ -969,11 +969,18 @@ html.h2h-modal-open body {
        instead, which do not cost legibility. */
     --h2h-row-size: 0.95rem;
     display: grid;
-    /* minmax(0, auto) on the tournament column so it can SHRINK. A bare `auto`
-       sizes to content and refuses to go below it, and at the larger type
-       "Australian Open · 2026 · QF" would have run past the card edge rather
-       than truncating. */
-    grid-template-columns: auto 1fr minmax(0, auto) auto auto;
+    /* WHICH COLUMN FLEXES DECIDES WHICH LINE TRUNCATES.
+       The winner spans tracks 1-2 and the tournament sits in track 3, so while
+       track 2 was the 1fr and track 3 sized to its content, a long venue took
+       the width first and the NAME paid for it: "Livesport Prague Open" printed
+       whole on the second line while "Marta Kostyuk" was cut to "Marta …" on
+       the first, which was otherwise empty.
+       Flipping it — track 2 auto, track 3 the flexible one — lets the name take
+       the width it needs and leaves the venue to give way, which is the order
+       the rule below already asks for. minmax(0, 1fr) keeps track 3 able to
+       shrink below its content, so "Australian Open · 2026 · QF" still
+       truncates instead of running past the card edge. */
+    grid-template-columns: auto auto minmax(0, 1fr) auto auto;
     align-items: baseline;
     column-gap: 0.3rem;
     row-gap: 0.15rem;
@@ -994,11 +1001,13 @@ html.h2h-modal-open body {
 
   .h2h-table td { display: block; }
 
-  /* The NAME gives way, not the score. Both were nowrap, so a four-set line
-     with tiebreak counts — "4(30)-6, 6(0)-3, 3(15)-6, 2(15)-6" — ran straight
-     out of its cell and printed on top of "Jenson Brooksby". The score is the
-     row's payload and stays whole; the name truncates, which still identifies
-     the winner because the coloured bar beside it says which player it is. */
+  /* The name keeps its ellipsis as a LAST RESORT, for the case the score
+     cannot yield to: both were nowrap once, so a four-set line with tiebreak
+     counts — "4(30)-6, 6(0)-3, 3(15)-6, 2(15)-6" — ran out of its cell and
+     printed on top of "Jenson Brooksby". The score is the row's payload and
+     stays whole. With track 2 now sizing to the name, that limit is reached
+     only when the score genuinely needs the room, rather than whenever the
+     venue on the line below happened to be long. */
   .h2h-winner {
     grid-area: 1 / 1 / 2 / 3;
     font-size: var(--h2h-row-size);
