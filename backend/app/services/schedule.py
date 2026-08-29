@@ -577,7 +577,7 @@ async def ingest_document(db, tournament, play_date: date, url: str,
     # while this one holds uncommitted writes deadlocks the ingest against
     # itself on SQLite's single writer.
     from app.services.schedule_invariants import check_parse
-    parse_violations = check_parse(meta, len(matches))
+    parse_violations = check_parse(meta, len(matches), [m.round for m in matches])
 
     # A REPUBLISH IS NOT A REVISION. The tours' systems regenerate the sheet
     # continuously — the only diff between two of Winston-Salem's overnight
