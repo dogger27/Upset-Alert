@@ -1777,6 +1777,32 @@ def settle_from_result_rows(side_players, index) -> tuple:
     return _as_settled_side(keep[0], win_rows), True
 
 
+# _READ_THE_DAY_AS_STORED
+#
+# Everything in the tail of `ingest_document` re-reads rows that same session
+# loaded MINUTES of work earlier, and `AsyncSessionLocal` is
+# `expire_on_commit=False`: a plain `select()` hands back the identity-mapped
+# object with its in-memory state intact, and `ScheduleEntry.players` is
+# `lazy="selectin"`, so a collection already loaded is never loaded again.
+# `_sync_players` adds and deletes player rows through `db.add`/`db.delete`
+# rather than through that collection — so by the time these run, the parent's
+# view of its own players is whatever the sheet said LAST time.
+#
+# Monterrey 2026-08-29: the sheet still printed "D. Parry OR A. Li" after the
+# draw had recorded Parry's semi-final win. Every ingest re-added the losing
+# alternative and re-marked the side unresolved (both correct — the row must
+# say what the sheet says), and this resolver then looked at a side that still
+# held ONE player in memory, concluded it was already settled, and skipped it.
+# Nothing collapsed, nothing committed, and the women's final sat on the page
+# offering a choice the bracket had closed. It looked like the resolver was
+# broken; the resolver was fine — on a FRESH session it collapses the row in
+# one call, which is exactly why the 2-minute backstop tick appeared to work
+# and this call never did.
+#
+# `populate_existing=True` overwrites the loaded state instead of trusting it,
+# and re-runs the selectin load for `players`. The `flush()` in front of it is
+# what makes that safe for a caller mid-transaction: pending writes reach the
+# database first, so the refresh reads them back rather than discarding them.
 async def resolve_settled_alternatives(db, tournament_id: int) -> int:
     """Collapse every "A or B" slot whose deciding match is already over.
 
@@ -1799,12 +1825,15 @@ async def resolve_settled_alternatives(db, tournament_id: int) -> int:
     from datetime import timedelta as _td
 
     today = date.today()
+    # `populate_existing`, and it is the difference between this running and
+    # this silently doing nothing. See _READ_THE_DAY_AS_STORED.
+    await db.flush()
     entries = (await db.execute(
         select(ScheduleEntry).where(
             ScheduleEntry.tournament_id == tournament_id,
             ScheduleEntry.is_tbd.is_(True),
             ScheduleEntry.play_date >= today - _td(days=1),
-        ))).scalars().all()
+        ).execution_options(populate_existing=True))).scalars().all()
     if not entries:
         return 0
 
@@ -1923,6 +1952,9 @@ async def relink_bracket_matches(db, tournament_id: int) -> int:
     from datetime import timedelta as _td
 
     today = date.today()
+    # Same refresh as the resolver above, and needed for the same reason: this
+    # runs from the ingest's own session too. See _READ_THE_DAY_AS_STORED.
+    await db.flush()
     entries = (await db.execute(
         select(ScheduleEntry).where(
             ScheduleEntry.tournament_id == tournament_id,
@@ -1933,7 +1965,8 @@ async def relink_bracket_matches(db, tournament_id: int) -> int:
             ScheduleEntry.stage == 'main',
             ScheduleEntry.is_tbd.is_(False),
             ScheduleEntry.play_date >= today - _td(days=1),
-        ))).scalars().all()
+            # See _READ_THE_DAY_AS_STORED.
+        ).execution_options(populate_existing=True))).scalars().all()
     if not entries:
         return 0
 
