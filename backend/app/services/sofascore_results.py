@@ -412,10 +412,14 @@ class SofascoreResultsMonitor:
                     if report["written"]:
                         logger.info("Sofascore results: %s", report)
             except SofascoreBlocked as exc:
-                delay = self.BLOCKED_BACKOFF
+                # The FLOOR, not the answer: the breaker escalates a repeat
+                # block up to six hours, and waking every half hour into one
+                # only refills the log. Sleep until it actually reopens.
+                from app.services.sofascore import blocked_for
+                delay = max(self.BLOCKED_BACKOFF, blocked_for() + 30)
                 await app_log(
                     "warning", "sofascore_results",
-                    f"Results sweep paused {self.BLOCKED_BACKOFF / 60:.0f}m — "
+                    f"Results sweep paused {delay / 60:.0f}m — "
                     f"Sofascore refused the request ({exc})",
                     dedup_key="sofa_results_blocked", dedup_hours=1)
             except asyncio.CancelledError:

@@ -703,10 +703,14 @@ class SofascoreLiveMonitor:
                             for tid in report.get("tournament_ids") or []:
                                 await broadcaster.publish(tid)
             except SofascoreBlocked as exc:
-                delay = self.BLOCKED_BACKOFF
+                # The FLOOR, not the answer: the breaker escalates a repeat
+                # block up to six hours, and waking every half hour into one
+                # only refills the log. Sleep until it actually reopens.
+                from app.services.sofascore import blocked_for
+                delay = max(self.BLOCKED_BACKOFF, blocked_for() + 30)
                 await app_log(
                     "warning", "sofascore_live",
-                    f"Live polling paused for {self.BLOCKED_BACKOFF / 60:.0f} "
+                    f"Live polling paused for {delay / 60:.0f} "
                     f"minutes — Sofascore refused the request ({exc})",
                     dedup_key="sofa_live_blocked", dedup_hours=1)
             except asyncio.CancelledError:

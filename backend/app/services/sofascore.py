@@ -201,6 +201,22 @@ _BLOCK_COOLDOWN_MAX = 21600.0
 _consecutive_blocks = 0
 
 
+def blocked_for() -> float:
+    """Seconds until the circuit closes; 0.0 when it is not open.
+
+    The sweeps each hardcoded a 30-minute pause to match the circuit breaker,
+    which stopped being true when the breaker learned to escalate: they woke
+    every half hour into a six-hour block, were refused, and logged it. Asking
+    the breaker how long it actually intends to stay shut lets them sleep the
+    real interval and log once per block instead of twice an hour.
+    """
+    try:
+        now = asyncio.get_running_loop().time()
+    except RuntimeError:      # no loop running — nothing is polling anyway
+        return 0.0
+    return max(0.0, _blocked_until - now)
+
+
 def _rotate_session(proxy: str) -> str:
     """Give a rotating-pool proxy a NEW sticky session id.
 
