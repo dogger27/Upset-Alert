@@ -344,8 +344,6 @@ export default function Navbar() {
           desc: 'A player is replaced in a draw you entered' },
         { key: 'qualifiers_added', label: 'Qualifiers added',
           desc: 'Qualifying slots are filled, with their first matches' },
-        { key: 'standout_pick', label: 'Standout pick',
-          desc: 'You called a result most competitors missed' },
         { key: 'round_standings', label: 'Round completion',
           // Wrapped rather than referenced directly: this is built above
           // toggleRoundStandings' const declaration, so naming it here would

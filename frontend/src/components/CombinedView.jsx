@@ -352,7 +352,7 @@ function Connectors({ leftCenters, rightCenters, totalH }) {
 // compact: phone-width mode — country flags are dropped to buy name space.
 // zoom:    scales the whole rendered draw (layout included, via CSS zoom) so
 //          the parent can shrink it until the target number of rounds fits.
-export default function CombinedView({ tournament, matches, players, picks, onPick, locked = true, windowStart = 0, windowSize = 4, labelsHidden = false, insetLeft = 0, compact = false, zoom = 1, scrubRef = null, leagueId = null, lockedMatchIds = new Set(), predictionsHidden = false }) {
+export default function CombinedView({ tournament, matches, players, picks, onPick, locked = true, windowStart = 0, windowSize = 4, labelsHidden = false, insetLeft = 0, compact = false, zoom = 1, scrubRef = null, leagueId = null, lockedMatchIds = new Set(), predictionsHidden = false , standoutIds = null }) {
   /* Which clock upcoming times are shown in. The account's choice where there
      is one; otherwise the reader's own, which needs no explanation when they
      have never expressed a preference. undefined means "this device". */
@@ -1564,10 +1564,14 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                         a wrong answer is worse than no button. */}
                     {m.winner?.id != null && !m.is_bye && !predictionsHidden && (
                       <button
-                        className="cv-group"
+                        className={`cv-group${standoutIds?.has(m.id) ? ' cv-group--standout' : ''}`}
                         style={{ ...chipTop, left: colIdx * (colW + COL_GAP) - H2H_X, pointerEvents: 'auto' }}
-                        title={`Who predicted ${m.winner.name}?`}
-                        aria-label={`Who predicted ${m.winner.name}?`}
+                        title={standoutIds?.has(m.id)
+                          ? `You called ${m.winner.name} — most of the field did not`
+                          : `Who predicted ${m.winner.name}?`}
+                        aria-label={standoutIds?.has(m.id)
+                          ? `Standout pick: you called ${m.winner.name}, which most competitors missed`
+                          : `Who predicted ${m.winner.name}?`}
                         onClick={() => setPredictorsMatch(m)}
                       >
                         <GroupIcon />

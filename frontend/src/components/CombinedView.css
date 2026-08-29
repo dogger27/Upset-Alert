@@ -636,3 +636,68 @@
   pointer-events: auto;
   cursor: pointer;
 }
+
+/* ── Standout pick: the field missed this one, and you didn't ──────────────
+   Replaces the email that used to say so hours later. It marks the reader's
+   OWN bracket only (see standoutIds), and only on finished matches.
+
+   The chip's transform is composed from runtime vars (--d/--t) and a -90deg
+   rotation, so the keyframes REBUILD that stack rather than replace it —
+   animating `transform` alone would drop the chip out of position and stand
+   the glyph on its side. */
+@property --cv-standout-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.cv-group--standout {
+  /* Neon ring: the card colour fills the padding box, the conic gradient
+     shows only through the border box. Where @property is unsupported the
+     angle simply never advances — a static neon edge rather than no edge. */
+  border-color: transparent;
+  background:
+    linear-gradient(var(--surface-card), var(--surface-card)) padding-box,
+    conic-gradient(from var(--cv-standout-angle),
+      #39ff14, #00e5ff, #b026ff, #ff2d95, #ffd400, #39ff14) border-box;
+  border-width: 2px;
+  box-shadow: 0 0 6px rgba(57, 255, 20, 0.45), 0 0 14px rgba(176, 38, 255, 0.28);
+  animation:
+    cv-standout-spin 2.4s linear infinite,
+    cv-standout-shake 1.6s cubic-bezier(0.36, 0.07, 0.19, 0.97) 1;
+  z-index: 5;                    /* above neighbouring boxes while it grows */
+}
+
+.cv-group--standout:hover { background:
+    linear-gradient(var(--surface-card), var(--surface-card)) padding-box,
+    conic-gradient(from var(--cv-standout-angle),
+      #39ff14, #00e5ff, #b026ff, #ff2d95, #ffd400, #39ff14) border-box; }
+
+@keyframes cv-standout-spin {
+  to { --cv-standout-angle: 360deg; }
+}
+
+/* Shakes IN and grows: small fast wobble that settles a little larger than it
+   started, so the chip still reads as the same control afterwards. */
+@keyframes cv-standout-shake {
+  0%   { transform: translate(-50%, -50%) translateY(calc(var(--d, 0) * var(--t, 0) * 1px)) rotate(-90deg) scale(0.85); }
+  12%  { transform: translate(-50%, -50%) translateY(calc(var(--d, 0) * var(--t, 0) * 1px)) rotate(-83deg) scale(1.18); }
+  26%  { transform: translate(-50%, -50%) translateY(calc(var(--d, 0) * var(--t, 0) * 1px)) rotate(-97deg) scale(1.32); }
+  40%  { transform: translate(-50%, -50%) translateY(calc(var(--d, 0) * var(--t, 0) * 1px)) rotate(-84deg) scale(1.40); }
+  54%  { transform: translate(-50%, -50%) translateY(calc(var(--d, 0) * var(--t, 0) * 1px)) rotate(-96deg) scale(1.34); }
+  68%  { transform: translate(-50%, -50%) translateY(calc(var(--d, 0) * var(--t, 0) * 1px)) rotate(-87deg) scale(1.26); }
+  82%  { transform: translate(-50%, -50%) translateY(calc(var(--d, 0) * var(--t, 0) * 1px)) rotate(-92deg) scale(1.20); }
+  100% { transform: translate(-50%, -50%) translateY(calc(var(--d, 0) * var(--t, 0) * 1px)) rotate(-90deg) scale(1.15); }
+}
+
+/* Settled state, so the chip stays grown after the shake ends. */
+.cv-group--standout {
+  transform: translate(-50%, -50%) translateY(calc(var(--d, 0) * var(--t, 0) * 1px)) rotate(-90deg) scale(1.15);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cv-group--standout {
+    animation: none;
+    transform: translate(-50%, -50%) translateY(calc(var(--d, 0) * var(--t, 0) * 1px)) rotate(-90deg) scale(1.15);
+  }
+}

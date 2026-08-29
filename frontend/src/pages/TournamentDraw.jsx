@@ -9,6 +9,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
 import { getDraw, listTournaments, refreshDraw, toggleUnlockSelections } from '../api/tournaments'
 import { getPredictions, savePredictions } from '../api/predictions'
+import { getMyStandouts } from '../api/tournaments'
 import { useAuth } from '../store/auth'
 import BracketView, { COL_W as BV_COL_W, COL_W_SCORES as BV_COL_W_SCORES, COL_GAP as BV_COL_GAP } from '../components/BracketView'
 import CombinedView, { COL_W as CV_COL_W, COMPACT_COL_W as CV_COMPACT_COL_W, COL_GAP as CV_COL_GAP, H2H_X as CV_H2H_X } from '../components/CombinedView'
@@ -287,6 +288,19 @@ function TournamentDraw() {
     refetchOnMount: 'always',
     retry: 2,
   })
+
+  // Which of this reader's picks the field got wrong. Only their OWN bracket
+  // is ever marked: the animation says "you saw this", which is meaningless
+  // over somebody else's picks.
+  const { data: standouts } = useQuery({
+    queryKey: ['my-standouts', id],
+    queryFn: () => getMyStandouts(Number(id)),
+    enabled: hasToken,
+    staleTime: 60_000,
+  })
+  // Hooks stay above the early returns below — see the note by isLoading.
+  const standoutSet = useMemo(
+    () => new Set(standouts?.match_ids || []), [standouts])
 
   const viewingOther = viewedUserId != null && viewedUserId !== user?.id
   const { data: viewedPreds } = useQuery({
@@ -1775,6 +1789,7 @@ function TournamentDraw() {
               labelsHidden={headerHidden}
               insetLeft={drawInsetLeft}
               compact={compactDraw}
+              standoutIds={viewingOther ? null : standoutSet}
               zoom={drawZoom}
               scrubRef={scrubApi}
               leagueId={activeLeagueId}

@@ -27,3 +27,6 @@ export const toggleUnlockSelections = (id) => client.post(`/tournaments/${id}/to
 export const getComparePicks = (tournamentId, leagueId) =>
   client.get(`/tournaments/${tournamentId}/compare-picks`,
     { params: leagueId != null ? { league_id: leagueId } : {} }).then(r => r.data)
+
+export const getMyStandouts = (tournamentId) =>
+  client.get(`/tournaments/${tournamentId}/my-standouts`).then(r => r.data)

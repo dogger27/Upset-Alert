@@ -2077,16 +2077,13 @@ def start_scheduler() -> None:
         id="notify_draw_changes",
         misfire_grace_time=300,
     )
-    # Measure finished matches against the field and tell the minority who
-    # called them right. Also on 5 min: this job does the measuring as well as
-    # the sending, and a match that is measured late is notified late.
-    scheduler.add_job(
-        _on_shutdown_quietly(_notify_pending_standout_picks),
-        "interval",
-        minutes=5,
-        id="notify_standout_picks",
-        misfire_grace_time=300,
-    )
+    # STANDOUT PICKS ARE NO LONGER NOTIFIED. Telling someone by email that they
+    # called a result the field missed lands hours later, in a different place
+    # from the bracket it is about. The draw itself now marks those picks where
+    # they happened, so the news arrives when the reader is already looking at
+    # it. _notify_pending_standout_picks and everything it calls are left in
+    # place, unscheduled: nothing runs them, and the measurement they wrote is
+    # not what the draw reads.
     # Sanity sweep for silent failures (released-but-not-open, wiki title
     # never resolving) — see _check_draw_health docstring.
     scheduler.add_job(
@@ -2208,7 +2205,6 @@ def start_scheduler() -> None:
     # are cooldown-gated, so a batch mid-settle at shutdown would otherwise wait
     # for the first interval tick.
     asyncio.create_task(_notify_pending_draw_changes())
-    asyncio.create_task(_notify_pending_standout_picks())
     # Catch any tournaments that were already stuck before this restart.
     asyncio.create_task(_check_draw_health())
     asyncio.create_task(_check_rankings_health())
