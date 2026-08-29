@@ -188,6 +188,17 @@ _MIN_INTERVAL = 2.0
 # usual backoff instinct and the only thing that actually shortens an IP block.
 _blocked_until = 0.0
 _BLOCK_COOLDOWN = 1800.0
+# A BLOCK THAT KEEPS COMING BACK IS NOT A RATE LIMIT, IT IS A BAN.
+# The flat 30-minute cooldown assumes the block clears on its own, which is
+# true of rate limiting and false of an IP ban: from 2026-08-29 the breaker
+# re-armed twice an hour for fourteen hours straight, each retry poking an
+# exit Sofascore had already refused — the one thing the comment above says
+# never to do — and writing two warnings an hour while it did.
+# Consecutive trips with no success between them double the wait, up to six
+# hours. The first success resets it, so a proxy coming back or a lifted block
+# returns to the tight cadence immediately.
+_BLOCK_COOLDOWN_MAX = 21600.0
+_consecutive_blocks = 0
 
 
 def _rotate_session(proxy: str) -> str:
@@ -231,7 +242,7 @@ async def _get(path: str) -> dict:
     One paced request. Raises SofascoreBlocked on 403 and while the breaker is
     open, so a caller mid-draw stops instead of walking the rest of its list.
     """
-    global _last_request_at, _blocked_until
+    global _last_request_at, _blocked_until, _consecutive_blocks
 
     loop = asyncio.get_running_loop()
     if loop.time() < _blocked_until:
@@ -269,12 +280,18 @@ async def _get(path: str) -> dict:
                 dedup_key="sofa_rotated", dedup_hours=6)
 
     if status == 403:
-        _blocked_until = loop.time() + _BLOCK_COOLDOWN
+        _consecutive_blocks += 1
+        cooldown = min(_BLOCK_COOLDOWN * (2 ** (_consecutive_blocks - 1)),
+                       _BLOCK_COOLDOWN_MAX)
+        _blocked_until = loop.time() + cooldown
         await app_log(
             "warning", "sofascore",
             "Sofascore returned 403 — pausing all requests for "
-            f"{_BLOCK_COOLDOWN / 60:.0f} minutes",
-            detail={"path": path},
+            f"{cooldown / 60:.0f} minutes"
+            + (f" (block #{_consecutive_blocks} in a row)"
+               if _consecutive_blocks > 1 else ""),
+            detail={"path": path, "consecutive_blocks": _consecutive_blocks,
+                    "proxy_configured": bool(os.environ.get(_PROXY_ENV))},
             dedup_key="sofa_blocked", dedup_hours=1)
         raise SofascoreBlocked(f"403 on {path}")
     # A 404 is an ANSWER, not a refusal. Sofascore returns one for a season
@@ -285,6 +302,10 @@ async def _get(path: str) -> dict:
         raise SofascoreNotFound(f"404 on {path}")
     if status != 200:
         raise SofascoreBlocked(f"HTTP {status} on {path}")
+    # Answered — so whatever was refusing us has stopped. Back to the tight
+    # cooldown, or a restored proxy would inherit the six-hour wait its
+    # predecessor earned.
+    _consecutive_blocks = 0
     return payload
 
 
