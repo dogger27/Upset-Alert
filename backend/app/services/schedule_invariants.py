@@ -571,7 +571,8 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
     return v
 
 
-def check_parse(meta, match_count: int | None = None) -> list[dict]:
+def check_parse(meta, match_count: int | None = None,
+                rounds: list | None = None) -> list[dict]:
     """The law applied to a PARSE, before a single row is stored.
 
     Everything in check_day looks at rows the ingest wrote. That is blind to
@@ -626,6 +627,27 @@ def check_parse(meta, match_count: int | None = None) -> list[dict]:
             "detail": f"the sheet prints {vs_lines} match boxes ('vs' on its own "
                       f"line) but the parse produced {match_count} — "
                       f"{vs_lines - match_count} slot(s) lost",
+        })
+
+    # 2026-08-29, Winston-Salem's finals sheet: the page printed "DOUBLES
+    # FINAL" over one box and "SINGLES FINAL" over the other, and NOISE_RE ate
+    # both — it exists to stop a header becoming a player, and nothing read one
+    # first. The singles row took its "F" off the bracket and looked fine; the
+    # doubles row has no bracket to fall back on (we store no doubles draw) and
+    # published with no round at all, beside a sheet that states one.
+    #
+    # Counted off the sheet's own lines in parse_pdf, independently of every
+    # rule that reads them — the same construction as vs_lines above, and quiet
+    # for the same reason: it fires only when the sheet printed a header and
+    # NOT ONE match came back wearing a round, which is the reading being
+    # broken rather than a sheet that labels some of its slots and not others.
+    # Measured over the 285-file corpus: zero.
+    headers = (meta or {}).get('round_headers')
+    if headers and rounds is not None and not any(rounds):
+        out.append({
+            "code": "printed_round_dropped", "entry_id": None, "court": None,
+            "detail": f"the sheet prints {headers} event header(s) stating a "
+                      f"round and the parse kept none — see _EVENT_HEADER_RE",
         })
     return out
 

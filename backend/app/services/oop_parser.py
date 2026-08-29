@@ -53,6 +53,60 @@ TOUR_RE = re.compile(r'^(ATP|WTA)$', re.I)
 ROUND_RE = re.compile(r'^(F|SF|QF|R\d{1,3}|Q\d?|FQ|1R|2R|3R|4R)$', re.I)
 CONT_RE = re.compile(r'^(?:\[[^\]]*\]|[A-Z]{3})$')
 
+# THE ROUND THE SHEET SPELLS OUT IN WORDS. ROUND_RE knows only the tokens, so a
+# sheet that writes its event out was read as furniture and its round thrown
+# away — NOISE_RE below deliberately eats "DOUBLES FINAL" so it can never be
+# taken for a player, and nothing read it before that. Winston-Salem's
+# 2026-08-29 finals sheet printed "DOUBLES FINAL" over one box and "SINGLES
+# FINAL" over the other: the singles row took its "F" from the bracket, and the
+# doubles row — which has no bracket to fall back on, we store no doubles draw —
+# published with no round at all beside a sheet that states one. 60 files of
+# the 285-file corpus print 97 headers in this form, and reading them fills a
+# round and a discipline on 95 matches while changing no name, time, court or
+# match count anywhere in it.
+_ROUND_WORD_RE = re.compile(
+    r'\b(?:(?:semi|quarter)[-\s]?)?finals?\b|\bround\s+of\s+\d{1,3}\b', re.I)
+# The header as a WHOLE LINE, which is how it is printed over a match box.
+# Anchored at both ends: "SINGLES FINAL BOBS U14 BOYS" is a junior event
+# sharing the page, and it stays the furniture NOISE_RE has always made of it.
+#
+# Deliberately NOT the event-CODE spelling ("MS FINAL", "QD SF"). A code states
+# the STAGE as well — "QS" is qualifying — and _classify reads codes out of a
+# blob this parser never fills, so a header read for its round while its Q went
+# unread would file a qualifying final as a main-draw one. Those stay noise
+# until something reads the whole code.
+_EVENT_HEADER_RE = re.compile(
+    r'^(?:(?:ATP|WTA|ITF)\s+)*(?P<disc>singles|doubles|mixed)\s+'
+    r'(?P<round>(?:(?:semi|quarter)[-\s]?)?finals?|round\s+of\s+\d{1,3})$', re.I)
+
+
+def _round_token(text):
+    """A spelled-out round as the token ROUND_RE would have produced, or None.
+
+    Order matters inside the regex above, not here: "SEMI-FINAL" contains
+    "-FINAL" on a word boundary, so a bare `\\bfinals?\\b` tested first would
+    read a semi-final as the final. The prefixes are part of one alternative
+    for exactly that reason.
+    """
+    m = _ROUND_WORD_RE.search(text or '')
+    if not m:
+        return None
+    word = re.sub(r'[-\s]+', '', m.group(0)).lower()
+    if word.startswith('semi'):
+        return 'SF'
+    if word.startswith('quarter'):
+        return 'QF'
+    if word.startswith('final'):
+        return 'F'
+    of = re.match(r'roundof(\d{1,3})$', word)
+    return f'R{of.group(1)}' if of else None
+
+
+def _event_header(text):
+    """-> (discipline, round token) when this whole line is an event header."""
+    m = _EVENT_HEADER_RE.match((text or '').strip())
+    return (m.group('disc').lower(), _round_token(m.group('round'))) if m else None
+
 # IOC codes as the tours print them, plus the ISO variants that turn up in
 # their place (DEU for Germany, and RUS/BLR which persist on some sheets
 # despite the neutral-athlete rules). Lives HERE, and schedule.py imports it,
@@ -163,6 +217,11 @@ class Match:
     nations_a: list = field(default_factory=list)
     nations_b: list = field(default_factory=list)
     page: int = 0
+    # INTERNAL. The event header printed inside this box ("DOUBLES FINAL"),
+    # held until the names are in rather than applied where it is read: a
+    # two-column sheet can file a header under the wrong court, and only the
+    # slot's own players can say so. Applied by _apply_header at flush.
+    header: Optional[tuple] = None
     # INTERNAL. Lines this slot swallowed that no rule could read as a name,
     # a score, a round or the sheet's furniture. Kept only so that a slot which
     # ends up with no players can say WHY it is empty — see meta['dropped_slots'].
@@ -259,14 +318,20 @@ def _column_origins(cells, tol=60):
 
 
 def _slot_of(text):
-    """-> (time, discipline) when this line opens a match slot, else None."""
+    """-> (time, discipline, round) when this line opens a match slot, else None."""
     if not text:
         return None
     if SLOT_RE.search(text) or BARE_TIME_RE.match(text) or TBX_RE.match(text):
         times = CLOCK_RE.findall(text)
         d = DISC_RE.search(text)
+        # Some sheets put the whole event header on the slot line — "Starting
+        # at 11:00 AM Doubles Final", "Singles Final - Starting at 1:00 PM".
+        # The round is read only when the line NAMES THE EVENT too: "final" is
+        # an ordinary English word, and a slot wording that happened to use it
+        # is not this match's round.
         return (times[-1].strip() if times else None,
-                d.group(1).lower() if d else None)
+                d.group(1).lower() if d else None,
+                _round_token(text) if d else None)
     return None
 
 
@@ -390,7 +455,12 @@ def parse_pdf(pdf_bytes):
             # per match box, independent of every rule below it. The caller
             # compares it against the match count, which is how a slot lost by
             # any means at all reports itself. See check_parse.
-            'vs_lines': 0}
+            'vs_lines': 0,
+            # How many times the sheet printed its event header as a line of
+            # its own ("DOUBLES FINAL"). Counted the same way and for the same
+            # reason as vs_lines: it is what the SHEET says, so the caller can
+            # tell that a round was printed and no match came back wearing one.
+            'round_headers': 0}
     matches = []
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
         meta['pages'] = len(pdf.pages)
@@ -446,6 +516,8 @@ def parse_pdf(pdf_bytes):
             # is opened, so that nothing this parser gets wrong can change the
             # number. Footer lines are already gone above.
             meta['vs_lines'] += sum(1 for _y, _m, t in cells if VS_RE.match(_clean(t)))
+            meta['round_headers'] += sum(
+                1 for _y, _m, t in cells if _EVENT_HEADER_RE.match(_clean(t)))
 
             origins = _column_origins(cells)
             if not origins:
@@ -477,6 +549,35 @@ def parse_pdf(pdf_bytes):
     if not matches and meta['reason'] is None:
         meta['reason'] = 'no matches found'
     return matches, meta
+
+
+def _apply_header(match):
+    """Take the box's printed event header — unless its own names contradict it.
+
+    A header is the sheet SAYING what the slot is, which beats counting names,
+    and it is the only source of a round for a doubles row (no doubles draw
+    means no bracket to derive one from). But a two-column sheet interleaves,
+    and Birmingham 2025-06-08 (wta/2025_1126) put COURT 1's "ATP Doubles Final"
+    into CENTRE COURT's 11:00 slot — an ATP singles semi-final, one name a
+    side, which would have published as a doubles row and stopped looking for
+    its bracket match. Where the header describes a different shape from the
+    players printed under it, it is describing a different box: drop it whole,
+    round included, rather than keep half a statement we know is misplaced.
+
+    Nothing already set is overwritten. A token printed for THIS slot — a bare
+    "SF" on its own line, or the wording that opened it — is the closer word.
+    """
+    if not match.header:
+        return
+    discipline, round_token = match.header
+    # The shape the NAMES give, read without match.discipline — is_doubles
+    # answers from the header once it is set, which would make this circular.
+    shape = 'doubles' if (match._side_size('a') > 1
+                          or match._side_size('b') > 1) else 'singles'
+    if (discipline if discipline != 'mixed' else 'doubles') != shape:
+        return
+    match.discipline = match.discipline or discipline
+    match.round = match.round or round_token
 
 
 def _regroup_alternatives(match):
@@ -541,6 +642,7 @@ def _slot_head(pre):
     for text, _alt in reversed(pre):
         if not (ROUND_RE.match(text) or TOUR_RE.match(text)
                 or _STATUS_TOKEN_RE.match(text) or DISC_RE.fullmatch(text)
+                or _EVENT_HEADER_RE.match(text)
                 or _is_continuation(text)
                 or (SCORE_RE.match(text) and re.search(r'\d', text))
                 or _is_name(text)):
@@ -566,6 +668,10 @@ def _parse_column(lines, pno, dropped=None):
         nonlocal cur
         if cur and cur.complete:
             _regroup_alternatives(cur)
+            # After the regroup, never before: it is what sets tbd_side, and
+            # the shape test in _apply_header reads it to tell two alternative
+            # teams from two partners.
+            _apply_header(cur)
             out.append(cur)
         elif cur is not None and cur.rejected and dropped is not None:
             # A slot marker opened this match and lines followed it that no
@@ -594,6 +700,17 @@ def _parse_column(lines, pno, dropped=None):
             return
         if ROUND_RE.match(text):
             cur.round = text.upper()
+            return
+        # The sheet's own event header, printed inside the box it belongs to
+        # ("DOUBLES FINAL" under the time band). Read for the two facts it
+        # states and then dropped: it is furniture as far as the names go, and
+        # NOISE_RE below would have dropped it unread. Neither field is
+        # overwritten — a token the sheet printed explicitly for THIS slot
+        # (ROUND_RE above, or the slot line's own wording) is the closer
+        # statement of the two.
+        header = _event_header(text)
+        if header:
+            cur.header = cur.header or header
             return
         # Strip leading round/tour tokens the layout parks on the name line.
         text = re.sub(r'^(?:F|SF|QF|R\d{1,3}|ATP|WTA)\s+(?=[A-Za-z\[])', '', text).strip()
@@ -687,7 +804,7 @@ def _parse_column(lines, pno, dropped=None):
             flush()
             pre = []
             cur = Match(court=court, time=slot[0], discipline=slot[1],
-                        start_raw=text, page=pno)
+                        round=slot[2], start_raw=text, page=pno)
             after_vs = False
             continue
 
