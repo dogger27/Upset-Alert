@@ -1001,9 +1001,13 @@ class SofascoreDoublesMonitor:
                                                       )).scalars().all()}:
                             await broadcaster.publish(tid)
             except SofascoreBlocked as exc:
-                delay = self.BLOCKED_BACKOFF
+                # The FLOOR, not the answer: the breaker escalates a repeat
+                # block up to six hours, and waking every half hour into one
+                # only refills the log. Sleep until it actually reopens.
+                from app.services.sofascore import blocked_for
+                delay = max(self.BLOCKED_BACKOFF, blocked_for() + 30)
                 await app_log("warning", "sofascore_doubles",
-                              f"Doubles sweep paused {self.BLOCKED_BACKOFF / 60:.0f}m ({exc})",
+                              f"Doubles sweep paused {delay / 60:.0f}m ({exc})",
                               dedup_key="sofa_doubles_blocked", dedup_hours=1)
             except asyncio.CancelledError:
                 raise
