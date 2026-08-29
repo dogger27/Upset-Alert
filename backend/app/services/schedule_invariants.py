@@ -35,6 +35,9 @@ _SHEET_CAPS_RE = re.compile(r'(?<![A-Za-z])[A-Z]{2,}(?![a-z])')
 # One letter standing in for a given name — "D." or a bare "D". Two letters is
 # a name the sheets really print (JJ TRACY), so the count matters.
 _INITIAL_RE = re.compile(r'^[A-Za-z]\.?$')
+# The other side of the same coin: a token carrying two or more letters is a
+# WORD — a name, not an initial. "Li" and "Tu" are surnames; "A." is not.
+_WORDY_RE = re.compile(r'[A-Za-z].*[A-Za-z]', re.S)
 # The qualifying round tokens, enumerated — "QF" starts with Q and is not one.
 _QUALI_ROUND_RE = re.compile(r'^(?:Q\d?|FQ)$', re.I)
 # A leading entry-status marker, "[LL] " / "[WC] " — the mirror of
@@ -97,7 +100,7 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
     # (schedule.resolve_settled_alternatives) collapses these from every
     # winner-writing path; this is the tripwire if any path forgets.
     from app.models.tournament import Draw, DrawEntry, Match
-    from app.services.schedule import _fold
+    from app.services.schedule import _fold, _match_tokens
     draw_ids = (await db.execute(
         select(Draw.id).where(Draw.tournament_id == tournament_id))).scalars().all()
     dents = (await db.execute(
@@ -429,6 +432,48 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                 flag("name_abbreviated_given", e,
                      f"side {p.side}: {p.raw_name!r} gives an initial where a "
                      f"settled row prints a name")
+
+        # 2026-08-29, Monterrey "D. Parry OR A. Li": the resolver kept only
+        # tokens LONGER than two characters, so "A. Li" reduced to nothing at
+        # all — an empty probe matches nobody. [5] Ann Li sat on the women's
+        # final with no flag, no ranking and no link to her own draw entry,
+        # and the slot could never have absorbed the settled sheet naming the
+        # winner, because `_side_resolves` needs her tokens too. Every short
+        # surname the tours print is in this hole: LI, TU, XU, BU, HO, JI, WU.
+        #
+        # Stated independently of the matcher on purpose: a printed name that
+        # still holds a WORD — two letters or more, after the seeding and the
+        # country come off — must leave the matcher something to probe with.
+        # When it does not, the matcher is structurally blind to that row
+        # rather than merely unable to place the player today.
+        for p in players:
+            raw = _LEADING_SEED_RE.sub(
+                "", _TRAILING_SEED_RE.sub("", (p.raw_name or "").strip()))
+            code = _TRAILING_CODE_RE.search(raw)
+            if code and code.group(1) in COUNTRY_CODES:
+                raw = raw[:code.start()]
+            # A team is DELIBERATELY unmatchable — it names two people and no
+            # draw entry is two people. That is the check below, not this one.
+            if "/" in raw:
+                continue
+            if any(_WORDY_RE.search(t) for t in raw.split()) \
+                    and not any(_match_tokens(p.raw_name)):
+                flag("name_no_matchable_token", e,
+                     f"side {p.side}: {p.raw_name!r} names somebody and the "
+                     f"matcher has nothing to probe with")
+
+        # 2026-08-29, Monterrey "M. Joint / Y. Xu": an unresolved doubles side
+        # offers a choice between two PAIRS, and each pair arrives as a single
+        # printed name. Only one of that pair's two surnames survived the
+        # length filter above, so the whole team matched Maya Joint's SINGLES
+        # draw entry — and the pair then flew her flag, her nationality and
+        # her ranking, while the alternative printed beside it carried none.
+        # Two people are never one draw entry, whatever the tokens say.
+        for p in players:
+            if "/" in (p.raw_name or "") and p.draw_entry_id is not None:
+                flag("team_name_claims_entry", e,
+                     f"side {p.side}: {p.raw_name!r} names a team and carries "
+                     f"draw_entry_id={p.draw_entry_id}")
 
         # 2026-08-24, Winston-Salem's three main-draw doubles matches, two of
         # them badged "Q": _classify's last-resort qualifying inference is

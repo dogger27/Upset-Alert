@@ -279,6 +279,35 @@ def _pairing_key(tournament_id: int, play_date: date, discipline: str,
     return hashlib.sha256(raw.encode()).hexdigest()[:32]
 
 
+# A token is an INITIAL — and so worth nothing to match on — when it carries a
+# single letter: "d.", "a", "m-". Everything longer is part of a name,
+# INCLUDING a two-letter surname.
+#
+# The test used to be the token's LENGTH (`len(t) > 2`), which silently threw
+# away every short surname the tours actually print — LI, TU, XU, BU, HO, JI,
+# MA, WU, NG. `sofascore_doubles._sheet_surnames` had already been taught this
+# ("Li TU AUS is a real entry and TU is a real surname"); this was the copy of
+# two that was never fixed. `schedule_invariants._INITIAL_RE` states the rule a
+# third time on purpose — the law must not be blinded by a change made here.
+_NON_ALPHA_RE = re.compile(r'[^a-z]')
+
+
+def _is_initial(token: str) -> bool:
+    """One letter standing in for a name, however it happens to be punctuated."""
+    return len(_NON_ALPHA_RE.sub('', token)) < 2
+
+
+def _names_a_team(name: str) -> bool:
+    """A WHOLE TEAM in one printed string — "S. Aoyama / E. Liang".
+
+    An unresolved doubles side offers a choice between two PAIRS, and each pair
+    reaches us as a single printed name. Two people can never be one
+    `draw_entries` row, so any id stamped on one of these necessarily describes
+    a single partner while the page speaks for both.
+    """
+    return '/' in (name or '')
+
+
 def _match_tokens(raw: str) -> tuple[set, set]:
     """The two token sets one name may be matched under, in priority order.
 
@@ -298,15 +327,32 @@ def _match_tokens(raw: str) -> tuple[set, set]:
     The ASCII fold is a FALLBACK, never the first test, because it is
     strictly looser: a draw holding both "Mueller" and "Muller" folds them
     together, so the exact spelling has to get first refusal.
+
+    A two-letter SURNAME is a name, not noise. Monterrey 2026-08-29 printed
+    the women's final as "D. Parry OR A. Li" and the old length filter reduced
+    "A. Li" to the EMPTY set — a probe that matches nobody. [5] Ann Li sat on
+    the page with no flag, no ranking and no link to her own draw entry, and
+    the row could never have absorbed the settled sheet that follows it, since
+    `_resolves` needs her tokens on both sides of the comparison. See
+    `_is_initial`.
     """
     cleaned = _clean_name(raw or '')
+    # A team names two people and no single draw entry can be it, so there is
+    # nothing here to probe with. Monterrey 2026-08-29 stamped
+    # "M. Joint / Y. Xu" with Maya Joint's SINGLES entry — the pair then flew
+    # her nationality, her ranking and her flag, while the alternative beside
+    # it ("S. Aoyama / E. Liang") carried none, purely because only one of that
+    # team's two surnames had survived the length filter. Nothing errors; the
+    # row simply speaks for a person who is half of it.
+    if _names_a_team(cleaned):
+        return set(), set()
     # `_clean_name`, NOT `_fold`, owns the stripping — it gates the trailing
     # code on _COUNTRY_CODES, and _fold takes any three capitals. Folding a
     # cleaned name stripped twice and turned "[WC] Luca POW GBR" into "Luca",
     # which is a subset of "Luca Van Assche": a confidently wrong player.
     # Three capitals are a surname as often as a country — LUZ, GUO, POW.
-    return ({t for t in _norm(cleaned).split() if len(t) > 2},
-            {t for t in _ascii_fold(cleaned).split() if len(t) > 2})
+    return ({t for t in _norm(cleaned).split() if not _is_initial(t)},
+            {t for t in _ascii_fold(cleaned).split() if not _is_initial(t)})
 
 
 async def _resolve_players(db, draws: list, tour: Optional[str], names: list) -> list:
@@ -409,8 +455,19 @@ async def _sync_players(db, entry, na: list, nb: list, ids: list,
             # Never trade an id already proved for a None this pass could not
             # resolve: a qualifier reaches draw_entries days after the sheet
             # first names them.
+            #
+            # A TEAM is the one name for which None is not "could not resolve"
+            # but "cannot be resolved, ever" — two people are not one entry —
+            # so it has to be able to erase. Without this exception the wrong
+            # id survives its own fix: Monterrey 2026-08-29 stamped
+            # "M. Joint / Y. Xu" with Maya Joint's singles entry, and
+            # re-ingesting the corrected parse would have left the pair still
+            # wearing her flag and her ranking, because the corrected pass
+            # resolves to None and None used to be ignored here.
             if eid is not None:
                 row.draw_entry_id = eid
+            elif _names_a_team(nm):
+                row.draw_entry_id = None
     # A side that SHRANK — the phantom "DAMM / SHELBAYH" settling to one name.
     for row in by_slot.values():
         await db.delete(row)
@@ -1151,9 +1208,22 @@ async def _renumber_courts(db, tournament_id: int, play_date: date) -> None:
 
 def _name_tokens(raw: str) -> set:
     """The tokens of one printed name worth matching on. Mirrors the closed-set
-    matching in `_resolve_players`: initials and country codes are dropped by
-    length, so "O. Luz" and "Orlando LUZ BRA" both reduce to {luz}."""
-    return {t for t in _norm(_clean_name(raw or '')).split() if len(t) > 2}
+    matching in `_resolve_players`: `_clean_name` takes the seeding and the
+    country, initials carry no name, so "O. Luz" and "Orlando LUZ BRA" both
+    reduce to {luz}.
+
+    Same `_is_initial` test as `_match_tokens`, and it had the same bug — a
+    two-letter surname was dropped by length and "A. Li" became the EMPTY set.
+    That blinds the whole dedupe layer, not just the matcher: `_side_resolves`
+    requires `toks and toks <= settled`, so an empty alternative can satisfy
+    nothing, and Monterrey's women's final would have been published TWICE the
+    moment the settled sheet arrived naming the winner.
+
+    A team string keeps its tokens here, unlike in `_match_tokens` — the
+    relations in `_dedupe_day` compare printed side against printed side, where
+    "S. Aoyama / E. Liang" is exactly the text that has to agree.
+    """
+    return {t for t in _norm(_clean_name(raw or '')).split() if not _is_initial(t)}
 
 
 def _side_tokens(entry, side: str) -> list:
