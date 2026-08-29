@@ -86,11 +86,23 @@ def _printed_instant(entry, tz_name):
 
 async def check_day(db, tournament_id: int, play_date) -> list[dict]:
     """Every violation in one tournament-day. Empty list = lawful."""
+    # `populate_existing`, because the law runs on what the day ACTUALLY
+    # stored and the ingest calls it with the session that wrote the day.
+    # `AsyncSessionLocal` is expire_on_commit=False and `players` is
+    # lazy="selectin", so without this a plain select returns the entry with
+    # the player collection it held before `_sync_players` touched it — rows
+    # already deleted still in it, rows just added missing from it. Monterrey
+    # 2026-08-29 reported `singles_side_stacked` for a player the resolver had
+    # deleted seconds earlier, and then two more violations against a side
+    # whose second alternative the law could not see. A law reading stale rows
+    # convicts the innocent and acquits the guilty in the same pass.
+    # NO flush here, unlike the two resolvers: a check must never write. See
+    # schedule._READ_THE_DAY_AS_STORED.
     rows = (await db.execute(
         select(ScheduleEntry).where(
             ScheduleEntry.tournament_id == tournament_id,
             ScheduleEntry.play_date == play_date,
-        ))).scalars().all()
+        ).execution_options(populate_existing=True))).scalars().all()
 
     v: list[dict] = []
 
