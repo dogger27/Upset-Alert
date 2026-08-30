@@ -1664,6 +1664,11 @@ def _ascii_fold(s: str) -> str:
     return "".join(c for c in s if not unicodedata.combining(c)).lower()
 
 
+# "j." or "j.j." — single letters separated by dots. Deliberately requires the
+# dots: a bare "jj" cannot be told from a short surname.
+_INITIALS_RUN_RE = __import__("re").compile(r"(?:[a-z]\.)+")
+
+
 def _fold(name: str) -> frozenset:
     """Name tokens under a plain ASCII fold, for matching a sheet's spelling
     to a draw's.
@@ -1678,7 +1683,21 @@ def _fold(name: str) -> frozenset:
     import re as _re
     s = _re.sub(r"^(?:\[[^\]]*\]\s*)+", "", (name or "").strip())
     s = _re.sub(r"\s+[A-Z]{3}$", "", s)
-    return frozenset(t for t in _ascii_fold(s).split() if t)
+    # A RUN OF INITIALS IS ITS LETTERS. The sheet writes "J.J. WOLF" and the
+    # draw entry "J. J. Wolf", which split into "j.j." and "j." — one token
+    # against two, so the two spellings never met and J.J. Wolf's schedule row
+    # was left with no draw_entry_id and therefore no profile, ranking or form
+    # anywhere it appeared.
+    #
+    # Expanded rather than dropped: discarding initials would fold "A. Zverev"
+    # and "M. Zverev" onto the same name, and a wrong link is worse than none.
+    out = set()
+    for t in _ascii_fold(s).split():
+        if t and _INITIALS_RUN_RE.fullmatch(t):
+            out |= set(t.replace(".", ""))
+        elif t:
+            out.add(t)
+    return frozenset(out)
 
 
 class SettledPlayer:
