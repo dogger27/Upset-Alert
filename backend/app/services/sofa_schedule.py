@@ -41,12 +41,19 @@ _KEEP = ("id", "startTimestamp", "roundInfo", "venue", "homeTeam", "awayTeam",
 async def fetch_events(tournament_id: int, season_id: int,
                        direction: str = "next", pages: int = 3) -> list[dict]:
     """Scheduled (or recent) events for one Sofascore tournament season."""
-    from app.services.sofascore import _get
+    from app.services.sofascore import _get, SofascoreNotFound
     out = []
     for page in range(pages):
-        payload = await _get(
-            f"/unique-tournament/{tournament_id}/season/{season_id}"
-            f"/events/{direction}/{page}")
+        try:
+            payload = await _get(
+                f"/unique-tournament/{tournament_id}/season/{season_id}"
+                f"/events/{direction}/{page}")
+        except SofascoreNotFound:
+            # RUNNING OUT OF PAGES IS A 404 HERE, not an error — the module's
+            # own rule: "a 404 is an ANSWER, not a refusal". Sofascore has no
+            # empty last page, it simply stops having one, so this is the
+            # normal end of the walk rather than something to report.
+            break
         events = (payload or {}).get("events") or []
         if not events:
             break
