@@ -702,8 +702,19 @@ async def refresh_order_of_play() -> int:
     # the lock, on a session that has never touched the network.
     if pending:
         async with AsyncSessionLocal() as wdb:
+            # LOAD EVERY ROW BEFORE DIRTYING ANY OF THEM. `wdb.get` is a query,
+            # and a query on a session holding a dirty row autoflushes it — so
+            # fetching the second draw took SQLite's write slot to write the
+            # first, once per draw, in the middle of the loop. The transaction
+            # was still short, but it grabbed the lock N times instead of once
+            # and each grab could sit out the full 30s busy_timeout: that is
+            # the shape of the 19:48/20:41/23:27 failures on 2026-08-30, whose
+            # SQL was a single-row `UPDATE draws SET oop_checked_at`.
+            # Read first, mutate second, flush once at commit.
+            rows = {d.id: d for d in (await wdb.execute(
+                select(Draw).where(Draw.id.in_(list(pending))))).scalars()}
             for did, fields in pending.items():
-                d = await wdb.get(Draw, did)
+                d = rows.get(did)
                 if d is None:
                     continue
                 for k, v in fields.items():

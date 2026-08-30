@@ -22,11 +22,40 @@ from typing import Optional
 
 from sqlalchemy import select
 
+from app.database import AsyncSessionLocal
 from app.models.schedule import ScheduleEntry, ScheduleEntryPlayer
 from app.services.schedule import _fold
 from app.services.system_log import app_log
 
 logger = logging.getLogger(__name__)
+
+
+async def _remember_setting(key: str, value: str) -> None:
+    """Write one bookkeeping row in a transaction of its own.
+
+    THE WRITER NEVER WAITS ON THE NETWORK — the same rule the order-of-play
+    stamps already follow, and for the same reason. A tick of this job holds
+    ONE session across every tournament-day it compares, and it fetches two
+    upstream feeds between them. `set_setting` leaves its row dirty for the
+    caller to commit, so the next query autoflushed it, took SQLite's single
+    write slot, and did not give it back until the whole tick finished. On
+    2026-08-30 that was long enough to sit out the 30s busy_timeout of
+    everything else that writes: the US Open scrape lost `last_scraped_at`
+    three times, and the order-of-play write pass failed at 19:48, 20:41 and
+    23:27 on a stamp it had correctly buffered — its transaction was short,
+    but the lock it needed was already gone.
+
+    A separate session commits before returning, so the lock is held for the
+    length of one small UPDATE and the shadow's own session stays read-only
+    for the rest of the tick.
+
+    Named apart from _remember below, which is this module's in-memory FETCH
+    cache and has nothing to do with the database.
+    """
+    from app.services import settings as st
+    async with AsyncSessionLocal() as wdb:
+        await st.set_setting(wdb, key, value)
+        await wdb.commit()
 
 COURTS_SETTING = "sofa_courts"          # + ":{tournament_id}"
 
@@ -79,7 +108,10 @@ async def wta_event_id(db, tournament_id: int, draws) -> Optional[int]:
     for d in draws:
         found = wta_feed.event_id_from_pdf_url(getattr(d, "oop_url", None))
         if found:
-            await st.set_setting(db, key, str(found))
+            # Committed here, not left for the caller: the fetches this id is
+            # looked up FOR run next, and a dirty row would hold the write lock
+            # across all of them. See _remember.
+            await _remember_setting(key, str(found))
             return found
     return None
 
@@ -288,7 +320,7 @@ async def learn_courts(db, tournament_id: int, votes: dict) -> dict:
         tally = Counter(stored.get(feed_court, {}))
         tally.update(names)
         stored[feed_court] = dict(tally)
-    await st.set_setting(db, key, json.dumps(stored, sort_keys=True))
+    await _remember_setting(key, json.dumps(stored, sort_keys=True))
     return {c: Counter(t).most_common(1)[0][0] for c, t in stored.items() if t}
 
 
