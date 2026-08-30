@@ -652,6 +652,51 @@ async def _load_sofa_egress() -> None:
     logger.info("Sofascore egress: %s", "direct" if direct else "residential proxy")
 
 
+async def _shadow_schedule_sources() -> None:
+    """Compare the structured feeds against the sheet, for every day on court.
+
+    Reads and reports; writes no schedule row. Gated by SCHEDULE_SHADOW so it
+    runs where we are proving it and stays out of production's way until the
+    numbers say it can take over.
+    """
+    import os
+    if os.environ.get("SCHEDULE_SHADOW", "").lower() not in ("1", "true", "yes"):
+        return
+    from datetime import timedelta as _td
+    from app.models.tournament import Draw
+    from app.services.schedule_shadow import run_shadow
+    from app.models.schedule import ScheduleEntry
+
+    today = date.today()
+    async with AsyncSessionLocal() as db:
+        # Only days with a sheet to compare against, and only around now — a
+        # season of history would re-fetch every feed for no new information.
+        days = (await db.execute(
+            select(ScheduleEntry.tournament_id, ScheduleEntry.play_date)
+            .where(ScheduleEntry.play_date >= today - _td(days=1),
+                   ScheduleEntry.play_date <= today + _td(days=1))
+            .distinct())).all()
+        for tid, day in days:
+            draws = (await db.execute(
+                select(Draw).where(Draw.tournament_id == tid))).scalars().all()
+            if not draws:
+                continue
+            tournament = await _tournament_of(db, tid)
+            if tournament is None:
+                continue
+            report = await run_shadow(db, tournament, draws, day)
+            if report:
+                logger.info("shadow %s %s: %s/%s matched (%s)",
+                            report["tournament"], report["day"],
+                            report["matched"], report["sheet"], report["source"])
+        await db.commit()
+
+
+async def _tournament_of(db, tournament_id: int):
+    from app.models.tournament import Tournament
+    return await db.get(Tournament, tournament_id)
+
+
 async def _probe_sofa_direct() -> None:
     """Ask Sofascore whether this host is welcome again, at most every 6h."""
     from app.services.sofascore import probe_direct
@@ -2098,6 +2143,15 @@ def start_scheduler() -> None:
     # it. _notify_pending_standout_picks and everything it calls are left in
     # place, unscheduled: nothing runs them, and the measurement they wrote is
     # not what the draw reads.
+    # Structured schedule sources, measured against the sheet they would
+    # replace. Read-only and flag-gated; see _shadow_schedule_sources.
+    scheduler.add_job(
+        _on_shutdown_quietly(_shadow_schedule_sources),
+        "interval",
+        minutes=30,
+        id="shadow_schedule_sources",
+        misfire_grace_time=600,
+    )
     # Try the free route back to Sofascore. Cheap when it declines (which is
     # most of the time — see probe_direct's guards) and it is the only thing
     # that ever moves us off the metered proxy, so it runs on its own clock
