@@ -30,6 +30,10 @@ _ROUND_NAMES = {
     "round of 128": "R128", "qualification round 1": "Q1",
     "qualification round 2": "Q2", "qualification round 3": "Q3",
     "qualification": "Q",
+    # The LAST qualifying round, whichever number that is: Q3 at a Slam, Q2 at
+    # a tour event. Mapping it to a number would be right half the time, and
+    # the round plays no part in identifying a match here, so it stays generic.
+    "qualification final": "Q",
 }
 
 # Live-score fields are stripped before the day's bytes are hashed: the feed

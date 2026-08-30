@@ -174,8 +174,13 @@ async def _structured(db, tournament, draws, day: date):
             if not tid or not sid:
                 continue
             try:
-                evs = await sofa_schedule.fetch_events(tid, sid, "next", pages=2)
-                evs += await sofa_schedule.fetch_events(tid, sid, "last", pages=2)
+                # DEEP ENOUGH TO REACH QUALIFYING. Sofascore keeps it under the
+                # same tournament id, not a separate one as first assumed — it
+                # simply sits further back than a page or two of history, since
+                # it is played before the main draw. Two pages stopped at the
+                # main draw and reported every qualifying day as 0 matched.
+                evs = await sofa_schedule.fetch_events(tid, sid, "next", pages=4)
+                evs += await sofa_schedule.fetch_events(tid, sid, "last", pages=8)
                 ms, _meta = sofa_schedule.parse_sofa_day(
                     sofa_schedule.normalize_day(evs, day, tz),
                     venue_tz=tz, discipline=disc)
