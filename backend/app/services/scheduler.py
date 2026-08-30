@@ -645,6 +645,20 @@ DRAW_CHANGE_NOTIFY_COOLDOWN = timedelta(minutes=10)
 QUALIFIERS_SETTLE_COOLDOWN = timedelta(minutes=10)
 
 
+async def _load_sofa_egress() -> None:
+    from app.services.sofascore import load_egress
+    async with AsyncSessionLocal() as db:
+        direct = await load_egress(db)
+    logger.info("Sofascore egress: %s", "direct" if direct else "residential proxy")
+
+
+async def _probe_sofa_direct() -> None:
+    """Ask Sofascore whether this host is welcome again, at most every 6h."""
+    from app.services.sofascore import probe_direct
+    async with AsyncSessionLocal() as db:
+        await probe_direct(db)
+
+
 async def _notify_pending_draw_changes() -> None:
     """
     Dispatch player swaps in draws people are already competing in.
@@ -2084,6 +2098,17 @@ def start_scheduler() -> None:
     # it. _notify_pending_standout_picks and everything it calls are left in
     # place, unscheduled: nothing runs them, and the measurement they wrote is
     # not what the draw reads.
+    # Try the free route back to Sofascore. Cheap when it declines (which is
+    # most of the time — see probe_direct's guards) and it is the only thing
+    # that ever moves us off the metered proxy, so it runs on its own clock
+    # rather than waiting for a deploy.
+    scheduler.add_job(
+        _on_shutdown_quietly(_probe_sofa_direct),
+        "interval",
+        hours=6,
+        id="sofa_probe_direct",
+        misfire_grace_time=3600,
+    )
     # Sanity sweep for silent failures (released-but-not-open, wiki title
     # never resolving) — see _check_draw_health docstring.
     scheduler.add_job(
@@ -2200,6 +2225,9 @@ def start_scheduler() -> None:
     # server was down.
     asyncio.create_task(_refresh_active_tournaments(force_refresh=True))
     # Catch any draw releases that went stable while the server was down.
+    # Which way out we are on has to be known BEFORE the first poll, or a
+    # restart during a ban would send the first request straight back into it.
+    asyncio.create_task(_load_sofa_egress())
     asyncio.create_task(_notify_pending_draw_releases())
     # Same for draw changes and standout picks recorded before a restart — both
     # are cooldown-gated, so a batch mid-settle at shutdown would otherwise wait
