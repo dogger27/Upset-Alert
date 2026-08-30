@@ -1498,3 +1498,18 @@
   color: var(--info) !important;
   border-color: var(--info) !important;
 }
+
+/* Temporary, ?namedebug only — see NAME_DEBUG in MatchScoreCard. Deliberately
+   loud and unstyled-looking so it can never be mistaken for part of the row. */
+.name-debug {
+  display: inline-block;
+  margin-right: 0.35rem;
+  padding: 0 0.25rem;
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  font-weight: 700;
+  color: #000;
+  background: #ffd400;
+  border-radius: 3px;
+  white-space: nowrap;
+}

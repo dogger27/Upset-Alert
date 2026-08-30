@@ -38,6 +38,15 @@ import '../pages/Schedule.css'
 // for that by overflowing onto the serve ball beside it.
 const NAME_SAFETY = 6
 
+/* ?namedebug on any schedule URL prints the five numbers behind each name's
+   size, on the row itself — a phone cannot be inspected from here, and this
+   turns an inference into a measurement. Read once at module load: it is a
+   diagnostic, not a feature, and must cost nothing when it is off. */
+const NAME_DEBUG = (() => {
+  try { return new URLSearchParams(window.location.search).has('namedebug') }
+  catch { return false }
+})()
+
 
 function useNameBox() {
   const ref = useRef(null)
@@ -299,9 +308,28 @@ function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp, t
       ? (wide(tightest) > budget ? Math.max(0.45, budget / wide(tightest)) : 1)
       : (tightest.length > fit ? Math.max(0.45, fit / tightest.length) : 1)
 
+  /* TEMPORARY, and gated on ?namedebug so it cannot reach anyone who did not
+     ask for it. The reservations all match their CSS and the box is
+     flex:1 1 auto, yet a seeded name still shrinks with visible slack beside
+     it — which means one of these five numbers is not what the source says it
+     should be. Reading them off the phone that renders it settles that; there
+     is no way to measure a phone's layout from here. Remove once it has. */
+  const dbg = NAME_DEBUG ? {
+    'data-avail': box ? Math.round(box.avail) : 'n/a',
+    'data-extras': box ? Math.round(extras) : 'n/a',
+    'data-budget': budget == null ? 'n/a' : Math.round(budget),
+    'data-textw': box ? Math.round(wide(tightest)) : 'n/a',
+    'data-scale': scale.toFixed(2),
+  } : null
+
   return (
-    <span className="sched-player"
+    <span className="sched-player" {...(dbg || {})}
           style={scale < 1 ? { '--name-scale': scale } : undefined}>
+      {dbg && (
+        <span className="name-debug">
+          {dbg['data-avail']}−{dbg['data-extras']}={dbg['data-budget']} w{dbg['data-textw']} ×{dbg['data-scale']}
+        </span>
+      )}
       {/* A missing nationality here is not missing DATA — the tours list
           Russian and Belarusian players as neutral athletes with no flag, and
           the sheet omits it deliberately.
