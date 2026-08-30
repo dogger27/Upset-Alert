@@ -92,14 +92,28 @@ def _local_hhmm(ts: Optional[str], venue_tz: Optional[str]) -> Optional[str]:
         return ts[11:16]
 
 
-def play_date_of(m: dict) -> Optional[date]:
+def play_date_of(m: dict, venue_tz: Optional[str] = None) -> Optional[date]:
+    """The day the SHEET would file this match under, which is the venue's day.
+
+    The feed stamps UTC, so a Monterrey night match at 01:16 UTC is 19:16 the
+    previous evening on site. Taking the UTC date moved every night match onto
+    the next day's sheet — the staging run showed it immediately: 4 matches on
+    2026-08-29 against the 2 the tournament actually played.
+    """
     ts = m.get("MatchTimeStamp")
     if not ts:
         return None
     try:
-        return datetime.fromisoformat(ts.replace("Z", "+00:00")).date()
+        dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
     except ValueError:
         return None
+    if venue_tz:
+        try:
+            from zoneinfo import ZoneInfo
+            return dt.astimezone(ZoneInfo(venue_tz)).date()
+        except Exception:
+            pass
+    return dt.date()
 
 
 def matches_for_day(rows: list[dict], day: date,
@@ -113,7 +127,7 @@ def matches_for_day(rows: list[dict], day: date,
     court_names = court_names or {}
     out = []
     for m in rows:
-        if play_date_of(m) != day:
+        if play_date_of(m, venue_tz) != day:
             continue
         cid = str(m.get("CourtID") or "").strip()
         venue = (m.get("Venue") or {}).get("name")
@@ -145,8 +159,9 @@ def matches_for_day(rows: list[dict], day: date,
     return out
 
 
-def days_available(rows: list[dict]) -> list[date]:
-    return sorted({d for d in (play_date_of(m) for m in rows) if d})
+def days_available(rows: list[dict],
+                   venue_tz: Optional[str] = None) -> list[date]:
+    return sorted({d for d in (play_date_of(m, venue_tz) for m in rows) if d})
 
 
 # Fields that change while a match is played. They are stripped before the
@@ -158,7 +173,8 @@ _VOLATILE = ("ScoreString", "ScoreSys", "ResultString", "Winner", "MatchState",
              "NumSets", "Message")
 
 
-def normalize_day(rows: list[dict], day: date) -> bytes:
+def normalize_day(rows: list[dict], day: date,
+                  venue_tz: Optional[str] = None) -> bytes:
     """One day's rows as stable bytes: volatile fields dropped, keys sorted.
 
     A document per DAY, not per tournament, so a revision to Tuesday does not
@@ -168,7 +184,7 @@ def normalize_day(rows: list[dict], day: date) -> bytes:
     import json
     keep = []
     for m in rows:
-        if play_date_of(m) != day:
+        if play_date_of(m, venue_tz) != day:
             continue
         keep.append({k: v for k, v in sorted(m.items())
                      if k not in _VOLATILE and not str(k).startswith("ScoreSet")
@@ -184,7 +200,7 @@ def parse_wta_day(doc: bytes, court_names: Optional[dict] = None,
     ingest_document expects of a parser."""
     import json
     rows = json.loads(doc.decode("utf-8"))
-    day = next((d for d in (play_date_of(m) for m in rows) if d), None)
+    day = next((d for d in (play_date_of(m, venue_tz) for m in rows) if d), None)
     matches = (matches_for_day(rows, day, court_names=court_names,
                                venue_tz=venue_tz) if day else [])
     return matches, {"source": "wta-api", "day": day.isoformat() if day else None,
