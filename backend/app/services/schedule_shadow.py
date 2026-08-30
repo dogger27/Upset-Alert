@@ -150,7 +150,7 @@ async def _structured(db, tournament, draws, day: date):
     # rather than being skipped: comparing only the men's half of a combined
     # event against a sheet carrying both reads as 50% disagreement and means
     # nothing.
-    covered = set()
+    covered, seen_events = set(), set()
     event_id = await wta_event_id(db, tournament.id, draws)
     for d in [x for x in draws if (x.gender or "").upper() == "F"]:
         if not event_id:
@@ -167,12 +167,20 @@ async def _structured(db, tournament, draws, day: date):
             logger.info("shadow: WTA feed unavailable for %s: %s",
                         tournament.name, exc)
 
+    # MIXED DOUBLES IS A THIRD EVENT, and its ids were already stored on the
+    # tournament — the shadow simply never asked for them, so the 12 mixed
+    # matches the US Open played during fan week counted as sheet-only.
+    mixed = [(getattr(tournament, "sofa_mixed_tournament_id", None),
+              getattr(tournament, "sofa_mixed_season_id", None), "mixed")]
+
     for d in [x for x in draws if x.id not in covered]:
         for tid, sid, disc in ((d.sofa_tournament_id, d.sofa_season_id, "singles"),
                                (d.sofa_doubles_tournament_id,
-                                d.sofa_doubles_season_id, "doubles")):
-            if not tid or not sid:
+                                d.sofa_doubles_season_id, "doubles"),
+                               *mixed):
+            if not tid or not sid or (tid, sid) in seen_events:
                 continue
+            seen_events.add((tid, sid))
             try:
                 # DEEP ENOUGH TO REACH QUALIFYING. Sofascore keeps it under the
                 # same tournament id, not a separate one as first assumed — it
