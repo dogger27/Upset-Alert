@@ -302,11 +302,14 @@ async def _get(path: str) -> dict:
         _blocked_until = loop.time() + cooldown
         await app_log(
             "warning", "sofascore",
-            "Sofascore returned 403 — pausing all requests for "
-            f"{cooldown / 60:.0f} minutes"
-            + (f" (block #{_consecutive_blocks} in a row)"
-               if _consecutive_blocks > 1 else ""),
-            detail={"path": path, "consecutive_blocks": _consecutive_blocks,
+            # STABLE TEXT, VARYING FACTS IN detail. The triage view groups by
+            # the message and the alert digest fingerprints on it, so folding
+            # the escalating minute count into the sentence split one problem
+            # into a fresh group — and a fresh alert — at every step of the
+            # backoff. The numbers are below, where they cost nothing.
+            "Sofascore returned 403 — all requests paused",
+            detail={"path": path, "paused_minutes": round(cooldown / 60),
+                    "consecutive_blocks": _consecutive_blocks,
                     "proxy_configured": bool(os.environ.get(_PROXY_ENV))},
             dedup_key="sofa_blocked", dedup_hours=1)
         raise SofascoreBlocked(f"403 on {path}")

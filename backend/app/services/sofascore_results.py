@@ -419,8 +419,9 @@ class SofascoreResultsMonitor:
                 delay = max(self.BLOCKED_BACKOFF, blocked_for() + 30)
                 await app_log(
                     "warning", "sofascore_results",
-                    f"Results sweep paused {delay / 60:.0f}m — "
-                    f"Sofascore refused the request ({exc})",
+                    "Results sweep paused — Sofascore refused the request",
+                    detail={"paused_minutes": round(delay / 60),
+                            "reason": str(exc)},
                     dedup_key="sofa_results_blocked", dedup_hours=1)
             except asyncio.CancelledError:
                 raise
