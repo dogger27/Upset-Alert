@@ -928,11 +928,22 @@ function TournamentDraw() {
     if (viewingOther && !canEditOther) {
       return 'You can only change your own predictions.'
     }
-    // A CLOSED DRAW SAYS NOTHING. The whole bracket is inert and reads that
-    // way — a popup on every box would be explaining the obvious, once per tap.
-    // The messages below are for the opposite case: a draw still open, where
-    // one box refuses and the reason is genuinely not visible.
-    if (locked) return null
+    /* A CLOSED DRAW REFUSES. This returned null — "no objection" — on the
+       stated grounds that the whole bracket is inert and a popup on every box
+       would explain the obvious. But the bracket is deliberately NOT inert:
+       nextMatchOnClick in CombinedView calls onPick whatever the lock says,
+       precisely so this function can own every reason ("an inert box is
+       indistinguishable from a page that did not register the tap"). Between
+       the two, a locked draw fell through the gap: the click applied, the
+       bracket showed a pick the server had already refused with a 403, and
+       only a reload put it back.
+       The reason comes from the server when it sent one, so the box says the
+       same thing the save would have. */
+    if (locked) {
+      return data?.lock_reason
+        ? `Predictions are locked — ${data.lock_reason}.`
+        : 'Predictions are locked for this draw.'
+    }
     if (lockedMatchIds.has(Number(matchId))) {
       /* ONLY THE UPSTREAM REASON REACHES HERE. A match frozen because IT is
          under way never gets this far — scoreInsteadOfPick showed its score
