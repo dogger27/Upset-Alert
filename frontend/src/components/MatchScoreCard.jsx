@@ -38,15 +38,6 @@ import '../pages/Schedule.css'
 // for that by overflowing onto the serve ball beside it.
 const NAME_SAFETY = 6
 
-/* ?namedebug on any schedule URL prints the five numbers behind each name's
-   size, on the row itself — a phone cannot be inspected from here, and this
-   turns an inference into a measurement. Read once at module load: it is a
-   diagnostic, not a feature, and must cost nothing when it is off. */
-const NAME_DEBUG = (() => {
-  try { return new URLSearchParams(window.location.search).has('namedebug') }
-  catch { return false }
-})()
-
 
 function useNameBox() {
   const ref = useRef(null)
@@ -229,9 +220,25 @@ function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp, t
   const px = box?.fontPx ?? 0
   const rem = rootFontPx()
   const seedText = !hideSeed && seed ? ` ${seed}` : ''
+  /* THE SEED IS INSIDE WHAT SHRINKS, so it must not be reserved outside it.
+     --name-scale goes on .sched-player, which contains the seed — the note on
+     the ladder below says so in as many words ("the seed shrinks with the name
+     it belongs to"). But the seed was ALSO subtracted from the box at full
+     size before the ladder ever ran, so the row paid for it twice: once in the
+     budget, once again in the rendering. On a completed US Open card
+     "RINDERKNECH [26]" came out at 0.52 while "S. SHIMABUKURO" — a LONGER name
+     on the same card, in the same box, differing only in having no seed — held
+     0.78. The seed cost 30px of a 113px box, and 14 of them were spent on
+     nothing.
+     So the seed joins the thing it scales with: name and seed are measured
+     together and solved for one scale, which is exact rather than circular —
+     s·(name + seed) <= avail - flag - safety. The flag stays outside because
+     it is sized in rem and does not scale. */
+  const flagPx = box && hasFlag ? (1.05 + 0.3) * rem : 0
+  const seedPx = box && seedText
+    ? textWidth(seedText, px * 0.85, 700) + 0.28 * rem : 0
   const extras = box
-    ? (hasFlag ? (1.05 + 0.3) * rem : 0)
-      + (seedText ? textWidth(seedText, px * 0.85, 700) + 0.28 * rem : 0)
+    ? flagPx
       // A REAL GAP, not a rounding allowance. The name does not clip by
       // design, so a canvas measurement a few pixels under the rendered
       // width does not truncate — it overflows, and the serve ball sitting
@@ -241,12 +248,20 @@ function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp, t
       + NAME_SAFETY
     : 0
   const budget = box ? Math.max(0, box.avail - extras) : null
-  const wide = (text) => textWidth(text, px, 600)
+  // Every rung and the final scale measure the WHOLE run that shrinks — the
+  // name and the seed it carries — against that budget.
+  const wide = (text) => textWidth(text, px, 600) + seedPx
   /* The ladder is unchanged — full name, then an initial, then the surname
      alone, then size — but each rung is now accepted or rejected by MEASURING
      it rather than by counting its letters. */
   const fitsPx = (text) => budget == null || wide(text) <= budget
-  const longName = !surnameOnly && (budget != null ? !fitsPx(shown) : shown.length > fit)
+  /* `full`, not `shown`. `shown` has the seed spelled into the string, and
+     wide() now adds the seed's own measurement on top — so testing it charged
+     the row for the seed twice and sent names to the initialled rung that the
+     full form would have held. It also made this test disagree with the one
+     the ladder itself uses a few lines down, which is fitsPx(full); the two
+     decide the same question and must give the same answer. */
+  const longName = !surnameOnly && (budget != null ? !fitsPx(full) : shown.length > fit)
   const initialled = first ? `${first.trim()[0]}. ${last}` : last
 
   /* AND A RUNG BELOW THE INITIAL, because some surnames are longer than the
@@ -308,28 +323,9 @@ function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp, t
       ? (wide(tightest) > budget ? Math.max(0.45, budget / wide(tightest)) : 1)
       : (tightest.length > fit ? Math.max(0.45, fit / tightest.length) : 1)
 
-  /* TEMPORARY, and gated on ?namedebug so it cannot reach anyone who did not
-     ask for it. The reservations all match their CSS and the box is
-     flex:1 1 auto, yet a seeded name still shrinks with visible slack beside
-     it — which means one of these five numbers is not what the source says it
-     should be. Reading them off the phone that renders it settles that; there
-     is no way to measure a phone's layout from here. Remove once it has. */
-  const dbg = NAME_DEBUG ? {
-    'data-avail': box ? Math.round(box.avail) : 'n/a',
-    'data-extras': box ? Math.round(extras) : 'n/a',
-    'data-budget': budget == null ? 'n/a' : Math.round(budget),
-    'data-textw': box ? Math.round(wide(tightest)) : 'n/a',
-    'data-scale': scale.toFixed(2),
-  } : null
-
   return (
-    <span className="sched-player" {...(dbg || {})}
+    <span className="sched-player"
           style={scale < 1 ? { '--name-scale': scale } : undefined}>
-      {dbg && (
-        <span className="name-debug">
-          {dbg['data-avail']}−{dbg['data-extras']}={dbg['data-budget']} w{dbg['data-textw']} ×{dbg['data-scale']}
-        </span>
-      )}
       {/* A missing nationality here is not missing DATA — the tours list
           Russian and Belarusian players as neutral athletes with no flag, and
           the sheet omits it deliberately.
@@ -537,6 +533,23 @@ function CompetitorRows({ e, a, b }) {
   const sets = fromLive ?? fromFinal
   const n = sets ? Math.max(sets[0]?.length ?? 0, sets[1]?.length ?? 0) : 0
 
+  /* HOW WIDE A SET CELL HAS TO BE, for THIS match.
+     .sched-set holds 1.15rem so a super-tiebreak "10" cannot widen one line
+     without widening the other — the two rows have to stay in column. But
+     nearly every match on the sheet shows single digits, and the reservation
+     was flat: four columns of a completed card held ~19px of two-digit room
+     each for numbers about 8px wide, and the name — the only flexible thing in
+     the row — paid all of it.
+     So ask the score. Both lines are measured together and get the same
+     answer, which is the property the alignment actually depends on; the
+     tiebreak superscript counts too, since it lives in the gap and a
+     two-digit one ("6" with a ¹⁰ beside it) needs the wider cell's slack to
+     clear the next number even when the games are single digits. */
+  const twoDigitCells = !!sets && sets.some(row => (row ?? []).some(c => {
+    const { g, tb } = parseSet(c)
+    return String(g ?? '').length > 1 || String(tb ?? '').length > 1
+  }))
+
   // Who took each completed set, for the bolding. The set in play has no winner
   // and must stay unbolded — that is what makes "in progress" legible.
   const setWon = (i, side) => {
@@ -634,7 +647,8 @@ function CompetitorRows({ e, a, b }) {
     : null
 
   return (
-    <div className={clsx('sched-competitors', { 'sched-competitors--doubles': doubles })}>
+    <div className={clsx('sched-competitors', { 'sched-competitors--doubles': doubles })}
+         style={twoDigitCells ? undefined : { '--sched-set-w': '0.85rem' }}>
       {rows.map(({ players, side, tbd }) => (
         <div key={side}
              className={clsx('sched-competitor', {
@@ -649,12 +663,22 @@ function CompetitorRows({ e, a, b }) {
                   tight={serving != null || point != null} sets={n}
                   form={dbl?.form} flags={dbl?.flags} box={nameBox} />
           </span>
-          {/* A SLOT, always present, not a conditional element. The ball
-              appears on one line only, so rendering it inline shifted that
-              line's scores left of the other's and broke the column. */}
-          <span className="sched-ball-slot">
-            {serving === side + 1 && <ServeBall />}
-          </span>
+          {/* A SLOT ON BOTH LINES OR ON NEITHER. The ball appears on one line
+              only, so rendering it inline shifted that line's scores left of
+              the other's and broke the column — hence a slot rather than a
+              conditional element.
+              But it is reserved per MATCH, not unconditionally: a finished or
+              not-yet-started match can never show a ball on either line, and
+              17px of a name box barely over 100px wide was being held for it
+              on every completed card on the sheet. Keyed on (live || stopped),
+              the same condition that decides whether `serving` is read at all,
+              so a live row keeps the slot whether or not serve inference has
+              landed yet and nothing pops in mid-match. */}
+          {(live || stopped) && (
+            <span className="sched-ball-slot">
+              {serving === side + 1 && <ServeBall />}
+            </span>
+          )}
           {/* BEFORE the tick/cross, not between it and the scores.
               Everything here is fixed-width and right-packed, so an element's
               position depends on the total width of everything after it. With
