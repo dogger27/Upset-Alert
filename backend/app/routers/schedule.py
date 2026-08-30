@@ -16,7 +16,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import get_optional_user
@@ -1036,9 +1036,33 @@ async def schedule_dates(
     db: AsyncSession = Depends(get_db),
 ):
     """Days that actually have a schedule — drives the date stepper so it can
-    skip straight to the next real day instead of walking through blanks."""
-    q = select(ScheduleEntry.play_date).distinct()
+    skip straight to the next real day instead of walking through blanks.
+
+    `open_counts` says how many matches on each day are still to be decided,
+    which is what lets the page land on the day with tennis left in it rather
+    than on the last sheet published.
+
+    A row counts as DECIDED when anything says so: its own status, its own
+    completion stamp, its own winner, or the bracket match behind it. That last
+    one is not redundant — a sheet row whose Sofascore claim never landed sits
+    at "scheduled" for ever while the match it points at has a winner and a
+    score, which is exactly what both of yesterday's finals did during the
+    2026-08-29 block. Reading only the row would have called a finished day
+    unfinished and parked the page on it.
+    """
+    q = (select(ScheduleEntry.play_date,
+                func.count(),
+                func.sum(
+                    case((or_(ScheduleEntry.status == "completed",
+                              ScheduleEntry.completed_at.isnot(None),
+                              ScheduleEntry.winner_side.isnot(None),
+                              Match.winner_id.isnot(None)), 0),
+                         else_=1)))
+         .select_from(ScheduleEntry)
+         .outerjoin(Match, Match.id == ScheduleEntry.match_id)
+         .group_by(ScheduleEntry.play_date))
     if tournament_id:
         q = q.where(ScheduleEntry.tournament_id == tournament_id)
     rows = (await db.execute(q.order_by(ScheduleEntry.play_date))).all()
-    return {"dates": [r[0].isoformat() for r in rows]}
+    return {"dates": [r[0].isoformat() for r in rows],
+            "open_counts": {r[0].isoformat(): int(r[2] or 0) for r in rows}}
