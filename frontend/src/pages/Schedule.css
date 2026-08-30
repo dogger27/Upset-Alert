@@ -1199,8 +1199,13 @@
    now for. */
 .sched-set {
   position: relative;
-  /* Two digits, so a super-tiebreak "10" does not widen one row alone. */
-  min-width: 1.15rem;
+  /* Two digits, so a super-tiebreak "10" does not widen one row alone — but
+     only for a match that actually shows two, which the card decides and
+     publishes as --sched-set-w. Reserving two digits on every cell of every
+     row cost a four-set card ~19px of name box, and the name is the only
+     thing in the row that can give. Both lines of a match read the same
+     variable, so they stay in column either way. */
+  min-width: var(--sched-set-w, 1.15rem);
   text-align: center;
   flex: 0 0 auto;
 }
@@ -1497,19 +1502,4 @@
   background: var(--info-bg) !important;
   color: var(--info) !important;
   border-color: var(--info) !important;
-}
-
-/* Temporary, ?namedebug only — see NAME_DEBUG in MatchScoreCard. Deliberately
-   loud and unstyled-looking so it can never be mistaken for part of the row. */
-.name-debug {
-  display: inline-block;
-  margin-right: 0.35rem;
-  padding: 0 0.25rem;
-  font-family: var(--font-mono);
-  font-size: 0.55rem;
-  font-weight: 700;
-  color: #000;
-  background: #ffd400;
-  border-radius: 3px;
-  white-space: nowrap;
 }
