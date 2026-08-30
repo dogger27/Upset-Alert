@@ -923,6 +923,34 @@ function TournamentDraw() {
      register". Each reason is checked in the order it becomes true, so the
      message names the thing actually stopping this pick rather than the first
      rule that happens to apply. Returns null when the pick is fine. */
+  /* A REFUSED TAP POINTS AT THE BADGE THAT ALREADY EXPLAINS IT. An alert
+     interrupts, needs dismissing, and says what the pill in the corner is
+     saying anyway. Bumping this remounts the pill (it is keyed on the count),
+     which restarts the animation — a class alone would not re-fire on a second
+     tap. */
+  const [lockNudge, setLockNudge] = useState(0)
+  // The phone has no pill to shake: the header collapses away entirely there,
+  // so the same refusal arrives as a toast that fades itself out. Nothing to
+  // dismiss either way — a refused tap should cost no interaction.
+  const [lockToast, setLockToast] = useState(null)
+  useEffect(() => {
+    if (!lockToast) return
+    const t = setTimeout(() => setLockToast(null), 2600)
+    return () => clearTimeout(t)
+  }, [lockToast])
+
+  const nudgeLock = () => {
+    // Reads the layout at CLICK time, not at definition time, so it follows a
+    // header that collapsed after this handler was created.
+    const badgeVisible = headerStage === 'full'
+      && !(headerHidden || headerForcedHidden)
+    if (badgeVisible) setLockNudge(n => n + 1)
+    else setLockToast({
+      key: Date.now(),
+      msg: `🔒 Predictions are locked — ${data?.lock_reason || 'the draw has started'}.`,
+    })
+  }
+
   const pickRefusal = (matchId) => {
     if (!user) return 'Sign in to make predictions.'
     if (viewingOther && !canEditOther) {
@@ -939,11 +967,11 @@ function TournamentDraw() {
        only a reload put it back.
        The reason comes from the server when it sent one, so the box says the
        same thing the save would have. */
-    if (locked) {
-      return data?.lock_reason
-        ? `Predictions are locked — ${data.lock_reason}.`
-        : 'Predictions are locked for this draw.'
-    }
+    // Locked draws are answered by the badge, not by this list — see the
+    // `locked` branch in handlePick. Everything below is the opposite case: a
+    // draw still open, where one box refuses for a reason nothing on screen
+    // shows.
+    if (locked) return null
     if (lockedMatchIds.has(Number(matchId))) {
       /* ONLY THE UPSTREAM REASON REACHES HERE. A match frozen because IT is
          under way never gets this far — scoreInsteadOfPick showed its score
@@ -971,7 +999,10 @@ function TournamentDraw() {
   }
 
   const handlePick = (matchId, playerId) => {
+    // A started match still answers with its score, locked or not — that is
+    // the more useful answer and it comes first.
     if (scoreInsteadOfPick(matchId)) return
+    if (locked) { nudgeLock(); return }
     const refusal = pickRefusal(matchId)
     if (refusal) {
       window.alert(refusal)
@@ -1011,6 +1042,7 @@ function TournamentDraw() {
      person here — display names are often just a real name and two people can
      share one. */
   const handlePickForOther = (matchId, playerId) => {
+    if (locked) { nudgeLock(); return }
     if (scoreInsteadOfPick(matchId)) return
     const refusal = pickRefusal(matchId)
     if (refusal) {
@@ -1642,7 +1674,9 @@ function TournamentDraw() {
           ) : locked ? (
             <div style={{ position: 'relative' }}>
               <span
-                className={`lock-badge${user?.is_admin ? ' lock-badge--admin' : ''}`}
+                key={lockNudge}
+                className={`lock-badge${user?.is_admin ? ' lock-badge--admin' : ''}`
+                  + (lockNudge ? ' lock-badge--nudge' : '')}
                 onClick={user?.is_admin ? () => setShowUnlockConfirm(v => !v) : undefined}
               >
                 🔒 Predictions locked
@@ -1710,6 +1744,11 @@ function TournamentDraw() {
         )}
       </div>
 
+      {lockToast && (
+        <div className="lock-toast" key={lockToast.key} role="status" aria-live="polite">
+          {lockToast.msg}
+        </div>
+      )}
       {saveMutation.isError && (
         <div className="error" style={{ padding: '0 1.5rem' }}>
           Failed to save: {saveMutation.error?.response?.data?.detail || 'Unknown error'}
