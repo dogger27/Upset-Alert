@@ -46,6 +46,40 @@ def _sig(names: list) -> frozenset:
     return frozenset(out)
 
 
+def _pair(stored: list, feed: list):
+    """Pair sheet rows with feed rows by how much of the name they share.
+
+    NOT set equality, which was the first attempt and measured the wrong thing:
+    "J.J. WOLF" against the feed's rendering, or a hyphenated given name split
+    differently, counted as a missing match when both sources plainly had it.
+    Two matches on the same day never share two surnames, so an overlap of two
+    distinctive tokens identifies the pair while a single shared common name
+    ("Maria") does not.
+
+    Greedy by best overlap, and each row is consumed once, so a near-duplicate
+    cannot absorb two sheet rows.
+    """
+    feed_sigs = [(m, _sig(m.side_a + m.side_b)) for m in feed]
+    taken, pairs = set(), []
+    for row in stored:
+        best, best_score = None, 0
+        for i, (m, fs) in enumerate(feed_sigs):
+            if i in taken:
+                continue
+            # Initials and one-letter fragments say little; distinctive tokens
+            # are what identify a person across three renderings of their name.
+            shared = {t for t in (row["sig"] & fs) if len(t) >= 3}
+            if len(shared) > best_score:
+                best, best_score = i, len(shared)
+        if best is not None and best_score >= 2:
+            taken.add(best)
+            pairs.append((row, feed_sigs[best][0]))
+    matched_rows = {id(r) for r, _ in pairs}
+    return (pairs,
+            [r for r in stored if id(r) not in matched_rows],
+            [m for i, (m, _f) in enumerate(feed_sigs) if i not in taken])
+
+
 async def _stored(db, tournament_id: int, day: date) -> list[dict]:
     rows = (await db.execute(
         select(ScheduleEntry.id, ScheduleEntry.court, ScheduleEntry.discipline)
@@ -130,23 +164,21 @@ async def compare_day(db, tournament, draws, day: date) -> Optional[dict]:
     if not source:
         return None
 
-    fsig = Counter(_sig(m.side_a + m.side_b) for m in feed)
-    ssig = Counter(r["sig"] for r in stored)
-    matched = sum((fsig & ssig).values())
+    pairs, unmatched_sheet, unmatched_feed = _pair(stored, feed)
+    matched = len(pairs)
 
     # Court names, learned only where both sources describe the same match.
     votes = defaultdict(Counter)
-    by_sig = {r["sig"]: r for r in stored}
-    for m in feed:
-        row = by_sig.get(_sig(m.side_a + m.side_b))
-        if row and m.court and row["court"]:
+    for row, m in pairs:
+        if m.court and row["court"]:
             votes[m.court][row["court"]] += 1
 
     return {
         "tournament": tournament.name, "day": day.isoformat(), "source": source,
         "sheet": len(stored), "feed": len(feed), "matched": matched,
-        "sheet_only": sum((ssig - fsig).values()),
-        "feed_only": sum((fsig - ssig).values()),
+        "sheet_only": len(unmatched_sheet),
+        "feed_only": len(unmatched_feed),
+        "sheet_only_names": [sorted(r["sig"])[:6] for r in unmatched_sheet[:4]],
         "court_votes": {k: dict(v) for k, v in votes.items()},
     }
 
