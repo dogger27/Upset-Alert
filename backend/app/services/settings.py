@@ -47,6 +47,26 @@ LOCK_MODES = (LOCK_AT_DRAW_START, LOCK_PROGRESSIVE_R1)
 # that would be needed at 3am to undo it.
 SOFA_AUTHORITATIVE = "sofa_authoritative"
 
+# ── Which way out to Sofascore ───────────────────────────────────────────────
+#
+# "direct" = straight from this host, which is free.
+# "proxy"  = through the residential exit, which is metered and costs money.
+#
+# Stored for the same reason as the line above: the app decides this about
+# itself. Sofascore banned the host's own IP on 2026-08-29 and it stayed banned
+# for 26 hours; the proxy is what got us back. So proxy is the SAFE state and
+# direct is the cheap one, and the app is allowed to try moving from safe to
+# cheap on its own — but only rarely, and it must fall back the instant it is
+# refused. Left in memory alone, a restart would forget a ban and go straight
+# back to poking it.
+SOFA_EGRESS = "sofa_egress"
+SOFA_EGRESS_DIRECT = "direct"
+SOFA_EGRESS_PROXY = "proxy"
+
+# When the direct route was last refused. The probe will not touch it again
+# until this is well behind us — retrying into a live ban is what extends it.
+SOFA_DIRECT_BLOCKED_AT = "sofa_direct_blocked_at"
+
 _DEFAULTS = {PICK_LOCK_MODE: LOCK_AT_DRAW_START}
 _cache: dict[str, str] = {}
 

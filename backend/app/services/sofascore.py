@@ -201,6 +201,32 @@ _BLOCK_COOLDOWN_MAX = 21600.0
 _consecutive_blocks = 0
 
 
+# ── WHICH WAY OUT ────────────────────────────────────────────────────────────
+#
+# Direct is free; the residential proxy is metered. Sofascore banned this
+# host's own IP for 26 hours on 2026-08-29, so PROXY IS THE SAFE DEFAULT and
+# direct is an optimisation the app may try for itself — rarely, and only well
+# after a ban has aged. Held in memory for the sync fetch path and mirrored
+# into app_settings so a restart cannot forget a ban and walk back into it.
+_egress_direct = False
+
+# How long a direct-route ban must age before the probe touches it again.
+# Retrying into a live ban is what extends it, so this is deliberately long
+# relative to the 6-hour probe cadence: the probe simply declines to run.
+DIRECT_COOLOFF = 3 * 24 * 3600.0
+
+
+def egress_is_direct() -> bool:
+    return _egress_direct
+
+
+def _current_proxy() -> str:
+    """The proxy to use, or "" to go straight out from this host."""
+    if _egress_direct:
+        return ""
+    return os.environ.get(_PROXY_ENV) or ""
+
+
 def blocked_for() -> float:
     """Seconds until the circuit closes; 0.0 when it is not open.
 
@@ -242,7 +268,7 @@ def _fetch(path: str, rotate: bool = False) -> tuple:
     from curl_cffi import requests as cr
 
     kwargs = {"impersonate": _IMPERSONATE, "timeout": _TIMEOUT}
-    proxy = os.environ.get(_PROXY_ENV)
+    proxy = _current_proxy()
     if proxy:
         if rotate:
             proxy = _rotate_session(proxy)
@@ -285,8 +311,7 @@ async def _get(path: str) -> dict:
     # there says nothing about us; it says that particular exit is dirty. Taking
     # a fresh session and trying once more is the right move, and opening a
     # 30-minute breaker over one unlucky draw would idle the poller for nothing.
-    if status == 403 and _rotate_session(os.environ.get(_PROXY_ENV) or "") != (
-            os.environ.get(_PROXY_ENV) or ""):
+    if status == 403 and _rotate_session(_current_proxy()) != _current_proxy():
         status, payload = await asyncio.to_thread(_fetch, path, True)
         if status == 200:
             await app_log(
@@ -296,6 +321,13 @@ async def _get(path: str) -> dict:
                 dedup_key="sofa_rotated", dedup_hours=6)
 
     if status == 403:
+        # REFUSED WHILE DIRECT MEANS THIS HOST IS BANNED AGAIN. Fall back to
+        # the proxy immediately and remember when, so the probe leaves the
+        # direct route alone until the ban has aged. Done before the breaker
+        # trips, so the very next request already takes the other way out
+        # rather than waiting out a cooldown it does not need.
+        if _egress_direct:
+            await _record_direct_block()
         _consecutive_blocks += 1
         cooldown = min(_BLOCK_COOLDOWN * (2 ** (_consecutive_blocks - 1)),
                        _BLOCK_COOLDOWN_MAX)
@@ -326,6 +358,95 @@ async def _get(path: str) -> dict:
     # predecessor earned.
     _consecutive_blocks = 0
     return payload
+
+
+async def _record_direct_block() -> None:
+    """Switch to the proxy and write down that direct is banned."""
+    global _egress_direct
+    from datetime import datetime, timezone as _tz
+    from app.database import AsyncSessionLocal
+    from app.services import settings as st
+
+    _egress_direct = False
+    async with AsyncSessionLocal() as db:
+        await st.set_setting(db, st.SOFA_EGRESS, st.SOFA_EGRESS_PROXY)
+        await st.set_setting(db, st.SOFA_DIRECT_BLOCKED_AT,
+                             datetime.now(_tz.utc).isoformat())
+        await db.commit()
+    await app_log("warning", "sofascore",
+                  "Direct route refused — switched to the residential proxy",
+                  detail={"cooloff_hours": round(DIRECT_COOLOFF / 3600)},
+                  dedup_key="sofa_egress_to_proxy", dedup_hours=6)
+
+
+async def load_egress(db) -> bool:
+    """Adopt the stored route at startup. Returns True when going direct."""
+    global _egress_direct
+    from app.services import settings as st
+
+    stored = await st.get_setting(db, st.SOFA_EGRESS)
+    # No proxy configured at all: direct is the only way out, whatever is
+    # stored. Nothing to fall back to, so nothing to decide.
+    if not os.environ.get(_PROXY_ENV):
+        _egress_direct = True
+    else:
+        _egress_direct = stored == st.SOFA_EGRESS_DIRECT
+    return _egress_direct
+
+
+async def probe_direct(db) -> bool:
+    """Try the free route once, and adopt it if it answers. Returns True if
+    we are now direct.
+
+    ONE request, and only when there is something to gain and little to lose:
+    already on the proxy, a proxy actually configured, the circuit closed, and
+    the last direct refusal well behind us. Everything else declines silently —
+    the point of the cooloff is that a banned IP is left completely alone, not
+    polled politely.
+    """
+    global _egress_direct
+    from datetime import datetime, timezone as _tz
+    from app.services import settings as st
+
+    if _egress_direct or not os.environ.get(_PROXY_ENV):
+        return _egress_direct
+    if blocked_for() > 0:
+        return False
+    blocked_at = await st.get_setting(db, st.SOFA_DIRECT_BLOCKED_AT)
+    if blocked_at:
+        try:
+            age = (datetime.now(_tz.utc)
+                   - datetime.fromisoformat(blocked_at)).total_seconds()
+        except ValueError:
+            age = DIRECT_COOLOFF + 1
+        if age < DIRECT_COOLOFF:
+            return False
+
+    # Deliberately NOT through _get: that would pace, trip the breaker and
+    # count a refusal here against the proxy route, which is not the one being
+    # tested. A bare probe, and a 403 costs only this request.
+    saved, ok = _egress_direct, False
+    try:
+        _egress_direct = True
+        status, _ = await asyncio.to_thread(_fetch, "/sport/tennis/events/live")
+        ok = status == 200
+    except Exception:
+        ok = False
+    finally:
+        _egress_direct = ok
+
+    if ok:
+        await st.set_setting(db, st.SOFA_EGRESS, st.SOFA_EGRESS_DIRECT)
+        await db.commit()
+        await app_log("info", "sofascore",
+                      "Direct route answered again — leaving the proxy",
+                      dedup_key="sofa_egress_to_direct", dedup_hours=6)
+    else:
+        _egress_direct = saved
+        await st.set_setting(db, st.SOFA_DIRECT_BLOCKED_AT,
+                             datetime.now(_tz.utc).isoformat())
+        await db.commit()
+    return ok
 
 
 # ---------------------------------------------------------------------------
