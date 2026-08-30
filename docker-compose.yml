@@ -66,6 +66,13 @@ services:
       # clears, with no proxy left to rotate to since IPRoyal was cancelled —
       # can be answered by pointing at an SSH SOCKS tunnel and a restart,
       # rather than by a code change.
+      # Measure the structured schedule feeds against the sheet they would
+      # replace. READ-ONLY as far as schedules go — it writes log lines and
+      # the learned court-name mapping, nothing else. It lives here rather
+      # than on staging because staging's scrapers are off by design, so its
+      # sheets never refresh and the comparison would decay against a frozen
+      # snapshot instead of measuring the feeds.
+      - SCHEDULE_SHADOW=true
       - SOFASCORE_PROXY=${SOFASCORE_PROXY:-}
     extra_hosts:
       # So SOFASCORE_PROXY can name the docker gateway for a host-side tunnel.
