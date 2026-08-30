@@ -80,11 +80,30 @@ def _tz(venue_tz: Optional[str]):
         return timezone.utc
 
 
+def _surname_last(part: str) -> str:
+    """"Bhambri Y" -> "Y Bhambri", so the surname ends the string.
+
+    Sofascore writes a SINGLES player as "Daniel Altmaier" but a DOUBLES team
+    as "Bhambri Y / Venus M" — surname first, initial after. Everything
+    downstream takes the last token for the surname, so the doubles form
+    silently matched on the initial: the staging run found 55 of Winston-Salem's
+    75 matches and every miss was a pair. Flipping the two puts both forms in
+    the same shape.
+    """
+    toks = part.split()
+    # The INITIAL is what identifies this form, wherever the surname ends —
+    # "Van de Zandschulp B" is the same shape as "Bhambri Y" and was missed by
+    # a rule that only looked at two-token names.
+    if len(toks) > 1 and len(toks[-1].rstrip(".")) == 1 and toks[-1].rstrip(".").isalpha():
+        return " ".join([toks[-1]] + toks[:-1])
+    return part
+
+
 def _names(team: dict) -> tuple[list, list]:
     """A doubles team is one string — "Krajicek A. / Mektic N." — so the pair
     is split back apart, and a singles player is simply a list of one."""
     name = (team or {}).get("name") or ""
-    parts = [p.strip() for p in name.split("/") if p.strip()]
+    parts = [_surname_last(p.strip()) for p in name.split("/") if p.strip()]
     country = (((team or {}).get("country") or {}).get("alpha3") or "").strip()
     # Sofascore states one country per TEAM, so a mixed-nationality pair would
     # be mislabelled; better to leave both blank than to assert the wrong flag.
