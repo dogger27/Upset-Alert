@@ -710,8 +710,12 @@ class SofascoreLiveMonitor:
                 delay = max(self.BLOCKED_BACKOFF, blocked_for() + 30)
                 await app_log(
                     "warning", "sofascore_live",
-                    f"Live polling paused for {delay / 60:.0f} "
-                    f"minutes — Sofascore refused the request ({exc})",
+                    # Stable sentence: the minutes and the reason vary every
+                    # step of the backoff, and putting them in the text made
+                    # one outage read as a dozen problems in triage.
+                    "Live polling paused — Sofascore refused the request",
+                    detail={"paused_minutes": round(delay / 60),
+                            "reason": str(exc)},
                     dedup_key="sofa_live_blocked", dedup_hours=1)
             except asyncio.CancelledError:
                 raise

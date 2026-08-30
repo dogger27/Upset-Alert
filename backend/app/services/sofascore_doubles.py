@@ -1007,7 +1007,9 @@ class SofascoreDoublesMonitor:
                 from app.services.sofascore import blocked_for
                 delay = max(self.BLOCKED_BACKOFF, blocked_for() + 30)
                 await app_log("warning", "sofascore_doubles",
-                              f"Doubles sweep paused {delay / 60:.0f}m ({exc})",
+                              "Doubles sweep paused",
+                              detail={"paused_minutes": round(delay / 60),
+                                      "reason": str(exc)},
                               dedup_key="sofa_doubles_blocked", dedup_hours=1)
             except asyncio.CancelledError:
                 raise
