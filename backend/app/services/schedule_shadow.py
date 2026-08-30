@@ -29,6 +29,38 @@ from app.services.system_log import app_log
 logger = logging.getLogger(__name__)
 
 COURTS_SETTING = "sofa_courts"          # + ":{tournament_id}"
+WTA_EVENT_SETTING = "wta_event"         # + ":{tournament_id}"
+
+
+async def wta_event_id(db, tournament_id: int, draws) -> Optional[int]:
+    """The WTA's id for this event, remembered rather than re-derived.
+
+    It lives in the PDF URL — .../draws/2026/1039/OP.pdf — which is the whole
+    reason no mapping table is needed. But that URL is NOT durable: it holds
+    only the current sheet and goes null overnight and again when the
+    tournament ends, so a completed event has nothing left to read the id from.
+    On a combined event it is stranded on whichever draw last had a sheet,
+    which is how Cincinnati ended up with the wtafiles id on its MEN'S row.
+
+    So: take it from any draw that has it, whatever the gender, and write it
+    down the first time it is seen.
+    """
+    from app.services import settings as st
+    from app.services import wta_feed
+
+    key = f"{WTA_EVENT_SETTING}:{tournament_id}"
+    stored = await st.get_setting(db, key)
+    if stored:
+        try:
+            return int(stored)
+        except ValueError:
+            pass
+    for d in draws:
+        found = wta_feed.event_id_from_pdf_url(getattr(d, "oop_url", None))
+        if found:
+            await st.set_setting(db, key, str(found))
+            return found
+    return None
 
 
 def _sig(names: list) -> frozenset:
@@ -119,8 +151,8 @@ async def _structured(db, tournament, draws, day: date):
     # event against a sheet carrying both reads as 50% disagreement and means
     # nothing.
     covered = set()
+    event_id = await wta_event_id(db, tournament.id, draws)
     for d in [x for x in draws if (x.gender or "").upper() == "F"]:
-        event_id = wta_feed.event_id_from_pdf_url(d.oop_url)
         if not event_id:
             continue
         try:
