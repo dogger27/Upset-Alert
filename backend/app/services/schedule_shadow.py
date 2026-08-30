@@ -29,6 +29,27 @@ from app.services.system_log import app_log
 logger = logging.getLogger(__name__)
 
 COURTS_SETTING = "sofa_courts"          # + ":{tournament_id}"
+
+# Fetched event lists, briefly. One tick compares three days of the same
+# tournament and was pulling the same feed three times; with 2-second pacing
+# and a dozen pages per event that is minutes of requests to Sofascore for
+# nothing, and hammering it is what earned an IP ban in August.
+_CACHE: dict = {}
+_CACHE_TTL = 600.0
+
+
+def _cached(key):
+    import time
+    hit = _CACHE.get(key)
+    if hit and time.monotonic() - hit[0] < _CACHE_TTL:
+        return hit[1]
+    return None
+
+
+def _remember(key, value):
+    import time
+    _CACHE[key] = (time.monotonic(), value)
+    return value
 WTA_EVENT_SETTING = "wta_event"         # + ":{tournament_id}"
 
 
@@ -156,8 +177,11 @@ async def _structured(db, tournament, draws, day: date):
         if not event_id:
             continue
         try:
-            rows = await __import__("asyncio").to_thread(
-                wta_feed.fetch_matches, event_id, day.year)
+            rows = _cached(("wta", event_id, day.year))
+            if rows is None:
+                rows = _remember(("wta", event_id, day.year),
+                                 await __import__("asyncio").to_thread(
+                                     wta_feed.fetch_matches, event_id, day.year))
             doc = wta_feed.normalize_day(rows, day, tz)
             ms, _meta = wta_feed.parse_wta_day(doc, venue_tz=tz)
             out += ms
@@ -187,13 +211,22 @@ async def _structured(db, tournament, draws, day: date):
                 continue
             seen_events.add((tid, sid))
             try:
-                # DEEP ENOUGH TO REACH QUALIFYING. Sofascore keeps it under the
-                # same tournament id, not a separate one as first assumed — it
-                # simply sits further back than a page or two of history, since
-                # it is played before the main draw. Two pages stopped at the
-                # main draw and reported every qualifying day as 0 matched.
-                evs = await sofa_schedule.fetch_events(tid, sid, "next", pages=4)
-                evs += await sofa_schedule.fetch_events(tid, sid, "last", pages=8)
+                # DEPTH ONLY WHERE IT BUYS SOMETHING. Qualifying sits under the
+                # same tournament id, just further back than a page or two of
+                # history — so an OLD day needs a deep walk, while today and
+                # tomorrow are on the first page or two. The routine tick looks
+                # at today +/- 1 and pays for two pages; a backfill of a
+                # finished tournament pays for eight.
+                from datetime import date as _d
+                old_day = (_d.today() - day).days > 2
+                key = (tid, sid, old_day)
+                evs = _cached(key)
+                if evs is None:
+                    evs = await sofa_schedule.fetch_events(
+                        tid, sid, "next", pages=4 if old_day else 2)
+                    evs += await sofa_schedule.fetch_events(
+                        tid, sid, "last", pages=8 if old_day else 2)
+                    _remember(key, evs)
                 ms, _meta = sofa_schedule.parse_sofa_day(
                     sofa_schedule.normalize_day(evs, day, tz),
                     venue_tz=tz, discipline=disc)
