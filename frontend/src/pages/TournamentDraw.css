@@ -852,3 +852,82 @@
   justify-content: flex-end;
 }
 
+
+/* ── The locked pill answers a refused tap ────────────────────────────────
+   Instead of an alert: the pill swells and shakes where it already sits, so
+   the answer arrives at the thing that was always stating it. Keyed on a
+   counter in the JSX, which remounts the span — restarting the animation on
+   every tap, which re-adding a class alone would not do.
+
+   transform-origin keeps the growth anchored to the badge's right edge so a
+   pill in the corner grows INWARD over the draw rather than off the screen. */
+.lock-badge--nudge {
+  display: inline-block;
+  transform-origin: right center;
+  animation: lock-badge-shout 1.1s cubic-bezier(0.36, 0.07, 0.19, 0.97) 1;
+  will-change: transform;
+}
+
+@keyframes lock-badge-shout {
+  0%   { transform: scale(1)    rotate(0deg); }
+  10%  { transform: scale(2.1)  rotate(-4deg); }
+  22%  { transform: scale(2.35) rotate(4deg); }
+  34%  { transform: scale(2.3)  rotate(-5deg); }
+  46%  { transform: scale(2.35) rotate(5deg); }
+  58%  { transform: scale(2.25) rotate(-4deg); }
+  70%  { transform: scale(2.1)  rotate(3deg); }
+  82%  { transform: scale(1.6)  rotate(-2deg); }
+  100% { transform: scale(1)    rotate(0deg); }
+}
+
+/* The shout is the whole point, so it is not removed under reduced motion —
+   only the shaking is. It still swells and settles. */
+@media (prefers-reduced-motion: reduce) {
+  .lock-badge--nudge { animation: lock-badge-swell 0.9s ease-out 1; }
+  @keyframes lock-badge-swell {
+    0% { transform: scale(1); } 30% { transform: scale(1.8); } 100% { transform: scale(1); }
+  }
+}
+
+/* ── Locked-pick toast (the phone's answer) ───────────────────────────────
+   The header — and with it the "Predictions locked" pill — collapses away on a
+   phone, so a refused tap has nothing to shake. This says the same thing over
+   the draw and takes itself away again.
+
+   pointer-events:none is the point of it: the refusal must cost the reader no
+   interaction, and a toast that can swallow the next tap would cost one. */
+.lock-toast {
+  position: fixed;
+  left: 50%;
+  bottom: max(1.25rem, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 600;
+  max-width: min(28rem, calc(100vw - 2rem));
+  padding: 0.6rem 1rem;
+  border-radius: 999px;
+  background: var(--warning-bg);
+  color: var(--warning);
+  border: 1px solid var(--warning);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: center;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+  pointer-events: none;
+  animation: lock-toast-life 2.6s ease forwards;
+}
+
+/* One animation for the whole life, so the fade OUT needs no second state and
+   no unmount dance — it is simply the tail of the same keyframes. */
+@keyframes lock-toast-life {
+  0%   { opacity: 0; transform: translate(-50%, 0.75rem); }
+  12%  { opacity: 1; transform: translate(-50%, 0); }
+  80%  { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, 0.5rem); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lock-toast { animation: lock-toast-fade 2.6s ease forwards; }
+  @keyframes lock-toast-fade {
+    0% { opacity: 0; } 10% { opacity: 1; } 85% { opacity: 1; } 100% { opacity: 0; }
+  }
+}
