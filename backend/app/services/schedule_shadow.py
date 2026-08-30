@@ -78,25 +78,30 @@ async def _structured(db, tournament, draws, day: date):
     tz = next((d.venue_timezone for d in draws if d.venue_timezone), None)
     out, sources = [], []
 
-    wta = [d for d in draws if (d.gender or "").upper() == "F"]
-    if wta:
-        event_id = next(
-            (wta_feed.event_id_from_pdf_url(d.oop_url) for d in wta
-             if wta_feed.event_id_from_pdf_url(d.oop_url)), None)
-        if event_id:
-            try:
-                rows = await __import__("asyncio").to_thread(
-                    wta_feed.fetch_matches, event_id, day.year)
-                doc = wta_feed.normalize_day(rows, day, tz)
-                ms, _meta = wta_feed.parse_wta_day(doc, venue_tz=tz)
-                out += ms
-                sources.append(f"wta:{event_id}")
-            except Exception as exc:      # noqa: BLE001 — shadow must not break the tick
-                logger.info("shadow: WTA feed unavailable for %s: %s",
-                            tournament.name, exc)
+    # THE WTA'S OWN FEED FIRST, where the draw came from a wtafiles PDF — that
+    # URL is where the event id lives. A Slam's WTA draw has no such URL (the
+    # US Open's points at usopen.org), so it falls through to Sofascore below
+    # rather than being skipped: comparing only the men's half of a combined
+    # event against a sheet carrying both reads as 50% disagreement and means
+    # nothing.
+    covered = set()
+    for d in [x for x in draws if (x.gender or "").upper() == "F"]:
+        event_id = wta_feed.event_id_from_pdf_url(d.oop_url)
+        if not event_id:
+            continue
+        try:
+            rows = await __import__("asyncio").to_thread(
+                wta_feed.fetch_matches, event_id, day.year)
+            doc = wta_feed.normalize_day(rows, day, tz)
+            ms, _meta = wta_feed.parse_wta_day(doc, venue_tz=tz)
+            out += ms
+            sources.append(f"wta:{event_id}")
+            covered.add(d.id)
+        except Exception as exc:          # noqa: BLE001 — shadow must not break the tick
+            logger.info("shadow: WTA feed unavailable for %s: %s",
+                        tournament.name, exc)
 
-    atp = [d for d in draws if (d.gender or "").upper() == "M"]
-    for d in atp:
+    for d in [x for x in draws if x.id not in covered]:
         for tid, sid, disc in ((d.sofa_tournament_id, d.sofa_season_id, "singles"),
                                (d.sofa_doubles_tournament_id,
                                 d.sofa_doubles_season_id, "doubles")):
