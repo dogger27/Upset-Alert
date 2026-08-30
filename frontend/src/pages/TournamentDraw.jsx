@@ -628,9 +628,19 @@ function TournamentDraw() {
     },
     onError: (err) => {
       reportSaveFailure(err)
-      // Put the bracket back to what the server actually holds, so the screen
-      // stops showing a pick that was never stored.
+      // PUT THE BRACKET BACK, BY HAND. Invalidating alone did not do it:
+      // React Query shares structure, so a refetch that returns the same rows
+      // hands back the SAME array reference, the effect keyed on savedPreds
+      // never re-runs, and the rejected pick stayed on screen until a reload.
+      // On a locked draw that is the whole bug — the click appears to work,
+      // the 403 is silent above the fold, and the bracket lies until reloaded.
+      applySaved(qc.getQueryData(['predictions', id]))
       qc.invalidateQueries({ queryKey: ['predictions', id] })
+      // And find out whether the draw locked under us. A tab opened before the
+      // first ball still holds draw_locked:false and will keep offering edits
+      // it cannot save; refetching turns the bracket read-only without a
+      // reload.
+      qc.invalidateQueries({ queryKey: ['draw', id] })
     },
   })
 
@@ -648,7 +658,16 @@ function TournamentDraw() {
     },
     onError: (err) => {
       reportSaveFailure(err)
+      const rows = qc.getQueryData(['predictions', id, viewedUserId])
+      if (Array.isArray(rows)) {
+        const map = {}
+        for (const p of rows) {
+          if (p.predicted_winner_id != null) map[p.match_id] = p.predicted_winner_id
+        }
+        setOtherPicks(map)
+      }
       qc.invalidateQueries({ queryKey: ['predictions', id, viewedUserId] })
+      qc.invalidateQueries({ queryKey: ['draw', id] })
     },
   })
 
