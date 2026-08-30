@@ -150,7 +150,7 @@ async def _structured(db, tournament, draws, day: date):
     # rather than being skipped: comparing only the men's half of a combined
     # event against a sheet carrying both reads as 50% disagreement and means
     # nothing.
-    covered, seen_events = set(), set()
+    seen_events = set()
     event_id = await wta_event_id(db, tournament.id, draws)
     for d in [x for x in draws if (x.gender or "").upper() == "F"]:
         if not event_id:
@@ -162,7 +162,6 @@ async def _structured(db, tournament, draws, day: date):
             ms, _meta = wta_feed.parse_wta_day(doc, venue_tz=tz)
             out += ms
             sources.append(f"wta:{event_id}")
-            covered.add(d.id)
         except Exception as exc:          # noqa: BLE001 — shadow must not break the tick
             logger.info("shadow: WTA feed unavailable for %s: %s",
                         tournament.name, exc)
@@ -173,7 +172,13 @@ async def _structured(db, tournament, draws, day: date):
     mixed = [(getattr(tournament, "sofa_mixed_tournament_id", None),
               getattr(tournament, "sofa_mixed_season_id", None), "mixed")]
 
-    for d in [x for x in draws if x.id not in covered]:
+    # EVERY source, not the first that answers. Treating the WTA feed as
+    # exclusive for its draws made three perfect days worse: Sofascore stopped
+    # being asked for those draws and covered more of them than the WTA API
+    # did. The matcher consumes each feed row once, so offering the same match
+    # twice cannot double-count it — it can only give the sheet row something
+    # to pair with. `feed` therefore counts rows OFFERED, not distinct matches.
+    for d in draws:
         for tid, sid, disc in ((d.sofa_tournament_id, d.sofa_season_id, "singles"),
                                (d.sofa_doubles_tournament_id,
                                 d.sofa_doubles_season_id, "doubles"),
