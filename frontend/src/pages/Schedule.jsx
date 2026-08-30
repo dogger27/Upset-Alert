@@ -644,17 +644,31 @@ export default function Schedule() {
   })
   const dates = dateData?.dates ?? []
 
-  /* No date in the URL means the latest published one — the sheet you would
-     have gone looking for. Today is the wrong default: at 2am the day being
-     played is still yesterday's sheet, and out of season today has nothing at
-     all. Falls back to today only until the list arrives, so the first paint
-     has something to ask for.
+  /* No date in the URL means THE EARLIEST DAY WITH TENNIS LEFT IN IT, never
+     earlier than today. That is the sheet someone opening "Order of play" is
+     looking for: the matches still to come. It used to be the latest published
+     day, which during a Slam is tomorrow's card — correct only on the evening
+     the next sheet drops, and wrong every other hour.
+
+     Today is still not blindly the answer, for the reason the old rule gave:
+     out of season today has no sheet at all. So the day is chosen from the
+     dates that EXIST, and a day whose matches are all finished is stepped
+     over — at the end of a Slam day this walks forward to tomorrow on its own.
+     If nothing from today onward has anything open, the last such day stands,
+     and out of season it falls back to the latest sheet we hold.
+
      A date that IS in the URL is clamped to the list, so an old link or a hand
      typed date cannot strand the page on a day with nothing on it. */
   const asked = params.get('date')
+  const openCounts = dateData?.open_counts ?? {}
+  const today = isoDay(new Date())
+  const upcoming = dates.filter(d => d >= today)
+  const firstOpen = upcoming.find(d => (openCounts[d] ?? 1) > 0)
   const day = (dates.length
-    ? (asked && dates.includes(asked) ? asked : dates[dates.length - 1])
-    : (asked || isoDay(new Date())))
+    ? (asked && dates.includes(asked)
+        ? asked
+        : (firstOpen || upcoming[upcoming.length - 1] || dates[dates.length - 1]))
+    : (asked || today))
 
   const dayIndex = dates.indexOf(day)
   const prevDay = dayIndex > 0 ? dates[dayIndex - 1] : null
