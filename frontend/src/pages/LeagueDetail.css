@@ -758,7 +758,16 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   border-top: 1px solid var(--border-strong);
   border-bottom: 1px solid var(--border-strong);
 }
-.lt-progress-header-row .lt-bar-track { height: 24px; background: none; }
+/* The SAME height as the compare header's two lines, and centred the same
+   way. At 24px against 36px the standings labels centred inside a taller row
+   while the compare block filled it, so the two headers sat at different
+   heights and the eye read the whole table as shifting. One height, one
+   alignment, no difference left to see. */
+.lt-progress-header-row .lt-bar-track {
+  height: var(--hdr-track-h, 36px);
+  align-items: center;
+  background: none;
+}
 /* Leaderboard */
 .leaderboard-wrap { margin-bottom: 1.5rem; }
 .leaderboard-header {
@@ -1353,8 +1362,11 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
      is 34px, and a line of chips is nearer 24px. So the compare rows sat about
      five pixels higher inside the identical slot, and the whole table appeared
      to lift when the tab changed while the ruled header stayed put.
-     34px, matching .lt-bar-track above: the number ROW_SLOT is built from. */
-  min-height: 34px;
+     34px, matching .lt-bar-track above: the number ROW_SLOT is built from.
+     A fixed height, not a minimum — a minimum stops the row being too short
+     but still lets a tall chip make it too tall, which is the same fault
+     pointing the other way. */
+  height: 34px;
 }
 
 /* The header stacks two lines in the one cell the bar labels used to occupy,
@@ -1363,8 +1375,10 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 .lt-picks-track--head {
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
-  height: var(--hdr-track-h, 34px);
+  /* Centred, matching the bar labels beside it — bottom-aligning these pushed
+     the round names lower than the labels they replace. */
+  justify-content: center;
+  height: var(--hdr-track-h, 36px);
 }
 
 .lt-picks-rounds,
