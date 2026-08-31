@@ -1790,3 +1790,28 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
    shape — but a heading is a label for the whole column, and centring is what
    says it belongs to all of it rather than to the first value under it. */
 .dt-table thead th { text-align: center; }
+
+
+/* ── The panel header on a phone ─────────────────────────────────────────────
+   Three things compete for one line here: what the draw is, which tour, and
+   the close button floating over the corner. On a narrow screen the title lost
+   — truncated to "S…" — while the switch sat marooned in the middle of the
+   row because the header holds 2.4rem clear for the X. */
+@media (max-width: 640px) {
+  .dm-body .lt-progress-header { flex-wrap: wrap; row-gap: 0.45rem; }
+
+  /* The dates take the first line alone. That line is the one under the close
+     button, and it is the one thing here short enough not to mind. */
+  .dm-body .lt-header-left { flex: 1 1 100%; }
+
+  /* Which drops the title and the switch to a line of their own, clear of the
+     X — so the switch can finally go hard right instead of stopping short of
+     a button on another row. */
+  .dm-body .lt-progress-header .lt-progress-title { flex: 1 1 auto; text-align: left; }
+  .dm-body .lt-progress-header .lt-tour { margin-left: auto; }
+  .dm-body .lt-progress-header { padding-right: 0; }
+
+  /* The league is the page you are already on. On a phone that is width the
+     draw's own name needs more. */
+  .lt-title-league { display: none; }
+}
