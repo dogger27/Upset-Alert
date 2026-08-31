@@ -465,6 +465,36 @@ const ROW_SLOT = 41 // px per row slot (bar height 34px + gap 7px)
    Card and modal deliberately run the SAME query key as the chart, so opening
    one costs no request — React Query serves it from cache and both stay on the
    same 60s refetch. */
+/* TIED IS TIED, AND THE BOARD SHOULD SAY SO.
+   The order already applies the league's tiebreak — total first, then round by
+   round from the Final backwards, so a competitor who did better late outranks
+   one who did better early. But the NUMBER beside each row was its position in
+   that order, which turned three genuinely level competitors into a 1st, a 2nd
+   and a 3rd on the strength of nothing at all. Once the tiebreak has run out
+   of rounds to compare, there is no more evidence, and inventing an order is
+   worse than admitting the tie.
+
+   Standard competition ranking: 1, 1, 1, 4, 4, 6 — tied rows share the first
+   position they occupy, and the next distinct row takes its own index back, so
+   the numbers still say how many people are ahead of you. */
+function sameStanding(a, b) {
+  if (!a || !b || a.total !== b.total) return false
+  const ra = a.round_points || [], rb = b.round_points || []
+  if (ra.length !== rb.length) return false
+  // Equality is order-independent, so this needs no Final-backwards walk —
+  // it is only the SORT that cares which round is compared first.
+  return ra.every((p, i) => (p ?? 0) === (rb[i] ?? 0))
+}
+
+/** The competition rank of the entry at `i` in an already-sorted list. */
+function standingRankAt(entries, i) {
+  let rank = 1
+  for (let k = 1; k <= i; k++) {
+    if (!sameStanding(entries[k - 1], entries[k])) rank = k + 1
+  }
+  return rank
+}
+
 /* WHAT ONE DRAW CONTRIBUTES TO ITS CARD. Its own query — the same key the
    modal uses, so opening the card costs no request — reduced to the two facts
    a card shows: where the viewer stands, and how far the draw has got. */
@@ -489,6 +519,7 @@ function useDrawStanding(t, leagueId, enabled = true) {
   return {
     entries,
     mine,
+    rank: mine >= 0 ? standingRankAt(entries, mine) : null,
     me: mine >= 0 ? entries[mine] : null,
     played: timeline.length,
     /* The denominator is not on the payload and does not need to be: a
@@ -512,7 +543,7 @@ function DcStanding({ t, stand, pickerCount }) {
     <div className={`dc-rank${stand.me ? '' : ' dc-rank--out'}`}>
       {stand.me ? (
         <>
-          <span className="dc-rank-num">{stand.mine + 1}</span>
+          <span className="dc-rank-num">{stand.rank}</span>
           <span className="dc-rank-of">of {stand.entries.length} · {stand.me.total} pts</span>
         </>
       ) : (
@@ -669,7 +700,7 @@ function DrawRow({ tournament: t, leagueId, showGenderLabel, onOpen }) {
               one cell — splitting them into two columns invited the eye to
               compare 3 with 22 down the page, which means nothing. */}
           <td className="dt-num dt-finish">
-            <span className="dt-finish-num">{mine + 1}</span>
+            <span className="dt-finish-num">{standingRankAt(entries, mine)}</span>
             <span className="dt-finish-of">of {entries.length}</span>
           </td>
           {/* WITH ITS DENOMINATOR. Every row here is a different draw, so
@@ -872,7 +903,13 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
      number keeps saying where someone stands rather than where they happen to
      appear. It doubles as the points tiebreak below: equal by rank is equal by
      points, by construction. */
-  const ranked = pointsOrder.map((e, i) => ({ ...e, standingsRank: i + 1 }))
+  const ranked = (() => {
+    let rank = 1
+    return pointsOrder.map((e, i) => {
+      if (i > 0 && !sameStanding(pointsOrder[i - 1], e)) rank = i + 1
+      return { ...e, standingsRank: rank }
+    })
+  })()
 
   /* GROUPED BY WHO AGREED, when a position header is clicked.
      Biggest group first, its members together, and inside a group the higher
