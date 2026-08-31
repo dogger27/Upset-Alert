@@ -339,6 +339,20 @@ def _utc(dt):
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
+def _is_suspended(entry, match) -> bool:
+    """Has play on this match STOPPED, wherever the fact is recorded?
+
+    Two spellings, because two feeds write it. ESPN parks the word in the fifth
+    slot of a match's live_scores_json; the point payload carries its own flag,
+    which is the only one a doubles row has. A match carried overnight has the
+    first and no live point at all, so testing either alone misses half of them.
+    """
+    ls = getattr(match, "live_scores_json", None) if match is not None else None
+    if isinstance(ls, (list, tuple)) and len(ls) > 4 and ls[4] == "suspended":
+        return True
+    return bool((_doubles_point(entry) or {}).get("suspended"))
+
+
 def _doubles_point(entry):
     """The live point for a doubles row, which has no bracket match to carry it.
 
@@ -608,9 +622,19 @@ async def schedule_day(
         # revision can share a position with a current one. Treating equal
         # positions as "later" marked a match that had not started as
         # completed, because the match beside it had.
+        # A SUSPENDED MATCH IS NOT PROOF THAT TODAY'S ORDER HAS BEGUN.
+        # It reads as "live" because it still carries a score — but that score
+        # is yesterday's, and the row is on today's sheet only because the
+        # match has to be finished sometime. On 2026-08-31 every affected court
+        # ran 11:00 AM first and the carried match second, so a carry sitting
+        # at position 2 marked the 11:00 AM match above it COMPLETED before it
+        # had been played, with no score to show because there was none.
+        # Play that happened on another day cannot say what happened on this
+        # one.
         highest_started = None
         for e in sorted(slots, key=lambda x: x.court_order):
-            if statuses[e.id] in ("live", "completed"):
+            if (statuses[e.id] in ("live", "completed")
+                    and not _is_suspended(e, matches.get(e.match_id) if e.match_id else None)):
                 highest_started = e.court_order
         if highest_started is None:
             continue
@@ -693,8 +717,13 @@ async def schedule_day(
         started_before = bool(earlier_started) or (
             bool(earlier) and _has_games(e.live_scores_json))
         # A row being PLAYED right now says so; the resumption is over.
+        # Suspended is not playing. This tested only the doubles point flag, so
+        # a suspended SINGLES match — whose stoppage is recorded on the match's
+        # live_scores instead — counted as under way, and the row never reached
+        # the "to be completed" branch below. It sat at "In progress" all day
+        # beside a score that could not move.
         playing_now = (statuses[e.id] == "live"
-                       and not (_doubles_point(e) or {}).get("suspended"))
+                       and not _is_suspended(e, matches.get(e.match_id) if e.match_id else None))
         # THE MATCH IS OVER, WHEREVER IT FINISHED. A sheet printed before the
         # resumption still lists the match today, and it goes on saying so
         # after it has been won. The result is a fact and the sheet is only a
