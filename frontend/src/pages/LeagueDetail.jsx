@@ -593,13 +593,19 @@ function DrawCard({ items, leagueId, showGenderLabel, onOpen }) {
         <div className="dc-bar-fill" style={{ width: `${pct}%` }} />
       </div>
 
-      <span className="dc-foot">
-        {anyOpen
-          ? (sa.entries.length > 0 ? `${sa.entries.length} entered` : 'No picks yet')
-          : total > 0
-            ? `${played} / ${total} matches${through ? ` · through ${through}` : ''}`
-            : 'Not started'}
-      </span>
+      {/* The match count goes with the standing on a combined card. It reads
+          as one draw's progress but is the sum of two, and a number that has
+          to be explained is worse on a card than no number at all — the bar
+          above already says how far through the fortnight the event is. */}
+      {!paired && (
+        <span className="dc-foot">
+          {anyOpen
+            ? (sa.entries.length > 0 ? `${sa.entries.length} entered` : 'No picks yet')
+            : total > 0
+              ? `${played} / ${total} matches${through ? ` · through ${through}` : ''}`
+              : 'Not started'}
+        </span>
+      )}
     </button>
   )
 }
