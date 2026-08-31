@@ -878,15 +878,22 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
    blocks are what replaced that: a fixed-height card per draw, and one layer
    at a time carrying the full chart. See DrawCard in LeagueDetail.jsx. */
 
-/* AUTO-FILL, NOT A FIXED COUNT. The Leagues page is narrower with a league
-   selected than it is on Global, and it sits inside a card whose width the
-   grid must not fight. minmax lets one column happen on a phone and four on a
-   wide desktop without a breakpoint per step. */
+/* FLEX, NOT GRID, SO THE LAST ROW CENTRES TOO.
+   A grid centres its TRACKS, which means two cards in a four-track grid still
+   sit in tracks one and two — hard left, with the rest of the row empty. That
+   is exactly what a two-draw week looks like, which is most weeks. Flex lines
+   are sized by their content, so justify-content actually centres them, and it
+   centres a partial last row the same way.
+   The basis is a width, not a fraction: cards stay a readable size instead of
+   stretching to fill a row that happens to hold two of them. */
 .lt-category-group {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 0.75rem;
 }
+
+.lt-category-group > .dc-card { flex: 0 1 19rem; }
 
 .dc-card {
   /* A button, so it is reachable by keyboard and announces itself as
@@ -1033,6 +1040,35 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 .dm-body .lt-progress-header { padding-right: 2.4rem; }
 .dm-body .lt-progress-block  { margin-bottom: 0; }
 
+/* ONLY THE LIST SCROLLS. Everything that says WHICH draw this is stays put —
+   the identity line, the tabs, and the column header the bars are measured
+   against. Scrolling 29 competitors used to take all three off the top of the
+   panel, so the numbers lost their labels exactly when the list got long
+   enough to need them.
+   Opaque backgrounds on both: rows must pass behind these, not through them. */
+.dm-body .lt-progress-top {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  padding-top: 0.15rem;
+  background: var(--surface-card);
+}
+
+.dm-body .lt-progress-header-row {
+  position: sticky;
+  /* Measured in DrawModal and published on the panel — the block above changes
+     height with the container tier and with a wrapping title. */
+  top: var(--dm-top-h, 5.5rem);
+  z-index: 2;
+  padding-top: 0.3rem;
+  padding-bottom: 0.2rem;
+  background: var(--surface-card);
+}
+
+/* The absolutely-positioned rows are painted in their own layer; without this
+   they ride OVER the sticky headers instead of under them. */
+.dm-body .lt-progress-rows--race { z-index: 0; }
+
 /* THE SCRUBBER STAYS PUT. It belongs to the whole list, so it must not sit
    wherever the list happens to end — that was the old page's failing. Sticky
    inside the scrolling body, opaque so rows pass behind it rather than
@@ -1058,3 +1094,85 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 /* An open draw leads with its state rather than a score, so the line is set
    like a label instead of a quiet aside. */
 .dc-rank-open { font-weight: 600; color: var(--pick-correct-line, #4ade80); }
+
+
+/* ── Previous draws: a table, not a wall of cards ─────────────────────────────
+   34 finished draws as tiles meant re-finding the rank in a different place on
+   every one. In rows every finish is in one column, which is what comparing
+   them needs. See DrawRow in LeagueDetail.jsx. */
+
+.dt-wrap { overflow-x: auto; }        /* the table scrolls, never the page */
+
+.dt-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.dt-table thead th {
+  padding: 0 0.6rem 0.5rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+
+.dt-h-num { text-align: right; }
+.dt-h-surface, .dt-h-dates { font-weight: 600; }
+
+.dt-row {
+  cursor: pointer;
+  transition: background 110ms ease;
+}
+
+.dt-row > td {
+  padding: 0.55rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.dt-row:last-child > td { border-bottom: 0; }
+.dt-row:hover { background: var(--atp-tint); }
+.dt-row:focus-visible {
+  outline: 2px solid var(--accent, #7aa9ff);
+  outline-offset: -2px;
+}
+
+/* The badge and the name are one identity, so they share a cell and a
+   baseline rather than being two columns that can drift apart. */
+.dt-draw {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.dt-name { font-weight: 700; }
+
+.dt-dates, .dt-surface { color: var(--text-muted); white-space: nowrap; }
+
+.dt-num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+.dt-finish-num { font-size: 1.05rem; font-weight: 800; color: var(--pick-correct-line, #4ade80); }
+.dt-finish-of  { margin-left: 0.3rem; font-size: 0.75rem; color: var(--text-muted); }
+
+.dt-correct { color: var(--text-muted); font-weight: 600; font-size: 0.8rem; }
+.dt-score   { font-weight: 700; }
+.dt-absent  { color: var(--text-muted); font-size: 0.8rem; }
+
+@media (max-width: 720px) {
+  /* Dates and surface are the first to go: they identify the event, and the
+     name already does that. Finish and score are the reason to look. */
+  .dt-h-dates, .dt-dates, .dt-h-surface, .dt-surface { display: none; }
+}
+
+@media (max-width: 420px) {
+  .dt-table { font-size: 0.8rem; }
+  .dt-row > td { padding: 0.5rem 0.35rem; }
+  /* The badge stacks above the name rather than squeezing it onto one line. */
+  .dt-draw { flex-direction: column; align-items: flex-start; gap: 0.2rem; }
+}
