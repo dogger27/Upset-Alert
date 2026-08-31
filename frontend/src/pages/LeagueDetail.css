@@ -734,7 +734,20 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 
 .lt-progress-total { font-size: 0.8rem; color: var(--ink, var(--n-950)); font-weight: 700; text-align: center; white-space: nowrap; }
 .lt-progress-col-header { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
-.lt-progress-header-row { margin-bottom: 0.2rem; }
+/* Ruled above and below, so the header reads as a band rather than as a first
+   row that happens to hold labels. Both lines, not just the one underneath:
+   the tabs sit directly above it and without a top rule the header looked
+   attached to them instead of to the table it describes.
+   --border-strong, not --text-muted: these separate things that are already
+   touching, which is what that token is for — the heavy rules in this view are
+   the vertical ones between rounds, and two more of that weight would compete
+   with them. */
+.lt-progress-header-row {
+  margin-bottom: 0.2rem;
+  padding: 0.3rem 0;
+  border-top: 1px solid var(--border-strong);
+  border-bottom: 1px solid var(--border-strong);
+}
 .lt-progress-header-row .lt-bar-track { height: 24px; background: none; }
 /* Leaderboard */
 .leaderboard-wrap { margin-bottom: 1.5rem; }
