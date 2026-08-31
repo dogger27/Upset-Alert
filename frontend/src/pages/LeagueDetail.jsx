@@ -321,12 +321,6 @@ export default function LeagueDetail() {
                           if (!gendersByName.has(t.name)) gendersByName.set(t.name, new Set())
                           gendersByName.get(t.name).add(t.gender)
                         }
-                        const open = ({ tournament: t, picker_count }) => () => setOpenDraw({
-                          tournament: t,
-                          pickerCount: picker_count,
-                          showGenderLabel: gendersByName.get(t.name)?.size > 1,
-                        })
-
                         /* TWO SHAPES, BECAUSE THE QUESTION CHANGES.
                            A live draw is asking "how am I doing" — one or two
                            of them, each worth a card with room for a standing
@@ -356,7 +350,10 @@ export default function LeagueDetail() {
                                       tournament={item.tournament}
                                       leagueId={isGlobal ? null : Number(id)}
                                       showGenderLabel={gendersByName.get(item.tournament.name)?.size > 1}
-                                      onOpen={open(item)}
+                                      onOpen={() => setOpenDraw({
+                                        items: [item],
+                                        showGenderLabel: gendersByName.get(item.tournament.name)?.size > 1,
+                                      })}
                                     />
                                   ))}
                                 </tbody>
@@ -364,16 +361,41 @@ export default function LeagueDetail() {
                             </div>
                           )
                         }
+                        /* ONE CARD PER EVENT. Two draws of the same
+                           tournament are its men's and women's halves, not two
+                           tournaments — grouped on the draws' shared
+                           tournament_id where there is one, and on name+year
+                           where there is not. Men first, so the pair always
+                           opens on the same side and the card's two lines do
+                           not swap order between events. */
+                        const events = []
+                        const byEvent = new Map()
+                        for (const item of visibleItems) {
+                          const t = item.tournament
+                          const key = t.tournament_id ?? `${t.name}|${t.year}`
+                          if (!byEvent.has(key)) {
+                            const g = { key, items: [] }
+                            byEvent.set(key, g)
+                            events.push(g)
+                          }
+                          byEvent.get(key).items.push(item)
+                        }
+                        for (const g of events) {
+                          g.items.sort((x, y) =>
+                            (x.tournament.gender === 'M' ? 0 : 1) - (y.tournament.gender === 'M' ? 0 : 1))
+                        }
                         return (
                           <div className="lt-category-group">
-                            {visibleItems.map(item => (
+                            {events.map(g => (
                               <DrawCard
-                                key={item.tournament.id}
-                                tournament={item.tournament}
-                                pickerCount={item.picker_count}
+                                key={g.key}
+                                items={g.items}
                                 leagueId={isGlobal ? null : Number(id)}
-                                showGenderLabel={gendersByName.get(item.tournament.name)?.size > 1}
-                                onOpen={open(item)}
+                                showGenderLabel={gendersByName.get(g.items[0].tournament.name)?.size > 1}
+                                onOpen={items => setOpenDraw({
+                                  items,
+                                  showGenderLabel: gendersByName.get(items[0].tournament.name)?.size > 1,
+                                })}
                               />
                             ))}
                           </div>
@@ -395,8 +417,7 @@ export default function LeagueDetail() {
 
       {openDraw && (
         <DrawModal
-          tournament={openDraw.tournament}
-          pickerCount={openDraw.pickerCount}
+          items={openDraw.items}
           leagueId={isGlobal ? null : Number(id)}
           leagueMemberCount={isGlobal ? null : league?.member_count}
           showRealName={isGlobal ? false : league?.show_real_name}
@@ -443,80 +464,129 @@ const ROW_SLOT = 41 // px per row slot (bar height 34px + gap 7px)
    Card and modal deliberately run the SAME query key as the chart, so opening
    one costs no request — React Query serves it from cache and both stay on the
    same 60s refetch. */
-function DrawCard({ tournament: t, pickerCount, leagueId, showGenderLabel, onOpen }) {
+/* WHAT ONE DRAW CONTRIBUTES TO ITS CARD. Its own query — the same key the
+   modal uses, so opening the card costs no request — reduced to the two facts
+   a card shows: where the viewer stands, and how far the draw has got. */
+function useDrawStanding(t, leagueId, enabled = true) {
   const { user } = useAuth()
   const { data } = useQuery({
-    queryKey: leagueId != null ? ['round-scores', leagueId, t.id] : ['global-round-scores', t.id],
+    queryKey: leagueId != null ? ['round-scores', leagueId, t?.id] : ['global-round-scores', t?.id],
     queryFn: leagueId != null ? () => getRoundScores(leagueId, t.id) : () => getGlobalRoundScores(t.id),
     refetchInterval: 60_000,
+    enabled: enabled && !!t,
   })
-
   const entries = data?.entries ?? []
   const timeline = data?.matches_timeline ?? []
   const numRounds = entries.length > 0
     ? entries[0].round_points.length
-    : (t.num_rounds ?? ROUND_COLORS.length)
-
-  /* WHERE THE VIEWER STANDS. Plain index+1, the same arithmetic the standings
-     row uses — a card that ranked ties differently from the list it opens
-     would read as one of the two being wrong. */
+    : (t?.num_rounds ?? ROUND_COLORS.length)
+  /* Plain index+1, the same arithmetic the standings row uses — a card that
+     ranked ties differently from the list it opens would read as one of the
+     two being wrong. */
   const mine = user ? entries.findIndex(e => e.user_id === user.id) : -1
-  /* HOW FAR THE DRAW HAS GOT. The timeline holds the matches that have been
-     played AND scored, in order — it is what the scrubber scrubs — so its
-     length is the numerator. The denominator is not on the payload, but it
-     does not need to be: a single-elimination draw of N entrants plays exactly
-     N-1 matches, and that stays right when there are byes (a 96-draw plays 95)
-     because a bye is not a match. */
-  const played = timeline.length
-  const total = t.draw_size > 1 ? t.draw_size - 1 : played
-  const last = played > 0 ? timeline[played - 1] : null
-  const through = last ? getRoundLabel(last.round_number - 1, numRounds) : null
+  const last = timeline.length > 0 ? timeline[timeline.length - 1] : null
+  return {
+    entries,
+    mine,
+    me: mine >= 0 ? entries[mine] : null,
+    played: timeline.length,
+    /* The denominator is not on the payload and does not need to be: a
+       single-elimination draw of N entrants plays exactly N-1 matches, and
+       that stays right with byes because a bye is not a match. */
+    total: t && t.draw_size > 1 ? t.draw_size - 1 : timeline.length,
+    through: last ? getRoundLabel(last.round_number - 1, numRounds) : null,
+  }
+}
+
+/** One tour's line on a card: which tour, where you came, what you scored. */
+function DcStanding({ t, stand, pickerCount }) {
+  if (t.status === 'open') {
+    return (
+      <div className="dc-rank dc-rank--out">
+        <span className="dc-rank-of dc-rank-open">Predictions open</span>
+      </div>
+    )
+  }
+  return (
+    <div className={`dc-rank${stand.me ? '' : ' dc-rank--out'}`}>
+      {stand.me ? (
+        <>
+          <span className="dc-rank-num">{stand.mine + 1}</span>
+          <span className="dc-rank-of">of {stand.entries.length} · {stand.me.total} pts</span>
+        </>
+      ) : (
+        <span className="dc-rank-of">
+          {stand.entries.length > 0
+            ? `${stand.entries.length} competitor${stand.entries.length !== 1 ? 's' : ''}`
+            : (pickerCount ? `${pickerCount} picking` : 'No picks yet')}
+        </span>
+      )}
+    </div>
+  )
+}
+
+/* ONE CARD PER EVENT, not per draw.
+
+   A combined tournament runs a men's and a women's draw on the same courts in
+   the same fortnight, and they were two cards saying the same dates, the same
+   surface and the same name — the only difference being a word in the title
+   and which half of the event you were looking at. That is one thing in the
+   world, so it is one card, and the tour becomes something you switch between
+   inside it rather than something you pick from the grid.
+
+   Exactly two queries either way, both declared unconditionally: hook order
+   cannot depend on how many draws an event happens to run. */
+function DrawCard({ items, leagueId, showGenderLabel, onOpen }) {
+  const a = items[0]?.tournament
+  const b = items[1]?.tournament
+  const paired = !!b
+  const sa = useDrawStanding(a, leagueId)
+  const sb = useDrawStanding(b, leagueId, paired)
+
+  const played = sa.played + (paired ? sb.played : 0)
+  const total = sa.total + (paired ? sb.total : 0)
+  const through = sa.through ?? (paired ? sb.through : null)
   const pct = total > 0 ? Math.min(100, (played / total) * 100) : 0
+  const anyOpen = a?.status === 'open' && (!paired || b?.status === 'open')
 
   return (
-    <button type="button" className="dc-card" onClick={() => onOpen(t)}>
+    <button type="button" className={`dc-card${paired ? ' dc-card--pair' : ''}`}
+            onClick={() => onOpen(items)}>
       <div className="dc-top">
-        <span className={`lt-gender-badge lt-gender-badge--${t.gender === 'M' ? 'm' : 'f'}`}>
-          {t.gender === 'M' ? 'ATP' : 'WTA'} {tierLabel(t.category)}
-        </span>
-        {(t.start_date || t.end_date) && (
-          <span className="dc-dates">
-            {fmtDrawDate(t.start_date)}{t.end_date ? ` – ${fmtDrawDate(t.end_date)}` : ''}
+        {paired ? (
+          /* Both tours named, then the tier once — it is the same tier for
+             both halves, and repeating it would be the loudest thing on the
+             card. */
+          <span className="dc-badges">
+            <span className="lt-gender-badge lt-gender-badge--m">ATP</span>
+            <span className="lt-gender-badge lt-gender-badge--f">WTA</span>
+            <span className="dc-tier">{tierLabel(a.category)}</span>
+          </span>
+        ) : (
+          <span className={`lt-gender-badge lt-gender-badge--${a.gender === 'M' ? 'm' : 'f'}`}>
+            {a.gender === 'M' ? 'ATP' : 'WTA'} {tierLabel(a.category)}
           </span>
         )}
-        {t.surface && <span className="dc-surface">{t.surface}</span>}
+        {(a.start_date || a.end_date) && (
+          <span className="dc-dates">
+            {fmtDrawDate(a.start_date)}{a.end_date ? ` – ${fmtDrawDate(a.end_date)}` : ''}
+          </span>
+        )}
+        {a.surface && <span className="dc-surface">{a.surface}</span>}
       </div>
 
       <span className="dc-title">
-        {t.name}{showGenderLabel ? ` ${t.gender === 'M' ? 'Men' : 'Women'}` : ''} {t.year}
+        {a.name}{!paired && showGenderLabel ? ` ${a.gender === 'M' ? 'Men' : 'Women'}` : ''} {a.year}
       </span>
 
-      {/* THE VIEWER'S OWN LINE FIRST, because it is the reason to open the
-          card. Someone not in this draw gets the size of the field instead —
-          a rank of nothing would be a lie, and an empty slot reads as broken. */}
-      {t.status === 'open' ? (
-        /* NOBODY HAS A RANK BEFORE PLAY. An open draw's entries are in no
-           meaningful order — the chart draws them as a plain list for exactly
-           that reason — so a position here would be an invented standing. Say
-           what the draw is waiting for instead. */
-        <div className="dc-rank dc-rank--out">
-          <span className="dc-rank-of dc-rank-open">Predictions open</span>
-        </div>
-      ) : mine >= 0 ? (
-        <div className="dc-rank">
-          <span className="dc-rank-num">{mine + 1}</span>
-          <span className="dc-rank-of">
-            of {entries.length} · {entries[mine].total} pts
-          </span>
-        </div>
-      ) : (
-        <div className="dc-rank dc-rank--out">
-          <span className="dc-rank-of">
-            {entries.length > 0
-              ? `${entries.length} competitor${entries.length !== 1 ? 's' : ''}`
-              : (pickerCount ? `${pickerCount} picking` : 'No picks yet')}
-          </span>
-        </div>
+      {/* NO STANDING ON A COMBINED CARD. Two of them ask the reader to hold
+          two ranks in two draws before they have decided which one they came
+          for — and whichever they pick, the modal says it again a moment
+          later. The card's job here is to name the event and say how far it
+          has got; the standing belongs to a tour, and the tour is chosen
+          inside. */}
+      {!paired && (
+        <DcStanding t={a} stand={sa} pickerCount={items[0]?.picker_count} />
       )}
 
       <div className="dc-bar" aria-hidden="true">
@@ -524,10 +594,8 @@ function DrawCard({ tournament: t, pickerCount, leagueId, showGenderLabel, onOpe
       </div>
 
       <span className="dc-foot">
-        {t.status === 'open'
-          ? (entries.length > 0
-              ? `${entries.length} entered`
-              : (pickerCount ? `${pickerCount} picking` : 'No picks yet'))
+        {anyOpen
+          ? (sa.entries.length > 0 ? `${sa.entries.length} entered` : 'No picks yet')
           : total > 0
             ? `${played} / ${total} matches${through ? ` · through ${through}` : ''}`
             : 'Not started'}
@@ -608,8 +676,15 @@ function DrawRow({ tournament: t, leagueId, showGenderLabel, onOpen }) {
    backdrop close it, and the body is frozen underneath: a wheel over a modal
    that scrolls the page behind it is how the layer stops feeling like a layer.
    Same conventions as InviteModal below. */
-function DrawModal({ tournament, pickerCount, leagueId, leagueMemberCount,
+function DrawModal({ items, leagueId, leagueMemberCount,
                      showRealName, showGenderLabel, leagueName, onClose }) {
+  /* Which half of a combined event is showing. Index, not gender, so an event
+     that somehow runs two draws of the same tour still works. */
+  const [which, setWhich] = useState(0)
+  const pair = items.length > 1
+  const active = items[Math.min(which, items.length - 1)]
+  const tournament = active.tournament
+  const pickerCount = active.picker_count
   useEffect(() => {
     const onKey = e => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
@@ -641,6 +716,22 @@ function DrawModal({ tournament, pickerCount, leagueId, leagueMemberCount,
             showRealName={showRealName}
             showGenderLabel={showGenderLabel}
             leagueName={leagueName}
+            /* THE SURFACE GIVES UP ITS CORNER. It is the same surface for both
+               halves of a combined event, and it is already on the card that
+               opened this — where the switch is, there is something to decide;
+               where the surface was, there was only something to read. */
+            headerRight={pair ? (
+              <span className="lt-tour" role="group" aria-label="Tour">
+                {items.map((it, i) => (
+                  <button key={it.tournament.id} type="button"
+                          className={`lt-tour-btn lt-tour-btn--${it.tournament.gender === 'M' ? 'm' : 'f'}${which === i ? ' lt-tour-btn--on' : ''}`}
+                          aria-pressed={which === i}
+                          onClick={() => setWhich(i)}>
+                    {it.tournament.gender === 'M' ? 'ATP' : 'WTA'}
+                  </button>
+                ))}
+              </span>
+            ) : null}
           />
         </div>
       </div>
@@ -648,7 +739,7 @@ function DrawModal({ tournament, pickerCount, leagueId, leagueMemberCount,
   )
 }
 
-export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMemberCount, showRealName, showGenderLabel, leagueName }) {
+export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMemberCount, showRealName, showGenderLabel, leagueName, headerRight }) {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [toast, setToast] = useState(null)
@@ -896,7 +987,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
           )}
           {' '}{t.year}
         </span>
-        {t.surface && <span className="lt-progress-meta">{t.surface}</span>}
+        {headerRight ?? (t.surface && <span className="lt-progress-meta">{t.surface}</span>)}
       </div>
 
       {/* The identity line above never moves; these switch only the body. */}

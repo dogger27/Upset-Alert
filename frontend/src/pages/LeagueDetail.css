@@ -1620,3 +1620,53 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 /* Eight columns of names where there were four: the chips give up their side
    padding before the names give up their letters. */
 .lt-picks-track[style*="--slots: 8"] .compare-pick-name { padding: 1px 2px; }
+
+/* ── A card that holds both halves of a combined event ──────────────────────── */
+
+/* Two tours named, then the tier once — it is the same tier for both, and
+   repeating it would be the loudest thing on the card. */
+.dc-badges { display: flex; align-items: center; gap: 0.3rem; }
+.dc-tier {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* A combined card carries no standing, so the space a rank would have taken
+   goes back to the gap — otherwise it reads as a card with something missing
+   rather than as a card that is about the event. */
+.dc-card--pair { gap: 0.55rem; }
+
+/* ── The tour switch, in the corner the surface used to hold ─────────────── */
+
+.lt-tour {
+  display: flex;
+  border: 1px solid var(--text-muted);
+  border-radius: 999px;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+
+.lt-tour-btn {
+  background: none;
+  border: 0;
+  padding: 3px 11px;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  transition: color 0.15s, background 0.15s;
+}
+
+.lt-tour-btn:hover { color: var(--text-strong, var(--text)); }
+
+/* Selected in its own tour's colour, so the switch says which half is showing
+   without being read — the same blue and pink as the title beside it. */
+.lt-tour-btn--on.lt-tour-btn--m { background: var(--atp-tint); color: var(--atp-text); }
+.lt-tour-btn--on.lt-tour-btn--f { background: var(--wta-tint); color: var(--wta-text); }
+
+.lt-tour-btn:focus-visible { outline: 2px solid var(--accent, #7aa9ff); outline-offset: -2px; }
