@@ -1033,67 +1033,68 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   flex: 1 1 auto;
   min-height: 0;          /* or the flex child refuses to shrink and never scrolls */
   overflow-y: auto;
-  /* NO PADDING ABOVE THE STICKY HEADER. A sticky top:0 sits at the top of the
-     CONTENT box, so any padding-top is a strip above it that scrolling rows
-     pass through in full view — the standings' first row was rendering above
-     the draw's own name. The gutter moves onto the pinned header itself, which
-     therefore starts at the very top of the scrollport and nothing can appear
-     over it. Held as a variable because the pinned rows below cancel it with
-     negative margins, and the two must always be the same number. */
   --dm-gutter: 1.1rem;
-  padding: 0 var(--dm-gutter);
+  padding: 0.9rem var(--dm-gutter) 0;
 }
 
 /* Room for the close button, which overlaps the chart's own header row. */
 .dm-body .lt-progress-header { padding-right: 2.4rem; }
 .dm-body .lt-progress-block  { margin-bottom: 0; }
 
-/* ONLY THE LIST SCROLLS. Everything that says WHICH draw this is stays put —
-   the identity line, the tabs, and the column header the bars are measured
-   against. Scrolling 29 competitors used to take all three off the top of the
-   panel, so the numbers lost their labels exactly when the list got long
-   enough to need them.
-   Opaque backgrounds on both: rows must pass behind these, not through them. */
-/* Bled to the panel edges: the background has to cover the gutters too, or
-   rows show in the strips either side of a header that only spans the text. */
-.dm-body .lt-progress-top {
-  position: sticky;
-  top: 0;
-  z-index: 3;
-  margin: 0 calc(-1 * var(--dm-gutter));
-  padding: 0.9rem var(--dm-gutter) 0;
-  background: var(--surface-card);
+/* ONLY THE LIST SCROLLS — AS A REAL REGION, NOT A STICKY ONE.
+
+   The first attempt pinned the header and the scrubber with position:sticky
+   inside one scrolling body. That works until it doesn't: a sticky top:0 sits
+   at the top of the CONTENT box, so the container's padding became a strip the
+   list showed through; covering the gutters then needed negative margins on
+   three separate rules, and those bled over the panel's own rounded border and
+   left fragments down the sides.
+
+   None of that is necessary. The chart already emits its parts as siblings —
+   identity block, column header, rows, scrubber — so making the block a flex
+   column and giving ONLY the rows `flex: 1 1 auto; overflow-y: auto` makes the
+   others fixed regions by construction. Nothing overlaps, so nothing needs a
+   z-index, a background or a negative margin, and the panel's border is left
+   alone. The markup is untouched; this is the same tree read as a layout. */
+.dm-body {
+  display: flex;
+  flex-direction: column;
+  /* The panel owns the scrolling now; this is only a padding box. */
+  overflow: hidden;
 }
 
-/* The negative margin and the padding cancel exactly, so this row's CONTENT
-   box still matches the rows beneath it — the grid columns have to keep
-   lining up, which is the whole point of the header. */
-.dm-body .lt-progress-header-row {
-  position: sticky;
-  /* Measured in DrawModal and published on the panel — the block above changes
-     height with the container tier and with a wrapping title. */
-  top: var(--dm-top-h, 5.5rem);
-  z-index: 2;
-  margin: 0 calc(-1 * var(--dm-gutter));
-  padding: 0.3rem var(--dm-gutter) 0.25rem;
-  background: var(--surface-card);
+.dm-panel .lt-progress-block {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-/* The absolutely-positioned rows are painted in their own layer; without this
-   they ride OVER the sticky headers instead of under them. */
-.dm-body .lt-progress-rows--race { z-index: 0; }
+.dm-panel .lt-progress-top,
+.dm-panel .lt-progress-header-row { flex: 0 0 auto; }
 
-/* THE SCRUBBER STAYS PUT. It belongs to the whole list, so it must not sit
-   wherever the list happens to end — that was the old page's failing. Sticky
-   inside the scrolling body, opaque so rows pass behind it rather than
-   through it. */
-.dm-body .lt-scrubber {
-  position: sticky;
-  bottom: 0;
-  z-index: 1;
-  margin: 0.75rem calc(-1 * var(--dm-gutter)) 0;
-  padding: 0.6rem var(--dm-gutter) 0.75rem;
-  background: var(--surface-card);
+/* THE SCROLLING REGION, whichever body this tab is showing.
+   height is overridden because the rows carry an inline one: their children
+   are absolutely positioned, so on an ordinary page the container must reserve
+   their space by hand. Here it must do the opposite — take the height flex
+   gives it and let the children overflow it, which is what makes them scroll.
+   Inline styles need !important to beat; the alternative is threading a prop
+   through the chart for a rule that belongs to the modal. */
+.dm-panel .lt-progress-rows--race,
+.dm-panel .lt-open-content,
+.dm-panel .compare-table-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  height: auto !important;
+}
+
+/* Held down at the bottom, a sibling of the list rather than the end of it. */
+.dm-panel .lt-scrubber {
+  flex: 0 0 auto;
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+  padding-bottom: 0.85rem;
   border-top: 1px solid var(--border);
 }
 
