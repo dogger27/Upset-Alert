@@ -295,3 +295,53 @@
   background: var(--pick-wrong-bg);
   border: 1px solid var(--pick-wrong);
 }
+
+/* ── Compare Picks: one column per bracket position ──────────────────────────
+   The picks used to stack vertically inside one cell per round, so reading
+   "who did everyone put in the final" meant scanning down four different
+   lists. A column per position puts each slot in a line of its own, and the
+   round header spans the columns belonging to it. */
+
+.compare-table--positions .cmp-round {
+  text-align: center;
+  padding-bottom: 0.15rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+/* The position numbers are scaffolding, not data — they name the column and
+   then get out of the way of the names underneath. */
+.compare-table--positions .cmp-pos {
+  text-align: center;
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  opacity: 0.75;
+  padding-top: 0;
+}
+
+/* Where one round ends and the next begins. Only a rule between GROUPS — a
+   line between every position would draw a grid and bury the grouping the
+   header is trying to show. */
+.compare-table--positions .cmp-group-start {
+  border-left: 1px solid var(--border-strong, var(--border));
+}
+
+.compare-table--positions .cmp-cell {
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+/* An empty slot is a held-open column, not a gap to be closed: without a
+   minimum it collapses and the positions stop lining up down the table. */
+.compare-table--positions .cmp-cell:empty { min-width: 5rem; }
+
+/* Seven pick columns where there were three: 12px of side padding on each was
+   84px of the row's width spent on nothing. */
+.compare-table--positions th,
+.compare-table--positions td { padding: 6px 8px; }
+
+/* The round header hands straight down to its position numbers — a rule
+   between them would cut the group in half, which is the opposite of what the
+   colSpan is saying. The line belongs under the position row only. */
+.compare-table--positions thead .cmp-round { border-bottom: 0; }
