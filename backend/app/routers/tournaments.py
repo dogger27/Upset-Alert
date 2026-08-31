@@ -556,9 +556,17 @@ async def compare_picks(
     max_round = max(m.round_number for m in matches)
     # Labelled by what the pick MEANS, not which round the match is in: the
     # winner of a quarterfinal is your predicted SEMIFINALIST, and the
-    # final's winner is your champion — so the columns read SF, F, W.
+    # final's winner is your champion — so the columns read QF, SF, F, W.
+    #
+    # QF is sent whether or not anything asks for it: the compare view's
+    # depth switch chooses between the quarter-finalists and the rounds after
+    # them, and paying for a second round trip to change a client-side setting
+    # would be worse than the handful of extra rows this costs. Ordered
+    # earliest-first so the client can render them in bracket order without
+    # sorting.
     tiers = [(rn, label) for rn, label in
-             ((max_round - 2, "SF"), (max_round - 1, "F"), (max_round, "W"))
+             ((max_round - 3, "QF"), (max_round - 2, "SF"),
+              (max_round - 1, "F"), (max_round, "W"))
              if rn >= 1]
     tier_of = {rn: label for rn, label in tiers}
     late = {m.id: (tier_of[m.round_number], m.match_number)
