@@ -309,32 +309,73 @@ export default function LeagueDetail() {
                   const hasMore = isPrevious && previousVisibleCount < g.items.length
                   return (
                     <div key={g.key} className="card league-tournaments-section">
-                      <div className="lt-category-group">
-                        {(() => {
-                          // Same name with both M and F present (Grand Slams, or any
-                          // other event running men's + women's draws simultaneously)
-                          // → disambiguate with "Men"/"Women" after the name.
-                          const gendersByName = new Map()
-                          for (const { tournament: t } of visibleItems) {
-                            if (!gendersByName.has(t.name)) gendersByName.set(t.name, new Set())
-                            gendersByName.get(t.name).add(t.gender)
-                          }
-                          return visibleItems.map(({ tournament: t, picker_count }) => (
-                            <DrawCard
-                              key={t.id}
-                              tournament={t}
-                              pickerCount={picker_count}
-                              leagueId={isGlobal ? null : Number(id)}
-                              showGenderLabel={gendersByName.get(t.name)?.size > 1}
-                              onOpen={() => setOpenDraw({
-                                tournament: t,
-                                pickerCount: picker_count,
-                                showGenderLabel: gendersByName.get(t.name)?.size > 1,
-                              })}
-                            />
-                          ))
-                        })()}
-                      </div>
+                      {(() => {
+                        // Same name with both M and F present (Grand Slams, or any
+                        // other event running men's + women's draws simultaneously)
+                        // → disambiguate with "Men"/"Women" after the name.
+                        const gendersByName = new Map()
+                        for (const { tournament: t } of visibleItems) {
+                          if (!gendersByName.has(t.name)) gendersByName.set(t.name, new Set())
+                          gendersByName.get(t.name).add(t.gender)
+                        }
+                        const open = ({ tournament: t, picker_count }) => () => setOpenDraw({
+                          tournament: t,
+                          pickerCount: picker_count,
+                          showGenderLabel: gendersByName.get(t.name)?.size > 1,
+                        })
+
+                        /* TWO SHAPES, BECAUSE THE QUESTION CHANGES.
+                           A live draw is asking "how am I doing" — one or two
+                           of them, each worth a card with room for a standing
+                           and a progress bar. A finished draw is asking "where
+                           did I come" across 34 of them, and 34 cards is a
+                           wall to scan: the eye has to re-find the rank in a
+                           different place on every tile. Rows put every finish
+                           in one column, which is what comparing them needs. */
+                        if (isPrevious) {
+                          return (
+                            <div className="dt-wrap">
+                              <table className="dt-table">
+                                <thead>
+                                  <tr>
+                                    <th className="dt-h-draw">Draw</th>
+                                    <th className="dt-h-dates">Dates</th>
+                                    <th className="dt-h-surface">Surface</th>
+                                    <th className="dt-h-num">Finish</th>
+                                    <th className="dt-h-num" title="Correct picks">✓</th>
+                                    <th className="dt-h-num">Score</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {visibleItems.map(item => (
+                                    <DrawRow
+                                      key={item.tournament.id}
+                                      tournament={item.tournament}
+                                      leagueId={isGlobal ? null : Number(id)}
+                                      showGenderLabel={gendersByName.get(item.tournament.name)?.size > 1}
+                                      onOpen={open(item)}
+                                    />
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )
+                        }
+                        return (
+                          <div className="lt-category-group">
+                            {visibleItems.map(item => (
+                              <DrawCard
+                                key={item.tournament.id}
+                                tournament={item.tournament}
+                                pickerCount={item.picker_count}
+                                leagueId={isGlobal ? null : Number(id)}
+                                showGenderLabel={gendersByName.get(item.tournament.name)?.size > 1}
+                                onOpen={open(item)}
+                              />
+                            ))}
+                          </div>
+                        )
+                      })()}
                       {hasMore && (
                         <div ref={previousLoadMoreRef} className="lt-load-more-sentinel">
                           Loading more…
@@ -488,6 +529,71 @@ function DrawCard({ tournament: t, pickerCount, leagueId, showGenderLabel, onOpe
   )
 }
 
+/* ONE FINISHED DRAW, AS A ROW.
+
+   Same data and same query key as DrawCard — a completed draw just answers a
+   different question, so it is written as a line to be compared with the lines
+   above and below it rather than as a tile to be read on its own.
+
+   No progress bar: every draw in this table played to a final, so a bar that is
+   always full says nothing. The finish and the score are what differ. */
+function DrawRow({ tournament: t, leagueId, showGenderLabel, onOpen }) {
+  const { user } = useAuth()
+  const { data } = useQuery({
+    queryKey: leagueId != null ? ['round-scores', leagueId, t.id] : ['global-round-scores', t.id],
+    queryFn: leagueId != null ? () => getRoundScores(leagueId, t.id) : () => getGlobalRoundScores(t.id),
+    refetchInterval: 60_000,
+  })
+
+  const entries = data?.entries ?? []
+  const mine = user ? entries.findIndex(e => e.user_id === user.id) : -1
+  const me = mine >= 0 ? entries[mine] : null
+
+  return (
+    <tr className="dt-row" onClick={onOpen} tabIndex={0} role="button"
+        onKeyDown={e => {
+          // A row is not natively focusable or activatable; without this the
+          // table is reachable by keyboard and then does nothing.
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen() }
+        }}>
+      <td className="dt-draw">
+        <span className={`lt-gender-badge lt-gender-badge--${t.gender === 'M' ? 'm' : 'f'}`}>
+          {t.gender === 'M' ? 'ATP' : 'WTA'} {tierLabel(t.category)}
+        </span>
+        <span className="dt-name">
+          {t.name}{showGenderLabel ? ` ${t.gender === 'M' ? 'Men' : 'Women'}` : ''} {t.year}
+        </span>
+      </td>
+      <td className="dt-dates">
+        {(t.start_date || t.end_date)
+          ? `${fmtDrawDate(t.start_date)}${t.end_date ? ` – ${fmtDrawDate(t.end_date)}` : ''}`
+          : '–'}
+      </td>
+      <td className="dt-surface">{t.surface || '–'}</td>
+      {me ? (
+        <>
+          {/* The finish reads as one fact, so the rank and the field size are
+              one cell — splitting them into two columns invited the eye to
+              compare 3 with 22 down the page, which means nothing. */}
+          <td className="dt-num dt-finish">
+            <span className="dt-finish-num">{mine + 1}</span>
+            <span className="dt-finish-of">of {entries.length}</span>
+          </td>
+          <td className="dt-num dt-correct">{me.correct_count ?? 0}</td>
+          <td className="dt-num dt-score">{me.total} pts</td>
+        </>
+      ) : (
+        /* Not in this draw. One spanning cell rather than three dashes: three
+           empty columns read as missing data, and this is not missing — the
+           person simply did not enter. */
+        <td className="dt-num dt-absent" colSpan={3}>
+          {entries.length > 0 ? `${entries.length} competed` : 'No picks'}
+        </td>
+      )}
+    </tr>
+  )
+}
+
 /* THE STANDINGS, IN A LAYER OF THEIR OWN.
 
    The chart is rendered unchanged — this only gives it somewhere to live where
@@ -497,6 +603,25 @@ function DrawCard({ tournament: t, pickerCount, leagueId, showGenderLabel, onOpe
    Same conventions as InviteModal below. */
 function DrawModal({ tournament, pickerCount, leagueId, leagueMemberCount,
                      showRealName, showGenderLabel, onClose }) {
+  /* MEASURE THE PINNED HEADER, DO NOT GUESS AT IT.
+     The column header (Competitor / rounds / Score) sticks directly below the
+     identity block, so it needs that block's height — and the height is not a
+     constant: the title wraps on a narrow panel, and the tab row and badge
+     both change size across the chart's container tiers. A hardcoded offset
+     leaves a gap on one width and overlaps on another. */
+  const panelRef = useRef(null)
+  useEffect(() => {
+    const panel = panelRef.current
+    const top = panel?.querySelector('.lt-progress-top')
+    if (!top || typeof ResizeObserver === 'undefined') return
+    const measure = () =>
+      panel.style.setProperty('--dm-top-h', `${top.offsetHeight}px`)
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(top)
+    return () => ro.disconnect()
+  }, [])
+
   useEffect(() => {
     const onKey = e => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
@@ -510,7 +635,7 @@ function DrawModal({ tournament, pickerCount, leagueId, leagueMemberCount,
 
   return (
     <div className="dm-backdrop" onClick={onClose} role="presentation">
-      <div className="dm-panel" role="dialog" aria-modal="true"
+      <div className="dm-panel" ref={panelRef} role="dialog" aria-modal="true"
            aria-label={`${tournament.name} standings`}
            onClick={e => e.stopPropagation()}>
         <button type="button" className="dm-close" onClick={onClose} aria-label="Close">
@@ -661,6 +786,13 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
 
   return (
     <div className="lt-progress-block">
+      {/* THE IDENTITY AND THE TABS ARE ONE PIECE OF FURNITURE. Wrapped so the
+          modal can pin them with a single sticky element: two adjacent sticky
+          siblings would each need to know the other's height, and this header
+          changes height when the title wraps. Outside the modal the wrapper is
+          an ordinary block and changes nothing — both children were already
+          block-level siblings in this order. */}
+      <div className="lt-progress-top">
       <div className="lt-progress-header">
         <div className="lt-header-left">
           <span className={`lt-gender-badge lt-gender-badge--${t.gender === 'M' ? 'm' : 'f'}`}>
@@ -684,6 +816,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
         <button type="button" role="tab" aria-selected={tab === 'compare'}
           className={`lt-tab${tab === 'compare' ? ' lt-tab--active' : ''}`}
           onClick={() => setTab('compare')}>Compare Picks</button>
+      </div>
       </div>
 
       {toast && <LgToast key={toast.key} message={toast.msg} onDone={() => setToast(null)} />}
