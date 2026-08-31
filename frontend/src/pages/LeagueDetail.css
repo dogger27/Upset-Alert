@@ -1026,7 +1026,21 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   position: relative;
   display: flex;
   flex-direction: column;
-  width: min(72rem, 100%);
+  /* AS WIDE AS THE DATA, up to the window.
+     A fixed 72rem was a cap on the standings and a straitjacket on Compare
+     Picks, which is seven columns of names and wanted to keep scrolling
+     sideways inside a panel with room to spare beside it.
+     fit-content sizes the panel from whichever tab is showing, so it also
+     changes width when the tab does — no measuring, no state, just the
+     content asking for what it needs.
+     min-width keeps the floor: the standings' bar track is a `1fr` grid
+     column, and a `1fr` inside a shrink-to-fit parent resolves against
+     max-content rather than the room available, so without a floor the
+     standings tab would size itself off its own contents instead of filling
+     the panel. */
+  width: fit-content;
+  min-width: min(72rem, 100%);
+  max-width: 100%;
   /* A DEFINITE HEIGHT, not just a cap.
      The list grows into the space the fixed regions leave — and flex-grow only
      has space to grow into when its container's height is definite. With
@@ -1058,12 +1072,22 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   padding: 0;
   color: var(--text-muted);
   background: var(--surface-card);
-  border: 1px solid var(--border);
+  /* --border is the hairline BETWEEN things that are already adjacent; a
+     control floating on the panel needs an edge of its own, and at #253430 on
+     a dark surface this one was invisible until hovered. The resting state is
+     what the button is read in almost all the time, so it takes the visible
+     colour and hover steps up from there rather than being the only state
+     that has an edge at all. */
+  border: 1px solid var(--text-muted);
   border-radius: 8px;
   cursor: pointer;
 }
 
-.dm-close:hover { color: var(--text); border-color: var(--text-muted); }
+.dm-close:hover {
+  color: var(--text-strong, var(--text));
+  border-color: var(--text-strong, var(--text));
+  background: var(--atp-tint);
+}
 
 .dm-body {
   flex: 1 1 auto;
