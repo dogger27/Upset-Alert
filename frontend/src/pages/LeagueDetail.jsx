@@ -910,7 +910,12 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                    style={{ '--slots': cmpTotalSlots }}>
                 <div className="lt-picks-rounds">
                   {cmpRounds.map((r, i) => (
-                    <div key={r} className="lt-picks-round"
+                    /* The divider belongs on this line as well. Without it the
+                       rule started below the round names, so the thing it was
+                       separating was the only part of the column it did not
+                       reach. */
+                    <div key={r}
+                         className={`lt-picks-round${i > 0 ? ' lt-picks-group' : ''}`}
                          style={{ gridColumn: `span ${cmpSlots[i]}` }}>
                       {ROUND_TITLES[r] ?? r}
                     </div>
