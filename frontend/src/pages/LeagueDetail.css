@@ -856,3 +856,189 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 .lt-tab--active {
   background: var(--green, #2d6a4f); border-color: transparent; color: #fff;
 }
+
+/* ── Draw cards, and the standings layer they open ───────────────────────────
+   The page used to hold every competitor of every draw at once. These two
+   blocks are what replaced that: a fixed-height card per draw, and one layer
+   at a time carrying the full chart. See DrawCard in LeagueDetail.jsx. */
+
+/* AUTO-FILL, NOT A FIXED COUNT. The Leagues page is narrower with a league
+   selected than it is on Global, and it sits inside a card whose width the
+   grid must not fight. minmax lets one column happen on a phone and four on a
+   wide desktop without a breakpoint per step. */
+.lt-category-group {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.75rem;
+}
+
+.dc-card {
+  /* A button, so it is reachable by keyboard and announces itself as
+     activating something — the whole card is the target, not a link buried
+     inside it. All the button chrome has to be undone by hand. */
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.45rem;
+  width: 100%;
+  padding: 0.85rem 0.9rem 0.9rem;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+}
+
+.dc-card:hover {
+  border-color: var(--accent, var(--text-muted));
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.22);
+}
+
+.dc-card:focus-visible {
+  outline: 2px solid var(--accent, #7aa9ff);
+  outline-offset: 2px;
+}
+
+.dc-top {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  /* The surface is pushed to the far edge; the dates keep the badge company. */
+  flex-wrap: wrap;
+}
+
+.dc-dates   { font-size: 0.78rem; color: var(--text-muted); }
+.dc-surface { margin-left: auto; font-size: 0.78rem; color: var(--text-muted); }
+
+.dc-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+/* The viewer's own standing, set large because it is the reason to open the
+   card at all. The rank and its denominator are one sentence, so they share a
+   baseline rather than being stacked. */
+.dc-rank { display: flex; align-items: baseline; gap: 0.4rem; }
+
+.dc-rank-num {
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--pick-correct-line, #4ade80);
+}
+
+.dc-rank-of { font-size: 0.85rem; color: var(--text-muted); }
+
+/* Someone not in this draw has no rank to show, so the line carries the size
+   of the field instead — at the body size, since there is no number to lead
+   with and a large grey count would read as a score. */
+.dc-rank--out .dc-rank-of { font-size: 0.92rem; }
+
+.dc-bar {
+  width: 100%;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--n-300, rgb(255 255 255 / 0.12));
+  overflow: hidden;
+}
+
+.dc-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--pick-correct-line, #4ade80);
+}
+
+.dc-foot { font-size: 0.78rem; color: var(--text-muted); }
+
+/* ── The standings layer ─────────────────────────────────────────────────── */
+
+.dm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgb(0 0 0 / 0.62);
+  backdrop-filter: blur(2px);
+}
+
+.dm-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(72rem, 100%);
+  /* Bounded, so the BODY scrolls rather than the page. An unbounded panel
+     grows with the field and takes the scrollbar back to the document, which
+     is the thing this whole layer exists to stop. */
+  max-height: min(90vh, 100%);
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 18px 48px rgb(0 0 0 / 0.45);
+  overflow: hidden;
+}
+
+.dm-close {
+  position: absolute;
+  top: 0.7rem;
+  right: 0.7rem;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  color: var(--text-muted);
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.dm-close:hover { color: var(--text); border-color: var(--text-muted); }
+
+.dm-body {
+  flex: 1 1 auto;
+  min-height: 0;          /* or the flex child refuses to shrink and never scrolls */
+  overflow-y: auto;
+  padding: 1rem 1.1rem 0;
+}
+
+/* Room for the close button, which overlaps the chart's own header row. */
+.dm-body .lt-progress-header { padding-right: 2.4rem; }
+.dm-body .lt-progress-block  { margin-bottom: 0; }
+
+/* THE SCRUBBER STAYS PUT. It belongs to the whole list, so it must not sit
+   wherever the list happens to end — that was the old page's failing. Sticky
+   inside the scrolling body, opaque so rows pass behind it rather than
+   through it. */
+.dm-body .lt-scrubber {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  margin-top: 0.75rem;
+  padding: 0.6rem 0 0.75rem;
+  background: var(--surface-card);
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 640px) {
+  /* Full-bleed on a phone: 1.5rem of backdrop on each side of a standings
+     table is width the table needs more than the backdrop does. */
+  .dm-backdrop { padding: 0; }
+  .dm-panel { max-height: 100%; height: 100%; border: 0; border-radius: 0; }
+  .dm-body { padding: 0.75rem 0.75rem 0; }
+}
+
+/* An open draw leads with its state rather than a score, so the line is set
+   like a label instead of a quiet aside. */
+.dc-rank-open { font-weight: 600; color: var(--pick-correct-line, #4ade80); }

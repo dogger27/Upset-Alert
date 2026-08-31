@@ -64,6 +64,11 @@ export default function LeagueDetail() {
   // the league selector arrow); this page just owns the modals they open.
   const { editing, setEditing, showInvite, setShowInvite } = useOutletContext()
 
+  // The draw whose standings are open, or null. Held HERE rather than in the
+  // card: the modal must not live inside the scrolling list it was opened
+  // from, or it inherits that list's stacking and clipping.
+  const [openDraw, setOpenDraw] = useState(null)
+
   const [statusFilter, setStatusFilter] = useState(null) // null = auto (first non-empty)
   const [showMembers, setShowMembers] = useState(false) // "All Members" view instead of draws
   const [memberSortCol, setMemberSortCol] = useState(null) // null | 'atp' | 'wta' | 'combined'
@@ -315,14 +320,17 @@ export default function LeagueDetail() {
                             gendersByName.get(t.name).add(t.gender)
                           }
                           return visibleItems.map(({ tournament: t, picker_count }) => (
-                            <RoundProgressChart
+                            <DrawCard
                               key={t.id}
                               tournament={t}
                               pickerCount={picker_count}
                               leagueId={isGlobal ? null : Number(id)}
-                              leagueMemberCount={isGlobal ? null : league.member_count}
-                              showRealName={isGlobal ? false : league.show_real_name}
                               showGenderLabel={gendersByName.get(t.name)?.size > 1}
+                              onOpen={() => setOpenDraw({
+                                tournament: t,
+                                pickerCount: picker_count,
+                                showGenderLabel: gendersByName.get(t.name)?.size > 1,
+                              })}
                             />
                           ))
                         })()}
@@ -341,6 +349,17 @@ export default function LeagueDetail() {
         )
       })()}
 
+      {openDraw && (
+        <DrawModal
+          tournament={openDraw.tournament}
+          pickerCount={openDraw.pickerCount}
+          leagueId={isGlobal ? null : Number(id)}
+          leagueMemberCount={isGlobal ? null : league?.member_count}
+          showRealName={isGlobal ? false : league?.show_real_name}
+          showGenderLabel={openDraw.showGenderLabel}
+          onClose={() => setOpenDraw(null)}
+        />
+      )}
     </div>
   )
 }
@@ -360,6 +379,160 @@ function getRoundLabel(index, numRounds) {
 }
 
 const ROW_SLOT = 41 // px per row slot (bar height 34px + gap 7px)
+
+/* ONE DRAW AS A CARD, and the full standings behind it.
+
+   The Leagues page used to stack a whole RoundProgressChart per draw. Every
+   competitor of every draw was in the document at once, so the page grew with
+   the field — 29 rows a draw today, and the whole point of the site is that
+   the field keeps growing. Nothing was scrollable in its own right either: the
+   scrubber for a draw sat wherever that draw's rows happened to end, so
+   reaching it meant scrolling the page past everyone.
+
+   A card is a fixed height whatever the field does. The standings open in a
+   layer of their own, where the list scrolls and the scrubber stays put.
+
+   Card and modal deliberately run the SAME query key as the chart, so opening
+   one costs no request — React Query serves it from cache and both stay on the
+   same 60s refetch. */
+function DrawCard({ tournament: t, pickerCount, leagueId, showGenderLabel, onOpen }) {
+  const { user } = useAuth()
+  const { data } = useQuery({
+    queryKey: leagueId != null ? ['round-scores', leagueId, t.id] : ['global-round-scores', t.id],
+    queryFn: leagueId != null ? () => getRoundScores(leagueId, t.id) : () => getGlobalRoundScores(t.id),
+    refetchInterval: 60_000,
+  })
+
+  const entries = data?.entries ?? []
+  const timeline = data?.matches_timeline ?? []
+  const numRounds = entries.length > 0
+    ? entries[0].round_points.length
+    : (t.num_rounds ?? ROUND_COLORS.length)
+
+  /* WHERE THE VIEWER STANDS. Plain index+1, the same arithmetic the standings
+     row uses — a card that ranked ties differently from the list it opens
+     would read as one of the two being wrong. */
+  const mine = user ? entries.findIndex(e => e.user_id === user.id) : -1
+  /* HOW FAR THE DRAW HAS GOT. The timeline holds the matches that have been
+     played AND scored, in order — it is what the scrubber scrubs — so its
+     length is the numerator. The denominator is not on the payload, but it
+     does not need to be: a single-elimination draw of N entrants plays exactly
+     N-1 matches, and that stays right when there are byes (a 96-draw plays 95)
+     because a bye is not a match. */
+  const played = timeline.length
+  const total = t.draw_size > 1 ? t.draw_size - 1 : played
+  const last = played > 0 ? timeline[played - 1] : null
+  const through = last ? getRoundLabel(last.round_number - 1, numRounds) : null
+  const pct = total > 0 ? Math.min(100, (played / total) * 100) : 0
+
+  return (
+    <button type="button" className="dc-card" onClick={() => onOpen(t)}>
+      <div className="dc-top">
+        <span className={`lt-gender-badge lt-gender-badge--${t.gender === 'M' ? 'm' : 'f'}`}>
+          {t.gender === 'M' ? 'ATP' : 'WTA'} {tierLabel(t.category)}
+        </span>
+        {(t.start_date || t.end_date) && (
+          <span className="dc-dates">
+            {fmtDrawDate(t.start_date)}{t.end_date ? ` – ${fmtDrawDate(t.end_date)}` : ''}
+          </span>
+        )}
+        {t.surface && <span className="dc-surface">{t.surface}</span>}
+      </div>
+
+      <span className="dc-title">
+        {t.name}{showGenderLabel ? ` ${t.gender === 'M' ? 'Men' : 'Women'}` : ''} {t.year}
+      </span>
+
+      {/* THE VIEWER'S OWN LINE FIRST, because it is the reason to open the
+          card. Someone not in this draw gets the size of the field instead —
+          a rank of nothing would be a lie, and an empty slot reads as broken. */}
+      {t.status === 'open' ? (
+        /* NOBODY HAS A RANK BEFORE PLAY. An open draw's entries are in no
+           meaningful order — the chart draws them as a plain list for exactly
+           that reason — so a position here would be an invented standing. Say
+           what the draw is waiting for instead. */
+        <div className="dc-rank dc-rank--out">
+          <span className="dc-rank-of dc-rank-open">Predictions open</span>
+        </div>
+      ) : mine >= 0 ? (
+        <div className="dc-rank">
+          <span className="dc-rank-num">{mine + 1}</span>
+          <span className="dc-rank-of">
+            of {entries.length} · {entries[mine].total} pts
+          </span>
+        </div>
+      ) : (
+        <div className="dc-rank dc-rank--out">
+          <span className="dc-rank-of">
+            {entries.length > 0
+              ? `${entries.length} competitor${entries.length !== 1 ? 's' : ''}`
+              : (pickerCount ? `${pickerCount} picking` : 'No picks yet')}
+          </span>
+        </div>
+      )}
+
+      <div className="dc-bar" aria-hidden="true">
+        <div className="dc-bar-fill" style={{ width: `${pct}%` }} />
+      </div>
+
+      <span className="dc-foot">
+        {t.status === 'open'
+          ? (entries.length > 0
+              ? `${entries.length} entered`
+              : (pickerCount ? `${pickerCount} picking` : 'No picks yet'))
+          : total > 0
+            ? `${played} / ${total} matches${through ? ` · through ${through}` : ''}`
+            : 'Not started'}
+      </span>
+    </button>
+  )
+}
+
+/* THE STANDINGS, IN A LAYER OF THEIR OWN.
+
+   The chart is rendered unchanged — this only gives it somewhere to live where
+   the list can scroll without the page scrolling with it. Escape and the
+   backdrop close it, and the body is frozen underneath: a wheel over a modal
+   that scrolls the page behind it is how the layer stops feeling like a layer.
+   Same conventions as InviteModal below. */
+function DrawModal({ tournament, pickerCount, leagueId, leagueMemberCount,
+                     showRealName, showGenderLabel, onClose }) {
+  useEffect(() => {
+    const onKey = e => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prev
+    }
+  }, [onClose])
+
+  return (
+    <div className="dm-backdrop" onClick={onClose} role="presentation">
+      <div className="dm-panel" role="dialog" aria-modal="true"
+           aria-label={`${tournament.name} standings`}
+           onClick={e => e.stopPropagation()}>
+        <button type="button" className="dm-close" onClick={onClose} aria-label="Close">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               strokeWidth="2" strokeLinecap="round">
+            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+        <div className="dm-body">
+          <RoundProgressChart
+            tournament={tournament}
+            pickerCount={pickerCount}
+            leagueId={leagueId}
+            leagueMemberCount={leagueMemberCount}
+            showRealName={showRealName}
+            showGenderLabel={showGenderLabel}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMemberCount, showRealName, showGenderLabel }) {
   const { user } = useAuth()
