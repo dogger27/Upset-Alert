@@ -625,7 +625,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 /* Completed/active view: bracket button, then draw-history button, in their own far-left columns */
 .lt-progress-row--abs,
 .lt-progress-header-row {
-  grid-template-columns: 28px 22px 22px var(--name-col-width, 120px) 1fr 52px;
+  grid-template-columns: 28px 22px 22px var(--name-col-width, 120px) 1fr 22px 52px;
 }
 .lt-progress-row--abs {
   position: absolute; width: 100%;
@@ -701,6 +701,18 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
     2px 0 0 #fff, -2px 0 0 #fff, 0 2px 0 #fff, 0 -2px 0 #fff,
     0 0 8px #fff, 0 0 16px rgba(255,255,255,0.9), 0 0 28px rgba(255,255,255,0.7);
 }
+/* Correct picks, quieter than the score it sits beside: the score is the
+   standing, this explains how it was reached. Tabular figures so the column
+   stays a column as counts pass 9. */
+.lt-progress-correct {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .lt-progress-total { font-size: 0.8rem; color: var(--ink, var(--n-950)); font-weight: 700; text-align: center; white-space: nowrap; }
 .lt-progress-col-header { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
 .lt-progress-header-row { margin-bottom: 0.2rem; }
@@ -740,7 +752,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   .lt-bar-track { display: none; }
   .lt-progress-row--abs,
   .lt-progress-header-row {
-    grid-template-columns: 28px 22px 22px var(--name-col-width, 120px) 52px;
+    grid-template-columns: 28px 22px 22px var(--name-col-width, 120px) 22px 52px;
   }
 }
 @container (max-width: 530px) {
@@ -768,11 +780,15 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   .lt-pos-num, .lt-hcol-pos { display: none; }
   .lt-progress-row--abs,
   .lt-progress-header-row {
-    grid-template-columns: 28px 22px var(--name-col-width, 92px) 52px;
+    grid-template-columns: 28px 22px var(--name-col-width, 92px) 22px 52px;
   }
 }
 @container (max-width: 300px) {
   .lt-bracket-btn, .lt-hcol-bracket, .lt-history-btn, .lt-hcol-history { display: none; }
+  /* Last tier standing: the name and what it scored. The correct count is a
+     second reading of the same performance, so it goes here rather than
+     crowding the score it explains. */
+  .lt-progress-correct { display: none; }
   .lt-progress-row--abs,
   .lt-progress-header-row {
     grid-template-columns: var(--name-col-width, 92px) 52px;
