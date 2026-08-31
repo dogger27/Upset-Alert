@@ -743,6 +743,16 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
    the vertical ones between rounds, and two more of that weight would compete
    with them. */
 .lt-progress-header-row {
+  /* ONE HEIGHT FOR BOTH TABS.
+     Compare's header is two lines (round, then position) where Standings' is
+     one, so switching tabs made the whole table step down and back up again.
+     The taller one wins and Standings pads to meet it: a label moving is a
+     detail, every row of data moving is the table jumping under the reader.
+     Driven by a single variable that the compare header also sets its own
+     height from, so the two cannot drift apart. box-sizing is border-box, so
+     the row's own padding is added on here. */
+  --hdr-track-h: 36px;   /* 34.6px of two-line header, plus headroom */
+  min-height: calc(var(--hdr-track-h) + 0.6rem);
   margin-bottom: 0.2rem;
   padding: 0.3rem 0;
   border-top: 1px solid var(--border-strong);
@@ -1339,8 +1349,15 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   min-width: 0;
 }
 
-/* The header stacks two lines in the one cell the bar labels used to occupy. */
-.lt-picks-track--head { display: block; }
+/* The header stacks two lines in the one cell the bar labels used to occupy,
+   at exactly the height the row reserves for it either way. The lines are
+   bottom-aligned so the position numbers sit closest to the picks they name. */
+.lt-picks-track--head {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  height: var(--hdr-track-h, 34px);
+}
 
 .lt-picks-rounds,
 .lt-picks-positions {
@@ -1360,6 +1377,9 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-strong, var(--text));
+  /* Explicit, so the two lines add up to --hdr-track-h regardless of the
+     family's default leading. */
+  line-height: 1.15;
   padding-bottom: 0.15rem;
 }
 
@@ -1372,6 +1392,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   font-weight: 600;
   color: var(--text-muted);
   opacity: 0.7;
+  line-height: 1.15;
   font-family: inherit;
   background: none;
   border: 0;
