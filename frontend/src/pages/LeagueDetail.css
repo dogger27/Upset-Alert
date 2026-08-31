@@ -1347,6 +1347,14 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   align-items: center;
   gap: 3px;
   min-width: 0;
+  /* THE ROW IS AS TALL AS ITS TRACK, so both tracks must be the same height.
+     Rows are absolutely positioned on a fixed 41px pitch (ROW_SLOT = 34px of
+     bar + 7px gap), but their own height comes from their content — .lt-bar-track
+     is 34px, and a line of chips is nearer 24px. So the compare rows sat about
+     five pixels higher inside the identical slot, and the whole table appeared
+     to lift when the tab changed while the ruled header stayed put.
+     34px, matching .lt-bar-track above: the number ROW_SLOT is built from. */
+  min-height: 34px;
 }
 
 /* The header stacks two lines in the one cell the bar labels used to occupy,
