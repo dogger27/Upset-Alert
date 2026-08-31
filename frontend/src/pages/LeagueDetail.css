@@ -1292,3 +1292,76 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   max-width: 100%;
   margin-inline: auto;
 }
+
+/* ── Compare Picks, inside the standings row ─────────────────────────────────
+   The tab swaps ONLY the track: the buttons, rank, name, correct count and
+   score are the same cells in the same columns either way, so a row does not
+   move under the reader when they switch. See RoundProgressChart. */
+
+/* One grid, one column count, shared by the round labels, the position numbers
+   and every row of picks — which is what keeps a name under its own heading.
+   --slots is published by the chart from the data. */
+.lt-picks-track {
+  display: grid;
+  grid-template-columns: repeat(var(--slots, 7), minmax(0, 1fr));
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+/* The header stacks two lines in the one cell the bar labels used to occupy. */
+.lt-picks-track--head { display: block; }
+
+.lt-picks-rounds,
+.lt-picks-positions {
+  display: grid;
+  grid-template-columns: repeat(var(--slots, 7), minmax(0, 1fr));
+  gap: 3px;
+}
+
+.lt-picks-round {
+  text-align: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* Scaffolding, not data: the numbers name the column and then get out of the
+   way of the names underneath. */
+.lt-picks-pos {
+  text-align: center;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+.lt-picks-cell { min-width: 0; }
+
+/* Where one round ends and the next begins — between GROUPS only. A rule
+   between every position would draw a grid and bury the grouping the header
+   is making. */
+.lt-picks-group { border-left: 2px solid var(--text-muted); padding-left: 3px; }
+.lt-picks-round:first-child,
+.lt-picks-positions .lt-picks-pos:first-child,
+.lt-picks-cell:first-child { border-left: 0; padding-left: 0; }
+
+/* The chips size to the column they are in rather than to their text. */
+.lt-picks-cell .compare-pick-name {
+  justify-content: center;
+  font-size: 0.8rem;
+  gap: 4px;
+  padding: 1px 5px;
+}
+.lt-picks-cell .compare-pick-label {
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lt-picks-cell .compare-pick-entry { margin-left: 0; }
+
+/* The header row holds two lines on this tab, so it cannot keep the bar
+   track's fixed height. */
+.lt-progress-header-row:has(.lt-picks-track--head) { height: auto; }

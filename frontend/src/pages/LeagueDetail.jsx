@@ -3,10 +3,12 @@ import { useParams, useNavigate, useOutletContext } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getLeague, getLeagueTournaments, getRoundScores, updateLeague, setMemberAdmin, removeMember, deleteLeague, shareLeagueByEmail, getGrandSlamTotals } from '../api/leagues'
 import { getGlobalRoundScores, getGlobalDraws, getGlobalGSTotals, listTournaments } from '../api/tournaments'
-import ComparePicksTable from '../components/ComparePicksTable'
+import { PickChip, ROUND_SLOTS, ROUND_TITLES } from '../components/ComparePicksTable'
+import { getComparePicks } from '../api/tournaments'
 import { useAuth } from '../store/auth'
 import UserName from '../components/UserName'
 import { computeCohortInfo, getDisplayStatus, DISPLAY_STATUS_LABELS } from '../utils/drawStatus.js'
+import { rootFontPx, textWidth } from '../utils/text'
 import './LeagueDetail.css'
 
 const SCORING_LABELS = {
@@ -659,6 +661,26 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
     refetchInterval: 60_000,
   })
 
+  /* THE PICKS, FOR THE SAME ROWS. Compare is no longer a separate table — it
+     is this table with the bar track swapped out — so the picks have to arrive
+     here and be joined to the standings entries by user id. Fetched only when
+     the tab is showing, but the hook itself is unconditional: hooks run before
+     any branch, always. */
+  const { data: cmp } = useQuery({
+    queryKey: ['compare-picks', t.id, leagueId ?? 'global'],
+    queryFn: () => getComparePicks(t.id, leagueId),
+    staleTime: 60_000,
+    enabled: tab === 'compare',
+  })
+  const comparing = tab === 'compare'
+  const cmpRounds = cmp?.rounds ?? []
+  const cmpSlots = cmpRounds.map(r => Math.max(
+    ROUND_SLOTS[r] ?? 1,
+    ...(cmp?.users ?? []).map(u => (u.picks[r] ?? []).length),
+  ))
+  const cmpTotalSlots = cmpSlots.reduce((a, b) => a + b, 0)
+  const cmpByUser = Object.fromEntries((cmp?.users ?? []).map(u => [u.user_id, u.picks]))
+
   const entries = rawData?.entries ?? []
   const roundsWithMatches = rawData?.rounds_with_matches ?? []
   const completedRoundNumsFromServer = rawData?.completed_round_nums ?? null
@@ -717,7 +739,22 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
   // When the top 3 get a place icon (🏆/🥈/🥉) it shares this same cell, so reserve extra room for
   // it too — otherwise a draw with only short usernames sizes the column just for the text, and the
   // icon on top of that pushes the name into ellipsis truncation.
-  const nameColWidth = Math.max(70, ...entries.map(e => e.username.length * 8.5)) + 8 + (finalPlayed ? 24 : 0)
+  /* MEASURE THE NAMES, DO NOT COUNT THEIR LETTERS.
+     8.5px a character is the same estimate the schedule's name fitter was
+     built on and had to abandon: "iamjaycheung" and "WWWWWWWWWWWW" are the
+     same length and nothing like the same width, so the column was sized for a
+     string nobody had — too wide for this league, and one bad name away from
+     being too narrow for another. A canvas measures the real strings in the
+     real font with no layout and no reflow.
+     0.85rem/600 is what .lt-progress-name draws in; the extras are what shares
+     the cell with the text — the place medal on a finished draw, and a couple
+     of pixels so the longest name does not finish flush against the next
+     column. */
+  const nameFontPx = rootFontPx() * 0.85
+  const nameColWidth = Math.max(
+    70,
+    ...entries.map(e => textWidth(e.username, nameFontPx, 600)),
+  ) + 6 + (finalPlayed ? 24 : 0)
   const PLACE_ICONS = ['🏆', '🥈', '🥉']
 
   const activeRounds = roundsWithMatches.length > 0
@@ -802,8 +839,8 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
       </div>
 
       {toast && <LgToast key={toast.key} message={toast.msg} onDone={() => setToast(null)} />}
-      {tab === 'compare' ? (
-        <ComparePicksTable drawId={t.id} leagueId={leagueId} />
+      {comparing && cmp?.hidden ? (
+        <p className="lt-progress-empty">Picks are hidden until the draw locks.</p>
       ) : entries.length === 0 ? (
         <p className="lt-progress-empty">No picks submitted yet.</p>
       ) : t.status === 'open' ? (
@@ -863,13 +900,41 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
               ✓ / {effectiveScrubPos}
             </span>
             <span className="lt-progress-total lt-progress-col-header">Score</span>
-            <div className="lt-bar-track">
-              {activeRounds.map((i, col) => (
-                <div key={i} className="lt-bar-col lt-bar-col--label" style={{ flex: colFlex[col] }} title={roundWinnerLabels[col] ?? undefined}>
-                  {getRoundLabel(i, numRounds)}
+            {comparing ? (
+              /* The same column, two lines: the round that owns a group, and
+                 the bracket position of each slot inside it. Both are grids of
+                 cmpTotalSlots equal columns, so they line up with each other
+                 AND with every row below — one shared column count is what
+                 keeps the header honest. */
+              <div className="lt-picks-track lt-picks-track--head"
+                   style={{ '--slots': cmpTotalSlots }}>
+                <div className="lt-picks-rounds">
+                  {cmpRounds.map((r, i) => (
+                    <div key={r} className="lt-picks-round"
+                         style={{ gridColumn: `span ${cmpSlots[i]}` }}>
+                      {ROUND_TITLES[r] ?? r}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+                <div className="lt-picks-positions">
+                  {cmpRounds.flatMap((r, i) =>
+                    Array.from({ length: cmpSlots[i] }, (_, k) => (
+                      <div key={`${r}-${k}`}
+                           className={`lt-picks-pos${k === 0 ? ' lt-picks-group' : ''}`}>
+                        {k + 1}
+                      </div>
+                    )))}
+                </div>
+              </div>
+            ) : (
+              <div className="lt-bar-track">
+                {activeRounds.map((i, col) => (
+                  <div key={i} className="lt-bar-col lt-bar-col--label" style={{ flex: colFlex[col] }} title={roundWinnerLabels[col] ?? undefined}>
+                    {getRoundLabel(i, numRounds)}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <div
             className="lt-progress-rows lt-progress-rows--race"
@@ -922,6 +987,23 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                   {entry.correct_count ?? 0}
                 </span>
                 <span className="lt-progress-total">{entry.total} pts</span>
+                {comparing ? (
+                  /* THE TRACK, WITH NAMES IN IT. Same cell, same column count
+                     as the header above — an unfilled slot still renders, so a
+                     part-finished bracket and a complete one keep their picks
+                     under the same headings. */
+                  <div className="lt-picks-track" style={{ '--slots': cmpTotalSlots }}>
+                    {cmpRounds.flatMap((r, i) => {
+                      const picks = cmpByUser[entry.user_id]?.[r] ?? []
+                      return Array.from({ length: cmpSlots[i] }, (_, k) => (
+                        <div key={`${r}-${k}`}
+                             className={`lt-picks-cell${k === 0 ? ' lt-picks-group' : ''}`}>
+                          {picks[k] ? <PickChip pk={picks[k]} /> : null}
+                        </div>
+                      ))
+                    })}
+                  </div>
+                ) : (
                 <div className="lt-bar-track">
                   {activeRounds.map((i, col) => {
                     const pts = entry.round_points[i]
@@ -943,10 +1025,15 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                     )
                   })}
                 </div>
+                )}
               </div>
             ))}
           </div>
-          {effectiveMax > 0 && (
+          {/* THE SCRUBBER BELONGS TO THE BARS. It rewinds a SCORE through the
+              matches that produced it; a bracket of predicted names has no
+              such history to walk, so on this tab there is nothing for it to
+              do and it goes. */}
+          {!comparing && effectiveMax > 0 && (
             <div className="lt-scrubber">
               <input
                 type="range"
