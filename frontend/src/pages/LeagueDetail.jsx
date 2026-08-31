@@ -401,6 +401,10 @@ export default function LeagueDetail() {
           leagueMemberCount={isGlobal ? null : league?.member_count}
           showRealName={isGlobal ? false : league?.show_real_name}
           showGenderLabel={openDraw.showGenderLabel}
+          /* "Global" is the name of the all-users pseudo-league, and the one
+             the page's own selector shows — so the title says the same thing
+             the page does rather than going blank there. */
+          leagueName={isGlobal ? 'Global' : league?.name}
           onClose={() => setOpenDraw(null)}
         />
       )}
@@ -605,7 +609,7 @@ function DrawRow({ tournament: t, leagueId, showGenderLabel, onOpen }) {
    that scrolls the page behind it is how the layer stops feeling like a layer.
    Same conventions as InviteModal below. */
 function DrawModal({ tournament, pickerCount, leagueId, leagueMemberCount,
-                     showRealName, showGenderLabel, onClose }) {
+                     showRealName, showGenderLabel, leagueName, onClose }) {
   useEffect(() => {
     const onKey = e => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
@@ -636,6 +640,7 @@ function DrawModal({ tournament, pickerCount, leagueId, leagueMemberCount,
             leagueMemberCount={leagueMemberCount}
             showRealName={showRealName}
             showGenderLabel={showGenderLabel}
+            leagueName={leagueName}
           />
         </div>
       </div>
@@ -643,7 +648,7 @@ function DrawModal({ tournament, pickerCount, leagueId, leagueMemberCount,
   )
 }
 
-export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMemberCount, showRealName, showGenderLabel }) {
+export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagueMemberCount, showRealName, showGenderLabel, leagueName }) {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [toast, setToast] = useState(null)
@@ -863,7 +868,23 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
             </span>
           )}
         </div>
-        <span className="lt-progress-title">{t.name}{showGenderLabel ? ` ${t.gender === 'M' ? 'Men' : 'Women'}` : ''} {t.year}</span>
+        {/* WHOSE TABLE, AND WHICH DRAW. The panel can be opened from any
+            league and from Global, and the standings inside are scoped to that
+            league — so the name it is scoped to belongs in the title rather
+            than only in the page behind the layer.
+            The gender word is tinted in the tour's own colour, the same pair
+            the badge beside it uses, so a glance at the title says which half
+            of a combined event this is. */}
+        <span className="lt-progress-title">
+          {leagueName && <span className="lt-title-league">{leagueName}: </span>}
+          {t.name}
+          {showGenderLabel && (
+            <span className={`lt-title-gender lt-title-gender--${t.gender === 'M' ? 'm' : 'f'}`}>
+              {' '}{t.gender === 'M' ? 'Men' : 'Women'}
+            </span>
+          )}
+          {' '}{t.year}
+        </span>
         {t.surface && <span className="lt-progress-meta">{t.surface}</span>}
       </div>
 

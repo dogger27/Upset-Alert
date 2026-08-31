@@ -1484,3 +1484,12 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 /* The header row holds two lines on this tab, so it cannot keep the bar
    track's fixed height. */
 .lt-progress-header-row:has(.lt-picks-track--head) { height: auto; }
+
+
+/* The league the standings below are scoped to. Quieter than the draw name —
+   it says whose table this is, not what the table is about. */
+.lt-title-league { color: var(--text-muted); font-weight: 600; }
+
+/* The tour's own colours, matching the badge on the same line. */
+.lt-title-gender--m { color: var(--atp-text); }
+.lt-title-gender--f { color: var(--wta-text); }
