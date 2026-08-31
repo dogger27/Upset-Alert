@@ -508,13 +508,15 @@
   --section-tint-open: rgba(201, 120, 58, 0.26);
   --section-tint-active: rgba(64, 145, 108, 0.28);
 
-  --round-1-ink: #fca5a5;
-  --round-2-ink: #fdba74;
-  --round-3-ink: #fde047;
-  --round-4-ink: #86efac;
-  --round-5-ink: #93c5fd;
-  --round-6-ink: #c4b5fd;
-  --round-7-ink: #f0abfc;
+  /* --round-N-ink deliberately NOT flipped here.
+     The comment on the light definitions says "only the label ink has to
+     flip", and that is true of ink on the PAGE — but this token has exactly
+     one consumer, the number written on the bar itself, and the bar's fill is
+     the same saturated colour in both themes. Flipping the ink to a pastel
+     therefore put a light number on a light fill, under a white outline and a
+     white glow: every layer light, no contrast anywhere, and the digits read
+     as a blurry blob. The bar keeps its dark ink in both themes because the
+     thing it must contrast with does not change. */
 
   --badge-seed-bg: #3a2f10;  --badge-seed-fg: #e8c766;  --badge-seed-line: #6b5518;
   --badge-wc-bg:   #16294a;  --badge-wc-fg:   #9dc0ff;  --badge-wc-line:   #3a5c93;
