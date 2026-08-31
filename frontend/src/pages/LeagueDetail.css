@@ -751,7 +751,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
      Driven by a single variable that the compare header also sets its own
      height from, so the two cannot drift apart. box-sizing is border-box, so
      the row's own padding is added on here. */
-  --hdr-track-h: 36px;   /* 34.6px of two-line header, plus headroom */
+  --hdr-track-h: 40px;   /* 37.7px of two-line header, plus headroom */
   min-height: calc(var(--hdr-track-h) + 0.6rem);
   margin-bottom: 0.2rem;
   padding: 0.3rem 0;
@@ -1410,10 +1410,14 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
    still reads as a label until you go near it. */
 .lt-picks-pos {
   text-align: center;
-  font-size: 0.68rem;
-  font-weight: 600;
+  /* Level with the round name above it. At 0.68rem these were a footnote on a
+     heading, and they are not decoration — each one is the control that sorts
+     the table by that slot, so it has to look like something you can hit. The
+     band's reserved height moved with them; both come off --hdr-track-h. */
+  font-size: 0.85rem;
+  font-weight: 700;
   color: var(--text-muted);
-  opacity: 0.7;
+  opacity: 0.8;
   line-height: 1.15;
   font-family: inherit;
   background: none;
