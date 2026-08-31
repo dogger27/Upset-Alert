@@ -1431,9 +1431,11 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   pointer-events: none;
 }
 
-.lt-picks-round:first-child,
-.lt-picks-positions .lt-picks-pos:first-child,
-.lt-picks-cell:first-child { border-left: 0; margin-left: 0; padding-left: 0; }
+/* THE FIRST GROUP IS RULED TOO. It was exempted on the reasoning that a rule
+   needs something on both sides of it — but there IS something on the left
+   here: the user, the correct count and the score. That block and the picks
+   are different kinds of thing, and the round rules are exactly what says
+   where one kind ends, so the leftmost one is the most useful of them. */
 
 /* THE CHIP FILLS ITS COLUMN, and its text centres inside it.
    Making the cell a flex container (so the divider could stretch to the row's

@@ -955,7 +955,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                        separating was the only part of the column it did not
                        reach. */
                     <div key={r}
-                         className={`lt-picks-round${i > 0 ? ' lt-picks-group' : ''}`}
+                         className="lt-picks-round lt-picks-group"
                          style={{ gridColumn: `span ${cmpSlots[i]}` }}>
                       {ROUND_TITLES[r] ?? r}
                     </div>
