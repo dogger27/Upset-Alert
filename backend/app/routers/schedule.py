@@ -666,6 +666,12 @@ async def schedule_day(
                # from one that never got on court.
                ScheduleEntry.scores_json, ScheduleEntry.status,
                ScheduleEntry.winner_side, ScheduleEntry.completed_at,
+               # SINGLES KEEPS ITS STATE ON THE MATCH, not on the row. Every
+               # column above is written by the doubles/qualifying sweep, so a
+               # singles row reads as never-started however long it was on
+               # court — which is why a suspended singles match never reached
+               # the "to be completed" branch and sat at "In progress" all day.
+               ScheduleEntry.match_id,
                ScheduleEntryPlayer.raw_name)
         .join(ScheduleEntryPlayer,
               ScheduleEntryPlayer.schedule_entry_id == ScheduleEntry.id)
@@ -675,14 +681,18 @@ async def schedule_day(
     names_by_row: dict = {}
     row_meta: dict = {}
     for (rid, pd, tid, live_scores, live_point, started,
-         final, st, winner, done_at, raw) in sig_rows:
+         final, st, winner, done_at, mid, raw) in sig_rows:
         names_by_row.setdefault(rid, set()).add(_pairing_surname(raw))
         row_meta[rid] = (tid, pd, live_scores, live_point, started,
-                         final, st, winner, done_at)
+                         final, st, winner, done_at, mid)
     elsewhere: dict = {}
     for rid, names in names_by_row.items():
         (tid, pd, live_scores, live_point, started,
-         final, st, winner, done_at) = row_meta[rid]
+         final, st, winner, done_at, mid) = row_meta[rid]
+        # The bracket match behind this row, where singles keeps everything.
+        # Present for a neighbouring day because a carried match is the SAME
+        # match on both rows, so today's lookup already loaded it.
+        m = matches.get(mid) if mid else None
         elsewhere.setdefault((tid, frozenset(names)), []).append(
             {"date": pd, "scores": live_scores, "point": live_point,
              "final": final, "winner": winner, "done_at": done_at,
@@ -690,11 +700,15 @@ async def schedule_day(
              # up on a later day this is restamped to the RESUMPTION, so a
              # borrowing row can print "Started at" instead of "In progress".
              "started_at": started,
-             "done": st == "completed" or done_at is not None,
+             "done": (st == "completed" or done_at is not None
+                      or getattr(m, "winner_id", None) is not None),
              # A finished match plainly started, even though completion has
-             # since emptied the live column that used to prove it.
-             "started": (started is not None or bool(live_scores)
-                         or bool(final))})
+             # since emptied the live column that used to prove it. Read off
+             # the match as well as the row, so this is true for singles too.
+             "started": (started is not None or bool(live_scores) or bool(final)
+                         or getattr(m, "started_at", None) is not None
+                         or bool(getattr(m, "live_scores_json", None))
+                         or getattr(m, "winner_id", None) is not None)})
 
     venue_today = {tid: _venue_today(tzs.get(tid)) for tid in t_ids}
     carried_from: dict = {}
@@ -754,10 +768,15 @@ async def schedule_day(
             # The score stands where play stopped. It lives on the row for the
             # day it was abandoned — that row holds the claim, and an event can
             # only be claimed once — so this row shows it rather than owning it.
-            if earlier_started and not _has_games(e.live_scores_json):
-                # Nothing of its own to show, so it borrows the abandoned
-                # day's score; a row holding its own claim already has it.
-                src = max(earlier_started, key=lambda r: r["date"])
+            src = (max(earlier_started, key=lambda r: r["date"])
+                   if earlier_started else None)
+            # ONLY BORROW FROM A ROW THAT HAS SOMETHING TO LEND. The abandoned
+            # day's row carries the score for doubles and qualifying; for
+            # singles the score is on the match, which this row already reads
+            # through the ordinary path. Borrowing an empty row would blank a
+            # score that was on screen a moment ago.
+            if (src and not _has_games(e.live_scores_json)
+                    and (_has_games(src.get("scores")) or src.get("final"))):
                 carried_from[e.id] = src
                 # AND IF PLAY HAS RESTARTED, SAY SO. The claim stays with the
                 # abandoned day's row, so this row learns the match is back on
