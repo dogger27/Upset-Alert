@@ -729,6 +729,29 @@ async def schedule_day(
             (e.tournament_id, frozenset(names_by_row.get(e.id, ()))), [])
         later = [r for r in siblings if r["date"] > e.play_date]
         earlier = [r for r in siblings if r["date"] < e.play_date]
+
+        # ONCE IT HAS RESUMED ELSEWHERE, THIS DAY NO LONGER OWNS IT.
+        # A postponed row is the record of a day that ran out, and it earns its
+        # place while the match is still waiting — that day is where it
+        # stopped. But the moment play restarts on another sheet, this row is a
+        # second copy of a match being played somewhere else, frozen at a score
+        # that will never move again, and the day it belongs to is the day it
+        # is on court. Two rows for one match is the thing that reads as the
+        # site being wrong.
+        #
+        # Placed BEFORE the status branches below, because several of them
+        # `continue` — a match that has since been won leaves through the
+        # completed guard and would never reach a check made further down.
+        #
+        # Gated on resumed_at alone. A later sheet listing the match is a PLAN,
+        # and a match scheduled to resume tomorrow and rained off again still
+        # belongs to the day it stopped; and "a later row that is done" cannot
+        # be used either, because a sheet printed early lists matches that were
+        # finished on THIS day, which would drop the very row that played them.
+        # The stamp is the only thing that says play actually restarted later.
+        if later and getattr(m_of(e), "resumed_at", None) is not None:
+            dropped.add(e.id)
+            continue
         # ONLY A MATCH THAT ACTUALLY STARTED is "to be completed" — one that
         # never got on court is simply playing today, and saying otherwise
         # would put a resumption badge on a match with nothing to resume.
@@ -774,20 +797,6 @@ async def schedule_day(
             continue
         if later:
             statuses[e.id] = "postponed"
-            # AND ONCE IT HAS ACTUALLY RESUMED, THIS ROW IS HISTORY.
-            # A postponed row is the record of a day that ran out — worth
-            # showing while the match is still waiting, because that day is
-            # where it stopped. The moment play restarts somewhere else, this
-            # row is a duplicate of a match being played on another sheet, and
-            # the day it belongs to is the day it is on court. Dropped rather
-            # than restyled: two rows for one match, one of them frozen, is
-            # the thing that reads as the site being wrong.
-            # Only on real evidence of a resumption — the stamp, or a later
-            # row that has finished — never merely on a later sheet listing
-            # it, which is just a plan.
-            if (getattr(m_of(e), "resumed_at", None) is not None
-                    or any(r["done"] for r in later)):
-                dropped.add(e.id)
         elif started_before and not playing_now:
             statuses[e.id] = "to_be_completed"
             # The score stands where play stopped. It lives on the row for the
