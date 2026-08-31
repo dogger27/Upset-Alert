@@ -667,7 +667,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
   const [cmpDepth, setCmpDepth] = useState('finals')
   const [flashMatch, setFlashMatch] = useState(null)
   const flashKey = useRef(0)
-  const flashTimer = useRef(null)
+
 
   const { data: rawData } = useQuery({
     queryKey: leagueId != null ? ['round-scores', leagueId, t.id] : ['global-round-scores', t.id],
@@ -1147,10 +1147,14 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                   setScrubPos(v >= effectiveMax ? null : v)
                   const m = matchesTimeline[Math.min(v, effectiveMax) - 1]
                   if (m) {
-                    if (flashTimer.current) clearTimeout(flashTimer.current)
+                    /* IT STAYS. This is the answer to "what happened at
+                       this point", and it was deleting itself 2.5 seconds
+                       after being asked — long enough to read the names, not
+                       long enough to look from them to the score beside them
+                       and back. The next drag replaces it; nothing else
+                       needs to. */
                     flashKey.current += 1
                     setFlashMatch({ ...m, _key: flashKey.current })
-                    flashTimer.current = setTimeout(() => setFlashMatch(null), 2500)
                   } else {
                     setFlashMatch(null)
                   }
@@ -1162,8 +1166,13 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                 <span className={`lt-scrubber-label${isScrubbing ? ' lt-scrubber-label--active' : ''}`}>
                   {scrubLabel}
                 </span>
-                {flashMatch && (
-                  <span key={flashMatch._key} className="lt-scrubber-flash">
+                {/* ALWAYS RENDERED, empty or not. The scrubber is pinned to
+                    the bottom of the panel, so anything that grows inside it
+                    pushes the slider up — and a slider that moves when you let
+                    go of it is a slider you have to re-find. The row holds its
+                    two lines of space whether or not there is a match in it. */}
+                <span key={flashMatch?._key ?? 'idle'} className="lt-scrubber-flash">
+                  {flashMatch && <>
                     {getRoundLabel(flashMatch.round_number - 1, numRounds)}
                     {': '}
                     {flashMatch.winner_name ?? '?'} def. {flashMatch.loser_name ?? '?'}
@@ -1172,8 +1181,8 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                         {new Date(flashMatch.completed_at).toLocaleString('en-US', { month: 'short', day: '2-digit', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })}
                       </span>
                     )}
-                  </span>
-                )}
+                  </>}
+                </span>
               </div>
             </div>
           )}

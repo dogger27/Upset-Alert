@@ -596,11 +596,6 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   font-size: 0.9rem; color: var(--text-muted); white-space: nowrap;
 }
 .lt-scrubber-label--active { color: var(--brand-text-strong); font-weight: 600; }
-@keyframes lt-flash-fade {
-  0%   { opacity: 1; }
-  60%  { opacity: 1; }
-  100% { opacity: 0; }
-}
 .lt-scrubber-when {
   display: block;
   font-size: 0.82rem;
@@ -612,7 +607,15 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   /* Allowed to wrap now that it owns the row — a long pair of names is better
      on two lines than cut off. */
   white-space: normal; line-height: 1.35;
-  animation: lt-flash-fade 2.5s ease-out forwards;
+  /* THE ROW KEEPS ITS HEIGHT WHEN IT IS EMPTY.
+     The two lines it holds — the match, then when it finished — are about
+     2.3rem, and the scrubber is pinned to the bottom of the panel, so without
+     this the slider sat lower before the first drag and jumped up the moment
+     one landed. Reserved space costs nothing; a control that moves under the
+     cursor costs the next drag.
+     No fade: it used to animate itself to opacity 0 over 2.5s, which meant the
+     answer disappeared while you were still reading it. */
+  min-height: 2.3rem;
 }
 
 .lt-progress-rows { display: flex; flex-direction: column; gap: 0.4rem; }
