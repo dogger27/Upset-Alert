@@ -850,7 +850,15 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                 </div>
               ))}
             </div>
-            <span className="lt-progress-correct lt-progress-col-header" title="Correct picks">✓</span>
+            {/* Correct out of WHAT — the count means nothing without its
+                denominator, and the denominator moves: it is the number of
+                matches on the board right now, which the scrubber changes.
+                effectiveScrubPos, not the timeline length, so the header
+                agrees with the rows under it at every position. */}
+            <span className="lt-progress-correct lt-progress-col-header"
+                  title={`Correct picks, of ${effectiveScrubPos} match${effectiveScrubPos !== 1 ? 'es' : ''} counted`}>
+              ✓ / {effectiveScrubPos}
+            </span>
             <span className="lt-progress-total lt-progress-col-header">Score</span>
           </div>
           <div
