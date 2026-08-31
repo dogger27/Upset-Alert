@@ -1541,3 +1541,33 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 /* The number keeps the group's indent so it stays over its column, but not the
    stroke — there is one line here now, and the round label draws it. */
 .lt-picks-pos.lt-picks-group { border-left: 0; }
+
+
+/* ── Alternating rows ────────────────────────────────────────────────────────
+   PAINTED ON THE CONTAINER, NOT ON THE ROWS.
+   The rows are absolutely positioned and animate to their slots with a
+   transform, so striping them with :nth-child would send the colours sliding
+   around whenever the table re-sorts — and a stripe belongs to a POSITION in
+   the list, not to a person. As a repeating gradient on the container the
+   bands hold still and the rows move across them, which is what a re-sort
+   should look like.
+
+   The pitch is ROW_SLOT: 41px per row (34px of row + a 7px gap), so one band
+   plus one clear band is 82px. The band covers the whole 41px rather than just
+   the row, so the stripes meet and read as a table rather than as a ladder of
+   detached blocks.
+
+   color-mix off --text rather than a pair of hardcoded tints: --text already
+   flips with the theme, so the stripe is dark-on-light and light-on-dark
+   without a second declaration to keep in step.
+
+   background-attachment: local — this element scrolls, and without it the
+   bands would stay pinned to the frame while the rows slid underneath. */
+.lt-progress-rows--race {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--text) 4%, transparent) 0 41px,
+    transparent 41px 82px
+  );
+  background-attachment: local;
+}
