@@ -1319,13 +1319,18 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   gap: 3px;
 }
 
+/* The round names say what the whole block underneath is, so they carry the
+   emphasis: full text colour and a size up from the position numbers, which
+   are only scaffolding. Muted, they read as a caption on the numbers rather
+   than as a heading over the names. */
 .lt-picks-round {
   text-align: center;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--text-strong, var(--text));
+  padding-bottom: 0.15rem;
 }
 
 /* Scaffolding, not data: the numbers name the column and then get out of the
@@ -1342,11 +1347,22 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 
 /* Where one round ends and the next begins — between GROUPS only. A rule
    between every position would draw a grid and bury the grouping the header
-   is making. */
-.lt-picks-group { border-left: 2px solid var(--text-muted); padding-left: 3px; }
+   is making.
+   The cells stretch so the rule runs the full height of the row rather than
+   the height of the chip inside it; the grid gap between rows is the only
+   thing that breaks it, which reads as a dashed column rather than as the
+   scattered ticks it was. */
+.lt-picks-group {
+  border-left: 2px solid var(--text-muted);
+  margin-left: 1px;
+  padding-left: 4px;
+}
+.lt-picks-track { align-items: stretch; }
+.lt-picks-cell { display: flex; align-items: center; }
+
 .lt-picks-round:first-child,
 .lt-picks-positions .lt-picks-pos:first-child,
-.lt-picks-cell:first-child { border-left: 0; padding-left: 0; }
+.lt-picks-cell:first-child { border-left: 0; margin-left: 0; padding-left: 0; }
 
 /* The chips size to the column they are in rather than to their text. */
 .lt-picks-cell .compare-pick-name {

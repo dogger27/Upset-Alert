@@ -358,19 +358,8 @@
 .compare-table--positions .cmp-pos { font-size: 0.75rem; }
 .compare-table--positions .compare-table-user { font-size: 0.95rem; }
 
-/* The seed, written rather than boxed. Tabular so a column of them stays a
-   column, and muted so the NAME is what the eye lands on. */
-.cmp-seed {
-  flex: 0 0 auto;
-  font-size: 0.85em;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: var(--text-muted);
-}
-
-/* An implied rank is draw order, not a real seed — same distinction the two
-   badge colours used to carry, kept so the number is not mistaken for one. */
-.cmp-seed--implied { opacity: 0.65; font-weight: 600; }
+/* .cmp-seed is gone with the seeds themselves — they live on the tooltip now,
+   where a question about one player is being asked. */
 
 /* The round header hands straight down to its position numbers — a rule
    between them would cut the group in half, which is the opposite of what the

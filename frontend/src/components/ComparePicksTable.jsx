@@ -33,6 +33,14 @@ function shortName(raw) {
   return last || raw
 }
 
+/* What hovering a pick says: the seed it was given, or its implied draw-order
+   rank when it has none, and the name in full. Everything the chip drops. */
+function fullLabel(pk) {
+  const rank = pk.seed != null ? `[${pk.seed}] `
+    : pk.implied != null ? `(${pk.implied}) ` : ''
+  return `${rank}${pk.name}`
+}
+
 /** One predicted player, in the draw page's own verdict colours. */
 export function PickChip({ pk }) {
   return (
@@ -40,18 +48,13 @@ export function PickChip({ pk }) {
       pk.state === 'correct' ? ' compare-pick-name--correct'
       : pk.state === 'out' ? ' compare-pick-name--out'
       : ' compare-pick-name--open'}`}>
-      {/* WRITTEN, NOT BOXED. A badge is a box inside a box: at seven columns a
-          row it was a rail of little rectangles down every one, and each
-          reserved a uniform 30px whether or not the player had a seed. As
-          "[12]" the number costs what it costs and reads as part of the name.
-          Seed and implied draw-order rank stay distinguishable by colour —
-          the same distinction the badges made, without the geometry. */}
-      {pk.seed != null ? (
-        <span className="cmp-seed">[{pk.seed}]</span>
-      ) : pk.implied != null ? (
-        <span className="cmp-seed cmp-seed--implied">[{pk.implied}]</span>
-      ) : null}
-      <span className="compare-pick-label" title={pk.name}>{shortName(pk.name)}</span>
+      {/* THE SEED MOVES TO THE TOOLTIP. Seven columns of "[12] Jódar" put a
+          number in front of every name on the grid, and the seeds are not what
+          this view is for — it is for seeing at a glance who agreed with whom,
+          which is a comparison between names. Hovering asks about one player,
+          and that is where the detail belongs: the seed and the full name,
+          together, for the one being asked about. */}
+      <span className="compare-pick-label" title={fullLabel(pk)}>{shortName(pk.name)}</span>
       {pk.entry_type && (
         <span className={`pos-badge entry entry-${pk.entry_type.toLowerCase()} compare-pick-entry`}>{pk.entry_type}</span>
       )}
