@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { useParams, useNavigate, useOutletContext } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getLeague, getLeagueTournaments, getRoundScores, updateLeague, setMemberAdmin, removeMember, deleteLeague, shareLeagueByEmail, getGrandSlamTotals } from '../api/leagues'
@@ -81,15 +81,6 @@ export default function LeagueDetail() {
   // observer attaches the instant the sentinel div mounts, regardless of
   // whether previousVisibleCount itself changed.
   const [previousVisibleCount, setPreviousVisibleCount] = useState(5)
-  const previousObserverRef = useRef(null)
-  const previousLoadMoreRef = useCallback((node) => {
-    previousObserverRef.current?.disconnect()
-    if (!node) return
-    previousObserverRef.current = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) setPreviousVisibleCount(c => c + 5)
-    }, { rootMargin: '300px' })
-    previousObserverRef.current.observe(node)
-  }, [])
 
   const { data: league, isLoading: leagueLoading } = useQuery({
     queryKey: ['league', id],
@@ -402,9 +393,19 @@ export default function LeagueDetail() {
                         )
                       })()}
                       {hasMore && (
-                        <div ref={previousLoadMoreRef} className="lt-load-more-sentinel">
-                          Loading more…
-                        </div>
+                        /* A BUTTON, NOT A SENTINEL. This was an
+                           IntersectionObserver watching a "Loading more…" div,
+                           and an IntersectionObserver only fires when
+                           intersection CHANGES — the sentinel came into view,
+                           loaded five more, and then stayed in view, so it
+                           never fired again. The list sat at ten rows under a
+                           message promising more forever.
+                           Clicking is also the honest interaction here: these
+                           are finished draws being browsed, not a feed. */
+                        <button type="button" className="lt-load-more"
+                                onClick={() => setPreviousVisibleCount(c => c + 20)}>
+                          Show more ({g.items.length - visibleItems.length} left)
+                        </button>
                       )}
                     </div>
                   )
@@ -629,6 +630,8 @@ function DrawRow({ tournament: t, leagueId, showGenderLabel, onOpen }) {
   const entries = data?.entries ?? []
   const mine = user ? entries.findIndex(e => e.user_id === user.id) : -1
   const me = mine >= 0 ? entries[mine] : null
+  /* N-1 for a draw of N entrants, byes included — a bye is not a match. */
+  const matchCount = t.draw_size > 1 ? t.draw_size - 1 : 0
 
   return (
     <tr className="dt-row" onClick={onOpen} tabIndex={0} role="button"
@@ -660,7 +663,13 @@ function DrawRow({ tournament: t, leagueId, showGenderLabel, onOpen }) {
             <span className="dt-finish-num">{mine + 1}</span>
             <span className="dt-finish-of">of {entries.length}</span>
           </td>
-          <td className="dt-num dt-correct">{me.correct_count ?? 0}</td>
+          {/* WITH ITS DENOMINATOR. Every row here is a different draw, so
+              unlike the standings — where one header can say "of 17" for the
+              whole column — the total belongs in the cell. A 250 and a slam
+              are not comparable on correct picks alone. */}
+          <td className="dt-num dt-correct">
+            {me.correct_count ?? 0}<span className="dt-of"> / {matchCount}</span>
+          </td>
           <td className="dt-num dt-score">{me.total} pts</td>
         </>
       ) : (

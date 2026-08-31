@@ -1670,3 +1670,47 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 .lt-tour-btn--on.lt-tour-btn--f { background: var(--wta-tint); color: var(--wta-text); }
 
 .lt-tour-btn:focus-visible { outline: 2px solid var(--accent, #7aa9ff); outline-offset: -2px; }
+
+
+/* ── Previous-draws table: alignment, width, and its own control ──────────── */
+
+/* AS WIDE AS THE DATA. width:100% stretched the table across the panel and
+   the Draw column absorbed all the slack, so a tournament name sat alone with
+   an inch of nothing before its dates. Content-sized and centred instead. */
+.dt-table { width: auto; margin-inline: auto; }
+
+/* The names start at one x. The badges are different widths — "ATP 250"
+   against "WTA 1000" — so left-aligning the CELL still left the names ragged;
+   it is the badge column that has to be fixed, not the text after it. */
+.dt-draw .lt-gender-badge {
+  min-width: 5.4rem;
+  text-align: center;
+  flex: 0 0 auto;
+}
+.dt-draw .dt-name { text-align: left; }
+
+/* Centred under their headings: these are values to compare down a column,
+   and a column reads as one when its contents share an axis. */
+.dt-h-surface, .dt-surface,
+.dt-h-num, .dt-num { text-align: center; }
+
+/* The denominator is context, not the number being read. */
+.dt-of { color: var(--text-muted); font-weight: 600; opacity: 0.75; }
+
+.lt-load-more {
+  display: block;
+  margin: 0.9rem auto 0.2rem;
+  padding: 0.4rem 1.1rem;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  background: none;
+  border: 1px solid var(--text-muted);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.lt-load-more:hover { color: var(--text-strong, var(--text)); border-color: var(--text-strong, var(--text)); }
+.lt-load-more:focus-visible { outline: 2px solid var(--accent, #7aa9ff); outline-offset: 2px; }
