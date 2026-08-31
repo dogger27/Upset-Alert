@@ -302,7 +302,7 @@ export default function LeagueDetail() {
                   const hasMore = isPrevious && previousVisibleCount < g.items.length
                   return (
                     <div key={g.key}
-                         className={`card league-tournaments-section${isPrevious ? '' : ' lt-section--cards'}`}>
+                         className="card league-tournaments-section lt-section--fit">
                       {(() => {
                         // Same name with both M and F present (Grand Slams, or any
                         // other event running men's + women's draws simultaneously)
