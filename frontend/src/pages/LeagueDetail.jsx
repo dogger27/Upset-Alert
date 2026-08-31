@@ -817,17 +817,17 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                 <p className="lt-open-notice-lock">Lock time: <strong>{fmtLockTime(t.closing_time)}</strong></p>
               )}
             </div>
-            <div className="lt-competitors-label">Competitor</div>
+            <div className="lt-competitors-label">User</div>
             <div className="lt-progress-rows">
               {entries.map((entry, entryIndex) => (
                 <div key={entry.user_id} className={`lt-progress-row lt-progress-row--open${entry.user_id === user?.id ? ' lt-progress-row--me' : ''}`}>
-                  <span className="lt-pos-num">{entryIndex + 1}.</span>
                   <a href={`/draw-history?user=${entry.user_id}`} className="lt-history-btn" title={`${entry.username}'s Draw History`} aria-label={`${entry.username}'s Draw History`}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
                       <circle cx="12" cy="7" r="4" />
                     </svg>
                   </a>
+                  <span className="lt-pos-num">{entryIndex + 1}.</span>
                   <span className={`lt-progress-name${entry.user_id === user?.id ? ' lt-progress-name--me' : ''}`}>
                     <UserName className="lt-progress-name-text" user={{ username: entry.username, full_name: showRealName ? entry.full_name : null }} />
                   </span>
@@ -839,17 +839,20 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
       ) : (
         <>
           <div className="lt-progress-row lt-progress-header-row" style={{ '--name-col-width': `${nameColWidth}px` }}>
+            {/* Both buttons first, then the rank, then the name — the two
+                controls belong together as one group of tools rather than
+                being split by a number. These spacers only hold the columns
+                open, but they have to be in the SAME order as the cells below
+                or the header stops describing the row. */}
             <span className="lt-hcol-bracket" />
-            <span className="lt-hcol-pos" />
             <span className="lt-hcol-history" />
-            <span className="lt-competitors-label lt-competitors-label--inline">Competitor</span>
-            <div className="lt-bar-track">
-              {activeRounds.map((i, col) => (
-                <div key={i} className="lt-bar-col lt-bar-col--label" style={{ flex: colFlex[col] }} title={roundWinnerLabels[col] ?? undefined}>
-                  {getRoundLabel(i, numRounds)}
-                </div>
-              ))}
-            </div>
+            <span className="lt-hcol-pos" />
+            <span className="lt-competitors-label lt-competitors-label--inline">User</span>
+            {/* THE TOTALS SIT BESIDE THE NAME, not past the bars. They are what
+                the row is being read for, and the bar track is a 1fr column
+                that grows with the panel — so parked on its far side they
+                drifted further from the person they belong to the wider the
+                window got. */}
             {/* Correct out of WHAT — the count means nothing without its
                 denominator, and the denominator moves: it is the number of
                 matches on the board right now, which the scrubber changes.
@@ -860,6 +863,13 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
               ✓ / {effectiveScrubPos}
             </span>
             <span className="lt-progress-total lt-progress-col-header">Score</span>
+            <div className="lt-bar-track">
+              {activeRounds.map((i, col) => (
+                <div key={i} className="lt-bar-col lt-bar-col--label" style={{ flex: colFlex[col] }} title={roundWinnerLabels[col] ?? undefined}>
+                  {getRoundLabel(i, numRounds)}
+                </div>
+              ))}
+            </div>
           </div>
           <div
             className="lt-progress-rows lt-progress-rows--race"
@@ -892,17 +902,26 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                     <line x1="3" y1="21" x2="10" y2="21"/>
                   </svg>
                 </button>
-                <span className="lt-pos-num">{rank + 1}.</span>
                 <a href={`/draw-history?user=${entry.user_id}`} className="lt-history-btn" title={`${entry.username}'s Draw History`} aria-label={`${entry.username}'s Draw History`} onClick={e => e.stopPropagation()}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
                     <circle cx="12" cy="7" r="4" />
                   </svg>
                 </a>
+                <span className="lt-pos-num">{rank + 1}.</span>
                 <span className={`lt-progress-name${entry.user_id === user?.id ? ' lt-progress-name--me' : ''}`}>
                   {finalPlayed && rank < 3 && <span className="lt-place-icon">{PLACE_ICONS[rank]}</span>}
                   <UserName className="lt-progress-name-text" user={{ username: entry.username, full_name: showRealName ? entry.full_name : null }} />
                 </span>
+                {/* Correct picks, beside the points they earned. The two are
+                    not the same fact: a round is worth more than the one
+                    before it, so 8 correct in R1 and 4 in the quarters can
+                    reach the same score by different routes. */}
+                <span className="lt-progress-correct"
+                      title={`${entry.correct_count ?? 0} correct pick${(entry.correct_count ?? 0) !== 1 ? 's' : ''}`}>
+                  {entry.correct_count ?? 0}
+                </span>
+                <span className="lt-progress-total">{entry.total} pts</span>
                 <div className="lt-bar-track">
                   {activeRounds.map((i, col) => {
                     const pts = entry.round_points[i]
@@ -924,15 +943,6 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                     )
                   })}
                 </div>
-                {/* Correct picks, beside the points they earned. The two are
-                    not the same fact: a round is worth more than the one
-                    before it, so 8 correct in R1 and 4 in the quarters can
-                    reach the same score by different routes. */}
-                <span className="lt-progress-correct"
-                      title={`${entry.correct_count ?? 0} correct pick${(entry.correct_count ?? 0) !== 1 ? 's' : ''}`}>
-                  {entry.correct_count ?? 0}
-                </span>
-                <span className="lt-progress-total">{entry.total} pts</span>
               </div>
             ))}
           </div>
