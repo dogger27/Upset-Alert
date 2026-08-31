@@ -1457,10 +1457,14 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 
 /* The column the table is currently grouped by. It has to be findable at a
    glance — the row order is otherwise unexplained. */
+/* Same token, same 1.02:1 problem, smaller stakes: this marks the column the
+   table is grouped by, so it must be findable without becoming the loudest
+   thing in a header full of names. Mixed toward the tour blue rather than
+   filled with it. */
 .lt-picks-pos--on {
   opacity: 1;
   color: var(--text-strong, var(--text));
-  background: var(--atp-tint);
+  background: color-mix(in srgb, var(--atp-text) 30%, var(--surface-card));
 }
 
 .lt-picks-pos:focus-visible {
@@ -1686,10 +1690,21 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 
 .lt-tour-btn:hover { color: var(--text-strong, var(--text)); }
 
-/* Selected in its own tour's colour, so the switch says which half is showing
-   without being read — the same blue and pink as the title beside it. */
-.lt-tour-btn--on.lt-tour-btn--m { background: var(--atp-tint); color: var(--atp-text); }
-.lt-tour-btn--on.lt-tour-btn--f { background: var(--wta-tint); color: var(--wta-text); }
+/* SELECTED IS A FILL, not a tint.
+   --atp-tint against --surface-card measures 1.02:1 — the same luminance,
+   separated only by hue, which is a difference you have to go looking for on a
+   control whose entire job is to say which half you are reading. The tabs
+   beside it already show "selected" as a solid fill; this now does the same,
+   in the tour's own colour rather than the brand green.
+
+   The ink is --surface-card, the page's own surface. That is what makes one
+   rule work in both themes: the fill flips from a mid blue to a light blue,
+   and the ink flips with it, so the pair stays legible without a second
+   declaration. Measured: 7.77:1 dark, 6.70:1 light, both for the fill against
+   the panel and the label against the fill. */
+.lt-tour-btn--on.lt-tour-btn--m { background: var(--atp-text); color: var(--surface-card); }
+.lt-tour-btn--on.lt-tour-btn--f { background: var(--wta-text); color: var(--surface-card); }
+.lt-tour-btn--on:hover { color: var(--surface-card); }
 
 .lt-tour-btn:focus-visible { outline: 2px solid var(--accent, #7aa9ff); outline-offset: -2px; }
 
