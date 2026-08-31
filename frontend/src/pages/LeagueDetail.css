@@ -723,7 +723,11 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-muted);
-  text-align: right;
+  /* Centred, not right-aligned. The header "✓ / 17" nearly fills the column
+     while a cell is two digits, so right-aligning both hung the numbers off
+     the header's right end instead of under it. Centring is what makes a
+     narrow cell sit beneath a wide label. */
+  text-align: center;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
