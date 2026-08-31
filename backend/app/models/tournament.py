@@ -500,6 +500,12 @@ class Match(Base):
     # only infer as "the first poll that saw it live".
     sofa_started_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True)
+    # WHEN PLAY CAME BACK. started_at is the first point of the match and never
+    # moves; a match suspended overnight and picked up the next day needs the
+    # second time too, or its row on the new day prints yesterday afternoon as
+    # its start.
+    resumed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True)
     status: Mapped[str] = mapped_column(String, default="pending")
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     # First moment ESPN reported this match in progress, and the minutes between

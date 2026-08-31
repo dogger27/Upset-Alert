@@ -57,6 +57,7 @@ from sqlalchemy import select
 from app.models.tournament import Draw, DrawEntry, Match
 from app.services.sofascore import SofascoreBlocked, _get
 from app.services.system_log import app_log
+from app.services.live_state import note_resumption
 from app.services.settings import sofa_authoritative
 
 logger = logging.getLogger(__name__)
@@ -543,6 +544,9 @@ async def poll_once(db) -> dict:
             blank_now = not (snap or {}).get("sets")
             had_before = bool((match.live_scores_json or [[], []])[0])
             if (not blank_now or not had_before) and match.live_scores_json != live:
+                # Before the assignment, while the old payload is still there
+                # to compare against — see note_resumption.
+                note_resumption(match, live)
                 match.live_scores_json = live
                 written += 1
                 touched_draws.add(draw_id)

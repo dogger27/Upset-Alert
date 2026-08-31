@@ -495,6 +495,13 @@ async def _migrate(conn):
         "ALTER TABLE matches ADD COLUMN sofa_completed_at DATETIME",
         "ALTER TABLE matches ADD COLUMN sofa_scores_json JSON",
         "ALTER TABLE matches ADD COLUMN sofa_started_at DATETIME",
+        # WHEN PLAY CAME BACK. started_at is the first point of the match and
+        # never moves; a match suspended overnight and picked up the next day
+        # needs the second time as well, or its row on the new day prints
+        # yesterday afternoon as its start. Stamped at the transition rather
+        # than derived from the score history, which records no suspension of
+        # its own and would have to be read with a tuned gap threshold.
+        "ALTER TABLE matches ADD COLUMN resumed_at DATETIME",
         # Doubles scoring. Doubles has no draw and no bracket row — see the note
         # on ScheduleEntry — so its result lives on the schedule row, which is
         # the only record of the match there is.

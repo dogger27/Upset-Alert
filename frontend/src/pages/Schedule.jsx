@@ -261,6 +261,16 @@ function startedLine(e, zone) {
   const opts = { hour: 'numeric', minute: '2-digit' }
   if (zone) opts.timeZone = zone
 
+  // A MATCH PICKED UP AGAIN NAMES THE TIME IT CAME BACK, not the time it
+  // began. started_at is the first point of the match and does not move — a
+  // match suspended overnight still started yesterday, which is exactly why
+  // its row is on today's sheet — so a resumed row printing it said "Started
+  // at 3:13 PM" beside a score from a session that had ended hours earlier.
+  // Only counted when it is genuinely later than the start, so an ordinary
+  // match with no suspension behind it is unaffected.
+  if (e.resumed_at && (!e.started_at || new Date(e.resumed_at) > new Date(e.started_at))) {
+    return `Resumed at ${new Date(e.resumed_at).toLocaleTimeString([], opts)}`
+  }
   // The observed start — when the first point was played, stamped by whichever
   // poller saw it. This is the normal path now for anything live or finished.
   if (e.started_at) {
