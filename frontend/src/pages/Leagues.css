@@ -283,8 +283,15 @@
 /* A pick still in play gets a box too — neutral grey, so every line reads
    as a slot and the three states differ only in colour: green settled,
    red dead, grey undecided. */
+/* A PICK STILL IN PLAY HAS NOTHING TO REPORT, so it is not outlined.
+   The three states used to differ only in colour, which meant a grey box
+   around every undecided name — and undecided is the majority of the table
+   early in a draw, so the grid of empty boxes drowned the few that had
+   settled. The border is now the signal: red means the pick is dead, green
+   means it came true, and nothing at all means still alive. Transparent
+   rather than absent so the text sits on the same rail in all three. */
 .compare-pick-name--open {
-  border: 1px solid var(--border-strong);
+  border: 1px solid transparent;
   background: transparent;
 }
 .compare-pick-name--correct {
@@ -324,7 +331,10 @@
    line between every position would draw a grid and bury the grouping the
    header is trying to show. */
 .compare-table--positions .cmp-group-start {
-  border-left: 1px solid var(--border-strong, var(--border));
+  /* Thick and light. This is the only line in the table that separates one
+     ROUND from the next, and at 1px of --border-strong it read as just
+     another cell edge among the pick outlines. */
+  border-left: 3px solid var(--text-muted);
 }
 
 .compare-table--positions .cmp-cell {
@@ -341,7 +351,40 @@
 .compare-table--positions th,
 .compare-table--positions td { padding: 6px 8px; }
 
+/* Dropping the badges and the given names bought the width back, so the type
+   can go up a step. This table is read across a modal, not skimmed. */
+.compare-table--positions { font-size: 0.95rem; }
+.compare-table--positions .cmp-round { font-size: 0.8rem; }
+.compare-table--positions .cmp-pos { font-size: 0.75rem; }
+.compare-table--positions .compare-table-user { font-size: 0.95rem; }
+
+/* The seed, written rather than boxed. Tabular so a column of them stays a
+   column, and muted so the NAME is what the eye lands on. */
+.cmp-seed {
+  flex: 0 0 auto;
+  font-size: 0.85em;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+/* An implied rank is draw order, not a real seed — same distinction the two
+   badge colours used to carry, kept so the number is not mistaken for one. */
+.cmp-seed--implied { opacity: 0.65; font-weight: 600; }
+
 /* The round header hands straight down to its position numbers — a rule
    between them would cut the group in half, which is the opposite of what the
    colSpan is saying. The line belongs under the position row only. */
 .compare-table--positions thead .cmp-round { border-bottom: 0; }
+
+/* Names centred in their column. The pill still spans the cell — it is the
+   slot, and slots the same width read as a column — so this centres the
+   CONTENT inside it rather than shrinking the box to the name.
+   Both overrides are needed: the label was flex:1 1 auto (taking all the
+   slack, so centring the row did nothing) and the entry token was pushed
+   right with margin-left:auto (which would have held the name off-centre by
+   its own width). */
+.compare-table--positions .compare-pick-name { justify-content: center; }
+.compare-table--positions .compare-pick-label { flex: 0 1 auto; }
+.compare-table--positions .compare-pick-entry { margin-left: 0; }
+.compare-table--positions .cmp-cell { text-align: center; }
