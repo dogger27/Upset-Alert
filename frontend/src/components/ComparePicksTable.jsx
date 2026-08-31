@@ -16,11 +16,22 @@ import { splitPlayerName } from '../utils/flags'
    draw happens to have. Deriving it from position in the array would give the
    same answers only while all three are present, and break silently on the
    draws where they are not. */
-export const ROUND_SLOTS = { SF: 4, F: 2, W: 1 }
+export const ROUND_SLOTS = { QF: 8, SF: 4, F: 2, W: 1 }
 
 /* The column groups are wide enough to say what they are. The short label is
    kept as the fallback, so an unmapped tier still reads correctly. */
-export const ROUND_TITLES = { SF: 'Semi-Finalists', F: 'Finalists', W: 'Winner' }
+export const ROUND_TITLES = {
+  QF: 'Quarter-Finalists', SF: 'Semi-Finalists', F: 'Finalists', W: 'Winner',
+}
+
+/* WHICH TIERS EACH DEPTH SHOWS.
+   Quarters is the eight quarter-finalists ALONE, not the eight plus everything
+   after them: fifteen columns of names is not a comparison anyone can read
+   across, and the later rounds are what the other setting is for. */
+export const DEPTH_ROUNDS = {
+  finals: r => r !== 'QF',
+  quarters: r => r === 'QF',
+}
 
 /* SURNAME ONLY. Seven name columns sit where a bar track used to, and the
    given name is the least informative part of a tennis name — the seed beside

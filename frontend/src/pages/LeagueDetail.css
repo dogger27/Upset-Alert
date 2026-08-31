@@ -1575,3 +1575,45 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   );
   background-attachment: local;
 }
+
+
+/* The depth switch, at the far end of the tab line. A segmented pair rather
+   than two loose pills: the tabs choose WHAT you are looking at, this chooses
+   how much of it, and joining the halves says they are one setting with two
+   positions. */
+.lt-depth {
+  margin-left: auto;
+  display: flex;
+  border: 1px solid var(--text-muted);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.lt-depth-btn {
+  background: none;
+  border: 0;
+  padding: 4px 12px;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  transition: color 0.15s, background 0.15s;
+}
+
+.lt-depth-btn:hover { color: var(--text-strong, var(--text)); }
+
+.lt-depth-btn--on {
+  background: var(--green, #2d6a4f);
+  color: #fff;
+}
+
+.lt-depth-btn:focus-visible {
+  outline: 2px solid var(--accent, #7aa9ff);
+  outline-offset: -2px;
+}
+
+/* Eight columns of names where there were four: the chips give up their side
+   padding before the names give up their letters. */
+.lt-picks-track[style*="--slots: 8"] .compare-pick-name { padding: 1px 2px; }
