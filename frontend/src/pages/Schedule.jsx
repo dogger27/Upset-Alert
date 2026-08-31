@@ -385,7 +385,13 @@ function MatchRow({ e, showCourt, zone, venueMode, onH2H, onChampion, onHistory,
   // Same flag the draw page reads — ESPN parks a suspended match at the fifth
   // slot of live_scores. Reusing the draw's own badge so rain reads the same
   // on both screens rather than looking like ordinary play here.
-  const suspended = e.live_scores?.[4] === 'suspended'
+  // TWO SOURCES, ONE ANSWER. ESPN parks the word in the fifth slot of
+  // live_scores; the point payload carries its own flag. A match suspended
+  // with no live point at all — which is every match carried overnight — has
+  // only the first, and the badge below was reading only the second. So a row
+  // the page had already tinted as suspended still announced "In progress",
+  // beside a score that had not moved since the night before.
+  const suspended = e.live_scores?.[4] === 'suspended' || !!e.live_point?.suspended
   const started = startedLine(e, zone)
 
   // The biggest thing that just happened to this match, or null. Marks the CARD
@@ -468,7 +474,7 @@ function MatchRow({ e, showCourt, zone, venueMode, onH2H, onChampion, onHistory,
         /* Say when play has STOPPED. A rain delay left rows reading "In
            progress" beside a score that could not move, which is the state
            people read as the site being broken. */
-        e.live_point?.suspended
+        suspended
           ? <span className="in-progress-badge in-progress-badge--suspended sched-status"
                   title="Play is suspended — the score is where it stood">Suspended</span>
           : <span className="in-progress-badge sched-status">In progress</span>

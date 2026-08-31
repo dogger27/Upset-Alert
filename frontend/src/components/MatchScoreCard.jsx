@@ -514,7 +514,15 @@ function CompetitorRows({ e, a, b }) {
      snapshot like a live row — otherwise the row falls through to the
      completed scores, finds none, and shows an empty card for a match that
      is half played. Nobody is serving, though, so the ball stays off. */
+  /* PLAY IS NOT HAPPENING. Postponed and to-be-completed say so on the row's
+     own status; a SUSPENDED match says it inside its score payload instead,
+     and was not counted here — so a match parked overnight kept the live row's
+     dash in the point column, which reads as "we have lost the point" rather
+     than "there is no point, nobody is playing". Both spellings, because a
+     carry with no live point has only the first and a live suspension only the
+     second. */
   const stopped = e.status === 'postponed' || e.status === 'to_be_completed'
+    || e.live_scores?.[4] === 'suspended' || !!e.live_point?.suspended
   const hasLiveScore = live || stopped
 
   // Games: prefer the snapshot's own, exactly as the draw page does.
