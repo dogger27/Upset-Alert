@@ -3,7 +3,7 @@ import { useParams, useNavigate, useOutletContext } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getLeague, getLeagueTournaments, getRoundScores, updateLeague, setMemberAdmin, removeMember, deleteLeague, shareLeagueByEmail, getGrandSlamTotals } from '../api/leagues'
 import { getGlobalRoundScores, getGlobalDraws, getGlobalGSTotals, listTournaments } from '../api/tournaments'
-import { PickChip, ROUND_SLOTS, ROUND_TITLES } from '../components/ComparePicksTable'
+import { PickChip, ROUND_SLOTS, ROUND_TITLES, DEPTH_ROUNDS } from '../components/ComparePicksTable'
 import { getComparePicks } from '../api/tournaments'
 import { useAuth } from '../store/auth'
 import UserName from '../components/UserName'
@@ -661,6 +661,10 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
      defined by total points, so it must never inherit an ordering chosen on
      the other tab. */
   const [cmpSort, setCmpSort] = useState(null)
+  /* How deep the compare view reaches. 'finals' is the default because it is
+     the whole back end of the draw in seven columns; 'quarters' trades that
+     for the eight names a round earlier. */
+  const [cmpDepth, setCmpDepth] = useState('finals')
   const [flashMatch, setFlashMatch] = useState(null)
   const flashKey = useRef(0)
   const flashTimer = useRef(null)
@@ -683,11 +687,18 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
     enabled: tab === 'compare',
   })
   const comparing = tab === 'compare'
-  const cmpRounds = cmp?.rounds ?? []
+  const allRounds = cmp?.rounds ?? []
+  const hasQuarters = allRounds.includes('QF')
+  /* The server sends every tier it has; the switch decides which are drawn.
+     One fetch serves both settings, so flipping it costs nothing. */
+  const cmpRounds = allRounds.filter(DEPTH_ROUNDS[cmpDepth] ?? (() => true))
   const cmpSlots = cmpRounds.map(r => Math.max(
     ROUND_SLOTS[r] ?? 1,
     ...(cmp?.users ?? []).map(u => (u.picks[r] ?? []).length),
   ))
+  /* A slot the switch has moved away from cannot stay the sort key — it is no
+     longer on screen to click off. */
+  const activeSort = cmpSort && cmpRounds.includes(cmpSort.round) ? cmpSort : null
   const cmpTotalSlots = cmpSlots.reduce((a, b) => a + b, 0)
   const cmpByUser = Object.fromEntries((cmp?.users ?? []).map(u => [u.user_id, u.picks]))
 
@@ -757,8 +768,8 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
      other. Anyone with no pick in that slot sorts last: nothing to agree
      with. */
   const dispEntries = (() => {
-    if (!comparing || !cmpSort) return ranked
-    const { round, slot } = cmpSort
+    if (!comparing || !activeSort) return ranked
+    const { round, slot } = activeSort
     const nameAt = e => cmpByUser[e.user_id]?.[round]?.[slot]?.name ?? null
     const counts = new Map()
     for (const e of ranked) {
@@ -896,6 +907,24 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
         <button type="button" role="tab" aria-selected={tab === 'compare'}
           className={`lt-tab${tab === 'compare' ? ' lt-tab--active' : ''}`}
           onClick={() => setTab('compare')}>Compare Picks</button>
+
+        {/* HOW FAR BACK TO LOOK. Only on the tab it governs, and pushed to the
+            far end of the line so it reads as a setting for the view rather
+            than as a third thing to open. Hidden when the draw has no
+            quarter-final tier to offer — a switch with one working side is
+            worse than no switch. */}
+        {comparing && hasQuarters && (
+          <div className="lt-depth" role="group" aria-label="Rounds shown">
+            {['quarters', 'finals'].map(d => (
+              <button key={d} type="button"
+                      className={`lt-depth-btn${cmpDepth === d ? ' lt-depth-btn--on' : ''}`}
+                      aria-pressed={cmpDepth === d}
+                      onClick={() => setCmpDepth(d)}>
+                {d === 'quarters' ? 'Quarters' : 'Finals'}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       </div>
 
@@ -985,7 +1014,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                 <div className="lt-picks-positions">
                   {cmpRounds.flatMap((r, i) =>
                     Array.from({ length: cmpSlots[i] }, (_, k) => {
-                      const on = cmpSort?.round === r && cmpSort?.slot === k
+                      const on = activeSort?.round === r && activeSort?.slot === k
                       return (
                         <button key={`${r}-${k}`} type="button"
                                 className={`lt-picks-pos${k === 0 ? ' lt-picks-group' : ''}${on ? ' lt-picks-pos--on' : ''}`}
