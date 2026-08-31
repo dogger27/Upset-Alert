@@ -808,7 +808,21 @@ export default function Schedule() {
      row said "Started at" some quite different time. Sorting on the same value
      the row displays is what makes the list read as a chronology. */
   const timeEntries = useMemo(() => {
-    const key = e => e.started_at || e.expected_start_at || ''
+    /* THE TIME IT HAPPENS ON THIS DAY, which for a carried match is not the
+       time it began. A match suspended overnight keeps yesterday's started_at
+       — that is what the field means — so sorting on it filed the resumptions
+       among yesterday afternoon's slots, scattered through a list that is
+       supposed to read as today's chronology.
+       Resumed: when it came back. Still waiting to resume: the slot it is
+       scheduled to come back in. Anything else is unchanged.
+       Keyed off the status rather than off comparing started_at's date with
+       play_date — those are a UTC instant and a venue-local date, and a night
+       match crossing midnight makes that comparison lie. */
+    const key = e => {
+      if (e.resumed_at) return e.resumed_at
+      if (e.status === 'to_be_completed') return e.expected_start_at || ''
+      return e.started_at || e.expected_start_at || ''
+    }
     return [...entries].sort((a, b) => {
       const ka = key(a), kb = key(b)
       if (ka !== kb) return ka < kb ? -1 : 1
