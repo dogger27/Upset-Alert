@@ -551,7 +551,8 @@ function DrawCard({ items, leagueId, showGenderLabel, onOpen }) {
   const anyOpen = a?.status === 'open' && (!paired || b?.status === 'open')
 
   return (
-    <button type="button" className={`dc-card${paired ? ' dc-card--pair' : ''}`}
+    <button type="button"
+            className={`dc-card dc-card--${paired ? 'both' : a.gender === 'M' ? 'atp' : 'wta'}${paired ? ' dc-card--pair' : ''}`}
             onClick={() => onOpen(items)}>
       <div className="dc-top">
         {paired ? (
@@ -568,6 +569,14 @@ function DrawCard({ items, leagueId, showGenderLabel, onOpen }) {
             {a.gender === 'M' ? 'ATP' : 'WTA'} {tierLabel(a.category)}
           </span>
         )}
+      </div>
+
+      {/* A LINE OF ITS OWN, so the dates start at the card's left edge instead
+          of trailing whatever the badges happened to leave. Where they shared
+          a row with the badges the line wrapped on a combined event and the
+          dates ended up in the middle of nowhere; two rows put each thing
+          where it can be found. */}
+      <div className="dc-meta">
         {(a.start_date || a.end_date) && (
           <span className="dc-dates">
             {fmtDrawDate(a.start_date)}{a.end_date ? ` – ${fmtDrawDate(a.end_date)}` : ''}
