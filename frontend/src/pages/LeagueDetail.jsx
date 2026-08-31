@@ -651,6 +651,11 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
   // null = always follow the latest match (auto-max); number = user-set position
   const [scrubPos, setScrubPos] = useState(null)
   const [tab, setTab] = useState('standings')
+  /* Which pick column the compare view is grouped by, or null for the
+     standings order. Cleared whenever Standings is entered — that view is
+     defined by total points, so it must never inherit an ordering chosen on
+     the other tab. */
+  const [cmpSort, setCmpSort] = useState(null)
   const [flashMatch, setFlashMatch] = useState(null)
   const flashKey = useRef(0)
   const flashTimer = useRef(null)
@@ -728,7 +733,42 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
     return { entries: currentEntries, roundsWithMatches: sliceRounds }
   }, [isScrubbing, effectiveScrubPos, matchesTimeline, entries, roundsWithMatches, userPredictions])
 
-  const dispEntries = displayData.entries
+  const pointsOrder = displayData.entries
+
+  /* A PERSON'S RANK IS THEIR RANK, whatever the rows are sorted by.
+     Stamped here, off the points order, so re-grouping the table by a pick
+     re-orders the ROWS without renumbering the people in them — and so the
+     number keeps saying where someone stands rather than where they happen to
+     appear. It doubles as the points tiebreak below: equal by rank is equal by
+     points, by construction. */
+  const ranked = pointsOrder.map((e, i) => ({ ...e, standingsRank: i + 1 }))
+
+  /* GROUPED BY WHO AGREED, when a position header is clicked.
+     Biggest group first, its members together, and inside a group the higher
+     standing first. The group's SIZE leads because the question the header
+     asks is "who did people put here", and the answer is a ranking of
+     consensus — thirteen for Djokovic before six for Tiafoe. Names order
+     groups that tie, so a redraw cannot shuffle two equal blocks past each
+     other. Anyone with no pick in that slot sorts last: nothing to agree
+     with. */
+  const dispEntries = (() => {
+    if (!comparing || !cmpSort) return ranked
+    const { round, slot } = cmpSort
+    const nameAt = e => cmpByUser[e.user_id]?.[round]?.[slot]?.name ?? null
+    const counts = new Map()
+    for (const e of ranked) {
+      const n = nameAt(e)
+      if (n) counts.set(n, (counts.get(n) ?? 0) + 1)
+    }
+    return [...ranked].sort((a, b) => {
+      const na = nameAt(a), nb = nameAt(b)
+      const ca = na ? counts.get(na) : -1
+      const cb = nb ? counts.get(nb) : -1
+      if (ca !== cb) return cb - ca
+      if (na !== nb) return (na ?? '').localeCompare(nb ?? '')
+      return a.standingsRank - b.standingsRank
+    })
+  })()
   const dispRoundsWithMatches = displayData.roundsWithMatches
 
   const numRounds = entries.length > 0 ? entries[0].round_points.length : (t.num_rounds ?? ROUND_COLORS.length)
@@ -831,7 +871,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
       <div className="lt-tabs" role="tablist">
         <button type="button" role="tab" aria-selected={tab === 'standings'}
           className={`lt-tab${tab === 'standings' ? ' lt-tab--active' : ''}`}
-          onClick={() => setTab('standings')}>Standings</button>
+          onClick={() => { setCmpSort(null); setTab('standings') }}>Standings</button>
         <button type="button" role="tab" aria-selected={tab === 'compare'}
           className={`lt-tab${tab === 'compare' ? ' lt-tab--active' : ''}`}
           onClick={() => setTab('compare')}>Compare Picks</button>
@@ -923,12 +963,19 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                 </div>
                 <div className="lt-picks-positions">
                   {cmpRounds.flatMap((r, i) =>
-                    Array.from({ length: cmpSlots[i] }, (_, k) => (
-                      <div key={`${r}-${k}`}
-                           className={`lt-picks-pos${k === 0 ? ' lt-picks-group' : ''}`}>
-                        {k + 1}
-                      </div>
-                    )))}
+                    Array.from({ length: cmpSlots[i] }, (_, k) => {
+                      const on = cmpSort?.round === r && cmpSort?.slot === k
+                      return (
+                        <button key={`${r}-${k}`} type="button"
+                                className={`lt-picks-pos${k === 0 ? ' lt-picks-group' : ''}${on ? ' lt-picks-pos--on' : ''}`}
+                                title={on
+                                  ? 'Sorted by this pick — click to return to the standings order'
+                                  : 'Sort by who picked here, most-agreed first'}
+                                onClick={() => setCmpSort(on ? null : { round: r, slot: k })}>
+                          {k + 1}
+                        </button>
+                      )
+                    }))}
                 </div>
               </div>
             ) : (
@@ -978,7 +1025,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                     <circle cx="12" cy="7" r="4" />
                   </svg>
                 </a>
-                <span className="lt-pos-num">{rank + 1}.</span>
+                <span className="lt-pos-num">{entry.standingsRank ?? rank + 1}.</span>
                 <span className={`lt-progress-name${entry.user_id === user?.id ? ' lt-progress-name--me' : ''}`}>
                   {finalPlayed && rank < 3 && <span className="lt-place-icon">{PLACE_ICONS[rank]}</span>}
                   <UserName className="lt-progress-name-text" user={{ username: entry.username, full_name: showRealName ? entry.full_name : null }} />

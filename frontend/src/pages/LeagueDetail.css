@@ -1346,14 +1346,37 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   padding-bottom: 0.15rem;
 }
 
-/* Scaffolding, not data: the numbers name the column and then get out of the
-   way of the names underneath. */
+/* Scaffolding AND a control: the numbers name the column, and clicking one
+   groups the table by who picked there. Button chrome undone by hand so it
+   still reads as a label until you go near it. */
 .lt-picks-pos {
   text-align: center;
   font-size: 0.68rem;
   font-weight: 600;
   color: var(--text-muted);
   opacity: 0.7;
+  font-family: inherit;
+  background: none;
+  border: 0;
+  padding: 2px 0;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color 120ms ease, opacity 120ms ease, background 120ms ease;
+}
+
+.lt-picks-pos:hover { opacity: 1; color: var(--text-strong, var(--text)); }
+
+/* The column the table is currently grouped by. It has to be findable at a
+   glance — the row order is otherwise unexplained. */
+.lt-picks-pos--on {
+  opacity: 1;
+  color: var(--text-strong, var(--text));
+  background: var(--atp-tint);
+}
+
+.lt-picks-pos:focus-visible {
+  outline: 2px solid var(--accent, #7aa9ff);
+  outline-offset: 1px;
 }
 
 .lt-picks-cell { min-width: 0; }
@@ -1373,12 +1396,39 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 .lt-picks-track { align-items: stretch; }
 .lt-picks-cell { display: flex; align-items: center; }
 
+/* THE RULE HAS TO CROSS THE GAP BETWEEN ROWS.
+   Standings rows are absolutely positioned on a 41px pitch and are 34px tall,
+   so 7px of every 41 is empty space between them — and a border on the cell
+   stops at the cell, leaving the column drawn as a ladder of short ticks
+   rather than as one line. A pseudo-element that overhangs the row by 4px at
+   each end closes the gap from both sides. Rows only; the header's own rules
+   stay ordinary borders, since nothing sits above or below them to join. */
+.lt-picks-cell.lt-picks-group { border-left: 0; position: relative; }
+.lt-picks-cell.lt-picks-group::before {
+  content: '';
+  position: absolute;
+  left: -3px;
+  top: -4px;
+  height: calc(100% + 8px);
+  border-left: 2px solid var(--text-muted);
+  pointer-events: none;
+}
+
 .lt-picks-round:first-child,
 .lt-picks-positions .lt-picks-pos:first-child,
 .lt-picks-cell:first-child { border-left: 0; margin-left: 0; padding-left: 0; }
 
-/* The chips size to the column they are in rather than to their text. */
+/* THE CHIP FILLS ITS COLUMN, and its text centres inside it.
+   Making the cell a flex container (so the divider could stretch to the row's
+   full height) turned the chip into a flex ITEM, which shrinks to its text and
+   sits at the start — so the names went back to hugging the left edge and the
+   chip's own justify-content had nothing to centre. It has to be told to grow
+   again. Filling also keeps the red and green pills a uniform width, which is
+   what makes them read as a column of verdicts rather than as tags of
+   assorted sizes. */
 .lt-picks-cell .compare-pick-name {
+  flex: 1 1 auto;
+  min-width: 0;
   justify-content: center;
   font-size: 0.8rem;
   gap: 4px;
