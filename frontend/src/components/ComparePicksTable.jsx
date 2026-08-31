@@ -23,17 +23,15 @@ const ROUND_SLOTS = { SF: 4, F: 2, W: 1 }
    is kept as the fallback, so an unmapped tier still reads correctly. */
 const ROUND_TITLES = { SF: 'Semi-Finalists', F: 'Finalists', W: 'Winner' }
 
-/* SURNAME AND AN INITIAL. Seven name columns now sit where three stacked
-   lists used to, so a full given name is width the row cannot spare — and it
-   is the least informative part of the name. The initial stays rather than
-   going entirely, because a bracket routinely holds two players who share a
-   surname (Zverev, Murray) and a bare surname would make them the same person.
-   splitPlayerName is the same parser the draw and the schedule use, so a
-   team, a seed prefix or a trailing IOC code is handled identically here. */
+/* SURNAME ONLY. Seven name columns sit where three stacked lists used to, and
+   the given name is the least informative part of a tennis name — the seed
+   beside it already separates the rare same-surname pair, and the full name is
+   on the title attribute either way.
+   splitPlayerName is the same parser the draw and the schedule use, so a team,
+   a seed prefix or a trailing IOC code is handled identically here. */
 function shortName(raw) {
-  const { first, last } = splitPlayerName(raw)
-  if (!last) return raw
-  return first ? `${first.trim()[0]}. ${last}` : last
+  const { last } = splitPlayerName(raw)
+  return last || raw
 }
 
 function PickChip({ pk }) {
@@ -42,14 +40,16 @@ function PickChip({ pk }) {
       pk.state === 'correct' ? ' compare-pick-name--correct'
       : pk.state === 'out' ? ' compare-pick-name--out'
       : ' compare-pick-name--open'}`}>
-      {/* Exactly the draw page's rules: a real seed is the grey box, an
-          implied draw-order rank the coloured one, and the entry token
-          (WC/Q/LL...) sits flush right — same classes, same colours, both
-          themes. */}
+      {/* WRITTEN, NOT BOXED. A badge is a box inside a box: at seven columns
+          a row it was a rail of little rectangles down every one, and each
+          reserved a uniform 30px whether or not the player had a seed. As
+          "[12]" the number costs what it costs and reads as part of the name.
+          Seed and implied draw-order rank stay distinguishable by colour —
+          the same distinction the badges made, without the geometry. */}
       {pk.seed != null ? (
-        <span className="pos-badge seeded">{pk.seed}</span>
+        <span className="cmp-seed">[{pk.seed}]</span>
       ) : pk.implied != null ? (
-        <span className="pos-badge unseeded">{pk.implied}</span>
+        <span className="cmp-seed cmp-seed--implied">[{pk.implied}]</span>
       ) : null}
       <span className="compare-pick-label" title={pk.name}>{shortName(pk.name)}</span>
       {pk.entry_type && (
