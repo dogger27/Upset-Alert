@@ -1185,6 +1185,23 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
    panel accounts for it. */
 .dm-panel .compare-table-scroll { scrollbar-gutter: stable; }
 
+/* THE ROWS REGION MUST NOT SCROLL SIDEWAYS.
+   Two things were producing a horizontal scrollbar with nothing to scroll to.
+   The rows are position:absolute with width:100%, which resolves against the
+   containing block's PADDING box — a box the vertical scrollbar does not
+   shrink — so every row was a scrollbar-width wider than the space it had to
+   sit in. A stable gutter takes that width out up front.
+   And the row grid is exactly 100% by construction: fixed columns, gaps, and
+   one 1fr track that absorbs whatever is left, with minmax(0,1fr) letting the
+   picks ellipsise rather than push. So there is no content to scroll to
+   horizontally, only sub-pixel rounding, and hiding that axis is the honest
+   statement rather than a cover-up. */
+.dm-panel .lt-progress-rows--race,
+.dm-panel .lt-open-content {
+  scrollbar-gutter: stable;
+  overflow-x: hidden;
+}
+
 /* Held down at the bottom, a sibling of the list rather than the end of it. */
 .dm-panel .lt-scrubber {
   flex: 0 0 auto;
