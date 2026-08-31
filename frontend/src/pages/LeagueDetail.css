@@ -1339,7 +1339,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
    opened it.
    Cards only. The Previous table is a real table and wants the full width to
    spread its columns across. */
-.lt-section--cards {
+.lt-section--fit {
   width: fit-content;
   max-width: 100%;
   margin-inline: auto;
@@ -1743,3 +1743,10 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   width: 100%;
 }
 .dc-meta .dc-surface { margin-left: auto; }
+
+
+/* Every heading centres over its column. The values below them do not all
+   follow — a tournament name is read from its left edge and a date is a fixed
+   shape — but a heading is a label for the whole column, and centring is what
+   says it belongs to all of it rather than to the first value under it. */
+.dt-table thead th { text-align: center; }
