@@ -1714,3 +1714,32 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 }
 .lt-load-more:hover { color: var(--text-strong, var(--text)); border-color: var(--text-strong, var(--text)); }
 .lt-load-more:focus-visible { outline: 2px solid var(--accent, #7aa9ff); outline-offset: 2px; }
+
+
+/* ── A card says which tour it is before it is read ──────────────────────────
+   The cards sat on the same colour as the panel behind them, so the only thing
+   separating a card from its container was a hairline. Tinting the surface by
+   tour makes the grid scannable at a distance — blue is the men's draw, pink
+   the women's, and clay the combined events that are both.
+
+   12% into --surface-card, the same recipe the schedule rows use, so the tint
+   reads as a shade of the surface rather than as a coloured panel. Mixed into
+   the surface token it follows the theme without a second declaration. */
+.dc-card--atp  { background: color-mix(in srgb, var(--atp-text) 12%, var(--surface-card)); }
+.dc-card--wta  { background: color-mix(in srgb, var(--wta-text) 12%, var(--surface-card)); }
+.dc-card--both { background: color-mix(in srgb, var(--clay-text) 12%, var(--surface-card)); }
+
+/* Borders take the same hue, a step stronger, so the edge belongs to the card
+   rather than looking borrowed from the panel. */
+.dc-card--atp  { border-color: color-mix(in srgb, var(--atp-text) 34%, var(--border-strong)); }
+.dc-card--wta  { border-color: color-mix(in srgb, var(--wta-text) 34%, var(--border-strong)); }
+.dc-card--both { border-color: color-mix(in srgb, var(--clay-text) 34%, var(--border-strong)); }
+
+/* Dates at the left edge, surface at the right, on a row of their own. */
+.dc-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  width: 100%;
+}
+.dc-meta .dc-surface { margin-left: auto; }
