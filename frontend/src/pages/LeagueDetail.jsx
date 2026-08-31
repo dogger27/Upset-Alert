@@ -572,15 +572,21 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
     const currentEntries = entries.map(e => {
       const preds = userPredictions[String(e.user_id)] ?? {}
       let total = 0
+      // COUNTED HERE, not carried over from `e`. The spread below would keep
+      // the server's finished-tournament correct_count on a row whose points
+      // have been rewound to an earlier match, so a scrubbed board would have
+      // shown "3 pts · 14 correct".
+      let correct_count = 0
       const byRound = {}
       for (const m of slice) {
         if (String(preds[String(m.id)]) === String(m.winner_id)) {
           byRound[m.round_number] = (byRound[m.round_number] ?? 0) + m.points
           total += m.points
+          correct_count += 1
         }
       }
       const round_points = Array.from({ length: e.round_points.length }, (_, i) => byRound[i + 1] ?? 0)
-      return { ...e, round_points, total }
+      return { ...e, round_points, total, correct_count }
     })
     currentEntries.sort((a, b) => {
       if (b.total !== a.total) return b.total - a.total
@@ -729,6 +735,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                 </div>
               ))}
             </div>
+            <span className="lt-progress-correct lt-progress-col-header" title="Correct picks">✓</span>
             <span className="lt-progress-total lt-progress-col-header">Score</span>
           </div>
           <div
@@ -794,6 +801,14 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                     )
                   })}
                 </div>
+                {/* Correct picks, beside the points they earned. The two are
+                    not the same fact: a round is worth more than the one
+                    before it, so 8 correct in R1 and 4 in the quarters can
+                    reach the same score by different routes. */}
+                <span className="lt-progress-correct"
+                      title={`${entry.correct_count ?? 0} correct pick${(entry.correct_count ?? 0) !== 1 ? 's' : ''}`}>
+                  {entry.correct_count ?? 0}
+                </span>
                 <span className="lt-progress-total">{entry.total} pts</span>
               </div>
             ))}
