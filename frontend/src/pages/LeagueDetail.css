@@ -893,7 +893,9 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   gap: 0.75rem;
 }
 
-.lt-category-group > .dc-card { flex: 0 1 19rem; }
+/* Neither grow nor shrink: the width above is the width. Shrinking would let
+   the same intrinsic-sizing loop back in through the side door. */
+.lt-category-group > .dc-card { flex: 0 0 auto; }
 
 .dc-card {
   /* A button, so it is reachable by keyboard and announces itself as
@@ -903,7 +905,15 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 0.45rem;
-  width: 100%;
+  /* A DEFINITE WIDTH, not a percentage.
+     The frame around these is width:fit-content, so it is sized FROM the
+     cards — and a percentage width inside a container that is still being
+     measured resolves against nothing and falls back to the content's own
+     max-content width. The cards ballooned past their flex basis and two
+     stopped fitting on a line. A real width makes the frame's max-content
+     arithmetic exact: n cards, n-1 gaps, done. */
+  width: 19rem;
+  max-width: 100%;
   padding: 0.85rem 0.9rem 0.9rem;
   font: inherit;
   text-align: left;
