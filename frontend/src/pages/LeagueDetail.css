@@ -881,13 +881,18 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 /* ── Standings / Compare Picks tabs, under each draw's identity line ── */
 .lt-tabs { display: flex; gap: 6px; margin: 6px 0 10px; }
 .lt-tab {
-  background: none; border: 1px solid var(--border); border-radius: 999px;
+  /* An unselected tab is still a BUTTON, and its outline is the only thing
+     saying so — next to the filled active one it read as bare text. --border
+     is the hairline between adjacent surfaces, not an edge for a control
+     floating on one; on a dark panel it is invisible. Same fault, same fix, as
+     the panel's close button. */
+  background: none; border: 1px solid var(--text-muted); border-radius: 999px;
   padding: 4px 14px; cursor: pointer;
   font-family: var(--font-display); font-weight: 700; font-size: 0.8rem;
   letter-spacing: 0.04em; color: var(--text-muted);
   transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
-.lt-tab:hover { color: var(--text-strong); }
+.lt-tab:hover { color: var(--text-strong); border-color: var(--text-strong); }
 .lt-tab--active {
   background: var(--green, #2d6a4f); border-color: transparent; color: #fff;
 }
@@ -938,7 +943,11 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   text-align: left;
   color: inherit;
   background: var(--surface-card);
-  border: 1px solid var(--border);
+  /* Also a control, also floating on the page — --border-strong rather than
+     --text-muted only because this is a large surface and the pill tabs are
+     small. Found while fixing the tabs; the same hairline was making the whole
+     card read as a faint smudge rather than as something to click. */
+  border: 1px solid var(--border-strong);
   border-radius: 12px;
   cursor: pointer;
   transition: border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
