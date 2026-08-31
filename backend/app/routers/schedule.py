@@ -717,6 +717,12 @@ async def schedule_day(
 
     venue_today = {tid: _venue_today(tzs.get(tid)) for tid in t_ids}
     carried_from: dict = {}
+    # Rows this day no longer owns, because the match moved on to another one.
+    dropped: set = set()
+
+    def m_of(entry):
+        return matches.get(entry.match_id) if entry.match_id else None
+
     carried_done: dict = {}
     for e in entries:
         siblings = elsewhere.get(
@@ -768,6 +774,20 @@ async def schedule_day(
             continue
         if later:
             statuses[e.id] = "postponed"
+            # AND ONCE IT HAS ACTUALLY RESUMED, THIS ROW IS HISTORY.
+            # A postponed row is the record of a day that ran out — worth
+            # showing while the match is still waiting, because that day is
+            # where it stopped. The moment play restarts somewhere else, this
+            # row is a duplicate of a match being played on another sheet, and
+            # the day it belongs to is the day it is on court. Dropped rather
+            # than restyled: two rows for one match, one of them frozen, is
+            # the thing that reads as the site being wrong.
+            # Only on real evidence of a resumption — the stamp, or a later
+            # row that has finished — never merely on a later sheet listing
+            # it, which is just a plan.
+            if (getattr(m_of(e), "resumed_at", None) is not None
+                    or any(r["done"] for r in later)):
+                dropped.add(e.id)
         elif started_before and not playing_now:
             statuses[e.id] = "to_be_completed"
             # The score stands where play stopped. It lives on the row for the
@@ -873,6 +893,8 @@ async def schedule_day(
     out: list[ScheduleEntryOut] = []
     courts: list[str] = []
     for e in entries:
+        if e.id in dropped:
+            continue
         if e.court and e.court not in courts:
             courts.append(e.court)
         m = matches.get(e.match_id) if e.match_id else None
