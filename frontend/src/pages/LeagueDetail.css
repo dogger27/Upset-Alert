@@ -1026,7 +1026,11 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1.5rem;
+  /* 0.75rem, not 1.5. max-width:100% is 100% of THIS box, so every pixel of
+     backdrop padding is a pixel the panel cannot use — 3rem of it was enough
+     to push a table that nearly fitted into scrolling sideways. Enough to read
+     as a layer over the page, not enough to cost the content a column. */
+  padding: 0.75rem;
   background: rgb(0 0 0 / 0.62);
   backdrop-filter: blur(2px);
 }
@@ -1157,6 +1161,16 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   overflow-y: auto;
   height: auto !important;
 }
+
+/* RESERVE THE VERTICAL SCROLLBAR BEFORE MEASURING THE PANEL.
+   The panel is width:fit-content, sized from this table — but this box also
+   scrolls vertically, and the scrollbar that appears takes its ~15px out of
+   the width AFTER the panel has been sized. The table then no longer fits the
+   space it was measured into, so a horizontal scrollbar appeared for the last
+   few pixels of a table that had just been given exactly enough room.
+   A stable gutter is part of the box before intrinsic sizing runs, so the
+   panel accounts for it. */
+.dm-panel .compare-table-scroll { scrollbar-gutter: stable; }
 
 /* Held down at the bottom, a sibling of the list rather than the end of it. */
 .dm-panel .lt-scrubber {
