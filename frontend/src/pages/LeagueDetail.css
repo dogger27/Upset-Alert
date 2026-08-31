@@ -1515,3 +1515,29 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 /* The tour's own colours, matching the badge on the same line. */
 .lt-title-gender--m { color: var(--atp-text); }
 .lt-title-gender--f { color: var(--wta-text); }
+
+
+/* ONE RULE THROUGH THE WHOLE HEADER BAND.
+   The round name and the position number are separate grid rows, so a
+   border-left on each drew two short strokes with a gap between them — and the
+   position button's 4px border-radius curled its stroke into the parenthesis
+   that made the pair read as a bracket.
+   Only the round label carries the rule now, as a pseudo-element tall enough
+   to cross both lines and the band's own padding, so it meets the rules above
+   and below it and continues cleanly into the row dividers underneath. Same
+   technique as the rows, for the same reason: a border stops at its element,
+   and this line has to cross several. */
+.lt-picks-round.lt-picks-group { position: relative; border-left: 0; }
+.lt-picks-round.lt-picks-group::before {
+  content: '';
+  position: absolute;
+  left: -3px;
+  top: -0.3rem;
+  height: calc(var(--hdr-track-h, 36px) + 0.6rem);
+  border-left: 2px solid var(--text-muted);
+  pointer-events: none;
+}
+
+/* The number keeps the group's indent so it stays over its column, but not the
+   stroke — there is one line here now, and the round label draws it. */
+.lt-picks-pos.lt-picks-group { border-left: 0; }
