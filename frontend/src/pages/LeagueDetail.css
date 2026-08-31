@@ -625,7 +625,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 /* Completed/active view: bracket button, then draw-history button, in their own far-left columns */
 .lt-progress-row--abs,
 .lt-progress-header-row {
-  grid-template-columns: 28px 22px 22px var(--name-col-width, 120px) 1fr 22px 52px;
+  grid-template-columns: 28px 22px 22px var(--name-col-width, 120px) 1fr 3rem 52px;
 }
 .lt-progress-row--abs {
   position: absolute; width: 100%;
@@ -708,6 +708,9 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 /* Correct picks, quieter than the score it sits beside: the score is the
    standing, this explains how it was reached. Tabular figures so the column
    stays a column as counts pass 9. */
+/* Wide enough for the HEADER, which is "✓ / 127" at its longest — the cells
+   beneath it are one to three digits and would have fitted in a third of it.
+   A column is as wide as the widest thing in it, and here that is the label. */
 .lt-progress-correct {
   font-size: 0.75rem;
   font-weight: 600;
@@ -756,7 +759,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   .lt-bar-track { display: none; }
   .lt-progress-row--abs,
   .lt-progress-header-row {
-    grid-template-columns: 28px 22px 22px var(--name-col-width, 120px) 22px 52px;
+    grid-template-columns: 28px 22px 22px var(--name-col-width, 120px) 3rem 52px;
   }
 }
 @container (max-width: 530px) {
@@ -784,7 +787,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   .lt-pos-num, .lt-hcol-pos { display: none; }
   .lt-progress-row--abs,
   .lt-progress-header-row {
-    grid-template-columns: 28px 22px var(--name-col-width, 92px) 22px 52px;
+    grid-template-columns: 28px 22px var(--name-col-width, 92px) 3rem 52px;
   }
 }
 @container (max-width: 300px) {
