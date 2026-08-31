@@ -243,6 +243,10 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
+  /* A flex column stretches its children across the cross axis by default, so
+     a section asking for width:fit-content was told to be full width anyway.
+     Centring is what lets each one be as wide as it needs and no wider. */
+  align-items: center;
 }
 
 /* Previous tab: sentinel row that triggers loading the next 5 draws once it
@@ -1251,7 +1255,18 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
    every one. In rows every finish is in one column, which is what comparing
    them needs. See DrawRow in LeagueDetail.jsx. */
 
-.dt-wrap { overflow-x: auto; }        /* the table scrolls, never the page */
+/* Sized by the table, and only THEN allowed to scroll.
+   overflow-x:auto is what lets a wide table scroll instead of the page — but a
+   scroll container gives the box around it nothing definite to shrink to, so
+   the section's fit-content fell back to the full width available and the
+   frame ran to the edge of the page with the table centred in a field of
+   nothing. An explicit fit-content here hands that measurement back, and
+   max-width keeps the scrolling behaviour on a narrow screen. */
+.dt-wrap {
+  overflow-x: auto;
+  width: fit-content;
+  max-width: 100%;
+}
 
 .dt-table {
   width: 100%;
