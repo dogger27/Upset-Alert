@@ -693,7 +693,10 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   box-shadow: inset 0 0 0 2.5px #000;
 }
 .lt-bar-label {
-  font-size: 1.05rem; font-weight: 900;
+  /* 1.4rem in a 34px bar: 22.4px of glyph with ~5px clear above and below,
+     including the outline. The number IS the row — it was set smaller than the
+     competitor's name beside it, which had the emphasis backwards. */
+  font-size: 1.4rem; font-weight: 900;
   white-space: nowrap; user-select: none; line-height: 1;
   /* A KEYLINE, NOT A HALO. The eight hard 1px offsets trace the glyph and lift
      it off the fill; that is the whole job. The three blurred glows underneath
@@ -703,7 +706,12 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
      ink is legible at a glance; a soft one never is. */
   text-shadow:
     1px 0 0 #fff, -1px 0 0 #fff, 0 1px 0 #fff, 0 -1px 0 #fff,
-    1px 1px 0 #fff, -1px 1px 0 #fff, 1px -1px 0 #fff, -1px -1px 0 #fff;
+    1px 1px 0 #fff, -1px 1px 0 #fff, 1px -1px 0 #fff, -1px -1px 0 #fff,
+    /* Still hard offsets, never blurred — a keyline scales with the type it
+       traces, so bigger digits need a thicker one to read as outlined rather
+       than as fringed. These are the four the original had at 2px; the three
+       blurred glows it also had are what made a blob and are not coming back. */
+    2px 0 0 #fff, -2px 0 0 #fff, 0 2px 0 #fff, 0 -2px 0 #fff;
 }
 /* Correct picks, quieter than the score it sits beside: the score is the
    standing, this explains how it was reached. Tabular figures so the column
