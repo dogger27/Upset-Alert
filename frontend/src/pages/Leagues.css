@@ -388,3 +388,9 @@
 .compare-table--positions .compare-pick-label { flex: 0 1 auto; }
 .compare-table--positions .compare-pick-entry { margin-left: 0; }
 .compare-table--positions .cmp-cell { text-align: center; }
+
+/* Names hug the picks they label. Left-aligned they sat against the panel edge
+   with a gap before the first slot, so the eye had to cross empty space to get
+   from a person to their bracket. Header follows the data — a label aligned
+   away from its own column reads as belonging to something else. */
+.compare-table--positions .compare-table-user { text-align: right; }
