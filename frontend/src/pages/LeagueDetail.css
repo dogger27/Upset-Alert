@@ -1198,3 +1198,21 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   /* The badge stacks above the name rather than squeezing it onto one line. */
   .dt-draw { flex-direction: column; align-items: flex-start; gap: 0.2rem; }
 }
+
+
+/* THE BOX FITS THE CARDS, NOT THE PAGE.
+   A .card is a block, so it spanned the full column and framed two cards with
+   a field of empty panel either side. Nothing about this box is a grid the
+   header has to line up with — it is a frame around however many draws are
+   running, so it should be that wide and no wider.
+   fit-content resolves to the cards' max-content width, which is all of them
+   on one line; max-width then caps it at the column and the flex line wraps as
+   before. Centred, so a box narrower than the page sits under the tabs that
+   opened it.
+   Cards only. The Previous table is a real table and wants the full width to
+   spread its columns across. */
+.lt-section--cards {
+  width: fit-content;
+  max-width: 100%;
+  margin-inline: auto;
+}
