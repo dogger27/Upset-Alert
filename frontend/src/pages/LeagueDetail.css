@@ -998,9 +998,16 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   display: flex;
   flex-direction: column;
   width: min(72rem, 100%);
-  /* Bounded, so the BODY scrolls rather than the page. An unbounded panel
-     grows with the field and takes the scrollbar back to the document, which
-     is the thing this whole layer exists to stop. */
+  /* A DEFINITE HEIGHT, not just a cap.
+     The list grows into the space the fixed regions leave — and flex-grow only
+     has space to grow into when its container's height is definite. With
+     max-height alone the panel sized to its CONTENT, and the rows contribute
+     no content height (their children are absolutely positioned, and the
+     inline height that normally stands in for them is overridden here). So the
+     list region resolved to zero and the standings did not appear at all.
+     Both properties, so the panel is exactly this tall and can never exceed
+     it. */
+  height: min(90vh, 100%);
   max-height: min(90vh, 100%);
   background: var(--surface-card);
   border: 1px solid var(--border);
