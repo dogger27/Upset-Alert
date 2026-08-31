@@ -985,9 +985,14 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
       <div className="lt-progress-top">
       <div className="lt-progress-header">
         <div className="lt-header-left">
-          <span className={`lt-gender-badge lt-gender-badge--${t.gender === 'M' ? 'm' : 'f'}`}>
-            {t.gender === 'M' ? 'ATP' : 'WTA'} {tierLabel(t.category)}
-          </span>
+          {/* The badge and the switch say the same thing, and the switch says
+              it louder and lets you act on it. Only the single-draw header,
+              which has no switch, still needs naming its tour. */}
+          {!headerRight && (
+            <span className={`lt-gender-badge lt-gender-badge--${t.gender === 'M' ? 'm' : 'f'}`}>
+              {t.gender === 'M' ? 'ATP' : 'WTA'} {tierLabel(t.category)}
+            </span>
+          )}
           {(t.start_date || t.end_date) && (
             <span className="lt-progress-date">
               {fmtDrawDate(t.start_date)}{t.end_date ? ` – ${fmtDrawDate(t.end_date)}` : ''}
