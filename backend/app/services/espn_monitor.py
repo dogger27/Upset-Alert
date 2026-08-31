@@ -45,6 +45,7 @@ from sqlalchemy import func, select
 from app.database import AsyncSessionLocal
 from app.models.tournament import DrawEntry, Match, Draw, LOCK_LEAD_DAYS
 from app.services.rankings import _norm
+from app.services.live_state import note_resumption
 
 logger = logging.getLogger(__name__)
 
@@ -1234,6 +1235,8 @@ class ESPNMonitor:
                     if suspended:
                         new_val.append("suspended")
                     if m.live_scores_json != new_val:
+                        # Before the assignment — see note_resumption.
+                        note_resumption(m, new_val)
                         m.live_scores_json = new_val
                         changed += 1
                         # SCORE HISTORY, WHERE SOFASCORE CANNOT PROVIDE IT.

@@ -96,6 +96,11 @@ class ScheduleEntryOut(BaseModel):
     # carry this — ESPN is the source and it covers nothing else — and only from
     # the moment we started recording it, so the client must fall back.
     started_at: Optional[datetime] = None
+    # WHEN PLAY CAME BACK, for a match that was suspended and picked up again.
+    # started_at stays at the first point of the match, because that is what it
+    # means; a row on the day of the resumption needs this instead, or it
+    # prints yesterday afternoon as its start time.
+    resumed_at: Optional[datetime] = None
     # When it FINISHED, for clients that want to react to a result rather than
     # merely display one. A phone discards a backgrounded tab and reloads it, so
     # "we watched the status change" is a fact the browser is often not around
@@ -936,6 +941,10 @@ async def schedule_day(
             # Singles reads it off the match; doubles has none and carries its
             # own, so the field means the same thing either way.
             started_at=began,
+            # Only when it is genuinely later than the start — a match that has
+            # never been suspended has no resumption to report, and one
+            # resumed within the same session should not claim a second start.
+            resumed_at=(_utc(getattr(m, "resumed_at", None)) if m else None),
             # Same read-through as started_at: singles carries the result on the
             # match, doubles on the row itself.
             completed_at=done_at,
