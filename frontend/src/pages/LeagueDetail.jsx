@@ -603,25 +603,6 @@ function DrawRow({ tournament: t, leagueId, showGenderLabel, onOpen }) {
    Same conventions as InviteModal below. */
 function DrawModal({ tournament, pickerCount, leagueId, leagueMemberCount,
                      showRealName, showGenderLabel, onClose }) {
-  /* MEASURE THE PINNED HEADER, DO NOT GUESS AT IT.
-     The column header (Competitor / rounds / Score) sticks directly below the
-     identity block, so it needs that block's height — and the height is not a
-     constant: the title wraps on a narrow panel, and the tab row and badge
-     both change size across the chart's container tiers. A hardcoded offset
-     leaves a gap on one width and overlaps on another. */
-  const panelRef = useRef(null)
-  useEffect(() => {
-    const panel = panelRef.current
-    const top = panel?.querySelector('.lt-progress-top')
-    if (!top || typeof ResizeObserver === 'undefined') return
-    const measure = () =>
-      panel.style.setProperty('--dm-top-h', `${top.offsetHeight}px`)
-    measure()
-    const ro = new ResizeObserver(measure)
-    ro.observe(top)
-    return () => ro.disconnect()
-  }, [])
-
   useEffect(() => {
     const onKey = e => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
@@ -635,7 +616,7 @@ function DrawModal({ tournament, pickerCount, leagueId, leagueMemberCount,
 
   return (
     <div className="dm-backdrop" onClick={onClose} role="presentation">
-      <div className="dm-panel" ref={panelRef} role="dialog" aria-modal="true"
+      <div className="dm-panel" role="dialog" aria-modal="true"
            aria-label={`${tournament.name} standings`}
            onClick={e => e.stopPropagation()}>
         <button type="button" className="dm-close" onClick={onClose} aria-label="Close">
