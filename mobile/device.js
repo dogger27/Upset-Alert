@@ -21,7 +21,6 @@
 
 import { Platform } from 'react-native'
 import * as Notifications from 'expo-notifications'
-import * as Device from 'expo-device'
 import Constants from 'expo-constants'
 import { getInstallId } from './install'
 import { registerDevice } from './api'
@@ -60,8 +59,13 @@ export async function registerThisDevice() {
     bundle_id: Constants.expoConfig?.ios?.bundleIdentifier || undefined,
     app_version: Constants.expoConfig?.version || undefined,
     build: String(Constants.expoConfig?.ios?.buildNumber || '') || undefined,
-    os_version: Device.osVersion || undefined,
-    device_model: Device.modelName || undefined,
+    // Platform.Version rather than expo-device: one fewer native module, and
+    // a native module added after a build was cut is simply absent from it.
+    // device_model is left out entirely — React Native cannot supply it
+    // without a native dependency, and the field is optional. If it turns out
+    // to matter for diagnosing push failures, add expo-device THEN and cut a
+    // build for it deliberately.
+    os_version: String(Platform.Version || '') || undefined,
     locale: Intl.DateTimeFormat().resolvedOptions().locale || undefined,
     time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone || undefined,
   }
