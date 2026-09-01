@@ -102,3 +102,11 @@ export const getLeague = (id) => request(`/leagues/${id}`)
 export const getLeagueTournaments = (id) => request(`/leagues/${id}/tournaments`)
 export const getRoundScores = (leagueId, tournamentId) =>
   request(`/leagues/${leagueId}/round-scores?tournament_id=${tournamentId}`)
+
+/* One draw's bracket, and this user's picks in it.
+   DrawOut is { tournament, draw_entries[], matches[], lock_mode, draw_locked,
+   lock_reason, predictions_hidden }. A MatchOut carries player1/player2/winner
+   as DrawEntryOut (or null — an unplayed slot), plus round_number, round_name,
+   is_bye, status and scores. */
+export const getDraw = (tournamentId) => request(`/tournaments/${tournamentId}/draw`)
+export const getPredictions = (tournamentId) => request(`/predictions/${tournamentId}`)

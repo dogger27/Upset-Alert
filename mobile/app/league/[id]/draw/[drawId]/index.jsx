@@ -14,13 +14,13 @@
  *    the person behind them is fourth.
  */
 
-import { Stack, useLocalSearchParams } from 'expo-router'
+import { Link, Stack, useLocalSearchParams } from 'expo-router'
 import { StyleSheet, Text, View } from 'react-native'
-import { useAuth } from '../../../../auth'
-import { getLeague, getLeagueTournaments, getRoundScores } from '../../../../api'
-import { useApi } from '../../../../useApi'
-import { C } from '../../../../theme'
-import { Card, ErrorNote, Loading, Muted, Screen, Title } from '../../../../ui'
+import { useAuth } from '../../../../../auth'
+import { getLeague, getLeagueTournaments, getRoundScores } from '../../../../../api'
+import { useApi } from '../../../../../useApi'
+import { C } from '../../../../../theme'
+import { Card, ErrorNote, Loading, Muted, Screen, Title } from '../../../../../ui'
 
 /* Level on total AND on every round — the same comparison the sort used, so
    the two cannot drift apart. */
@@ -59,10 +59,15 @@ export default function Standings() {
         <ErrorNote error={scores.error} onRetry={scores.refetch} />
 
         {scores.data && (
-          <Muted>
-            {scores.data.completed_matches_count} matches played
-            {t ? ` · ${t.draw_size} draw` : ''}
-          </Muted>
+          <View style={s.bar}>
+            <Muted>
+              {scores.data.completed_matches_count} matches played
+              {t ? ` · ${t.draw_size} draw` : ''}
+            </Muted>
+            <Link href={`/league/${id}/draw/${drawId}/picks`} style={s.link}>
+              Your picks ›
+            </Link>
+          </View>
         )}
 
         {scores.data && entries.length === 0 && (
@@ -109,6 +114,8 @@ export default function Standings() {
 }
 
 const s = StyleSheet.create({
+  bar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
+  link: { color: C.accent, fontWeight: '700', paddingVertical: 6 },
   table: {
     borderWidth: 1, borderColor: C.border, borderRadius: 14,
     overflow: 'hidden', backgroundColor: C.card,
