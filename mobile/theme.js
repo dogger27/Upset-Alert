@@ -61,6 +61,14 @@ export const C = {
 /* Pick states, from the bracket's own CSS. THE WHOLE BOX CHANGES, not a mark
    in the corner — that is what makes a wall of matches readable at a glance,
    and it is the single biggest thing the first version of this screen missed. */
+/* The bracket's position badge — seed in gold, ranking in grey, qualifier in
+   green. Straight from BracketView.css's .pos-badge and its dark tokens. */
+export const BADGE = {
+  seeded:   { bg: '#3a2f10', fg: '#e8c766', line: '#6b5518' },
+  unseeded: { bg: '#2b3a35', fg: '#b8c6c0', line: '#9fb0a9' },
+  qual:     { bg: '#142e24', fg: '#8fd8b0', line: '#35664d' },
+}
+
 export const PICK = {
   correct: { bg: '#1c4a33', border: '#45c977' },
   wrong:   { bg: '#4a2320', border: '#f2726a' },

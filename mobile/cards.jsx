@@ -10,7 +10,7 @@
 
 import { Image, StyleSheet, Text, View } from 'react-native'
 import { tierStamp } from './logos'
-import { C, R, S, SHADOW, T } from './theme'
+import { BADGE, C, R, S, SHADOW, T } from './theme'
 
 /* The accent bar: a 4px vertical gradient from the tour's 500 to its 700.
    Six stacked bands rather than a real gradient — expo-linear-gradient is a
@@ -119,4 +119,33 @@ const u = StyleSheet.create({
     paddingHorizontal: 10, paddingVertical: 4, borderRadius: R.pill,
     alignSelf: 'flex-start',
   },
+  // 26x17 with radius 3, from .pos-badge. The fixed width is the point.
+  badge: {
+    width: 28, height: 18, borderRadius: 3, borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  badgeGap: { width: 28 },
+  badgeText: { fontFamily: 'Archivo_700Bold', fontSize: 11, lineHeight: 13 },
 })
+
+
+/* The bracket's position badge.
+ *
+ * A SEED IS NOT A RANKING and the site distinguishes them: seeds in gold,
+ * everyone else's world ranking in grey, a qualifier's Q in green. Fixed
+ * footprint so a two- and a three-digit number leave the name starting at the
+ * same x down the whole column — which is most of what makes a bracket scan.
+ */
+export function PosBadge({ seed, ranking, entryType }) {
+  const isQ = String(entryType || '').toUpperCase() === 'Q'
+  const text = seed != null ? String(seed)
+    : isQ ? 'Q'
+    : ranking != null ? String(ranking) : ''
+  if (!text) return <View style={u.badgeGap} />
+  const t = seed != null ? BADGE.seeded : isQ ? BADGE.qual : BADGE.unseeded
+  return (
+    <View style={[u.badge, { backgroundColor: t.bg, borderColor: t.line }]}>
+      <Text style={[u.badgeText, { color: t.fg }]} numberOfLines={1}>{text}</Text>
+    </View>
+  )
+}
