@@ -15,7 +15,7 @@ import { useAuth } from '../auth'
 import { getOffer } from '../api'
 import { useApi } from '../useApi'
 import { capabilities, isAvailable } from '../modules/live-activity'
-import { showOnLockScreen } from '../liveactivity'
+import { showOnLockScreen, useShowingOnLockScreen } from '../liveactivity'
 import { C } from '../theme'
 import { Button, Card, ErrorNote, Muted, Row, Screen, Title } from '../ui'
 
@@ -30,19 +30,17 @@ export default function Status() {
   // about the binary underneath it. nativeBuildVersion does.
   const caps = capabilities()
   const [starting, setStarting] = useState(false)
-  const [started, setStarted] = useState(null)
   const [startErr, setStartErr] = useState('')
+  const [started, recheck] = useShowingOnLockScreen(offer.data?.match?.match_id)
 
   async function show() {
-    setStarting(true); setStartErr(''); setStarted(null)
+    setStarting(true); setStartErr('')
     try {
-      const id = await showOnLockScreen(
-        offer.data?.match, config?.content_state_version ?? 1)
-      setStarted(id)
+      await showOnLockScreen(offer.data?.match, config?.content_state_version ?? 1)
     } catch (e) {
       setStartErr(e.message)
     } finally {
-      setStarting(false)
+      setStarting(false); recheck()
     }
   }
 

@@ -15,6 +15,8 @@ import {
   addListener, attributesType, capabilities, isAvailable, runningActivities,
   startActivity, startListening,
 } from './modules/live-activity'
+import { useCallback, useEffect, useState } from 'react'
+import { useFocusEffect } from 'expo-router'
 import { getInstallId } from './install'
 import { endActivity, listActivities, registerActivity, registerPushToStart } from './api'
 
@@ -91,6 +93,38 @@ async function reconcile(install_id, contentVersion) {
   }
   if (stale.length) console.log(`[LA] reconciled: ended ${stale.length} stale`)
   return { onDevice: onDevice.size, ended: stale.length }
+}
+
+/* Is THIS match already on the Lock Screen?
+ *
+ * The button used to be driven by a local `shown` flag, which is wrong twice
+ * over: it resets on every reload, and it never knew about an activity started
+ * before this render — including one started by a previous install. So the app
+ * offered to show something that was already showing.
+ *
+ * ActivityKit is the only thing that actually knows, so ask it. Re-asked when
+ * the screen regains focus (the user may have swiped the activity away while
+ * looking at the Lock Screen) and whenever one ends.
+ */
+export function useShowingOnLockScreen(matchId) {
+  const [showing, setShowing] = useState(false)
+
+  const check = useCallback(() => {
+    if (matchId == null) { setShowing(false); return }
+    const found = runningActivities().some(a => Number(a.matchId) === Number(matchId))
+    setShowing(found)
+  }, [matchId])
+
+  useEffect(() => {
+    check()
+    const sub = addListener('onActivityEnded', check)
+    return () => { try { sub.remove() } catch { /* already gone */ } }
+  }, [check])
+
+  // Coming back from the Lock Screen is exactly when this can have changed.
+  useFocusEffect(useCallback(() => { check() }, [check]))
+
+  return [showing, check]
 }
 
 export function liveActivityStarted() { return started }

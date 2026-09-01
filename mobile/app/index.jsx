@@ -20,7 +20,7 @@ import { getEntryStatus, getOffer, listTournaments } from '../api'
 import { useApi } from '../useApi'
 import { computeCohortInfo, getHomeSection } from '../drawStatus'
 import { lockLabel } from '../lock'
-import { showOnLockScreen } from '../liveactivity'
+import { showOnLockScreen, useShowingOnLockScreen } from '../liveactivity'
 import { isAvailable } from '../modules/live-activity'
 import { C, R, S, T } from '../theme'
 import { Button, Card, ErrorNote, Eyebrow, Loading, Muted, Pill, Screen, Title } from '../ui'
@@ -164,14 +164,16 @@ function LiveNow({ offer, contentVersion }) {
   const a = m.attributes
   const st = m.content_state
   const [busy, setBusy] = useState(false)
-  const [shown, setShown] = useState(false)
   const [err, setErr] = useState('')
+  // ActivityKit is the source of truth, not a local flag — see
+  // useShowingOnLockScreen.
+  const [shown, recheck] = useShowingOnLockScreen(m?.match_id)
 
   async function show() {
     setBusy(true); setErr('')
-    try { await showOnLockScreen(m, contentVersion); setShown(true) }
+    try { await showOnLockScreen(m, contentVersion) }
     catch (e) { setErr(e.message) }
-    finally { setBusy(false) }
+    finally { setBusy(false); recheck() }
   }
 
   const games = st?.games
