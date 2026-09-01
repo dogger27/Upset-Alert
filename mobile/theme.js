@@ -40,13 +40,30 @@ export const C = {
   bad:       '#f87171',
   warn:      '#e0a34a',
 
-  // Court surfaces, matching the site's swatches.
-  grass:     '#2f9e44',
-  clayCourt: '#c9783a',
-  hard:      '#3b6ea8',
+  // The tour ramps, from the site's --atp-500/--atp-700 and --wta-500/-700.
+  // The first pass here used eyeballed approximations (#3b6ea8 / #a8437a);
+  // these are the real values, and the difference is visible.
+  atp:       '#2563eb',
+  atpDeep:   '#1742a0',
+  wta:       '#db2777',
+  wtaDeep:   '#a3134e',
 
-  atp:       '#3b6ea8',
-  wta:       '#a8437a',
+  // Court surfaces: the dot colour, and the pill's dark-mode fill and ink.
+  surfaces: {
+    grass: { dot: '#2f9e44', bg: '#102b18', fg: '#6fd18a', label: 'Grass' },
+    clay:  { dot: '#c9783a', bg: '#33200f', fg: '#e0a06a', label: 'Clay' },
+    hard:  { dot: '#1d4ed8', bg: '#142743', fg: '#8fb6ff', label: 'Hard' },
+  },
+}
+
+/* --shadow-sm in dark: 0 1px 3px rgba(0,0,0,0.50). RN wants the pieces
+   separately, and its shadowRadius is roughly the CSS blur halved. */
+export const SHADOW = {
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 1 },
+  shadowOpacity: 0.5,
+  shadowRadius: 2,
+  elevation: 2,
 }
 
 /* Type scale.

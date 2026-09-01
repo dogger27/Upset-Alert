@@ -25,6 +25,8 @@ import { useApi } from '../../useApi'
 import { computeCohortInfo, getHomeSection } from '../../drawStatus'
 import { lockLabel } from '../../lock'
 import { C, R, S, T } from '../../theme'
+import { StatusChip, SurfacePill, TourCard } from '../../cards'
+import { dateRange } from '../../dates'
 import { Button, Card, ErrorNote, Eyebrow, Loading, Muted, Screen, Title } from '../../ui'
 
 export default function Dashboard() {
@@ -152,114 +154,124 @@ function Section({ title, count, tone, children }) {
   )
 }
 
-const tintOf = t => (t.gender === 'F' ? C.wta : C.atp)
-const tourOf = t => (t.gender === 'F' ? 'WTA' : 'ATP')
-const metaOf = t => [t.category, t.surface, t.draw_size ? `${t.draw_size} draw` : null, t.city]
-  .filter(Boolean).join(' · ')
+/* "Sep 21 – 27", the site's date range in its mono face, right-aligned in the
+   meta row so it reads as the third item in a summary rather than a heading. */
 
-/* The only card with something to DO, so it is the only one that shouts.
-   The countdown is the largest thing on it — it is the thing you can miss. */
+function Meta({ t }) {
+  return (
+    <View style={s.meta}>
+      {t.city ? (
+        <Text style={[T.smallMed, { color: C.inkBody, flexShrink: 1 }]} numberOfLines={1}>
+          {t.city}
+        </Text>
+      ) : null}
+      <SurfacePill surface={t.surface} />
+      {dateRange(t) ? (
+        <Text style={[T.tiny, { color: C.muted, marginLeft: 'auto' }]}>{dateRange(t)}</Text>
+      ) : null}
+    </View>
+  )
+}
+
+/* The only card with something to DO, so the countdown is the loudest thing
+   on it — that is the part you can miss. */
 function OpenCard({ t, status, now }) {
   const lock = lockLabel(t, now)
-  const entered = status === 'complete' ? { text: 'Picks in', color: C.greenLit }
-    : status === 'partial' ? { text: 'Partly picked', color: C.warn }
-    : { text: 'Not entered', color: C.clay }
+  const chip = status === 'complete' ? ['good', 'Picks in']
+    : status === 'partial' ? ['warn', 'Picks incomplete']
+    : ['bad', 'Not entered']
 
   return (
     <Link href={`/draw/${t.id}`} asChild>
-      <Pressable style={({ pressed }) => [s.card, pressed && { opacity: 0.75 }]}>
-        <View style={[s.tint, { backgroundColor: tintOf(t) }]} />
-        <View style={s.body}>
-          <View style={s.topRow}>
-            <Text style={[T.h2, { color: C.ink, flex: 1 }]} numberOfLines={1}>{t.name}</Text>
-            <Text style={[T.tiny, { color: tintOf(t) }]}>{tourOf(t)}</Text>
-          </View>
-          <Text style={[T.small, { color: C.muted }]} numberOfLines={1}>{metaOf(t)}</Text>
-          <View style={s.footRow}>
-            {lock ? (
-              <View style={s.lockLine}>
-                <Text style={[T.score, { color: lock.urgent ? C.clay : C.ink }]}>{lock.value}</Text>
-                <Text style={[T.tiny, { color: C.faint }]}>{lock.suffix}</Text>
-              </View>
-            ) : <View />}
-            <Text style={[T.tiny, { color: entered.color }]}>{entered.text}</Text>
-          </View>
-        </View>
+      <Pressable style={({ pressed }) => pressed && { opacity: 0.8 }}>
+        <TourCard
+          tour={t.gender === 'F' ? 'WTA' : 'ATP'} tier={t.category} name={t.name}
+          footer={
+            <View style={s.footRow}>
+              {lock ? (
+                <View style={s.lockLine}>
+                  <Text style={[T.score, { color: lock.urgent ? C.clay : C.ink }]}>{lock.value}</Text>
+                  <Text style={[T.tiny, { color: C.faint }]}>{lock.suffix}</Text>
+                </View>
+              ) : <View />}
+              <StatusChip tone={chip[0]}>{chip[1]}</StatusChip>
+            </View>
+          }
+        >
+          <Meta t={t} />
+        </TourCard>
       </Pressable>
     </Link>
   )
 }
 
-/* Playing: nothing to do, so the question is only "where am I". */
+/* Playing: nothing to do, so the only question is where you stand. */
 function ActiveCard({ t, userId }) {
   const standings = useApi(`standings:${t.id}`, () => getDrawStandings(t.id))
   const rows = standings.data || []
   const mine = rows.find(r => r.user?.id === userId)
-  const rank = mine ? rankOf(rows, mine) : null
 
   return (
     <Link href={`/draw/${t.id}`} asChild>
-      <Pressable style={({ pressed }) => [s.card, pressed && { opacity: 0.75 }]}>
-        <View style={[s.tint, { backgroundColor: tintOf(t) }]} />
-        <View style={s.body}>
-          <View style={s.topRow}>
-            <Text style={[T.h2, { color: C.ink, flex: 1 }]} numberOfLines={1}>{t.name}</Text>
-            <Text style={[T.tiny, { color: tintOf(t) }]}>{tourOf(t)}</Text>
-          </View>
-          <Text style={[T.small, { color: C.muted }]} numberOfLines={1}>{metaOf(t)}</Text>
-          <View style={s.footRow}>
-            {mine ? (
-              <View style={s.lockLine}>
-                <Text style={[T.score, { color: C.ink }]}>{ordinal(rank)}</Text>
-                <Text style={[T.tiny, { color: C.faint }]}>of {rows.length}</Text>
-              </View>
-            ) : (
-              <Text style={[T.tiny, { color: C.faint }]}>
-                {standings.loading ? '' : 'Not entered'}
-              </Text>
-            )}
-            {mine && (
-              <Text style={[T.tiny, { color: C.muted }]}>
-                {mine.correct_count} right · {fmtPts(mine.total_points)} pts
-              </Text>
-            )}
-          </View>
-        </View>
+      <Pressable style={({ pressed }) => pressed && { opacity: 0.8 }}>
+        <TourCard
+          tour={t.gender === 'F' ? 'WTA' : 'ATP'} tier={t.category} name={t.name}
+          footer={
+            <View style={s.footRow}>
+              {mine ? (
+                <View style={s.lockLine}>
+                  <Text style={[T.score, { color: C.ink }]}>{ordinal(mine.rank)}</Text>
+                  <Text style={[T.tiny, { color: C.faint }]}>of {rows.length}</Text>
+                </View>
+              ) : (
+                <Text style={[T.tiny, { color: C.faint }]}>
+                  {standings.loading ? '' : 'Not entered'}
+                </Text>
+              )}
+              {mine ? (
+                <StatusChip tone="muted">
+                  {mine.correct_count} right · {fmtPts(mine.total_points)} pts
+                </StatusChip>
+              ) : null}
+            </View>
+          }
+        >
+          <Meta t={t} />
+        </TourCard>
       </Pressable>
     </Link>
   )
 }
 
+/* Next/last week: one line, because that is what they are worth. The tour dot
+   carries the only thing that distinguishes them at a glance. */
 function CompactRow({ t, done }) {
+  const isATP = t.gender !== 'F'
   return (
     <Link href={`/draw/${t.id}`} asChild>
       <Pressable style={({ pressed }) => [s.compact, pressed && { opacity: 0.7 }]}>
-        <View style={[s.compactDot, { backgroundColor: tintOf(t) }]} />
+        <View style={[s.compactDot, { backgroundColor: isATP ? C.atp : C.wta }]} />
         <Text style={[T.small, { color: done ? C.muted : C.inkBody, flex: 1 }]} numberOfLines={1}>
           {t.name}
         </Text>
-        <Text style={[T.tiny, { color: C.faint }]}>
-          {[t.surface, t.draw_size].filter(Boolean).join(' · ')}
-        </Text>
+        <Text style={[T.tiny, { color: C.faint }]}>{dateRange(t)}</Text>
       </Pressable>
     </Link>
   )
 }
 
-/* Competition ranking: level people share a place and the next one skips.
-   The server sends `rank`, but it is computed for the whole board — recomputing
-   here would be a second opinion, so this just reads it. */
-function rankOf(rows, mine) {
-  return mine.rank ?? (rows.indexOf(mine) + 1)
-}
-
+/* 1st, 2nd, 3rd, 4th… The server sends `rank` already computed across the whole
+   board — competition ranking, ties sharing a place — so this only formats it.
+   Recomputing here would be a second opinion on the same question. */
 function ordinal(n) {
   if (n == null) return '—'
-  const s = ['th', 'st', 'nd', 'rd']
+  const suf = ['th', 'st', 'nd', 'rd']
   const v = n % 100
-  return n + (s[(v - 20) % 10] || s[v] || s[0])
+  return n + (suf[(v - 20) % 10] || suf[v] || suf[0])
 }
 
+// Points are a float on the wire but whole in practice; show a decimal only
+// when there genuinely is one.
 const fmtPts = p => (Number.isInteger(p) ? String(p) : String(Math.round(p * 10) / 10))
 
 const s = StyleSheet.create({
@@ -273,17 +285,8 @@ const s = StyleSheet.create({
   sectionHead: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
   rule: { flex: 1, height: 1, backgroundColor: C.border },
 
-  card: {
-    backgroundColor: C.card, borderRadius: R.lg, borderWidth: 1, borderColor: C.border,
-    flexDirection: 'row', overflow: 'hidden',
-  },
-  tint: { width: 4 },
-  body: { flex: 1, padding: S.md, gap: 3 },
-  topRow: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
-  footRow: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline',
-    marginTop: S.sm, borderTopWidth: 1, borderTopColor: C.border, paddingTop: S.sm,
-  },
+  meta: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  footRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: S.sm },
   lockLine: { flexDirection: 'row', alignItems: 'baseline', gap: 5 },
 
   compact: {
