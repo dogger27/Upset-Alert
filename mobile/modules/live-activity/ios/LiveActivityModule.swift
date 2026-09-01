@@ -25,6 +25,12 @@ import ExpoModulesCore
 // copies is not ideal, but an app target and a widget extension are separate
 // compilation units and Expo modules cannot see the extension's sources.
 // The wire format is owned by live_activity_content.py; both copies mirror it.
+//
+// "EXACTLY" IS NOW CHECKED, because saying it here did not prevent it: seed
+// badges shipped in a build that never drew one, since p1_draw_rank was added
+// to the widget's copy and not to this one. THIS struct is what the app encodes
+// with, so a field missing here is dropped before the widget can ever see it —
+// and nothing errors. Run `node liveactivity.test.mjs`.
 struct MatchActivityAttributes: ActivityAttributes {
   public struct ContentState: Codable, Hashable {
     var v: Int
@@ -53,6 +59,8 @@ struct MatchActivityAttributes: ActivityAttributes {
   var p2_name: String
   var p1_seed: Int?
   var p2_seed: Int?
+  var p1_draw_rank: Int?
+  var p2_draw_rank: Int?
   var round_name: String
   var event_label: String
 }
