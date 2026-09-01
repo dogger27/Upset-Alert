@@ -1,15 +1,27 @@
 import { useState } from 'react'
+import { Redirect } from 'expo-router'
 import { StyleSheet, Text, TextInput, View } from 'react-native'
 import { useAuth } from '../auth'
 import { C, TOUCH } from '../theme'
 import { Button, Card, Muted, Screen, Title } from '../ui'
 
 export default function SignIn() {
-  const { signIn, config } = useAuth()
+  const { signIn, config, phase } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+
+  // Signing in changes `phase` but does not move the app: this screen would
+  // otherwise keep rendering the form over an authenticated session, which is
+  // exactly what it did — the sign-in worked, the token was stored, and only
+  // relaunching (which boots at "/") revealed it. Declarative rather than a
+  // router.replace() inside submit(), so arriving here while already signed in
+  // bounces too, not just the instant the request returns.
+  //
+  // Placed AFTER every hook above: early-returning before one is the
+  // rules-of-hooks bug this project has hit before.
+  if (phase === 'ready') return <Redirect href="/" />
 
   async function submit() {
     setBusy(true); setError('')
