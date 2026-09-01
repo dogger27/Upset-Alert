@@ -3,6 +3,7 @@
  * Logged-in users can make / update predictions until the lock time.
  */
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react'
+import { shortRound } from '../utils/rounds'
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -1179,15 +1180,20 @@ function TournamentDraw() {
     if (!(m.round_number in roundNameByNum)) roundNameByNum[m.round_number] = m.round_name
     roundCountByNum[m.round_number] = (roundCountByNum[m.round_number] || 0) + 1
   }
-  // Short label inside each dot: final stages by name, earlier rounds by order
-  // (e.g. Grand Slam → R1, R2, R3, R16, QF, SF, F).
+  /* The dot says the same thing as the column header it scrolls to.
+     It used to number by ORDER — R1, R2, R3, R16, QF, SF, F — which put an
+     "R1" dot above a column headed "R128" once the headers were shortened.
+     Same source, same function, so the two cannot drift.
+     The count-based branch survives only as a fallback for a round the API
+     gave no name: matches in a round × 2 is the number of players in it. */
   const dotLabel = (rn, i) => {
+    const name = roundNameByNum[rn]
+    if (name) return shortRound(name, i + 1)
     const c = roundCountByNum[rn]
     if (c === 1) return 'F'
     if (c === 2) return 'SF'
     if (c === 4) return 'QF'
-    if (c === 8) return 'R16'
-    return `R${i + 1}`
+    return `R${c * 2}`
   }
   // Round label by DRAW SIZE at that round (players = 2×matches): R128/R64/R32/
   // R16, then QF/SF/F. Used on the edge round-nav buttons.
