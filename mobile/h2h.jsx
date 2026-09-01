@@ -124,7 +124,7 @@ const s = StyleSheet.create({
   matchMeta: { ...T.tiny, color: C.faint },
   matchScore: { ...T.tiny, color: C.muted },
   none: { ...T.small, color: C.muted, textAlign: 'center', paddingVertical: S.lg },
-  err: { ...T.small, color: C.error, textAlign: 'center', paddingVertical: S.md },
+  err: { ...T.small, color: C.bad, textAlign: 'center', paddingVertical: S.md },
   close: { alignSelf: 'center', paddingVertical: S.sm, paddingHorizontal: S.lg },
   closeText: { ...T.smallMed, color: C.clay },
 })

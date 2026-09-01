@@ -150,6 +150,13 @@ export const getEntryStatus = () => request('/predictions/entry-status')
 export const getH2H = (p1, p2) =>
   request(`/h2h?p1=${encodeURIComponent(p1)}&p2=${encodeURIComponent(p2)}`)
 
+/* Who called a finished match right, and who didn't. With no league_id this is
+   every PARTICIPANT in the draw — someone with at least one pick — which is the
+   same bar the standings use. Only completed non-bye matches answer. */
+export const getPredictors = (tournamentId, matchId, leagueId) =>
+  request(`/tournaments/${tournamentId}/matches/${matchId}/predictors` +
+          (leagueId ? `?league_id=${leagueId}` : ''))
+
 /* Reconciliation. The server's view of what is running drifts from the
    device's — the app is killed without calling DELETE, a user swipes an
    activity away, a new build replaces the one that owned it — and this is the
