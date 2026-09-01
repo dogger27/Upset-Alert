@@ -260,6 +260,18 @@ struct MatchLockScreenView: View {
             // compressed at all, and let the name (which has
             // minimumScaleFactor) give up the space instead.
             if let point = state.point, point.indices.contains(side - 1), !isOver {
+                /* A RULE BETWEEN THE SETS AND THE POINT.
+                   Without it the point is just another number in the row, and
+                   at love it is indistinguishable from a set: "3" then "0"
+                   reads as two sets, 3-1 and 0-0, rather than a set at 3-1
+                   with the game at love. Colour alone did not carry it —
+                   reported as "not showing game score", which is what it looks
+                   like when the games are mistaken for sets. */
+                Rectangle()
+                    .fill(Color.white.opacity(0.22))
+                    .frame(width: 1, height: 13)
+                    .padding(.leading, 2)
+
                 Text(point[side - 1])
                     .font(.system(.subheadline, design: .rounded))
                     .fontWeight(.bold)

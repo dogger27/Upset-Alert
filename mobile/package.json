@@ -30,7 +30,9 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "test:theme": "node theme.test.mjs",
-    "test:scoring": "node scoring.test.mjs"
+    "test:scoring": "node scoring.test.mjs",
+    "test:wire": "node liveactivity.test.mjs",
+    "test": "node theme.test.mjs && node scoring.test.mjs && node liveactivity.test.mjs"
   },
   "private": true,
   "devDependencies": {
