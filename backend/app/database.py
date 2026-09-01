@@ -61,9 +61,13 @@ async def init_db():
     # NoReferencedTableError instead, and each newly cross-referenced table made
     # that trap a little worse.
     import app.models.alert  # noqa: F401
+    import app.models.app_device  # noqa: F401
+
     import app.models.draw_history  # noqa: F401
     import app.models.h2h  # noqa: F401
     import app.models.league  # noqa: F401
+    import app.models.live_activity  # noqa: F401
+
     import app.models.notification  # noqa: F401
     import app.models.prediction  # noqa: F401
     import app.models.push  # noqa: F401
@@ -117,6 +121,16 @@ def _enrol_all_notifications_sql() -> str:
 async def _migrate(conn):
     """Apply additive schema migrations that create_all won't handle."""
     migrations = [
+        # A PARTIAL index, which is why it is here rather than in the model:
+        # a device row exists before notification permission is granted, so
+        # device_token is null until it is. SQLite treats every NULL as
+        # distinct, so a plain UNIQUE would happen to work — but it would be
+        # the wrong statement of intent, and it would break the day this moves
+        # to a database where it does not.
+        # A token that migrates between accounts (sign out, sign in as someone
+        # else) must MOVE rather than exist twice; this is what enforces that.
+        "CREATE UNIQUE INDEX IF NOT EXISTS ux_app_devices_token "
+        "ON app_devices(device_token) WHERE device_token IS NOT NULL",
         "ALTER TABLE matches ADD COLUMN scores_json JSON",
         "ALTER TABLE schedule_entry_players ADD COLUMN nationality VARCHAR",
         "ALTER TABLE tournaments ADD COLUMN sofa_mixed_tournament_id INTEGER",

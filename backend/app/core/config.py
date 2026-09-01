@@ -52,6 +52,35 @@ class Settings(BaseSettings):
     # purpose, and says so in the log at boot.
     outbound_notifications: bool = True
 
+    # ── Apple Push Notification service ──────────────────────────────────
+    # Token-based auth: one .p8 key covers alerts AND Live Activities, both
+    # platforms, and never expires. Certificates would need annual renewal per
+    # environment, which is a recurring outage waiting to happen on a
+    # single-maintainer project.
+    #
+    # A FILE PATH, not the key material. A multi-line PEM in an env var is a
+    # compose-quoting footgun and shows up in `docker inspect`. Mount it
+    # read-only and keep it with the other production secrets, which are not in
+    # git — this repo is public.
+    apns_key_path: str = "/secrets/apns.p8"
+    apns_key_id: str = ""
+    apns_team_id: str = ""
+    apns_bundle_id: str = ""
+    # Fallback only. The authoritative value is per-device: which host a token
+    # is valid on is a property of the BUILD (Xcode → sandbox, TestFlight and
+    # the App Store → production), so the client reports it and we store it.
+    apns_default_env: str = "production"
+
+    # Live Activities. Off by default, exactly like sofascore_live_enabled and
+    # for the same reason: merging this changes nothing anywhere until an
+    # instance opts in.
+    live_activity_enabled: bool = False
+    # Run the dispatcher end to end and LOG every push it would send, without
+    # sending any. The precedent is sofascore_results_enabled with
+    # sofascore_authoritative=false — watch it against a real tournament day
+    # before anything leaves the machine.
+    live_activity_dry_run: bool = False
+
     # Sofascore live-score polling. Off by default so merging the poller changes
     # nothing anywhere until an instance opts in — staging first, production only
     # once it has been watched through a real tournament day.
