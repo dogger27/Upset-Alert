@@ -19,24 +19,9 @@ import { StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '../../../../../auth'
 import { getLeague, getLeagueTournaments, getRoundScores } from '../../../../../api'
 import { useApi } from '../../../../../useApi'
+import { competitionRanks } from '../../../../../scoring'
 import { C } from '../../../../../theme'
 import { Card, ErrorNote, Loading, Muted, Screen, Title } from '../../../../../ui'
-
-/* Level on total AND on every round — the same comparison the sort used, so
-   the two cannot drift apart. */
-function sameStanding(a, b) {
-  if (!a || !b || a.total !== b.total) return false
-  const x = a.round_points || [], y = b.round_points || []
-  return x.length === y.length && x.every((v, i) => v === y[i])
-}
-
-function competitionRanks(entries) {
-  const out = []
-  entries.forEach((e, i) => {
-    out.push(i > 0 && sameStanding(entries[i - 1], e) ? out[i - 1] : i + 1)
-  })
-  return out
-}
 
 export default function Standings() {
   const { id, drawId } = useLocalSearchParams()

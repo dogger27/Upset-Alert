@@ -37,6 +37,10 @@ export function useApi(key, fetcher, { enabled = true } = {}) {
   const run = useCallback(async (force = false) => {
     if (!key || !enabled) return
     if (!force && cache.has(key)) { setData(cache.get(key)); setLoading(false); return }
+    // Drop whatever the PREVIOUS key produced. Without this, navigating from
+    // one league to another shows the first league's rows under the second
+    // league's header until the new request lands — briefly, and wrongly.
+    setData(cache.get(key))
     setLoading(true); setError(null)
     try {
       // Dedupe: two screens mounting at once must not fire the same request

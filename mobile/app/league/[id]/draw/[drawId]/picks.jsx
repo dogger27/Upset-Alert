@@ -21,22 +21,12 @@ import { useMemo } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { getDraw, getPredictions } from '../../../../../api'
 import { useApi } from '../../../../../useApi'
+import { slotLabel } from '../../../../../scoring'
 import { C } from '../../../../../theme'
 import { Card, ErrorNote, Loading, Muted, Screen, Title } from '../../../../../ui'
 
-function slotLabel(entry, match) {
-  // A named entrant always wins: in a bye match one side IS a real player, and
-  // labelling both sides "Bye" would hide who received it.
-  if (entry?.name) return entry.name
-  if (match.is_bye) return 'Bye'
-  if (!entry) return 'TBD'
-  // Drawn but not yet named. entry_type 'Q' is the qualifier case, and the
-  // draw sheet calls it "Qualifier" — not blank, not TBD.
-  return entry.entry_type === 'Q' ? 'Qualifier' : 'TBD'
-}
-
 export default function Picks() {
-  const { id, drawId } = useLocalSearchParams()
+  const { drawId } = useLocalSearchParams()
   const draw = useApi(`draw:${drawId}`, () => getDraw(drawId))
   const preds = useApi(`preds:${drawId}`, () => getPredictions(drawId))
 
