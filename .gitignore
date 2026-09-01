@@ -49,3 +49,7 @@ frontend/dist/
 
 # Vite's dep cache
 frontend/.vite/
+
+# Expo app
+mobile/node_modules/
+mobile/.expo/
