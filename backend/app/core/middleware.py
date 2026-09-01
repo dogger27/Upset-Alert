@@ -33,8 +33,14 @@ _AUTH_PATHS = frozenset({
     "/auth/reset-password",
 })
 _AUTH_LIMIT = 8      # per minute
-_API_LIMIT = 300     # per minute per IP (general endpoints)
+_API_LIMIT = 300     # per minute (general endpoints)
 _WINDOW = 60.0       # seconds
+
+# Registration and Live Activity lifecycle. Tighter than the general limit
+# because a client retry loop is the realistic failure here, not a person —
+# and a bug in one install should not spend the whole budget for the account.
+_APP_PREFIXES = ("/app/devices", "/app/live-activities")
+_APP_LIMIT = 60
 
 
 class _SlidingWindow:
@@ -73,15 +79,46 @@ def _client_ip(request: Request) -> str:
     )
 
 
+def _actor(request: Request) -> str:
+    """Who to charge this request to: the signed-in user, else the IP.
+
+    KEYING ON IP ALONE DOES NOT SURVIVE A PHONE APP. Mobile carriers put
+    thousands of subscribers behind one NAT address, and so does any office or
+    university. Once native clients exist, an IP bucket is shared by strangers:
+    one busy user throttles people they have never met, and the site looks
+    broken for everyone on that carrier.
+
+    The token is VERIFIED, not merely parsed. Reading the `sub` claim without
+    checking the signature would let anyone mint their own bucket by inventing
+    a user id — an easier limit to escape than the IP one it replaces.
+
+    An unauthenticated or expired token falls back to the IP, which is correct:
+    the request is anonymous, and rejecting it is the route's job rather than
+    this middleware's.
+    """
+    auth = request.headers.get("authorization") or ""
+    if auth.lower().startswith("bearer "):
+        from app.core.security import decode_token
+        subject = decode_token(auth[7:].strip())
+        if subject:
+            return f"u:{subject}"
+    return f"ip:{_client_ip(request)}"
+
+
 class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        ip = _client_ip(request)
         path = request.url.path
 
         if path in _AUTH_PATHS and request.method == "POST":
-            key, limit = f"auth:{ip}", _AUTH_LIMIT
+            # Deliberately still per IP. These endpoints are unauthenticated by
+            # definition, and the limit exists to slow down someone guessing
+            # passwords — charging it to the account being attacked would let
+            # an attacker lock a victim out of their own login.
+            key, limit = f"auth:{_client_ip(request)}", _AUTH_LIMIT
+        elif path.startswith(_APP_PREFIXES):
+            key, limit = f"app:{_actor(request)}", _APP_LIMIT
         else:
-            key, limit = f"api:{ip}", _API_LIMIT
+            key, limit = f"api:{_actor(request)}", _API_LIMIT
 
         if not _window.allow(key, limit):
             return JSONResponse(
