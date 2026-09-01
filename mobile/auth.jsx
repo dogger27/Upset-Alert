@@ -18,6 +18,7 @@ import { getAppConfig, getMe, login, setToken, setUnauthorizedHandler } from './
 import { clearToken, loadToken, saveToken } from './session'
 import { invalidate } from './useApi'
 import { registerThisDevice } from './device'
+import { startLiveActivityBridge, stopLiveActivityBridge } from './liveactivity'
 
 const Ctx = createContext(null)
 
@@ -82,8 +83,10 @@ export function AuthProvider({ children }) {
   const signOut = useCallback(async () => {
     await clearToken()
     setToken(null)
-    // Another account's leagues must not survive in the cache.
+    // Another account's leagues must not survive in the cache, and neither
+    // must their Lock Screen.
     invalidate()
+    stopLiveActivityBridge().catch(() => {})
     setMe(null)
     setPhase('signedout')
   }, [])
@@ -100,6 +103,18 @@ export function AuthProvider({ children }) {
     setUnauthorizedHandler(() => { signOutRef.current?.() })
     return () => setUnauthorizedHandler(null)
   }, [])
+
+  // The Live Activity bridge needs BOTH a session (its tokens belong to a
+  // user) and the config (for content_state_version). An effect keyed on both
+  // starts it exactly when they are available, and re-runs harmlessly —
+  // startLiveActivityBridge() is idempotent. Fire-and-forget, like everything
+  // else here: a phone that cannot do Live Activities must still sign in.
+  useEffect(() => {
+    if (phase !== 'ready') return
+    startLiveActivityBridge(config?.content_state_version ?? 1)
+      .then(r => { if (!r.ok) console.log('[LA] not started:', r.note) })
+      .catch(e => console.warn('[LA] bridge failed:', e.message))
+  }, [phase, config])
 
   return (
     <Ctx.Provider value={{ phase, me, config, error, signIn, signOut, retry: boot }}>

@@ -115,3 +115,17 @@ export const getPredictions = (tournamentId) => request(`/predictions/${tourname
    install.js for why keying on the token duplicates rows. */
 export const registerDevice = (body) =>
   request('/app/devices', { method: 'POST', body })
+
+/* Live Activities.
+   push-to-start: one token per install, lets the SERVER begin an activity the
+   user never opened the app for — which is the point, since the match worth
+   watching at 2am is the one nobody is holding their phone for.
+   The per-activity token is re-posted every time ActivityKit reissues it; the
+   endpoint upserts on (device, activity_id) for exactly that reason. */
+export const registerPushToStart = (install_id, attributes_type, token) =>
+  request('/app/devices/push-to-start', {
+    method: 'POST', body: { install_id, attributes_type, token },
+  })
+
+export const registerActivity = (body) =>
+  request('/app/live-activities', { method: 'POST', body })

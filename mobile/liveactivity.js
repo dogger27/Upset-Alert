@@ -1,0 +1,75 @@
+/*
+ * Wiring the ActivityKit bridge to the server.
+ *
+ * Started after sign-in, because every token here is meaningless until there
+ * is a user to attach it to.
+ *
+ * BOTH TOKENS ARE OBSERVED, NEVER FETCHED ONCE. iOS reissues them without
+ * warning — the push-to-start token periodically, and an activity's own token
+ * mid-activity — and a token the server holds after it has been reissued is
+ * simply dead. The endpoints upsert for that reason, so re-posting is the
+ * expected path rather than an error case.
+ */
+
+import {
+  addListener, attributesType, capabilities, isAvailable, startListening,
+} from './modules/live-activity'
+import { getInstallId } from './install'
+import { registerActivity, registerPushToStart } from './api'
+
+let started = false
+const subs = []
+
+export async function startLiveActivityBridge(contentVersion = 1) {
+  if (started) return { ok: true, note: 'already running' }
+  if (!isAvailable()) return { ok: false, note: 'module not in this build' }
+
+  const caps = capabilities()
+  if (!caps.supported) return { ok: false, note: 'iOS too old for Live Activities' }
+  // areActivitiesEnabled is a per-app user setting. Worth reporting rather
+  // than silently doing nothing: "you turned them off" is a different problem
+  // from "we cannot".
+  if (!caps.enabled) return { ok: false, note: 'Live Activities disabled in Settings', caps }
+
+  const install_id = await getInstallId()
+  const attributes_type = attributesType()
+
+  subs.push(addListener('onPushToStartToken', ({ token }) => {
+    if (!token || !attributes_type) return
+    registerPushToStart(install_id, attributes_type, token)
+      .catch(e => console.warn('[LA] push-to-start register failed:', e.message))
+  }))
+
+  subs.push(addListener('onActivityToken', ({ activityId, matchId, token }) => {
+    if (!token || !activityId) return
+    registerActivity({
+      install_id,
+      activity_id: activityId,
+      push_token: token,
+      match_id: matchId ?? null,
+      content_version: contentVersion,
+      // The server started it; the client is only reporting the token it was
+      // handed. Recording that honestly matters for working out later why an
+      // activity exists at all.
+      started_by: 'push_to_start',
+    }).catch(e => console.warn('[LA] activity register failed:', e.message))
+  }))
+
+  await startListening()
+  started = true
+  return { ok: true, caps, attributes_type }
+}
+
+export function liveActivityStarted() { return started }
+
+export async function stopLiveActivityBridge() {
+  for (const s of subs.splice(0)) {
+    try { s.remove() } catch { /* already gone */ }
+  }
+  started = false
+  const { stopListening, endAll } = await import('./modules/live-activity')
+  // Sign-out ends them: a Lock Screen belonging to an account nobody is signed
+  // into has no business still updating.
+  try { await stopListening() } catch { /* no module */ }
+  try { await endAll() } catch { /* no module */ }
+}

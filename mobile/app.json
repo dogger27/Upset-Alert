@@ -35,7 +35,8 @@
       "expo-secure-store",
       "expo-router",
       "expo-notifications",
-      "expo-dev-client"
+      "expo-dev-client",
+      "@bacons/apple-targets"
     ],
     "scheme": "upsetalert",
     "owner": "dogger27",
