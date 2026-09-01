@@ -151,20 +151,32 @@ def score_match(
 
     # The reason is what makes an offer feel considered rather than random, and
     # it costs nothing to carry.
+    # SAY WHAT THE USER DID, NOT WHAT THEY "ARE".
+    # "Your upset pick is on court" reads as though the user is the upset. The
+    # thing that actually happened is that they picked the lower-ranked player,
+    # so say that: an upset pick IS picking the underdog.
+    #
+    # And never fall back to "You picked this match". Every competitor picks
+    # every match in the draw — it is a full-bracket game — so that sentence
+    # carries no information whatsoever and is true of all 127 matches at once.
     if lost:
-        reason = "Your pick is two sets down"
+        reason = "The player you picked is two sets down"
     elif upset and close >= 2:
-        reason = "Your upset pick is in a tight one"
+        reason = "You picked the underdog, and it's tight"
     elif upset:
-        reason = "Your upset pick is on court"
+        reason = "You picked the underdog here"
     elif st >= 3:
-        reason = "Your bracket leans on this one"
+        # The concrete number beats the vague claim: "5 of your later picks
+        # ride on this" is checkable, "your bracket leans on this one" is not.
+        reason = f"{st} of your later picks ride on this"
     elif close >= 2:
         reason = "This one is close"
     elif rnd >= 0.8:
-        reason = "Late round"
+        reason = "Late in the draw"
     else:
-        reason = "You picked this match"
+        # Scored above MIN_SCORE without any single standout cause — usually
+        # round and tier together. Say that plainly rather than inventing one.
+        reason = "A big match in this draw"
     return (round(total, 3), reason)
 
 
