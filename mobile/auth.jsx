@@ -13,8 +13,8 @@
  * so "looks broken" is nearly always transport.
  */
 
-import { createContext, useCallback, useContext, useEffect, useState } from 'react'
-import { getAppConfig, getMe, login, setToken } from './api'
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
+import { getAppConfig, getMe, login, setToken, setUnauthorizedHandler } from './api'
 import { clearToken, loadToken, saveToken } from './session'
 import { invalidate } from './useApi'
 
@@ -73,6 +73,19 @@ export function AuthProvider({ children }) {
     invalidate()
     setMe(null)
     setPhase('signedout')
+  }, [])
+
+  // Held in a ref so the handler registered once below always calls the
+  // current signOut, without re-registering on every render.
+  const signOutRef = useRef(signOut)
+  signOutRef.current = signOut
+
+  // A token that expires mid-session must land people on sign-in, not on a
+  // screen showing an error they cannot act on. Registered once, above the
+  // navigator, so no screen has to handle it.
+  useEffect(() => {
+    setUnauthorizedHandler(() => { signOutRef.current?.() })
+    return () => setUnauthorizedHandler(null)
   }, [])
 
   return (

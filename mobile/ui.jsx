@@ -1,17 +1,35 @@
 /* The handful of components every screen needs. Not a design system — just the
    pieces that would otherwise be copy-pasted four times and drift. */
 
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import {
+  ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View,
+} from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { C, TOUCH } from './theme'
 
-export function Screen({ children, scroll = true, edges = ['top', 'left', 'right'] }) {
+export function Screen({
+  children, scroll = true, edges = ['top', 'left', 'right'], onRefresh, refreshing,
+}) {
   const Body = scroll ? ScrollView : View
+  const extra = scroll
+    ? {
+        contentContainerStyle: u.body,
+        // Pull-to-refresh only where a refresher was given. A standings screen
+        // is checked over and over during a match, and the alternative is
+        // making people leave the screen and come back.
+        refreshControl: onRefresh ? (
+          <RefreshControl
+            refreshing={!!refreshing}
+            onRefresh={onRefresh}
+            tintColor={C.muted}
+            colors={[C.accent]}
+          />
+        ) : undefined,
+      }
+    : { style: u.body }
   return (
     <SafeAreaView style={u.safe} edges={edges}>
-      <Body {...(scroll ? { contentContainerStyle: u.body } : { style: u.body })}>
-        {children}
-      </Body>
+      <Body {...extra}>{children}</Body>
     </SafeAreaView>
   )
 }

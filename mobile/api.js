@@ -19,9 +19,16 @@
 export const API = 'https://upsetalert-api.upsetalert.ca'
 
 let token = null
+let onUnauthorized = null
 
 export function setToken(t) { token = t }
 export function getToken() { return token }
+
+/* Called when a request that CARRIED A TOKEN comes back 401 — i.e. the session
+   really has expired mid-use. Deliberately not fired for a 401 on a request
+   with no token: signing in with the wrong password is also a 401, and routing
+   that through "your session ended" would be nonsense. */
+export function setUnauthorizedHandler(fn) { onUnauthorized = fn }
 
 function fail(message, { status = 0, offline = false } = {}) {
   const e = new Error(message)
@@ -32,6 +39,7 @@ function fail(message, { status = 0, offline = false } = {}) {
 
 async function request(path, { method = 'GET', body, form } = {}) {
   const headers = {}
+  const sent = !!token
   if (token) headers.Authorization = `Bearer ${token}`
 
   let payload
@@ -57,6 +65,7 @@ async function request(path, { method = 'GET', body, form } = {}) {
   try { data = text ? JSON.parse(text) : null } catch { data = text }
 
   if (!res.ok) {
+    if (res.status === 401 && sent && onUnauthorized) onUnauthorized()
     const detail = (data && data.detail) || res.statusText
     throw fail(typeof detail === 'string' ? detail : JSON.stringify(detail),
                { status: res.status })

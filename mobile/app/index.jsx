@@ -35,7 +35,7 @@ export default function Leagues() {
   }
 
   return (
-    <Screen>
+    <Screen onRefresh={refetch} refreshing={loading && !!leagues}>
       <View style={s.hello}>
         <Text style={s.who}>{me?.username}</Text>
         <Link href="/status" style={s.statusLink}>Status</Link>
