@@ -1,6 +1,17 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
+  /* THE NAVBAR'S TOTAL HEIGHT, INCLUDING THE STATUS BAR IT SITS UNDER.
+     The bar is 60px of content, but on an installed PWA with a notch or a
+     Dynamic Island it also has to clear the safe area — and every full-height
+     page has to subtract the SAME number or its scroll container is wrong by
+     exactly the amount the navbar grew. That number was written by hand in
+     three places and already disagreed with itself: TournamentDraw.css said
+     60px and AuthForm.css said 56px. One variable, and the notch is part of
+     it. */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --nav-h: calc(60px + var(--safe-top));
+
   /* Tells the browser which way to paint the things CSS cannot reach:
      scrollbars, form control chrome, the spellcheck underline. */
   color-scheme: light;
