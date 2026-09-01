@@ -20,8 +20,26 @@
  */
 
 import { Platform } from 'react-native'
-import * as Notifications from 'expo-notifications'
 import Constants from 'expo-constants'
+
+/* expo-notifications is loaded LAZILY, and that is not fussiness.
+ *
+ * A native module lives in the binary, so a build cut before the module was
+ * added does not have it — and a top-level `import` of a missing native module
+ * throws at MODULE LOAD, taking the whole app down with a red screen before
+ * anything renders. That is what happened: the first development build
+ * predates expo-notifications, and every launch died on this line.
+ *
+ * The code below already knows how to work without a push token — it
+ * registers the device anyway and lets a later launch fill the token in. That
+ * graceful path is worthless if the app cannot get far enough to run it. */
+let Notifications = null
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  Notifications = require('expo-notifications')
+} catch {
+  Notifications = null
+}
 import { getInstallId } from './install'
 import { registerDevice } from './api'
 
@@ -30,6 +48,7 @@ export async function registerThisDevice() {
 
   let permission = 'unknown'
   try {
+    if (!Notifications) throw new Error('expo-notifications is not in this build')
     const existing = await Notifications.getPermissionsAsync()
     permission = existing.status
     if (existing.status !== 'granted' && existing.canAskAgain) {
@@ -41,6 +60,7 @@ export async function registerThisDevice() {
 
   let device_token = null
   try {
+    if (!Notifications) throw new Error('expo-notifications is not in this build')
     // Deliberately attempted even when permission was refused — see above.
     const t = await Notifications.getDevicePushTokenAsync()
     device_token = typeof t === 'string' ? t : t?.data || null
