@@ -332,3 +332,271 @@ def forget(activity_id: int) -> None:
 def enabled() -> bool:
     from app.services.apns import apns_enabled
     return bool(settings.live_activity_enabled and apns_enabled())
+
+
+# ── The dispatcher ──────────────────────────────────────────────────────────
+#
+# Reads, then sends, then writes — in three separate steps, never nested.
+# SQLite has one writer and this database has already had lock storms; holding
+# a write transaction open across a round trip to Cupertino is the exact shape
+# of the app_log deadlock that took down saving picks for a day. So the session
+# is closed before the first push goes out, and re-opened afterwards for the
+# handful of rows that changed.
+
+# The last point state we classified per match, so a change can be recognised.
+# In memory because it is a comparison cache, not a fact — losing it in a
+# restart costs one redundant push per activity.
+_last_point: dict = {}
+
+
+async def dispatch(match_ids: set) -> dict:
+    """Push one round of updates for these matches. Never raises."""
+    from sqlalchemy import select
+    from app.database import AsyncSessionLocal
+    from app.models.app_device import AppDevice
+    from app.models.live_activity import LiveActivity, STATE_ACTIVE
+    from app.models.tournament import Match
+    from app.services import apns
+    from app.services.live_activity_content import (
+        CONTENT_VERSION, STATUS_FINAL, STATUS_IN_PROGRESS, STATUS_SUSPENDED,
+        build_content_state, build_payload, final_line,
+    )
+    from app.services.sofascore_live import live_point_for
+
+    if not match_ids or not enabled():
+        return {"sent": 0}
+
+    # ── 1. READ ──────────────────────────────────────────────────────────
+    async with AsyncSessionLocal() as db:
+        rows = (await db.execute(
+            select(LiveActivity, AppDevice)
+            .join(AppDevice, AppDevice.id == LiveActivity.device_id)
+            .where(LiveActivity.match_id.in_(match_ids),
+                   LiveActivity.state == STATE_ACTIVE,
+                   AppDevice.disabled_at.is_(None))
+        )).all()
+        if not rows:
+            return {"sent": 0}
+        matches = {
+            m.id: m for m in (await db.execute(
+                select(Match).where(Match.id.in_(match_ids)))).scalars().all()
+        }
+
+    # ── 2. BUILD, once per match rather than once per activity ───────────
+    # A final can carry hundreds of activities; rendering per row would repeat
+    # the same work for every one of them.
+    per_match = {}
+    for mid, m in matches.items():
+        point = live_point_for(m)
+        finished = m.winner_id is not None
+        prev = _last_point.get(mid)
+        if not finished:
+            _last_point[mid] = point
+
+        if finished:
+            status, event, ending = STATUS_FINAL, "end", True
+            # THE FINAL SCORE COMES FROM scores_json, NOT FROM THE LIVE FEED.
+            # renderable_point() returns None for a finished match — correctly,
+            # since a live point on a match that is over is exactly the stale
+            # state it exists to suppress. So the end push, the one the whole
+            # feature is for, would have carried no score at all. The result is
+            # written to scores_json on completion in the same shape `games`
+            # already uses, so it drops straight in.
+            if m.scores_json:
+                point = {"games": m.scores_json, "point": None,
+                         "tiebreak": False, "match_tiebreak": False,
+                         "serving": None}
+            elif prev:
+                # Nothing recorded yet — the sweep that writes scores_json runs
+                # on its own clock. The last live state we saw is a better
+                # answer than a blank card.
+                point = prev
+        elif point and point.get("suspended"):
+            status, event, ending = STATUS_SUSPENDED, "update", False
+        else:
+            status, event, ending = STATUS_IN_PROGRESS, "update", False
+
+        per_match[mid] = {
+            "point": point, "prev": prev, "status": status,
+            "event": event, "ending": ending,
+            "decision": classify(prev, point),
+            "final_line": final_line((point or {}).get("games")) if ending else None,
+        }
+
+    # ── 3. SEND, with no database session open ───────────────────────────
+    outcomes = []
+    for la, device in rows:
+        info = per_match.get(la.match_id)
+        if info is None or not device.device_token:
+            continue
+
+        state = build_content_state(
+            info["point"], status=info["status"],
+            final_line=info["final_line"], version=la.content_version or CONTENT_VERSION,
+        )
+
+        if info["ending"]:
+            # THE ONE PUSH THAT IS NEVER THROTTLED. Final score, your pick,
+            # right or wrong — the payoff the whole feature exists for.
+            priority, reason = PRIORITY_IMMEDIATE, "end"
+        else:
+            decided = should_send(la.id, info["decision"], state)
+            if not decided.send:
+                continue
+            priority, reason = decided.priority, decided.reason
+
+        ts = note_sent(la.id, priority, state)
+        payload = build_payload(
+            state, event=info["event"], timestamp=ts,
+            dismissal_seconds=3600 if info["ending"] else None,
+        )
+        expiry = int(time.time()) + (
+            EXPIRY_END if info["ending"]
+            else EXPIRY_P10 if priority == PRIORITY_IMMEDIATE else EXPIRY_P5)
+
+        if settings.live_activity_dry_run:
+            logger.info("DRY RUN live activity %s match=%s p%s %s %s",
+                        la.activity_id, la.match_id, priority, reason,
+                        json.dumps(state, separators=(",", ":"))[:200])
+            outcomes.append((la.id, None, info["ending"]))
+            continue
+
+        result = await apns.send(
+            token=la.push_token, payload=payload, push_type="liveactivity",
+            env=device.apns_env, priority=priority, expiration=expiry,
+            # An undelivered update is REPLACED by the next rather than both
+            # landing later — which is what makes coalescing real rather than
+            # just local.
+            collapse_id=f"la-{la.match_id}",
+        )
+        outcomes.append((la.id, result, info["ending"]))
+
+    # ── 4. WRITE what changed, in one short transaction ──────────────────
+    await _record(outcomes)
+    return {"sent": sum(1 for _, r, _ in outcomes if r is None or r.ok)}
+
+
+async def _record(outcomes: list) -> None:
+    """Persist the handful of rows that actually changed."""
+    from datetime import datetime, timezone
+    from sqlalchemy import update
+    from app.database import AsyncSessionLocal
+    from app.models.app_device import AppDevice
+    from app.models.live_activity import LiveActivity, STATE_DEAD, STATE_ENDED
+
+    if not outcomes:
+        return
+    now = datetime.now(timezone.utc)
+    async with AsyncSessionLocal() as db:
+        for la_id, result, ending in outcomes:
+            st = _state.get(la_id)
+            values = {"updated_at": now}
+            if st:
+                values.update(last_sent_at=now, last_sent_hash=st.last_hash,
+                              last_sent_timestamp=st.last_timestamp,
+                              sent_count=st.sent_count)
+            if ending:
+                values.update(state=STATE_ENDED, ended_at=now,
+                              end_reason="match_complete")
+                forget(la_id)
+            elif result is not None and result.activity_is_over:
+                # The user dismissed it, or it aged out. Normal, and it must
+                # never disable the device.
+                values.update(state=STATE_DEAD, ended_at=now,
+                              end_reason="expired_token")
+                forget(la_id)
+            await db.execute(
+                update(LiveActivity).where(LiveActivity.id == la_id).values(**values))
+
+            if result is not None and result.token_is_dead:
+                la = await db.get(LiveActivity, la_id)
+                if la is not None:
+                    await db.execute(
+                        update(AppDevice).where(AppDevice.id == la.device_id)
+                        .values(disabled_at=now, disabled_reason=result.reason))
+            elif result is not None and result.reason == "env_corrected":
+                la = await db.get(LiveActivity, la_id)
+                if la is not None:
+                    dev = await db.get(AppDevice, la.device_id)
+                    if dev is not None:
+                        dev.apns_env = ("sandbox" if dev.apns_env == "production"
+                                        else "production")
+        await db.commit()
+
+
+async def reap() -> int:
+    """End activities the dispatcher will never hear about again.
+
+    The safety net, and it has to exist because nothing guarantees we are told
+    an activity is over: the app is killed, the phone dies, a deploy loses the
+    pending set. Also the only thing that ends an activity whose match finished
+    while this process was restarting.
+    """
+    from datetime import datetime, timedelta, timezone
+    from sqlalchemy import select, update
+    from app.database import AsyncSessionLocal
+    from app.models.live_activity import LiveActivity, STATE_ACTIVE, STATE_ENDED
+    from app.models.tournament import Match
+
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(hours=8)
+    ended = 0
+    async with AsyncSessionLocal() as db:
+        rows = (await db.execute(
+            select(LiveActivity).where(LiveActivity.state == STATE_ACTIVE)
+        )).scalars().all()
+        stale_ids, done_ids = [], []
+        for la in rows:
+            if (la.updated_at or la.created_at) < cutoff:
+                # ActivityKit's own ceiling is a few hours; past this the
+                # activity is gone from the device whatever we believe.
+                stale_ids.append(la.id)
+            elif la.match_id:
+                m = await db.get(Match, la.match_id)
+                if m is not None and m.winner_id is not None:
+                    done_ids.append(la.id)
+        for ids, reason in ((stale_ids, "stale"), (done_ids, "match_complete")):
+            if ids:
+                await db.execute(
+                    update(LiveActivity).where(LiveActivity.id.in_(ids))
+                    .values(state=STATE_ENDED, ended_at=now,
+                            end_reason=reason, updated_at=now))
+                ended += len(ids)
+                for i in ids:
+                    forget(i)
+        await db.commit()
+    return ended
+
+
+async def worker() -> None:
+    """Drain the queue and reap, forever. Started from main.py's lifespan.
+
+    Deliberately not an APScheduler job. A score change is an EDGE — poll_once
+    already knows exactly which matches changed — and a scheduled job would
+    have to re-derive that by diffing a column the poller is concurrently
+    rewriting, which is a second source of truth for the same fact. Its useful
+    floor here is also two minutes, against a ten-second poll.
+    """
+    logger.info("live activity worker started (enabled=%s dry_run=%s)",
+                settings.live_activity_enabled, settings.live_activity_dry_run)
+    last_reap = 0.0
+    while True:
+        try:
+            try:
+                await asyncio.wait_for(_wake.wait(), timeout=30.0)
+            except asyncio.TimeoutError:
+                pass
+            batch = drain()
+            if batch and enabled():
+                await dispatch(batch)
+            now = time.time()
+            if enabled() and now - last_reap > 30.0:
+                last_reap = now
+                await reap()
+        except asyncio.CancelledError:
+            raise
+        except Exception:                                          # noqa: BLE001
+            # Never let one bad round kill the loop; the pollers depend on
+            # nothing here, but a dead worker is a silently frozen Lock Screen.
+            logger.exception("live activity worker round failed")
+            await asyncio.sleep(5.0)
