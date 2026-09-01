@@ -26,6 +26,8 @@ import { slotLabel } from '../../scoring'
 import { lockLabel } from '../../lock'
 import { currentRound, shortRound } from '../../rounds'
 import { C, PICK, R, S, SHADOW, T } from '../../theme'
+import { PosBadge } from '../../cards'
+import { scoreLine } from '../../score'
 import { Card, ErrorNote, Loading, Muted, Screen, Title } from '../../ui'
 
 export default function DrawScreen() {
@@ -149,19 +151,21 @@ export default function DrawScreen() {
 /* The bracket's match box, ported.
  *
  * THE WHOLE BOX CARRIES THE RESULT — green when your pick came off, red when
- * it did not, amber-bordered when the match is live. The first version put a
- * tick in the corner and left the box grey, which is why a screen of them read
- * as a list rather than a bracket: nothing was scannable without reading.
+ * it did not, background and border together. A tick in the corner of a grey
+ * box makes a round read as a list; this makes it scannable without reading.
  *
- * Two rows divided by a hairline, the winner in full ink and the loser dimmed,
- * with the set scores right-aligned in fixed cells so every box lines up down
- * the column.
+ * THE SCORE IS A LINE, NOT COLUMNS. The first version gave each set a fixed
+ * 15pt cell, so "6(7)" had nowhere to go and wrapped one character per row —
+ * a box six hundred points tall with a lone bracket on a line of its own. Sets
+ * are a sentence: "6-4  7-5  6⁷-7  6-1", under the names, the way the site
+ * puts them under the box.
  */
 function MatchRow({ m, pick }) {
   const decided = !!m.winner
   const correct = decided && pick != null && pick === m.winner.id
   const wrong = decided && pick != null && pick !== m.winner.id
   const state = correct ? PICK.correct : wrong ? PICK.wrong : null
+  const line = scoreLine(m.scores)
 
   return (
     <View style={[
@@ -172,12 +176,9 @@ function MatchRow({ m, pick }) {
       {[m.player1, m.player2].map((p, i) => {
         const isPick = p && pick != null && p.id === pick
         const won = decided && p && m.winner.id === p.id
-        const games = m.scores ? m.scores[i] : null
         return (
           <View key={i} style={[s.side, i === 0 && s.sideDivider]}>
-            <Text style={[T.tiny, { color: C.faint, width: 16 }]}>
-              {p?.seed ?? ''}
-            </Text>
+            <PosBadge seed={p?.seed} ranking={p?.ranking} entryType={p?.entry_type} />
             <Text
               style={[
                 T.bodyMed,
@@ -189,18 +190,14 @@ function MatchRow({ m, pick }) {
             >
               {slotLabel(p, m)}
             </Text>
-            <View style={s.games}>
-              {(games || []).map((g, k) => (
-                <Text key={k} style={[T.score, {
-                  color: decided && !won ? C.muted : C.ink, width: 15, textAlign: 'center',
-                }]}>
-                  {g === null || g === '' ? '' : g}
-                </Text>
-              ))}
-            </View>
           </View>
         )
       })}
+      {line ? (
+        <Text style={[s.score, state && { color: state.border }]} numberOfLines={1}>
+          {line}
+        </Text>
+      ) : null}
     </View>
   )
 }
@@ -233,9 +230,15 @@ const s = StyleSheet.create({
   // min-height 28 on the web at a 252pt column; 34 here, because a phone gives
   // the column 361pt and the extra goes into being readable.
   side: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingVertical: 6, paddingLeft: 6, paddingRight: 8, minHeight: 34,
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingVertical: 7, paddingHorizontal: 8, minHeight: 34,
   },
   sideDivider: { borderBottomWidth: 1, borderBottomColor: C.border },
-  games: { flexDirection: 'row', gap: 4 },
+  // Under the names, like the site puts it under the box. Tabular so the sets
+  // of one match line up with the next one down the column.
+  score: {
+    fontFamily: 'SairaCondensed_600SemiBold', fontSize: 14, lineHeight: 17,
+    color: C.muted, paddingHorizontal: 8, paddingBottom: 7, paddingTop: 1,
+    fontVariant: ['tabular-nums'],
+  },
 })
