@@ -117,6 +117,12 @@ struct MatchLockScreenView: View {
     private var attrs: MatchActivityAttributes { context.attributes }
     private var isOver: Bool { state.status == "final" || state.status == "ended_no_result" }
 
+    /// Whether the per-player set columns have anything in them.
+    private var hasSetColumns: Bool {
+        guard let g = state.games, g.count == 2 else { return false }
+        return g.contains { row in row.contains { !$0.isEmpty } }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
@@ -124,9 +130,10 @@ struct MatchLockScreenView: View {
                     .font(.caption2).fontWeight(.bold)
                     .foregroundColor(muted)
                     .lineLimit(1)
-                // Status sits with the event name rather than on the right,
-                // because the round pill owns that corner now and "YOU WERE
-                // RIGHT" would otherwise shove it off the card.
+                // Status sits with the event name because the round pill owns
+                // the right corner. What is left here is short by design —
+                // SUSPENDED, TIEBREAK, or FINAL when nobody picked the match —
+                // so it shares the line without crowding either side.
                 statusBadge
                 Spacer(minLength: 6)
                 if !attrs.round_name.isEmpty {
@@ -137,7 +144,14 @@ struct MatchLockScreenView: View {
             playerRow(side: 1, name: attrs.p1_name, seed: attrs.p1_seed, drawRank: attrs.p1_draw_rank)
             playerRow(side: 2, name: attrs.p2_name, seed: attrs.p2_seed, drawRank: attrs.p2_draw_rank)
 
-            if let line = state.final_line, isOver {
+            // ONE SCORE, NOT TWO. On the end push the card had both the
+            // per-player set columns (3 3 5 / 6 6 7) AND this summary line
+            // ("3-6 3-6 5-7") — the same result, written twice, one above the
+            // other. The columns win: they sit on the row of the player who
+            // won each set, which the line cannot show. So this renders only
+            // when there are no columns to render, which is the case the line
+            // was really for — an end push that arrives with no games grid.
+            if let line = state.final_line, isOver, !hasSetColumns {
                 Text(line).font(.caption).foregroundColor(muted)
             }
         }
@@ -150,13 +164,15 @@ struct MatchLockScreenView: View {
         if state.status == "suspended" {
             Text("SUSPENDED").font(.caption2).fontWeight(.bold).foregroundColor(bad)
         } else if isOver {
-            // The payoff: right or wrong, stated plainly, at the moment it is
-            // finally knowable.
-            if let correct = state.pick.correct {
-                Text(correct ? "YOU WERE RIGHT" : "YOU WERE WRONG")
-                    .font(.caption2).fontWeight(.bold)
-                    .foregroundColor(correct ? good : bad)
-            } else {
+            // NO "YOU WERE RIGHT" / "YOU WERE WRONG" HERE. The tick or cross
+            // already sits beside the player you picked, in the row it belongs
+            // to — the words said the same thing a second time, and at two
+            // words apiece they wrapped onto two lines in a corner with one
+            // line to spare.
+            //
+            // The glyph only exists when there IS a pick, though, so a match
+            // nobody picked still has to say it is over.
+            if state.pick.correct == nil {
                 Text("FINAL").font(.caption2).fontWeight(.bold).foregroundColor(muted)
             }
         } else if state.tiebreak || state.match_tiebreak {
@@ -184,8 +200,11 @@ struct MatchLockScreenView: View {
                 .minimumScaleFactor(0.7)
 
             if picked {
+                // Slightly larger once the match is decided: this is the whole
+                // verdict now that the words are gone, rather than a marker
+                // sitting beside a running score.
                 Image(systemName: pickSymbol)
-                    .font(.caption2)
+                    .font(isOver ? .footnote : .caption2)
                     .foregroundColor(pickColor)
             }
 
