@@ -13,17 +13,17 @@
  */
 
 import { useMemo, useState } from 'react'
+import { Ionicons } from '@expo/vector-icons'
 import { Stack } from 'expo-router'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { getScheduleDates, getScheduleDay } from '../../api'
 import { useApi } from '../../useApi'
 import {
-  gamesOf, isLive, isSuspended, pointOf, servingSide, sideFlags, sideName,
-  sideSeed, whenLabel, winnerSide,
+  gamesOf, isLive, isSuspended, pointOf, servingSide, sideDrawRank, sideFlags,
+  sideName, sideSeed, whenLabel, winnerSide,
 } from '../../schedule'
 import { clockTime, expectedStartLabel } from '../../dates'
-import { flagEmoji } from '../../flags'
-import { TourBadge } from '../../cards'
+import { FlagSlot, PlayerName, PosBadge, TourBadge } from '../../cards'
 import { C, R, S, T } from '../../theme'
 import { Card, ErrorNote, Eyebrow, Loading, Muted, Screen, Title } from '../../ui'
 
@@ -88,7 +88,7 @@ export default function ScheduleScreen() {
             disabled={idx <= 0} hitSlop={10}
             style={({ pressed }) => [s.arrow, (idx <= 0) && s.arrowOff, pressed && { opacity: 0.6 }]}
           >
-            <Text style={s.arrowText}>‹</Text>
+            <Ionicons name="chevron-back" size={20} color={C.ink} />
           </Pressable>
           <View style={s.dateBox}>
             <Text style={[T.h2, { color: C.ink }]}>{prettyDate(date)}</Text>
@@ -104,7 +104,7 @@ export default function ScheduleScreen() {
               pressed && { opacity: 0.6 },
             ]}
           >
-            <Text style={s.arrowText}>›</Text>
+            <Ionicons name="chevron-forward" size={20} color={C.ink} />
           </Pressable>
         </View>
 
@@ -151,6 +151,10 @@ function EntryRow({ e }) {
   /* resumed_at wins over started_at: after a rain delay the resumption is the
      time that answers "when did this get going", and the original start is
      hours of stopped play ago. See the rain-delay lifecycle. */
+  /* Both rows get the SAME number of flag slots — a doubles pair needs two —
+     so the two names still start at the same x. */
+  const flagSlots = Math.max(
+    1, sideFlags(e.players, 'a').length, sideFlags(e.players, 'b').length)
   const started = clockTime(e.resumed_at || e.started_at)
   const upcoming = !started && !done
     ? expectedStartLabel(e.expected_start_at, e.expected_source)
@@ -177,8 +181,11 @@ function EntryRow({ e }) {
         <PlayerLine
           key={side}
           name={sideName(e.players, side)}
+          doubles={e.discipline !== 'singles'}
           seed={sideSeed(e.players, side)}
+          drawRank={sideDrawRank(e.players, side)}
           flags={sideFlags(e.players, side)}
+          flagSlots={flagSlots}
           games={games ? games[side === 'a' ? 0 : 1] : null}
           point={point ? point[side === 'a' ? 0 : 1] : null}
           serving={serving === side && !done}
@@ -199,23 +206,23 @@ function EntryRow({ e }) {
   )
 }
 
-function PlayerLine({ name, seed, flags, games, point, serving, won, dim }) {
+function PlayerLine({ name, doubles, seed, drawRank, flags, flagSlots, games, point, serving, won, dim }) {
   return (
     <View style={s.line}>
       <View style={[s.dot, serving && { backgroundColor: C.clay }]} />
-      {seed ? <Text style={[T.tiny, { color: C.faint }]}>{seed}</Text> : null}
-      {/* No fixed width and no placeholder: an unknown country yields an empty
-          string, and the site shows nothing there too, so absence never reads
-          as a wrong flag. */}
-      {(flags || []).some(Boolean) && (
-        <Text style={s.flag}>{(flags || []).map(flagEmoji).filter(Boolean).join(' ')}</Text>
-      )}
-      <Text
-        style={[T.bodyMed, { color: dim ? C.muted : C.ink, flex: 1 }, won && { color: C.ink }]}
-        numberOfLines={1}
-      >
-        {name}
-      </Text>
+      {/* Badge and flag are FIXED-WIDTH columns and are drawn even when empty.
+          That is the whole point: a seeded player and an unseeded one, a player
+          with a flag and a neutral athlete without, all start their name at the
+          same x. Without it the rows staggered and the pair stopped reading as
+          one match. */}
+      <PosBadge seed={seed} drawRank={drawRank} />
+      <FlagSlot codes={flags} slots={flagSlots} />
+      <PlayerName
+        name={name}
+        doubles={doubles}
+        style={[T.bodyMed, { color: dim ? C.muted : C.ink, flexShrink: 1 }, won && { color: C.ink }]}
+      />
+      <View style={{ flex: 1 }} />
       <View style={s.scores}>
         {(games || []).map((g, i) => (
           <Text key={i} style={[T.score, { color: dim ? C.muted : C.ink }]}>
@@ -245,7 +252,10 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: C.border, backgroundColor: C.card,
   },
   arrowOff: { opacity: 0.3 },
-  arrowText: { ...T.h1, color: C.ink, lineHeight: 26 },
+  /* The arrows are ICONS, not text glyphs. "‹" in a 40pt circle sat visibly
+     high: a typographic glyph carries its font's own vertical metrics, and a
+     hand-set lineHeight (26 here) fights the centring rather than fixing it.
+     An icon font draws inside its box, so it centres by construction. */
 
   tabs: { flexDirection: 'row', gap: S.xs, backgroundColor: C.sunken, borderRadius: R.md, padding: 3 },
   tab: { flex: 1, alignItems: 'center', paddingVertical: S.sm, borderRadius: R.sm },

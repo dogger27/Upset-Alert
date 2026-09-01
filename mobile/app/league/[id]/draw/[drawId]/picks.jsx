@@ -17,11 +17,12 @@
  */
 
 import { Stack, useLocalSearchParams } from 'expo-router'
+import { leading } from '../../../../../fontScale.js'
 import { useMemo } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { getDraw, getPredictions } from '../../../../../api'
 import { useApi } from '../../../../../useApi'
-import { EntryChip, PosBadge } from '../../../../../cards'
+import { EntryChip, PlayerName, PosBadge } from '../../../../../cards'
 import { computeDrawRanks } from '../../../../../drawRanks'
 import { shortRound } from '../../../../../rounds'
 import { scoreLine } from '../../../../../score'
@@ -130,12 +131,10 @@ function MatchRow({ m, pick, drawRanks }) {
                 on both screens and a seed reads as a seed rather than as a
                 number that happens to precede a name. */}
             <PosBadge seed={p?.seed} drawRank={p ? drawRanks[p.id] : null} />
-            <Text
+            <PlayerName
+              name={slotLabel(p, m)}
               style={[s.player, won && s.won, picked && s.picked]}
-              numberOfLines={1}
-            >
-              {slotLabel(p, m)}
-            </Text>
+            />
             <EntryChip entryType={p?.entry_type} />
             <View style={{ flex: 1 }} />
             {/* '•' rather than the word "pick": the bracket marks an open pick
@@ -164,7 +163,7 @@ const s = StyleSheet.create({
      the double space between sets and "6-4 7-5 6⁷-7 6-1" ran together as
      "6-47-56⁷-76-1"; tabular-nums also keeps the digits from shifting. */
   score: {
-    fontFamily: 'SairaCondensed_600SemiBold', fontSize: 14, lineHeight: 17,
+    fontFamily: 'SairaCondensed_600SemiBold', fontSize: 14, lineHeight: leading(17),
     color: C.muted, paddingTop: 3, fontVariant: ['tabular-nums'],
   },
   round: { gap: 6 },

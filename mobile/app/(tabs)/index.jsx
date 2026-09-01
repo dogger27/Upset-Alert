@@ -18,6 +18,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { Link, Redirect } from 'expo-router'
+import { Ionicons } from '@expo/vector-icons'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '../../auth'
 import { getDrawStandings, getEntryStatus, listTournaments } from '../../api'
@@ -61,7 +62,7 @@ export default function Dashboard() {
   if (phase === 'unreachable') {
     return (
       <Screen>
-        <Head username={me?.username} />
+        <Head />
         <Card>
           <Title>Can’t reach Upset Alert</Title>
           <Muted>
@@ -81,12 +82,12 @@ export default function Dashboard() {
 
   return (
     <Screen onRefresh={refetch} refreshing={tours.loading && !!tours.data}>
-      <Head username={me?.username} />
+      <Head />
 
       <ErrorNote error={tours.error} onRetry={refetch} />
       {loading ? <Loading /> : null}
 
-      <Section title="Pick now" count={buckets.open.length} tone={C.clay}>
+      <Section title="Pick now" tone={C.clay}>
         {buckets.open.map(t => (
           <OpenCard key={t.id} t={t} status={entry.data?.[t.id]} now={now} />
         ))}
@@ -96,19 +97,19 @@ export default function Dashboard() {
       </Section>
 
       {buckets.active.length > 0 && (
-        <Section title="Playing" count={buckets.active.length} tone={C.greenLit}>
+        <Section title="Playing" tone={C.greenLit}>
           {buckets.active.map(t => <ActiveCard key={t.id} t={t} userId={me?.id} />)}
         </Section>
       )}
 
       {buckets.upcoming.length > 0 && (
-        <Section title="Next week" count={buckets.upcoming.length} tone={C.muted}>
+        <Section title="Next week" tone={C.muted}>
           {buckets.upcoming.map(t => <CompactRow key={t.id} t={t} />)}
         </Section>
       )}
 
       {buckets.lastweek.length > 0 && (
-        <Section title="Last week" count={buckets.lastweek.length} tone={C.muted}>
+        <Section title="Last week" tone={C.muted}>
           {buckets.lastweek.map(t => <CompactRow key={t.id} t={t} done />)}
         </Section>
       )}
@@ -124,22 +125,35 @@ export default function Dashboard() {
   )
 }
 
-function Head({ username }) {
+/* A profile button, as on the site, rather than the username spelled out.
+   The name told the reader something they already knew — whose phone this is —
+   and it was the widest thing on the row after the wordmark. The circle goes
+   somewhere; the text went nowhere. */
+function Head() {
   return (
     <View style={s.head}>
       <Text style={s.brand}>UPSET <Text style={{ color: C.clay }}>ALERT!</Text></Text>
-      {username ? <Text style={[T.smallMed, { color: C.faint }]}>{username}</Text> : null}
+      <Link href="/status" asChild>
+        <Pressable
+          style={({ pressed }) => [s.avatar, pressed && { opacity: 0.7 }]}
+          hitSlop={8} accessibilityRole="button" accessibilityLabel="Your account"
+        >
+          <Ionicons name="person-outline" size={18} color={C.inkBody} />
+        </Pressable>
+      </Link>
     </View>
   )
 }
 
-function Section({ title, count, tone, children }) {
+/* No count. A number floating at the end of the rule said only how many cards
+   were already visible directly beneath it — the reader can see that, and it
+   read as a badge that meant something. */
+function Section({ title, tone, children }) {
   return (
     <View style={s.section}>
       <View style={s.sectionHead}>
         <Eyebrow color={tone}>{title}</Eyebrow>
         <View style={s.rule} />
-        {count ? <Text style={[T.tiny, { color: C.faint }]}>{count}</Text> : null}
       </View>
       {children}
     </View>
@@ -149,7 +163,7 @@ function Section({ title, count, tone, children }) {
 /* "Sep 21 – 27", the site's date range in its mono face, right-aligned in the
    meta row so it reads as the third item in a summary rather than a heading. */
 
-function Meta({ t }) {
+function Meta({ t, showSurface = true }) {
   return (
     <View style={s.meta}>
       {t.city ? (
@@ -157,7 +171,7 @@ function Meta({ t }) {
           {t.city}
         </Text>
       ) : null}
-      <SurfacePill surface={t.surface} />
+      {showSurface ? <SurfacePill surface={t.surface} /> : null}
       {dateRange(t) ? (
         <Text style={[T.tiny, { color: C.muted, marginLeft: 'auto' }]}>{dateRange(t)}</Text>
       ) : null}
@@ -220,15 +234,15 @@ function ActiveCard({ t, userId }) {
                   {standings.loading ? '' : 'Not entered'}
                 </Text>
               )}
-              {mine ? (
-                <StatusChip tone="muted">
-                  {mine.correct_count} right · {fmtPts(mine.total_points)} pts
-                </StatusChip>
-              ) : null}
+              {/* The SURFACE here, not "29 right · 29 pts". Those two numbers
+                  restate the standing immediately to their left — "29th of 29"
+                  already says how it is going — while the surface is the one
+                  thing about the event this card was not showing anywhere. */}
+              <SurfacePill surface={t.surface} />
             </View>
           }
         >
-          <Meta t={t} />
+          <Meta t={t} showSurface={false} />
         </TourCard>
       </Pressable>
     </Link>
@@ -260,9 +274,6 @@ function ordinal(n) {
   return n + (suf[(v - 20) % 10] || suf[v] || suf[0])
 }
 
-// Points are a float on the wire but whole in practice; show a decimal only
-// when there genuinely is one.
-const fmtPts = p => (Number.isInteger(p) ? String(p) : String(Math.round(p * 10) / 10))
 
 const s = StyleSheet.create({
   head: {
@@ -270,6 +281,11 @@ const s = StyleSheet.create({
     paddingTop: S.sm, paddingBottom: S.xs,
   },
   brand: { ...T.display, color: C.ink },
+  avatar: {
+    width: 36, height: 36, borderRadius: 18,
+    borderWidth: 1, borderColor: C.border, backgroundColor: C.card,
+    alignItems: 'center', justifyContent: 'center',
+  },
 
   section: { gap: S.sm, marginTop: S.md },
   sectionHead: { flexDirection: 'row', alignItems: 'center', gap: S.sm },

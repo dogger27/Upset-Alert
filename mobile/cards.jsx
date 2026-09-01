@@ -8,8 +8,12 @@
  * comes from the source.
  */
 
+import { useEffect, useMemo, useState } from 'react'
 import { Image, StyleSheet, Text, View } from 'react-native'
+import { leading } from './fontScale.js'
 import { tierStamp } from './logos'
+import { flagEmoji } from './flags'
+import { nameForms, pairForms } from './names'
 import { BADGE, C, R, S, SHADOW, T, TOUR } from './theme'
 
 /* The accent bar: a 4px vertical gradient from the tour's 500 to its 700.
@@ -85,14 +89,13 @@ export function TourCard({ tour, tier, name, children, footer }) {
       <AccentBar from={isATP ? C.atp : C.wta} to={isATP ? C.atpDeep : C.wtaDeep} />
       <View style={u.body}>
         <View style={u.titleRow}>
-          <View style={u.titleCol}>
-            <Text style={u.title} numberOfLines={2}>{name}</Text>
-            {/* The tour, in words. A combined event supplies TWO draws named
-                "US Open", and the tier stamp beside them is the SAME logo for
-                both — so without this the dashboard showed two identical cards
-                distinguished only by a 5pt stripe. */}
-            <TourBadge gender={isATP ? 'M' : 'F'} />
-          </View>
+          {/* The tour reads BEFORE the name, not under it: a combined event
+              supplies two draws both called "US Open" and the tier stamp
+              beside them is the same logo for both, so the badge is the first
+              thing that tells them apart and belongs where the eye starts. */}
+          <TourBadge gender={isATP ? 'M' : 'F'} />
+          <Text style={u.title} numberOfLines={2}>{name}</Text>
+          <View style={{ flex: 1 }} />
           <TierBadge tour={tour} tier={tier} name={name} />
         </View>
         {children}
@@ -110,14 +113,13 @@ const u = StyleSheet.create({
   },
   // '14px 16px 14px 20px' with gap 9, from the source.
   body: { flex: 1, paddingTop: 14, paddingRight: 16, paddingBottom: 14, paddingLeft: 16, gap: 9 },
-  titleRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 },
-  titleCol: { flex: 1, gap: 6, alignItems: 'flex-start' },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   // 1.18rem at 16px root = 18.9; lineHeight 1.05; letterSpacing 0.01em.
   title: {
-    fontFamily: 'SairaCondensed_700Bold', fontSize: 19, lineHeight: 20,
+    fontFamily: 'SairaCondensed_700Bold', fontSize: 19, lineHeight: leading(20),
     // No flex:1 — the title now sits in a COLUMN, where flex:1 would stretch it
     // vertically and push the tour badge to the bottom of the card.
-    letterSpacing: 0.19, color: C.ink, alignSelf: 'stretch',
+    letterSpacing: 0.19, color: C.ink, flexShrink: 1,
   },
   footer: { borderTopWidth: 1, borderTopColor: C.border, paddingTop: 9, marginTop: 1 },
   pill: {
@@ -135,9 +137,17 @@ const u = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   badgeGap: { width: 28 },
+  flagSlot: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  flagGlyph: { fontSize: 13, lineHeight: leading(16) },
+  // Same footprint as a flag, so a name never moves because a country is
+  // missing. 4:3, like the flag images the site uses.
+  flagEmpty: {
+    width: 16, height: 12, borderRadius: 2,
+    borderWidth: 1, borderColor: C.borderOn, backgroundColor: 'transparent',
+  },
   // .dh-category: 0.65rem/700/uppercase, 0.06em tracking, radius 4, 2px 6px.
   tourBadge: { borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, alignSelf: 'flex-start' },
-  tourText: { fontFamily: 'Archivo_700Bold', fontSize: 10, lineHeight: 14, letterSpacing: 0.6 },
+  tourText: { fontFamily: 'Archivo_700Bold', fontSize: 10, lineHeight: leading(14), letterSpacing: 0.6 },
   /* The entry chip is CONTENT-WIDTH and therefore does NOT reuse `badge`.
      It was composed as [badge, entryChip] with width:undefined to cancel the
      28pt, and that does not cancel it — "WC" came out as "W..". This is the
@@ -148,7 +158,7 @@ const u = StyleSheet.create({
     height: 18, borderRadius: 3, borderWidth: 1, paddingHorizontal: 5,
     alignItems: 'center', justifyContent: 'center', marginLeft: 6,
   },
-  badgeText: { fontFamily: 'Archivo_700Bold', fontSize: 11, lineHeight: 13 },
+  badgeText: { fontFamily: 'Archivo_700Bold', fontSize: 11, lineHeight: leading(13) },
 })
 
 
@@ -210,5 +220,84 @@ export function TourBadge({ gender, style }) {
     <View style={[u.tourBadge, { backgroundColor: t.bg }, style]}>
       <Text style={[u.tourText, { color: t.fg }]}>{t.label}</Text>
     </View>
+  )
+}
+
+
+/* A country flag in a FIXED slot — or an empty box when there isn't one.
+ *
+ * The box is not decoration: a withheld nationality is meaningful. Neutral
+ * athletes carry no flag, and the order of play drops the country whenever
+ * space is tight, so "no flag" is a state the row has to be able to show. An
+ * outlined empty box says "no country here" the way the site does; rendering
+ * nothing at all would instead shift every name after it out of line.
+ *
+ * `slots` is the number of flags this ENTRY needs — a doubles pair needs two —
+ * and both players in a match are given the same value so their names still
+ * start at the same x.
+ */
+export function FlagSlot({ codes, slots = 1 }) {
+  const list = (codes && codes.length ? codes : [null]).slice(0, slots)
+  while (list.length < slots) list.push(null)
+  return (
+    <View style={[u.flagSlot, { width: slots * 17 + (slots - 1) * 3 }]}>
+      {list.map((c, i) => {
+        const glyph = flagEmoji(c)
+        return glyph
+          ? <Text key={i} style={u.flagGlyph}>{glyph}</Text>
+          : <View key={i} style={u.flagEmpty} />
+      })}
+    </View>
+  )
+}
+
+
+/* A player's name, shortened in the order a person would shorten it.
+ *
+ * "…" IS THE LAST RESORT, not the first. Truncation destroys the part that
+ * identifies the player — "Juan Manuel Cerú…" says less than "Cerúndolo" does,
+ * in more space — so the rungs are walked in order and shrinking only starts
+ * once the words have run out:
+ *
+ *   1. initials for the given names   2. surname alone
+ *   3. shrink the type                4. and only then, ellipsis
+ *
+ * React Native cannot measure text without drawing it, so this steps DOWN on
+ * layout: draw a rung, and if the line comes back different from what was
+ * asked for, it did not fit — try the next. At most two extra passes, and the
+ * rung is reset when the name changes.
+ *
+ * adjustsFontSizeToFit is deliberately OFF until the last rung. Left on, it
+ * would quietly shrink the full name to fit and the shortening would never
+ * happen — which is the ladder upside down.
+ */
+export function PlayerName({ name, doubles = false, style, ...rest }) {
+  const forms = useMemo(
+    () => (doubles ? pairForms(name) : nameForms(name)),
+    [name, doubles],
+  )
+  const [rung, setRung] = useState(0)
+  useEffect(() => { setRung(0) }, [forms])
+
+  const last = rung >= forms.length - 1
+  return (
+    <Text
+      {...rest}
+      style={style}
+      numberOfLines={1}
+      ellipsizeMode="tail"
+      adjustsFontSizeToFit={last}
+      minimumScaleFactor={last ? 0.6 : 1}
+      onTextLayout={e => {
+        if (last) return
+        const line = e.nativeEvent?.lines?.[0]
+        if (!line) return
+        if (line.text.trim() !== forms[rung]) {
+          setRung(r => Math.min(r + 1, forms.length - 1))
+        }
+      }}
+    >
+      {forms[rung]}
+    </Text>
   )
 }

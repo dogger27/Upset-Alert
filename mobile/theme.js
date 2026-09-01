@@ -11,6 +11,8 @@
  * there is no second set of values to keep in step until someone asks for one.
  */
 
+import { leading } from './fontScale.js'
+
 export const C = {
   // Surfaces. Each step lifts toward the light: sunken < page < card < raised,
   // kept close together so elevation reads through the border, not a glare.
@@ -102,18 +104,18 @@ export const SHADOW = {
  * explicit — RN's defaults differ per platform and drift as text scales.
  */
 export const T = {
-  display:  { fontFamily: 'SairaCondensed_700Bold',   fontSize: 30, lineHeight: 34, letterSpacing: 0.3 },
-  h1:       { fontFamily: 'SairaCondensed_700Bold',   fontSize: 24, lineHeight: 28, letterSpacing: 0.2 },
-  h2:       { fontFamily: 'SairaCondensed_600SemiBold', fontSize: 19, lineHeight: 23 },
-  eyebrow:  { fontFamily: 'SairaCondensed_700Bold',   fontSize: 12, lineHeight: 14, letterSpacing: 1.1 },
-  score:    { fontFamily: 'SairaCondensed_700Bold',   fontSize: 20, lineHeight: 22 },
+  display:  { fontFamily: 'SairaCondensed_700Bold',   fontSize: 30, lineHeight: leading(34), letterSpacing: 0.3 },
+  h1:       { fontFamily: 'SairaCondensed_700Bold',   fontSize: 24, lineHeight: leading(28), letterSpacing: 0.2 },
+  h2:       { fontFamily: 'SairaCondensed_600SemiBold', fontSize: 19, lineHeight: leading(23) },
+  eyebrow:  { fontFamily: 'SairaCondensed_700Bold',   fontSize: 12, lineHeight: leading(14), letterSpacing: 1.1 },
+  score:    { fontFamily: 'SairaCondensed_700Bold',   fontSize: 20, lineHeight: leading(22) },
 
-  body:     { fontFamily: 'Archivo_400Regular',       fontSize: 15, lineHeight: 21 },
-  bodyMed:  { fontFamily: 'Archivo_500Medium',        fontSize: 15, lineHeight: 21 },
-  bodyBold: { fontFamily: 'Archivo_700Bold',          fontSize: 15, lineHeight: 21 },
-  small:    { fontFamily: 'Archivo_400Regular',       fontSize: 13, lineHeight: 18 },
-  smallMed: { fontFamily: 'Archivo_500Medium',        fontSize: 13, lineHeight: 18 },
-  tiny:     { fontFamily: 'Archivo_500Medium',        fontSize: 11, lineHeight: 15 },
+  body:     { fontFamily: 'Archivo_400Regular',       fontSize: 15, lineHeight: leading(21) },
+  bodyMed:  { fontFamily: 'Archivo_500Medium',        fontSize: 15, lineHeight: leading(21) },
+  bodyBold: { fontFamily: 'Archivo_700Bold',          fontSize: 15, lineHeight: leading(21) },
+  small:    { fontFamily: 'Archivo_400Regular',       fontSize: 13, lineHeight: leading(18) },
+  smallMed: { fontFamily: 'Archivo_500Medium',        fontSize: 13, lineHeight: leading(18) },
+  tiny:     { fontFamily: 'Archivo_500Medium',        fontSize: 11, lineHeight: leading(15) },
 }
 
 /* Spacing. One scale, used everywhere, so gaps are chosen rather than typed. */

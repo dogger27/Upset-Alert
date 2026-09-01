@@ -1,6 +1,7 @@
 /* The leagues you're in. Reached from the dashboard. */
 
 import { Redirect } from 'expo-router'
+import { leading } from '../../fontScale.js'
 import { StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '../../auth'
 import { getLeagues } from '../../api'
@@ -100,6 +101,6 @@ const s = StyleSheet.create({
   },
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   name: { color: C.ink, fontWeight: '800', fontSize: 17, flex: 1 },
-  chev: { color: C.muted, fontSize: 22, lineHeight: 22 },
+  chev: { color: C.muted, fontSize: 22, lineHeight: leading(22) },
   meta: { color: C.muted },
 })
