@@ -86,6 +86,20 @@ async def lifespan(app: FastAPI):
         sofa_live_monitor.start()
         logging.getLogger("app").info("Sofascore live polling ENABLED")
 
+    # The Live Activity dispatcher. In THIS process on purpose: the queue it
+    # drains is an in-process set fed by the poller above, and the throttle
+    # counters are per-process. Splitting it into a worker would silently give
+    # every activity one push per process and divide the budget counting by the
+    # same number.
+    la_on = settings.live_activity_enabled
+    la_task = None
+    if la_on:
+        from app.services import live_activity
+        la_task = asyncio.create_task(live_activity.worker())
+        logging.getLogger("app").info(
+            "Live Activity dispatcher ENABLED (dry_run=%s)",
+            settings.live_activity_dry_run)
+
     # The identity layer every one of the sweeps below reads. Without it a draw
     # is invisible to all of them and shows no live score at all, silently — see
     # the note in sofa_resolver.py for how that went unnoticed for two days.
@@ -132,6 +146,10 @@ async def lifespan(app: FastAPI):
             settings.environment,
         )
     yield
+    if la_task is not None:
+        la_task.cancel()
+        from app.services import apns
+        await apns.aclose()
     if doubles_on:
         from app.services.sofascore_doubles import monitor as sofa_doubles_monitor
         sofa_doubles_monitor.stop()
