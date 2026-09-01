@@ -124,6 +124,7 @@ export default function Dashboard() {
       )}
 
       <View style={s.footer}>
+        <Link href="/schedule" style={s.footerLink}>Schedule</Link>
         <Link href="/leagues" style={s.footerLink}>Leagues</Link>
         <Link href="/status" style={s.footerLink}>Status</Link>
         <Pressable onPress={signOut} hitSlop={8}>
