@@ -15,40 +15,98 @@ private let muted = Color(red: 0.58, green: 0.64, blue: 0.62)
 private let accent = Color(red: 0.79, green: 0.47, blue: 0.23)
 private let good = Color(red: 0.29, green: 0.87, blue: 0.50)
 private let bad = Color(red: 0.97, green: 0.44, blue: 0.44)
-// --clay-300 (#e8a87c), the site's brand dot. Lighter than `accent`: the mark
-// sits on a dark tint and the darker clay reads as mud at 7pt.
+// --clay-300 (#e8a87c), the site's brand dot.
 private let clayLight = Color(red: 0.91, green: 0.66, blue: 0.49)
 
-/// The brand mark — the site's navbar dot, redrawn rather than shipped.
+// The bracket's position-badge palette, lifted from the app's BADGE tokens so
+// a seed looks the same on the Lock Screen as it does inside the draw.
+private let seedBg   = Color(red: 0.227, green: 0.184, blue: 0.063)  // #3a2f10
+private let seedInk  = Color(red: 0.910, green: 0.780, blue: 0.400)  // #e8c766
+private let seedLine = Color(red: 0.420, green: 0.333, blue: 0.094)  // #6b5518
+private let rankBg   = Color(red: 0.169, green: 0.227, blue: 0.208)  // #2b3a35
+private let rankInk  = Color(red: 0.722, green: 0.776, blue: 0.753)  // #b8c6c0
+private let rankLine = Color(red: 0.624, green: 0.690, blue: 0.663)  // #9fb0a9
+
+/// The serve indicator — the site's brand beacon, inner disc inside an outer
+/// ring, doing an actual job rather than sitting in a corner as decoration.
 ///
-/// DRAWN, NOT AN ASSET, and deliberately: a widget extension cannot reach the
-/// main app's bundle, so a bitmap here would need its own copy in the target's
-/// asset catalogue at three scales, and it would still be a raster of two
-/// circles. This is the same mark as `.navbar-brand-dot` — a clay disc inside a
-/// soft ring at 28% — minus the pulse, which has no business animating on a
-/// Lock Screen.
+/// IT DOES NOT PULSE, and that is not an oversight. Live Activity views are
+/// rendered by WidgetKit as snapshots and redrawn only when the content state
+/// changes; a `repeatForever` animation never runs there. Shipping one anyway
+/// would leave dead code that reads like it should work and invites someone to
+/// "fix" it later. The two rings still mark the server unmistakably, which is
+/// the job. If serve ever needs to move, it has to move on a content update —
+/// and updates are throttled to roughly one every 45s, which is not a pulse.
 ///
-/// No wordmark: iOS already prints "Upset Alert" directly above the card, so a
-/// second one would say the app's name twice in two centimetres.
-private struct BrandDot: View {
-    var size: CGFloat = 7
+/// Renders its full footprint whether or not it is active, so the badges and
+/// names below it stay on one vertical line.
+private struct ServeBeacon: View {
+    let active: Bool
+    private let outer: CGFloat = 14
+    private let inner: CGFloat = 6
 
     var body: some View {
-        Circle()
-            .fill(clayLight)
-            .frame(width: size, height: size)
-            // The halo is a disc BEHIND the dot rather than a stroke on it: a
-            // stroke straddles the edge and eats into the solid centre, which
-            // at this size turns the mark into a smudge.
-            .background(
-                Circle()
-                    .fill(clayLight.opacity(0.28))
-                    .frame(width: size + 7, height: size + 7)
-            )
-            // Reserve what the halo actually occupies, or it clips against the
-            // neighbouring text.
-            .frame(width: size + 7, height: size + 7)
-            .accessibilityHidden(true)
+        ZStack {
+            if active {
+                Circle().fill(clayLight.opacity(0.30)).frame(width: outer, height: outer)
+                Circle().stroke(clayLight.opacity(0.55), lineWidth: 1).frame(width: outer, height: outer)
+                Circle().fill(clayLight).frame(width: inner, height: inner)
+            }
+        }
+        .frame(width: outer, height: outer)
+        .accessibilityHidden(true)
+    }
+}
+
+/// A real tournament seed, or the inferred one.
+///
+/// A GENUINE SEED IS A FACT ABOUT THE DRAW; an inferred seed is our own
+/// arithmetic over the field. They are deliberately not the same colour — gold
+/// carries the authority, grey stays quiet — and the box is a FIXED WIDTH so
+/// every player's name starts at the same x whether their number is one digit
+/// or three. That alignment is most of what makes two rows read as a match.
+private struct SeedBadge: View {
+    let seed: Int?
+    let drawRank: Int?
+
+    var body: some View {
+        let isSeed = seed != nil
+        let value = seed ?? drawRank
+        return Group {
+            if let value {
+                Text("\(value)")
+                    .font(.caption2).fontWeight(.bold)
+                    .foregroundColor(isSeed ? seedInk : rankInk)
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    // fixedSize before the frame, for the same reason the score
+                    // cells do it: overflow a tight box rather than wrap.
+                    .fixedSize(horizontal: true, vertical: false)
+                    .frame(width: 24, height: 16)
+                    .background(RoundedRectangle(cornerRadius: 3).fill(isSeed ? seedBg : rankBg))
+                    .overlay(RoundedRectangle(cornerRadius: 3).stroke(isSeed ? seedLine : rankLine, lineWidth: 0.5))
+            } else {
+                // No number at all still reserves the column, or the two names
+                // would start at different x.
+                Color.clear.frame(width: 24, height: 16)
+            }
+        }
+    }
+}
+
+/// The round, top-right.
+private struct RoundPill: View {
+    let text: String
+    var body: some View {
+        Text(text)
+            .font(.caption2).fontWeight(.bold)
+            .foregroundColor(ink.opacity(0.92))
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(Color.white.opacity(0.14)))
+            .overlay(Capsule().stroke(Color.white.opacity(0.20), lineWidth: 0.5))
     }
 }
 
@@ -61,22 +119,23 @@ struct MatchLockScreenView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                BrandDot()
+            HStack(spacing: 6) {
                 Text(attrs.event_label.uppercased())
                     .font(.caption2).fontWeight(.bold)
                     .foregroundColor(muted)
-                if !attrs.round_name.isEmpty {
-                    Text(attrs.round_name)
-                        .font(.caption2)
-                        .foregroundColor(muted)
-                }
-                Spacer()
+                    .lineLimit(1)
+                // Status sits with the event name rather than on the right,
+                // because the round pill owns that corner now and "YOU WERE
+                // RIGHT" would otherwise shove it off the card.
                 statusBadge
+                Spacer(minLength: 6)
+                if !attrs.round_name.isEmpty {
+                    RoundPill(text: attrs.round_name)
+                }
             }
 
-            playerRow(side: 1, name: attrs.p1_name, seed: attrs.p1_seed)
-            playerRow(side: 2, name: attrs.p2_name, seed: attrs.p2_seed)
+            playerRow(side: 1, name: attrs.p1_name, seed: attrs.p1_seed, drawRank: attrs.p1_draw_rank)
+            playerRow(side: 2, name: attrs.p2_name, seed: attrs.p2_seed, drawRank: attrs.p2_draw_rank)
 
             if let line = state.final_line, isOver {
                 Text(line).font(.caption).foregroundColor(muted)
@@ -105,24 +164,22 @@ struct MatchLockScreenView: View {
         }
     }
 
-    private func playerRow(side: Int, name: String, seed: Int?) -> some View {
+    private func playerRow(side: Int, name: String, seed: Int?, drawRank: Int?) -> some View {
         let picked = state.pick.side == side
         let won = state.winner == side
         return HStack(spacing: 6) {
-            // Serving. A dot rather than a label: it changes every game and a
-            // word would draw more attention than it deserves.
-            Circle()
-                .fill(state.serving == side && !isOver ? accent : Color.clear)
-                .frame(width: 6, height: 6)
+            ServeBeacon(active: state.serving == side && !isOver)
+            SeedBadge(seed: seed, drawRank: drawRank)
 
-            if let seed = seed {
-                Text("\(seed)").font(.caption2).foregroundColor(muted)
-            }
-
+            // BOTH NAMES WHITE. Colouring the pick clay made the card look
+            // like it was rating the two players rather than reporting a
+            // match, and the star already says which one is yours — twice was
+            // once too many. Weight still moves, because bold is about who is
+            // winning, not about whose side you took.
             Text(name)
                 .font(.subheadline)
                 .fontWeight(picked || won ? .bold : .regular)
-                .foregroundColor(picked ? accent : ink)
+                .foregroundColor(ink)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
 
