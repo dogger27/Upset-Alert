@@ -155,3 +155,9 @@ export const endActivity = (activityId) =>
      scores      the final, once completed.
      winner_side 0 = side a, 1 = side b. */
 export const getScheduleDates = () => request('/schedule/dates')
+
+/* One draw's standings. Public — no auth — and the shape is
+   {rank, user, total_points, correct_count, has_upset_pick}. Used on the
+   dashboard to answer "where am I" without opening the draw. */
+export const getDrawStandings = (tournamentId) =>
+  request(`/tournaments/${tournamentId}/standings`)
