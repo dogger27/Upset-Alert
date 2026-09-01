@@ -949,3 +949,56 @@ input:focus, select:focus { outline: none; border-color: var(--brand-line); }
     font-size: inherit !important;
   }
 }
+
+/* ── Touch targets ───────────────────────────────────────────────────────────
+   Apple asks for 44pt; measured, every control on this site was short of it —
+   the standard button by 5px, the tab pills by 19, the small round buttons by
+   22. Thumbs miss, and on the schedule and leagues screens a miss means
+   selecting the wrong filter rather than nothing.
+
+   GROWN VERTICALLY ONLY, and that is a deliberate limit rather than laziness.
+   Most of these controls sit in horizontal rows a few pixels apart, so an
+   invisible 44px-wide hit area would overlap its neighbour and start stealing
+   its taps — which is worse than a small target, because it acts on the wrong
+   thing instead of doing nothing. Height is also the axis a thumb actually
+   misses on.
+
+   Padding rather than min-height, so the label stays optically centred: these
+   are inline-block buttons, and a min-height would leave the text at the top
+   of a taller box.
+
+   `pointer: coarse` rather than a width query, matching the input rule above —
+   this is about touch input, and a narrow desktop window has a mouse. */
+@media (pointer: coarse) {
+  /* 39px -> 44px */
+  button,
+  a.btn-primary,
+  a.btn-secondary,
+  a.btn-clay {
+    padding-top: calc(0.5rem + 3px);
+    padding-bottom: calc(0.5rem + 3px);
+  }
+
+  /* The pills: primary navigation on the two screens people live in. */
+  .lt-tab { padding-top: 14px; padding-bottom: 14px; }
+  .lt-depth-btn { padding-top: 15px; padding-bottom: 15px; }
+  .lt-tour-btn { padding-top: 14px; padding-bottom: 14px; }
+  .sched-chip, .sched-back { padding-top: 0.9rem; padding-bottom: 0.9rem; }
+
+  /* Isolated in the panel's corner, so this one CAN grow both ways safely. */
+  .dm-close { width: 44px; height: 44px; }
+}
+
+/* KNOWN EXCEPTIONS, recorded so they are not mistaken for oversights.
+
+   The bracket's player rows are ~16px (BOX_H = 32 for a two-player box, in
+   CombinedView.jsx). Reaching 44pt would nearly triple the height of a 128-row
+   draw and break the windowed layout and its pager outright. A tournament
+   bracket is a dense information display in the way a calendar or a
+   spreadsheet is, and those legitimately carry smaller targets; the draw also
+   has its own generous tap handling around each slot.
+
+   The standings row's bracket and history icons are ~22px inside a 34px row on
+   a 41px pitch. Growing them would change the row height that the absolutely
+   positioned rows and their transform animation are built on. They are
+   secondary affordances beside a name that is itself the primary target. */
