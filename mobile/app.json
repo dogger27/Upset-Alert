@@ -8,7 +8,10 @@
     "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "ca.upsetalert.app"
+      "bundleIdentifier": "ca.upsetalert.app",
+      "infoPlist": {
+        "NSSupportsLiveActivities": true
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -28,6 +31,13 @@
       "expo-secure-store",
       "expo-router"
     ],
-    "scheme": "upsetalert"
+    "scheme": "upsetalert",
+    "owner": "dogger27",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "1c3b317b-d9fc-420d-a710-7ca680db7ce8"
+      }
+    }
   }
 }
