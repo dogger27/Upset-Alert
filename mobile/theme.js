@@ -58,6 +58,15 @@ export const C = {
 
 /* --shadow-sm in dark: 0 1px 3px rgba(0,0,0,0.50). RN wants the pieces
    separately, and its shadowRadius is roughly the CSS blur halved. */
+/* Pick states, from the bracket's own CSS. THE WHOLE BOX CHANGES, not a mark
+   in the corner — that is what makes a wall of matches readable at a glance,
+   and it is the single biggest thing the first version of this screen missed. */
+export const PICK = {
+  correct: { bg: '#1c4a33', border: '#45c977' },
+  wrong:   { bg: '#4a2320', border: '#f2726a' },
+  needs:   { bg: null,      border: '#f0b03f' },
+}
+
 export const SHADOW = {
   shadowColor: '#000',
   shadowOffset: { width: 0, height: 1 },
