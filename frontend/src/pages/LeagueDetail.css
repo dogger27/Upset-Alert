@@ -1815,3 +1815,19 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
      draw's own name needs more. */
   .lt-title-league { display: none; }
 }
+
+
+/* COMPARE PICKS IS DESKTOP-ONLY.
+   Its body is a grid of one column per bracket slot across seven rounds. That
+   needs width a phone does not have, and shrinking it does not help — a
+   127-slot table is illegible long before it fits. So the tab goes below the
+   same 640px this file already uses for its other mobile rules.
+
+   With Compare hidden there is exactly one tab left, and a tab strip with one
+   tab is furniture rather than a control, so the strip goes too. LeagueDetail
+   forces `tab` back to standings at this width, which is what stops someone
+   who was already comparing being stranded when a window narrows. */
+@media (max-width: 640px) {
+  .lt-tab--compare { display: none; }
+  .lt-tabs { display: none; }
+}

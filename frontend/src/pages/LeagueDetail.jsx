@@ -802,6 +802,20 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
   // null = always follow the latest match (auto-max); number = user-set position
   const [scrubPos, setScrubPos] = useState(null)
   const [tab, setTab] = useState('standings')
+  /* COMPARE PICKS IS DESKTOP-ONLY. Its layout is a grid of one column per
+     bracket slot — seven rounds of them — which needs width it will never have
+     on a phone, and no amount of shrinking makes a 127-slot table legible
+     there. The tab is hidden below 640px in CSS.
+     This effect is the other half: hiding a control does not move someone who
+     is already using it, so rotating a tablet or narrowing a desktop window
+     would otherwise strand them in a view with no way out. */
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 640px)')
+    const apply = () => { if (mq.matches) setTab(t => (t === 'compare' ? 'standings' : t)) }
+    apply()
+    mq.addEventListener('change', apply)
+    return () => mq.removeEventListener('change', apply)
+  }, [])
   /* Which pick column the compare view is grouped by, or null for the
      standings order. Cleared whenever Standings is entered — that view is
      defined by total points, so it must never inherit an ordering chosen on
@@ -1062,7 +1076,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
           className={`lt-tab${tab === 'standings' ? ' lt-tab--active' : ''}`}
           onClick={() => { setCmpSort(null); setTab('standings') }}>Standings</button>
         <button type="button" role="tab" aria-selected={tab === 'compare'}
-          className={`lt-tab${tab === 'compare' ? ' lt-tab--active' : ''}`}
+          className={`lt-tab lt-tab--compare${tab === 'compare' ? ' lt-tab--active' : ''}`}
           onClick={() => setTab('compare')}>Compare Picks</button>
 
         {/* HOW FAR BACK TO LOOK. Only on the tab it governs, and pushed to the
