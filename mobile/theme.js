@@ -63,6 +63,14 @@ export const C = {
    and it is the single biggest thing the first version of this screen missed. */
 /* The bracket's position badge — seed in gold, ranking in grey, qualifier in
    green. Straight from BracketView.css's .pos-badge and its dark tokens. */
+/* The ATP / WTA badge, resolved from the site's DARK tokens — the app has no
+   light mode, so the light values (#dbeafe / #fce7f3) would be wrong here.
+   ATP: --atp-tint-strong + --info.  WTA: --wta-tint + --wta-text. */
+export const TOUR = {
+  M: { bg: '#1a2f4f', fg: '#7aa9ff', label: 'ATP' },
+  F: { bg: '#3a1526', fg: '#ff8ab5', label: 'WTA' },
+}
+
 export const BADGE = {
   seeded:   { bg: '#3a2f10', fg: '#e8c766', line: '#6b5518' },
   unseeded: { bg: '#2b3a35', fg: '#b8c6c0', line: '#9fb0a9' },

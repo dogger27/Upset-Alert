@@ -1,0 +1,7 @@
+{
+  "name": "upsetalert-tools",
+  "private": true,
+  "type": "module",
+  "description": "Dev-only tooling. Deliberately NOT part of mobile/ or frontend/ so that neither an EAS build nor a Cloudflare Pages build ever installs Playwright.",
+  "devDependencies": { "playwright": "^1.62.0", "sharp": "^0.33.0" }
+}

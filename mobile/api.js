@@ -16,7 +16,12 @@
  * Only status === 401 may end a session. See session.js.
  */
 
-export const API = 'https://upsetalert-api.upsetalert.ca'
+/* Production by default. Expo inlines any EXPO_PUBLIC_* variable at build
+   time, so this stays a plain constant in the bundle rather than a runtime
+   lookup. The override exists for the web export the visual-diff harness
+   renders (pointed at a local backend) and, later, for aiming a build at
+   staging without editing this file. */
+export const API = process.env.EXPO_PUBLIC_API_URL || 'https://upsetalert-api.upsetalert.ca'
 
 let token = null
 let onUnauthorized = null

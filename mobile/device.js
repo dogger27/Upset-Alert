@@ -44,6 +44,15 @@ import { getInstallId } from './install'
 import { registerDevice } from './api'
 
 export async function registerThisDevice() {
+  /* There is no such thing as a web device here. This whole file exists to
+     obtain an APNs token for push and Live Activities; a browser has neither,
+     and `platform: 'web'` is not a value the backend's enum accepts — so the
+     web build's only contribution was a 422 on every launch. Returning a
+     shaped result rather than throwing keeps the caller's happy path intact. */
+  if (Platform.OS === 'web') {
+    return { skipped: 'web', permission: 'unsupported', had_token: false }
+  }
+
   const install_id = await getInstallId()
 
   let permission = 'unknown'

@@ -10,7 +10,7 @@
 
 import { Image, StyleSheet, Text, View } from 'react-native'
 import { tierStamp } from './logos'
-import { BADGE, C, R, S, SHADOW, T } from './theme'
+import { BADGE, C, R, S, SHADOW, T, TOUR } from './theme'
 
 /* The accent bar: a 4px vertical gradient from the tour's 500 to its 700.
    Six stacked bands rather than a real gradient — expo-linear-gradient is a
@@ -85,7 +85,14 @@ export function TourCard({ tour, tier, name, children, footer }) {
       <AccentBar from={isATP ? C.atp : C.wta} to={isATP ? C.atpDeep : C.wtaDeep} />
       <View style={u.body}>
         <View style={u.titleRow}>
-          <Text style={u.title} numberOfLines={2}>{name}</Text>
+          <View style={u.titleCol}>
+            <Text style={u.title} numberOfLines={2}>{name}</Text>
+            {/* The tour, in words. A combined event supplies TWO draws named
+                "US Open", and the tier stamp beside them is the SAME logo for
+                both — so without this the dashboard showed two identical cards
+                distinguished only by a 5pt stripe. */}
+            <TourBadge gender={isATP ? 'M' : 'F'} />
+          </View>
           <TierBadge tour={tour} tier={tier} name={name} />
         </View>
         {children}
@@ -104,10 +111,13 @@ const u = StyleSheet.create({
   // '14px 16px 14px 20px' with gap 9, from the source.
   body: { flex: 1, paddingTop: 14, paddingRight: 16, paddingBottom: 14, paddingLeft: 16, gap: 9 },
   titleRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 },
+  titleCol: { flex: 1, gap: 6, alignItems: 'flex-start' },
   // 1.18rem at 16px root = 18.9; lineHeight 1.05; letterSpacing 0.01em.
   title: {
     fontFamily: 'SairaCondensed_700Bold', fontSize: 19, lineHeight: 20,
-    letterSpacing: 0.19, color: C.ink, flex: 1,
+    // No flex:1 — the title now sits in a COLUMN, where flex:1 would stretch it
+    // vertically and push the tour badge to the bottom of the card.
+    letterSpacing: 0.19, color: C.ink, alignSelf: 'stretch',
   },
   footer: { borderTopWidth: 1, borderTopColor: C.border, paddingTop: 9, marginTop: 1 },
   pill: {
@@ -125,27 +135,80 @@ const u = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   badgeGap: { width: 28 },
+  // .dh-category: 0.65rem/700/uppercase, 0.06em tracking, radius 4, 2px 6px.
+  tourBadge: { borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, alignSelf: 'flex-start' },
+  tourText: { fontFamily: 'Archivo_700Bold', fontSize: 10, lineHeight: 14, letterSpacing: 0.6 },
+  /* The entry chip is CONTENT-WIDTH and therefore does NOT reuse `badge`.
+     It was composed as [badge, entryChip] with width:undefined to cancel the
+     28pt, and that does not cancel it — "WC" came out as "W..". This is the
+     fourth fixed-width cell in this project to truncate or wrap its contents
+     rather than grow; the lesson each time is that the override belongs in a
+     standalone style, not layered on top of a fixed one. */
+  entryChip: {
+    height: 18, borderRadius: 3, borderWidth: 1, paddingHorizontal: 5,
+    alignItems: 'center', justifyContent: 'center', marginLeft: 6,
+  },
   badgeText: { fontFamily: 'Archivo_700Bold', fontSize: 11, lineHeight: 13 },
 })
 
 
-/* The bracket's position badge.
+/* The bracket's position badge — and the entry chip beside it.
  *
- * A SEED IS NOT A RANKING and the site distinguishes them: seeds in gold,
- * everyone else's world ranking in grey, a qualifier's Q in green. Fixed
- * footprint so a two- and a three-digit number leave the name starting at the
- * same x down the whole column — which is most of what makes a bracket scan.
+ * TWO BADGES, NOT ONE. The site shows a qualifier as `114` `Q`: the position
+ * badge always carries a NUMBER, and the entry type is a separate chip. The
+ * first version of this collapsed them, printing `Q` INSTEAD of the number,
+ * which quietly deleted the ranking of every qualifier in the draw.
+ *
+ * The number is the player's rank WITHIN THIS FIELD (see drawRanks.js) — seeds
+ * keep their seed, everyone else is numbered after them. It is NOT the world
+ * ranking, which is a different and larger number.
+ *
+ * Fixed footprint so a two- and a three-digit number leave the name starting at
+ * the same x down the whole column — most of what makes a bracket scan.
  */
-export function PosBadge({ seed, ranking, entryType }) {
-  const isQ = String(entryType || '').toUpperCase() === 'Q'
-  const text = seed != null ? String(seed)
-    : isQ ? 'Q'
-    : ranking != null ? String(ranking) : ''
+export function PosBadge({ seed, drawRank }) {
+  const text = seed != null ? String(seed) : drawRank != null ? String(drawRank) : ''
   if (!text) return <View style={u.badgeGap} />
-  const t = seed != null ? BADGE.seeded : isQ ? BADGE.qual : BADGE.unseeded
+  const t = seed != null ? BADGE.seeded : BADGE.unseeded
   return (
     <View style={[u.badge, { backgroundColor: t.bg, borderColor: t.line }]}>
       <Text style={[u.badgeText, { color: t.fg }]} numberOfLines={1}>{text}</Text>
+    </View>
+  )
+}
+
+/* Q for a qualifier, WC for a wildcard, LL for a lucky loser — whatever the
+   feed says, rendered only when there is one. Sits AFTER the name, as on the
+   site, so it never pushes the names out of alignment. */
+export function EntryChip({ entryType }) {
+  if (!entryType) return null
+  return (
+    <View style={[u.entryChip, { backgroundColor: BADGE.qual.bg, borderColor: BADGE.qual.line }]}>
+      <Text style={[u.badgeText, { color: BADGE.qual.fg }]} numberOfLines={1}>
+        {String(entryType).toUpperCase()}
+      </Text>
+    </View>
+  )
+}
+
+
+/* ATP or WTA, as a badge.
+ *
+ * NOT COSMETIC. A combined event puts two draws called exactly "US Open" in the
+ * same list, and without this the only thing separating them is a 5pt accent
+ * stripe — so the dashboard, the leagues list and a league's draw list each
+ * showed two identical rows and left you to guess which was the men's. The site
+ * never has this problem because it prints the tour on every card.
+ *
+ * Gender is 'M' or 'F' in the API; anything else renders nothing rather than
+ * guessing a tour.
+ */
+export function TourBadge({ gender, style }) {
+  const t = TOUR[gender]
+  if (!t) return null
+  return (
+    <View style={[u.tourBadge, { backgroundColor: t.bg }, style]}>
+      <Text style={[u.tourText, { color: t.fg }]}>{t.label}</Text>
     </View>
   )
 }

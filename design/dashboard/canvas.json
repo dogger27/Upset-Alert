@@ -1,0 +1,20 @@
+{
+  "pages": [
+    { "id": "page-1", "name": "Dashboard" },
+    { "id": "page-2", "name": "Not chosen" }
+  ],
+  "artboards": [
+    { "file": "Main.dc.html",          "x": 0,   "y": 0, "w": 393, "h": 852, "title": "Dashboard",        "page": "page-1" },
+    { "file": "Scoreboard.dc.html",    "x": 0,   "y": 0, "w": 393, "h": 852, "title": "B — Scoreboard",   "page": "page-2" },
+    { "file": "DeadlineFirst.dc.html", "x": 513, "y": 0, "w": 393, "h": 852, "title": "C — Deadline first","page": "page-2" }
+  ],
+  "annotations": [
+    { "id": "chosen", "x": 0, "y": -170, "w": 393, "page": "page-1",
+      "text": "CHOSEN and built.\n\nDrops the Live Now card, merges ATP/WTA into one tinted list instead of the PWA's two columns, and puts your standing on the home screen — which the website never did.\n\nC's countdown treatment survives here: on a card that HAS a deadline, the number is the loudest thing on it." },
+    { "id": "note-b", "x": 0, "y": 892, "w": 393, "page": "page-2",
+      "text": "B — SCOREBOARD\nRows, not cards. Most information per screen of the three.\nNot chosen: reads as data rather than an app, and nothing invites a tap." },
+    { "id": "note-c", "x": 513, "y": 892, "w": 393, "page": "page-2",
+      "text": "C — DEADLINE FIRST\nOne dominant thing: the next lock, as a clock, with the action attached.\nNot chosen: out of season the hero has nothing to say — and out of season is today. Its idea lives on in the chosen design's countdown." }
+  ],
+  "launch": { "view": "canvas", "page": "page-1" }
+}

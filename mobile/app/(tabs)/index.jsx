@@ -27,10 +27,10 @@ import { lockLabel } from '../../lock'
 import { C, R, S, T } from '../../theme'
 import { StatusChip, SurfacePill, TourCard } from '../../cards'
 import { dateRange } from '../../dates'
-import { Button, Card, ErrorNote, Eyebrow, Loading, Muted, Screen, Title } from '../../ui'
+import { Button, Card, CardLink, ErrorNote, Eyebrow, Loading, Muted, Screen, Title } from '../../ui'
 
 export default function Dashboard() {
-  const { phase, me, signOut, retry, error: authError } = useAuth()
+  const { phase, me, retry, error: authError } = useAuth()
   const ready = phase === 'ready'
 
   const tours = useApi(ready ? 'tournaments' : null, listTournaments, { enabled: ready })
@@ -120,14 +120,6 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {/* Schedule, Leagues and Status moved to the tab bar; a link to a tab
-          is a second way to reach the same place and makes the bar look
-          optional. Sign out has nowhere else to live yet, so it stays. */}
-      <View style={s.footer}>
-        <Pressable onPress={signOut} hitSlop={8}>
-          <Text style={[T.smallMed, { color: C.faint }]}>Sign out</Text>
-        </Pressable>
-      </View>
     </Screen>
   )
 }
@@ -248,15 +240,13 @@ function ActiveCard({ t, userId }) {
 function CompactRow({ t, done }) {
   const isATP = t.gender !== 'F'
   return (
-    <Link href={`/draw/${t.id}`} asChild>
-      <Pressable style={({ pressed }) => [s.compact, pressed && { opacity: 0.7 }]}>
-        <View style={[s.compactDot, { backgroundColor: isATP ? C.atp : C.wta }]} />
-        <Text style={[T.small, { color: done ? C.muted : C.inkBody, flex: 1 }]} numberOfLines={1}>
-          {t.name}
-        </Text>
-        <Text style={[T.tiny, { color: C.faint }]}>{dateRange(t)}</Text>
-      </Pressable>
-    </Link>
+    <CardLink href={`/draw/${t.id}`} style={s.compact} pressedOpacity={0.7}>
+      <View style={[s.compactDot, { backgroundColor: isATP ? C.atp : C.wta }]} />
+      <Text style={[T.small, { color: done ? C.muted : C.inkBody, flex: 1 }]} numberOfLines={1}>
+        {t.name}
+      </Text>
+      <Text style={[T.tiny, { color: C.faint }]}>{dateRange(t)}</Text>
+    </CardLink>
   )
 }
 

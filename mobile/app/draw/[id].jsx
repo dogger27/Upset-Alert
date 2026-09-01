@@ -21,12 +21,13 @@ import { useMemo, useState } from 'react'
 import { Stack, useLocalSearchParams } from 'expo-router'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { getDraw, getPredictions } from '../../api'
+import { computeDrawRanks } from '../../drawRanks'
 import { useApi } from '../../useApi'
 import { slotLabel } from '../../scoring'
 import { lockLabel } from '../../lock'
 import { currentRound, shortRound } from '../../rounds'
 import { C, PICK, R, S, SHADOW, T } from '../../theme'
-import { PosBadge } from '../../cards'
+import { EntryChip, PosBadge } from '../../cards'
 import { scoreLine } from '../../score'
 import { Card, ErrorNote, Loading, Muted, Screen, Title } from '../../ui'
 
@@ -37,6 +38,12 @@ export default function DrawScreen() {
   const [picked, setPicked] = useState(null)   // null = follow the live round
 
   const t = draw.data?.tournament
+
+  /* Computed once from draw_entries, not per row: it sorts the whole field. */
+  const drawRanks = useMemo(
+    () => computeDrawRanks(draw.data?.draw_entries),
+    [draw.data?.draw_entries],
+  )
 
   const pickBy = useMemo(() => {
     const m = new Map()
@@ -137,7 +144,7 @@ export default function DrawScreen() {
           showsVerticalScrollIndicator={false}
         >
           {shown ? shown[1].map(m => (
-            <MatchRow key={m.id} m={m} pick={pickBy.get(m.id)} />
+            <MatchRow key={m.id} m={m} pick={pickBy.get(m.id)} drawRanks={drawRanks} />
           )) : null}
           {draw.data && !rounds.length && (
             <Card><Title>No matches yet</Title><Muted>This draw hasn’t been released.</Muted></Card>
@@ -160,7 +167,7 @@ export default function DrawScreen() {
  * are a sentence: "6-4  7-5  6⁷-7  6-1", under the names, the way the site
  * puts them under the box.
  */
-function MatchRow({ m, pick }) {
+function MatchRow({ m, pick, drawRanks }) {
   const decided = !!m.winner
   const correct = decided && pick != null && pick === m.winner.id
   const wrong = decided && pick != null && pick !== m.winner.id
@@ -178,11 +185,11 @@ function MatchRow({ m, pick }) {
         const won = decided && p && m.winner.id === p.id
         return (
           <View key={i} style={[s.side, i === 0 && s.sideDivider]}>
-            <PosBadge seed={p?.seed} ranking={p?.ranking} entryType={p?.entry_type} />
+            <PosBadge seed={p?.seed} drawRank={p ? drawRanks[p.id] : null} />
             <Text
               style={[
                 T.bodyMed,
-                { color: decided && !won ? C.muted : C.ink, flex: 1 },
+                { color: decided && !won ? C.muted : C.ink, flexShrink: 1 },
                 isPick && !state && { color: C.clay },
                 won && { fontFamily: 'Archivo_700Bold' },
               ]}
@@ -190,6 +197,19 @@ function MatchRow({ m, pick }) {
             >
               {slotLabel(p, m)}
             </Text>
+            <EntryChip entryType={p?.entry_type} />
+            <View style={{ flex: 1 }} />
+            {/* WHO YOU PICKED, always — not only while the match is open.
+                The tint says right or wrong; on its own it never says WHICH
+                player you backed, and once a match was decided this row lost
+                its marker entirely, so a red box left you to infer your own
+                pick from the two names. The site marks it with a glyph; so do
+                we, and it stays put after the result lands. */}
+            {isPick && (
+              <Text style={[s.pickMark, { color: state ? state.border : C.clay }]}>
+                {correct ? '✓' : wrong ? '✗' : '•'}
+              </Text>
+            )}
           </View>
         )
       })}
@@ -203,6 +223,7 @@ function MatchRow({ m, pick }) {
 }
 
 const s = StyleSheet.create({
+  pickMark: { fontFamily: 'Archivo_700Bold', fontSize: 13, marginLeft: 8 },
   head: {
     flexDirection: 'row', backgroundColor: C.card, borderRadius: R.md,
     borderWidth: 1, borderColor: C.border, overflow: 'hidden',
