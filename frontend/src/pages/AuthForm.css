@@ -6,7 +6,10 @@
 }
 
 .auth-page {
-  min-height: calc(100vh - 56px);
+  /* Was 56px while the navbar was 60px — a four-pixel disagreement nobody
+     could see but which made the page a scrollbar taller than the viewport. */
+  min-height: calc(100vh - var(--nav-h));
+  min-height: calc(100dvh - var(--nav-h));
   display: flex;
   align-items: center;
   justify-content: center;

@@ -2,8 +2,8 @@
   max-width: 100%;
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 60px);
-  height: calc(100dvh - 60px);
+  height: calc(100vh - var(--nav-h));
+  height: calc(100dvh - var(--nav-h));
   overflow: hidden;
 }
 
@@ -664,7 +664,9 @@
 
 .reset-toast {
   position: fixed;
-  bottom: 2rem;
+  /* 2rem is 32px against a 34px home indicator — it was landing ON it. The
+     lock-toast beside this one already got it right. */
+  bottom: max(2rem, env(safe-area-inset-bottom, 0px));
   left: 50%;
   transform: translateX(-50%);
   background: var(--tooltip-bg);
