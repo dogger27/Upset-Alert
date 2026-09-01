@@ -1350,14 +1350,39 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
 }
 
 function InviteModal({ league, onClose }) {
-  const [copied, setCopied] = useState(false)
+  // null = idle, true = copied, false = the copy failed and the code is shown
+  // instead. Three states, because "we tried" is not the same as "you have it".
+  const [copied, setCopied] = useState(null)
   const [emailInput, setEmailInput] = useState('')
   const [sendResults, setSendResults] = useState(null)
 
-  const copy = () => {
-    navigator.clipboard.writeText(league.invite_code)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+  /* CLAIM SUCCESS ONLY ON SUCCESS.
+     writeText returns a PROMISE and this had no .catch, while setCopied(true)
+     ran unconditionally on the line after — so "✓ Copied!" appeared whether or
+     not anything reached the clipboard. It rejects for real reasons: a
+     non-secure context, a document that is not focused, Safari outside a user
+     gesture, and every WebView that denies the permission. The user then pastes
+     nothing into their invite email and has no idea why.
+     On failure we say so and select the code, so it can still be copied by
+     hand — a failed copy should cost a long-press, not the invite. */
+  const codeRef = useRef(null)
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(league.invite_code)
+      setCopied(true)
+    } catch {
+      setCopied(false)
+      // Select it so the manual path is one gesture, not a transcription.
+      const el = codeRef.current
+      if (el) {
+        const r = document.createRange()
+        r.selectNodeContents(el)
+        const sel = window.getSelection()
+        sel?.removeAllRanges()
+        sel?.addRange(r)
+      }
+    }
+    setTimeout(() => setCopied(null), 2500)
   }
 
   const sendMutation = useMutation({
@@ -1379,10 +1404,13 @@ function InviteModal({ league, onClose }) {
         </p>
         <div className="invite-code-block">
           <div className="invite-code-label">Invite Code</div>
-          <div className="invite-code-value">{league.invite_code}</div>
+          {/* Referenced so a failed copy can select it — see copy() above. */}
+          <div className="invite-code-value" ref={codeRef}>{league.invite_code}</div>
         </div>
         <button className="btn-primary invite-copy-btn" onClick={copy}>
-          {copied ? '✓ Copied!' : 'Copy Invite Code'}
+          {copied === true ? '✓ Copied!'
+            : copied === false ? 'Copy failed — select it above'
+            : 'Copy Invite Code'}
         </button>
 
         <div className="invite-or-divider"><span>OR</span></div>
