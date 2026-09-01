@@ -132,8 +132,8 @@ struct MatchLockScreenView: View {
                     .lineLimit(1)
                 // Status sits with the event name because the round pill owns
                 // the right corner. What is left here is short by design —
-                // SUSPENDED, TIEBREAK, or FINAL when nobody picked the match —
-                // so it shares the line without crowding either side.
+                // SUSPENDED or TIEBREAK, and nothing at all once a match is
+                // over — so it shares the line without crowding either side.
                 statusBadge
                 Spacer(minLength: 6)
                 if !attrs.round_name.isEmpty {
@@ -164,17 +164,16 @@ struct MatchLockScreenView: View {
         if state.status == "suspended" {
             Text("SUSPENDED").font(.caption2).fontWeight(.bold).foregroundColor(bad)
         } else if isOver {
-            // NO "YOU WERE RIGHT" / "YOU WERE WRONG" HERE. The tick or cross
-            // already sits beside the player you picked, in the row it belongs
-            // to — the words said the same thing a second time, and at two
-            // words apiece they wrapped onto two lines in a corner with one
-            // line to spare.
+            // NOTHING. Not "YOU WERE RIGHT"/"YOU WERE WRONG" — the tick or
+            // cross already sits beside the player you picked, in the row it
+            // belongs to, and the words said it a second time while wrapping
+            // onto two lines in a corner with one line to spare.
             //
-            // The glyph only exists when there IS a pick, though, so a match
-            // nobody picked still has to say it is over.
-            if state.pick.correct == nil {
-                Text("FINAL").font(.caption2).fontWeight(.bold).foregroundColor(muted)
-            }
+            // And not "FINAL" either when there is no pick. A finished match
+            // is legible without a label: the score is on both rows, the
+            // winner's is bold, and the serve beacon and live point are gone.
+            // A word in the corner adds nothing to that.
+            EmptyView()
         } else if state.tiebreak || state.match_tiebreak {
             Text("TIEBREAK").font(.caption2).fontWeight(.bold).foregroundColor(accent)
         }
