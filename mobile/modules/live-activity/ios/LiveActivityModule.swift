@@ -93,6 +93,51 @@ public class LiveActivityModule: Module {
       self.beginObserving()
     }
 
+    // Start one, and hand back its id.
+    //
+    // JSON STRINGS RATHER THAN BRIDGED DICTIONARIES, deliberately. The server
+    // builds both halves with live_activity_content.py, which owns the wire
+    // format; passing them through as opaque JSON means the client cannot
+    // quietly reshape a field on the way past, and the same JSONDecoder that
+    // will handle every push handles the first one. A dictionary bridged
+    // key-by-key would be a second, subtly different parser.
+    AsyncFunction("startActivity") { (attributesJson: String, stateJson: String) -> String in
+      guard #available(iOS 16.2, *) else {
+        throw NSError(domain: "LiveActivity", code: 1, userInfo: [
+          NSLocalizedDescriptionKey: "Live Activities need iOS 16.2",
+        ])
+      }
+      guard ActivityAuthorizationInfo().areActivitiesEnabled else {
+        throw NSError(domain: "LiveActivity", code: 2, userInfo: [
+          NSLocalizedDescriptionKey: "Live Activities are turned off in Settings",
+        ])
+      }
+
+      let decoder = JSONDecoder()
+      let attributes = try decoder.decode(
+        MatchActivityAttributes.self, from: Data(attributesJson.utf8))
+      let state = try decoder.decode(
+        MatchActivityAttributes.ContentState.self, from: Data(stateJson.utf8))
+
+      // One per match. Starting a second for a match already on the Lock
+      // Screen gives the user two of the same thing and the server two rows to
+      // update, and only one of them can ever be dismissed by tapping.
+      if let existing = Activity<MatchActivityAttributes>.activities.first(
+        where: { $0.attributes.match_id == attributes.match_id }
+      ) {
+        return existing.id
+      }
+
+      // .token asks iOS for a push token so the server can update it. Without
+      // it the activity is frozen at whatever it started with.
+      let activity = try Activity.request(
+        attributes: attributes,
+        content: .init(state: state, staleDate: nil),
+        pushType: .token
+      )
+      return activity.id
+    }
+
     AsyncFunction("stopListening") { () -> Void in
       self.pushToStartTask?.cancel()
       self.activityTask?.cancel()

@@ -43,6 +43,15 @@ export async function startListening() {
   if (native) await native.startListening()
 }
 
+/* Start one for a match. `attributes` and `contentState` come from the offer
+   endpoint and are passed through as JSON without being touched — the server
+   owns that shape, and a client that reshapes it is a second definition of the
+   wire format waiting to drift. Returns the ActivityKit id. */
+export async function startActivity(attributes, contentState) {
+  if (!native) throw new Error('Live Activities are not available in this build')
+  return native.startActivity(JSON.stringify(attributes), JSON.stringify(contentState))
+}
+
 export async function stopListening() {
   if (native) await native.stopListening()
 }

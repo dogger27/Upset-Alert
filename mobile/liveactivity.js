@@ -12,7 +12,8 @@
  */
 
 import {
-  addListener, attributesType, capabilities, isAvailable, startListening,
+  addListener, attributesType, capabilities, isAvailable, startActivity,
+  startListening,
 } from './modules/live-activity'
 import { getInstallId } from './install'
 import { registerActivity, registerPushToStart } from './api'
@@ -61,6 +62,39 @@ export async function startLiveActivityBridge(contentVersion = 1) {
 }
 
 export function liveActivityStarted() { return started }
+
+/* Put a match on the Lock Screen.
+ *
+ * The activity is created FIRST and registered with the server second, in that
+ * order and not the other way round: ActivityKit is the thing that can refuse
+ * (Live Activities disabled, too many running, iOS too old), and registering a
+ * row for an activity that was never created leaves the dispatcher pushing at
+ * an id that does not exist.
+ *
+ * The push token does not arrive with the activity — it comes later on
+ * pushTokenUpdates, which the bridge is already listening for and which posts
+ * to the same endpoint. So this registration is the row, and that listener
+ * fills in the token that makes it updatable.
+ */
+export async function showOnLockScreen(offerMatch, contentVersion = 1) {
+  const { attributes, content_state: state, match_id } = offerMatch || {}
+  if (!attributes || !state) {
+    throw new Error('This match cannot be shown yet — the server sent no activity payload')
+  }
+  const activityId = await startActivity(attributes, state)
+  const install_id = await getInstallId()
+  await registerActivity({
+    install_id,
+    activity_id: activityId,
+    // A placeholder until pushTokenUpdates yields the real one; the endpoint
+    // upserts on (device, activity_id), so the listener overwrites this.
+    push_token: 'pending',
+    match_id: match_id ?? null,
+    content_version: contentVersion,
+    started_by: 'client',
+  })
+  return activityId
+}
 
 export async function stopLiveActivityBridge() {
   for (const s of subs.splice(0)) {
