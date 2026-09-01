@@ -1,24 +1,25 @@
 /*
  * The JS face of the ActivityKit bridge.
  *
- * Loaded defensively for the same reason expo-notifications is: this is a
- * native module, and a build cut before it existed does not contain it. A
- * top-level import that throws takes the whole app down — which has already
- * happened once in this project.
+ * requireOptionalNativeModule, NOT NativeModulesProxy. The proxy is the legacy
+ * accessor and does not see modules defined with the modern `Module` API —
+ * which LiveActivityModule is — so it returned undefined even in a build that
+ * genuinely contained the module, and the bridge reported "module not in this
+ * build" while sitting right next to it.
+ *
+ * The "optional" variant returns null instead of throwing when the module is
+ * absent, which is the defensive load this file needs anyway: a build cut
+ * before the module existed does not contain it, and a top-level import that
+ * throws takes the whole app down.
  */
 
-import { NativeModulesProxy, EventEmitter } from 'expo-modules-core'
+import { requireOptionalNativeModule } from 'expo-modules-core'
 
-let native = null
-try {
-  native = NativeModulesProxy?.LiveActivity ?? null
-} catch {
-  native = null
-}
+const native = requireOptionalNativeModule('LiveActivity')
 
 export const isAvailable = () => !!native
 
-/** { supported, enabled, pushToStart } — or all false where unavailable. */
+/** { supported, enabled, pushToStart } — all false where unavailable. */
 export function capabilities() {
   if (!native) return { supported: false, enabled: false, pushToStart: false }
   try {
@@ -50,9 +51,10 @@ export async function endAll() {
   if (native) await native.endAll()
 }
 
-const emitter = native ? new EventEmitter(native) : null
-
+/* A modern Expo module IS an event emitter — no separate EventEmitter to
+   construct. Returns an inert subscription when there is no module, so callers
+   never have to null-check before removing one. */
 export function addListener(event, handler) {
-  if (!emitter) return { remove() {} }
-  return emitter.addListener(event, handler)
+  if (!native?.addListener) return { remove() {} }
+  return native.addListener(event, handler)
 }
