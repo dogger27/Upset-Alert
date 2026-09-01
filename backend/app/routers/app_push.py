@@ -420,6 +420,9 @@ async def offer(
     from app.models.prediction import UserPrediction
     from app.models.tournament import Draw, DrawEntry
     from app.services.live_relevance import rank_live_matches
+    from app.services.live_activity_content import (
+        build_attributes, build_content_state,
+    )
     from app.services.sofascore_live import live_point_for
 
     live = (await db.execute(
@@ -481,11 +484,13 @@ async def offer(
     ranked.sort(key=lambda r: -r["score"])
     best, rest = ranked[0], ranked[1:4]
     by_id = {m.id: m for m in live}
+    entry_by_id = {e.id: e for e in entries}
+    pick_by_match = {p.match_id: p.predicted_winner_id for p in preds}
 
-    def describe(row):
+    def describe(row, *, full: bool):
         m = by_id[row["match_id"]]
         d = draws.get(m.draw_id)
-        return {
+        out = {
             "match_id": m.id,
             "draw_id": m.draw_id,
             "event": getattr(d, "name", None),
@@ -493,12 +498,43 @@ async def offer(
             "score": row["score"],
             "reason": row["reason"],
         }
+        if not full:
+            return out
 
-    return {"match": describe(best),
+        # WHAT THE CLIENT NEEDS TO START AN ACTIVITY, built by the module that
+        # owns the wire format. build_attributes existed and had never been
+        # called — nothing anywhere could start a Live Activity, because nobody
+        # was handing the client the immutable half. Building it here rather
+        # than in the app keeps ONE definition of the shape: the client copies
+        # these dicts into ActivityKit verbatim and never invents a field.
+        p1 = entry_by_id.get(m.player1_id)
+        p2 = entry_by_id.get(m.player2_id)
+        predicted = pick_by_match.get(m.id)
+        pick_side = (1 if predicted and predicted == m.player1_id
+                     else 2 if predicted and predicted == m.player2_id
+                     else None)
+        out["attributes"] = build_attributes(
+            m,
+            p1.name if p1 else "TBD",
+            p2.name if p2 else "TBD",
+            p1_entry_id=m.player1_id,
+            p1_seed=getattr(p1, "seed", None),
+            p2_seed=getattr(p2, "seed", None),
+            round_name=d.round_name(m.round_number) if d else "",
+            event_label=getattr(d, "name", "") or "",
+        )
+        out["content_state"] = build_content_state(
+            live_point_for(m), pick_side=pick_side,
+        )
+        return out
+
+    return {"match": describe(best, full=True),
             "reason": best["reason"],
             "score": best["score"],
-            # So the user can pick a different one rather than being told.
-            "alternatives": [describe(r) for r in rest]}
+            # Alternatives stay LIGHT. Only the match actually being started
+            # needs attributes and a content state, and building them for four
+            # matches to use one is three wasted walks of the draw.
+            "alternatives": [describe(r, full=False) for r in rest]}
 
 
 # ── helpers ─────────────────────────────────────────────────────────────────
