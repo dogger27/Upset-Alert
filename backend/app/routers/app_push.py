@@ -119,6 +119,15 @@ async def register_device(
         )
         db.add(device)
 
+    # CAPTURED BEFORE THE STEAL BELOW, which is the whole point.
+    # That bulk UPDATE matches ANY row holding this token — including this one —
+    # and nulls it, expiring the attribute on this very object. Reading
+    # device.device_token afterwards therefore yields None, every comparison
+    # against it says "changed", and the guard further down never fires. That
+    # bug survived a code review by me and was only caught by watching a value
+    # flip in the database.
+    prior_token = device.device_token
+
     if body.device_token:
         # Take the token off any other row holding it, including one belonging
         # to a different account.
@@ -144,7 +153,7 @@ async def register_device(
     # A NEW TOKEN resets that: a token issued by a differently-signed build is a
     # different token, and whatever we learned about the old one says nothing
     # about it. So the guess is trusted again exactly when the token changes.
-    token_changed = bool(body.device_token) and body.device_token != device.device_token
+    token_changed = bool(body.device_token) and body.device_token != prior_token
 
     device.platform = body.platform
     device.device_token = body.device_token or device.device_token
