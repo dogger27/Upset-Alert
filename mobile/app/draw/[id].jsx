@@ -21,7 +21,7 @@ import { useMemo, useState } from 'react'
 import { Stack, useLocalSearchParams } from 'expo-router'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { getDraw, getPredictions } from '../../api'
-import { expectedStartLabel } from '../../dates'
+import { dateRange, expectedStartLabel } from '../../dates'
 import { useAuth } from '../../auth'
 import { computeDrawRanks } from '../../drawRanks'
 import { useApi } from '../../useApi'
@@ -29,7 +29,7 @@ import { slotLabel } from '../../scoring'
 import { lockLabel } from '../../lock'
 import { currentRound, shortRound } from '../../rounds'
 import { C, PICK, R, S, SHADOW, T } from '../../theme'
-import { EntryChip, PosBadge } from '../../cards'
+import { EntryChip, PosBadge, TourBadge } from '../../cards'
 import { scoreLine } from '../../score'
 import { Card, ErrorNote, Loading, Muted, Screen, Title } from '../../ui'
 
@@ -108,10 +108,26 @@ export default function DrawScreen() {
           <View style={s.head}>
             <View style={[s.tint, { backgroundColor: t.gender === 'F' ? C.wta : C.atp }]} />
             <View style={s.headBody}>
-              <Text style={[T.small, { color: C.muted }]} numberOfLines={1}>
-                {[t.category, t.surface, t.draw_size ? `${t.draw_size} draw` : null]
-                  .filter(Boolean).join(' · ')}
-              </Text>
+              {/* The draw screen was the one place that never said whose draw
+                  it was: no tour, no city, no dates — just "Grand Slam · Hard".
+                  With a combined event that made the men's and women's US Open
+                  indistinguishable here too, and the screen title alone
+                  ("US Open") does not resolve it. */}
+              <View style={s.headTitle}>
+                <TourBadge gender={t.gender} />
+                <Text style={[T.small, { color: C.muted, flexShrink: 1 }]} numberOfLines={1}>
+                  {[t.category, t.surface, t.draw_size ? `${t.draw_size} draw` : null]
+                    .filter(Boolean).join(' · ')}
+                </Text>
+              </View>
+              {/* `city`, not `location` — the API sends "New York City" under
+                  city and leaves location null, so reading location rendered
+                  an empty string with no error anywhere. */}
+              {(t.city || dateRange(t)) ? (
+                <Text style={[T.tiny, { color: C.faint }]} numberOfLines={1}>
+                  {[t.city, dateRange(t)].filter(Boolean).join(' · ')}
+                </Text>
+              ) : null}
               <View style={s.headStats}>
                 {tally.decided > 0 && (
                   <Text style={[T.smallMed, { color: C.ink }]}>
@@ -246,6 +262,7 @@ function MatchRow({ m, pick, drawRanks, zone }) {
 }
 
 const s = StyleSheet.create({
+  headTitle: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   whenRow: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     paddingHorizontal: 10, paddingTop: 8, paddingBottom: 2,
