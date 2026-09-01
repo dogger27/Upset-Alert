@@ -21,11 +21,18 @@ from typing import Optional
 CONTENT_VERSION = 1
 
 # How long the client should treat a state as current before greying itself
-# out. Mirrors sofascore_live.FRESH_SECONDS so both sides age a score out at
-# the same moment, plus enough slack that a single missed poll is not visible.
-# This is the best defence against a frozen-looking Lock Screen: if we go quiet
-# for any reason, iOS dims the activity WITHOUT needing a push from us.
-STALE_AFTER_SECONDS = 150
+# out. The best defence against a frozen-looking Lock Screen: if we go quiet for
+# any reason, iOS dims the activity WITHOUT needing a push from us.
+#
+# IT MUST EXCEED OUR OWN WORST GAP DURING PLAY, or the activity greys itself
+# out while the match is being played normally — a false alarm that trains
+# people to distrust it. Measured with scripts/la_budget_sim.py over 88 real
+# matches: the longest gap the throttle produces while the feed is continuous
+# is 3.0 minutes, which happens when a long game yields no visible change and
+# no priority-10 event. 240s clears that with margin. The first value here was
+# 150s, chosen to mirror FRESH_SECONDS before the simulator existed to say
+# otherwise.
+STALE_AFTER_SECONDS = 240
 
 STATUS_IN_PROGRESS = "in_progress"
 STATUS_SUSPENDED = "suspended"
