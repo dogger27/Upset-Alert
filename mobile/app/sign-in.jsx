@@ -36,13 +36,21 @@ export default function SignIn() {
         <TextInput
           style={s.input} placeholder="Email" placeholderTextColor={C.muted}
           autoCapitalize="none" autoCorrect={false} keyboardType="email-address"
-          textContentType="username" value={email} onChangeText={setEmail}
+          autoComplete="username" textContentType="username"
+          value={email} onChangeText={setEmail}
           onSubmitEditing={submit} returnKeyType="next"
         />
+        {/* autoCapitalize and autoCorrect are NOT redundant with
+            secureTextEntry: iOS hides the correction bar for a secure field,
+            but the shift key can still be armed, so a password typed into a
+            fresh field can arrive with a capitalised first letter and no
+            visible sign — the characters render as dots either way. */}
         <TextInput
           style={s.input} placeholder="Password" placeholderTextColor={C.muted}
-          secureTextEntry textContentType="password" value={password}
-          onChangeText={setPassword} onSubmitEditing={submit} returnKeyType="go"
+          secureTextEntry autoCapitalize="none" autoCorrect={false}
+          autoComplete="current-password" textContentType="password"
+          value={password} onChangeText={setPassword}
+          onSubmitEditing={submit} returnKeyType="go"
         />
         <Button label="Sign in" onPress={submit} busy={busy} />
         {!!error && <Text style={s.error}>{error}</Text>}
