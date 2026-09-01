@@ -93,6 +93,17 @@ public class LiveActivityModule: Module {
       self.beginObserving()
     }
 
+    // What ActivityKit believes is running, for reconciliation at launch.
+    // Neither side is reliable alone: the app is killed without telling the
+    // server, and the server cannot see a user swiping an activity away — or,
+    // as happened here, a new build replacing the one that owned it.
+    Function("runningActivities") { () -> [[String: Any]] in
+      guard #available(iOS 16.2, *) else { return [] }
+      return Activity<MatchActivityAttributes>.activities.map {
+        ["activityId": $0.id, "matchId": $0.attributes.match_id]
+      }
+    }
+
     // Start one, and hand back its id.
     //
     // JSON STRINGS RATHER THAN BRIDGED DICTIONARIES, deliberately. The server
