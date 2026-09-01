@@ -361,6 +361,118 @@ async def list_activities(
     }
 
 
+# ── Which match to offer ────────────────────────────────────────────────────
+
+# The draw's tier, as a weight. A slam quarter-final and a 250 first round are
+# not the same event, and this is the same ranking scoring already uses — read
+# from Draw.scoring_tier rather than a second table of category strings.
+_TIER_WEIGHT = {"GS": 1.0, "1000": 0.7, "500": 0.45, "250": 0.3}
+
+
+@router.get("/live-activities/offer")
+async def offer(
+    match_id: Optional[int] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The live match most worth putting on this user's Lock Screen.
+
+    THE HARD PART IS THAT EVERYTHING QUALIFIES. This is a full-bracket game, so
+    a user has a pick in every live match; on the first Monday of a slam that is
+    thirty at once against one Lock Screen. Existence is not a filter, so the
+    ranking is — see live_relevance for what it weighs and why.
+
+    Returns {"match": null} rather than a weak suggestion. A prompt for a match
+    someone does not care about teaches them to dismiss prompts.
+
+    With ?match_id it validates the client's own choice instead of imposing
+    ours: the user tapped a specific match, and the only questions left are
+    whether it is live and what to say about it.
+    """
+    from app.models.prediction import UserPrediction
+    from app.models.tournament import Draw, DrawEntry
+    from app.services.live_relevance import rank_live_matches
+    from app.services.sofascore_live import live_point_for
+
+    live = (await db.execute(
+        select(Match).where(Match.sofa_live_json.isnot(None),
+                            Match.winner_id.is_(None))
+    )).scalars().all()
+    if match_id is not None:
+        live = [m for m in live if m.id == match_id]
+        if not live:
+            raise HTTPException(status.HTTP_409_CONFLICT,
+                                {"detail": "match_not_live"})
+    if not live:
+        return {"match": None}
+
+    draw_ids = {m.draw_id for m in live}
+
+    # ONE ROUND TRIP PER TABLE, not per draw. A user in eight active draws on a
+    # slam Monday would otherwise be twenty-four queries for a suggestion.
+    preds = (await db.execute(
+        select(UserPrediction).where(UserPrediction.user_id == current_user.id,
+                                     UserPrediction.draw_id.in_(draw_ids))
+    )).scalars().all()
+    if not preds:
+        return {"match": None}
+
+    entered = {p.draw_id for p in preds}
+    draws = {d.id: d for d in (await db.execute(
+        select(Draw).where(Draw.id.in_(entered)))).scalars().all()}
+    all_matches = (await db.execute(
+        select(Match).where(Match.draw_id.in_(entered)))).scalars().all()
+    entries = (await db.execute(
+        select(DrawEntry).where(DrawEntry.draw_id.in_(entered)))).scalars().all()
+
+    by_draw_matches, by_draw_entries, by_draw_preds = {}, {}, {}
+    for m in all_matches:
+        by_draw_matches.setdefault(m.draw_id, []).append(m)
+    for e in entries:
+        by_draw_entries.setdefault(e.draw_id, []).append(e)
+    for p in preds:
+        by_draw_preds.setdefault(p.draw_id, []).append(p)
+
+    ranked = []
+    for did, draw in draws.items():
+        mine = [m for m in live if m.draw_id == did]
+        if not mine:
+            continue
+        ranked += rank_live_matches(
+            mine,
+            predictions=by_draw_preds.get(did, []),
+            all_matches=by_draw_matches.get(did, []),
+            entries=by_draw_entries.get(did, []),
+            points={m.id: live_point_for(m) for m in mine},
+            num_rounds=draw.num_rounds or 1,
+            tier_weight=_TIER_WEIGHT.get(draw.scoring_tier, 0.3),
+        )
+    if not ranked:
+        return {"match": None}
+
+    ranked.sort(key=lambda r: -r["score"])
+    best, rest = ranked[0], ranked[1:4]
+    by_id = {m.id: m for m in live}
+
+    def describe(row):
+        m = by_id[row["match_id"]]
+        d = draws.get(m.draw_id)
+        return {
+            "match_id": m.id,
+            "draw_id": m.draw_id,
+            "event": getattr(d, "name", None),
+            "round_number": m.round_number,
+            "score": row["score"],
+            "reason": row["reason"],
+        }
+
+    return {"match": describe(best),
+            "reason": best["reason"],
+            "score": best["score"],
+            # So the user can pick a different one rather than being told.
+            "alternatives": [describe(r) for r in rest]}
+
+
 # ── helpers ─────────────────────────────────────────────────────────────────
 
 async def _device_for(db: AsyncSession, user_id: int, install_id: str) -> AppDevice:
