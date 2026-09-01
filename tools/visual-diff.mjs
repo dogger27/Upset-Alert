@@ -56,6 +56,11 @@ async function shoot(url, kind, name, click) {
   const ctx = await browser.newContext({
     viewport: VIEW, deviceScaleFactor: DSF, isMobile: true, hasTouch: true,
     colorScheme: 'dark',
+    /* The phone is in Vancouver. Headless Chromium defaults to UTC, which made
+       every expected-start label read "... UTC" on BOTH sides — so a real
+       disagreement about whose clock to use would have looked like agreement. */
+    timezoneId: 'America/Vancouver',
+    locale: 'en-CA',
   })
   // Both keys every time: the Expo app reads upsetalert.session.jwt (session.js),
   // the PWA reads `token`. Setting the other app's key is inert.

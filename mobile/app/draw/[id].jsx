@@ -21,6 +21,8 @@ import { useMemo, useState } from 'react'
 import { Stack, useLocalSearchParams } from 'expo-router'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { getDraw, getPredictions } from '../../api'
+import { expectedStartLabel } from '../../dates'
+import { useAuth } from '../../auth'
 import { computeDrawRanks } from '../../drawRanks'
 import { useApi } from '../../useApi'
 import { slotLabel } from '../../scoring'
@@ -33,11 +35,21 @@ import { Card, ErrorNote, Loading, Muted, Screen, Title } from '../../ui'
 
 export default function DrawScreen() {
   const { id } = useLocalSearchParams()
+  const { me } = useAuth()
   const draw = useApi(`draw:${id}`, () => getDraw(id))
   const preds = useApi(`preds:${id}`, () => getPredictions(id))
   const [picked, setPicked] = useState(null)   // null = follow the live round
 
   const t = draw.data?.tournament
+
+  /* WHICH CLOCK an upcoming start is shown in — the site's rule, exactly:
+     'venue' means the tournament's own timezone, and ANYTHING ELSE means
+     undefined, i.e. this device. The account's `timezone` field is NOT it;
+     that is the profile's zone and using it here made the app say
+     "Tomorrow at ~1:00 a.m. UTC" where the site said "Today at ~6:00 p.m.
+     PDT" — the same instant, a different clock, and no way for a reader to
+     know which of the two they were looking at. */
+  const zone = me?.schedule_tz === 'venue' ? (t?.venue_timezone || undefined) : undefined
 
   /* Computed once from draw_entries, not per row: it sorts the whole field. */
   const drawRanks = useMemo(
@@ -144,7 +156,7 @@ export default function DrawScreen() {
           showsVerticalScrollIndicator={false}
         >
           {shown ? shown[1].map(m => (
-            <MatchRow key={m.id} m={m} pick={pickBy.get(m.id)} drawRanks={drawRanks} />
+            <MatchRow key={m.id} m={m} pick={pickBy.get(m.id)} drawRanks={drawRanks} zone={zone} />
           )) : null}
           {draw.data && !rounds.length && (
             <Card><Title>No matches yet</Title><Muted>This draw hasn’t been released.</Muted></Card>
@@ -167,12 +179,16 @@ export default function DrawScreen() {
  * are a sentence: "6-4  7-5  6⁷-7  6-1", under the names, the way the site
  * puts them under the box.
  */
-function MatchRow({ m, pick, drawRanks }) {
+function MatchRow({ m, pick, drawRanks, zone }) {
   const decided = !!m.winner
   const correct = decided && pick != null && pick === m.winner.id
   const wrong = decided && pick != null && pick !== m.winner.id
   const state = correct ? PICK.correct : wrong ? PICK.wrong : null
   const line = scoreLine(m.scores)
+
+  /* Only for a match that has not started. Once there is a result the start
+     time is history, and the site drops it there too. */
+  const when = !decided && !m.is_bye ? expectedStartLabel(m.expected_start_at, m.expected_source, zone) : null
 
   return (
     <View style={[
@@ -180,6 +196,13 @@ function MatchRow({ m, pick, drawRanks }) {
       state && { backgroundColor: state.bg, borderColor: state.border },
       m.is_bye && { opacity: 0.5 },
     ]}>
+      {when ? (
+        <View style={s.whenRow}>
+          <View style={s.schedChip}><Text style={s.schedText}>SCHEDULED</Text></View>
+          <Text style={s.whenText} numberOfLines={1}>{when}</Text>
+          {m.court ? <Text style={s.courtText} numberOfLines={1}>{m.court}</Text> : null}
+        </View>
+      ) : null}
       {[m.player1, m.player2].map((p, i) => {
         const isPick = p && pick != null && p.id === pick
         const won = decided && p && m.winner.id === p.id
@@ -223,6 +246,18 @@ function MatchRow({ m, pick, drawRanks }) {
 }
 
 const s = StyleSheet.create({
+  whenRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 10, paddingTop: 8, paddingBottom: 2,
+  },
+  // The site's SCHEDULED pill: small, outlined, and never competing with a name.
+  schedChip: {
+    borderRadius: 4, borderWidth: 1, borderColor: '#3b4c8a',
+    backgroundColor: '#182140', paddingHorizontal: 5, paddingVertical: 1,
+  },
+  schedText: { fontFamily: 'Archivo_700Bold', fontSize: 9, lineHeight: 13, letterSpacing: 0.5, color: '#9db4ff' },
+  whenText: { ...T.tiny, color: C.muted, flexShrink: 1 },
+  courtText: { ...T.tiny, color: C.faint },
   pickMark: { fontFamily: 'Archivo_700Bold', fontSize: 13, marginLeft: 8 },
   head: {
     flexDirection: 'row', backgroundColor: C.card, borderRadius: R.md,
