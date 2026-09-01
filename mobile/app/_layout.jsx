@@ -56,12 +56,12 @@ export default function RootLayout() {
             contentStyle: { backgroundColor: C.bg },
           }}
         >
-          <Stack.Screen name="index" options={{ headerShown: false }} />
+          {/* The tab bar owns the four main destinations; everything else is
+              PUSHED over it, which is what keeps a draw feeling like somewhere
+              you went rather than somewhere you switched to. */}
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="sign-in" options={{ headerShown: false }} />
-          <Stack.Screen name="status" options={{ title: 'Status' }} />
-          <Stack.Screen name="leagues" options={{ title: 'Leagues' }} />
           <Stack.Screen name="draw/[id]" options={{ title: 'Draw' }} />
-          <Stack.Screen name="schedule" options={{ title: 'Schedule' }} />
         </Stack>
       </AuthProvider>
     </SafeAreaProvider>
