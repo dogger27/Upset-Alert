@@ -31,6 +31,15 @@ export function sideSeed(players, side) {
   return p?.seed ?? null
 }
 
+/* The inferred seed, for the badge to fall back to. Main-draw singles only —
+   the server withholds it for doubles and qualifying, where a draw_entry_id
+   points at the player's SINGLES row and any number read off it would describe
+   a different event. */
+export function sideDrawRank(players, side) {
+  const p = (players || []).find(x => x.side === side && x.draw_rank != null)
+  return p?.draw_rank ?? null
+}
+
 /** [[a games], [b games]] from whichever source has them, or null. */
 export function gamesOf(e) {
   if (e?.live_point?.games) return e.live_point.games

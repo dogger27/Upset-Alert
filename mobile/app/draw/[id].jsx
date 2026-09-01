@@ -18,6 +18,7 @@
  */
 
 import { useMemo, useState } from 'react'
+import { leading } from '../../fontScale.js'
 import { Stack, useLocalSearchParams } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
@@ -32,7 +33,7 @@ import { slotLabel } from '../../scoring'
 import { lockLabel } from '../../lock'
 import { currentRound, shortRound } from '../../rounds'
 import { C, PICK, R, S, SHADOW, T } from '../../theme'
-import { EntryChip, PosBadge, TourBadge } from '../../cards'
+import { EntryChip, PlayerName, PosBadge, TourBadge } from '../../cards'
 import { scoreLine } from '../../score'
 import { Card, ErrorNote, Loading, Muted, Screen, Title } from '../../ui'
 
@@ -255,16 +256,14 @@ function MatchRow({ m, pick, drawRanks, zone, slugById, onH2H, onPredictors }) {
         return (
           <View key={i} style={[s.side, i === 0 && s.sideDivider]}>
             <PosBadge seed={p?.seed} drawRank={p ? drawRanks[p.id] : null} />
-            <Text
+            <PlayerName
+              name={slotLabel(p, m)}
               style={[
                 T.bodyMed,
                 { color: decided && !won ? C.muted : C.ink, flexShrink: 1 },
                 won && { fontFamily: 'Archivo_700Bold' },
               ]}
-              numberOfLines={1}
-            >
-              {slotLabel(p, m)}
-            </Text>
+            />
             <EntryChip entryType={p?.entry_type} />
             <View style={{ flex: 1 }} />
             {/* WHO YOU PICKED, always — not only while the match is open.
@@ -339,7 +338,7 @@ const s = StyleSheet.create({
     borderRadius: 4, borderWidth: 1, borderColor: C.borderOn,
     paddingHorizontal: 7, paddingVertical: 2,
   },
-  h2hText: { fontFamily: 'Archivo_700Bold', fontSize: 10, lineHeight: 14, letterSpacing: 0.5, color: C.greenLit },
+  h2hText: { fontFamily: 'Archivo_700Bold', fontSize: 10, lineHeight: leading(14), letterSpacing: 0.5, color: C.greenLit },
   headTitle: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   whenRow: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
@@ -350,7 +349,7 @@ const s = StyleSheet.create({
     borderRadius: 4, borderWidth: 1, borderColor: '#3b4c8a',
     backgroundColor: '#182140', paddingHorizontal: 5, paddingVertical: 1,
   },
-  schedText: { fontFamily: 'Archivo_700Bold', fontSize: 9, lineHeight: 13, letterSpacing: 0.5, color: '#9db4ff' },
+  schedText: { fontFamily: 'Archivo_700Bold', fontSize: 9, lineHeight: leading(13), letterSpacing: 0.5, color: '#9db4ff' },
   whenText: { ...T.tiny, color: C.muted, flexShrink: 1 },
   courtText: { ...T.tiny, color: C.faint },
   pickMark: { fontFamily: 'Archivo_700Bold', fontSize: 13, marginLeft: 8 },
@@ -388,7 +387,7 @@ const s = StyleSheet.create({
   // Under the names, like the site puts it under the box. Tabular so the sets
   // of one match line up with the next one down the column.
   score: {
-    fontFamily: 'SairaCondensed_600SemiBold', fontSize: 14, lineHeight: 17,
+    fontFamily: 'SairaCondensed_600SemiBold', fontSize: 14, lineHeight: leading(17),
     color: C.muted, paddingHorizontal: 8,
     fontVariant: ['tabular-nums'],
   },

@@ -4,13 +4,29 @@
 import {
   ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View,
 } from 'react-native'
+import { useHeaderHeight } from '@react-navigation/elements'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Link } from 'expo-router'
 import { C, R, S, T, TOUCH } from './theme'
 
+/* `edges` defaults to WHATEVER THE SCREEN ACTUALLY NEEDS.
+ *
+ * A screen with a native header must NOT also claim the top safe-area inset:
+ * the header has already consumed it, so taking it again inserts a second
+ * status bar's worth of empty space. That is what put a finger-deep band
+ * between the "Schedule" title and the date — a gap so large it read as a
+ * deliberately reserved slot rather than a bug.
+ *
+ * Detected rather than passed per screen, because three of the four tabs show
+ * a header and remembering to opt out on each is exactly the kind of thing
+ * that gets forgotten on the fourth. useHeaderHeight() is 0 when a screen sets
+ * headerShown: false, so the dashboard still gets its inset.
+ */
 export function Screen({
-  children, scroll = true, edges = ['top', 'left', 'right'], onRefresh, refreshing, style,
+  children, scroll = true, edges, onRefresh, refreshing, style,
 }) {
+  const headerHeight = useHeaderHeight()
+  const resolvedEdges = edges ?? (headerHeight > 0 ? ['left', 'right'] : ['top', 'left', 'right'])
   const Body = scroll ? ScrollView : View
   const extra = scroll
     ? {
@@ -25,7 +41,7 @@ export function Screen({
       }
     : { style: [u.body, style] }
   return (
-    <SafeAreaView style={u.safe} edges={edges}>
+    <SafeAreaView style={u.safe} edges={resolvedEdges}>
       <Body {...extra}>{children}</Body>
     </SafeAreaView>
   )

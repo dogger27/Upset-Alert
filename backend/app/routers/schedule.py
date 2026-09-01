@@ -47,6 +47,10 @@ class SchedulePlayerOut(BaseModel):
     # is the only source for doubles teams and qualifiers, who have no
     # draw_entries row at all.
     seed: Optional[int] = None
+    # The INFERRED seed — where this player sits once the whole field is
+    # ordered, which is what the bracket's grey badge shows. Main-draw singles
+    # only, for the same reason `seed` is: see _player_out.
+    draw_rank: Optional[int] = None
     entry_type: Optional[str] = None
     # For the H2H panel. Deliberately NOT what gates the button — an unmatched
     # player would otherwise take head-to-head away from a match that is
@@ -269,7 +273,7 @@ async def _slugs_by_name(db, raws: list) -> dict:
     return {k: v for k, v in hits.items() if v}
 
 
-def _player_out(p, nats: dict, seeds: dict, types: dict, from_bracket: bool,
+def _player_out(p, nats: dict, seeds: dict, types: dict, ranks: dict, from_bracket: bool,
                 slugs: dict = None, extra: dict = None, by_name: dict = None,
                 extra_by_name: dict = None):
     """One player, preferring what the bracket knows over what the sheet printed.
@@ -282,15 +286,22 @@ def _player_out(p, nats: dict, seeds: dict, types: dict, from_bracket: bool,
     both, the sheet is the only source that is about the event being played.
     """
     seed, etype = _printed_mark(p.raw_name)
+    draw_rank = None
     if from_bracket:
         seed = seeds.get(p.draw_entry_id) or seed
         etype = types.get(p.draw_entry_id) or etype
+        # Behind the SAME guard as `seed`, and for the same reason: a doubles
+        # or qualifying row resolves to the player's SINGLES draw_entries row,
+        # so an inferred seed read off it would describe a different event
+        # entirely — the exact mistake the seeding guard above exists to stop.
+        draw_rank = ranks.get(p.draw_entry_id)
     return SchedulePlayerOut(
         side=p.side, position=p.position,
         name=p.raw_name,
         draw_entry_id=p.draw_entry_id,
         nationality=nats.get(p.draw_entry_id) or p.nationality,
         seed=seed,
+        draw_rank=draw_rank,
         entry_type=etype,
         # By draw entry where there is one; by NAME where there is not.
         # Qualifying has no draw_entries row — a 128-draw stores rounds 1-7 and
@@ -530,6 +541,24 @@ async def schedule_day(
     t_names = {r[0]: r[1] for r in t_rows}
 
     ent_ids = {p.draw_entry_id for e in entries for p in e.players if p.draw_entry_id}
+
+    # An inferred seed is a player's place once the ENTIRE field is ordered, so
+    # unlike everything else here it cannot be looked up per player — the whole
+    # draw has to be loaded. Two draws of 128 on a Slam day; cheap enough, and
+    # the alternative is a badge that only appears for seeds.
+    ent_ranks: dict[int, int] = {}
+    draw_ids = {e.draw_id for e in entries if getattr(e, "draw_id", None)}
+    if draw_ids:
+        from collections import defaultdict as _dd
+        from app.services.upsets import _compute_draw_ranks
+        field = (await db.execute(
+            select(DrawEntry).where(DrawEntry.draw_id.in_(draw_ids)))).scalars().all()
+        by_draw = _dd(list)
+        for de in field:
+            by_draw[de.draw_id].append(de)
+        for _did, _es in by_draw.items():
+            ent_ranks.update(_compute_draw_ranks(_es))
+
     nats = {}
     ent_seeds = {}
     ent_types = {}
@@ -936,7 +965,7 @@ async def schedule_day(
             ordered.extend(sp)
 
         players = [
-            _player_out(p, nats, ent_seeds, ent_types,
+            _player_out(p, nats, ent_seeds, ent_types, ent_ranks,
                         e.discipline == "singles" and e.stage == "main",
                         ent_slugs, ent_extra, slugs_by_name, extra_by_name)
             for p in ordered

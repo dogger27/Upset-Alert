@@ -94,6 +94,88 @@ private struct SeedBadge: View {
     }
 }
 
+/// A player's name, shortened the way a person would shorten it.
+///
+/// "…" IS THE LAST RESORT. Truncation destroys the part that identifies the
+/// player — "Juan Manuel Cerú…" says less than "Cerúndolo", in more space — so
+/// the rungs go: initials for the given names, then the surname alone, then
+/// shrink the type, and only then an ellipsis.
+///
+/// ViewThatFits IS the ladder: it renders the first child that fits the space
+/// offered and falls through otherwise, so no measurement code is needed. Only
+/// the last child is allowed to shrink, or it would quietly scale the full name
+/// down and the shortening would never happen — the ladder upside down.
+///
+/// Mirrors mobile/names.js. Keep the two in step.
+private struct PlayerNameView: View {
+    let name: String
+    let bold: Bool
+
+    private static let particles: Set<String> = [
+        "van", "von", "de", "del", "della", "der", "den", "di", "da", "dos",
+        "das", "du", "la", "le", "el", "al", "bin", "ibn", "ter", "ten",
+    ]
+
+    /// [full, initials + surname, surname]. Rungs that save nothing are dropped.
+    private var forms: [String] {
+        // Doubles arrive as "A / B"; shorten each side so the pair collapses
+        // evenly instead of one name vanishing while the other stays whole.
+        let sides = name.components(separatedBy: "/").map {
+            $0.trimmingCharacters(in: .whitespaces)
+        }.filter { !$0.isEmpty }
+        if sides.count > 1 {
+            let each = sides.map { Self.rungs(for: $0) }
+            let depth = each.map(\.count).max() ?? 1
+            var out: [String] = []
+            for i in 0..<depth {
+                out.append(each.map { $0[min(i, $0.count - 1)] }.joined(separator: " / "))
+            }
+            return Self.dedupe(out)
+        }
+        return Self.rungs(for: name)
+    }
+
+    private static func rungs(for name: String) -> [String] {
+        let full = name.trimmingCharacters(in: .whitespaces)
+        let parts = full.split(separator: " ").map(String.init)
+        guard parts.count > 1 else { return [full] }
+
+        var start = parts.count - 1
+        while start > 1 && particles.contains(parts[start - 1].lowercased()) { start -= 1 }
+        let given = parts[0..<start]
+        let surname = parts[start...].joined(separator: " ")
+        guard !given.isEmpty, !surname.isEmpty else { return [full] }
+
+        let initials = given.map { "\($0.prefix(1).uppercased())." }.joined(separator: " ")
+        return dedupe([full, "\(initials) \(surname)", surname])
+    }
+
+    /// Drop any rung that is not actually shorter than the one before it —
+    /// "Bu" to "B." buys no width and costs the reader the given name.
+    private static func dedupe(_ forms: [String]) -> [String] {
+        var out: [String] = []
+        for f in forms where out.isEmpty || f.count < out[out.count - 1].count {
+            out.append(f)
+        }
+        return out
+    }
+
+    var body: some View {
+        let all = forms
+        ViewThatFits(in: .horizontal) {
+            ForEach(Array(all.enumerated()), id: \.offset) { idx, form in
+                Text(form)
+                    .font(.subheadline)
+                    .fontWeight(bold ? .bold : .regular)
+                    .foregroundColor(ink)
+                    .lineLimit(1)
+                    // Only the final rung may shrink, and only then may it clip.
+                    .minimumScaleFactor(idx == all.count - 1 ? 0.6 : 1)
+            }
+        }
+    }
+}
+
 /// The round, top-right.
 private struct RoundPill: View {
     let text: String
@@ -191,12 +273,7 @@ struct MatchLockScreenView: View {
             // match, and the star already says which one is yours — twice was
             // once too many. Weight still moves, because bold is about who is
             // winning, not about whose side you took.
-            Text(name)
-                .font(.subheadline)
-                .fontWeight(picked || won ? .bold : .regular)
-                .foregroundColor(ink)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+            PlayerNameView(name: name, bold: picked || won)
 
             if picked {
                 // Slightly larger once the match is decided: this is the whole
