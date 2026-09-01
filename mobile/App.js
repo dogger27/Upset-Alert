@@ -1,28 +1,30 @@
 /*
- * First screen: prove the whole chain from a phone.
+ * First screen: prove the whole chain from a phone, and stay signed in.
  *
- * Deliberately not a pretty shell over nothing. Signing in against production
- * and reading back a real answer is what tells us the parts that CANNOT be
- * checked from a laptop actually work: the phone reaches the Cloudflare Tunnel,
- * the JWT is accepted from a non-browser client, and the /app surface built for
- * this app answers it.
+ * The launch path is the interesting part. When a stored token exists we have
+ * to find out whether it is still good, and there are exactly two ways that
+ * can fail — which must NOT be shown the same way:
  *
- * Runs in Expo Go, so it uses no native modules — no SecureStore, no push. The
- * token is held in memory and a restart signs you out again, which is correct
- * for a scaffold and wrong for the real app: that one puts it in the Keychain,
- * because WebKit-style storage eviction signing people out silently is a
- * failure this project has already had once on the web.
+ *   401            the session is genuinely dead   -> clear it, show sign-in
+ *   never arrived  the network is                  -> KEEP it, offer Retry
+ *
+ * Showing a sign-in form for the second case is the bug worth naming: it
+ * invites someone to re-authenticate over a problem that fixes itself, and it
+ * is indistinguishable to them from having been logged out. Tokens here are
+ * year-long and rolling, so "looks broken" is nearly always transport.
  */
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text,
   TextInput, TouchableOpacity, View,
 } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
 import { getAppConfig, getMe, getOffer, login, setToken } from './api'
+import { clearToken, loadToken, saveToken } from './session'
 
 export default function App() {
+  const [phase, setPhase] = useState('boot')   // boot | signedout | unreachable | ready
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
@@ -31,25 +33,68 @@ export default function App() {
   const [config, setConfig] = useState(null)
   const [offer, setOffer] = useState(null)
 
-  // Public, so it answers before anyone signs in — and it is the fastest way to
-  // tell "the phone cannot reach the API" from "the password is wrong".
-  useEffect(() => {
-    getAppConfig().then(setConfig).catch(e => setError(`Cannot reach the API: ${e.message}`))
+  // Public, so it answers before anyone signs in — and it is the fastest way
+  // to tell "the phone cannot reach the API" from "the password is wrong".
+  useEffect(() => { getAppConfig().then(setConfig).catch(() => setConfig(null)) }, [])
+
+  const loadSignedIn = useCallback(async () => {
+    setMe(await getMe())
+    // Nothing is live at 3am, so an empty answer here is a real answer.
+    setOffer(await getOffer().catch(() => null))
+    setPhase('ready')
   }, [])
+
+  const boot = useCallback(async () => {
+    setError('')
+    const stored = await loadToken()
+    if (!stored) { setPhase('signedout'); return }
+    setToken(stored)
+    try {
+      await loadSignedIn()
+    } catch (e) {
+      if (e.status === 401) {
+        // The ONLY branch allowed to end a session.
+        await clearToken()
+        setToken(null)
+        setPhase('signedout')
+      } else {
+        setError(e.message)
+        setPhase('unreachable')
+      }
+    }
+  }, [loadSignedIn])
+
+  useEffect(() => { boot() }, [boot])
 
   async function signIn() {
     setBusy(true); setError('')
     try {
       const { access_token } = await login(email.trim(), password)
       setToken(access_token)
-      setMe(await getMe())
-      // Nothing is live at 3am, so an empty answer here is a real answer.
-      setOffer(await getOffer().catch(() => null))
+      await saveToken(access_token)
+      setPassword('')
+      await loadSignedIn()
     } catch (e) {
-      setError(e.message)
+      setError(e.offline ? `Cannot reach Upset Alert: ${e.message}` : e.message)
     } finally {
       setBusy(false)
     }
+  }
+
+  async function signOut() {
+    await clearToken()
+    setToken(null)
+    setMe(null); setOffer(null)
+    setPhase('signedout')
+  }
+
+  if (phase === 'boot') {
+    return (
+      <SafeAreaView style={[s.safe, s.centre]}>
+        <StatusBar style="light" />
+        <ActivityIndicator color="#c9783a" size="large" />
+      </SafeAreaView>
+    )
   }
 
   return (
@@ -58,33 +103,50 @@ export default function App() {
       <ScrollView contentContainerStyle={s.body}>
         <Text style={s.brand}>UPSET <Text style={s.brandAccent}>ALERT!</Text></Text>
 
-        <Row label="API reachable" value={config ? 'yes' : '…'} />
+        <Row label="API reachable" value={config ? 'yes' : 'no'} />
         {config && (
           <Row label="Live Activities" value={config.live_activities ? 'on' : 'off (no key yet)'} />
         )}
 
-        {!me ? (
+        {phase === 'unreachable' && (
+          <View style={s.card}>
+            <Text style={s.cardTitle}>Can’t reach Upset Alert</Text>
+            <Text style={s.muted}>
+              You’re still signed in — this is a connection problem, not a
+              sign-out. Your session is untouched.
+            </Text>
+            <TouchableOpacity style={s.button} onPress={boot}>
+              <Text style={s.buttonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {phase === 'signedout' && (
           <View style={s.card}>
             <Text style={s.cardTitle}>Sign in</Text>
             <TextInput
               style={s.input} placeholder="Email" placeholderTextColor="#6b7a75"
               autoCapitalize="none" autoCorrect={false} keyboardType="email-address"
-              value={email} onChangeText={setEmail}
+              textContentType="username" value={email} onChangeText={setEmail}
             />
             <TextInput
               style={s.input} placeholder="Password" placeholderTextColor="#6b7a75"
-              secureTextEntry value={password} onChangeText={setPassword}
+              secureTextEntry textContentType="password"
+              value={password} onChangeText={setPassword}
             />
             <TouchableOpacity style={s.button} onPress={signIn} disabled={busy}>
               {busy ? <ActivityIndicator color="#fff" />
                     : <Text style={s.buttonText}>Sign in</Text>}
             </TouchableOpacity>
           </View>
-        ) : (
+        )}
+
+        {phase === 'ready' && me && (
           <View style={s.card}>
             <Text style={s.cardTitle}>Signed in</Text>
             <Row label="User" value={me.username} />
             <Row label="Name" value={me.full_name} />
+
             <Text style={[s.cardTitle, { marginTop: 18 }]}>Worth a Lock Screen?</Text>
             {offer && offer.match ? (
               <>
@@ -96,6 +158,10 @@ export default function App() {
             ) : (
               <Text style={s.muted}>Nothing live worth offering right now.</Text>
             )}
+
+            <TouchableOpacity style={s.buttonQuiet} onPress={signOut}>
+              <Text style={s.buttonQuietText}>Sign out</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -118,6 +184,7 @@ function Row({ label, value }) {
    look like a default template, so a screenshot of it is legible. */
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#101a16' },
+  centre: { alignItems: 'center', justifyContent: 'center' },
   body: { padding: 20, gap: 14 },
   brand: { fontSize: 26, fontWeight: '800', color: '#eef2f0', letterSpacing: 0.5 },
   brandAccent: { color: '#c9783a' },
@@ -138,6 +205,11 @@ const s = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   buttonText: { color: '#fff', fontWeight: '800' },
+  buttonQuiet: {
+    marginTop: 18, height: 44, borderRadius: 10, borderWidth: 1,
+    borderColor: '#3a4b45', alignItems: 'center', justifyContent: 'center',
+  },
+  buttonQuietText: { color: '#93a49e', fontWeight: '700' },
   row: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   rowLabel: { color: '#93a49e' },
   rowValue: { color: '#eef2f0', fontWeight: '600', flexShrink: 1, textAlign: 'right' },
