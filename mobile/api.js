@@ -74,3 +74,22 @@ export const getAppConfig = () => request('/app/config')
 export const getOffer = () => request('/app/live-activities/offer')
 export const getScheduleDay = (playDate) =>
   request(`/schedule/day${playDate ? `?play_date=${playDate}` : ''}`)
+
+/* Leagues.
+   round-scores is the one worth a note: it is untyped in the OpenAPI spec
+   (it returns a plain dict), and its real shape is
+
+     { entries: [{user_id, username, full_name, round_points[], total,
+                  correct_count}],
+       completed_matches_count, rounds_with_matches[], completed_round_nums[],
+       matches_timeline[], user_predictions{} }
+
+   entries arrive ALREADY SORTED by the server: total desc, then points in the
+   latest rounds first (Final -> SF -> QF -> ...). Do not re-sort them on the
+   client — the tiebreak is lexicographic over the round vector, not a weighted
+   sum, and a client-side sort would quietly disagree with the website. */
+export const getLeagues = () => request('/leagues')
+export const getLeague = (id) => request(`/leagues/${id}`)
+export const getLeagueTournaments = (id) => request(`/leagues/${id}/tournaments`)
+export const getRoundScores = (leagueId, tournamentId) =>
+  request(`/leagues/${leagueId}/round-scores?tournament_id=${tournamentId}`)
