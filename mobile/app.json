@@ -10,7 +10,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "ca.upsetalert.app",
       "infoPlist": {
-        "NSSupportsLiveActivities": true
+        "NSSupportsLiveActivities": true,
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -29,7 +30,9 @@
     },
     "plugins": [
       "expo-secure-store",
-      "expo-router"
+      "expo-router",
+      "expo-notifications",
+      "expo-dev-client"
     ],
     "scheme": "upsetalert",
     "owner": "dogger27",
