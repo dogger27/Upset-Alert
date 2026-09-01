@@ -49,6 +49,7 @@ export default function RootLayout() {
           <Stack.Screen name="status" options={{ title: 'Status' }} />
           <Stack.Screen name="leagues" options={{ title: 'Leagues' }} />
           <Stack.Screen name="draw/[id]" options={{ title: 'Draw' }} />
+          <Stack.Screen name="schedule" options={{ title: 'Schedule' }} />
         </Stack>
       </AuthProvider>
     </SafeAreaProvider>

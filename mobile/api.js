@@ -144,3 +144,14 @@ export const getEntryStatus = () => request('/predictions/entry-status')
 export const listActivities = () => request('/app/live-activities')
 export const endActivity = (activityId) =>
   request(`/app/live-activities/${encodeURIComponent(activityId)}`, { method: 'DELETE' })
+
+/* Schedule.
+   An entry is one line of the order of play. Its shape is worth knowing:
+     players     [{side:'a'|'b', position, name, entry_name, seed, ...}]
+                 `name` is the SHEET's format — surname in caps — and
+                 `entry_name` is proper case. Prefer entry_name; fall back.
+     live_point  the richer feed: has the current POINT. Use it when present.
+     live_scores games only, no point — ESPN cannot supply one.
+     scores      the final, once completed.
+     winner_side 0 = side a, 1 = side b. */
+export const getScheduleDates = () => request('/schedule/dates')
