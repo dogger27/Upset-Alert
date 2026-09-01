@@ -25,7 +25,7 @@ import { useApi } from '../../useApi'
 import { slotLabel } from '../../scoring'
 import { lockLabel } from '../../lock'
 import { currentRound, shortRound } from '../../rounds'
-import { C, R, S, T } from '../../theme'
+import { C, PICK, R, S, SHADOW, T } from '../../theme'
 import { Card, ErrorNote, Loading, Muted, Screen, Title } from '../../ui'
 
 export default function DrawScreen() {
@@ -146,45 +146,53 @@ export default function DrawScreen() {
   )
 }
 
-/* Full width, so nothing has to be squeezed: seed, name, set scores, and the
-   mark saying whether your pick came off. */
+/* The bracket's match box, ported.
+ *
+ * THE WHOLE BOX CARRIES THE RESULT — green when your pick came off, red when
+ * it did not, amber-bordered when the match is live. The first version put a
+ * tick in the corner and left the box grey, which is why a screen of them read
+ * as a list rather than a bracket: nothing was scannable without reading.
+ *
+ * Two rows divided by a hairline, the winner in full ink and the loser dimmed,
+ * with the set scores right-aligned in fixed cells so every box lines up down
+ * the column.
+ */
 function MatchRow({ m, pick }) {
   const decided = !!m.winner
   const correct = decided && pick != null && pick === m.winner.id
   const wrong = decided && pick != null && pick !== m.winner.id
+  const state = correct ? PICK.correct : wrong ? PICK.wrong : null
 
   return (
-    <View style={s.match}>
+    <View style={[
+      s.match,
+      state && { backgroundColor: state.bg, borderColor: state.border },
+      m.is_bye && { opacity: 0.5 },
+    ]}>
       {[m.player1, m.player2].map((p, i) => {
         const isPick = p && pick != null && p.id === pick
         const won = decided && p && m.winner.id === p.id
         const games = m.scores ? m.scores[i] : null
         return (
-          <View key={i} style={s.side}>
-            {p?.seed ? (
-              <Text style={[T.tiny, { color: C.faint, width: 18 }]}>{p.seed}</Text>
-            ) : <View style={{ width: 18 }} />}
+          <View key={i} style={[s.side, i === 0 && s.sideDivider]}>
+            <Text style={[T.tiny, { color: C.faint, width: 16 }]}>
+              {p?.seed ?? ''}
+            </Text>
             <Text
               style={[
                 T.bodyMed,
                 { color: decided && !won ? C.muted : C.ink, flex: 1 },
-                isPick && { color: C.clay },
+                isPick && !state && { color: C.clay },
+                won && { fontFamily: 'Archivo_700Bold' },
               ]}
               numberOfLines={1}
             >
               {slotLabel(p, m)}
             </Text>
-            {isPick ? (
-              <Text style={[T.tiny, {
-                color: correct ? C.ok : wrong ? C.bad : C.muted, width: 16, textAlign: 'center',
-              }]}>
-                {correct ? '✓' : wrong ? '✗' : '★'}
-              </Text>
-            ) : <View style={{ width: 16 }} />}
             <View style={s.games}>
               {(games || []).map((g, k) => (
                 <Text key={k} style={[T.score, {
-                  color: decided && !won ? C.muted : C.ink, width: 16, textAlign: 'right',
+                  color: decided && !won ? C.muted : C.ink, width: 15, textAlign: 'center',
                 }]}>
                   {g === null || g === '' ? '' : g}
                 </Text>
@@ -216,10 +224,18 @@ const s = StyleSheet.create({
   chipOn: { backgroundColor: C.raised, borderColor: C.borderOn },
 
   list: { gap: S.xs, paddingTop: S.sm, paddingBottom: S.xxl },
+  // radius 5 and a 1px border, from BracketView.css — a bracket's boxes are
+  // squarer than the app's cards, and that difference is part of reading as one.
   match: {
-    backgroundColor: C.card, borderRadius: R.md, borderWidth: 1, borderColor: C.border,
-    paddingVertical: S.sm, paddingHorizontal: S.md, gap: 4,
+    backgroundColor: C.card, borderRadius: 5, borderWidth: 1, borderColor: C.borderOn,
+    overflow: 'hidden', ...SHADOW,
   },
-  side: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
-  games: { flexDirection: 'row', gap: 6 },
+  // min-height 28 on the web at a 252pt column; 34 here, because a phone gives
+  // the column 361pt and the extra goes into being readable.
+  side: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingVertical: 6, paddingLeft: 6, paddingRight: 8, minHeight: 34,
+  },
+  sideDivider: { borderBottomWidth: 1, borderBottomColor: C.border },
+  games: { flexDirection: 'row', gap: 4 },
 })
