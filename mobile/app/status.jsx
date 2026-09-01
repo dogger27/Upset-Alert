@@ -8,12 +8,16 @@
  * once Live Activities are actually sending.
  */
 
+import { useState } from 'react'
+import { Text } from 'react-native'
 import Constants from 'expo-constants'
 import { useAuth } from '../auth'
 import { getOffer } from '../api'
 import { useApi } from '../useApi'
 import { capabilities, isAvailable } from '../modules/live-activity'
-import { Card, ErrorNote, Muted, Row, Screen, Title } from '../ui'
+import { showOnLockScreen } from '../liveactivity'
+import { C } from '../theme'
+import { Button, Card, ErrorNote, Muted, Row, Screen, Title } from '../ui'
 
 export default function Status() {
   const { config, me, phase } = useAuth()
@@ -25,6 +29,22 @@ export default function Status() {
   // reloads from Metro constantly, so the version on screen tells you nothing
   // about the binary underneath it. nativeBuildVersion does.
   const caps = capabilities()
+  const [starting, setStarting] = useState(false)
+  const [started, setStarted] = useState(null)
+  const [startErr, setStartErr] = useState('')
+
+  async function show() {
+    setStarting(true); setStartErr(''); setStarted(null)
+    try {
+      const id = await showOnLockScreen(
+        offer.data?.match, config?.content_state_version ?? 1)
+      setStarted(id)
+    } catch (e) {
+      setStartErr(e.message)
+    } finally {
+      setStarting(false)
+    }
+  }
 
   return (
     <Screen>
@@ -71,10 +91,27 @@ export default function Status() {
         <ErrorNote error={offer.error} onRetry={offer.refetch} />
         {offer.data?.match ? (
           <>
-            <Row label="Match" value={String(offer.data.match.match_id)} />
+            {offer.data.match.attributes && (
+              <Row
+                label="Match"
+                value={`${offer.data.match.attributes.p1_name} v ${offer.data.match.attributes.p2_name}`}
+              />
+            )}
             <Row label="Event" value={offer.data.match.event || '—'} />
+            <Row label="Round" value={offer.data.match.attributes?.round_name || '—'} />
             <Row label="Why" value={offer.data.reason} />
             <Row label="Score" value={String(offer.data.score)} />
+
+            {started ? (
+              <Muted>On your Lock Screen now. It updates as the match moves.</Muted>
+            ) : (
+              <Button
+                label={isAvailable() ? 'Show on Lock Screen' : 'Not available in this build'}
+                onPress={show}
+                busy={starting}
+              />
+            )}
+            {!!startErr && <Text style={{ color: C.error }}>{startErr}</Text>}
           </>
         ) : (
           <Muted>
