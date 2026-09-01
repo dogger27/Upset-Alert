@@ -45,6 +45,8 @@ const SCREENS = [
   // Signed OUT on purpose: this screen had two invisible-token bugs at once.
   { name: 'signin',    mobile: '/sign-in', pwa: '/login', noAuth: true },
   { name: 'picks',     mobile: '/league/10/draw/77/picks', pwa: '/tournaments/77' },
+  { name: 'history',   mobile: '/history',      pwa: '/draw-history' },
+  { name: 'hof',       mobile: '/hall-of-fame', pwa: '/hall-of-fame' },
   /* NOT '/status': Metro's dev server answers that path itself with
      "packager-status:running" and never reaches the app. Reached by tapping
      the tab instead. */
@@ -86,6 +88,11 @@ async function shoot(url, kind, name, click, noAuth) {
   const errors = []
   page.on('console', m => { if (m.type() === 'error') errors.push(m.text().slice(0, 160)) })
   page.on('pageerror', e => errors.push('PAGEERROR ' + String(e).slice(0, 160)))
+  // "Failed to load resource: 404" on its own names nothing. Log the URL, or a
+  // benign missing favicon is indistinguishable from a broken API call.
+  page.on('response', r => {
+    if (r.status() >= 400) errors.push(`HTTP ${r.status()} ${r.url().slice(0, 120)}`)
+  })
 
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 })
   // networkidle alone fires before React Query has painted the second wave of
