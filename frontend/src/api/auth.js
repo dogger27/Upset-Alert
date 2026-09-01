@@ -10,6 +10,10 @@ export const login = (email, password) => {
 export const refreshToken = () => client.post('/auth/refresh').then(r => r.data)
 export const getMe = () => client.get('/auth/me').then(r => r.data)
 export const updateMe = (data) => client.patch('/auth/me', data).then(r => r.data)
+// Irreversible. The password is re-checked server-side — see the note on
+// DELETE /auth/me for why a year-long session is not enough on its own.
+export const deleteAccount = (current_password) =>
+  client.delete('/auth/me', { data: { current_password } }).then(r => r.data)
 export const listUsers = () => client.get('/auth/users').then(r => r.data)
 export const listAdminUsers = () => client.get('/auth/admin/users').then(r => r.data)
 export const setUserAdmin = (userId, isAdmin) => client.patch(`/auth/admin/users/${userId}`, { is_admin: isAdmin }).then(r => r.data)

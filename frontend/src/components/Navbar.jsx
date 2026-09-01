@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import clsx from 'clsx'
 import { useAuth } from '../store/auth'
+import { deleteAccount } from '../api/auth'
 import { deletePasskey, enrolPasskey, listPasskeys, passkeysSupported, renamePasskey } from '../api/passkeys'
 import { useTheme } from '../store/theme'
 import './Navbar.css'
@@ -12,6 +13,13 @@ const NAV_BREAKPOINT = 900
 
 export default function Navbar() {
   const { user, logout, updateProfile } = useAuth()
+  // Two-step, and the second step needs the password typed again. Deleting an
+  // account is the one action here that cannot be undone by any means, so it
+  // should not be reachable by one stray tap.
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deletePassword, setDeletePassword] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
   const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
   const location = useLocation()
@@ -790,6 +798,62 @@ export default function Navbar() {
                         {saving ? 'Saving…' : 'Save'}
                       </button>
                     </div>
+
+                    {/* LAST, AND BEHIND A SECOND STEP. Deleting an account is
+                        the only thing in this modal that nothing can undo, so
+                        it is not a button sitting beside Save. */}
+                    <div className="profile-dropdown-divider" style={{ margin: '1.25rem 0 0.5rem' }} />
+                    {!deleteOpen ? (
+                      <button className="profile-delete-link"
+                              onClick={() => { setDeleteOpen(true); setDeleteError('') }}>
+                        Delete my account
+                      </button>
+                    ) : (
+                      <div className="profile-delete-box">
+                        <p className="profile-delete-title">Delete your account?</p>
+                        <p className="profile-delete-body">
+                          This cannot be undone. Your email, name, password, passkeys
+                          and devices are permanently deleted.
+                          {' '}Your past picks stay in the leagues you competed in, with
+                          your name removed — so other players' standings and results
+                          are not rewritten.
+                        </p>
+                        <input
+                          className="profile-edit-input"
+                          type="password"
+                          value={deletePassword}
+                          onChange={e => setDeletePassword(e.target.value)}
+                          placeholder="Enter your password to confirm"
+                          autoComplete="current-password"
+                        />
+                        {deleteError && <p className="profile-edit-error">{deleteError}</p>}
+                        <div className="profile-edit-actions">
+                          <button className="btn-secondary profile-edit-btn"
+                                  onClick={() => { setDeleteOpen(false); setDeletePassword(''); setDeleteError('') }}
+                                  disabled={deleting}>
+                            Keep my account
+                          </button>
+                          <button className="profile-delete-confirm"
+                                  disabled={deleting || !deletePassword}
+                                  onClick={async () => {
+                                    setDeleting(true); setDeleteError('')
+                                    try {
+                                      await deleteAccount(deletePassword)
+                                      // The account is gone; the token that is
+                                      // still in localStorage now names nobody.
+                                      logout()
+                                      window.location.href = '/'
+                                    } catch (err) {
+                                      setDeleteError(err?.response?.data?.detail
+                                        || 'Could not delete the account.')
+                                      setDeleting(false)
+                                    }
+                                  }}>
+                            {deleting ? 'Deleting…' : 'Delete for ever'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>,

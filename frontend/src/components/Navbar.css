@@ -782,3 +782,59 @@ a.profile-dropdown-item:visited {
   font-weight: 700;
   margin: 0 0 0.75rem;
 }
+
+/* ── Deleting an account ─────────────────────────────────────────────────────
+   Deliberately not styled like the other actions in this modal. Everything
+   else here is reversible — change your name, change your password — and this
+   is the one thing that is not, so it does not get to look like them. */
+
+/* Step one is a link, not a button: it opens an explanation, it does not act. */
+.profile-delete-link {
+  background: none;
+  border: 0;
+  padding: 0.35rem 0;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.profile-delete-link:hover { color: var(--danger, #f87171); }
+
+.profile-delete-box {
+  padding: 0.85rem;
+  border: 1px solid var(--danger, #f87171);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--danger, #f87171) 8%, transparent);
+}
+
+.profile-delete-title {
+  margin: 0 0 0.4rem;
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: var(--danger, #f87171);
+}
+
+/* The consequences, in full, before the field that confirms them. What
+   survives is as important as what goes: someone deleting an account should
+   not have to wonder whether it also erases them from three years of league
+   history. */
+.profile-delete-body {
+  margin: 0 0 0.75rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.profile-delete-confirm {
+  flex: 1;
+  background: var(--danger, #f87171);
+  color: #fff;
+  border: 1px solid var(--danger, #f87171);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.profile-delete-confirm:disabled { opacity: 0.5; cursor: not-allowed; }
