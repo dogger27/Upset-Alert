@@ -522,7 +522,46 @@ async def dispatch(match_ids: set) -> dict:
 
     # ── 4. WRITE what changed, in one short transaction ──────────────────
     await _record(outcomes)
-    return {"sent": sum(1 for _, r, _ in outcomes if r is None or r.ok)}
+
+    ok = sum(1 for _, r, _ in outcomes if r is None or r.ok)
+    bad = [(i, r) for i, r, _ in outcomes if r is not None and not r.ok]
+
+    # A SUCCESSFUL PUSH USED TO LOG NOTHING AT ALL. Only failures spoke, so
+    # "delivering fine" and "not running" were the same silence — which is
+    # exactly the question that could not be answered the first time this was
+    # switched on for real.
+    if outcomes:
+        logger.info("live activity dispatch: %d sent, %d failed (matches %s)",
+                    ok, len(bad), sorted(match_ids))
+
+    # system_logs is what /issues reads, so anything worth investigating has to
+    # land there rather than only in a file. Failures only: a healthy round is
+    # in the log above and does not need a row each time.
+    if bad:
+        try:
+            from app.services.system_log import app_log
+            reasons = {}
+            for _, r in bad:
+                reasons[r.reason or f"http_{r.status}"] = reasons.get(r.reason or f"http_{r.status}", 0) + 1
+            await app_log(
+                "warning", "live_activity",
+                f"{len(bad)} Live Activity push(es) failed: "
+                + ", ".join(f"{k}={v}" for k, v in sorted(reasons.items())),
+                detail={"matches": sorted(match_ids), "reasons": reasons},
+                # One row per distinct failure shape per hour. A match that
+                # keeps failing every ten seconds would otherwise bury every
+                # other issue in /issues within a minute.
+                dedup_key="live_activity:" + ",".join(sorted(reasons)),
+                dedup_hours=1.0,
+            )
+        except Exception:                                            # noqa: BLE001
+            # Logging must never be able to break dispatch. app_log is
+            # fire-and-forget by design here for the same reason it is
+            # everywhere else in this codebase.
+            logger.warning("could not write live_activity failure to system_logs",
+                           exc_info=True)
+
+    return {"sent": ok}
 
 
 async def _record(outcomes: list) -> None:
