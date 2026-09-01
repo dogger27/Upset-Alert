@@ -8,9 +8,11 @@
  * once Live Activities are actually sending.
  */
 
+import Constants from 'expo-constants'
 import { useAuth } from '../auth'
 import { getOffer } from '../api'
 import { useApi } from '../useApi'
+import { capabilities, isAvailable } from '../modules/live-activity'
 import { Card, ErrorNote, Muted, Row, Screen, Title } from '../ui'
 
 export default function Status() {
@@ -18,8 +20,24 @@ export default function Status() {
   const ready = phase === 'ready'
   const offer = useApi(ready ? 'offer' : null, getOffer, { enabled: ready })
 
+  // Which BINARY is running, and what native code is in it. Added after an
+  // afternoon of guessing whether a given build was actually installed: the JS
+  // reloads from Metro constantly, so the version on screen tells you nothing
+  // about the binary underneath it. nativeBuildVersion does.
+  const caps = capabilities()
+
   return (
     <Screen>
+      <Card>
+        <Title>This build</Title>
+        <Row label="App version" value={Constants.nativeAppVersion || '—'} />
+        <Row label="Build number" value={Constants.nativeBuildVersion || '—'} />
+        <Row label="Live Activity module" value={isAvailable() ? 'present' : 'ABSENT'} />
+        <Row label="ActivityKit" value={caps.supported ? 'supported' : 'no'} />
+        <Row label="Activities allowed" value={caps.enabled ? 'yes' : 'no (check Settings)'} />
+        <Row label="Push-to-start" value={caps.pushToStart ? 'yes' : 'no (needs iOS 17.2)'} />
+      </Card>
+
       <Card>
         <Title>Connection</Title>
         <Row label="API reachable" value={config ? 'yes' : 'no'} />
