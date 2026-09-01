@@ -15,6 +15,42 @@ private let muted = Color(red: 0.58, green: 0.64, blue: 0.62)
 private let accent = Color(red: 0.79, green: 0.47, blue: 0.23)
 private let good = Color(red: 0.29, green: 0.87, blue: 0.50)
 private let bad = Color(red: 0.97, green: 0.44, blue: 0.44)
+// --clay-300 (#e8a87c), the site's brand dot. Lighter than `accent`: the mark
+// sits on a dark tint and the darker clay reads as mud at 7pt.
+private let clayLight = Color(red: 0.91, green: 0.66, blue: 0.49)
+
+/// The brand mark — the site's navbar dot, redrawn rather than shipped.
+///
+/// DRAWN, NOT AN ASSET, and deliberately: a widget extension cannot reach the
+/// main app's bundle, so a bitmap here would need its own copy in the target's
+/// asset catalogue at three scales, and it would still be a raster of two
+/// circles. This is the same mark as `.navbar-brand-dot` — a clay disc inside a
+/// soft ring at 28% — minus the pulse, which has no business animating on a
+/// Lock Screen.
+///
+/// No wordmark: iOS already prints "Upset Alert" directly above the card, so a
+/// second one would say the app's name twice in two centimetres.
+private struct BrandDot: View {
+    var size: CGFloat = 7
+
+    var body: some View {
+        Circle()
+            .fill(clayLight)
+            .frame(width: size, height: size)
+            // The halo is a disc BEHIND the dot rather than a stroke on it: a
+            // stroke straddles the edge and eats into the solid centre, which
+            // at this size turns the mark into a smudge.
+            .background(
+                Circle()
+                    .fill(clayLight.opacity(0.28))
+                    .frame(width: size + 7, height: size + 7)
+            )
+            // Reserve what the halo actually occupies, or it clips against the
+            // neighbouring text.
+            .frame(width: size + 7, height: size + 7)
+            .accessibilityHidden(true)
+    }
+}
 
 struct MatchLockScreenView: View {
     let context: ActivityViewContext<MatchActivityAttributes>
@@ -26,6 +62,7 @@ struct MatchLockScreenView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
+                BrandDot()
                 Text(attrs.event_label.uppercased())
                     .font(.caption2).fontWeight(.bold)
                     .foregroundColor(muted)
@@ -113,7 +150,10 @@ struct MatchLockScreenView: View {
     @ViewBuilder private func setScores(side: Int) -> some View {
         let row = (state.games?.indices.contains(side - 1) ?? false)
             ? state.games![side - 1] : []
-        HStack(spacing: 6) {
+        // spacing 4, not 6: equal-width cells cost roughly 8pt per set over the
+        // content-width ones they replace, and by the fifth set that came
+        // straight out of the player's name.
+        HStack(spacing: 4) {
             ForEach(Array(row.enumerated()), id: \.offset) { _, g in
                 Text(g.isEmpty ? "–" : g)
                     .font(.system(.subheadline, design: .rounded))
@@ -122,6 +162,17 @@ struct MatchLockScreenView: View {
                     .monospacedDigit()
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
+                    // EQUAL, CENTRED COLUMNS. The two players' scores are two
+                    // independent HStacks, so nothing lines them up unless
+                    // every cell is the SAME width — content-width cells only
+                    // appeared to work because every game score is one digit.
+                    // A match tiebreak ("10") is two, and that row alone would
+                    // have shifted out of step with the one above it.
+                    // The frame goes AFTER fixedSize deliberately: the text
+                    // keeps its ideal width and overflows a narrow cell rather
+                    // than wrapping, which is the failure this file already
+                    // carries a paragraph about.
+                    .frame(width: 18, alignment: .center)
             }
             // The current point sits apart from the set scores, and only while
             // the feed actually has one — ESPN-sourced matches never do.
@@ -141,7 +192,10 @@ struct MatchLockScreenView: View {
                     .monospacedDigit()
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
-                    .frame(minWidth: 26, alignment: .trailing)
+                    // Centred, not trailing. Right-aligned, "0" and "40" shared
+                    // a right edge and nothing else, so the single digit sat
+                    // out on its own away from the column above it.
+                    .frame(width: 26, alignment: .center)
             }
         }
     }
