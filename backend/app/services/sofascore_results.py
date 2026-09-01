@@ -355,8 +355,10 @@ async def sweep_once(db) -> dict:
     if touched_draws:
         from app.services import broadcaster
         from app.services.sofascore_live import _tournament_of
-        for tid in {_tournament_of[d] for d in touched_draws if d in _tournament_of}:
-            await broadcaster.publish(tid)
+        # Both ids: this sweep records WINNERS, and the draw page — which keys
+        # on the draw id — is the surface that most needs to hear about one.
+        for d in touched_draws:
+            await broadcaster.publish(d, _tournament_of.get(d))
 
     # A winner recorded this sweep may decide a schedule "A or B";
     # collapse immediately rather than waiting for the next sheet.
