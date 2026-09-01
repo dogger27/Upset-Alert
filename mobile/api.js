@@ -142,6 +142,14 @@ export const registerActivity = (body) =>
 export const listTournaments = () => request('/tournaments')
 export const getEntryStatus = () => request('/predictions/entry-status')
 
+/* Head-to-head between two Tennis Explorer slugs. The BACKEND caches this
+   (shared table, weekly TTL) because the underlying source is a scrape and can
+   be slow — so there is no client cache beyond useApi's, and no retry storm to
+   design around. Slugs come off draw_entries.te_slug, which is null when a
+   player never matched a TE profile; the caller must not offer H2H then. */
+export const getH2H = (p1, p2) =>
+  request(`/h2h?p1=${encodeURIComponent(p1)}&p2=${encodeURIComponent(p2)}`)
+
 /* Reconciliation. The server's view of what is running drifts from the
    device's — the app is killed without calling DELETE, a user swipes an
    activity away, a new build replaces the one that owned it — and this is the

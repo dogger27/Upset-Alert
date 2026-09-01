@@ -23,6 +23,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { getDraw, getPredictions } from '../../api'
 import { dateRange, expectedStartLabel } from '../../dates'
 import { useAuth } from '../../auth'
+import { H2HSheet } from '../../h2h'
 import { computeDrawRanks } from '../../drawRanks'
 import { useApi } from '../../useApi'
 import { slotLabel } from '../../scoring'
@@ -56,6 +57,17 @@ export default function DrawScreen() {
     () => computeDrawRanks(draw.data?.draw_entries),
     [draw.data?.draw_entries],
   )
+
+  /* Matches carry no te_slug — it lives on draw_entries — so H2H needs this
+     bridge. A null slug means the player never matched a Tennis Explorer
+     profile, and the button must not be offered for them at all. */
+  const slugById = useMemo(() => {
+    const m = new Map()
+    for (const e of draw.data?.draw_entries || []) if (e.te_slug) m.set(e.id, e.te_slug)
+    return m
+  }, [draw.data?.draw_entries])
+
+  const [h2h, setH2H] = useState(null)
 
   const pickBy = useMemo(() => {
     const m = new Map()
@@ -172,13 +184,18 @@ export default function DrawScreen() {
           showsVerticalScrollIndicator={false}
         >
           {shown ? shown[1].map(m => (
-            <MatchRow key={m.id} m={m} pick={pickBy.get(m.id)} drawRanks={drawRanks} zone={zone} />
+            <MatchRow key={m.id} m={m} pick={pickBy.get(m.id)} drawRanks={drawRanks}
+                      zone={zone} slugById={slugById} onH2H={setH2H} />
           )) : null}
           {draw.data && !rounds.length && (
             <Card><Title>No matches yet</Title><Muted>This draw hasn’t been released.</Muted></Card>
           )}
         </ScrollView>
       </Screen>
+
+      {/* One sheet for the whole screen, not one per match: 64 mounted Modals
+          is 64 mounted Modals. The match hands it a pair and it fetches. */}
+      <H2HSheet visible={!!h2h} onClose={() => setH2H(null)} a={h2h?.a} b={h2h?.b} />
     </>
   )
 }
@@ -195,12 +212,17 @@ export default function DrawScreen() {
  * are a sentence: "6-4  7-5  6⁷-7  6-1", under the names, the way the site
  * puts them under the box.
  */
-function MatchRow({ m, pick, drawRanks, zone }) {
+function MatchRow({ m, pick, drawRanks, zone, slugById, onH2H }) {
   const decided = !!m.winner
   const correct = decided && pick != null && pick === m.winner.id
   const wrong = decided && pick != null && pick !== m.winner.id
   const state = correct ? PICK.correct : wrong ? PICK.wrong : null
   const line = scoreLine(m.scores)
+  /* Both players real AND both matched to a TE profile. A qualifier who never
+     matched has no slug, and asking the endpoint for one returns nothing
+     useful — so the button is simply absent rather than present and empty. */
+  const canH2H = !!(m.player1?.id && m.player2?.id && !m.is_bye &&
+    slugById?.get(m.player1.id) && slugById?.get(m.player2.id))
 
   /* Only for a match that has not started. Once there is a result the start
      time is history, and the site drops it there too. */
@@ -252,16 +274,37 @@ function MatchRow({ m, pick, drawRanks, zone }) {
           </View>
         )
       })}
-      {line ? (
-        <Text style={[s.score, state && { color: state.border }]} numberOfLines={1}>
-          {line}
-        </Text>
+      {(line || canH2H) ? (
+        <View style={s.footRow}>
+          {line ? (
+            <Text style={[s.score, state && { color: state.border }]} numberOfLines={1}>
+              {line}
+            </Text>
+          ) : <View style={{ flex: 1 }} />}
+          {canH2H ? (
+            <Pressable
+              onPress={() => onH2H({
+                a: { name: m.player1.name, te_slug: slugById.get(m.player1.id) },
+                b: { name: m.player2.name, te_slug: slugById.get(m.player2.id) },
+              })}
+              hitSlop={8} style={s.h2hChip}
+            >
+              <Text style={s.h2hText}>H2H</Text>
+            </Pressable>
+          ) : null}
+        </View>
       ) : null}
     </View>
   )
 }
 
 const s = StyleSheet.create({
+  footRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 2 },
+  h2hChip: {
+    borderRadius: 4, borderWidth: 1, borderColor: C.borderOn,
+    paddingHorizontal: 7, paddingVertical: 2,
+  },
+  h2hText: { fontFamily: 'Archivo_700Bold', fontSize: 10, lineHeight: 14, letterSpacing: 0.5, color: C.greenLit },
   headTitle: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   whenRow: {
     flexDirection: 'row', alignItems: 'center', gap: 8,

@@ -40,6 +40,7 @@ const SCREENS = [
   // The site keeps standings behind a tab rather than a route, so the PWA side
   // has to be clicked into position before it can be compared with anything.
   { name: 'standings', mobile: '/league/10/draw/77', pwa: '/leagues/10', pwaClick: 'Members' },
+  { name: 'h2h',       mobile: '/draw/77', pwa: '/tournaments/77', appClick: 'H2H', pwaClick: 'H2H' },
 ]
 
 const only = process.argv.slice(2).filter(a => !a.startsWith('-'))
@@ -117,7 +118,7 @@ async function pair(name, a, b) {
 }
 
 for (const s of targets) {
-  const app = await shoot(MOBILE + s.mobile, 'app', s.name)
+  const app = await shoot(MOBILE + s.mobile, 'app', s.name, s.appClick)
   const pwa = await shoot(PWA + s.pwa, 'pwa', s.name, s.pwaClick)
   const cmp = await pair(s.name, app.file, pwa.file)
   console.log(`${s.name}: ${cmp}`)
