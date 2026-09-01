@@ -19,13 +19,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, Redirect } from 'expo-router'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { useAuth } from '../auth'
-import { getDrawStandings, getEntryStatus, listTournaments } from '../api'
-import { useApi } from '../useApi'
-import { computeCohortInfo, getHomeSection } from '../drawStatus'
-import { lockLabel } from '../lock'
-import { C, R, S, T } from '../theme'
-import { Button, Card, ErrorNote, Eyebrow, Loading, Muted, Screen, Title } from '../ui'
+import { useAuth } from '../../auth'
+import { getDrawStandings, getEntryStatus, listTournaments } from '../../api'
+import { useApi } from '../../useApi'
+import { computeCohortInfo, getHomeSection } from '../../drawStatus'
+import { lockLabel } from '../../lock'
+import { C, R, S, T } from '../../theme'
+import { Button, Card, ErrorNote, Eyebrow, Loading, Muted, Screen, Title } from '../../ui'
 
 export default function Dashboard() {
   const { phase, me, signOut, retry, error: authError } = useAuth()
@@ -118,10 +118,10 @@ export default function Dashboard() {
         </Card>
       )}
 
+      {/* Schedule, Leagues and Status moved to the tab bar; a link to a tab
+          is a second way to reach the same place and makes the bar look
+          optional. Sign out has nowhere else to live yet, so it stays. */}
       <View style={s.footer}>
-        <Link href="/schedule" style={s.footerLink}>Schedule</Link>
-        <Link href="/leagues" style={s.footerLink}>Leagues</Link>
-        <Link href="/status" style={s.footerLink}>Status</Link>
         <Pressable onPress={signOut} hitSlop={8}>
           <Text style={[T.smallMed, { color: C.faint }]}>Sign out</Text>
         </Pressable>

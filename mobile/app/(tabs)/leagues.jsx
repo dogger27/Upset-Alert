@@ -2,11 +2,11 @@
 
 import { Link, Redirect } from 'expo-router'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { useAuth } from '../auth'
-import { getLeagues } from '../api'
-import { useApi } from '../useApi'
-import { C } from '../theme'
-import { Button, Card, ErrorNote, Loading, Muted, Screen, Title } from '../ui'
+import { useAuth } from '../../auth'
+import { getLeagues } from '../../api'
+import { useApi } from '../../useApi'
+import { C } from '../../theme'
+import { Button, Card, ErrorNote, Loading, Muted, Screen, Title } from '../../ui'
 
 export default function Leagues() {
   const { phase, retry, error: authError } = useAuth()

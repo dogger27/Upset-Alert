@@ -11,13 +11,13 @@
 import { useState } from 'react'
 import { Text } from 'react-native'
 import Constants from 'expo-constants'
-import { useAuth } from '../auth'
-import { getOffer } from '../api'
-import { useApi } from '../useApi'
-import { capabilities, isAvailable } from '../modules/live-activity'
-import { showOnLockScreen, useShowingOnLockScreen } from '../liveactivity'
-import { C } from '../theme'
-import { Button, Card, ErrorNote, Muted, Row, Screen, Title } from '../ui'
+import { useAuth } from '../../auth'
+import { getOffer } from '../../api'
+import { useApi } from '../../useApi'
+import { capabilities, isAvailable } from '../../modules/live-activity'
+import { showOnLockScreen, useShowingOnLockScreen } from '../../liveactivity'
+import { C } from '../../theme'
+import { Button, Card, ErrorNote, Muted, Row, Screen, Title } from '../../ui'
 
 export default function Status() {
   const { config, me, phase } = useAuth()

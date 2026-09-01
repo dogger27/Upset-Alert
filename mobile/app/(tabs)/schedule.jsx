@@ -15,14 +15,14 @@
 import { useMemo, useState } from 'react'
 import { Stack } from 'expo-router'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { getScheduleDates, getScheduleDay } from '../api'
-import { useApi } from '../useApi'
+import { getScheduleDates, getScheduleDay } from '../../api'
+import { useApi } from '../../useApi'
 import {
   gamesOf, isLive, isSuspended, pointOf, servingSide, sideName, sideSeed,
   whenLabel, winnerSide,
-} from '../schedule'
-import { C, R, S, T } from '../theme'
-import { Card, ErrorNote, Eyebrow, Loading, Muted, Screen, Title } from '../ui'
+} from '../../schedule'
+import { C, R, S, T } from '../../theme'
+import { Card, ErrorNote, Eyebrow, Loading, Muted, Screen, Title } from '../../ui'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
