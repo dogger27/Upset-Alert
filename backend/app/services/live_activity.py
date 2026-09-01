@@ -284,6 +284,16 @@ def should_send(activity_id: int, decision: Decision, state: dict,
     The end push never reaches here — see dispatch() — because it is the one
     push the feature cannot survive losing.
     """
+    # THE CLASSIFIER'S "NO" IS FINAL. This function only knows how to say
+    # "not yet" — it applies a budget, and a budget cannot turn a change nobody
+    # would notice into one worth sending. Without this line a
+    # Decision(False, "no_visible_change") fell straight through every branch
+    # below and came out as Decision(True, ..., "no_visible_change"), which is
+    # exactly what the dry run logged: seven of twenty pushes whose own stated
+    # reason was that nothing had changed.
+    if not decision.send:
+        return decision
+
     now = now or time.time()
     st = state_for(activity_id)
 
@@ -388,6 +398,26 @@ async def dispatch(match_ids: set) -> dict:
                 select(Match).where(Match.id.in_(match_ids)))).scalars().all()
         }
 
+        # THE PICK IS THE POINT, and it was being dropped. Every update built a
+        # content state with no pick_side, so pick came out {side: null,
+        # correct: null} — the first real push would have ERASED the highlight
+        # that makes this different from a scores app. The activity looked right
+        # only because the CLIENT's initial state carried it.
+        #
+        # Loaded here, in the read phase, because dispatch deliberately holds no
+        # database session open across the APNs calls.
+        from app.models.prediction import UserPrediction
+        picks = {}
+        user_ids = {la.user_id for la, _ in rows}
+        if user_ids:
+            for pr in (await db.execute(
+                select(UserPrediction).where(
+                    UserPrediction.user_id.in_(user_ids),
+                    UserPrediction.match_id.in_(match_ids),
+                )
+            )).scalars().all():
+                picks[(pr.user_id, pr.match_id)] = pr.predicted_winner_id
+
     # ── 2. BUILD, once per match rather than once per activity ───────────
     # A final can carry hundreds of activities; rendering per row would repeat
     # the same work for every one of them.
@@ -436,9 +466,22 @@ async def dispatch(match_ids: set) -> dict:
         if info is None or not device.device_token:
             continue
 
+        # Per activity, not per match: two users watching the same match picked
+        # different players, and the whole value of the card is whose side the
+        # score is going.
+        m = matches.get(la.match_id)
+        predicted = picks.get((la.user_id, la.match_id))
+        pick_side = None
+        if m is not None and predicted is not None:
+            pick_side = (1 if predicted == m.player1_id
+                         else 2 if predicted == m.player2_id else None)
+        pick_correct = (None if (m is None or m.winner_id is None or predicted is None)
+                        else predicted == m.winner_id)
+
         state = build_content_state(
             info["point"], status=info["status"],
             final_line=info["final_line"], version=la.content_version or CONTENT_VERSION,
+            pick_side=pick_side, pick_correct=pick_correct,
         )
 
         if info["ending"]:
