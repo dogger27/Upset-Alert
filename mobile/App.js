@@ -16,14 +16,23 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import {
-  ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text,
+  ActivityIndicator, ScrollView, StyleSheet, Text,
   TextInput, TouchableOpacity, View,
 } from 'react-native'
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import { StatusBar } from 'expo-status-bar'
 import { getAppConfig, getMe, getOffer, login, setToken } from './api'
 import { clearToken, loadToken, saveToken } from './session'
 
 export default function App() {
+  return (
+    <SafeAreaProvider>
+      <Root />
+    </SafeAreaProvider>
+  )
+}
+
+function Root() {
   const [phase, setPhase] = useState('boot')   // boot | signedout | unreachable | ready
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
