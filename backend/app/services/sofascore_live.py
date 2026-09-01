@@ -629,6 +629,10 @@ async def poll_once(db) -> dict:
         # Tournament ids, because that is what the SSE broadcaster is keyed by.
         "tournament_ids": sorted({_tournament_of[d] for d in touched_draws
                                   if d in _tournament_of}),
+        # BOTH ids, because subscribers are split across them — see
+        # broadcaster.publish. The draw page keys on the draw id and would
+        # otherwise never see a Sofascore nudge at all.
+        "draw_ids": sorted(touched_draws),
         "changed_matches": sorted(changed_matches),
     }
 
@@ -722,6 +726,8 @@ class SofascoreLiveMonitor:
                             from app.services import broadcaster
                             for tid in report.get("tournament_ids") or []:
                                 await broadcaster.publish(tid)
+                            for did in report.get("draw_ids") or []:
+                                await broadcaster.publish(did)
                             # SYNCHRONOUS, AND IT MUST STAY THAT WAY. This adds
                             # match ids to an in-process set and returns; the
                             # dispatcher is a separate task. Awaiting a push

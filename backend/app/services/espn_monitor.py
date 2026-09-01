@@ -1293,7 +1293,7 @@ class ESPNMonitor:
             if changed:
                 await db.commit()
                 from app.services import broadcaster
-                await broadcaster.publish(tournament.id)
+                await broadcaster.publish(tournament.id, tournament.tournament_id)
 
     # ------------------------------------------------------------------
     # Job 3: match results
@@ -1390,7 +1390,7 @@ class ESPNMonitor:
             if updated:
                 await db.commit()
                 from app.services import broadcaster
-                await broadcaster.publish(tournament.id)
+                await broadcaster.publish(tournament.id, tournament.tournament_id)
 
                 # Check whether any of the rounds we just wrote results into
                 # are now fully complete; if so, fire round-standings emails.
