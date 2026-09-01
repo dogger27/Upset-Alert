@@ -223,6 +223,12 @@ def enqueue(match_ids) -> None:
     """
     if not match_ids:
         return
+    # Nothing is draining this when the feature is off, so collecting would be
+    # an accumulation with no reader — small, but pointless, and it would make
+    # the first push after enabling the feature a flood of everything that had
+    # changed since boot.
+    if not settings.live_activity_enabled:
+        return
     _pending.update(match_ids)
     _wake.set()
 

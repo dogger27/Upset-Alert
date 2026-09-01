@@ -422,6 +422,13 @@ async def poll_once(db) -> dict:
 
     written, seen_matches = 0, 0
     touched_draws: set = set()
+    # WHICH MATCHES CHANGED, for anything that needs the edge rather than the
+    # state. touched_draws is deliberately coarse — it feeds an SSE nudge that
+    # tells a page to refetch — but a Live Activity pushes one match's score to
+    # one Lock Screen and cannot refetch anything, so it needs to know exactly
+    # which. Collected on the same branches, so it inherits the same "only when
+    # something really changed" guarantee.
+    changed_matches: set = set()
     for ev, draw_id in ours:
         home_ids = _event_player_ids(ev.get("homeTeam") or {})
         away_ids = _event_player_ids(ev.get("awayTeam") or {})
@@ -485,6 +492,7 @@ async def poll_once(db) -> dict:
                     match.sofa_started_at = first_play
                     written += 1
                     touched_draws.add(draw_id)
+                    changed_matches.add(match.id)
                 if sofa_authoritative() and match.started_at is None:
                     match.started_at = first_play
                     written += 1
@@ -517,6 +525,7 @@ async def poll_once(db) -> dict:
             match.sofa_live_json = snap
             written += 1
             touched_draws.add(draw_id)
+            changed_matches.add(match.id)
             # HISTORY, on the content-change half of this condition ONLY. The
             # stamp-refresh half fires every 22.5s per idle live match and would
             # bank thousands of identical rows a day; a change is one row per
@@ -550,6 +559,7 @@ async def poll_once(db) -> dict:
                 match.live_scores_json = live
                 written += 1
                 touched_draws.add(draw_id)
+                changed_matches.add(match.id)
 
     if seen_matches:
         state.last_match_seen_at = datetime.now(timezone.utc)
@@ -598,6 +608,11 @@ async def poll_once(db) -> dict:
         m.sofa_live_json = None
         written += 1
         touched_draws.add(m.draw_id)
+        # THE END OF A MATCH IS A CHANGE TOO, and the only signal there is that
+        # one is over — nothing anywhere emits "this match finished", the live
+        # column is simply cleared. Without this an activity would sit on a
+        # Lock Screen showing the last score for ever.
+        changed_matches.add(m.id)
         # Clear the promoted copy too, or a finished match keeps showing a
         # live score for ever — exactly what staging did.
         if sofa_authoritative() and m.live_scores_json is not None:
@@ -614,6 +629,7 @@ async def poll_once(db) -> dict:
         # Tournament ids, because that is what the SSE broadcaster is keyed by.
         "tournament_ids": sorted({_tournament_of[d] for d in touched_draws
                                   if d in _tournament_of}),
+        "changed_matches": sorted(changed_matches),
     }
 
 
@@ -706,6 +722,13 @@ class SofascoreLiveMonitor:
                             from app.services import broadcaster
                             for tid in report.get("tournament_ids") or []:
                                 await broadcaster.publish(tid)
+                            # SYNCHRONOUS, AND IT MUST STAY THAT WAY. This adds
+                            # match ids to an in-process set and returns; the
+                            # dispatcher is a separate task. Awaiting a push
+                            # here would put a round trip to Cupertino inside
+                            # this loop and delay every score on the site.
+                            from app.services import live_activity
+                            live_activity.enqueue(report.get("changed_matches"))
             except SofascoreBlocked as exc:
                 # The FLOOR, not the answer: the breaker escalates a repeat
                 # block up to six hours, and waking every half hour into one
