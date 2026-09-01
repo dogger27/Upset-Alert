@@ -19,6 +19,7 @@
 
 import { useMemo, useState } from 'react'
 import { Stack, useLocalSearchParams } from 'expo-router'
+import { Ionicons } from '@expo/vector-icons'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { getDraw, getPredictions } from '../../api'
 import { dateRange, expectedStartLabel } from '../../dates'
@@ -258,7 +259,6 @@ function MatchRow({ m, pick, drawRanks, zone, slugById, onH2H, onPredictors }) {
               style={[
                 T.bodyMed,
                 { color: decided && !won ? C.muted : C.ink, flexShrink: 1 },
-                isPick && !state && { color: C.clay },
                 won && { fontFamily: 'Archivo_700Bold' },
               ]}
               numberOfLines={1}
@@ -273,9 +273,14 @@ function MatchRow({ m, pick, drawRanks, zone, slugById, onH2H, onPredictors }) {
                 its marker entirely, so a red box left you to infer your own
                 pick from the two names. The site marks it with a glyph; so do
                 we, and it stays put after the result lands. */}
+            {/* WHITE NAMES, MARKER CARRIES IT. The pick used to be clay AND
+                marked, which is the doubled signal the Lock Screen card just
+                lost — and a coloured name reads as the app rating a player
+                rather than reporting a match. A star while it is undecided
+                (the same glyph the Lock Screen uses), then the verdict. */}
             {isPick && (
               <Text style={[s.pickMark, { color: state ? state.border : C.clay }]}>
-                {correct ? '✓' : wrong ? '✗' : '•'}
+                {correct ? '✓' : wrong ? '✗' : '★'}
               </Text>
             )}
           </View>
@@ -288,10 +293,15 @@ function MatchRow({ m, pick, drawRanks, zone, slugById, onH2H, onPredictors }) {
               {line}
             </Text>
           ) : <View style={{ flex: 1 }} />}
-          {/* Only once there is a result to have been right about. */}
+          {/* A GLYPH, NOT A SENTENCE. "WHO CALLED IT" spelled out was ~200pt
+              of chip on every decided match, repeated the whole way down the
+              column and shoving the score off to the left. The site uses a
+              two-person mark here for the same reason. Only once there is a
+              result to have been right about. */}
           {decided && !m.is_bye ? (
-            <Pressable onPress={() => onPredictors(m)} hitSlop={8} style={s.h2hChip}>
-              <Text style={[s.h2hText, { color: C.muted }]}>WHO CALLED IT</Text>
+            <Pressable onPress={() => onPredictors(m)} hitSlop={10} style={s.iconChip}
+                       accessibilityLabel="Who called it">
+              <Ionicons name="people" size={13} color={C.muted} />
             </Pressable>
           ) : null}
           {canH2H ? (
@@ -312,7 +322,19 @@ function MatchRow({ m, pick, drawRanks, zone, slugById, onH2H, onPredictors }) {
 }
 
 const s = StyleSheet.create({
-  footRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 2 },
+  /* Tight, because on an undecided match this row holds ONE small chip and
+     nothing else, and R128 has sixty-four of those — every point of padding
+     here is four hundred points of scrolling. The score supplies its own
+     padding, so the row adds only what the chips need. */
+  footRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingRight: 8, paddingBottom: 6, paddingTop: 2,
+  },
+  iconChip: {
+    borderRadius: 4, borderWidth: 1, borderColor: C.borderOn,
+    paddingHorizontal: 7, paddingVertical: 2,
+    alignItems: 'center', justifyContent: 'center',
+  },
   h2hChip: {
     borderRadius: 4, borderWidth: 1, borderColor: C.borderOn,
     paddingHorizontal: 7, paddingVertical: 2,
@@ -367,7 +389,7 @@ const s = StyleSheet.create({
   // of one match line up with the next one down the column.
   score: {
     fontFamily: 'SairaCondensed_600SemiBold', fontSize: 14, lineHeight: 17,
-    color: C.muted, paddingHorizontal: 8, paddingBottom: 7, paddingTop: 1,
+    color: C.muted, paddingHorizontal: 8,
     fontVariant: ['tabular-nums'],
   },
 })
