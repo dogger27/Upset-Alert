@@ -128,3 +128,16 @@ export function expectedStartLabel(iso, source, zone) {
   const hedge = source === 'printed' ? '' : '~'
   return `${prefix} at ${hedge}${time}${suffix}`
 }
+
+/* "3:40 p.m." — a bare clock time in the reader's own zone, for a match that
+   has already begun. No day and no zone name here on purpose: it sits inside a
+   row that is already filed under a specific play date, and repeating the zone
+   on every one of forty rows is noise. The expected-start label upstream is the
+   place that names a zone, because it is the one that can refer to tomorrow.
+   Reuses the cached formatter for the same reason it exists there. */
+export function clockTime(iso, zone) {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  return formatter('time', zone).format(d)
+}

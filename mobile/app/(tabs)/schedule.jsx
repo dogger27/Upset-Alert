@@ -21,6 +21,7 @@ import {
   gamesOf, isLive, isSuspended, pointOf, servingSide, sideFlags, sideName,
   sideSeed, whenLabel, winnerSide,
 } from '../../schedule'
+import { clockTime, expectedStartLabel } from '../../dates'
 import { flagEmoji } from '../../flags'
 import { TourBadge } from '../../cards'
 import { C, R, S, T } from '../../theme'
@@ -147,6 +148,13 @@ function EntryRow({ e }) {
   const serving = servingSide(e)
   const won = winnerSide(e)
   const done = e.status === 'completed'
+  /* resumed_at wins over started_at: after a rain delay the resumption is the
+     time that answers "when did this get going", and the original start is
+     hours of stopped play ago. See the rain-delay lifecycle. */
+  const started = clockTime(e.resumed_at || e.started_at)
+  const upcoming = !started && !done
+    ? expectedStartLabel(e.expected_start_at, e.expected_source)
+    : null
 
   return (
     <View style={[s.entry, live && s.entryLive]}>
@@ -179,8 +187,13 @@ function EntryRow({ e }) {
         />
       ))}
 
-      {e.court && (
-        <Text style={[T.tiny, { color: C.faint }]} numberOfLines={1}>{e.court}</Text>
+      {/* Court and time on ONE line. The site gives the time its own block, but
+          a phone row that already carries two players and a set-by-set score
+          cannot spend a whole line saying "Started at". */}
+      {(e.court || started || upcoming) && (
+        <Text style={[T.tiny, { color: C.faint }]} numberOfLines={1}>
+          {[e.court, started ? `Started ${started}` : upcoming].filter(Boolean).join(' · ')}
+        </Text>
       )}
     </View>
   )
