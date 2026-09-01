@@ -24,6 +24,7 @@ import { getDraw, getPredictions } from '../../api'
 import { dateRange, expectedStartLabel } from '../../dates'
 import { useAuth } from '../../auth'
 import { H2HSheet } from '../../h2h'
+import { PredictorsSheet } from '../../predictors'
 import { computeDrawRanks } from '../../drawRanks'
 import { useApi } from '../../useApi'
 import { slotLabel } from '../../scoring'
@@ -68,6 +69,7 @@ export default function DrawScreen() {
   }, [draw.data?.draw_entries])
 
   const [h2h, setH2H] = useState(null)
+  const [predictors, setPredictors] = useState(null)
 
   const pickBy = useMemo(() => {
     const m = new Map()
@@ -185,7 +187,8 @@ export default function DrawScreen() {
         >
           {shown ? shown[1].map(m => (
             <MatchRow key={m.id} m={m} pick={pickBy.get(m.id)} drawRanks={drawRanks}
-                      zone={zone} slugById={slugById} onH2H={setH2H} />
+                      zone={zone} slugById={slugById} onH2H={setH2H}
+                      onPredictors={setPredictors} />
           )) : null}
           {draw.data && !rounds.length && (
             <Card><Title>No matches yet</Title><Muted>This draw hasn’t been released.</Muted></Card>
@@ -196,6 +199,10 @@ export default function DrawScreen() {
       {/* One sheet for the whole screen, not one per match: 64 mounted Modals
           is 64 mounted Modals. The match hands it a pair and it fetches. */}
       <H2HSheet visible={!!h2h} onClose={() => setH2H(null)} a={h2h?.a} b={h2h?.b} />
+      <PredictorsSheet
+        visible={!!predictors} onClose={() => setPredictors(null)}
+        drawId={id} match={predictors} meId={me?.id}
+      />
     </>
   )
 }
@@ -212,7 +219,7 @@ export default function DrawScreen() {
  * are a sentence: "6-4  7-5  6⁷-7  6-1", under the names, the way the site
  * puts them under the box.
  */
-function MatchRow({ m, pick, drawRanks, zone, slugById, onH2H }) {
+function MatchRow({ m, pick, drawRanks, zone, slugById, onH2H, onPredictors }) {
   const decided = !!m.winner
   const correct = decided && pick != null && pick === m.winner.id
   const wrong = decided && pick != null && pick !== m.winner.id
@@ -281,6 +288,12 @@ function MatchRow({ m, pick, drawRanks, zone, slugById, onH2H }) {
               {line}
             </Text>
           ) : <View style={{ flex: 1 }} />}
+          {/* Only once there is a result to have been right about. */}
+          {decided && !m.is_bye ? (
+            <Pressable onPress={() => onPredictors(m)} hitSlop={8} style={s.h2hChip}>
+              <Text style={[s.h2hText, { color: C.muted }]}>WHO CALLED IT</Text>
+            </Pressable>
+          ) : null}
           {canH2H ? (
             <Pressable
               onPress={() => onH2H({

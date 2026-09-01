@@ -72,7 +72,7 @@ function LeagueRow({ league }) {
 const s = StyleSheet.create({
   hello: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   who: { color: C.muted, fontWeight: '700' },
-  statusLink: { color: C.accent, fontWeight: '700', padding: 6 },
+  statusLink: { color: C.clay, fontWeight: '700', padding: 6 },
   card: {
     backgroundColor: C.card, borderRadius: 14, padding: 16,
     borderWidth: 1, borderColor: C.border, gap: 6,

@@ -41,6 +41,9 @@ const SCREENS = [
   // has to be clicked into position before it can be compared with anything.
   { name: 'standings', mobile: '/league/10/draw/77', pwa: '/leagues/10', pwaClick: 'Members' },
   { name: 'h2h',       mobile: '/draw/77', pwa: '/tournaments/77', appClick: 'H2H', pwaClick: 'H2H' },
+  { name: 'called',    mobile: '/draw/77', pwa: '/tournaments/77', appClick: 'WHO CALLED IT' },
+  // Signed OUT on purpose: this screen had two invisible-token bugs at once.
+  { name: 'signin',    mobile: '/sign-in', pwa: '/login', noAuth: true },
 ]
 
 const only = process.argv.slice(2).filter(a => !a.startsWith('-'))
@@ -53,7 +56,7 @@ const browser = await chromium.launch({
   args: ['--disable-web-security', '--hide-scrollbars', '--force-color-profile=srgb'],
 })
 
-async function shoot(url, kind, name, click) {
+async function shoot(url, kind, name, click, noAuth) {
   const ctx = await browser.newContext({
     viewport: VIEW, deviceScaleFactor: DSF, isMobile: true, hasTouch: true,
     colorScheme: 'dark',
@@ -65,12 +68,14 @@ async function shoot(url, kind, name, click) {
   })
   // Both keys every time: the Expo app reads upsetalert.session.jwt (session.js),
   // the PWA reads `token`. Setting the other app's key is inert.
-  await ctx.addInitScript(t => {
-    try {
-      localStorage.setItem('upsetalert.session.jwt', t)
-      localStorage.setItem('token', t)
-    } catch {}
-  }, TOKEN)
+  if (!noAuth) {
+    await ctx.addInitScript(t => {
+      try {
+        localStorage.setItem('upsetalert.session.jwt', t)
+        localStorage.setItem('token', t)
+      } catch {}
+    }, TOKEN)
+  }
 
   const page = await ctx.newPage()
   const errors = []
@@ -118,8 +123,8 @@ async function pair(name, a, b) {
 }
 
 for (const s of targets) {
-  const app = await shoot(MOBILE + s.mobile, 'app', s.name, s.appClick)
-  const pwa = await shoot(PWA + s.pwa, 'pwa', s.name, s.pwaClick)
+  const app = await shoot(MOBILE + s.mobile, 'app', s.name, s.appClick, s.noAuth)
+  const pwa = await shoot(PWA + s.pwa, 'pwa', s.name, s.pwaClick, s.noAuth)
   const cmp = await pair(s.name, app.file, pwa.file)
   console.log(`${s.name}: ${cmp}`)
   for (const e of app.errors.slice(0, 4)) console.log(`   app  ! ${e}`)

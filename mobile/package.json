@@ -28,7 +28,9 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "test:theme": "node theme.test.mjs",
+    "test:scoring": "node scoring.test.mjs"
   },
   "private": true,
   "devDependencies": {

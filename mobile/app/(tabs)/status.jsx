@@ -109,7 +109,7 @@ export default function Status() {
                 busy={starting}
               />
             )}
-            {!!startErr && <Text style={{ color: C.error }}>{startErr}</Text>}
+            {!!startErr && <Text style={{ color: C.bad }}>{startErr}</Text>}
           </>
         ) : (
           <Muted>

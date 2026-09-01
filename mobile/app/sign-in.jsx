@@ -78,12 +78,12 @@ export default function SignIn() {
 const s = StyleSheet.create({
   head: { gap: 6, paddingTop: 24, paddingBottom: 8 },
   brand: { fontSize: 30, fontWeight: '800', color: C.ink, letterSpacing: 0.5 },
-  accent: { color: C.accent },
+  accent: { color: C.clay },
   input: {
     backgroundColor: C.bg, borderWidth: 1, borderColor: C.border,
     borderRadius: 10, paddingHorizontal: 12,
     // 16px or iOS zooms the field on focus; TOUCH to match the web app's rule.
     height: TOUCH, fontSize: 16, color: C.ink,
   },
-  error: { color: C.error },
+  error: { color: C.bad },
 })

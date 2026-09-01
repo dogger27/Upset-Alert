@@ -105,7 +105,7 @@ export default function Standings() {
 
 const s = StyleSheet.create({
   bar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
-  link: { color: C.accent, fontWeight: '700', paddingVertical: 6 },
+  link: { color: C.clay, fontWeight: '700', paddingVertical: 6 },
   table: {
     borderWidth: 1, borderColor: C.border, borderRadius: 14,
     overflow: 'hidden', backgroundColor: C.card,
@@ -121,7 +121,7 @@ const s = StyleSheet.create({
   rank: { color: C.muted, width: 28, fontWeight: '700' },
   who: { flex: 1, minWidth: 0 },
   name: { color: C.ink, fontWeight: '600' },
-  nameMine: { color: C.accent, fontWeight: '800' },
+  nameMine: { color: C.clay, fontWeight: '800' },
   real: { color: C.muted, fontSize: 12 },
   num: { color: C.ink, width: 62, textAlign: 'right' },
   total: { fontWeight: '800' },

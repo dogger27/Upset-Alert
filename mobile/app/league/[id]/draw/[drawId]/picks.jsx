@@ -149,9 +149,9 @@ const s = StyleSheet.create({
   player: { color: C.muted, flex: 1, fontSize: 15 },
   seed: { color: C.muted, fontSize: 12 },
   won: { color: C.ink, fontWeight: '700' },
-  picked: { color: C.accent },
+  picked: { color: C.clay },
   tag: { fontSize: 12, fontWeight: '800', width: 34, textAlign: 'right' },
   tagOk: { color: '#4ade80' },
-  tagBad: { color: C.error },
+  tagBad: { color: C.bad },
   tagOpen: { color: C.muted, fontSize: 10 },
 })
