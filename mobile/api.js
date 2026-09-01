@@ -157,6 +157,16 @@ export const getPredictors = (tournamentId, matchId, leagueId) =>
   request(`/tournaments/${tournamentId}/matches/${matchId}/predictors` +
           (leagueId ? `?league_id=${leagueId}` : ''))
 
+/* Your record across every draw you competed in. Persisted for everyone, but
+   the endpoint filters to draws you actually entered — see the draw-history
+   note: a draw you never picked in is not a result you placed last in. */
+export const getMyDrawHistory = () => request('/auth/me/draw-history')
+
+/* Best single-draw performances, grouped by TIER and then split men/women —
+   the two are separate competitions and a combined table would rank a 128-draw
+   Slam against a 32-draw 250. */
+export const getHallOfFame = () => request('/tournaments/hall-of-fame')
+
 /* Reconciliation. The server's view of what is running drifts from the
    device's — the app is killed without calling DELETE, a user swipes an
    activity away, a new build replaces the one that owned it — and this is the

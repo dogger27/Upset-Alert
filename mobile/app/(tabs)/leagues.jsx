@@ -39,6 +39,20 @@ export default function Leagues() {
       {loading && !leagues ? <Loading /> : null}
       <ErrorNote error={error} onRetry={refetch} />
 
+      {/* Both of these are competition records rather than settings, so they
+          belong beside the leagues and not on the Status tab. Two links rather
+          than two more tabs: the bar stays at four. */}
+      <View style={s.shortcuts}>
+        <CardLink href="/history" style={s.shortcut}>
+          <Text style={s.shortcutTitle}>Draw history</Text>
+          <Text style={s.shortcutSub}>Every draw you’ve played</Text>
+        </CardLink>
+        <CardLink href="/hall-of-fame" style={s.shortcut}>
+          <Text style={s.shortcutTitle}>Hall of Fame</Text>
+          <Text style={s.shortcutSub}>Best ever performances</Text>
+        </CardLink>
+      </View>
+
       {leagues?.length === 0 && (
         <Card>
           <Title>No leagues yet</Title>
@@ -72,6 +86,13 @@ function LeagueRow({ league }) {
 const s = StyleSheet.create({
   hello: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   who: { color: C.muted, fontWeight: '700' },
+  shortcuts: { flexDirection: 'row', gap: 10 },
+  shortcut: {
+    flex: 1, backgroundColor: C.card, borderRadius: 14, borderWidth: 1,
+    borderColor: C.border, padding: 12, gap: 2,
+  },
+  shortcutTitle: { color: C.ink, fontWeight: '800', fontSize: 14 },
+  shortcutSub: { color: C.faint, fontSize: 11 },
   statusLink: { color: C.clay, fontWeight: '700', padding: 6 },
   card: {
     backgroundColor: C.card, borderRadius: 14, padding: 16,
