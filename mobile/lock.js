@@ -11,9 +11,10 @@
 
 export function lockLabel(t, now = Date.now()) {
   if (!t) return null
-  if (t.is_locked) return { text: 'Picks closed', urgent: false }
+  if (t.is_locked) return { value: 'Closed', suffix: '', text: 'Picks closed', urgent: false }
   if (t.pick_lock_mode === 'r1_progressive') {
-    return { text: 'Closes as round 1 finishes', urgent: false }
+    // No number, on purpose — see above. The suffix carries the whole meaning.
+    return { value: 'R1', suffix: 'closes as round 1 finishes', text: 'Closes as round 1 finishes', urgent: false }
   }
   if (!t.closing_time) return null
 
@@ -21,14 +22,19 @@ export function lockLabel(t, now = Date.now()) {
   const at = new Date(t.closing_time.endsWith('Z') ? t.closing_time : t.closing_time + 'Z')
   const ms = at.getTime() - now
   if (Number.isNaN(ms)) return null
-  if (ms <= 0) return { text: 'Picks closed', urgent: false }
+  if (ms <= 0) return { value: 'Closed', suffix: '', text: 'Picks closed', urgent: false }
 
   const mins = Math.floor(ms / 60000)
   const hrs = Math.floor(mins / 60)
   const days = Math.floor(hrs / 24)
 
-  if (days >= 2) return { text: `Locks in ${days} days`, urgent: false }
-  if (hrs >= 24) return { text: 'Locks tomorrow', urgent: false }
-  if (hrs >= 1) return { text: `Locks in ${hrs}h ${mins % 60}m`, urgent: hrs < 6 }
-  return { text: `Locks in ${mins}m`, urgent: true }
+  // Split so the card can set the NUMBER large and the unit small — the number
+  // is the thing you can miss, and it should be the loudest thing on the card.
+  const mk = (value, suffix, urgent = false) =>
+    ({ value, suffix, text: `${value} ${suffix}`.trim(), urgent })
+
+  if (days >= 2) return mk(String(days), 'days to lock')
+  if (hrs >= 24) return mk('1', 'day to lock')
+  if (hrs >= 1) return mk(`${hrs}h ${mins % 60}m`, 'to lock', hrs < 6)
+  return mk(`${mins}m`, 'to lock', true)
 }

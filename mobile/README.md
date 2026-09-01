@@ -19,11 +19,27 @@ tmux new-session -d -s expo -c ~/Documents/Claude/Projects/TennisFantasyLeague/m
 tmux send-keys -t expo 'npx expo start' Enter
 ```
 
-Then open `exp://192.168.1.111:8081` in Expo Go — phone and server on the same
-Wi-Fi. **Prefer LAN over `--tunnel`:** ngrok's edge publishes AAAA records that
-are unreachable from this network, and iOS prefers IPv6, so tunnel URLs hang on
-"Opening project…" while LAN answers in ~100 ms. LAN is also stable across
-restarts; the ngrok subdomain is not.
+### The dev server address, and working away from home
+
+Metro is started with `REACT_NATIVE_PACKAGER_HOSTNAME=100.74.46.52` —
+Jupiter's **Tailscale** address — so it advertises ONE url that works on the
+home Wi-Fi and on cellular alike:
+
+    http://100.74.46.52:8081
+
+Enter it in the development build's "Enter URL manually". The phone needs the
+Tailscale app signed into the same account (`iphone172` is already on the
+tailnet). Expect a beat more latency than LAN while Tailscale relays through
+DERP rather than a direct connection.
+
+**Not `--tunnel`.** ngrok's edge publishes AAAA records that are unreachable
+from this network, and iOS prefers IPv6, so tunnel URLs hang on "Opening
+project…" while this answers in ~100 ms. The ngrok subdomain also changes on
+every restart; a Tailscale address never does.
+
+**The API needs none of this.** It is public through the Cloudflare Tunnel and
+reachable from anywhere already — Metro was the only thing ever pinned to the
+LAN, which is why the app worked on 5G but could not start.
 
 ## SDK 54, deliberately
 
