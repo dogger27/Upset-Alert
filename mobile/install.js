@@ -12,19 +12,35 @@
  * on User-Agent, which its own docstring records.
  *
  * The Keychain is the right home precisely because it SURVIVES APP DELETION on
- * iOS. Reinstalling the app gets the same install_id back, so the reinstall
- * that mints a brand-new device token still lands on the existing row and
- * updates it, rather than creating a duplicate.
+ * iOS. Reinstalling gets the same install_id back, so the reinstall that mints
+ * a brand-new device token still lands on the existing row and updates it,
+ * rather than creating a duplicate.
  */
 
 import * as SecureStore from 'expo-secure-store'
-import * as Crypto from 'expo-crypto'
 
 const KEY = 'upsetalert.install.id'
 // AFTER_FIRST_UNLOCK so background work can read it while the screen is
 // locked; THIS_DEVICE_ONLY because an install id that synced to the user's
 // other hardware would defeat its purpose — it identifies THIS installation.
 const OPTS = { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY }
+
+/* Math.random rather than expo-crypto, deliberately.
+ *
+ * This id is an IDENTIFIER, not a credential: the endpoint that consumes it is
+ * authenticated by the user's JWT, and a row is only ever matched within that
+ * user's own devices. Guessing one grants nothing. Weighed against that,
+ * expo-crypto is a native module — and a native module added after a build has
+ * been cut is missing from it, which is exactly the trap this file was
+ * rewritten to escape. Fewer native dependencies means the JS can move without
+ * a rebuild. */
+function uuid4() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = (Math.random() * 16) | 0
+    const v = c === 'x' ? r : (r & 0x3) | 0x8
+    return v.toString(16)
+  })
+}
 
 let cached = null
 
@@ -33,7 +49,7 @@ export async function getInstallId() {
   try {
     let id = await SecureStore.getItemAsync(KEY, OPTS)
     if (!id) {
-      id = Crypto.randomUUID()
+      id = uuid4()
       await SecureStore.setItemAsync(KEY, id, OPTS)
     }
     cached = id
@@ -43,7 +59,7 @@ export async function getInstallId() {
     // means this session registers as a new device and is forgotten on
     // restart — degraded, but working, and honest about it.
     console.warn('[install] keychain unavailable, using a session-only id:', e.message)
-    cached = cached || Crypto.randomUUID()
+    cached = cached || uuid4()
     return cached
   }
 }
