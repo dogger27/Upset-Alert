@@ -44,6 +44,8 @@ def build_attributes(match, p1_name: str, p2_name: str, *,
                      p1_entry_id: Optional[int] = None,
                      p1_seed: Optional[int] = None,
                      p2_seed: Optional[int] = None,
+                     p1_draw_rank: Optional[int] = None,
+                     p2_draw_rank: Optional[int] = None,
                      round_name: str = "", event_label: str = "") -> dict:
     """The immutable half, sent once when the activity starts.
 
@@ -63,6 +65,15 @@ def build_attributes(match, p1_name: str, p2_name: str, *,
         "p2_name": p2_name,
         "p1_seed": p1_seed,
         "p2_seed": p2_seed,
+        # The INFERRED seed — where a player sits in this field once everyone
+        # is ordered, which is what the bracket's grey badge shows. Sent
+        # alongside the real seed rather than merged with it, because the card
+        # colours the two differently: a genuine tournament seed is a fact
+        # about the draw, an inferred one is our own arithmetic and should not
+        # claim the same authority. Both optional; a client built before these
+        # existed ignores them.
+        "p1_draw_rank": p1_draw_rank,
+        "p2_draw_rank": p2_draw_rank,
         "round_name": round_name,
         "event_label": event_label,
     }

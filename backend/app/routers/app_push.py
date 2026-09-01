@@ -31,6 +31,7 @@ from app.models.live_activity import (
 from app.models.tournament import Match
 from app.models.schedule import ScheduleEntry
 from app.models.user import User
+from app.services.rounds import compact_round
 
 router = APIRouter(prefix="/app", tags=["app"])
 
@@ -485,6 +486,18 @@ async def offer(
     best, rest = ranked[0], ranked[1:4]
     by_id = {m.id: m for m in live}
     entry_by_id = {e.id: e for e in entries}
+
+    # The inferred seed, per draw. _compute_draw_ranks is imported rather than
+    # reimplemented on purpose: it is the SAME arithmetic the site's bracket
+    # badge uses, and a second copy would drift — the app already shipped a
+    # version that showed a player's world ranking where the site showed their
+    # rank in the field.
+    from collections import defaultdict
+    from app.services.upsets import _compute_draw_ranks
+    _by_draw = defaultdict(list)
+    for _e in entries:
+        _by_draw[_e.draw_id].append(_e)
+    ranks_by_draw = {did: _compute_draw_ranks(es) for did, es in _by_draw.items()}
     pick_by_match = {p.match_id: p.predicted_winner_id for p in preds}
 
     def describe(row, *, full: bool):
@@ -520,6 +533,8 @@ async def offer(
             p1_entry_id=m.player1_id,
             p1_seed=getattr(p1, "seed", None),
             p2_seed=getattr(p2, "seed", None),
+            p1_draw_rank=ranks_by_draw.get(m.draw_id, {}).get(m.player1_id),
+            p2_draw_rank=ranks_by_draw.get(m.draw_id, {}).get(m.player2_id),
             # COMPACT on the Lock Screen: "Round of 128" is a sentence where
             # there is room for a label, and it crowded the event name off the
             # header row. Draw.round_name() keeps the long form for the site.
