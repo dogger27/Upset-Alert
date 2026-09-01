@@ -16,6 +16,11 @@ services:
       # WAL on the host where it belongs.
       - /home/paulwiens/upsetalert/data:/data
       - /home/paulwiens/upsetalert/logs:/logs
+      # The APNs signing key, read-only. A FILE, never an env var: a multi-line
+      # PEM is a compose-quoting footgun and would show up in `docker inspect`.
+      # Deliberately absent from staging — staging runs a copy of production's
+      # database, so it holds real device tokens and must not be able to push.
+      - /home/paulwiens/upsetalert/secrets:/secrets:ro
     environment:
       - DATABASE_URL=sqlite+aiosqlite:////data/tennis_fantasy.db
       - LOG_FILE=/logs/backend.log
@@ -29,6 +34,23 @@ services:
       # so a machine without them configured still boots normally.
       - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
       - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
+      # ── APNs / Live Activities ─────────────────────────────────────────
+      # `:-` and not `:?`, matching VAPID above rather than SECRET_KEY: with
+      # these absent apns_enabled() is false and the feature is simply off, so
+      # a machine without a key still boots. The difference from the SECRET_KEY
+      # trap is that nothing here fails SILENTLY — apns_probe reports
+      # `not_configured` by name, and the dispatcher no-ops rather than
+      # pretending to send.
+      - APNS_KEY_ID=${APNS_KEY_ID:-}
+      - APNS_TEAM_ID=${APNS_TEAM_ID:-}
+      - APNS_BUNDLE_ID=${APNS_BUNDLE_ID:-}
+      # Fallback only; the authoritative value is per-device, because which
+      # host a token is valid on is a property of the BUILD.
+      - APNS_DEFAULT_ENV=${APNS_DEFAULT_ENV:-production}
+      # Both stay off until a dry run has been watched through a real
+      # tournament day. Wiring the key up is not the same as switching it on.
+      - LIVE_ACTIVITY_ENABLED=${LIVE_ACTIVITY_ENABLED:-false}
+      - LIVE_ACTIVITY_DRY_RUN=${LIVE_ACTIVITY_DRY_RUN:-true}
       - ENVIRONMENT=production
       # ── Sofascore ──────────────────────────────────────────────────────
       # Runs BESIDE ESPN, not instead of it. The two things it adds here are
