@@ -128,9 +128,28 @@ async def register_device(
             .values(device_token=None)
         )
 
+    # THE ENVIRONMENT IS A PROPERTY OF THE TOKEN, AND THE CLIENT IS GUESSING.
+    #
+    # A client cannot reliably read which APNs host its token belongs to: it is
+    # decided by the entitlement the build was signed with, and an internal-
+    # distribution build signed with a DISTRIBUTION certificate gets production
+    # even while __DEV__ is true and Metro is attached. That is not theoretical
+    # — the first real device registered here guessed "sandbox" and was in fact
+    # production, which apns.py discovered by being told so by Apple.
+    #
+    # So the learned value outranks the guess. Overwriting it on every sign-in
+    # would throw away what Apple told us and make the next push spend a
+    # round-trip rediscovering it, every time, forever.
+    #
+    # A NEW TOKEN resets that: a token issued by a differently-signed build is a
+    # different token, and whatever we learned about the old one says nothing
+    # about it. So the guess is trusted again exactly when the token changes.
+    token_changed = bool(body.device_token) and body.device_token != device.device_token
+
     device.platform = body.platform
     device.device_token = body.device_token or device.device_token
-    device.apns_env = body.apns_env or device.apns_env or settings.apns_default_env
+    if device.apns_env is None or token_changed:
+        device.apns_env = body.apns_env or settings.apns_default_env
     device.bundle_id = body.bundle_id or device.bundle_id
     device.app_version = body.app_version
     device.build = body.build
