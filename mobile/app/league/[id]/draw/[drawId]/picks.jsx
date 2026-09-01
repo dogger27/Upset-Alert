@@ -21,6 +21,9 @@ import { useMemo } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { getDraw, getPredictions } from '../../../../../api'
 import { useApi } from '../../../../../useApi'
+import { EntryChip, PosBadge } from '../../../../../cards'
+import { computeDrawRanks } from '../../../../../drawRanks'
+import { scoreLine } from '../../../../../score'
 import { slotLabel } from '../../../../../scoring'
 import { C } from '../../../../../theme'
 import { Card, ErrorNote, Loading, Muted, Screen, Title } from '../../../../../ui'
@@ -29,6 +32,10 @@ export default function Picks() {
   const { drawId } = useLocalSearchParams()
   const draw = useApi(`draw:${drawId}`, () => getDraw(drawId))
   const preds = useApi(`preds:${drawId}`, () => getPredictions(drawId))
+  const drawRanks = useMemo(
+    () => computeDrawRanks(draw.data?.draw_entries),
+    [draw.data?.draw_entries],
+  )
 
   const pickBy = useMemo(() => {
     const m = new Map()
@@ -92,7 +99,7 @@ export default function Picks() {
             </Text>
             <View style={s.group}>
               {matches.map(m => (
-                <MatchRow key={m.id} m={m} pick={pickBy.get(m.id)} />
+                <MatchRow key={m.id} m={m} pick={pickBy.get(m.id)} drawRanks={drawRanks} />
               ))}
             </View>
           </View>
@@ -102,10 +109,11 @@ export default function Picks() {
   )
 }
 
-function MatchRow({ m, pick }) {
+function MatchRow({ m, pick, drawRanks }) {
   const decided = !!m.winner
   const correct = decided && pick != null && pick === m.winner.id
   const wrong = decided && pick != null && pick !== m.winner.id
+  const line = scoreLine(m.scores)
 
   return (
     <View style={s.match}>
@@ -114,26 +122,47 @@ function MatchRow({ m, pick }) {
         const won = decided && p && m.winner.id === p.id
         return (
           <View key={i} style={s.side}>
+            {/* The same badge the bracket uses, so a name starts at the same x
+                on both screens and a seed reads as a seed rather than as a
+                number that happens to precede a name. */}
+            <PosBadge seed={p?.seed} drawRank={p ? drawRanks[p.id] : null} />
             <Text
               style={[s.player, won && s.won, picked && s.picked]}
               numberOfLines={1}
             >
-              {p?.seed ? <Text style={s.seed}>{p.seed} </Text> : null}
               {slotLabel(p, m)}
             </Text>
+            <EntryChip entryType={p?.entry_type} />
+            <View style={{ flex: 1 }} />
+            {/* '•' rather than the word "pick": the bracket marks an open pick
+                the same way, and "pick" sitting at the end of a row reads as a
+                button that does something. The clay name already says whose
+                side you took. */}
             {picked ? (
               <Text style={[s.tag, correct ? s.tagOk : wrong ? s.tagBad : s.tagOpen]}>
-                {correct ? '✓' : wrong ? '✗' : 'pick'}
+                {correct ? '✓' : wrong ? '✗' : '•'}
               </Text>
             ) : null}
           </View>
         )
       })}
+      {line ? (
+        <Text style={[s.score, correct ? s.tagOk : wrong ? s.tagBad : null]} numberOfLines={1}>
+          {line}
+        </Text>
+      ) : null}
     </View>
   )
 }
 
 const s = StyleSheet.create({
+  /* Identical to the bracket's score line. At 13px this condensed face closed
+     the double space between sets and "6-4 7-5 6⁷-7 6-1" ran together as
+     "6-47-56⁷-76-1"; tabular-nums also keeps the digits from shifting. */
+  score: {
+    fontFamily: 'SairaCondensed_600SemiBold', fontSize: 14, lineHeight: 17,
+    color: C.muted, paddingTop: 3, fontVariant: ['tabular-nums'],
+  },
   round: { gap: 6 },
   roundName: {
     color: C.muted, fontSize: 12, fontWeight: '800',
@@ -146,7 +175,7 @@ const s = StyleSheet.create({
   match: { paddingVertical: 8, paddingHorizontal: 12, gap: 2,
            borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
   side: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  player: { color: C.muted, flex: 1, fontSize: 15 },
+  player: { color: C.muted, flexShrink: 1, fontSize: 15 },
   seed: { color: C.muted, fontSize: 12 },
   won: { color: C.ink, fontWeight: '700' },
   picked: { color: C.clay },
