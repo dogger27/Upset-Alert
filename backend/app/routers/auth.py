@@ -7,6 +7,8 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import delete, func, or_, select, and_, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from pydantic import BaseModel
+
 from app.core.auth import get_current_user
 from app.services.notification_keys import ALL_KEYS
 from app.core.security import (
@@ -123,7 +125,29 @@ _USER_OWNED = (
     ("notification_preferences", "user_id"),
     ("notification_opt_outs", "user_id"),
     ("push_subscriptions", "user_id"),
+    # Added 2026-09-01, and every one of them was found by this endpoint's own
+    # unowned-table audit rather than by anyone noticing. Deleting a user was
+    # leaving their PASSKEYS behind — credentials pointing at an account that
+    # no longer exists — along with their devices and any running Live
+    # Activities. The audit was right and had been reporting it.
+    ("user_passkeys", "user_id"),
+    ("webauthn_challenges", "user_id"),
+    ("live_activities", "user_id"),
+    ("app_devices", "user_id"),
     ("leagues", "owner_id"),
+)
+
+# What self-service deletion DESTROYS. Everything identifying, everything that
+# can authenticate, and everything that can reach a device.
+_SELF_DELETE = (
+    ("user_passkeys", "user_id"),
+    ("webauthn_challenges", "user_id"),
+    ("push_subscriptions", "user_id"),
+    ("live_activities", "user_id"),
+    ("app_devices", "user_id"),
+    ("notification_preferences", "user_id"),
+    ("notification_opt_outs", "user_id"),
+    ("league_members", "user_id"),
 )
 
 
@@ -270,6 +294,103 @@ async def delete_user(
                   {"deleted_user_id": user_id, "username": target.username,
                    "by": current_user.username, "removed": removed})
     return {"deleted": target.username, "removed": removed}
+
+
+class DeleteAccount(BaseModel):
+    current_password: str
+
+
+@router.delete("/me")
+async def delete_own_account(
+    body: DeleteAccount,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Delete your own account. Irreversible.
+
+    Required by App Store guideline 5.1.1(v) wherever an account can be created
+    in the app, and it has to actually complete — not open a mail client.
+
+    ANONYMISED, NOT ERASED, AND THAT IS THE POINT OF THIS ENDPOINT.
+    Everything identifying is destroyed: the email, the real name, the password,
+    every passkey, every registered device, every push channel. What survives is
+    the competitive record — the picks and the finishing positions — attached to
+    a tombstone that names nobody.
+
+    A hard delete of the picks would rewrite OTHER people's history. Standings
+    are a ranking within a field, so removing a competitor retroactively moves
+    everybody who finished below them; and a standout pick is defined by how
+    many people picked a match and how few got it right, so deleting one
+    person's predictions silently promotes and demotes other people's badges in
+    completed tournaments. One person leaving must not edit everyone else's
+    past.
+
+    What remains is not personal data in any useful sense: a row saying an
+    anonymous competitor picked Alcaraz in a match two years ago, with no way
+    back to a person.
+    """
+    # RE-AUTHENTICATE. Tokens here last a year and only a 401 ends a session,
+    # so a borrowed phone is a plausible way to reach this endpoint. The action
+    # cannot be undone, so it is worth one password.
+    if not verify_password(body.current_password, current_user.password_hash):
+        raise HTTPException(status_code=400, detail="Password is incorrect")
+
+    uid = current_user.id
+
+    # A league with other people in it outlives its owner's account, and this
+    # endpoint has no business guessing who should inherit it. Same rule the
+    # admin path applies, and the same wording, because the user has to be able
+    # to act on it.
+    inhabited = (await db.execute(
+        text("SELECT l.name FROM leagues l WHERE l.owner_id = :uid AND EXISTS ("
+             "  SELECT 1 FROM league_members m"
+             "  WHERE m.league_id = l.id AND m.user_id != :uid)"),
+        {"uid": uid})).scalars().all()
+    if inhabited:
+        raise HTTPException(
+            status_code=400,
+            detail=f"You own league(s) with other members "
+                   f"({', '.join(inhabited)}). Transfer or delete them first.")
+
+    removed = {}
+    for table, column in _SELF_DELETE:
+        res = await db.execute(
+            text(f"DELETE FROM {table} WHERE {column} = :uid"), {"uid": uid})
+        if res.rowcount:
+            removed[table] = res.rowcount
+    # Leagues they own that nobody else is in — the guard above proved they are
+    # empty, so nothing is being taken from anyone.
+    res = await db.execute(
+        text("DELETE FROM leagues WHERE owner_id = :uid"), {"uid": uid})
+    if res.rowcount:
+        removed["leagues"] = res.rowcount
+
+    # The tombstone. Unique columns get the id mixed in so a second deletion
+    # cannot collide with the first, and the email domain is .invalid — reserved
+    # by RFC 2606 precisely so it can never be delivered to or re-registered.
+    current_user.email = f"deleted-{uid}@deleted.invalid"
+    current_user.username = f"deleted_user_{uid}"
+    current_user.full_name = "Deleted user"
+    current_user.display_name = "Deleted user"
+    # Not a hash of anything — no password can produce it, so the account
+    # cannot be signed into even by someone who knew the old one.
+    current_user.password_hash = "!deleted"
+    current_user.is_active = False
+    current_user.is_admin = False
+    current_user.email_verified = False
+    current_user.verification_code = None
+    current_user.verification_code_expires = None
+    current_user.timezone = None
+    current_user.theme = None
+    current_user.schedule_tz = None
+
+    await db.commit()
+
+    from app.services.system_log import app_log
+    await app_log("info", "auth",
+                  f"User {uid} deleted their own account",
+                  {"user_id": uid, "removed": removed})
+    return {"deleted": True, "removed": removed}
 
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
