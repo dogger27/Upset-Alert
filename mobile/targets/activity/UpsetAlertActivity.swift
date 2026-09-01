@@ -173,16 +173,64 @@ struct UpsetAlertActivityWidget: Widget {
                         .monospacedDigit()
                 }
             } compactLeading: {
-                Text("\(context.state.sets_won.first ?? 0)")
-                    .fontWeight(.bold).monospacedDigit()
+                // WHOSE match, not which side won a set. The old pair of set
+                // counts read "2" and "2" — true, and useless: it named neither
+                // player nor who was ahead. Three letters of the surname you
+                // picked answers the first question in the space available.
+                Text(pickTag(context.attributes, context.state))
+                    .font(.caption2).fontWeight(.bold)
+                    .foregroundColor(accent)
             } compactTrailing: {
-                Text("\(context.state.sets_won.count > 1 ? context.state.sets_won[1] : 0)")
-                    .fontWeight(.bold).monospacedDigit()
+                // Sets, YOUR pick's first, coloured by whether it is going your
+                // way. Two glyphs and a colour is the whole story from a glance
+                // at the top of the screen.
+                Text(setsLine(context.state))
+                    .font(.caption2).fontWeight(.bold).monospacedDigit()
+                    .foregroundColor(leadColor(context.state))
             } minimal: {
-                Image(systemName: "tennisball.fill").foregroundColor(accent)
+                // Minimal is one glyph beside another app's activity: the only
+                // thing worth saying is whether to look.
+                Image(systemName: "circle.fill")
+                    .font(.system(size: 9))
+                    .foregroundColor(leadColor(context.state))
             }
         }
     }
+}
+
+/// Three letters of the surname this viewer picked — "COM" for Comesaña.
+/// Falls back to the leader when there is no pick, so the island still names
+/// the match rather than going blank.
+private func pickTag(_ a: MatchActivityAttributes, _ s: MatchActivityAttributes.ContentState) -> String {
+    let side = s.pick.side ?? (s.sets_won.count == 2 && s.sets_won[1] > s.sets_won[0] ? 2 : 1)
+    let full = side == 2 ? a.p2_name : a.p1_name
+    // Surname is the last whitespace-separated component; "Francisco Comesaña"
+    // -> "COM". Doubles ("A / B") keeps the first pair's surname, which is the
+    // best three letters available.
+    let surname = full.split(separator: "/").first?
+        .split(separator: " ").last.map(String.init) ?? full
+    return String(surname.prefix(3)).uppercased()
+}
+
+/// "2–1" with the viewer's pick FIRST, so the left number is always theirs.
+private func setsLine(_ s: MatchActivityAttributes.ContentState) -> String {
+    guard s.sets_won.count == 2 else { return "0–0" }
+    let side = s.pick.side ?? 1
+    let mine = side == 2 ? s.sets_won[1] : s.sets_won[0]
+    let theirs = side == 2 ? s.sets_won[0] : s.sets_won[1]
+    return "\(mine)–\(theirs)"
+}
+
+/// Green ahead, red behind, clay level — against the PICK, not side one.
+private func leadColor(_ s: MatchActivityAttributes.ContentState) -> Color {
+    if let correct = s.pick.correct { return correct ? good : bad }
+    guard s.sets_won.count == 2, s.pick.side != nil else { return accent }
+    let side = s.pick.side ?? 1
+    let mine = side == 2 ? s.sets_won[1] : s.sets_won[0]
+    let theirs = side == 2 ? s.sets_won[0] : s.sets_won[1]
+    if mine > theirs { return good }
+    if theirs > mine { return bad }
+    return accent
 }
 
 /// "6-4 3-6 2-1" from the games grid — the Dynamic Island has no room for rows.
