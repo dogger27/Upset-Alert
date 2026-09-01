@@ -133,14 +133,13 @@ function Head() {
   return (
     <View style={s.head}>
       <Text style={s.brand}>UPSET <Text style={{ color: C.clay }}>ALERT!</Text></Text>
-      <Link href="/status" asChild>
-        <Pressable
-          style={({ pressed }) => [s.avatar, pressed && { opacity: 0.7 }]}
-          hitSlop={8} accessibilityRole="button" accessibilityLabel="Your account"
-        >
-          <Ionicons name="person-outline" size={18} color={C.inkBody} />
-        </Pressable>
-      </Link>
+      {/* CardLink, not <Link asChild><Pressable style=...>. That second form
+          drops the style — it is the same trap CardLink exists to close, and I
+          walked straight back into it: the ring simply did not draw and the
+          icon floated in the header. */}
+      <CardLink href="/status" style={s.avatar} pressedOpacity={0.7}>
+        <Ionicons name="person-outline" size={18} color={C.inkBody} />
+      </CardLink>
     </View>
   )
 }
@@ -283,7 +282,10 @@ const s = StyleSheet.create({
   brand: { ...T.display, color: C.ink },
   avatar: {
     width: 36, height: 36, borderRadius: 18,
-    borderWidth: 1, borderColor: C.border, backgroundColor: C.card,
+    // borderOn, not border: C.border on C.card is a 1.1:1 edge and the circle
+    // simply was not there — the icon looked like it was floating in the
+    // header. The site draws a visible ring around its profile button.
+    borderWidth: 1, borderColor: C.borderOn, backgroundColor: C.card,
     alignItems: 'center', justifyContent: 'center',
   },
 
