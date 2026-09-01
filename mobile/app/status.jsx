@@ -30,8 +30,14 @@ export default function Status() {
     <Screen>
       <Card>
         <Title>This build</Title>
-        <Row label="App version" value={Constants.nativeAppVersion || '—'} />
-        <Row label="Build number" value={Constants.nativeBuildVersion || '—'} />
+        {/* nativeAppVersion/nativeBuildVersion were removed from
+            expo-constants; they live in expo-application now, which is another
+            native module and therefore another build — circular, when the thing
+            being diagnosed IS which build is installed.
+            The module row is the honest answer instead: it is present only in a
+            binary built after the podspec landed, so it identifies the build
+            more reliably than a version string would. */}
+        <Row label="App version" value={Constants.expoConfig?.version || '—'} />
         <Row label="Live Activity module" value={isAvailable() ? 'present' : 'ABSENT'} />
         <Row label="ActivityKit" value={caps.supported ? 'supported' : 'no'} />
         <Row label="Activities allowed" value={caps.enabled ? 'yes' : 'no (check Settings)'} />
