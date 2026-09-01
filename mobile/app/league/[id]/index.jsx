@@ -1,11 +1,12 @@
 /* The draws a league has played, newest first. Tap one for its standings. */
 
-import { Link, Stack, useLocalSearchParams } from 'expo-router'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Stack, useLocalSearchParams } from 'expo-router'
+import { StyleSheet, Text, View } from 'react-native'
 import { getLeague, getLeagueTournaments } from '../../../api'
 import { useApi } from '../../../useApi'
+import { TourBadge } from '../../../cards'
 import { C } from '../../../theme'
-import { Card, ErrorNote, Loading, Muted, Screen, Title } from '../../../ui'
+import { Card, CardLink, ErrorNote, Loading, Muted, Screen, Title } from '../../../ui'
 
 export default function LeagueDraws() {
   const { id } = useLocalSearchParams()
@@ -46,23 +47,31 @@ function DrawRow({ t, pickers, leagueId }) {
   // Gender drives the accent because it is the fastest way to tell two halves
   // of the same combined event apart, which is exactly the case the web app's
   // combined cards exist for.
-  const tint = t.gender === 'W' ? C.wta : C.atp
+  // 'F', not 'W' — the API's genders are 'M' and 'F'. This tested 'W', which is
+  // never true, so every stripe in the list rendered ATP blue including the WTA
+  // draws. The TourBadge beside it keys on the same field correctly, which is
+  // what made the disagreement visible at all.
+  const tint = t.gender === 'F' ? C.wta : C.atp
   return (
-    <Link href={`/league/${leagueId}/draw/${t.id}`} asChild>
-      <Pressable style={({ pressed }) => [s.card, pressed && { opacity: 0.75 }]}>
-        <View style={[s.stripe, { backgroundColor: tint }]} />
-        <View style={s.inner}>
+    <CardLink href={`/league/${leagueId}/draw/${t.id}`} style={s.card}>
+      <View style={[s.stripe, { backgroundColor: tint }]} />
+      <View style={s.inner}>
+        <View style={s.nameRow}>
           <Text style={s.name} numberOfLines={2}>{t.name}</Text>
-          <Text style={s.meta}>
-            {[t.category, t.surface, t.year].filter(Boolean).join(' · ')}
-          </Text>
-          <Text style={s.meta}>
-            {t.draw_size} draw · {pickers} {pickers === 1 ? 'picker' : 'pickers'}
-          </Text>
+          {/* Same reason as the dashboard: a combined event lists two draws
+              under one name, and the accent stripe alone does not say which
+              is which. */}
+          <TourBadge gender={t.gender} />
         </View>
-        <Text style={s.chev}>›</Text>
-      </Pressable>
-    </Link>
+        <Text style={s.meta}>
+          {[t.category, t.surface, t.year].filter(Boolean).join(' · ')}
+        </Text>
+        <Text style={s.meta}>
+          {t.draw_size} draw · {pickers} {pickers === 1 ? 'picker' : 'pickers'}
+        </Text>
+      </View>
+      <Text style={s.chev}>›</Text>
+    </CardLink>
   )
 }
 
@@ -74,7 +83,8 @@ const s = StyleSheet.create({
   },
   stripe: { width: 5, alignSelf: 'stretch' },
   inner: { flex: 1, padding: 14, gap: 3 },
-  name: { color: C.ink, fontWeight: '800', fontSize: 16 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  name: { color: C.ink, fontWeight: '800', fontSize: 16, flexShrink: 1 },
   meta: { color: C.muted, fontSize: 13 },
   chev: { color: C.muted, fontSize: 22, paddingRight: 14 },
 })

@@ -1,12 +1,12 @@
 /* The leagues you're in. Reached from the dashboard. */
 
-import { Link, Redirect } from 'expo-router'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Redirect } from 'expo-router'
+import { StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '../../auth'
 import { getLeagues } from '../../api'
 import { useApi } from '../../useApi'
 import { C } from '../../theme'
-import { Button, Card, ErrorNote, Loading, Muted, Screen, Title } from '../../ui'
+import { Button, Card, CardLink, ErrorNote, Loading, Muted, Screen, Title } from '../../ui'
 
 export default function Leagues() {
   const { phase, retry, error: authError } = useAuth()
@@ -56,18 +56,16 @@ export default function Leagues() {
 
 function LeagueRow({ league }) {
   return (
-    <Link href={`/league/${league.id}`} asChild>
-      <Pressable style={({ pressed }) => [s.card, pressed && { opacity: 0.75 }]}>
-        <View style={s.cardTop}>
-          <Text style={s.name} numberOfLines={2}>{league.name}</Text>
-          <Text style={s.chev}>›</Text>
-        </View>
-        <Text style={s.meta}>
-          {league.member_count} {league.member_count === 1 ? 'member' : 'members'}
-          {league.is_public ? ' · public' : ''}
-        </Text>
-      </Pressable>
-    </Link>
+    <CardLink href={`/league/${league.id}`} style={s.card}>
+      <View style={s.cardTop}>
+        <Text style={s.name} numberOfLines={2}>{league.name}</Text>
+        <Text style={s.chev}>›</Text>
+      </View>
+      <Text style={s.meta}>
+        {league.member_count} {league.member_count === 1 ? 'member' : 'members'}
+        {league.is_public ? ' · public' : ''}
+      </Text>
+    </CardLink>
   )
 }
 

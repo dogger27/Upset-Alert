@@ -21,22 +21,53 @@ import { useMemo, useState } from 'react'
 import { Stack, useLocalSearchParams } from 'expo-router'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { getDraw, getPredictions } from '../../api'
+import { dateRange, expectedStartLabel } from '../../dates'
+import { useAuth } from '../../auth'
+import { H2HSheet } from '../../h2h'
+import { computeDrawRanks } from '../../drawRanks'
 import { useApi } from '../../useApi'
 import { slotLabel } from '../../scoring'
 import { lockLabel } from '../../lock'
 import { currentRound, shortRound } from '../../rounds'
 import { C, PICK, R, S, SHADOW, T } from '../../theme'
-import { PosBadge } from '../../cards'
+import { EntryChip, PosBadge, TourBadge } from '../../cards'
 import { scoreLine } from '../../score'
 import { Card, ErrorNote, Loading, Muted, Screen, Title } from '../../ui'
 
 export default function DrawScreen() {
   const { id } = useLocalSearchParams()
+  const { me } = useAuth()
   const draw = useApi(`draw:${id}`, () => getDraw(id))
   const preds = useApi(`preds:${id}`, () => getPredictions(id))
   const [picked, setPicked] = useState(null)   // null = follow the live round
 
   const t = draw.data?.tournament
+
+  /* WHICH CLOCK an upcoming start is shown in — the site's rule, exactly:
+     'venue' means the tournament's own timezone, and ANYTHING ELSE means
+     undefined, i.e. this device. The account's `timezone` field is NOT it;
+     that is the profile's zone and using it here made the app say
+     "Tomorrow at ~1:00 a.m. UTC" where the site said "Today at ~6:00 p.m.
+     PDT" — the same instant, a different clock, and no way for a reader to
+     know which of the two they were looking at. */
+  const zone = me?.schedule_tz === 'venue' ? (t?.venue_timezone || undefined) : undefined
+
+  /* Computed once from draw_entries, not per row: it sorts the whole field. */
+  const drawRanks = useMemo(
+    () => computeDrawRanks(draw.data?.draw_entries),
+    [draw.data?.draw_entries],
+  )
+
+  /* Matches carry no te_slug — it lives on draw_entries — so H2H needs this
+     bridge. A null slug means the player never matched a Tennis Explorer
+     profile, and the button must not be offered for them at all. */
+  const slugById = useMemo(() => {
+    const m = new Map()
+    for (const e of draw.data?.draw_entries || []) if (e.te_slug) m.set(e.id, e.te_slug)
+    return m
+  }, [draw.data?.draw_entries])
+
+  const [h2h, setH2H] = useState(null)
 
   const pickBy = useMemo(() => {
     const m = new Map()
@@ -89,10 +120,26 @@ export default function DrawScreen() {
           <View style={s.head}>
             <View style={[s.tint, { backgroundColor: t.gender === 'F' ? C.wta : C.atp }]} />
             <View style={s.headBody}>
-              <Text style={[T.small, { color: C.muted }]} numberOfLines={1}>
-                {[t.category, t.surface, t.draw_size ? `${t.draw_size} draw` : null]
-                  .filter(Boolean).join(' · ')}
-              </Text>
+              {/* The draw screen was the one place that never said whose draw
+                  it was: no tour, no city, no dates — just "Grand Slam · Hard".
+                  With a combined event that made the men's and women's US Open
+                  indistinguishable here too, and the screen title alone
+                  ("US Open") does not resolve it. */}
+              <View style={s.headTitle}>
+                <TourBadge gender={t.gender} />
+                <Text style={[T.small, { color: C.muted, flexShrink: 1 }]} numberOfLines={1}>
+                  {[t.category, t.surface, t.draw_size ? `${t.draw_size} draw` : null]
+                    .filter(Boolean).join(' · ')}
+                </Text>
+              </View>
+              {/* `city`, not `location` — the API sends "New York City" under
+                  city and leaves location null, so reading location rendered
+                  an empty string with no error anywhere. */}
+              {(t.city || dateRange(t)) ? (
+                <Text style={[T.tiny, { color: C.faint }]} numberOfLines={1}>
+                  {[t.city, dateRange(t)].filter(Boolean).join(' · ')}
+                </Text>
+              ) : null}
               <View style={s.headStats}>
                 {tally.decided > 0 && (
                   <Text style={[T.smallMed, { color: C.ink }]}>
@@ -137,13 +184,18 @@ export default function DrawScreen() {
           showsVerticalScrollIndicator={false}
         >
           {shown ? shown[1].map(m => (
-            <MatchRow key={m.id} m={m} pick={pickBy.get(m.id)} />
+            <MatchRow key={m.id} m={m} pick={pickBy.get(m.id)} drawRanks={drawRanks}
+                      zone={zone} slugById={slugById} onH2H={setH2H} />
           )) : null}
           {draw.data && !rounds.length && (
             <Card><Title>No matches yet</Title><Muted>This draw hasn’t been released.</Muted></Card>
           )}
         </ScrollView>
       </Screen>
+
+      {/* One sheet for the whole screen, not one per match: 64 mounted Modals
+          is 64 mounted Modals. The match hands it a pair and it fetches. */}
+      <H2HSheet visible={!!h2h} onClose={() => setH2H(null)} a={h2h?.a} b={h2h?.b} />
     </>
   )
 }
@@ -160,12 +212,21 @@ export default function DrawScreen() {
  * are a sentence: "6-4  7-5  6⁷-7  6-1", under the names, the way the site
  * puts them under the box.
  */
-function MatchRow({ m, pick }) {
+function MatchRow({ m, pick, drawRanks, zone, slugById, onH2H }) {
   const decided = !!m.winner
   const correct = decided && pick != null && pick === m.winner.id
   const wrong = decided && pick != null && pick !== m.winner.id
   const state = correct ? PICK.correct : wrong ? PICK.wrong : null
   const line = scoreLine(m.scores)
+  /* Both players real AND both matched to a TE profile. A qualifier who never
+     matched has no slug, and asking the endpoint for one returns nothing
+     useful — so the button is simply absent rather than present and empty. */
+  const canH2H = !!(m.player1?.id && m.player2?.id && !m.is_bye &&
+    slugById?.get(m.player1.id) && slugById?.get(m.player2.id))
+
+  /* Only for a match that has not started. Once there is a result the start
+     time is history, and the site drops it there too. */
+  const when = !decided && !m.is_bye ? expectedStartLabel(m.expected_start_at, m.expected_source, zone) : null
 
   return (
     <View style={[
@@ -173,16 +234,23 @@ function MatchRow({ m, pick }) {
       state && { backgroundColor: state.bg, borderColor: state.border },
       m.is_bye && { opacity: 0.5 },
     ]}>
+      {when ? (
+        <View style={s.whenRow}>
+          <View style={s.schedChip}><Text style={s.schedText}>SCHEDULED</Text></View>
+          <Text style={s.whenText} numberOfLines={1}>{when}</Text>
+          {m.court ? <Text style={s.courtText} numberOfLines={1}>{m.court}</Text> : null}
+        </View>
+      ) : null}
       {[m.player1, m.player2].map((p, i) => {
         const isPick = p && pick != null && p.id === pick
         const won = decided && p && m.winner.id === p.id
         return (
           <View key={i} style={[s.side, i === 0 && s.sideDivider]}>
-            <PosBadge seed={p?.seed} ranking={p?.ranking} entryType={p?.entry_type} />
+            <PosBadge seed={p?.seed} drawRank={p ? drawRanks[p.id] : null} />
             <Text
               style={[
                 T.bodyMed,
-                { color: decided && !won ? C.muted : C.ink, flex: 1 },
+                { color: decided && !won ? C.muted : C.ink, flexShrink: 1 },
                 isPick && !state && { color: C.clay },
                 won && { fontFamily: 'Archivo_700Bold' },
               ]}
@@ -190,19 +258,67 @@ function MatchRow({ m, pick }) {
             >
               {slotLabel(p, m)}
             </Text>
+            <EntryChip entryType={p?.entry_type} />
+            <View style={{ flex: 1 }} />
+            {/* WHO YOU PICKED, always — not only while the match is open.
+                The tint says right or wrong; on its own it never says WHICH
+                player you backed, and once a match was decided this row lost
+                its marker entirely, so a red box left you to infer your own
+                pick from the two names. The site marks it with a glyph; so do
+                we, and it stays put after the result lands. */}
+            {isPick && (
+              <Text style={[s.pickMark, { color: state ? state.border : C.clay }]}>
+                {correct ? '✓' : wrong ? '✗' : '•'}
+              </Text>
+            )}
           </View>
         )
       })}
-      {line ? (
-        <Text style={[s.score, state && { color: state.border }]} numberOfLines={1}>
-          {line}
-        </Text>
+      {(line || canH2H) ? (
+        <View style={s.footRow}>
+          {line ? (
+            <Text style={[s.score, state && { color: state.border }]} numberOfLines={1}>
+              {line}
+            </Text>
+          ) : <View style={{ flex: 1 }} />}
+          {canH2H ? (
+            <Pressable
+              onPress={() => onH2H({
+                a: { name: m.player1.name, te_slug: slugById.get(m.player1.id) },
+                b: { name: m.player2.name, te_slug: slugById.get(m.player2.id) },
+              })}
+              hitSlop={8} style={s.h2hChip}
+            >
+              <Text style={s.h2hText}>H2H</Text>
+            </Pressable>
+          ) : null}
+        </View>
       ) : null}
     </View>
   )
 }
 
 const s = StyleSheet.create({
+  footRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 2 },
+  h2hChip: {
+    borderRadius: 4, borderWidth: 1, borderColor: C.borderOn,
+    paddingHorizontal: 7, paddingVertical: 2,
+  },
+  h2hText: { fontFamily: 'Archivo_700Bold', fontSize: 10, lineHeight: 14, letterSpacing: 0.5, color: C.greenLit },
+  headTitle: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  whenRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 10, paddingTop: 8, paddingBottom: 2,
+  },
+  // The site's SCHEDULED pill: small, outlined, and never competing with a name.
+  schedChip: {
+    borderRadius: 4, borderWidth: 1, borderColor: '#3b4c8a',
+    backgroundColor: '#182140', paddingHorizontal: 5, paddingVertical: 1,
+  },
+  schedText: { fontFamily: 'Archivo_700Bold', fontSize: 9, lineHeight: 13, letterSpacing: 0.5, color: '#9db4ff' },
+  whenText: { ...T.tiny, color: C.muted, flexShrink: 1 },
+  courtText: { ...T.tiny, color: C.faint },
+  pickMark: { fontFamily: 'Archivo_700Bold', fontSize: 13, marginLeft: 8 },
   head: {
     flexDirection: 'row', backgroundColor: C.card, borderRadius: R.md,
     borderWidth: 1, borderColor: C.border, overflow: 'hidden',

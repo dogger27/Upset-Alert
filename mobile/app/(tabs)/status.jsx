@@ -20,7 +20,7 @@ import { C } from '../../theme'
 import { Button, Card, ErrorNote, Muted, Row, Screen, Title } from '../../ui'
 
 export default function Status() {
-  const { config, me, phase } = useAuth()
+  const { config, me, phase, signOut } = useAuth()
   const ready = phase === 'ready'
   const offer = useApi(ready ? 'offer' : null, getOffer, { enabled: ready })
 
@@ -117,6 +117,19 @@ export default function Status() {
             match and says why it was chosen.
           </Muted>
         )}
+      </Card>
+
+      {/* Sign out lives HERE, not on the dashboard. It sat under the draw
+          cards on the opening screen, which put a destructive action in the
+          middle of the one screen the app opens to. Status is the account
+          screen; this is where someone goes looking for it. */}
+      <Card>
+        <Title>Account</Title>
+        {/* `quiet` rather than a tone: Button only knows 'clay' and green, so
+            tone="danger" would have rendered a GREEN sign-out button. Outlined
+            is right regardless — this is not the screen's primary action.
+            No "signed in as" line here; the card above already carries it. */}
+        <Button label="Sign out" quiet onPress={signOut} />
       </Card>
     </Screen>
   )

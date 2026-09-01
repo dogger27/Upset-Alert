@@ -16,7 +16,12 @@
  * Only status === 401 may end a session. See session.js.
  */
 
-export const API = 'https://upsetalert-api.upsetalert.ca'
+/* Production by default. Expo inlines any EXPO_PUBLIC_* variable at build
+   time, so this stays a plain constant in the bundle rather than a runtime
+   lookup. The override exists for the web export the visual-diff harness
+   renders (pointed at a local backend) and, later, for aiming a build at
+   staging without editing this file. */
+export const API = process.env.EXPO_PUBLIC_API_URL || 'https://upsetalert-api.upsetalert.ca'
 
 let token = null
 let onUnauthorized = null
@@ -136,6 +141,14 @@ export const registerActivity = (body) =>
    state the UI has to show, not a missing value to default away. */
 export const listTournaments = () => request('/tournaments')
 export const getEntryStatus = () => request('/predictions/entry-status')
+
+/* Head-to-head between two Tennis Explorer slugs. The BACKEND caches this
+   (shared table, weekly TTL) because the underlying source is a scrape and can
+   be slow — so there is no client cache beyond useApi's, and no retry storm to
+   design around. Slugs come off draw_entries.te_slug, which is null when a
+   player never matched a TE profile; the caller must not offer H2H then. */
+export const getH2H = (p1, p2) =>
+  request(`/h2h?p1=${encodeURIComponent(p1)}&p2=${encodeURIComponent(p2)}`)
 
 /* Reconciliation. The server's view of what is running drifts from the
    device's — the app is killed without calling DELETE, a user swipes an

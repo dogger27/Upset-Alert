@@ -5,6 +5,7 @@ import {
   ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { Link } from 'expo-router'
 import { C, R, S, T, TOUCH } from './theme'
 
 export function Screen({
@@ -138,3 +139,28 @@ const u = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', paddingHorizontal: S.lg,
   },
 })
+
+
+/* A whole card that is also a link.
+ *
+ * THE VISUAL STYLE GOES ON AN INNER VIEW, never on the Pressable that
+ * `Link asChild` clones. A card style placed on that Pressable is dropped: the
+ * row loses its background, border and flex direction, collapsing to bare text
+ * with the chevron stranded on its own line. Three screens had it wrong at once
+ * — the leagues list, a league's draws, and the dashboard's compact rows — all
+ * written the same plausible way, so the correct shape lives here instead of
+ * being re-typed per screen.
+ *
+ * (Confirmed on the web renderer, which is what the visual-diff harness runs.
+ * The inner-View form is what the dashboard's working cards already do, so it
+ * is right on both targets either way.)
+ */
+export function CardLink({ href, style, children, pressedOpacity = 0.75 }) {
+  return (
+    <Link href={href} asChild>
+      <Pressable style={({ pressed }) => (pressed ? { opacity: pressedOpacity } : null)}>
+        <View style={style}>{children}</View>
+      </Pressable>
+    </Link>
+  )
+}

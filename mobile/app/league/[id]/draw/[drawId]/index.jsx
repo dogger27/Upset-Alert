@@ -65,10 +65,15 @@ export default function Standings() {
         {entries.length > 0 && (
           <View style={s.table}>
             <View style={[s.row, s.head]}>
-              <Text style={[s.rank, s.headText]}>#</Text>
-              <Text style={[s.who, s.headText]}>Player</Text>
-              <Text style={[s.num, s.headText]}>Correct</Text>
-              <Text style={[s.num, s.headText]}>Points</Text>
+              {/* numberOfLines on every header cell, without exception: these
+                  are FIXED-WIDTH columns, and "Correct" at 12pt uppercase is
+                  wider than 62pt, so it broke as "CORREC / T". Wording follows
+                  the dashboard's own — "26 right · 26 pts" — rather than being
+                  a second vocabulary for the same two numbers. */}
+              <Text style={[s.rank, s.headText]} numberOfLines={1}>#</Text>
+              <Text style={[s.who, s.headText]} numberOfLines={1}>Player</Text>
+              <Text style={[s.num, s.headText]} numberOfLines={1}>Right</Text>
+              <Text style={[s.num, s.headText]} numberOfLines={1}>Pts</Text>
             </View>
             {entries.map((e, i) => {
               const mine = me && e.user_id === me.id

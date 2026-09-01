@@ -11,9 +11,38 @@ import { StatusBar } from 'expo-status-bar'
 import { useFonts } from 'expo-font'
 import { ActivityIndicator, View } from 'react-native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
-import { AuthProvider } from '../auth'
+import { AuthProvider, useAuth } from '../auth'
 import { FONTS } from '../fonts'
 import { C, T } from '../theme'
+
+
+/* WHY THE NAVIGATOR WAITS FOR AUTH BOOT.
+ *
+ * expo-router mounts the target screen immediately, so a COLD LAUNCH STRAIGHT
+ * INTO A ROUTE — a deep link, a notification tap, and above all a Live Activity
+ * tap into a match — begins fetching before auth.boot() has read the Keychain
+ * and called setToken(). Those requests go out bare and come back 401.
+ *
+ * That is worse than a slow screen: useApi CACHES the rejection, and nothing
+ * re-runs it when the token later arrives, so the screen stays wrong until
+ * something forces a refetch. Observed on /draw/77, where every pick silently
+ * disappeared — the bracket rendered perfectly and simply showed no picks,
+ * which is the kind of wrong that reads as a design decision.
+ *
+ * Only 'boot' waits. 'signedout' and 'unreachable' must render, or the sign-in
+ * screen and the offline notice would have nowhere to appear.
+ */
+function Gate({ children }) {
+  const { phase } = useAuth()
+  if (phase === 'boot') {
+    return (
+      <View style={{ flex: 1, backgroundColor: C.bg, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color={C.clay} />
+      </View>
+    )
+  }
+  return children
+}
 
 export default function RootLayout() {
   const [ready, fontError] = useFonts(FONTS)
@@ -46,6 +75,7 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <AuthProvider>
         <StatusBar style="light" />
+        <Gate>
         <Stack
           screenOptions={{
             headerStyle: { backgroundColor: C.bg },
@@ -63,6 +93,7 @@ export default function RootLayout() {
           <Stack.Screen name="sign-in" options={{ headerShown: false }} />
           <Stack.Screen name="draw/[id]" options={{ title: 'Draw' }} />
         </Stack>
+        </Gate>
       </AuthProvider>
     </SafeAreaProvider>
   )

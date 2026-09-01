@@ -26,6 +26,7 @@
  * that does.
  */
 
+import { Platform } from 'react-native'
 import * as SecureStore from 'expo-secure-store'
 
 const KEY = 'upsetalert.session.jwt'
@@ -38,6 +39,22 @@ const OPTS = {
 // saying out loud rather than silently failing to persist a session.
 const MAX_BYTES = 2048
 
+/* expo-secure-store ships `export default {}` for web — a browser has no
+   Keychain, so every call below would throw and the try/catch would quietly
+   demote the session to memory-only, lost on the next refresh. The web export
+   is not a shipping target (it backs prerendering and the visual-diff harness),
+   but "cannot persist" is a thing to state rather than to discover, so the
+   fallback is written down.
+
+   localStorage is NOT the Keychain's equal and is not pretended to be: any
+   script on the origin can read it, and it does not survive a cleared profile.
+   Acceptable here only because the web build is a development artefact. */
+const isWeb = Platform.OS === 'web'
+
+function webStore() {
+  try { return globalThis.localStorage ?? null } catch { return null }
+}
+
 /* Every call is wrapped: the Keychain is allowed to be unavailable (a
    simulator quirk, a device in a strange state) and that must degrade to an
    in-memory session, never to a crash on launch. */
@@ -49,6 +66,7 @@ export async function saveToken(token) {
     return false
   }
   try {
+    if (isWeb) { webStore()?.setItem(KEY, token); return !!webStore() }
     await SecureStore.setItemAsync(KEY, token, OPTS)
     return true
   } catch (e) {
@@ -59,6 +77,7 @@ export async function saveToken(token) {
 
 export async function loadToken() {
   try {
+    if (isWeb) return webStore()?.getItem(KEY) ?? null
     return await SecureStore.getItemAsync(KEY, OPTS)
   } catch (e) {
     console.warn('[session] could not read token:', e.message)
@@ -68,6 +87,7 @@ export async function loadToken() {
 
 export async function clearToken() {
   try {
+    if (isWeb) { webStore()?.removeItem(KEY); return }
     await SecureStore.deleteItemAsync(KEY, OPTS)
   } catch (e) {
     console.warn('[session] could not clear token:', e.message)

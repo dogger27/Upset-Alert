@@ -19,6 +19,13 @@ export function sideName(players, side) {
   return ps.map(p => p.entry_name || p.name || 'TBD').join(' / ')
 }
 
+/* The flag codes for a side, in the order the names are joined — so doubles
+   shows both. Deliberately parallel to sideName: if one shows two names, the
+   other must offer two flags or they cannot be lined up. */
+export function sideFlags(players, side) {
+  return (players || []).filter(p => p.side === side).map(p => p.nationality || null)
+}
+
 export function sideSeed(players, side) {
   const p = (players || []).find(x => x.side === side && x.seed)
   return p?.seed ?? null
