@@ -1,4 +1,5 @@
 import { matchStarted } from '../utils/score'
+import { shortRound } from '../utils/rounds'
 /**
  * BracketView — full tournament bracket.
  *
@@ -676,7 +677,7 @@ export default function BracketView({ tournament, matches, players, picks, onPic
           return (
             <div key={rn} style={{ display: 'flex', flexShrink: 0 }}>
               <div className="round-label" style={{ width: colW }}>
-                {rounds[rn][0]?.round_name || `Round ${rn}`}
+                {shortRound(rounds[rn][0]?.round_name, rn)}
               </div>
               {i < visibleRounds.length - 1 && <div style={{ width: COL_GAP }} />}
             </div>

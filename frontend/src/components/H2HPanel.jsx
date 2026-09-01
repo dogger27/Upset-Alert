@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { shortRound } from '../utils/rounds'
 import { createPortal } from 'react-dom'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { getH2H, getPlayerForm } from '../api/players'
@@ -613,7 +614,7 @@ export default function H2HPanel({
           {/* Reads off `view`, like everything else, so the counter can't
               advance ahead of the match whose data is on screen. */}
           <span className="h2h-round-name">
-            <span className="h2h-round-label">{match?.round_name || ''}</span>
+            <span className="h2h-round-label">{shortRound(match?.round_name)}</span>
             {matchOrder?.[match?.id] != null && matchTotal > 0 && (
               <span className="h2h-match-pos">
                 Match {matchOrder[match.id]} / {matchTotal}

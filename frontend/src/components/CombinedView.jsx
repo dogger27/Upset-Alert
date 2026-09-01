@@ -28,6 +28,7 @@ import useFlashOnChange from '../hooks/useFlashOnChange'
 import { nationalityIso2 } from '../utils/flags'
 import './CombinedView.css'
 import { parseSet, scoreNodes, liveScoreNodes, expectedStartLabel, matchStarted } from '../utils/score'
+import { shortRound } from '../utils/rounds'
 import { useAuth } from '../store/auth'
 
 // Upset bell with the same hover tooltip as BracketView's (portal-rendered,
@@ -1145,8 +1146,8 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
         <div className="cv-labels-track" style={scrubbing ? SCRUB_SHIFT : undefined}>
           {visible.map((c, i) => {
             const label = c === 0
-              ? (R[0][0]?.round_name || 'Round 1')
-              : c < N ? (R[c][0]?.round_name || `Round ${c + 1}`) : 'Champion'
+              ? shortRound(R[0][0]?.round_name, 1)
+              : c < N ? shortRound(R[c][0]?.round_name, c + 1) : 'Champion'
             // A heading belongs to its column: the one whose column is leaving
             // fades out, the one whose column is arriving fades in. Without
             // this the whole row swapped in a single frame at commit, which is
