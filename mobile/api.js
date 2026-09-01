@@ -110,3 +110,8 @@ export const getRoundScores = (leagueId, tournamentId) =>
    is_bye, status and scores. */
 export const getDraw = (tournamentId) => request(`/tournaments/${tournamentId}/draw`)
 export const getPredictions = (tournamentId) => request(`/predictions/${tournamentId}`)
+
+/* Device registration. install_id is the identity, not device_token — see
+   install.js for why keying on the token duplicates rows. */
+export const registerDevice = (body) =>
+  request('/app/devices', { method: 'POST', body })

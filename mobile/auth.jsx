@@ -17,8 +17,19 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { getAppConfig, getMe, login, setToken, setUnauthorizedHandler } from './api'
 import { clearToken, loadToken, saveToken } from './session'
 import { invalidate } from './useApi'
+import { registerThisDevice } from './device'
 
 const Ctx = createContext(null)
+
+/* Registering the device must never be able to break signing in.
+   It needs a session (the row is owned by a user), it can fail for reasons
+   that have nothing to do with auth — no entitlement, refused permission, a
+   flaky network — and none of those should leave someone staring at a login
+   form. So: not awaited, and it swallows its own errors. */
+function announceDevice() {
+  registerThisDevice().catch(e =>
+    console.warn('[auth] device registration skipped:', e.message))
+}
 
 export function useAuth() {
   const v = useContext(Ctx)
@@ -44,6 +55,7 @@ export function AuthProvider({ children }) {
     try {
       setMe(await getMe())
       setPhase('ready')
+      announceDevice()
     } catch (e) {
       if (e.status === 401) {
         await clearToken()
@@ -64,6 +76,7 @@ export function AuthProvider({ children }) {
     await saveToken(access_token)
     setMe(await getMe())
     setPhase('ready')
+    announceDevice()
   }, [])
 
   const signOut = useCallback(async () => {
