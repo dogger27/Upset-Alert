@@ -7,7 +7,10 @@ pydantic-settings>=2.6.0
 python-jose[cryptography]>=3.3.0
 bcrypt>=4.0.0
 python-multipart>=0.0.12
-httpx>=0.27.0
+# APNs speaks HTTP/2 only, and the h2 extra is invisible in a file that is
+# read by hand — so it is named explicitly as well as via the extra.
+httpx[http2]>=0.27.0
+h2>=4.1.0
 beautifulsoup4>=4.12.0
 apscheduler>=3.10.0
 aiosqlite>=0.20.0
