@@ -68,6 +68,13 @@ struct MatchActivityAttributes: ActivityAttributes {
     var p2_name: String
     var p1_seed: Int?
     var p2_seed: Int?
+    /// The INFERRED seed — where the player sits once the whole field is
+    /// ordered. Optional in both directions on purpose: a payload from a server
+    /// that predates these decodes fine, and a server that sends them to an
+    /// older build is simply ignored. Getting that wrong is not a crash, it is
+    /// an activity that silently stops updating while APNs still returns 200.
+    var p1_draw_rank: Int?
+    var p2_draw_rank: Int?
     var round_name: String
     var event_label: String
 }
