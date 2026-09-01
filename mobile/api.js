@@ -136,3 +136,11 @@ export const registerActivity = (body) =>
    state the UI has to show, not a missing value to default away. */
 export const listTournaments = () => request('/tournaments')
 export const getEntryStatus = () => request('/predictions/entry-status')
+
+/* Reconciliation. The server's view of what is running drifts from the
+   device's — the app is killed without calling DELETE, a user swipes an
+   activity away, a new build replaces the one that owned it — and this is the
+   only thing that puts them back in step. */
+export const listActivities = () => request('/app/live-activities')
+export const endActivity = (activityId) =>
+  request(`/app/live-activities/${encodeURIComponent(activityId)}`, { method: 'DELETE' })

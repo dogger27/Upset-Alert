@@ -39,6 +39,18 @@ export function attributesType() {
   }
 }
 
+/* What ActivityKit is actually showing. [] where unavailable, which is the
+   safe answer: reconciliation then does nothing rather than deleting rows on
+   the strength of a question it could not ask. */
+export function runningActivities() {
+  if (!native?.runningActivities) return []
+  try {
+    return native.runningActivities() || []
+  } catch {
+    return []
+  }
+}
+
 export async function startListening() {
   if (native) await native.startListening()
 }

@@ -113,23 +113,35 @@ struct MatchLockScreenView: View {
     @ViewBuilder private func setScores(side: Int) -> some View {
         let row = (state.games?.indices.contains(side - 1) ?? false)
             ? state.games![side - 1] : []
-        HStack(spacing: 7) {
+        HStack(spacing: 6) {
             ForEach(Array(row.enumerated()), id: \.offset) { _, g in
                 Text(g.isEmpty ? "–" : g)
                     .font(.system(.subheadline, design: .rounded))
                     .fontWeight(.semibold)
                     .foregroundColor(ink)
                     .monospacedDigit()
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
             }
             // The current point sits apart from the set scores, and only while
             // the feed actually has one — ESPN-sourced matches never do.
+            //
+            // fixedSize IS THE FIX, not the width. By the fifth set the row is
+            // a name plus five set scores plus this, and SwiftUI resolves the
+            // squeeze by WRAPPING rather than truncating — so "15" came out as
+            // a 1 above a 5, which reads as two separate numbers. lineLimit
+            // alone would not have helped; the text has to refuse to be
+            // compressed at all, and let the name (which has
+            // minimumScaleFactor) give up the space instead.
             if let point = state.point, point.indices.contains(side - 1), !isOver {
                 Text(point[side - 1])
                     .font(.system(.subheadline, design: .rounded))
                     .fontWeight(.bold)
                     .foregroundColor(accent)
                     .monospacedDigit()
-                    .frame(minWidth: 24, alignment: .trailing)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .frame(minWidth: 26, alignment: .trailing)
             }
         }
     }

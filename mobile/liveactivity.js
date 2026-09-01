@@ -12,11 +12,11 @@
  */
 
 import {
-  addListener, attributesType, capabilities, isAvailable, startActivity,
-  startListening,
+  addListener, attributesType, capabilities, isAvailable, runningActivities,
+  startActivity, startListening,
 } from './modules/live-activity'
 import { getInstallId } from './install'
-import { registerActivity, registerPushToStart } from './api'
+import { endActivity, listActivities, registerActivity, registerPushToStart } from './api'
 
 let started = false
 const subs = []
@@ -58,7 +58,39 @@ export async function startLiveActivityBridge(contentVersion = 1) {
 
   await startListening()
   started = true
+
+  // Not awaited: reconciliation is housekeeping, and a Lock Screen that works
+  // must not wait on it.
+  reconcile(install_id, contentVersion)
+    .catch(e => console.warn('[LA] reconcile failed:', e.message))
+
   return { ok: true, caps, attributes_type }
+}
+
+/* Put the server's view and the device's back in step.
+ *
+ * Both sides go stale in ways the other cannot see. The app is killed without
+ * calling DELETE; the user swipes an activity away; a new build replaces the
+ * one that owned it — which is exactly what happened on the first install of
+ * the dashboard build, leaving a row the dispatcher would have pushed at
+ * forever.
+ *
+ * Deletions only. A running activity the server does not know about is NOT
+ * re-registered here, because its push token belongs to a registration we no
+ * longer have and posting a placeholder would create a row the dispatcher
+ * cannot use. pushTokenUpdates yields for every running activity when the
+ * listener starts, and that path registers it properly.
+ */
+async function reconcile(install_id, contentVersion) {
+  const onDevice = new Set(runningActivities().map(a => a.activityId))
+  const { activities = [] } = (await listActivities()) || {}
+  const stale = activities.filter(a => !onDevice.has(a.activity_id))
+  for (const a of stale) {
+    await endActivity(a.activity_id)
+      .catch(e => console.warn('[LA] could not end', a.activity_id, e.message))
+  }
+  if (stale.length) console.log(`[LA] reconciled: ended ${stale.length} stale`)
+  return { onDevice: onDevice.size, ended: stale.length }
 }
 
 export function liveActivityStarted() { return started }
