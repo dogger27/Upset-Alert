@@ -520,7 +520,10 @@ async def offer(
             p1_entry_id=m.player1_id,
             p1_seed=getattr(p1, "seed", None),
             p2_seed=getattr(p2, "seed", None),
-            round_name=d.round_name(m.round_number) if d else "",
+            # COMPACT on the Lock Screen: "Round of 128" is a sentence where
+            # there is room for a label, and it crowded the event name off the
+            # header row. Draw.round_name() keeps the long form for the site.
+            round_name=compact_round(d.round_name(m.round_number)) if d else "",
             event_label=getattr(d, "name", "") or "",
         )
         out["content_state"] = build_content_state(

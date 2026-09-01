@@ -23,6 +23,7 @@ import { getDraw, getPredictions } from '../../../../../api'
 import { useApi } from '../../../../../useApi'
 import { EntryChip, PosBadge } from '../../../../../cards'
 import { computeDrawRanks } from '../../../../../drawRanks'
+import { shortRound } from '../../../../../rounds'
 import { scoreLine } from '../../../../../score'
 import { slotLabel } from '../../../../../scoring'
 import { C } from '../../../../../theme'
@@ -95,7 +96,10 @@ export default function Picks() {
         {rounds.map(([num, matches]) => (
           <View key={num} style={s.round}>
             <Text style={s.roundName}>
-              {matches[0]?.round_name || `Round ${num}`}
+              {/* R128, not "Round of 128" — the same scoreboard forms the
+                  draw's round strip uses, so one draw does not name its rounds
+                  two different ways depending on which screen you are on. */}
+              {shortRound(matches[0]?.round_name, num)}
             </Text>
             <View style={s.group}>
               {matches.map(m => (
