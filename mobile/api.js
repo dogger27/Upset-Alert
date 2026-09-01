@@ -129,3 +129,10 @@ export const registerPushToStart = (install_id, attributes_type, token) =>
 
 export const registerActivity = (body) =>
   request('/app/live-activities', { method: 'POST', body })
+
+/* Dashboard.
+   entry-status returns {tournament_id: 'complete' | 'partial'} and ONLY for
+   draws with at least one pick — absent means not entered, which is a third
+   state the UI has to show, not a missing value to default away. */
+export const listTournaments = () => request('/tournaments')
+export const getEntryStatus = () => request('/predictions/entry-status')

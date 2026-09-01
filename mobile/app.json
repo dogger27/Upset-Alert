@@ -15,7 +15,8 @@
       },
       "config": {
         "usesNonExemptEncryption": false
-      }
+      },
+      "appleTeamId": "8MGTLRPKYF"
     },
     "android": {
       "adaptiveIcon": {
@@ -36,7 +37,8 @@
       "expo-router",
       "expo-notifications",
       "expo-dev-client",
-      "@bacons/apple-targets"
+      "@bacons/apple-targets",
+      "expo-font"
     ],
     "scheme": "upsetalert",
     "owner": "dogger27",

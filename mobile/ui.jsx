@@ -1,32 +1,28 @@
-/* The handful of components every screen needs. Not a design system — just the
-   pieces that would otherwise be copy-pasted four times and drift. */
+/* The shared pieces. Not a design system for its own sake — these are the
+   components that would otherwise be copy-pasted into six screens and drift. */
 
 import {
   ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { C, TOUCH } from './theme'
+import { C, R, S, T, TOUCH } from './theme'
 
 export function Screen({
-  children, scroll = true, edges = ['top', 'left', 'right'], onRefresh, refreshing,
+  children, scroll = true, edges = ['top', 'left', 'right'], onRefresh, refreshing, style,
 }) {
   const Body = scroll ? ScrollView : View
   const extra = scroll
     ? {
-        contentContainerStyle: u.body,
-        // Pull-to-refresh only where a refresher was given. A standings screen
-        // is checked over and over during a match, and the alternative is
-        // making people leave the screen and come back.
+        contentContainerStyle: [u.body, style],
+        showsVerticalScrollIndicator: false,
         refreshControl: onRefresh ? (
           <RefreshControl
-            refreshing={!!refreshing}
-            onRefresh={onRefresh}
-            tintColor={C.muted}
-            colors={[C.accent]}
+            refreshing={!!refreshing} onRefresh={onRefresh}
+            tintColor={C.muted} colors={[C.clay]}
           />
         ) : undefined,
       }
-    : { style: u.body }
+    : { style: [u.body, style] }
   return (
     <SafeAreaView style={u.safe} edges={edges}>
       <Body {...extra}>{children}</Body>
@@ -34,55 +30,83 @@ export function Screen({
   )
 }
 
-export function Card({ children, style }) {
-  return <View style={[u.card, style]}>{children}</View>
-}
-
-export function Title({ children, style }) {
-  return <Text style={[u.title, style]}>{children}</Text>
-}
-
-export function Muted({ children, style }) {
-  return <Text style={[u.muted, style]}>{children}</Text>
-}
-
-export function Row({ label, value }) {
+export function Card({ children, style, tint }) {
   return (
-    <View style={u.row}>
-      <Text style={u.rowLabel}>{label}</Text>
-      <Text style={u.rowValue}>{value}</Text>
+    <View style={[u.card, style]}>
+      {tint ? <View style={[u.tint, { backgroundColor: tint }]} /> : null}
+      {children}
     </View>
   )
 }
 
-export function Button({ label, onPress, busy, quiet }) {
+/* An all-caps label above a group. Condensed and letterspaced so it reads as a
+   sign rather than as text someone forgot to sentence-case. */
+export function Eyebrow({ children, color = C.muted, style }) {
+  return <Text style={[T.eyebrow, { color, textTransform: 'uppercase' }, style]}>{children}</Text>
+}
+
+export function Title({ children, style }) {
+  return <Text style={[T.h2, { color: C.ink }, style]}>{children}</Text>
+}
+
+export function Muted({ children, style, numberOfLines }) {
+  return (
+    <Text style={[T.small, { color: C.muted }, style]} numberOfLines={numberOfLines}>
+      {children}
+    </Text>
+  )
+}
+
+export function Row({ label, value, valueColor = C.ink }) {
+  return (
+    <View style={u.row}>
+      <Text style={[T.small, { color: C.muted }]}>{label}</Text>
+      <Text style={[T.smallMed, { color: valueColor, flexShrink: 1, textAlign: 'right' }]}>
+        {value}
+      </Text>
+    </View>
+  )
+}
+
+/* A small status chip. `tone` picks the colour; the text is never the only
+   signal, because colour alone fails for a good number of people. */
+export function Pill({ children, tone = 'muted' }) {
+  const fg = { open: C.clay, live: C.greenLit, muted: C.muted, bad: C.bad }[tone] || C.muted
+  return (
+    <View style={[u.pill, { borderColor: fg }]}>
+      <Text style={[T.tiny, { color: fg, textTransform: 'uppercase', letterSpacing: 0.8 }]}>
+        {children}
+      </Text>
+    </View>
+  )
+}
+
+export function Button({ label, onPress, busy, quiet, tone = 'clay' }) {
+  const bg = quiet ? 'transparent' : (tone === 'clay' ? C.clay : C.green)
   return (
     <Pressable
       style={({ pressed }) => [
-        quiet ? u.btnQuiet : u.btn,
-        pressed && { opacity: 0.7 },
+        u.btn,
+        { backgroundColor: bg, borderColor: quiet ? C.borderOn : bg },
+        pressed && { opacity: 0.75 },
       ]}
-      onPress={onPress}
-      disabled={busy}
-      accessibilityRole="button"
+      onPress={onPress} disabled={busy} accessibilityRole="button"
     >
-      {busy ? <ActivityIndicator color="#fff" />
-            : <Text style={quiet ? u.btnQuietText : u.btnText}>{label}</Text>}
+      {busy ? <ActivityIndicator color={quiet ? C.muted : '#fff'} />
+            : <Text style={[T.bodyBold, { color: quiet ? C.inkBody : '#fff' }]}>{label}</Text>}
     </Pressable>
   )
 }
 
 export function Loading() {
   return (
-    <View style={u.centre}>
-      <ActivityIndicator color={C.accent} size="large" />
-    </View>
+    <View style={u.centre}><ActivityIndicator color={C.clay} size="large" /></View>
   )
 }
 
 /* An error that says which KIND of failure it was. "Couldn't load" with no
-   distinction between a dead network and a real server error is the thing that
-   makes an app feel broken rather than offline. */
+   distinction between a dead network and a real server error is what makes an
+   app feel broken rather than offline. */
 export function ErrorNote({ error, onRetry }) {
   if (!error) return null
   const offline = error.offline
@@ -97,25 +121,20 @@ export function ErrorNote({ error, onRetry }) {
 
 const u = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
-  body: { padding: 16, gap: 12, flexGrow: 1 },
+  body: { padding: S.lg, gap: S.md, flexGrow: 1, paddingBottom: S.xxl },
   centre: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
   card: {
-    backgroundColor: C.card, borderRadius: 14, padding: 16,
-    borderWidth: 1, borderColor: C.border, gap: 10,
+    backgroundColor: C.card, borderRadius: R.lg, padding: S.lg,
+    borderWidth: 1, borderColor: C.border, gap: S.sm, overflow: 'hidden',
   },
-  title: { color: C.ink, fontWeight: '800', fontSize: 16 },
-  muted: { color: C.muted, lineHeight: 20 },
-  row: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
-  rowLabel: { color: C.muted },
-  rowValue: { color: C.ink, fontWeight: '600', flexShrink: 1, textAlign: 'right' },
+  tint: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4 },
+  row: { flexDirection: 'row', justifyContent: 'space-between', gap: S.md, alignItems: 'baseline' },
+  pill: {
+    borderWidth: 1, borderRadius: R.pill,
+    paddingHorizontal: S.sm, paddingVertical: 3, alignSelf: 'flex-start',
+  },
   btn: {
-    backgroundColor: C.green, borderRadius: 10, height: TOUCH,
-    alignItems: 'center', justifyContent: 'center',
+    borderRadius: R.md, height: TOUCH, borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center', paddingHorizontal: S.lg,
   },
-  btnText: { color: '#fff', fontWeight: '800' },
-  btnQuiet: {
-    height: TOUCH, borderRadius: 10, borderWidth: 1, borderColor: C.border,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  btnQuietText: { color: C.muted, fontWeight: '700' },
 })
