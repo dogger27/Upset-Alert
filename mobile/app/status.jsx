@@ -23,8 +23,22 @@ export default function Status() {
       <Card>
         <Title>Connection</Title>
         <Row label="API reachable" value={config ? 'yes' : 'no'} />
-        <Row label="Live Activities"
-             value={config ? (config.live_activities ? 'on' : 'off (no key yet)') : '—'} />
+        {/* "off" has two very different causes and they must not read the
+            same. No bundle_id means the server has no APNs key configured at
+            all; a bundle_id with live_activities false means the key is there
+            and the feature is deliberately held off until a dry run has been
+            watched through a tournament day. Reporting the second as "no key"
+            sends anyone debugging it to look in the wrong place. */}
+        <Row
+          label="Live Activities"
+          value={
+            !config ? '—'
+              : config.live_activities ? 'on'
+              : config.bundle_id ? 'off (key ready, not enabled)'
+              : 'off (no key configured)'
+          }
+        />
+        {config?.bundle_id ? <Row label="Bundle" value={config.bundle_id} /> : null}
         <Row label="Signed in as" value={me?.username || '—'} />
       </Card>
 
