@@ -552,8 +552,18 @@ async def reap() -> int:
             select(LiveActivity).where(LiveActivity.state == STATE_ACTIVE)
         )).scalars().all()
         stale_ids, done_ids = [], []
+
+        def _aware(dt):
+            # SQLite hands back NAIVE datetimes regardless of what was written,
+            # so comparing one to an aware `cutoff` raises and takes the whole
+            # reaper round with it. Same helper and same convention as
+            # sofa_compare._aware — stored times are UTC, they just lose the
+            # tzinfo on the way through the driver.
+            return None if dt is None else (dt if dt.tzinfo
+                                            else dt.replace(tzinfo=timezone.utc))
+
         for la in rows:
-            if (la.updated_at or la.created_at) < cutoff:
+            if (_aware(la.updated_at) or _aware(la.created_at)) < cutoff:
                 # ActivityKit's own ceiling is a few hours; past this the
                 # activity is gone from the device whatever we believe.
                 stale_ids.append(la.id)
