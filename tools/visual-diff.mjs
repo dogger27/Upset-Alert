@@ -44,6 +44,11 @@ const SCREENS = [
   { name: 'called',    mobile: '/draw/77', pwa: '/tournaments/77', appClick: 'WHO CALLED IT' },
   // Signed OUT on purpose: this screen had two invisible-token bugs at once.
   { name: 'signin',    mobile: '/sign-in', pwa: '/login', noAuth: true },
+  { name: 'picks',     mobile: '/league/10/draw/77/picks', pwa: '/tournaments/77' },
+  /* NOT '/status': Metro's dev server answers that path itself with
+     "packager-status:running" and never reaches the app. Reached by tapping
+     the tab instead. */
+  { name: 'status',    mobile: '/', pwa: '/', appClick: 'Status' },
 ]
 
 const only = process.argv.slice(2).filter(a => !a.startsWith('-'))
