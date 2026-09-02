@@ -27,6 +27,34 @@ import { useApi } from './useApi'
 const THUMB = 26
 const TICK = { break: C.warn, set: C.info, match: C.lossMark }
 
+/* The draw page's caller. A bracket match is not a schedule row, but the
+   sheet reads one shape — so the match is dressed as a row: its two entrants
+   as sides, the winner as a side index, its live and final scores as they
+   are. draw_entry_id is the entrant's own id, which is what the history
+   endpoint's player1_id names, so orientation lines up by construction. */
+export function entryFromMatch(m, drawId, drawRanks) {
+  if (!m) return null
+  const side = (p, sd) => p ? [{
+    side: sd, position: 1, name: p.name, entry_name: p.name, seed: p.seed ?? null,
+    nationality: p.nationality ?? null, draw_entry_id: p.id,
+    draw_rank: drawRanks?.get?.(p.id) ?? null, te_slug: p.te_slug ?? null,
+  }] : []
+  const live = !m.winner && !!(m.live_scores || m.live_point)
+  return {
+    id: `m${m.id}`, draw_id: drawId, match_id: m.id, discipline: 'singles',
+    status: m.winner || m.status === 'completed' ? 'completed' : live ? 'live' : 'scheduled',
+    players: [...side(m.player1, 'a'), ...side(m.player2, 'b')],
+    winner_side: m.winner ? (m.player1 && m.winner.id === m.player1.id ? 0 : 1) : null,
+    scores: m.scores ?? null, live_scores: m.live_scores ?? null, live_point: m.live_point ?? null,
+  }
+}
+
+/* The site's rule for "this match has a score to show": anything with a
+   result, a live feed or a scoreline, and never a bye. */
+export function matchStarted(m) {
+  return !!m && !m.is_bye && !!(m.winner || m.live_scores || m.live_point || m.scores || m.status === 'completed')
+}
+
 export function ScoreHistorySheet({ visible, onClose, entry }) {
   // A row with no bracket match — qualifying singles, doubles — keeps its
   // history under its own schedule-entry id; the response shape is identical.
@@ -203,20 +231,23 @@ function Stats({ stats, pos, topIsP1, left, right }) {
   return (
     <View style={s.stats}>
       <View style={s.statNames}>
-        <Text style={[s.statName, { color: C.clay }]} numberOfLines={1}>{left}</Text>
-        <Text style={[s.statName, { color: C.info, textAlign: 'right' }]} numberOfLines={1}>{right}</Text>
+        <Text style={[s.statName, { color: C.h2hP1 }]} numberOfLines={1}>{left}</Text>
+        <Text style={[s.statName, { color: C.h2hP2, textAlign: 'right' }]} numberOfLines={1}>{right}</Text>
       </View>
+      {/* ONE LINE PER STATISTIC, the site's grid: number, bar, label, bar,
+          number. The bars grow from the label outward, in each player's own
+          colour, so name, bar and column read as one. */}
       {rows.map(([label, lw, lt, rw, rt]) => (
         <View key={label} style={s.statRow}>
-          <View style={s.statHalf}>
-            <Text style={s.statNum}>{lt ? `${pct(lw, lt)}%` : '—'}<Text style={s.statSmall}>{lt ? ` (${lw}/${lt})` : ''}</Text></Text>
-            <View style={s.barL}><View style={[s.barFill, { backgroundColor: C.clay, width: `${lt ? pct(lw, lt) : 0}%` }]} /></View>
-          </View>
-          <Text style={s.statLabel}>{label}</Text>
-          <View style={s.statHalf}>
-            <View style={s.barR}><View style={[s.barFill, { backgroundColor: C.info, width: `${rt ? pct(rw, rt) : 0}%` }]} /></View>
-            <Text style={[s.statNum, { textAlign: 'right' }]}>{rt ? `${pct(rw, rt)}%` : '—'}<Text style={s.statSmall}>{rt ? ` (${rw}/${rt})` : ''}</Text></Text>
-          </View>
+          <Text style={s.statNum} numberOfLines={1}>
+            {lt ? `${pct(lw, lt)}%` : '—'}<Text style={s.statSmall}>{lt ? ` (${lw}/${lt})` : ''}</Text>
+          </Text>
+          <View style={s.barL}><View style={[s.barFill, { backgroundColor: C.h2hP1, width: `${lt ? pct(lw, lt) : 0}%` }]} /></View>
+          <Text style={s.statLabel} numberOfLines={1}>{label}</Text>
+          <View style={s.barR}><View style={[s.barFill, { backgroundColor: C.h2hP2, width: `${rt ? pct(rw, rt) : 0}%` }]} /></View>
+          <Text style={[s.statNum, { textAlign: 'right' }]} numberOfLines={1}>
+            {rt ? `${pct(rw, rt)}%` : '—'}<Text style={s.statSmall}>{rt ? ` (${rw}/${rt})` : ''}</Text>
+          </Text>
         </View>
       ))}
     </View>
@@ -241,8 +272,8 @@ const s = StyleSheet.create({
   err: { ...T.small, color: C.muted, textAlign: 'center' },
   scrubRow: { flexDirection: 'row', alignItems: 'center', gap: S.sm, marginTop: S.xs },
   names: { width: 28, height: 44, justifyContent: 'space-between' },
-  nameTop: { ...T.tiny, color: C.muted, fontFamily: 'Archivo_700Bold' },
-  nameBot: { ...T.tiny, color: C.muted, fontFamily: 'Archivo_700Bold' },
+  nameTop: { ...T.tiny, color: C.h2hP1, fontFamily: 'Archivo_700Bold' },
+  nameBot: { ...T.tiny, color: C.h2hP2, fontFamily: 'Archivo_700Bold' },
   track: { flex: 1, height: 44, justifyContent: 'center' },
   rail: { height: 4, borderRadius: 2, backgroundColor: C.border },
   fill: { position: 'absolute', left: 0, height: 4, borderRadius: 2, backgroundColor: C.greenLit },
@@ -257,15 +288,14 @@ const s = StyleSheet.create({
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   legendBox: { width: 8, height: 8, borderRadius: 2 },
   legendText: { ...T.tiny, color: C.faint },
-  stats: { gap: 6, marginTop: S.xs },
+  stats: { gap: 8, marginTop: S.xs },
   statNames: { flexDirection: 'row', justifyContent: 'space-between', gap: S.sm },
   statName: { ...T.smallMed, flex: 1 },
-  statRow: { gap: 2 },
-  statHalf: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  statNum: { ...T.tiny, color: C.ink, minWidth: 74 },
-  statSmall: { ...T.tiny, color: C.faint },
-  statLabel: { ...T.tiny, color: C.faint, textAlign: 'center', lineHeight: leading(14) },
-  barL: { flex: 1, height: 6, borderRadius: 3, backgroundColor: C.border, overflow: 'hidden', alignItems: 'flex-end' },
-  barR: { flex: 1, height: 6, borderRadius: 3, backgroundColor: C.border, overflow: 'hidden' },
-  barFill: { height: 6, borderRadius: 3 },
+  statRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  statNum: { ...T.tiny, color: C.ink, fontFamily: 'Archivo_700Bold', width: 78 },
+  statSmall: { ...T.tiny, color: C.faint, fontFamily: 'Archivo_400Regular' },
+  statLabel: { ...T.tiny, color: C.faint, textAlign: 'center', flexShrink: 1 },
+  barL: { flex: 1, height: 5, borderRadius: 3, backgroundColor: C.border, overflow: 'hidden', alignItems: 'flex-end' },
+  barR: { flex: 1, height: 5, borderRadius: 3, backgroundColor: C.border, overflow: 'hidden' },
+  barFill: { height: 5, borderRadius: 3 },
 })

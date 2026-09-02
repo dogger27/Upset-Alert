@@ -69,3 +69,33 @@ export function winnerSideOf(e) {
   for (let i = 0; i < setCount(sets); i++) { if (setWon(sets, i, 0, false)) x++; if (setWon(sets, i, 1, false)) y++ }
   return x === y ? null : (x > y ? 0 : 1)
 }
+
+/* ONE LINE, NOT COLUMNS — the draw page's score, ported from the site's
+   scoreNodes: "6-4 7-5 6⁷-7 6-1". The tiebreak shows for the set's LOSER only,
+   exactly the detail that drifts between two copies, and RN has no <sup>, so
+   the points are Unicode superscript digits — real characters that never
+   wrap away from their game count. A walkover has no games to format and a
+   retirement is said once, at the end. */
+const SUP = { 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' }
+const sup = n => String(n).split('').map(c => SUP[c] ?? c).join('')
+
+export function scoreLine(scores) {
+  if (!scores || scores.length < 2) return null
+  const [a, b] = scores
+  if ([a, b].some(arr => arr?.some(v => /^w\/?o$/i.test(String(v ?? '').trim())))) return 'walkover'
+  const n = Math.max(a?.length ?? 0, b?.length ?? 0)
+  const sets = []
+  let retired = false
+  for (let i = 0; i < n; i++) {
+    if (/r$/i.test(a?.[i] ?? '') || /r$/i.test(b?.[i] ?? '')) retired = true
+    const A = parseSet(a?.[i]), B = parseSet(b?.[i])
+    if (A.g === '' && B.g === '') continue
+    const gA = Number(A.g), gB = Number(B.g)
+    const loserIsA = A.tb != null && (B.tb == null || gA < gB)
+    if (A.tb != null && loserIsA) sets.push(`${A.g}${sup(A.tb)}-${B.g}`)
+    else if (B.tb != null && !loserIsA) sets.push(`${A.g}-${B.g}${sup(B.tb)}`)
+    else sets.push(`${A.g}-${B.g}`)
+  }
+  if (!sets.length) return null
+  return sets.join('  ') + (retired ? ' (ret.)' : '')
+}
