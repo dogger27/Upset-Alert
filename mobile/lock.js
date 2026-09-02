@@ -38,3 +38,27 @@ export function lockLabel(t, now = Date.now()) {
   if (hrs >= 1) return mk(`${hrs}h ${mins % 60}m`, 'to lock', hrs < 6)
   return mk(`${mins}m`, 'to lock', true)
 }
+
+
+/* WHEN ANOTHER MEMBER'S PICKS CAN BE SEEN — the site's sidebar toast, and the
+   server's predictions_visible, in one sentence.
+
+   Under the original rule nothing can change after the first ball, so the
+   server never hides a bracket: the only wait is for picking to close, and
+   that is a time the sheet can name. Under match-by-match ("r1_progressive"
+   in the admin panel) picks stay editable through round one, so a visible
+   bracket is a bracket to copy: the server withholds it until EVERY
+   first-round match has started — an hour that depends on the tennis and
+   cannot be named in advance. Null once the draw is active or finished. */
+export function othersPicksNote(t) {
+  if (!t || t.status === 'active' || t.status === 'completed') return null
+  if (t.pick_lock_mode === 'r1_progressive') {
+    return 'Members’ picks open once every first-round match has started.'
+  }
+  if (!t.closing_time) return 'Members’ picks open after pick selection closes.'
+  const at = new Date(t.closing_time.endsWith('Z') ? t.closing_time : t.closing_time + 'Z')
+  const when = Number.isNaN(at.getTime()) ? '' : at.toLocaleString([], {
+    month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
+  })
+  return `Members’ picks open after pick selection closes${when ? `: ${when}` : ''}.`
+}
