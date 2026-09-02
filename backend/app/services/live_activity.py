@@ -54,14 +54,15 @@ MAX_HIGH_PRIORITY_PER_HOUR = 30
 # flag froze the activity, and budget can take 24 h to return. So the flag
 # buys a doubling here, not a licence: a break, a set, a match point every
 # minute is already more than a match produces.
-MAX_HIGH_PRIORITY_PER_HOUR_FREQUENT = 60
+MAX_HIGH_PRIORITY_PER_HOUR_FREQUENT = 90
 # And no closer than this. Measured 2026-09-02 on the user's phone: every
 # point at priority 10 (~1 a minute) plus a handful of test pushes, and
 # after ~25 minutes iOS stopped showing ANY update to the app's activities —
 # the budget freeze Apple warns of, which it says can take hours to lift.
-# One update per half-minute keeps the card honest and stays well inside
-# what that phone tolerated before it froze.
-MIN_INTERVAL_P10_FREQUENT = 30.0
+# Fifteen seconds, at the user's request (2026-09-02): the poll is 10 s, so
+# this is at most every other snapshot. If the freeze recurs, 30 s is the
+# value that was in place before and the first thing to go back to.
+MIN_INTERVAL_P10_FREQUENT = 15.0
 # PRIORITY 5 IS HELD, NOT DELIVERED. Measured 2026-09-02 on the user's own
 # phone: six priority-5 point updates in four minutes, all accepted by APNs,
 # none shown; a forced priority-10 push showed at once. "Opportunistic" means
