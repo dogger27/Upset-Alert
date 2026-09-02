@@ -473,7 +473,10 @@ def _status_of(entry, match) -> str:
     if match is not None:
         if getattr(match, "winner_id", None):
             return "completed"
-        if getattr(match, "live_scores_json", None):
+        # ESPN's field, or a FRESH Sofascore point (live_point_for returns
+        # None once the snapshot is stale, so this cannot resurrect a match
+        # the feed has forgotten). Either is a match being played.
+        if getattr(match, "live_scores_json", None) or live_point_for(match):
             return "live"
     else:
         # Doubles: the row IS the record, so its own columns decide.
@@ -824,7 +827,13 @@ async def schedule_day(
         # score it should be showing — Completed, with nothing under it.
         if statuses[e.id] == "completed":
             continue
-        if later:
+        # A MATCH BEING PLAYED RIGHT NOW IS NEVER "POSTPONED", whatever any
+        # sheet says. A later sheet is a plan; the venue's date rolling over is
+        # a clock. Neither outranks a live score. Zverev–Sonego on 2026-09-01
+        # was in its fourth set at 00:22 New York time and read POSTPONED for
+        # the rest of the night, because the branch below decided the day was
+        # over and nothing unfinished could still be in play.
+        if later and not playing_now:
             statuses[e.id] = "postponed"
         elif started_before and not playing_now:
             statuses[e.id] = "to_be_completed"
@@ -849,9 +858,11 @@ async def schedule_day(
                 # completed" for the rest of the afternoon.
                 if (src.get("point") or {}).get("suspended") is False:
                     statuses[e.id] = "live"
-        elif e.play_date < (venue_today.get(e.tournament_id) or date.today()):
+        elif (not playing_now
+              and e.play_date < (venue_today.get(e.tournament_id) or date.today())):
             # No later sheet yet — but this day is over at the venue, so
-            # whatever is still unfinished did not get played.
+            # whatever is still unfinished did not get played. Unless it is
+            # being played: a night session runs past midnight every Slam.
             statuses[e.id] = "postponed"
 
     # ── Who actually came through ────────────────────────────────────────────
