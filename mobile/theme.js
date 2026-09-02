@@ -41,6 +41,7 @@ export const C = {
   ok:        '#52b788',
   bad:       '#f87171',
   warn:      '#e0a34a',
+  info:      '#7aa9ff',   // the site's --info (dark): a match carried to a later day
 
   // The tour ramps, from the site's --atp-500/--atp-700 and --wta-500/-700.
   // The first pass here used eyeballed approximations (#3b6ea8 / #a8437a);

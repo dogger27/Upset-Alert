@@ -36,6 +36,8 @@ const SCREENS = [
   { name: 'draw',      mobile: '/draw/77',     pwa: '/tournaments/77' },
   { name: 'leagues',   mobile: '/leagues',     pwa: '/leagues' },
   { name: 'schedule',  mobile: '/schedule',    pwa: '/schedule' },
+  // A day with a washout behind it: postponed, carried-over and resumed rows.
+  { name: 'washout',   mobile: '/schedule?date=2026-09-01', pwa: '/schedule?date=2026-09-01' },
   { name: 'league',    mobile: '/league/10',   pwa: '/leagues/10' },
   // The site keeps standings behind a tab rather than a route, so the PWA side
   // has to be clicked into position before it can be compared with anything.

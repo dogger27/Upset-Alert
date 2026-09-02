@@ -3,7 +3,7 @@
 // hold on any machine: the "device" is Los Angeles, the venue New York.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { whenLabel } from './schedule.js'
+import { whenLabel, isLive, isSuspended } from './schedule.js'
 
 const LA = 'America/Los_Angeles', NY = 'America/New_York'
 const fixed = { status: 'scheduled', start_type: 'fixed', start_time_local: '11:00 AM',
@@ -33,4 +33,15 @@ test('long wordings shorten; rows without a note fall back on the same clock rul
 test('state outranks the printed line', () => {
   assert.equal(whenLabel({ ...fixed, status: 'completed' }, LA, false), 'Completed')
   assert.equal(whenLabel({ ...fixed, status: 'live' }, LA, false), 'In progress')
+})
+
+test('a washed-out day has two halves, and neither is live', () => {
+  const frozen = { ...fixed, live_point: { suspended: true }, live_scores: [[6, 3], [4, 6], 2, 0, 'suspended'] }
+  assert.equal(whenLabel({ ...frozen, status: 'postponed' }, LA, false), 'Postponed')
+  assert.equal(whenLabel({ ...frozen, status: 'to_be_completed' }, LA, false), 'To be completed')
+  assert.equal(whenLabel({ ...frozen, status: 'live' }, LA, false), 'Suspended')
+  assert.equal(isLive({ ...frozen, status: 'postponed' }), false)
+  assert.equal(isSuspended({ ...frozen, status: 'postponed' }), false)
+  assert.equal(isLive({ ...frozen, status: 'live' }), true)
+  assert.equal(isSuspended({ ...frozen, status: 'live' }), true)
 })
