@@ -141,3 +141,29 @@ export function clockTime(iso, zone) {
   if (Number.isNaN(d.getTime())) return null
   return formatter('time', zone).format(d)
 }
+
+/* "Wed 8:00 AM" — a start time short enough for a phone row.
+ *
+ * NEVER "Tomorrow". expectedStartLabel above says "Tomorrow at ~8:00 AM PDT"
+ * because a bracket column on a desktop has room for a sentence; in a schedule
+ * row it ran off the end and truncated to "Tomorrow at 8:00 …", which is the
+ * one part of the string that carries no information at all.
+ *
+ * A three-letter weekday is shorter than "Tomorrow", never ambiguous, and does
+ * not go stale at midnight. The zone name is dropped too: the whole screen is
+ * in one zone, so repeating it on every row of forty says nothing.
+ *
+ * The "~" still marks an estimate, because a guess that reads as an announced
+ * time is the failure the tilde exists to prevent.
+ */
+export function shortStart(iso, source, zone) {
+  if (!iso) return null
+  let when = new Date(iso)
+  if (Number.isNaN(when.getTime())) return null
+  if (source !== 'printed') {
+    when = new Date(Math.round(when.getTime() / FIVE_MIN) * FIVE_MIN)
+  }
+  const day = formatter('weekday', zone).format(when)
+  const time = formatter('time', zone).format(when)
+  return `${source === 'printed' ? '' : '~'}${day} ${time}`
+}
