@@ -38,6 +38,10 @@ const SCREENS = [
   { name: 'schedule',  mobile: '/schedule',    pwa: '/schedule' },
   // A day with a washout behind it: postponed, carried-over and resumed rows.
   { name: 'washout',   mobile: '/schedule?date=2026-09-01', pwa: '/schedule?date=2026-09-01' },
+  // The same day scrolled to its end, where the postponed rows live, and with
+  // "Completed" switched off, which must take the postponed rows with it.
+  { name: 'washout-end',  mobile: '/schedule?date=2026-09-01', pwa: '/schedule?date=2026-09-01', scrollEnd: true },
+  { name: 'washout-open', mobile: '/schedule?date=2026-09-01', pwa: '/schedule?date=2026-09-01', appClick: 'Completed', pwaClick: 'Completed' },
   { name: 'league',    mobile: '/league/10',   pwa: '/leagues/10' },
   // The site keeps standings behind a tab rather than a route, so the PWA side
   // has to be clicked into position before it can be compared with anything.
@@ -73,7 +77,7 @@ const browser = await chromium.launch({
   args: ['--disable-web-security', '--hide-scrollbars', '--force-color-profile=srgb'],
 })
 
-async function shoot(url, kind, name, click, noAuth) {
+async function shoot(url, kind, name, click, noAuth, scrollEnd) {
   const ctx = await browser.newContext({
     viewport: VIEW, deviceScaleFactor: DSF, isMobile: true, hasTouch: true,
     colorScheme: 'dark',
@@ -119,6 +123,19 @@ async function shoot(url, kind, name, click, noAuth) {
     await page.waitForTimeout(2000)
   }
 
+  // The app's lists live in a bounded ScrollView, so a full-page shot never
+  // reaches their end. Scroll the deepest scroller (and the window) to the
+  // bottom when a screen asks for it.
+  if (scrollEnd) {
+    await page.evaluate(() => {
+      window.scrollTo(0, document.body.scrollHeight)
+      const els = [...document.querySelectorAll('*')].filter(e =>
+        e.scrollHeight > e.clientHeight + 40 && /auto|scroll/.test(getComputedStyle(e).overflowY))
+      for (const e of els) e.scrollTop = e.scrollHeight
+    })
+    await page.waitForTimeout(1500)
+  }
+
   // EXPO'S RED BOX IS NOT A pageerror. A crash inside a screen is caught and
   // painted as an overlay, so the console hook above stays silent and the
   // screenshot shows an error page that reads, at a glance, like a dark
@@ -158,8 +175,8 @@ async function pair(name, a, b) {
 }
 
 for (const s of targets) {
-  const app = await shoot(MOBILE + s.mobile, 'app', s.name, s.appClick, s.noAuth)
-  const pwa = await shoot(PWA + s.pwa, 'pwa', s.name, s.pwaClick, s.noAuth)
+  const app = await shoot(MOBILE + s.mobile, 'app', s.name, s.appClick, s.noAuth, s.scrollEnd)
+  const pwa = await shoot(PWA + s.pwa, 'pwa', s.name, s.pwaClick, s.noAuth, s.scrollEnd)
   const cmp = await pair(s.name, app.file, pwa.file)
   console.log(`${s.name}: ${cmp}`)
   for (const e of app.errors.slice(0, 4)) console.log(`   app  ! ${e}`)

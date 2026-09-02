@@ -87,6 +87,7 @@ export default function ScheduleScreen() {
   // of the fetched data instead.
   const all = useMemo(() => day.data?.entries || [], [day.data])
   const tours = useMemo(() => [...new Set(all.map(e => e.tour).filter(Boolean))].sort(), [all])
+  const hasDoubles = useMemo(() => all.some(e => e.discipline !== 'singles'), [all])
   useEffect(() => {
     if (!all.length) return
     const origin = fromDraw ? all.find(e => e.draw_id === fromDraw) : null
@@ -108,12 +109,14 @@ export default function ScheduleScreen() {
   const fromRow = (drawsList.data || []).find(d => d.id === fromDraw)
   const drawReady = !drawsList.data || !fromRow || fromRow.status === 'completed' || !!fromRow.draw_released_direct_at
 
-  const groups = useMemo(() => {
-    /* The site's rules, applied ONCE so both views see them: doubles only when
-       asked and only in the time view; completed rows only when asked; a tour
-       only while selected. The first version filtered inside the court loop
-       alone, so the time view — the default — ignored every chip. */
-    const visible = all.filter(e => {
+  /* The site's rules, applied ONCE so both views see them: doubles only when
+     asked and only in the time view; completed rows only when asked; a tour
+     only while selected. The first version filtered inside the court loop
+     alone, so the time view — the default — ignored every chip. Kept apart
+     from the grouping so the empty state can tell "nothing published" from
+     "the switches hid everything". */
+  const visible = useMemo(() => {
+    return all.filter(e => {
       if (view === 'time' && e.discipline !== 'singles' && !showDoubles) return false
       // "Completed" off means no longer upcoming on this day — the site's
       // rule: a match postponed off today's sheet leaves with the finished ones,
@@ -122,6 +125,9 @@ export default function ScheduleScreen() {
       if (view === 'time' && tourSel && e.tour && !tourSel.has(e.tour)) return false
       return true
     })
+  }, [all, view, showDone, showDoubles, tourSel])
+
+  const groups = useMemo(() => {
     if (view === 'court') {
       const order = day.data?.courts || []
       const by = new Map()
@@ -160,7 +166,7 @@ export default function ScheduleScreen() {
         || (a.court_order ?? 99) - (b.court_order ?? 99)
     })
     return [[null, sorted]]
-  }, [all, view, day.data, showDone, showDoubles, tourSel])
+  }, [visible, view, day.data])
 
   const refetch = () => { day.refetch(); dates.refetch() }
   const liveCount = all.filter(isLive).length
@@ -217,10 +223,14 @@ export default function ScheduleScreen() {
               </Pressable>
             )
           })}
-          <Pressable onPress={() => setShowDoubles(v => !v)} style={[s.chip, showDoubles && s.chipOn]}
-                     accessibilityRole="button" accessibilityState={{ selected: showDoubles }}>
-            <Text style={[s.chipText, showDoubles && { color: '#fff' }]}>Doubles</Text>
-          </Pressable>
+          {/* Only a day that HAS doubles offers the switch — the site's rule.
+              A chip that toggles nothing reads as broken. */}
+          {view === 'time' && hasDoubles && (
+            <Pressable onPress={() => setShowDoubles(v => !v)} style={[s.chip, showDoubles && s.chipOn]}
+                       accessibilityRole="button" accessibilityState={{ selected: showDoubles }}>
+              <Text style={[s.chipText, showDoubles && { color: '#fff' }]}>Doubles</Text>
+            </Pressable>
+          )}
           <Pressable onPress={() => setShowDone(v => !v)} style={[s.chip, showDone && s.chipOn]}
                      accessibilityRole="button" accessibilityState={{ selected: showDone }}>
             <Text style={[s.chipText, showDone && { color: '#fff' }]}>Completed</Text>
@@ -251,10 +261,26 @@ export default function ScheduleScreen() {
         {day.loading && !day.data ? <Loading /> : null}
         <ErrorNote error={day.error} onRetry={refetch} />
 
+        {/* Two kinds of nothing, in the site's words: a day the tournament has
+            not published, and a published day the reader's own switches have
+            emptied — which used to render as a blank screen. Name the switch
+            that brings the rows back. */}
         {day.data && all.length === 0 && (
           <Card>
-            <Title>No play scheduled</Title>
-            <Muted>Nothing is listed for this day.</Muted>
+            <Title>No order of play published for this day.</Title>
+            <Muted>Schedules appear once the tournament releases them, usually the evening before.</Muted>
+          </Card>
+        )}
+        {day.data && all.length > 0 && visible.length === 0 && (
+          <Card>
+            <Title>Nothing left to show for this day.</Title>
+            <Muted>
+              {!showDone && all.some(e => e.status === 'completed' || e.status === 'postponed')
+                ? 'Every match listed is finished or postponed — switch Completed on to see them.'
+                : !showDoubles && all.every(e => e.discipline !== 'singles')
+                  ? 'Only doubles is listed — switch Doubles on to see it.'
+                  : 'The current switches hide every match listed.'}
+            </Muted>
           </Card>
         )}
 
