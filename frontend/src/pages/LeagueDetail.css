@@ -835,10 +835,14 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
    just because the viewport is narrow. Ordered after the 640 tier so these
    grids win. */
 @container (max-width: 340px) {
-  .lt-pos-num, .lt-hcol-pos { display: none; }
+  /* THE RANK STAYS. It used to be the first thing dropped on a phone, which
+     left a standings table with no standings on it — and ties, which the
+     desktop marks with a shared number, became invisible. Narrower than the
+     desktop column, not absent. */
+  .lt-pos-num { font-size: 0.7rem; }
   .lt-progress-row--abs,
   .lt-progress-header-row {
-    grid-template-columns: 28px 22px var(--name-col-width, 92px) 3rem 52px;
+    grid-template-columns: 22px 22px 20px var(--name-col-width, 92px) 3rem 52px;
   }
 }
 @container (max-width: 300px) {
@@ -1811,9 +1815,16 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   .dm-body .lt-progress-header .lt-tour { margin-left: auto; }
   .dm-body .lt-progress-header { padding-right: 0; }
 
-  /* The league is the page you are already on. On a phone that is width the
-     draw's own name needs more. */
-  .lt-title-league { display: none; }
+  /* WHOSE STANDINGS. The league name shares the title's space on a phone as
+     an eyebrow above the draw name — the row had the room, the gap between
+     the name and the tour switch was empty — rather than being hidden, which
+     left a table with no league on it. */
+  .dm-body .lt-progress-header .lt-progress-title { white-space: normal; line-height: 1.15; }
+  .dm-body .lt-progress-header .lt-title-league {
+    display: block; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px;
+  }
+  .dm-body .lt-progress-header .lt-title-sep { display: none; }
 }
 
 

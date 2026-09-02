@@ -57,6 +57,8 @@ const SCREENS = [
   { name: 'standings-global', mobile: '/standings/77', pwa: '/leagues' },
   // The dashboard's hamburger, open.
   { name: 'menu', mobile: '/', pwa: '/', appClick: 'Menu', pwaClick: 'Menu' },
+  // The league page's draw popup on a phone: league name in the title, ranked rows.
+  { name: 'league-popup', mobile: '/league/10/draw/77', pwa: '/leagues/10', pwaClick: 'US Open 2026' },
   { name: 'washout-open', mobile: '/schedule?date=2026-09-01', pwa: '/schedule?date=2026-09-01', appClick: 'Completed', pwaClick: 'Completed' },
   { name: 'league',    mobile: '/league/10',   pwa: '/leagues/10' },
   // The site keeps standings behind a tab rather than a route, so the PWA side
