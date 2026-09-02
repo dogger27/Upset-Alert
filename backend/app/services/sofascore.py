@@ -212,8 +212,9 @@ _egress_direct = False
 
 # How long a direct-route ban must age before the probe touches it again.
 # Retrying into a live ban is what extends it, so this is deliberately long
-# relative to the 6-hour probe cadence: the probe simply declines to run.
-DIRECT_COOLOFF = 3 * 24 * 3600.0
+# relative to the probe cadence: the probe simply declines to run. A day —
+# the one ban on record lasted 26 hours — and then a SINGLE request.
+DIRECT_COOLOFF = 24 * 3600.0
 
 
 def egress_is_direct() -> bool:
@@ -321,13 +322,25 @@ async def _get(path: str) -> dict:
                 dedup_key="sofa_rotated", dedup_hours=6)
 
     if status == 403:
-        # REFUSED WHILE DIRECT MEANS THIS HOST IS BANNED AGAIN. Fall back to
-        # the proxy immediately and remember when, so the probe leaves the
-        # direct route alone until the ban has aged. Done before the breaker
-        # trips, so the very next request already takes the other way out
-        # rather than waiting out a cooldown it does not need.
+        # SMART SWITCHING, ONE STEP EACH WAY, ONE REQUEST EACH.
+        # Refused while direct: this host is banned again. Fall back to the
+        # proxy, remember when (the probe leaves direct alone for a day), and
+        # send THIS request out through the proxy right now — the caller need
+        # never know. Only if the proxy refuses too does the breaker trip.
         if _egress_direct:
             await _record_direct_block()
+            if _current_proxy():
+                status, payload = await asyncio.to_thread(_fetch, path)
+                if status == 200:
+                    await app_log("info", "sofascore",
+                                  "Direct route refused — this request went out through the proxy",
+                                  detail={"path": path},
+                                  dedup_key="sofa_fell_to_proxy", dedup_hours=6)
+        # Refused on the proxy, even from a fresh exit: the free route is the
+        # other way out — tried once, and only if its own ban has aged.
+        elif await _direct_may_be_tried():
+            status, payload = await _try_direct(path)
+    if status == 403:
         _consecutive_blocks += 1
         cooldown = min(_BLOCK_COOLDOWN * (2 ** (_consecutive_blocks - 1)),
                        _BLOCK_COOLDOWN_MAX)
@@ -425,28 +438,58 @@ async def probe_direct(db) -> bool:
     # Deliberately NOT through _get: that would pace, trip the breaker and
     # count a refusal here against the proxy route, which is not the one being
     # tested. A bare probe, and a 403 costs only this request.
-    saved, ok = _egress_direct, False
+    status, _ = await _try_direct("/sport/tennis/events/live")
+    return status == 200
+
+
+async def _direct_may_be_tried() -> bool:
+    """The probe's guards, for the fallback path: on the proxy, a proxy
+    configured, and the last direct refusal at least DIRECT_COOLOFF ago."""
+    from datetime import datetime, timezone as _tz
+    from app.database import AsyncSessionLocal
+    from app.services import settings as st
+    if _egress_direct or not os.environ.get(_PROXY_ENV):
+        return False
+    async with AsyncSessionLocal() as db:
+        blocked_at = await st.get_setting(db, st.SOFA_DIRECT_BLOCKED_AT)
+    if not blocked_at:
+        return True
+    try:
+        age = (datetime.now(_tz.utc) - datetime.fromisoformat(blocked_at)).total_seconds()
+    except ValueError:
+        return True
+    return age >= DIRECT_COOLOFF
+
+
+async def _try_direct(path: str) -> tuple:
+    """ONE request straight out of this host. On 200 the direct route is
+    adopted and stored; on anything else the refusal is timestamped so the
+    route is left alone for DIRECT_COOLOFF. Returns (status, payload)."""
+    global _egress_direct
+    from datetime import datetime, timezone as _tz
+    from app.database import AsyncSessionLocal
+    from app.services import settings as st
+    saved = _egress_direct
     try:
         _egress_direct = True
-        status, _ = await asyncio.to_thread(_fetch, "/sport/tennis/events/live")
-        ok = status == 200
+        status, payload = await asyncio.to_thread(_fetch, path)
     except Exception:
-        ok = False
-    finally:
-        _egress_direct = ok
-
+        status, payload = 0, None
+    ok = status == 200
+    _egress_direct = ok if ok else saved
+    async with AsyncSessionLocal() as db:
+        if ok:
+            await st.set_setting(db, st.SOFA_EGRESS, st.SOFA_EGRESS_DIRECT)
+        else:
+            await st.set_setting(db, st.SOFA_DIRECT_BLOCKED_AT,
+                                 datetime.now(_tz.utc).isoformat())
+        await db.commit()
     if ok:
-        await st.set_setting(db, st.SOFA_EGRESS, st.SOFA_EGRESS_DIRECT)
-        await db.commit()
         await app_log("info", "sofascore",
-                      "Direct route answered again — leaving the proxy",
+                      "Direct route answered — leaving the proxy",
+                      detail={"path": path},
                       dedup_key="sofa_egress_to_direct", dedup_hours=6)
-    else:
-        _egress_direct = saved
-        await st.set_setting(db, st.SOFA_DIRECT_BLOCKED_AT,
-                             datetime.now(_tz.utc).isoformat())
-        await db.commit()
-    return ok
+    return status, payload
 
 
 # ---------------------------------------------------------------------------
