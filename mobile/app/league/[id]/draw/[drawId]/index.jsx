@@ -21,6 +21,7 @@ import { useAuth } from '../../../../../auth'
 import { getLeague, getLeagueTournaments, getRoundScores } from '../../../../../api'
 import { useApi } from '../../../../../useApi'
 import { competitionRanks } from '../../../../../scoring'
+import { othersPicksNote } from '../../../../../lock'
 import { C } from '../../../../../theme'
 import { PlayerName } from '../../../../../cards'
 import { Card, CardLink, ErrorNote, Loading, Muted, Screen, Title } from '../../../../../ui'
@@ -64,6 +65,8 @@ export default function Standings() {
           </Card>
         )}
 
+        {/* The site's sidebar toast, as a line: why a row does not open yet. */}
+        {entries.length > 0 && othersPicksNote(t) ? <Muted>{othersPicksNote(t)}</Muted> : null}
         {entries.length > 0 && (
           <View style={s.table}>
             <View style={[s.row, s.head]}>

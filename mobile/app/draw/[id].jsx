@@ -228,7 +228,9 @@ export default function DrawScreen() {
             <Ionicons name="eye-outline" size={14} color={C.info} />
             <Text style={[T.small, { color: C.ink, flex: 1 }]} numberOfLines={1}>
               {preds.error
-                ? `${name ? `${name}’s` : 'Their'} picks are hidden until the first round is complete.`
+                // Only match-by-match draws withhold a bracket, and only until
+                // every first-round match has started (locking.predictions_visible).
+                ? `${name ? `${name}’s` : 'Their'} picks open once every first-round match has started.`
                 : `Viewing ${name ? `${name}’s` : 'their'} picks`}
             </Text>
             <Pressable onPress={() => router.setParams({ user: undefined, name: undefined })} hitSlop={8}
