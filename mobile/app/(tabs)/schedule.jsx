@@ -87,6 +87,7 @@ export default function ScheduleScreen() {
             onPress={() => idx > 0 && setDate(available[idx - 1])}
             disabled={idx <= 0} hitSlop={10}
             style={({ pressed }) => [s.arrow, (idx <= 0) && s.arrowOff, pressed && { opacity: 0.6 }]}
+            accessibilityRole="button" accessibilityLabel="Previous day"
           >
             <Ionicons name="chevron-back" size={20} color={C.ink} />
           </Pressable>
@@ -103,6 +104,7 @@ export default function ScheduleScreen() {
               s.arrow, (idx < 0 || idx >= available.length - 1) && s.arrowOff,
               pressed && { opacity: 0.6 },
             ]}
+            accessibilityRole="button" accessibilityLabel="Next day"
           >
             <Ionicons name="chevron-forward" size={20} color={C.ink} />
           </Pressable>
@@ -228,7 +230,6 @@ function PlayerLine({ name, doubles, seed, drawRank, flags, flagSlots, games, po
         doubles={doubles}
         style={[T.bodyMed, { color: dim ? C.muted : C.ink, flexShrink: 1 }, won && { color: C.ink }]}
       />
-      <View style={{ flex: 1 }} />
       <View style={s.scores}>
         {(games || []).map((g, i) => (
           <Text key={i} style={[T.score, { color: dim ? C.muted : C.ink }]}>

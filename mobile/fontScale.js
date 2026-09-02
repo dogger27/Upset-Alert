@@ -25,6 +25,16 @@ try {
   scale = 1
 }
 
+/* HARNESS OVERRIDE. react-native-web always reports a font scale of 1, which
+   left the visual-diff harness blind to the whole class of "larger text"
+   bugs — it could not reproduce the clipped chips or the truncated names the
+   phone showed. tools/visual-diff.mjs sets this before the bundle loads so a
+   render on Jupiter can use the reader's actual text size. Never set by the
+   app itself. */
+if (typeof globalThis !== 'undefined' && Number(globalThis.__UA_FONT_SCALE) > 0) {
+  scale = Number(globalThis.__UA_FONT_SCALE)
+}
+
 export const FONT_SCALE = scale
 
 /** A line height that grows with the reader's text size, like the glyphs do. */

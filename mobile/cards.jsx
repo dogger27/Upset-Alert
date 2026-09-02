@@ -8,11 +8,12 @@
  * comes from the source.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Image, StyleSheet, Text, View } from 'react-native'
 import { leading } from './fontScale.js'
 import { tierStamp } from './logos'
 import { flagEmoji } from './flags'
+import { textWidth } from './measure.js'
 import { nameForms, pairForms } from './names'
 import { BADGE, C, R, S, SHADOW, T, TOUR } from './theme'
 
@@ -142,6 +143,7 @@ const u = StyleSheet.create({
   },
   badgeGap: { width: leading(28) },
   flagSlot: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  nameSlot: { flex: 1, minWidth: 0 },
   flagGlyph: { fontSize: 13, lineHeight: leading(16) },
   // Same footprint as a flag, so a name never moves because a country is
   // missing. 4:3, like the flag images the site uses.
@@ -189,14 +191,11 @@ export function PosBadge({ seed, drawRank }) {
       {/* A NUMBER IS NEVER ELLIPSISED. "1…" could be anything from 100 to 199,
           so it misinforms rather than abbreviates — shrink instead, which is
           the same rule the name ladder follows for the same reason. */}
-      <Text
-        style={[u.badgeText, { color: t.fg }]}
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumScaleFactor={0.55}
-      >
-        {text}
-      </Text>
+      {/* No adjustsFontSizeToFit: on iOS it shrinks to its floor whenever the
+          box has any slack, and the digits became a speck in an empty box.
+          The box already scales with the type (leading), and three digits
+          measure 19.7pt against its 26pt interior, so nothing needs to give. */}
+      <Text style={[u.badgeText, { color: t.fg }]} numberOfLines={1}>{text}</Text>
     </View>
   )
 }
@@ -276,42 +275,49 @@ export function FlagSlot({ codes, slots = 1 }) {
  *   1. initials for the given names   2. surname alone
  *   3. shrink the type                4. and only then, ellipsis
  *
- * React Native cannot measure text without drawing it, so this steps DOWN on
- * layout: draw a rung, and if the line comes back different from what was
- * asked for, it did not fit — try the next. At most two extra passes, and the
- * rung is reset when the name changes.
+ * MEASURED, NOT ASKED. The first version leaned on onTextLayout to notice a
+ * truncation and step down a rung; on iOS it never noticed, and "Nishesh B…"
+ * shipped. This one measures every rung from the font's own metrics
+ * (measure.js) against the width the row actually gave it, and picks the
+ * longest that fits. The same arithmetic runs on iOS and in the web harness,
+ * so what is checked here is what ships.
  *
- * adjustsFontSizeToFit is deliberately OFF until the last rung. Left on, it
- * would quietly shrink the full name to fit and the shortening would never
- * happen — which is the ladder upside down.
+ * The wrapper takes the row's spare width (flex: 1) precisely so onLayout
+ * reports how much room there IS, not how much the text happened to use.
  */
-export function PlayerName({ name, doubles = false, style, ...rest }) {
+export function PlayerName({ name, doubles = false, style }) {
   const forms = useMemo(
     () => (doubles ? pairForms(name) : nameForms(name)),
     [name, doubles],
   )
-  const [rung, setRung] = useState(0)
-  useEffect(() => { setRung(0) }, [forms])
+  const [avail, setAvail] = useState(null)
+  const flat = StyleSheet.flatten(style) || {}
+  const family = flat.fontFamily || 'Archivo_500Medium'
+  const size = flat.fontSize || 15
 
-  const last = rung >= forms.length - 1
+  let text = forms[0]
+  let fontSize = size
+  if (avail != null) {
+    // A point of slack: kerning is not in the tables, and a name that is
+    // right on the line should shorten rather than gamble.
+    const room = avail - 1
+    const fits = forms.find(f => textWidth(f, family, size) <= room)
+    if (fits) {
+      text = fits
+    } else {
+      // Every rung is too wide: the shortest one, shrunk — but no further than
+      // 60%, past which the ellipsis is the lesser evil.
+      text = forms[forms.length - 1]
+      const need = textWidth(text, family, size)
+      fontSize = Math.max(size * 0.6, (size * room) / need)
+    }
+  }
+
   return (
-    <Text
-      {...rest}
-      style={style}
-      numberOfLines={1}
-      ellipsizeMode="tail"
-      adjustsFontSizeToFit={last}
-      minimumScaleFactor={last ? 0.6 : 1}
-      onTextLayout={e => {
-        if (last) return
-        const line = e.nativeEvent?.lines?.[0]
-        if (!line) return
-        if (line.text.trim() !== forms[rung]) {
-          setRung(r => Math.min(r + 1, forms.length - 1))
-        }
-      }}
-    >
-      {forms[rung]}
-    </Text>
+    <View style={u.nameSlot} onLayout={e => setAvail(e.nativeEvent.layout.width)}>
+      <Text style={[style, fontSize !== size && { fontSize }]} numberOfLines={1}>
+        {text}
+      </Text>
+    </View>
   )
 }

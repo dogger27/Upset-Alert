@@ -265,7 +265,6 @@ function MatchRow({ m, pick, drawRanks, zone, slugById, onH2H, onPredictors }) {
               ]}
             />
             <EntryChip entryType={p?.entry_type} />
-            <View style={{ flex: 1 }} />
             {/* WHO YOU PICKED, always — not only while the match is open.
                 The tint says right or wrong; on its own it never says WHICH
                 player you backed, and once a match was decided this row lost
