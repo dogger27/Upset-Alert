@@ -18,7 +18,7 @@ import { capabilities, isAvailable } from '../../modules/live-activity'
 import { DeleteAccountSheet, NotificationPrefs, PasswordSheet } from '../../account'
 import { showOnLockScreen, useShowingOnLockScreen } from '../../liveactivity'
 import { C, T } from '../../theme'
-import { Button, Card, ErrorNote, Muted, Row, Screen, Title } from '../../ui'
+import { Button, Card, CardLink, ErrorNote, Muted, Row, Screen, Title } from '../../ui'
 
 export default function Status() {
   const { config, me, phase, signOut } = useAuth()
@@ -142,6 +142,9 @@ export default function Status() {
             is right regardless — this is not the screen's primary action.
             No "signed in as" line here; the card above already carries it. */}
         <Button label="Sign out" quiet onPress={signOut} />
+        <CardLink href="/about" style={{ alignSelf: 'center', paddingVertical: 6 }}>
+          <Text style={[T.smallMed, { color: C.greenLit }]}>About Upset Alert</Text>
+        </CardLink>
       </Card>
     </Screen>
   )

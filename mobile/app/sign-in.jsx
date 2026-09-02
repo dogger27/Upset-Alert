@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Redirect } from 'expo-router'
+import { Link, Redirect } from 'expo-router'
 import { StyleSheet, Text, TextInput, View } from 'react-native'
 import { useAuth } from '../auth'
 import { C, TOUCH } from '../theme'
@@ -66,6 +66,8 @@ export default function SignIn() {
         />
         <Button label="Sign in" onPress={submit} busy={busy} />
         {!!error && <Text style={s.error}>{error}</Text>}
+        <Link href="/forgot-password" style={s.link}>Forgot password?</Link>
+        <Link href="/register" style={s.link}>Create an account</Link>
       </Card>
 
       {config === null && (
@@ -86,4 +88,5 @@ const s = StyleSheet.create({
     height: TOUCH, fontSize: 16, color: C.ink,
   },
   error: { color: C.bad },
+  link: { color: C.greenLit, textAlign: 'center', paddingVertical: 6, fontFamily: 'Archivo_500Medium', fontSize: 14 },
 })
