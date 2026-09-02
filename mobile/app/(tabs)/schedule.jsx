@@ -20,13 +20,12 @@ import { getScheduleDates, getScheduleDay, listTournaments, updateMe } from '../
 import { useAuth } from '../../auth'
 import { H2HSheet } from '../../h2h'
 import { useApi } from '../../useApi'
-import {
-  gamesOf, isLive, isSuspended, pointOf, servingSide, sideDrawRank, sideFlags,
-  sideName, sideSeed, whenLabel, winnerSide,
-} from '../../schedule'
+import { isLive, isSuspended, whenLabel } from '../../schedule'
 import { clockTime, shortStart } from '../../dates'
 import { leading } from '../../fontScale.js'
-import { FlagSlot, PlayerName, PosBadge, TourBadge } from '../../cards'
+import { TourBadge } from '../../cards'
+import { MatchCard } from '../../scorecard'
+import { ScoreHistorySheet } from '../../scoreHistory'
 import { C, R, S, T } from '../../theme'
 import { Card, CardLink, ErrorNote, Eyebrow, Loading, Muted, Screen, Title } from '../../ui'
 
@@ -74,6 +73,7 @@ export default function ScheduleScreen() {
     updateMe({ schedule_tz: mode }).then(() => refreshMe?.()).catch(() => {})
   }
   const [h2h, setH2H] = useState(null)
+  const [hist, setHist] = useState(null)
   const [view, setView] = useState('time')
 
   const dates = useApi(`schedule-dates:${tournament ?? 'all'}`, () => getScheduleDates(tournament))
@@ -304,30 +304,26 @@ export default function ScheduleScreen() {
         {groups.map(([court, list]) => (
           <View key={court || 'all'} style={s.group}>
             {court ? <Eyebrow>{court}</Eyebrow> : null}
-            {list.map(e => <EntryRow venueMode={venueMode} venueTz={venueTzOf(e)} onH2H={setH2H} key={e.id} e={e} inCourt={view === 'court'} />)}
+            {list.map(e => <EntryRow venueMode={venueMode} venueTz={venueTzOf(e)} onH2H={setH2H} onHistory={setHist} key={e.id} e={e} inCourt={view === 'court'} />)}
           </View>
         ))}
       </Screen>
       <H2HSheet visible={!!h2h} onClose={() => setH2H(null)} a={h2h?.a} b={h2h?.b} />
+      {/* The row as the schedule holds it NOW, looked up by id, so a live match
+          keeps ticking in the sheet while it is open. */}
+      <ScoreHistorySheet visible={!!hist} onClose={() => setHist(null)}
+                         entry={hist ? (all.find(x => x.id === hist.id) || hist) : null} />
     </>
   )
 }
 
-function EntryRow({ e, venueMode, venueTz, onH2H, inCourt }) {
+function EntryRow({ e, venueMode, venueTz, onH2H, onHistory, inCourt }) {
   const live = isLive(e)
   const suspended = isSuspended(e)
-  const games = gamesOf(e)
-  const point = pointOf(e)
-  const serving = servingSide(e)
-  const won = winnerSide(e)
   const done = e.status === 'completed'
   /* resumed_at wins over started_at: after a rain delay the resumption is the
      time that answers "when did this get going", and the original start is
      hours of stopped play ago. See the rain-delay lifecycle. */
-  /* Both rows get the SAME number of flag slots — a doubles pair needs two —
-     so the two names still start at the same x. */
-  const flagSlots = Math.max(
-    1, sideFlags(e.players, 'a').length, sideFlags(e.players, 'b').length)
   const a = (e.players || []).find(p => p.side === 'a'), b = (e.players || []).find(p => p.side === 'b')
   const h2hPair = e.discipline === 'singles' && a?.te_slug && b?.te_slug
     ? { a: { name: a.entry_name || a.name, te_slug: a.te_slug }, b: { name: b.entry_name || b.name, te_slug: b.te_slug } }
@@ -358,8 +354,14 @@ function EntryRow({ e, venueMode, venueTz, onH2H, inCourt }) {
     ? shortStart(e.expected_start_at, e.expected_source, venueMode ? venueTz : undefined)
     : null
 
+  /* A started match answers a tap with its history — the same sheet, slider
+     and card the draw page opens, because the two surfaces describe the same
+     match. Scheduled rows stay inert: nothing to show, and a dead tap reading
+     as a broken page is the draw page's own documented lesson. */
+  const openable = onHistory && ['live', 'completed', 'postponed', 'to_be_completed'].includes(e.status)
+  const Wrap = openable ? Pressable : View
   return (
-    <View style={[s.entry, live && s.entryLive]}>
+    <Wrap style={[s.entry, live && s.entryLive]} onPress={openable ? () => onHistory(e) : undefined}>
       <View style={s.entryTop}>
         {/* The tour, named. A combined day lists the men's and women's US Open
             as the same "US Open · R128" and nothing else separated them. */}
@@ -378,22 +380,7 @@ function EntryRow({ e, venueMode, venueTz, onH2H, inCourt }) {
         </Text>
       </View>
 
-      {['a', 'b'].map(side => (
-        <PlayerLine
-          key={side}
-          name={sideName(e.players, side)}
-          doubles={e.discipline !== 'singles'}
-          seed={sideSeed(e.players, side)}
-          drawRank={sideDrawRank(e.players, side)}
-          flags={sideFlags(e.players, side)}
-          flagSlots={flagSlots}
-          games={games ? games[side === 'a' ? 0 : 1] : null}
-          point={point ? point[side === 'a' ? 0 : 1] : null}
-          serving={serving === side && !done}
-          won={won === side}
-          dim={done && won && won !== side}
-        />
-      ))}
+      <MatchCard e={e} />
 
       {/* Court and time on ONE line. The site gives the time its own block, but
           a phone row that already carries two players and a set-by-set score
@@ -414,39 +401,7 @@ function EntryRow({ e, venueMode, venueTz, onH2H, inCourt }) {
           )}
         </View>
       )}
-    </View>
-  )
-}
-
-function PlayerLine({ name, doubles, seed, drawRank, flags, flagSlots, games, point, serving, won, dim }) {
-  return (
-    <View style={s.line}>
-      <View style={[s.dot, serving && { backgroundColor: C.clay }]} />
-      {/* Badge and flag are FIXED-WIDTH columns and are drawn even when empty.
-          That is the whole point: a seeded player and an unseeded one, a player
-          with a flag and a neutral athlete without, all start their name at the
-          same x. Without it the rows staggered and the pair stopped reading as
-          one match. */}
-      <PosBadge seed={seed} drawRank={drawRank} />
-      <FlagSlot codes={flags} slots={flagSlots} />
-      <PlayerName
-        name={name}
-        doubles={doubles}
-        style={[T.bodyMed, { color: dim ? C.muted : C.ink, flexShrink: 1 }, won && { color: C.ink }]}
-      />
-      <View style={s.scores}>
-        {(games || []).map((g, i) => (
-          <Text key={i} style={[T.score, { color: dim ? C.muted : C.ink }]}>
-            {g === null || g === '' ? '–' : g}
-          </Text>
-        ))}
-        {point != null && (
-          <Text style={[T.score, { color: C.clay, minWidth: 26, textAlign: 'right' }]}>
-            {point}
-          </Text>
-        )}
-      </View>
-    </View>
+    </Wrap>
   )
 }
 
@@ -492,8 +447,4 @@ const s = StyleSheet.create({
   },
   entryLive: { borderColor: C.green },
   entryTop: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
-  line: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'transparent' },
-  flag: { fontSize: 13 },
-  scores: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
 })

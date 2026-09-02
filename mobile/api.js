@@ -238,3 +238,13 @@ export const getScheduleDates = (tournamentId) =>
    dashboard to answer "where am I" without opening the draw. */
 export const getDrawStandings = (tournamentId) =>
   request(`/tournaments/${tournamentId}/standings`)
+
+/* A match's score history — every change of the score, for the history sheet's
+   slider. Two twins with one response shape: a bracket match keeps its history
+   under the draw, a row with no bracket match (qualifying, doubles) under its
+   own schedule-entry id. Snapshots are in the MATCH's orientation
+   (player1_id / player1_name say who side 1 is), not the sheet's. */
+export const getMatchScoreHistory = (drawId, matchId) =>
+  request(`/tournaments/${drawId}/matches/${matchId}/score-history`)
+export const getEntryScoreHistory = (entryId) =>
+  request(`/schedule/entries/${entryId}/score-history`)
