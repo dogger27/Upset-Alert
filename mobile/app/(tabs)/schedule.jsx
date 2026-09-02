@@ -22,7 +22,7 @@ import {
   gamesOf, isLive, isSuspended, pointOf, servingSide, sideDrawRank, sideFlags,
   sideName, sideSeed, whenLabel, winnerSide,
 } from '../../schedule'
-import { clockTime, expectedStartLabel } from '../../dates'
+import { clockTime, shortStart } from '../../dates'
 import { FlagSlot, PlayerName, PosBadge, TourBadge } from '../../cards'
 import { C, R, S, T } from '../../theme'
 import { Card, ErrorNote, Eyebrow, Loading, Muted, Screen, Title } from '../../ui'
@@ -156,8 +156,14 @@ function EntryRow({ e }) {
   const flagSlots = Math.max(
     1, sideFlags(e.players, 'a').length, sideFlags(e.players, 'b').length)
   const started = clockTime(e.resumed_at || e.started_at)
+  /* "Wed 8:00 AM", never "Tomorrow at 8:00 AM PDT" — that ran off the end of
+     the row and truncated to "Tomorrow at 8:00 …". Note the site does NOT show
+     an expected start on its schedule at all: the printed start already sits at
+     the top-right of every row. This is the same moment in the READER's zone
+     rather than the venue's, which is the only thing the printed time cannot
+     tell them. */
   const upcoming = !started && !done
-    ? expectedStartLabel(e.expected_start_at, e.expected_source)
+    ? shortStart(e.expected_start_at, e.expected_source)
     : null
 
   return (

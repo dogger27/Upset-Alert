@@ -23,7 +23,7 @@ import { Stack, useLocalSearchParams } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { getDraw, getPredictions } from '../../api'
-import { dateRange, expectedStartLabel } from '../../dates'
+import { dateRange, shortStart } from '../../dates'
 import { useAuth } from '../../auth'
 import { H2HSheet } from '../../h2h'
 import { PredictorsSheet } from '../../predictors'
@@ -235,7 +235,7 @@ function MatchRow({ m, pick, drawRanks, zone, slugById, onH2H, onPredictors }) {
 
   /* Only for a match that has not started. Once there is a result the start
      time is history, and the site drops it there too. */
-  const when = !decided && !m.is_bye ? expectedStartLabel(m.expected_start_at, m.expected_source, zone) : null
+  const when = !decided && !m.is_bye ? shortStart(m.expected_start_at, m.expected_source, zone) : null
 
   return (
     <View style={[

@@ -131,12 +131,16 @@ const u = StyleSheet.create({
     paddingHorizontal: 10, paddingVertical: 4, borderRadius: R.pill,
     alignSelf: 'flex-start',
   },
-  // 26x17 with radius 3, from .pos-badge. The fixed width is the point.
+  /* 26x17 with radius 3, from .pos-badge. The fixed width is the point — but
+     it has to be fixed IN THE READER'S UNITS, not in ours. At a larger text
+     size the digits grow and 28pt stopped holding three of them, so a rank of
+     108 came out as "1…" — which is not a smaller number, it is a different
+     one. The box scales with the type it contains. */
   badge: {
-    width: 28, height: 18, borderRadius: 3, borderWidth: 1,
+    width: leading(28), height: leading(18), borderRadius: 3, borderWidth: 1,
     alignItems: 'center', justifyContent: 'center',
   },
-  badgeGap: { width: 28 },
+  badgeGap: { width: leading(28) },
   flagSlot: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   flagGlyph: { fontSize: 13, lineHeight: leading(16) },
   // Same footprint as a flag, so a name never moves because a country is
@@ -182,7 +186,17 @@ export function PosBadge({ seed, drawRank }) {
   const t = seed != null ? BADGE.seeded : BADGE.unseeded
   return (
     <View style={[u.badge, { backgroundColor: t.bg, borderColor: t.line }]}>
-      <Text style={[u.badgeText, { color: t.fg }]} numberOfLines={1}>{text}</Text>
+      {/* A NUMBER IS NEVER ELLIPSISED. "1…" could be anything from 100 to 199,
+          so it misinforms rather than abbreviates — shrink instead, which is
+          the same rule the name ladder follows for the same reason. */}
+      <Text
+        style={[u.badgeText, { color: t.fg }]}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumScaleFactor={0.55}
+      >
+        {text}
+      </Text>
     </View>
   )
 }
