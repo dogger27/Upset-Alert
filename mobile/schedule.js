@@ -115,7 +115,10 @@ const CANON = [
 /* The site splits the line into wording and clock and canonicalises the
    wording; this app renders one line, so the two halves are joined again. */
 function canon(text) {
-  const m = (text || '').match(/^(.*?)\s*(~?\d{1,2}[:.]\d{2}\s*(?:[AP]M)?)$/i)
+  // "a.m." as well as "AM": en-CA and en-AU devices print the dotted form,
+  // and a clock the split does not recognise leaves the whole line as
+  // wording, so nothing canonicalises and "Starts At" survives.
+  const m = (text || '').match(/^(.*?)\s*(~?\d{1,2}[:.]\d{2}\s*(?:[AP]\.?M\.?)?)$/i)
   const label = (m ? m[1] : text || '').trim()
   const time = m ? m[2].trim() : ''
   let out = label
