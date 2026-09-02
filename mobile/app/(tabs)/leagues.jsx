@@ -70,6 +70,10 @@ export default function Leagues() {
           <Text style={s.shortcutSub}>Best ever performances</Text>
         </CardLink>
       </View>
+      <CardLink href="/rules" style={[s.shortcut, { flex: 0 }]}>
+        <Text style={s.shortcutTitle}>Rules</Text>
+        <Text style={s.shortcutSub}>How picks score, tier by tier</Text>
+      </CardLink>
 
       {leagues?.length === 0 && (
         <Card>

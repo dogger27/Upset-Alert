@@ -83,6 +83,17 @@ async function request(path, { method = 'GET', body, form } = {}) {
 export const login = (email, password) =>
   request('/auth/login', { method: 'POST', form: { username: email, password } })
 
+/* Sign-up, as the site does it: create the account, then confirm the
+   six-digit code from the email, then log in — login refuses an unverified
+   address, so the code step is not optional. */
+export const register = (body) => request('/auth/register', { method: 'POST', body })
+export const verifyEmailCode = (email, code) =>
+  request('/auth/verify-email-code', { method: 'POST', body: { email, code } })
+/* The About page's contact form — same route, same fields. */
+export const sendContact = (body) => request('/contact', { method: 'POST', body })
+export const forgotPassword = (email) =>
+  request('/auth/forgot-password', { method: 'POST', body: { email } })
+
 export const getMe = () => request('/auth/me')
 /* Account preferences. schedule_tz ('venue' | 'user') lives HERE, not in
    device storage, so it follows the reader from phone to desktop — the site's

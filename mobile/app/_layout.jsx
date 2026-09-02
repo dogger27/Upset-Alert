@@ -94,6 +94,10 @@ export default function RootLayout() {
           <Stack.Screen name="draw/[id]" options={{ title: 'Draw' }} />
           <Stack.Screen name="history" options={{ title: 'Draw history' }} />
           <Stack.Screen name="hall-of-fame" options={{ title: 'Hall of Fame' }} />
+          <Stack.Screen name="rules" options={{ title: 'Rules' }} />
+          <Stack.Screen name="forgot-password" options={{ title: 'Forgot password' }} />
+          <Stack.Screen name="register" options={{ title: 'Create account' }} />
+          <Stack.Screen name="about" options={{ title: 'About' }} />
         </Stack>
         </Gate>
       </AuthProvider>
