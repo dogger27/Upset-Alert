@@ -129,7 +129,6 @@ export default function ScheduleScreen() {
 
   const groups = useMemo(() => {
     if (view === 'court') {
-      const order = day.data?.courts || []
       const by = new Map()
       for (const e of visible) {
         const k = e.court || 'Court TBA'
@@ -139,10 +138,25 @@ export default function ScheduleScreen() {
       for (const list of by.values()) {
         list.sort((a, b) => (a.court_order ?? 99) - (b.court_order ?? 99))
       }
-      // The sheet's own court order, not alphabetical: Ashe is not "A".
-      const known = order.filter(c => by.has(c))
-      const rest = [...by.keys()].filter(c => !order.includes(c))
-      return [...known, ...rest].map(c => [c, by.get(c)])
+      // The site's rule: courts are ordered by the best seed playing on them,
+      // so the show courts rise to the top without hardcoding venue names —
+      // every tournament calls its main court something different. Then by
+      // how many matches a court hosts, then name. Singles only: a doubles
+      // [1] says nothing next to a singles [1]. A finite sentinel, not
+      // Infinity — two unseeded courts would compare as NaN and a NaN
+      // comparator leaves the array in whatever order it started.
+      const NO_SEED = 9999
+      const ranked = [...by.entries()].map(([name, list]) => {
+        let best = NO_SEED, count = 0
+        for (const e of list) {
+          if (e.discipline !== 'singles') continue
+          count += 1
+          for (const p of e.players || []) if (p.seed != null && p.seed < best) best = p.seed
+        }
+        return { name, list, best, count }
+      })
+      ranked.sort((a, b) => a.best - b.best || b.count - a.count || a.name.localeCompare(b.name))
+      return ranked.map(r => [r.name, r.list])
     }
 
     // Time: a chronology of the day, the site's rule exactly (Schedule.jsx
@@ -213,7 +227,10 @@ export default function ScheduleScreen() {
         ) : null}
 
         <View style={s.filters}>
-          {tours.map(t => {
+          {/* The tour chips filter the time view only, so the court view does
+              not offer them — the site's rule; a chip that toggles nothing
+              reads as broken. And one tour needs no chip. */}
+          {view === 'time' && tours.length > 1 && tours.map(t => {
             const on = !tourSel || tourSel.has(t)
             return (
               <Pressable key={t} onPress={() => toggleTour(t)}
@@ -287,7 +304,7 @@ export default function ScheduleScreen() {
         {groups.map(([court, list]) => (
           <View key={court || 'all'} style={s.group}>
             {court ? <Eyebrow>{court}</Eyebrow> : null}
-            {list.map(e => <EntryRow venueMode={venueMode} venueTz={venueTzOf(e)} onH2H={setH2H} key={e.id} e={e} />)}
+            {list.map(e => <EntryRow venueMode={venueMode} venueTz={venueTzOf(e)} onH2H={setH2H} key={e.id} e={e} inCourt={view === 'court'} />)}
           </View>
         ))}
       </Screen>
@@ -296,7 +313,7 @@ export default function ScheduleScreen() {
   )
 }
 
-function EntryRow({ e, venueMode, venueTz, onH2H }) {
+function EntryRow({ e, venueMode, venueTz, onH2H, inCourt }) {
   const live = isLive(e)
   const suspended = isSuspended(e)
   const games = gamesOf(e)
@@ -384,10 +401,11 @@ function EntryRow({ e, venueMode, venueTz, onH2H }) {
       {/* Court and time on the left, H2H on the right — ONE line. The chip had
           its own row, which cost every match a line for a button most rows
           never tap. The site's rail sits beside the row for the same reason. */}
-      {(e.court || started || upcoming || h2hPair) && (
+      {((!inCourt && e.court) || started || upcoming || h2hPair) && (
         <View style={s.footLine}>
           <Text style={[T.tiny, { color: C.faint, flex: 1 }]} numberOfLines={1}>
-            {[e.court, started ? `${startedWord} ${started}` : upcoming].filter(Boolean).join(' · ')}
+            {/* Grouped under its court already, a row need not repeat it. */}
+            {[inCourt ? null : e.court, started ? `${startedWord} ${started}` : upcoming].filter(Boolean).join(' · ')}
           </Text>
           {h2hPair && (
             <Pressable onPress={() => onH2H(h2hPair)} hitSlop={8} style={s.h2hChip}>
