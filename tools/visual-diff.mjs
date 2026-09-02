@@ -54,6 +54,14 @@ const SCREENS = [
 ]
 
 const only = process.argv.slice(2).filter(a => !a.startsWith('-'))
+/* --scale 1.7: render the APP at the phone's text-size setting. react-native-web
+   always reports a font scale of 1, which hid a whole class of bug — clipped
+   chips, truncated names — until fontScale.js grew a harness override. The
+   PWA side is unaffected (it has no such setting). Output goes to
+   <screen>@<scale>.*.png so the 1.0 set is kept for comparison. */
+const scaleArg = process.argv.find(a => a.startsWith('--scale='))
+const SCALE = scaleArg ? Number(scaleArg.split('=')[1]) : 1
+const SUFFIX = SCALE !== 1 ? `@${SCALE}` : ''
 const full = process.argv.includes('--full')
 const targets = only.length ? SCREENS.filter(s => only.includes(s.name)) : SCREENS
 
@@ -82,6 +90,9 @@ async function shoot(url, kind, name, click, noAuth) {
         localStorage.setItem('token', t)
       } catch {}
     }, TOKEN)
+  }
+  if (kind === 'app' && SCALE !== 1) {
+    await ctx.addInitScript(sc => { globalThis.__UA_FONT_SCALE = sc }, SCALE)
   }
 
   const page = await ctx.newPage()
@@ -116,7 +127,7 @@ async function shoot(url, kind, name, click, noAuth) {
     if (box) errors.push('RED BOX ' + box.replace(/\n+/g, ' ').slice(0, 160))
   }
 
-  const file = join(OUT, `${name}.${kind}.png`)
+  const file = join(OUT, `${name}${SUFFIX}.${kind}.png`)
   await page.screenshot({ path: file, fullPage: full })
   await ctx.close()
   return { file, errors }
@@ -133,7 +144,7 @@ async function pair(name, a, b) {
   const H = Math.max(xa.height, xb.height)
   const GAP = 24
   const W = xa.width + xb.width + GAP
-  const out = join(OUT, `${name}.compare.png`)
+  const out = join(OUT, `${name}${SUFFIX}.compare.png`)
   await sharp({ create: { width: W, height: H + 34, channels: 3, background: '#000' } })
     .composite([
       { input: label('APP (Expo)', xa.width), top: 0, left: 0 },

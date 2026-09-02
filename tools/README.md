@@ -16,7 +16,14 @@ through a screenshot taken on the phone.
 node visual-diff.mjs                  # every screen
 node visual-diff.mjs draw dashboard   # just these
 node visual-diff.mjs --full           # full-page instead of one viewport
+node visual-diff.mjs --scale=1.7      # the app at the phone's LARGER text size
 ```
+
+`--scale` renders the app side at a given text-size multiplier (the phone has
+larger text on; react-native-web always reports 1). Output goes to
+`<screen>@1.7.*.png` so the 1.0 set is kept. Every app capture also reads
+Expo's red-box overlay text and reports it as `RED BOX …` — a crash is painted
+as an overlay, not thrown to `pageerror`, so a dark screenshot is not "fine".
 
 ### What it needs running
 
