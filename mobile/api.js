@@ -88,6 +88,21 @@ export const getMe = () => request('/auth/me')
    device storage, so it follows the reader from phone to desktop — the site's
    own note on the subject. */
 export const updateMe = (data) => request('/auth/me', { method: 'PATCH', body: data })
+
+/* The site's account actions, same endpoints.
+   - Notification preferences are one list of enabled keys: an email key is
+     the bare name ("round_standings"), its push twin is "push_" + name.
+   - Password change re-checks the current one server-side.
+   - Deleting an account is irreversible and REQUIRED in-app by App Store
+     guideline 5.1.1(v) wherever an account can be created; it re-checks the
+     password because a year-long session is not enough on its own. */
+export const getNotificationPrefs = () => request('/auth/me/notifications')
+export const setNotificationPrefs = (enabledKeys) =>
+  request('/auth/me/notifications', { method: 'PUT', body: { enabled_keys: enabledKeys } })
+export const changePassword = (currentPassword, newPassword) =>
+  request('/auth/me/password', { method: 'PATCH', body: { current_password: currentPassword, new_password: newPassword } })
+export const deleteAccount = (currentPassword) =>
+  request('/auth/me', { method: 'DELETE', body: { current_password: currentPassword } })
 export const getAppConfig = () => request('/app/config')
 export const getOffer = () => request('/app/live-activities/offer')
 export const getScheduleDay = (playDate) =>
