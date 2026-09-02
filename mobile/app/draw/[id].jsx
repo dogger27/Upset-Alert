@@ -38,7 +38,7 @@ import { currentRound, shortRound } from '../../rounds'
 import { C, PICK, R, S, SHADOW, T } from '../../theme'
 import { EntryChip, PlayerName, PosBadge, TourBadge } from '../../cards'
 import { scoreLine } from '../../score'
-import { Card, ErrorNote, Loading, Muted, Screen, Title } from '../../ui'
+import { Card, CardLink, ErrorNote, Loading, Muted, Screen, Title } from '../../ui'
 import { RoundScrub } from '../../RoundScrub'
 
 export default function DrawScreen() {
@@ -194,11 +194,25 @@ export default function DrawScreen() {
                 </Text>
               ) : null}
               <View style={s.headStats}>
+                {/* The tally is the door to the global standings — the list
+                    the site's sidebar keeps beside the bracket. */}
                 {tally.decided > 0 && (
-                  <Text style={[T.smallMed, { color: C.ink }]}>
-                    {tally.right} of {tally.decided} right
-                  </Text>
+                  <CardLink href={`/standings/${id}`} style={s.tallyLink} pressedOpacity={0.6}>
+                    <Text style={[T.smallMed, { color: C.ink }]}>
+                      {tally.right} of {tally.decided} right
+                    </Text>
+                    <Ionicons name="chevron-forward" size={14} color={C.muted} />
+                  </CardLink>
                 )}
+                {/* The site's sidebar carries the Order of Play button on the
+                    draw page; the schedule lands on the right day itself. */}
+                {t.oop_first_seen_at && t.tournament_id ? (
+                  <CardLink href={{ pathname: '/schedule', params: { tournament: t.tournament_id, draw: id } }}
+                            style={s.oopChip} pressedOpacity={0.6}>
+                    <Ionicons name="calendar-outline" size={13} color={C.greenLit} />
+                    <Text style={[T.tiny, { color: C.greenLit }]}>Order of Play</Text>
+                  </CardLink>
+                ) : null}
                 {lock ? (
                   <Text style={[T.small, { color: lock.urgent ? C.clay : C.muted }]}>
                     {lock.text}
@@ -398,6 +412,8 @@ function MatchRow({ m, pick, drawRanks, zone, slugById, onH2H, onPredictors, onS
 }
 
 const s = StyleSheet.create({
+  tallyLink: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  oopChip: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderColor: C.borderOn, borderRadius: R.pill, paddingHorizontal: 8, paddingVertical: 3 },
   viewing: {
     flexDirection: 'row', alignItems: 'center', gap: S.sm,
     borderWidth: 1, borderColor: C.info, borderRadius: R.md, backgroundColor: C.card,

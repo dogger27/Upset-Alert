@@ -261,10 +261,11 @@ function ActiveCard({ t, userId, pickState }) {
             <View style={{ gap: 8 }}>
             <View style={s.footRow}>
               {mine ? (
-                <View style={s.lockLine}>
+                <CardLink href={`/standings/${t.id}`} style={s.lockLine} pressedOpacity={0.6}>
                   <Text style={[T.score, { color: C.ink }]}>{ordinal(mine.rank)}</Text>
                   <Text style={[T.tiny, { color: C.faint }]}>of {rows.length}</Text>
-                </View>
+                  <Ionicons name="chevron-forward" size={13} color={C.faint} />
+                </CardLink>
               ) : (
                 <Text style={[T.tiny, { color: C.faint }]}>
                   {standings.loading ? '' : 'Not entered'}
