@@ -316,7 +316,7 @@ function EntryRow({ e, venueMode, venueTz, onH2H }) {
         <Text style={[T.tiny, {
           color: suspended ? C.warn : live ? C.greenLit : done ? C.faint : C.muted,
         }]}>
-          {whenLabel(e)}
+          {whenLabel(e, venueMode ? venueTz : undefined, venueMode)}
         </Text>
       </View>
 

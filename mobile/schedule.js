@@ -85,13 +85,73 @@ export function isSuspended(e) {
    "Not before 3:00 PM", or the printed time. "Final" and "On court" were this
    app's inventions; two apps naming one state two ways is the kind of drift
    the reader notices without being able to say why. */
-export function whenLabel(e) {
-  if (e?.status === 'completed') return 'Completed'
+/* The site's slot line (Schedule.jsx printedStart / SHORTEN / CANON), ported
+   whole. Three display-only rewrites of what the sheet printed — start_note
+   itself is kept faithful:
+   - the CLOCK inside the line follows the zone switch: "Not before 3:00 PM"
+     is the venue's clock, and in "my time" it is rewritten to the reader's or
+     the switch moves every estimate and leaves this line on a different
+     clock (that was this app's bug: "11:00 AM" above "Wed 8:00 a.m.");
+   - wordings too long for a row are shortened;
+   - one wording per phrase — "Followed By", "Starts At" and friends vary
+     sheet to sheet and would change shape row to row. */
+const SHORTEN = [
+  [/after\s+suitable\s+rest/i, 'After rest'],
+  [/after\s+the\s+(?:conclusion|completion)\s+of[^,]*/i, 'After previous'],
+]
+
+function shorten(text) {
+  if (!text) return text
+  for (const [re, short] of SHORTEN) if (re.test(text)) return text.replace(re, short)
+  return text
+}
+
+const CANON = [
+  [/^followed\s+by$/i, 'Followed by'],
+  [/^not\s+before$/i, 'Not before'],
+  [/^starts?(?:ing)?\s+at$/i, 'Starting at'],
+]
+
+/* The site splits the line into wording and clock and canonicalises the
+   wording; this app renders one line, so the two halves are joined again. */
+function canon(text) {
+  const m = (text || '').match(/^(.*?)\s*(~?\d{1,2}[:.]\d{2}\s*(?:[AP]M)?)$/i)
+  const label = (m ? m[1] : text || '').trim()
+  const time = m ? m[2].trim() : ''
+  let out = label
+  for (const [re, c] of CANON) if (re.test(label)) { out = c; break }
+  return [out, time].filter(Boolean).join(' ')
+}
+
+function clockIn(iso, zone) {
+  return new Date(iso).toLocaleTimeString([], {
+    hour: 'numeric', minute: '2-digit', ...(zone ? { timeZone: zone } : {}),
+  })
+}
+
+/* Venue mode shows the sheet's line untouched — it is already venue-local. In
+   "my time" the wording stays but the clock inside it is rewritten. The
+   fallbacks only apply to rows stored before start_note existed; they follow
+   the same clock rule, which the site states but only applies to the note. */
+function printedStart(e, zone, venueMode) {
+  const mine = !venueMode && e.printed_start_at
+  if (e.start_note && mine && e.start_time_local) {
+    return shorten(e.start_note.replace(e.start_time_local, clockIn(e.printed_start_at, zone)))
+  }
+  if (e.start_note) return shorten(e.start_note)
+  const clock = mine ? clockIn(e.printed_start_at, zone) : e.start_time_local
+  if (e.start_type === 'followed_by') return 'Followed by'
+  if (e.start_type === 'not_before') return `Not before ${clock ?? ''}`.trim()
+  if (e.start_type === 'after_event') return 'After rest'
+  if (clock) return clock
+  return 'TBA'
+}
+
+/* zone: an IANA name for venue mode, undefined for the device's own. */
+export function whenLabel(e, zone, venueMode) {
+  if (!e) return ''
+  if (e.status === 'completed') return 'Completed'
   if (isSuspended(e)) return 'Suspended'
-  if (e?.status === 'live') return 'In progress'
-  if (e?.start_type === 'followed_by') return 'Followed by'
-  if (e?.start_type === 'not_before') return `Not before ${e.start_time_local ?? ''}`.trim()
-  if (e?.start_time_local) return e.start_time_local
-  if (e?.start_note) return e.start_note
-  return ''
+  if (e.status === 'live') return 'In progress'
+  return canon(printedStart(e, zone, venueMode))
 }
