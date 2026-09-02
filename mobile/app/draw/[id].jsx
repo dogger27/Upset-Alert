@@ -26,6 +26,7 @@ import { getDraw, getPredictions, listTournaments } from '../../api'
 import { dateRange, shortStart } from '../../dates'
 import { useAuth } from '../../auth'
 import { H2HSheet } from '../../h2h'
+import { ScoreHistorySheet, entryFromMatch, matchStarted } from '../../scoreHistory'
 import { PredictorsSheet } from '../../predictors'
 import { tourLabel } from '../../category'
 import { computeDrawRanks } from '../../drawRanks'
@@ -93,6 +94,7 @@ export default function DrawScreen() {
 
   const [h2h, setH2H] = useState(null)
   const [predictors, setPredictors] = useState(null)
+  const [scoreMatch, setScoreMatch] = useState(null)
 
   const pickBy = useMemo(() => {
     const m = new Map()
@@ -234,7 +236,7 @@ export default function DrawScreen() {
             renderRow={m => (
               <MatchRow m={m} pick={pickBy.get(m.id)} drawRanks={drawRanks}
                         zone={zone} slugById={slugById} onH2H={setH2H}
-                        onPredictors={setPredictors} />
+                        onPredictors={setPredictors} onShowScore={setScoreMatch} />
             )}
           />
         )}
@@ -246,6 +248,13 @@ export default function DrawScreen() {
       {/* One sheet for the whole screen, not one per match: 64 mounted Modals
           is 64 mounted Modals. The match hands it a pair and it fetches. */}
       <H2HSheet visible={!!h2h} onClose={() => setH2H(null)} a={h2h?.a} b={h2h?.b} />
+      {/* The site's scoreInsteadOfPick: a started match answers a tap with its
+          score and history — its pick is locked by then, so the tap is free to
+          mean "show me". Looked up fresh by id so a live match keeps ticking. */}
+      <ScoreHistorySheet visible={!!scoreMatch} onClose={() => setScoreMatch(null)}
+                         entry={scoreMatch ? entryFromMatch(
+                           (draw.data?.matches || []).find(x => x.id === scoreMatch.id) || scoreMatch,
+                           Number(id), drawRanks) : null} />
       <PredictorsSheet
         visible={!!predictors} onClose={() => setPredictors(null)}
         drawId={id} match={predictors} meId={me?.id}
@@ -266,7 +275,7 @@ export default function DrawScreen() {
  * are a sentence: "6-4  7-5  6⁷-7  6-1", under the names, the way the site
  * puts them under the box.
  */
-function MatchRow({ m, pick, drawRanks, zone, slugById, onH2H, onPredictors }) {
+function MatchRow({ m, pick, drawRanks, zone, slugById, onH2H, onPredictors, onShowScore }) {
   const decided = !!m.winner
   const correct = decided && pick != null && pick === m.winner.id
   const wrong = decided && pick != null && pick !== m.winner.id
@@ -282,12 +291,14 @@ function MatchRow({ m, pick, drawRanks, zone, slugById, onH2H, onPredictors }) {
      time is history, and the site drops it there too. */
   const when = !decided && !m.is_bye ? shortStart(m.expected_start_at, m.expected_source, zone) : null
 
+  const openable = !!onShowScore && matchStarted(m)
+  const Wrap = openable ? Pressable : View
   return (
-    <View style={[
+    <Wrap style={[
       s.match,
       state && { backgroundColor: state.bg, borderColor: state.border },
       m.is_bye && { opacity: 0.5 },
-    ]}>
+    ]} onPress={openable ? () => onShowScore(m) : undefined}>
       {when ? (
         <View style={s.whenRow}>
           <View style={s.schedChip}><Text style={s.schedText}>SCHEDULED</Text></View>
@@ -360,7 +371,7 @@ function MatchRow({ m, pick, drawRanks, zone, slugById, onH2H, onPredictors }) {
           ) : null}
         </View>
       ) : null}
-    </View>
+    </Wrap>
   )
 }
 

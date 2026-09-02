@@ -37,3 +37,11 @@ test('one source per render', () => {
   assert.deepEqual(scoreSets({ status: 'completed', live_point: lp, scores: [['6', '6'], ['4', '4']] }), [['6', '6'], ['4', '4']])
   assert.deepEqual(scoreSets({ status: 'postponed', live_point: lp, scores: null }), lp.games)
 })
+
+test('the one-line score names the tiebreak for its loser only', async () => {
+  const { scoreLine } = await import('./score.js')
+  assert.equal(scoreLine([['7(7)', '6', '3'], ['6(4)', '4', '0r']]), '7-6⁴  6-4  3-0 (ret.)')
+  assert.equal(scoreLine([['6(3)', '6'], ['7', '4']]), '6³-7  6-4')
+  assert.equal(scoreLine([['w/o'], []]), 'walkover')
+  assert.equal(scoreLine(null), null)
+})

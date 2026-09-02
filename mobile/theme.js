@@ -43,6 +43,8 @@ export const C = {
   warn:      '#e0a34a',
   info:      '#7aa9ff',   // the site's --info (dark): a match carried to a later day
   lossMark:  '#f87171',   // the site's --bad-fg: the cross beside the loser, and the match tick
+  h2hP1:     '#38a8f0',   // the site's --h2h-p1 (dark): the top player in a comparison
+  h2hP2:     '#c76df2',   // the site's --h2h-p2 (dark): the bottom player
 
   // The tour ramps, from the site's --atp-500/--atp-700 and --wta-500/-700.
   // The first pass here used eyeballed approximations (#3b6ea8 / #a8437a);
