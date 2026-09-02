@@ -84,6 +84,10 @@ export const login = (email, password) =>
   request('/auth/login', { method: 'POST', form: { username: email, password } })
 
 export const getMe = () => request('/auth/me')
+/* Account preferences. schedule_tz ('venue' | 'user') lives HERE, not in
+   device storage, so it follows the reader from phone to desktop — the site's
+   own note on the subject. */
+export const updateMe = (data) => request('/auth/me', { method: 'PATCH', body: data })
 export const getAppConfig = () => request('/app/config')
 export const getOffer = () => request('/app/live-activities/offer')
 export const getScheduleDay = (playDate) =>
