@@ -69,10 +69,26 @@ app/                       expo-router; the file tree IS the URL tree
 api.js       transport; errors carry .status and .offline
 session.js   the JWT, in the Keychain
 auth.jsx     who is signed in; owns the 401 rule
-useApi.js    small keyed cache (see below)
+useApi.js    small keyed cache (see below); invalidate() refetches what is mounted
+live.js      server-sent events -> invalidate(): the schedule and draw follow live scores
+score.js     the site's score rules (parseSet, ret./w/o, winner order of trust)
+scorecard.jsx   MatchCard — the ONE way a score is drawn (schedule row, history sheet)
+scoreHistory.jsx  a match's score with a slider through its history (+ point stats)
+scoreTimeline.js  COPIED VERBATIM from frontend/src/utils — breaks/sets/match ticks
+schedule.js  the schedule row's words: whenLabel (site's printedStart), sides
+leagueSettings.jsx  the site's LeagueSettings panel, as a sheet
+app/standings/[id].jsx   global standings for a draw
+app/schedule (tab)       order of play; ?tournament=&draw=&date=
+app/draw/[id].jsx        the bracket; ?user=&name= shows another member's picks
 scoring.js   the comparisons that decide what the screens say
 theme.js  ui.jsx
 ```
+
+The phone runs a DEVELOPMENT CLIENT that loads JavaScript from the metro in
+tmux session `expo` (`npx expo start --dev-client --host lan`, production API,
+no EXPO_PUBLIC_API_URL). Every committed JS change is on the phone at the next
+reload; an EAS build is only needed for native changes. An `npm install` here
+ends both metros (8081 phone, 8099 harness) — restart both.
 
 ## Decisions worth not re-litigating
 
@@ -104,7 +120,8 @@ is lexicographic over the round vector, not a weighted sum.
 ## Checks
 
 ```sh
-node scoring.test.mjs    # the rules that fail silently
+node --test *.test.mjs   # scoring, names, measure, theme tokens, score, timeline, schedule words
+node ../tools/visual-diff.mjs schedule draw   # SEE it beside the site (tools/README.md)
 npx expo lint            # 0 problems expected
 npx expo-doctor          # 18/18
 npx expo export --platform web --output-dir /tmp/webexport

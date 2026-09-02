@@ -186,7 +186,7 @@ export default function ScheduleScreen() {
         || (a.court_order ?? 99) - (b.court_order ?? 99)
     })
     return [[null, sorted]]
-  }, [visible, view, day.data])
+  }, [visible, view])
 
   const refetch = () => { day.refetch(); dates.refetch() }
   const liveCount = all.filter(isLive).length
