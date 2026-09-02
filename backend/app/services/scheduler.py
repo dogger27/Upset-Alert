@@ -2164,7 +2164,7 @@ def start_scheduler() -> None:
     scheduler.add_job(
         _on_shutdown_quietly(_probe_sofa_direct),
         "interval",
-        hours=6,
+        hours=2,
         id="sofa_probe_direct",
         misfire_grace_time=3600,
         next_run_time=datetime.now(timezone.utc) + timedelta(minutes=2),
