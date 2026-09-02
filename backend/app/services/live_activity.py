@@ -283,6 +283,7 @@ class SendState:
     last_timestamp: int = 0
     last_hash: str = ""
     sent_count: int = 0
+    p10_total: int = 0        # lifetime priority-10 sends, persisted as high_priority_count
     p10_times: list = field(default_factory=list)
 
 
@@ -361,6 +362,7 @@ def note_sent(activity_id: int, priority: int, state: dict,
     st.last_hash = content_hash(state)
     st.sent_count += 1
     if priority == PRIORITY_IMMEDIATE:
+        st.p10_total += 1
         st.last_p10_at = now
         st.p10_times = [t for t in st.p10_times if now - t < 3600] + [now]
     ts = max(int(now), st.last_timestamp + 1)
@@ -449,6 +451,7 @@ async def dispatch(match_ids: set) -> dict:
     # A final can carry hundreds of activities; rendering per row would repeat
     # the same work for every one of them.
     per_match = {}
+    priorities: list = []
     for mid, m in matches.items():
         point = live_point_for(m)
         finished = m.winner_id is not None
@@ -549,6 +552,7 @@ async def dispatch(match_ids: set) -> dict:
             collapse_id=f"la-{la.match_id}",
         )
         outcomes.append((la.id, result, info["ending"]))
+        priorities.append(priority)
 
     # ── 4. WRITE what changed, in one short transaction ──────────────────
     await _record(outcomes)
@@ -561,8 +565,9 @@ async def dispatch(match_ids: set) -> dict:
     # exactly the question that could not be answered the first time this was
     # switched on for real.
     if outcomes:
-        logger.info("live activity dispatch: %d sent, %d failed (matches %s)",
-                    ok, len(bad), sorted(match_ids))
+        logger.info("live activity dispatch: %d sent (%d at p10), %d failed (matches %s)",
+                    ok, sum(1 for p in priorities if p == PRIORITY_IMMEDIATE),
+                    len(bad), sorted(match_ids))
 
     # system_logs is what /issues reads, so anything worth investigating has to
     # land there rather than only in a file. Failures only: a healthy round is
@@ -612,7 +617,11 @@ async def _record(outcomes: list) -> None:
             if st:
                 values.update(last_sent_at=now, last_sent_hash=st.last_hash,
                               last_sent_timestamp=st.last_timestamp,
-                              sent_count=st.sent_count)
+                              sent_count=st.sent_count,
+                              # Was never written before, so the column read 0 for
+                              # every activity and could not answer "did the points
+                              # go at 10?" — the question that mattered on 2026-09-02.
+                              high_priority_count=st.p10_total)
             if ending:
                 values.update(state=STATE_ENDED, ended_at=now,
                               end_reason="match_complete")
