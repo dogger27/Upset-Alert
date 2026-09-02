@@ -328,17 +328,20 @@ function EntryRow({ e, venueMode, venueTz, onH2H }) {
       {/* Court and time on ONE line. The site gives the time its own block, but
           a phone row that already carries two players and a set-by-set score
           cannot spend a whole line saying "Started at". */}
-      {/* The site puts an H2H rail on every schedule row; offered only when
-          both sides matched a Tennis Explorer profile, as on the draw. */}
-      {h2hPair && (
-        <Pressable onPress={() => onH2H(h2hPair)} hitSlop={8} style={s.h2hChip}>
-          <Text style={s.h2hText}>H2H</Text>
-        </Pressable>
-      )}
-      {(e.court || started || upcoming) && (
-        <Text style={[T.tiny, { color: C.faint }]} numberOfLines={1}>
-          {[e.court, started ? `Started ${started}` : upcoming].filter(Boolean).join(' · ')}
-        </Text>
+      {/* Court and time on the left, H2H on the right — ONE line. The chip had
+          its own row, which cost every match a line for a button most rows
+          never tap. The site's rail sits beside the row for the same reason. */}
+      {(e.court || started || upcoming || h2hPair) && (
+        <View style={s.footLine}>
+          <Text style={[T.tiny, { color: C.faint, flex: 1 }]} numberOfLines={1}>
+            {[e.court, started ? `Started ${started}` : upcoming].filter(Boolean).join(' · ')}
+          </Text>
+          {h2hPair && (
+            <Pressable onPress={() => onH2H(h2hPair)} hitSlop={8} style={s.h2hChip}>
+              <Text style={s.h2hText}>H2H</Text>
+            </Pressable>
+          )}
+        </View>
       )}
     </View>
   )
@@ -404,7 +407,8 @@ const s = StyleSheet.create({
   tz: { flexDirection: 'row', backgroundColor: C.sunken, borderRadius: R.pill, padding: 2 },
   tzBtn: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: R.pill },
   tzOn: { backgroundColor: C.green },
-  h2hChip: { alignSelf: 'flex-end', borderRadius: 4, borderWidth: 1, borderColor: C.borderOn, paddingHorizontal: 7, paddingVertical: 2, marginTop: 2 },
+  footLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  h2hChip: { borderRadius: 4, borderWidth: 1, borderColor: C.borderOn, paddingHorizontal: 7, paddingVertical: 2 },
   h2hText: { fontFamily: 'Archivo_700Bold', fontSize: 10, lineHeight: leading(14), letterSpacing: 0.5, color: C.greenLit },
   tabs: { flexDirection: 'row', gap: S.xs, backgroundColor: C.sunken, borderRadius: R.md, padding: 3 },
   tab: { flex: 1, alignItems: 'center', paddingVertical: S.sm, borderRadius: R.sm },

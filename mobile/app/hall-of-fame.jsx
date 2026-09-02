@@ -11,7 +11,7 @@ import { Stack } from 'expo-router'
 import { StyleSheet, Text, View } from 'react-native'
 import { getHallOfFame } from '../api'
 import { useApi } from '../useApi'
-import { TourBadge } from '../cards'
+import { PlayerName, TourBadge } from '../cards'
 import { C, R, S, T } from '../theme'
 import { Card, ErrorNote, Eyebrow, Loading, Muted, Screen, Title } from '../ui'
 
@@ -59,9 +59,7 @@ function Board({ gender, rows }) {
           <Text style={[s.rank, r.rank === 1 && { color: C.clay }]}>{r.rank}</Text>
           <View style={s.who}>
             {/* Username, never display_name — see the predictors sheet. */}
-            <Text style={[s.user, r.is_current_user && { color: C.clay }]} numberOfLines={1}>
-              {r.username}
-            </Text>
+            <PlayerName name={r.username} shrinkOnly style={[s.user, r.is_current_user && { color: C.clay }]} />
             <Text style={s.where} numberOfLines={1}>
               {r.tournament_name} {r.tournament_year}
             </Text>
