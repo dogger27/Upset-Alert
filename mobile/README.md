@@ -21,11 +21,18 @@ tmux send-keys -t expo 'npx expo start' Enter
 
 ### The dev server address, and working away from home
 
-Metro is started with `REACT_NATIVE_PACKAGER_HOSTNAME=100.74.46.52` —
-Jupiter's **Tailscale** address — so it advertises ONE url that works on the
-home Wi-Fi and on cellular alike:
+Metro is started with `REACT_NATIVE_PACKAGER_HOSTNAME=jupiter.tail600879.ts.net` —
+Jupiter's **Tailscale MagicDNS name** — so it advertises ONE url that works on
+the home Wi-Fi and on cellular alike:
 
-    http://100.74.46.52:8081
+    http://jupiter.tail600879.ts.net:8081
+
+THE NAME, NOT THE 100.x ADDRESS. iOS App Transport Security blocks plain http
+except to "local" ranges (10/8, 172.16/12, 192.168/16) and to hosts named in
+`NSExceptionDomains`; Tailscale's 100.64/10 is neither, so `http://100.74.46.52`
+failed with "failed to connect" before a packet left the phone. app.json
+names `jupiter.tail600879.ts.net` as the one exception, and an
+exception can only be a hostname.
 
 Enter it in the development build's "Enter URL manually". The phone needs the
 Tailscale app signed into the same account (`iphone172` is already on the
