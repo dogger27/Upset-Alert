@@ -12,17 +12,20 @@
  * has to be above the fold rather than sorted correctly.
  */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import { Stack, useLocalSearchParams } from 'expo-router'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { getScheduleDates, getScheduleDay, listTournaments } from '../../api'
+import { getScheduleDates, getScheduleDay, listTournaments, updateMe } from '../../api'
+import { useAuth } from '../../auth'
+import { H2HSheet } from '../../h2h'
 import { useApi } from '../../useApi'
 import {
   gamesOf, isLive, isSuspended, pointOf, servingSide, sideDrawRank, sideFlags,
   sideName, sideSeed, whenLabel, winnerSide,
 } from '../../schedule'
 import { clockTime, shortStart } from '../../dates'
+import { leading } from '../../fontScale.js'
 import { FlagSlot, PlayerName, PosBadge, TourBadge } from '../../cards'
 import { C, R, S, T } from '../../theme'
 import { Card, CardLink, ErrorNote, Eyebrow, Loading, Muted, Screen, Title } from '../../ui'
@@ -55,6 +58,22 @@ export default function ScheduleScreen() {
   const asked = typeof params.date === 'string' ? params.date : undefined
   // null = follow the landing rule; a tap on an arrow pins a day.
   const [pinned, setPinned] = useState(null)
+  /* The site's filters and their defaults: completed rows shown, doubles
+     hidden, every tour on — except when arriving from a draw, when only that
+     draw's tour is on. tourSel is a SET so ATP+WTA is expressible. */
+  const [showDone, setShowDone] = useState(true)
+  const [showDoubles, setShowDoubles] = useState(false)
+  const [tourSel, setTourSel] = useState(null)
+  /* Venue clock or the reader's own — an ACCOUNT preference (users.schedule_tz),
+     saved through the same PATCH the site uses, so it follows the reader from
+     phone to desktop. Optimistic; a failed save keeps the local choice. */
+  const { me, retry: refreshMe } = useAuth()
+  const [tzMode, setTzModeState] = useState(me?.schedule_tz === 'user' ? 'user' : 'venue')
+  const setTzMode = (mode) => {
+    setTzModeState(mode)
+    updateMe({ schedule_tz: mode }).then(() => refreshMe?.()).catch(() => {})
+  }
+  const [h2h, setH2H] = useState(null)
   const [view, setView] = useState('time')
 
   const dates = useApi(`schedule-dates:${tournament ?? 'all'}`, () => getScheduleDates(tournament))
@@ -67,6 +86,21 @@ export default function ScheduleScreen() {
   // recompute on every keystroke of state elsewhere. Memoised on the identity
   // of the fetched data instead.
   const all = useMemo(() => day.data?.entries || [], [day.data])
+  const tours = useMemo(() => [...new Set(all.map(e => e.tour).filter(Boolean))].sort(), [all])
+  useEffect(() => {
+    if (!all.length) return
+    const origin = fromDraw ? all.find(e => e.draw_id === fromDraw) : null
+    setTourSel(new Set(origin?.tour ? [origin.tour] : tours))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [day.data, fromDraw])
+  const toggleTour = t => setTourSel(prev => {
+    const cur = new Set(prev ?? tours)
+    if (cur.has(t)) cur.delete(t); else cur.add(t)
+    return cur
+  })
+  const venueMode = tzMode === 'venue'
+  // The venue's zone for a row, from the day's tournament list.
+  const venueTzOf = e => (day.data?.tournaments || []).find(t => t.id === e.tournament_id)?.venue_timezone || undefined
   // Grey the Draw link when its draw has nothing to show — a Slam's qualifying
   // sheet is live days before the bracket, and a live link to an empty draw
   // reads as a broken page. Same released rule the dashboard cards use.
@@ -75,10 +109,20 @@ export default function ScheduleScreen() {
   const drawReady = !drawsList.data || !fromRow || fromRow.status === 'completed' || !!fromRow.draw_released_direct_at
 
   const groups = useMemo(() => {
+    /* The site's rules, applied ONCE so both views see them: doubles only when
+       asked and only in the time view; completed rows only when asked; a tour
+       only while selected. The first version filtered inside the court loop
+       alone, so the time view — the default — ignored every chip. */
+    const visible = all.filter(e => {
+      if (view === 'time' && e.discipline !== 'singles' && !showDoubles) return false
+      if (!showDone && e.status === 'completed') return false
+      if (view === 'time' && tourSel && e.tour && !tourSel.has(e.tour)) return false
+      return true
+    })
     if (view === 'court') {
       const order = day.data?.courts || []
       const by = new Map()
-      for (const e of all) {
+      for (const e of visible) {
         const k = e.court || 'Court TBA'
         if (!by.has(k)) by.set(k, [])
         by.get(k).push(e)
@@ -94,7 +138,7 @@ export default function ScheduleScreen() {
 
     // Time: live first — this screen is opened to find what is on NOW — then
     // by the sheet's expected start, then by court order within a slot.
-    const sorted = [...all].sort((a, b) => {
+    const sorted = [...visible].sort((a, b) => {
       const la = isLive(a) ? 0 : a.status === 'completed' ? 2 : 1
       const lb = isLive(b) ? 0 : b.status === 'completed' ? 2 : 1
       if (la !== lb) return la - lb
@@ -104,7 +148,7 @@ export default function ScheduleScreen() {
       return (a.court_order ?? 99) - (b.court_order ?? 99)
     })
     return [[null, sorted]]
-  }, [all, view, day.data])
+  }, [all, view, day.data, showDone, showDoubles, tourSel])
 
   const refetch = () => { day.refetch(); dates.refetch() }
   const liveCount = all.filter(isLive).length
@@ -150,6 +194,37 @@ export default function ScheduleScreen() {
           </CardLink>
         ) : null}
 
+        <View style={s.filters}>
+          {tours.map(t => {
+            const on = !tourSel || tourSel.has(t)
+            return (
+              <Pressable key={t} onPress={() => toggleTour(t)}
+                         style={[s.chip, on && (t === 'WTA' ? s.chipWta : s.chipAtp)]}
+                         accessibilityRole="button" accessibilityState={{ selected: on }}>
+                <Text style={[s.chipText, on && { color: '#fff' }]}>{t}</Text>
+              </Pressable>
+            )
+          })}
+          <Pressable onPress={() => setShowDoubles(v => !v)} style={[s.chip, showDoubles && s.chipOn]}
+                     accessibilityRole="button" accessibilityState={{ selected: showDoubles }}>
+            <Text style={[s.chipText, showDoubles && { color: '#fff' }]}>Doubles</Text>
+          </Pressable>
+          <Pressable onPress={() => setShowDone(v => !v)} style={[s.chip, showDone && s.chipOn]}
+                     accessibilityRole="button" accessibilityState={{ selected: showDone }}>
+            <Text style={[s.chipText, showDone && { color: '#fff' }]}>Completed</Text>
+          </Pressable>
+          <View style={{ flex: 1 }} />
+          <View style={s.tz}>
+            {[['venue', 'Venue'], ['user', 'My time']].map(([k, label]) => (
+              <Pressable key={k} onPress={() => setTzMode(k)}
+                         style={[s.tzBtn, tzMode === k && s.tzOn]}
+                         accessibilityRole="button" accessibilityState={{ selected: tzMode === k }}>
+                <Text style={[s.chipText, tzMode === k && { color: '#fff' }]}>{label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+
         <View style={s.tabs}>
           {['time', 'court'].map(v => (
             <Pressable key={v} onPress={() => setView(v)}
@@ -174,15 +249,16 @@ export default function ScheduleScreen() {
         {groups.map(([court, list]) => (
           <View key={court || 'all'} style={s.group}>
             {court ? <Eyebrow>{court}</Eyebrow> : null}
-            {list.map(e => <EntryRow key={e.id} e={e} />)}
+            {list.map(e => <EntryRow venueMode={venueMode} venueTz={venueTzOf(e)} onH2H={setH2H} key={e.id} e={e} />)}
           </View>
         ))}
       </Screen>
+      <H2HSheet visible={!!h2h} onClose={() => setH2H(null)} a={h2h?.a} b={h2h?.b} />
     </>
   )
 }
 
-function EntryRow({ e }) {
+function EntryRow({ e, venueMode, venueTz, onH2H }) {
   const live = isLive(e)
   const suspended = isSuspended(e)
   const games = gamesOf(e)
@@ -197,7 +273,14 @@ function EntryRow({ e }) {
      so the two names still start at the same x. */
   const flagSlots = Math.max(
     1, sideFlags(e.players, 'a').length, sideFlags(e.players, 'b').length)
-  const started = clockTime(e.resumed_at || e.started_at)
+  const a = (e.players || []).find(p => p.side === 'a'), b = (e.players || []).find(p => p.side === 'b')
+  const h2hPair = e.discipline === 'singles' && a?.te_slug && b?.te_slug
+    ? { a: { name: a.entry_name || a.name, te_slug: a.te_slug }, b: { name: b.entry_name || b.name, te_slug: b.te_slug } }
+    : null
+  /* The same split the site makes: venue mode renders a started match's
+     time in the VENUE's zone, the reader's mode in theirs. Both show it —
+     hiding it in venue mode was this app's invention. */
+  const started = clockTime(e.resumed_at || e.started_at, venueMode ? venueTz : undefined)
   /* "Wed 8:00 AM", never "Tomorrow at 8:00 AM PDT" — that ran off the end of
      the row and truncated to "Tomorrow at 8:00 …". Note the site does NOT show
      an expected start on its schedule at all: the printed start already sits at
@@ -205,7 +288,7 @@ function EntryRow({ e }) {
      rather than the venue's, which is the only thing the printed time cannot
      tell them. */
   const upcoming = !started && !done
-    ? shortStart(e.expected_start_at, e.expected_source)
+    ? shortStart(e.expected_start_at, e.expected_source, venueMode ? venueTz : undefined)
     : null
 
   return (
@@ -245,6 +328,13 @@ function EntryRow({ e }) {
       {/* Court and time on ONE line. The site gives the time its own block, but
           a phone row that already carries two players and a set-by-set score
           cannot spend a whole line saying "Started at". */}
+      {/* The site puts an H2H rail on every schedule row; offered only when
+          both sides matched a Tennis Explorer profile, as on the draw. */}
+      {h2hPair && (
+        <Pressable onPress={() => onH2H(h2hPair)} hitSlop={8} style={s.h2hChip}>
+          <Text style={s.h2hText}>H2H</Text>
+        </Pressable>
+      )}
       {(e.court || started || upcoming) && (
         <Text style={[T.tiny, { color: C.faint }]} numberOfLines={1}>
           {[e.court, started ? `Started ${started}` : upcoming].filter(Boolean).join(' · ')}
@@ -305,6 +395,17 @@ const s = StyleSheet.create({
      An icon font draws inside its box, so it centres by construction. */
 
   back: { flexDirection: 'row', alignItems: 'center', gap: 2, alignSelf: 'flex-start', paddingVertical: 4 },
+  filters: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  chip: { borderRadius: R.pill, borderWidth: 1, borderColor: C.border, backgroundColor: C.card, paddingHorizontal: 10, paddingVertical: 5 },
+  chipOn: { backgroundColor: C.green, borderColor: C.green },
+  chipAtp: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
+  chipWta: { backgroundColor: '#db2777', borderColor: '#db2777' },
+  chipText: { ...T.tiny, color: C.muted, fontFamily: 'Archivo_700Bold' },
+  tz: { flexDirection: 'row', backgroundColor: C.sunken, borderRadius: R.pill, padding: 2 },
+  tzBtn: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: R.pill },
+  tzOn: { backgroundColor: C.green },
+  h2hChip: { alignSelf: 'flex-end', borderRadius: 4, borderWidth: 1, borderColor: C.borderOn, paddingHorizontal: 7, paddingVertical: 2, marginTop: 2 },
+  h2hText: { fontFamily: 'Archivo_700Bold', fontSize: 10, lineHeight: leading(14), letterSpacing: 0.5, color: C.greenLit },
   tabs: { flexDirection: 'row', gap: S.xs, backgroundColor: C.sunken, borderRadius: R.md, padding: 3 },
   tab: { flex: 1, alignItems: 'center', paddingVertical: S.sm, borderRadius: R.sm },
   tabOn: { backgroundColor: C.raised },

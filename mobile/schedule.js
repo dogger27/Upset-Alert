@@ -80,10 +80,17 @@ export function isSuspended(e) {
    start_note carries the sheet's own phrasing ("Followed By", "Not Before
    2:00 PM") and that is more honest than a clock we computed — those matches
    genuinely have no time. */
+/* The site's wording, exactly: "Completed", "Suspended", "In progress", and
+   for a match not yet started the sheet's own phrase — "Followed by",
+   "Not before 3:00 PM", or the printed time. "Final" and "On court" were this
+   app's inventions; two apps naming one state two ways is the kind of drift
+   the reader notices without being able to say why. */
 export function whenLabel(e) {
-  if (e?.status === 'completed') return 'Final'
+  if (e?.status === 'completed') return 'Completed'
   if (isSuspended(e)) return 'Suspended'
-  if (e?.status === 'live') return 'On court'
+  if (e?.status === 'live') return 'In progress'
+  if (e?.start_type === 'followed_by') return 'Followed by'
+  if (e?.start_type === 'not_before') return `Not before ${e.start_time_local ?? ''}`.trim()
   if (e?.start_time_local) return e.start_time_local
   if (e?.start_note) return e.start_note
   return ''
