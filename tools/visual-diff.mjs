@@ -43,6 +43,8 @@ const SCREENS = [
   { name: 'washout-end',  mobile: '/schedule?date=2026-09-01', pwa: '/schedule?date=2026-09-01', scrollEnd: true },
   { name: 'schedule-court', mobile: '/schedule', pwa: '/schedule', appClick: 'Court', pwaClick: 'Court' },
   { name: 'washout-court',  mobile: '/schedule?date=2026-09-01', pwa: '/schedule?date=2026-09-01', appClick: 'Court', pwaClick: 'Court', scrollEnd: true },
+  // A finished row tapped open: the score-history sheet beside the site's popup.
+  { name: 'score-history', mobile: '/schedule?date=2026-09-01', pwa: '/schedule?date=2026-09-01', appClick: 'Madison Keys', pwaClick: 'KEYS' },
   { name: 'washout-open', mobile: '/schedule?date=2026-09-01', pwa: '/schedule?date=2026-09-01', appClick: 'Completed', pwaClick: 'Completed' },
   { name: 'league',    mobile: '/league/10',   pwa: '/leagues/10' },
   // The site keeps standings behind a tab rather than a route, so the PWA side

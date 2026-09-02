@@ -1,58 +1,71 @@
-/*
- * Tennis score formatting, ported from frontend/src/utils/score.jsx.
- *
- * Copied rather than reinvented, and that file says why: the tiebreak rule —
- * show the points only for the set's LOSER — is exactly the detail that drifts
- * between two copies. The web's own schedule page got it wrong the first time
- * by inventing its own.
- *
- * ONE LINE, NOT COLUMNS. The first version of the app's match box put each set
- * in a fixed 15pt cell, so "6(7)" had nowhere to go and wrapped one character
- * per line — a box six hundred points tall with a lone bracket on its own row.
- * Sets are a sentence, not a table.
- *
- * RN has no <sup>, so the tiebreak uses Unicode superscript digits. They are
- * real characters, so they never wrap away from their game count.
- */
+/* The site's score rules (utils/score.jsx parseSet and MatchScoreCard's
+   CompetitorRows), as plain functions so the schedule row and the history
+   sheet draw a score the same way and the rules can be tested under node.
 
-const SUP = { 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' }
-const sup = n => String(n).split('').map(c => SUP[c] ?? c).join('')
+   A cell is a string the way the feeds print it: "6", "7(7)" — games with the
+   tiebreak in brackets — "0r" for the set a player retired in, "w/o" for a
+   walkover. The site renders the tiebreak as a superscript and the marker as
+   a word before the tick; "7(7)" and "0r" printed raw were this app's bug. */
 
-function parseSet(cell) {
-  const s = String(cell ?? '').trim()
-  const g = s.match(/^(\d+)/)
-  const tb = s.match(/\((\d+)\)/)
-  return { g: g ? g[1] : '', tb: tb ? tb[1] : null }
+export function parseSet(cell) {
+  const m = cell != null ? String(cell).replace(/r$/i, '').match(/^(\d+)(?:\((\d+)\))?/) : null
+  return m ? { g: m[1], tb: m[2] ?? null } : { g: '', tb: null }
 }
 
-/** "6-4 7-5 6⁷-7 6-1", or null when there is nothing to show. */
-export function scoreLine(scores) {
-  if (!scores || scores.length < 2) return null
-  const [a, b] = scores
+/* How a side's match ended, off its own cells: 'w/o' marks the player who
+   ADVANCED, 'ret.' the player who QUIT. Null for an ordinary result. */
+export function endedWith(scores, side) {
+  const cells = (scores || [])[side] || []
+  if (cells.some(c => /^w\/?o$/i.test(String(c ?? '').trim()))) return 'w/o'
+  if (cells.some(c => /r$/i.test(String(c ?? '')))) return 'ret.'
+  return null
+}
 
-  // A walkover has no games to format — the withdrawing side's only cell is the
-  // literal "w/o". Without this the set loop skips everything and a completed
-  // match shows no score and no reason.
-  if ([a, b].some(arr => arr?.some(v => /^w\/?o$/i.test(String(v ?? '').trim())))) {
-    return 'walkover'
-  }
+/* ONE source per render, the site's rule: the live snapshot while a match is
+   under way, the record once it is over. Mixing them put a point beside a set
+   score that had already moved on. A stopped row (postponed, carried) keeps
+   the record if it has one and the frozen snapshot otherwise. */
+export function scoreSets(e) {
+  if (!e) return null
+  const lp = e.live_point ?? null
+  const fromLive = lp?.games ?? (Array.isArray(e.live_scores) && e.live_scores.length >= 2
+    ? [e.live_scores[0], e.live_scores[1]] : null)
+  if (e.status === 'live') return fromLive ?? e.scores ?? null
+  if (e.status === 'completed') return e.scores ?? null
+  return e.scores ?? fromLive
+}
 
-  const n = Math.max(a?.length ?? 0, b?.length ?? 0)
-  const sets = []
-  let retired = false
+export function setCount(sets) {
+  return sets ? Math.max(sets[0]?.length ?? 0, sets[1]?.length ?? 0) : 0
+}
 
-  for (let i = 0; i < n; i++) {
-    if (/r$/i.test(a?.[i] ?? '') || /r$/i.test(b?.[i] ?? '')) retired = true
-    const A = parseSet(a?.[i]), B = parseSet(b?.[i])
-    if (A.g === '' && B.g === '') continue
-    const gA = Number(A.g), gB = Number(B.g)
-    // The tiebreak loser is the side with fewer games; only their points show.
-    const loserIsA = A.tb != null && (B.tb == null || gA < gB)
-    if (A.tb != null && loserIsA) sets.push(`${A.g}${sup(A.tb)}-${B.g}`)
-    else if (B.tb != null && !loserIsA) sets.push(`${A.g}-${B.g}${sup(B.tb)}`)
-    else sets.push(`${A.g}-${B.g}`)
-  }
+/* Did `side` (0/1) win set `i`? The set in play is never "won", and a match
+   tiebreak has no set in play. */
+export function setWon(sets, i, side, live, lp) {
+  if (!sets) return false
+  const n = setCount(sets)
+  if (live && i === n - 1 && !lp?.match_tiebreak) return false
+  const x = Number(parseSet(sets[0]?.[i]).g), y = Number(parseSet(sets[1]?.[i]).g)
+  if (Number.isNaN(x) || Number.isNaN(y)) return false
+  return side === 0 ? x > y : y > x
+}
 
-  if (!sets.length) return null
-  return sets.join('  ') + (retired ? ' (ret.)' : '')
+/* Who won, 0/1 or null, in the site's order of trust:
+   1. the server says so (a recorded fact);
+   2. the end marker — "w/o" names the side that advanced, "ret." the side
+      that quit, and both describe matches a scoreline cannot;
+   3. only then, counting sets — WRONG for a player who retires while ahead,
+      so reached only for an ordinary completed row the server did not mark. */
+export function winnerSideOf(e) {
+  if (e?.winner_side === 0 || e?.winner_side === 1) return e.winner_side
+  if (e?.status !== 'completed') return null
+  if (endedWith(e.scores, 0) === 'w/o') return 0
+  if (endedWith(e.scores, 1) === 'w/o') return 1
+  if (endedWith(e.scores, 0) === 'ret.') return 1
+  if (endedWith(e.scores, 1) === 'ret.') return 0
+  const sets = e.scores
+  if (!sets) return null
+  let x = 0, y = 0
+  for (let i = 0; i < setCount(sets); i++) { if (setWon(sets, i, 0, false)) x++; if (setWon(sets, i, 1, false)) y++ }
+  return x === y ? null : (x > y ? 0 : 1)
 }
