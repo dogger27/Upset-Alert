@@ -115,7 +115,10 @@ export default function ScheduleScreen() {
        alone, so the time view — the default — ignored every chip. */
     const visible = all.filter(e => {
       if (view === 'time' && e.discipline !== 'singles' && !showDoubles) return false
-      if (!showDone && e.status === 'completed') return false
+      // "Completed" off means no longer upcoming on this day — the site's
+      // rule: a match postponed off today's sheet leaves with the finished ones,
+      // so what remains is on court now or still waiting to get there.
+      if (!showDone && (e.status === 'completed' || e.status === 'postponed')) return false
       if (view === 'time' && tourSel && e.tour && !tourSel.has(e.tour)) return false
       return true
     })
@@ -136,16 +139,25 @@ export default function ScheduleScreen() {
       return [...known, ...rest].map(c => [c, by.get(c)])
     }
 
-    // Time: live first — this screen is opened to find what is on NOW — then
-    // by the sheet's expected start, then by court order within a slot.
+    // Time: a chronology of the day, the site's rule exactly (Schedule.jsx
+    // timeEntries). Sort on the same instant the row DISPLAYS — when a match
+    // actually began, else the estimate — or a match that went on late sits
+    // among the slots it was printed beside while its own row says "Started
+    // at" some quite different time. A match carried over from yesterday
+    // keeps yesterday's started_at (that is what the field means), so it is
+    // keyed on when it comes back today: resumed_at once it has, the slot it
+    // is due in until then.
+    const key = e => {
+      if (e.resumed_at) return e.resumed_at
+      if (e.status === 'to_be_completed') return e.expected_start_at || ''
+      return e.started_at || e.expected_start_at || ''
+    }
     const sorted = [...visible].sort((a, b) => {
-      const la = isLive(a) ? 0 : a.status === 'completed' ? 2 : 1
-      const lb = isLive(b) ? 0 : b.status === 'completed' ? 2 : 1
-      if (la !== lb) return la - lb
-      const ta = a.expected_start_at || a.printed_start_at || ''
-      const tb = b.expected_start_at || b.printed_start_at || ''
-      if (ta !== tb) return ta.localeCompare(tb)
-      return (a.court_order ?? 99) - (b.court_order ?? 99)
+      const ka = key(a), kb = key(b)
+      if (ka !== kb) return ka < kb ? -1 : 1
+      // Same instant: keep a court's own running order intact.
+      return (a.court || '').localeCompare(b.court || '')
+        || (a.court_order ?? 99) - (b.court_order ?? 99)
     })
     return [[null, sorted]]
   }, [all, view, day.data, showDone, showDoubles, tourSel])

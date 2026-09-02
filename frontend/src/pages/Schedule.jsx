@@ -795,7 +795,11 @@ export default function Schedule() {
       // between tours, and a row that names none is not a row that names the
       // other one.
       if (view === 'time' && tourSel && e.tour && !tourSel.has(e.tour)) return false
-      if (!showDone && e.status === 'completed') return false
+      // "Completed" off means NO LONGER UPCOMING ON THIS DAY, not merely
+      // finished: a match postponed off today's sheet is as done with today
+      // as one that was played, so it goes too. What is left is what is on
+      // court now and what is still waiting to get there.
+      if (!showDone && (e.status === 'completed' || e.status === 'postponed')) return false
       return true
     })
   }, [data, view, showDone, showDoubles, tourSel])

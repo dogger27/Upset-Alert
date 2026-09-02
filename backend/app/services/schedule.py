@@ -38,6 +38,7 @@ from app.services.sofascore_doubles import _sheet_surnames
 from app.models.schedule import (ScheduleChange, ScheduleDocument,
                                  ScheduleEntry, ScheduleEntryPlayer)
 from app.models.tournament import Draw, DrawEntry, Match
+from app.services.live_state import is_suspended
 from app.services.oop_parser import COUNTRY_CODES, parse_pdf
 from app.services.rankings import _norm
 
@@ -2349,9 +2350,39 @@ async def recompute_expected_starts(db, tournament_id: int, play_date: date,
                     # The court was never occupied, so it is freed by whatever
                     # came BEFORE this row: prev_end is left exactly as it was.
                     s.estimated_duration_min = 0
+                elif finished_at:
+                    prev_end = finished_at + gap
+                    s.estimated_duration_min = dur
                 else:
-                    prev_end = (finished_at if finished_at else now + timedelta(
-                        minutes=_remaining_minutes(live_json, s.discipline))) + gap
+                    # A LIVE SCORE DOES NOT MEAN A MATCH ON COURT. A match
+                    # suspended overnight keeps its score, and its row on the
+                    # next day's sheet says "Not before 12:30 PM" — yet this
+                    # branch read "in progress" and answered "done in about an
+                    # hour, from now". At 1 AM in New York that filed every
+                    # "followed by" match behind it between 1 and 6 AM, ahead
+                    # of the day's first ball, and the time view sorted them
+                    # there (US Open R64, 2026-09-02).
+                    # The court is busy from whenever the match can actually be
+                    # on it: its printed slot today if that is still ahead, or
+                    # the end of whatever the chain has in front of it — the
+                    # same rule a "Not before" row gets — and only otherwise
+                    # now. Two signals say it is waiting rather than playing:
+                    # the feed's own suspended flag, or a slot on THIS day that
+                    # has not arrived. A match that merely began a few minutes
+                    # early trips the second by those few minutes, harmlessly.
+                    waiting = (is_suspended(live_json)
+                               or (printed_dt is not None and printed_dt > now))
+                    anchor = now
+                    if waiting:
+                        anchor = max(t for t in (now, printed_dt, prev_end) if t)
+                        if anchor > now:
+                            # Still to come today, so it is a plan like any
+                            # other pending row, and reads as one.
+                            s.expected_start_at = anchor
+                            s.expected_source = ('printed' if anchor == printed_dt
+                                                 else 'estimated')
+                    prev_end = anchor + timedelta(
+                        minutes=_remaining_minutes(live_json, s.discipline)) + gap
                     s.estimated_duration_min = dur
                 if before != (s.expected_start_at, s.expected_source):
                     touched += 1
