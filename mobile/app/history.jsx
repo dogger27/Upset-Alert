@@ -7,17 +7,23 @@
  * it renders what the server considers your record.
  */
 
-import { Stack } from 'expo-router'
+import { Stack, useLocalSearchParams } from 'expo-router'
 import { StyleSheet, Text, View } from 'react-native'
-import { getMyDrawHistory } from '../api'
+import { getMyDrawHistory, getUserDrawHistory } from '../api'
 import { useApi } from '../useApi'
 import { TourBadge } from '../cards'
 import { C, R, S, T } from '../theme'
 import { Card, CardLink, ErrorNote, Loading, Muted, Screen, Title } from '../ui'
 
 export default function History() {
-  const q = useApi('draw-history', getMyDrawHistory)
-  const rows = q.data || []
+  /* ?user= shows someone else's record — the site's per-row Draw History
+     button from the standings. The user endpoint answers { username,
+     entries }; the caller's own answers a bare list with no name on it. */
+  const { user } = useLocalSearchParams()
+  const q = useApi(user ? `draw-history:${user}` : 'draw-history',
+                   () => (user ? getUserDrawHistory(user) : getMyDrawHistory()))
+  const rows = (user ? q.data?.entries : q.data) || []
+  const username = user ? q.data?.username : null
 
   return (
     <>
@@ -26,10 +32,11 @@ export default function History() {
         {q.loading && !q.data ? <Loading /> : null}
         <ErrorNote error={q.error} onRetry={q.refetch} />
 
+        {username ? <Muted>{username}</Muted> : null}
         {q.data && rows.length === 0 && (
           <Card>
             <Title>No draws yet</Title>
-            <Muted>Draws you’ve competed in show up here once they finish.</Muted>
+            <Muted>{username ? `${username} has not yet completed any draws.` : 'Draws you’ve competed in show up here once they finish.'}</Muted>
           </Card>
         )}
 

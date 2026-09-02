@@ -2,13 +2,16 @@
 
 import { Stack, useLocalSearchParams } from 'expo-router'
 import { useMemo, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { getLeague, getLeagueTournaments } from '../../../api'
+import { Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
+import { getLeague, getLeagueTournaments, shareLeagueByEmail } from '../../../api'
+import { useAuth } from '../../../auth'
+import { Sheet } from '../../../sheet'
 import { useApi } from '../../../useApi'
 import { TourBadge } from '../../../cards'
 import { computeCohortInfo, getHomeSection } from '../../../drawStatus'
 import { C, T } from '../../../theme'
-import { Card, CardLink, ErrorNote, Eyebrow, Loading, Muted, Screen, Title } from '../../../ui'
+import { Button, Card, CardLink, ErrorNote, Eyebrow, Loading, Muted, Screen, Title } from '../../../ui'
 
 export default function LeagueDraws() {
   const { id } = useLocalSearchParams()
@@ -37,6 +40,8 @@ export default function LeagueDraws() {
     return { current: cur, previous: prev }
   }, [draws.data])
   const [prevShown, setPrevShown] = useState(5)
+  const [invite, setInvite] = useState(false)
+  const { me } = useAuth()
 
   return (
     <>
@@ -51,6 +56,23 @@ export default function LeagueDraws() {
             <Muted>This league hasn’t played a draw yet.</Muted>
           </Card>
         )}
+
+        {/* The site's "Share League": the invite code, a way to send it, and
+            share-by-email. Offered to the owner, or to any member when the
+            league allows member invites — the site's own gate. */}
+        {league.data?.invite_code && (league.data.owner?.id === me?.id || league.data.allow_member_invites) ? (
+          <View style={s.invite}>
+            <View style={{ flex: 1 }}>
+              <Text style={[T.eyebrow, { color: C.muted }]}>Invite code</Text>
+              <Text style={s.code}>{league.data.invite_code}</Text>
+            </View>
+            <Pressable onPress={() => setInvite(true)} style={({ pressed }) => [s.shareBtn, pressed && { opacity: 0.7 }]}>
+              <Ionicons name="share-outline" size={16} color={C.greenLit} />
+              <Text style={[T.smallMed, { color: C.greenLit }]}>Share</Text>
+            </Pressable>
+          </View>
+        ) : null}
+        <InviteSheet visible={invite} onClose={() => setInvite(false)} league={league.data} />
 
         {current.length > 0 && (
           <>
@@ -126,5 +148,58 @@ const s = StyleSheet.create({
   name: { color: C.ink, fontWeight: '800', fontSize: 16, flexShrink: 1 },
   meta: { color: C.muted, fontSize: 13 },
   more: { alignSelf: 'center', paddingVertical: 8 },
+  invite: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: C.card, borderRadius: 14, borderWidth: 1, borderColor: C.border, padding: 12,
+  },
+  code: { fontFamily: 'SairaCondensed_700Bold', fontSize: 22, letterSpacing: 3, color: C.ink },
+  codeBig: { fontFamily: 'SairaCondensed_700Bold', fontSize: 34, letterSpacing: 5, color: C.ink, textAlign: 'center', paddingVertical: 6 },
+  shareBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: C.borderOn },
+  input: { backgroundColor: C.bg, borderWidth: 1, borderColor: C.border, borderRadius: 10, paddingHorizontal: 12, height: 44, fontSize: 16, color: C.ink },
   chev: { color: C.muted, fontSize: 22, paddingRight: 14 },
 })
+
+
+function InviteSheet({ visible, onClose, league }) {
+  const [emails, setEmails] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [results, setResults] = useState(null)
+  const [error, setError] = useState('')
+  const code = league?.invite_code || ''
+
+  // The system share sheet, not the clipboard: a clipboard needs a native
+  // module the build does not carry, and the share sheet reaches Messages,
+  // Mail and the clipboard anyway.
+  const share = () => Share.share({
+    message: `Join my Upset Alert league "${league?.name}" with invite code ${code} — https://upsetalert.ca/leagues`,
+  }).catch(() => {})
+
+  async function sendEmails() {
+    const list = emails.split(/[\s,;]+/).map(e => e.trim()).filter(Boolean)
+    if (!list.length) return
+    setBusy(true); setError(''); setResults(null)
+    try { setResults(await shareLeagueByEmail(league.id, list)) }
+    catch (e) { setError(e.offline ? 'Could not reach Upset Alert.' : (e.message || 'Could not send')) }
+    finally { setBusy(false) }
+  }
+
+  return (
+    <Sheet visible={visible} onClose={onClose} title="Share League">
+      <Text style={[T.eyebrow, { color: C.muted }]}>Share via invite code</Text>
+      <Text style={[T.small, { color: C.inkBody }]}>Anyone with this code can join from the Leagues tab.</Text>
+      <Text style={s.codeBig} selectable>{code}</Text>
+      <Button label="Share invite code" onPress={share} />
+
+      <Text style={[T.eyebrow, { color: C.muted, marginTop: 8 }]}>Share via email</Text>
+      <TextInput style={s.input} value={emails} onChangeText={setEmails} placeholder="one or more addresses"
+                 placeholderTextColor={C.muted} autoCapitalize="none" autoCorrect={false} keyboardType="email-address" />
+      {(results || []).map((r, i) => (
+        <Text key={i} style={[T.small, { color: r.status === 'added' ? C.greenLit : C.muted }]}>
+          {r.status === 'added' ? `✓ ${r.email} — added as @${r.username}` : `${r.email} — ${r.status}`}
+        </Text>
+      ))}
+      {!!error && <Text style={{ color: C.bad }}>{error}</Text>}
+      <Button label="Send invites" quiet onPress={sendEmails} busy={busy} />
+    </Sheet>
+  )
+}

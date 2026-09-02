@@ -105,6 +105,20 @@ export const getScheduleDay = (playDate) =>
 export const getLeagues = () => request('/leagues')
 export const getLeague = (id) => request(`/leagues/${id}`)
 export const getLeagueTournaments = (id) => request(`/leagues/${id}/tournaments`)
+
+/* The site's league actions, same payloads. Create is private and classic
+   scoring by default — the site offers no other mode from the form. Join
+   takes the code as a query param, uppercased by the caller. */
+export const createLeague = (name, showRealName) =>
+  request('/leagues', { method: 'POST', body: { name, scoring_mode: 'classic', is_public: false, show_real_name: !!showRealName } })
+export const joinLeague = (inviteCode) =>
+  request(`/leagues/join?invite_code=${encodeURIComponent(inviteCode)}`, { method: 'POST' })
+export const shareLeagueByEmail = (leagueId, emails) =>
+  request(`/leagues/${leagueId}/share-email`, { method: 'POST', body: { emails } })
+
+/* Someone else's record. Returns { username, entries }; the caller's own
+   record comes from getMyDrawHistory and has no username on it. */
+export const getUserDrawHistory = (userId) => request(`/auth/users/${userId}/draw-history`)
 export const getRoundScores = (leagueId, tournamentId) =>
   request(`/leagues/${leagueId}/round-scores?tournament_id=${tournamentId}`)
 

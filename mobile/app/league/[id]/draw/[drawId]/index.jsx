@@ -16,12 +16,13 @@
 
 import { Link, Stack, useLocalSearchParams } from 'expo-router'
 import { StyleSheet, Text, View } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../../../auth'
 import { getLeague, getLeagueTournaments, getRoundScores } from '../../../../../api'
 import { useApi } from '../../../../../useApi'
 import { competitionRanks } from '../../../../../scoring'
 import { C } from '../../../../../theme'
-import { Card, ErrorNote, Loading, Muted, Screen, Title } from '../../../../../ui'
+import { Card, CardLink, ErrorNote, Loading, Muted, Screen, Title } from '../../../../../ui'
 
 export default function Standings() {
   const { id, drawId } = useLocalSearchParams()
@@ -93,6 +94,10 @@ export default function Standings() {
                   </View>
                   <Text style={s.num}>{e.correct_count}</Text>
                   <Text style={[s.num, s.total]}>{e.total}</Text>
+                  {/* The site puts a Draw History button on every row. */}
+                  <CardLink href={{ pathname: '/history', params: { user: e.user_id } }} style={s.hist} pressedOpacity={0.6}>
+                    <Ionicons name="time-outline" size={16} color={C.muted} />
+                  </CardLink>
                 </View>
               )
             })}
@@ -125,4 +130,5 @@ const s = StyleSheet.create({
   real: { color: C.muted, fontSize: 12 },
   num: { color: C.ink, width: 62, textAlign: 'right' },
   total: { fontWeight: '800' },
+  hist: { paddingLeft: 6, paddingVertical: 4 },
 })
