@@ -1056,11 +1056,28 @@ export default function Schedule() {
         </div>
       )}
 
-      {!isLoading && !isError && entries.length === 0 && (
+      {/* Two different kinds of nothing. A day the tournament has not published
+          is one thing; a published day the reader's own switches have emptied
+          is another, and calling the second "no order of play" is a confident
+          claim about the tournament made from a filter setting. Name the
+          switch that would bring the rows back. */}
+      {!isLoading && !isError && (data?.entries?.length ?? 0) === 0 && (
         <div className="sched-empty">
           No order of play published for this day.
           <div className="sched-empty-sub">
             Schedules appear once the tournament releases them, usually the evening before.
+          </div>
+        </div>
+      )}
+      {!isLoading && !isError && (data?.entries?.length ?? 0) > 0 && entries.length === 0 && (
+        <div className="sched-empty">
+          Nothing left to show for this day.
+          <div className="sched-empty-sub">
+            {!showDone && data.entries.some(e => e.status === 'completed' || e.status === 'postponed')
+              ? 'Every match listed is finished or postponed — switch Completed on to see them.'
+              : !showDoubles && data.entries.every(e => e.discipline !== 'singles')
+                ? 'Only doubles is listed — switch Doubles on to see it.'
+                : 'The current switches hide every match listed.'}
           </div>
         </div>
       )}
