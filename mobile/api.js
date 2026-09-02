@@ -158,7 +158,10 @@ export const getRoundScores = (leagueId, tournamentId) =>
    as DrawEntryOut (or null — an unplayed slot), plus round_number, round_name,
    is_bye, status and scores. */
 export const getDraw = (tournamentId) => request(`/tournaments/${tournamentId}/draw`)
-export const getPredictions = (tournamentId) => request(`/predictions/${tournamentId}`)
+/* Mine by default; another member's with user_id, which the server only
+   honours once picking has closed — the site's sidebar rule. */
+export const getPredictions = (tournamentId, userId) =>
+  request(`/predictions/${tournamentId}${userId != null ? `?user_id=${userId}` : ''}`)
 
 /* Device registration. install_id is the identity, not device_token — see
    install.js for why keying on the token duplicates rows. */
