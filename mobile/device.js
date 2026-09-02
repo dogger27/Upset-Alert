@@ -42,6 +42,14 @@ try {
 }
 import { getInstallId } from './install'
 import { registerDevice } from './api'
+import { capabilities as liveCapabilities, isAvailable as liveAvailable } from './modules/live-activity'
+
+/* The Live Activity module's capability report, or null when this build has
+   no module — a top-level import of a missing native module throws at load,
+   so the wrapper's isAvailable() guards it (README: build gotcha). */
+function liveCaps() {
+  try { return liveAvailable() ? liveCapabilities() : null } catch { return null }
+}
 
 export async function registerThisDevice() {
   /* There is no such thing as a web device here. This whole file exists to
@@ -97,6 +105,12 @@ export async function registerThisDevice() {
     os_version: String(Platform.Version || '') || undefined,
     locale: Intl.DateTimeFormat().resolvedOptions().locale || undefined,
     time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone || undefined,
+    // ActivityAuthorizationInfo().frequentPushesEnabled — the user's per-app
+    // "More Frequent Updates" switch. The server sizes this device's
+    // priority-10 budget from it, so it travels with every registration.
+    // undefined (not false) when the module is absent: absence is not a
+    // refusal, and the server keeps whatever it last knew.
+    frequent_pushes: liveCaps()?.frequentPushes,
   }
 
   const result = await registerDevice(payload)

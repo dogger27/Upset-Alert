@@ -80,6 +80,7 @@ class DeviceIn(BaseModel):
     device_model: Optional[str] = None
     locale: Optional[str] = None
     time_zone: Optional[str] = None
+    frequent_pushes: Optional[bool] = None
 
 
 @router.post("/devices")
@@ -167,6 +168,8 @@ async def register_device(
     device.device_model = body.device_model
     device.locale = body.locale
     device.time_zone = body.time_zone
+    if body.frequent_pushes is not None:
+        device.frequent_pushes = body.frequent_pushes
     device.last_seen_at = now
     # A device that comes back is not disabled any more, whatever Apple said
     # about its old token. This is what makes the soft delete self-healing.

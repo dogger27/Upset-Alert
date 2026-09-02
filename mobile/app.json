@@ -11,7 +11,8 @@
       "bundleIdentifier": "ca.upsetalert.app",
       "infoPlist": {
         "NSSupportsLiveActivities": true,
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSSupportsLiveActivitiesFrequentUpdates": true
       },
       "config": {
         "usesNonExemptEncryption": false
