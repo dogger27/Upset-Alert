@@ -83,7 +83,14 @@ export default function Standings() {
                   key={e.user_id}
                   style={[s.row, i % 2 ? s.alt : null, mine && s.mine]}
                 >
-                  <Text style={s.rank}>{ranks[i]}</Text>
+                  {/* The site's place medal, on a finished draw only: a
+                      podium mid-tournament would be a prediction. Ties share
+                      a place, so two 1sts both get the trophy. */}
+                  <Text style={s.rank}>
+                    {t?.status === 'completed' && ranks[i] <= 3
+                      ? ['🏆', '🥈', '🥉'][ranks[i] - 1]
+                      : ranks[i]}
+                  </Text>
                   <View style={s.who}>
                     <Text style={[s.name, mine && s.nameMine]} numberOfLines={1}>
                       {e.username}
