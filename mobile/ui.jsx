@@ -171,12 +171,20 @@ const u = StyleSheet.create({
  * The inner-View form is what the dashboard's working cards already do, so it
  * is right on both targets either way.)
  */
-export function CardLink({ href, style, children, pressedOpacity = 0.75 }) {
-  return (
+export function CardLink({ href, style, children, pressedOpacity = 0.75, grow = false }) {
+  /* `grow`: take the row's spare width, so the whole row is the hit target and
+     a sibling link after it lands at the edge.
+
+     The flex lives on a View OUTSIDE the Link — not on the Pressable. A style
+     on the Pressable that `Link asChild` clones is dropped (that is the whole
+     reason this component exists), and a flex put there vanished the same way:
+     the Last Week rows packed left with their icon floating mid-row. */
+  const link = (
     <Link href={href} asChild>
       <Pressable style={({ pressed }) => (pressed ? { opacity: pressedOpacity } : null)}>
         <View style={style}>{children}</View>
       </Pressable>
     </Link>
   )
+  return grow ? <View style={{ flex: 1 }}>{link}</View> : link
 }
