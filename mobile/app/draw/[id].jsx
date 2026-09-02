@@ -36,6 +36,7 @@ import { C, PICK, R, S, SHADOW, T } from '../../theme'
 import { EntryChip, PlayerName, PosBadge, TourBadge } from '../../cards'
 import { scoreLine } from '../../score'
 import { Card, ErrorNote, Loading, Muted, Screen, Title } from '../../ui'
+import { RoundScrub } from '../../RoundScrub'
 
 export default function DrawScreen() {
   const { id } = useLocalSearchParams()
@@ -183,19 +184,24 @@ export default function DrawScreen() {
           </ScrollView>
         )}
 
-        <ScrollView
-          contentContainerStyle={s.list}
-          showsVerticalScrollIndicator={false}
-        >
-          {shown ? shown[1].map(m => (
-            <MatchRow key={m.id} m={m} pick={pickBy.get(m.id)} drawRanks={drawRanks}
-                      zone={zone} slugById={slugById} onH2H={setH2H}
-                      onPredictors={setPredictors} />
-          )) : null}
-          {draw.data && !rounds.length && (
-            <Card><Title>No matches yet</Title><Muted>This draw hasn’t been released.</Muted></Card>
-          )}
-        </ScrollView>
+        {/* Swipe sideways to pull the next round in; the row under the
+            finger stays under the finger. The strip above still jumps. */}
+        {rounds.length > 0 && (
+          <RoundScrub
+            rounds={rounds}
+            active={shown ? shown[0] : active}
+            onCommit={setPicked}
+            columnStyle={s.list}
+            renderRow={m => (
+              <MatchRow m={m} pick={pickBy.get(m.id)} drawRanks={drawRanks}
+                        zone={zone} slugById={slugById} onH2H={setH2H}
+                        onPredictors={setPredictors} />
+            )}
+          />
+        )}
+        {draw.data && !rounds.length && (
+          <Card><Title>No matches yet</Title><Muted>This draw hasn’t been released.</Muted></Card>
+        )}
       </Screen>
 
       {/* One sheet for the whole screen, not one per match: 64 mounted Modals
