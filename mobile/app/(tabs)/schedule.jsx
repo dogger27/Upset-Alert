@@ -292,7 +292,19 @@ function EntryRow({ e, venueMode, venueTz, onH2H }) {
   /* The same split the site makes: venue mode renders a started match's
      time in the VENUE's zone, the reader's mode in theirs. Both show it —
      hiding it in venue mode was this app's invention. */
-  const started = clockTime(e.resumed_at || e.started_at, venueMode ? venueTz : undefined)
+  /* The site's startedLine, exactly: only a match on court or finished names
+     its start, and one picked up again names the time it came BACK. A row
+     carried over from yesterday still holds yesterday's started_at — that is
+     what the field means — so it names the slot it returns in instead, like
+     any pending row. */
+  const resumed = !!e.resumed_at
+    && (!e.started_at || new Date(e.resumed_at) > new Date(e.started_at))
+  const started = (live || done)
+    ? clockTime(resumed ? e.resumed_at : e.started_at, venueMode ? venueTz : undefined)
+    : null
+  const startedWord = resumed ? 'Resumed' : 'Started'
+  const postponed = e.status === 'postponed'
+  const carried = e.status === 'to_be_completed'
   /* "Wed 8:00 AM", never "Tomorrow at 8:00 AM PDT" — that ran off the end of
      the row and truncated to "Tomorrow at 8:00 …". Note the site does NOT show
      an expected start on its schedule at all: the printed start already sits at
@@ -314,7 +326,10 @@ function EntryRow({ e, venueMode, venueTz, onH2H }) {
             .filter(Boolean).join(' · ')}
         </Text>
         <Text style={[T.tiny, {
-          color: suspended ? C.warn : live ? C.greenLit : done ? C.faint : C.muted,
+          // The site's badge colours: amber for play that stopped, blue for a
+          // match carried to a later day, green for one on court.
+          color: suspended || postponed ? C.warn : carried ? C.info
+            : live ? C.greenLit : done ? C.faint : C.muted,
         }]}>
           {whenLabel(e, venueMode ? venueTz : undefined, venueMode)}
         </Text>
@@ -346,7 +361,7 @@ function EntryRow({ e, venueMode, venueTz, onH2H }) {
       {(e.court || started || upcoming || h2hPair) && (
         <View style={s.footLine}>
           <Text style={[T.tiny, { color: C.faint, flex: 1 }]} numberOfLines={1}>
-            {[e.court, started ? `Started ${started}` : upcoming].filter(Boolean).join(' · ')}
+            {[e.court, started ? `${startedWord} ${started}` : upcoming].filter(Boolean).join(' · ')}
           </Text>
           {h2hPair && (
             <Pressable onPress={() => onH2H(h2hPair)} hitSlop={8} style={s.h2hChip}>

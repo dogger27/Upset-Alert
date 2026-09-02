@@ -68,12 +68,20 @@ export function winnerSide(e) {
   return null
 }
 
+/* Live is the SERVER's word. A suspended match is still status 'live' (play
+   stopped, score stands), so nothing is lost by trusting it — and a match
+   postponed off the day, or carried to a later one, keeps a frozen point with
+   the suspended flag on it. Reading that flag as "live" gave a postponed row
+   the live border and counted it on the Today tab. */
 export function isLive(e) {
-  return e?.status === 'live' || !!e?.live_point?.suspended
+  return e?.status === 'live'
 }
 
+/* Suspended is a sub-state of live, as the site draws it: the badge only
+   swaps wording on a live row. */
 export function isSuspended(e) {
-  return e?.live_scores?.[4] === 'suspended' || !!e?.live_point?.suspended
+  return e?.status === 'live'
+    && (e?.live_scores?.[4] === 'suspended' || !!e?.live_point?.suspended)
 }
 
 /* When it starts, in the words the sheet used.
@@ -154,6 +162,10 @@ function printedStart(e, zone, venueMode) {
 export function whenLabel(e, zone, venueMode) {
   if (!e) return ''
   if (e.status === 'completed') return 'Completed'
+  // The two halves of a washed-out day, in the site's words: abandoned here,
+  // resumed there. Neither is "in progress" and neither is a plan.
+  if (e.status === 'postponed') return 'Postponed'
+  if (e.status === 'to_be_completed') return 'To be completed'
   if (isSuspended(e)) return 'Suspended'
   if (e.status === 'live') return 'In progress'
   return canon(printedStart(e, zone, venueMode))
