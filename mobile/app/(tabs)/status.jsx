@@ -9,18 +9,20 @@
  */
 
 import { useState } from 'react'
-import { Text } from 'react-native'
+import { Pressable, Text } from 'react-native'
 import Constants from 'expo-constants'
 import { useAuth } from '../../auth'
 import { getOffer } from '../../api'
 import { useApi } from '../../useApi'
 import { capabilities, isAvailable } from '../../modules/live-activity'
+import { DeleteAccountSheet, NotificationPrefs, PasswordSheet } from '../../account'
 import { showOnLockScreen, useShowingOnLockScreen } from '../../liveactivity'
-import { C } from '../../theme'
+import { C, T } from '../../theme'
 import { Button, Card, ErrorNote, Muted, Row, Screen, Title } from '../../ui'
 
 export default function Status() {
   const { config, me, phase, signOut } = useAuth()
+  const [sheet, setSheet] = useState(null)
   const ready = phase === 'ready'
   const offer = useApi(ready ? 'offer' : null, getOffer, { enabled: ready })
 
@@ -123,8 +125,18 @@ export default function Status() {
           cards on the opening screen, which put a destructive action in the
           middle of the one screen the app opens to. Status is the account
           screen; this is where someone goes looking for it. */}
+      <NotificationPrefs />
+
       <Card>
         <Title>Account</Title>
+        <Button label="Change password" quiet onPress={() => setSheet('password')} />
+        {/* Required in-app by App Store guideline 5.1.1(v). Quiet and last:
+            it is the one irreversible thing on this screen. */}
+        <Pressable onPress={() => setSheet('delete')} hitSlop={8} style={{ alignSelf: 'center', paddingVertical: 6 }}>
+          <Text style={[T.smallMed, { color: C.bad }]}>Delete my account</Text>
+        </Pressable>
+        <PasswordSheet visible={sheet === 'password'} onClose={() => setSheet(null)} />
+        <DeleteAccountSheet visible={sheet === 'delete'} onClose={() => setSheet(null)} onDeleted={() => { setSheet(null); signOut() }} />
         {/* `quiet` rather than a tone: Button only knows 'clay' and green, so
             tone="danger" would have rendered a GREEN sign-out button. Outlined
             is right regardless — this is not the screen's primary action.
