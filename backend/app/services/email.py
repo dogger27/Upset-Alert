@@ -454,19 +454,16 @@ def _round_complete_league_block(name: str, rows: list[tuple], is_last: bool) ->
     """
     def _row(i, rank, cname, score, you):
         if rank is None:  # ellipsis / gap row
-            return (
-                '<tr style="background:#ffffff">'
-                '<td colspan="2" style="padding:2px 12px;color:#9ca3af;text-align:center">…</td>'
-                '</tr>'
-            )
-        bg = "#cfe8ff" if you else ("#ffffff" if i % 2 == 0 else "#f9fafb")
-        weight = "700" if you else "400"
+            return '<tr><td colspan="2" style="padding:2px 12px;color:#9ca3af;text-align:center">…</td></tr>'
+        # Lean markup, same look — see _status_badge for why bytes matter here.
+        bg = "#cfe8ff" if you else ("" if i % 2 == 0 else "#f9fafb")
+        tr = f'<tr style="background:{bg}">' if bg else '<tr>'
+        bold = ';font-weight:700' if you else ''
         return (
-            f'<tr style="background:{bg}">'
-            f'<td style="padding:7px 12px 7px 14px;font-weight:{weight};color:#111">'
+            f'{tr}'
+            f'<td style="padding:7px 12px 7px 14px{bold}">'
             f'<span style="color:#9ca3af">{rank}.</span>&nbsp;{cname}</td>'
-            f'<td align="center" width="90" style="padding:7px 12px;text-align:center;width:90px;'
-            f'font-weight:{"700" if you else "400"};color:#111">{score:g}</td>'
+            f'<td align="center" style="padding:7px 12px;width:90px;text-align:center{bold}">{score:g}</td>'
             f'</tr>'
         )
     body_rows = "".join(_row(i, *r) for i, r in enumerate(rows))
@@ -474,7 +471,7 @@ def _round_complete_league_block(name: str, rows: list[tuple], is_last: bool) ->
     return (
         f'<table width="100%" cellpadding="0" cellspacing="0" border="0" '
         f'style="width:100%;border-collapse:collapse;font-size:14px;margin:{margin};'
-        f'border:1px solid #e5e7eb">'
+        f'border:1px solid #e5e7eb;color:#111">'
         # League name — header spanning both columns, above the Name/Score headers.
         f'<tr><td colspan="2" style="padding:11px 12px;text-align:center;font-weight:700;'
         f'font-size:16px;color:#111;background:#ffffff;'
@@ -501,11 +498,14 @@ def _status_badge(status: str) -> str:
     """
     if not status:
         return ""
+    # SHORT ON PURPOSE. Gmail clips a message over 102 KB wherever the limit
+    # falls — on 2026-09-02 the US Open R128 digest (128 result rows, five
+    # leagues) was 112 KB and the last row rendered as a bare ✗. This span
+    # appears once per seeded or special entry; every byte here is paid ~120
+    # times per email.
     return (
-        f'<span style="display:inline-block;margin-left:5px;padding:0 4px;'
-        f'font-size:11px;font-weight:700;line-height:16px;color:#6b7280;'
-        f'background:#f3f4f6;border:1px solid #e5e7eb;border-radius:3px">'
-        f'{_esc(status)}</span>'
+        f'<span style="margin-left:4px;padding:0 3px;font-size:11px;font-weight:700;'
+        f'color:#6b7280;background:#f3f4f6;border:1px solid #e5e7eb">{_esc(status)}</span>'
     )
 
 
@@ -514,19 +514,20 @@ def _match_result_row(i: int, winner_last: str, winner_status: str,
                       score: str, is_correct: bool) -> str:
     # Alternating row background (matches _round_complete_league_block) instead
     # of bolding the winner name — easier to scan a long list of results.
-    bg = "#ffffff" if i % 2 == 0 else "#f9fafb"
     # Mirrors the app's pick-result convention (BracketView.jsx): ✓ #15803d / ✗ #dc2626.
     mark_color = "#15803d" if is_correct else "#dc2626"
     mark_char = "&#10003;" if is_correct else "&#10007;"
+    # Half the bytes of the first version (see _status_badge): the table sets
+    # the font size and ink once, even rows keep the default white, and the
+    # mark cell's width is stated once.
+    tr = '<tr style="background:#f9fafb">' if i % 2 else '<tr>'
     return (
-        f'<tr style="background:{bg}">'
-        f'<td width="24" style="padding:8px 4px 8px 12px;font-size:14px;'
-        f'font-weight:700;color:{mark_color};width:24px">{mark_char}</td>'
-        f'<td style="padding:8px 12px 8px 4px;font-size:14px;color:#111">'
+        f'{tr}'
+        f'<td style="padding:8px 4px 8px 12px;width:24px;font-weight:700;color:{mark_color}">{mark_char}</td>'
+        f'<td style="padding:8px 4px">'
         f'{_esc(winner_last)}{_status_badge(winner_status)} def. '
         f'{_esc(loser_last)}{_status_badge(loser_status)}</td>'
-        f'<td align="right" style="padding:8px 12px;font-size:14px;color:#444;'
-        f'white-space:nowrap;text-align:right">{score}</td>'
+        f'<td align="right" style="padding:8px 12px;color:#444;white-space:nowrap">{score}</td>'
         f'</tr>'
     )
 
@@ -553,7 +554,7 @@ def _round_results_widget(round_name: str, results: list[tuple]) -> str:
           </div>
           <table width="100%" cellpadding="0" cellspacing="0" border="0"
                  style="width:100%;border-collapse:collapse;border:1px solid #e5e7eb;border-top:none;
-                        border-bottom-left-radius:6px;border-bottom-right-radius:6px">
+                        border-bottom-left-radius:6px;border-bottom-right-radius:6px;font-size:14px;color:#111">
             <tbody>{rows}</tbody>
           </table>
         </div>"""
