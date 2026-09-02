@@ -300,10 +300,14 @@ export function FlagSlot({ codes, slots = 1 }) {
  * The wrapper takes the row's spare width (flex: 1) precisely so onLayout
  * reports how much room there IS, not how much the text happened to use.
  */
-export function PlayerName({ name, doubles = false, style }) {
+export function PlayerName({ name, doubles = false, shrinkOnly = false, style }) {
+  /* shrinkOnly: a USERNAME. It cannot be initialised or reduced to a surname —
+     "koounderpressure" has neither — but the last two rungs still apply:
+     shrink first, and only then "…". Truncating a handle is the same loss as
+     truncating a surname; it is the identifier. */
   const forms = useMemo(
-    () => (doubles ? pairForms(name) : nameForms(name)),
-    [name, doubles],
+    () => (shrinkOnly ? [String(name || '')] : doubles ? pairForms(name) : nameForms(name)),
+    [name, doubles, shrinkOnly],
   )
   const [avail, setAvail] = useState(null)
   const flat = StyleSheet.flatten(style) || {}

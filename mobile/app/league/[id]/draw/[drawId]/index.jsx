@@ -22,6 +22,7 @@ import { getLeague, getLeagueTournaments, getRoundScores } from '../../../../../
 import { useApi } from '../../../../../useApi'
 import { competitionRanks } from '../../../../../scoring'
 import { C } from '../../../../../theme'
+import { PlayerName } from '../../../../../cards'
 import { Card, CardLink, ErrorNote, Loading, Muted, Screen, Title } from '../../../../../ui'
 
 export default function Standings() {
@@ -92,11 +93,9 @@ export default function Standings() {
                       : ranks[i]}
                   </Text>
                   <View style={s.who}>
-                    <Text style={[s.name, mine && s.nameMine]} numberOfLines={1}>
-                      {e.username}
-                    </Text>
+                    <PlayerName name={e.username} shrinkOnly style={[s.name, mine && s.nameMine]} />
                     {showReal && e.full_name ? (
-                      <Text style={s.real} numberOfLines={1}>{e.full_name}</Text>
+                      <PlayerName name={e.full_name} style={s.real} />
                     ) : null}
                   </View>
                   <Text style={s.num}>{e.correct_count}</Text>
