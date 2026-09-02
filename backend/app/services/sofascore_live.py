@@ -712,6 +712,7 @@ class SofascoreLiveMonitor:
         logger.info("Sofascore live poller started (interval=%ss)", POLL_INTERVAL)
         while not self._stop.is_set():
             delay = POLL_INTERVAL
+            started = asyncio.get_running_loop().time()
             try:
                 async with AsyncSessionLocal() as db:
                     if not await _anything_on_court(db):
@@ -767,6 +768,16 @@ class SofascoreLiveMonitor:
                 delay = min(POLL_INTERVAL * state.consecutive_errors, 300.0)
 
             try:
+                # THE INTERVAL IS THE CYCLE, NOT THE GAP. The fetch through the
+                # residential proxy takes ~1.3 s and the writes a little more;
+                # sleeping the full interval on top made the real cycle ~11.5 s,
+                # and every one of those seconds was Lock Screen lag. Sleep the
+                # remainder, so a 10 s interval polls every 10 s — the same
+                # request rate the number always promised. Backoffs and the
+                # idle gap are left exactly as they were.
+                if delay == POLL_INTERVAL:
+                    elapsed = asyncio.get_running_loop().time() - started
+                    delay = max(1.0, POLL_INTERVAL - elapsed)
                 await asyncio.wait_for(self._stop.wait(), timeout=delay)
             except asyncio.TimeoutError:
                 pass
