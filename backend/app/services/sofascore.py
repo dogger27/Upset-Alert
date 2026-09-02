@@ -417,7 +417,6 @@ async def probe_direct(db) -> bool:
     the point of the cooloff is that a banned IP is left completely alone, not
     polled politely.
     """
-    global _egress_direct
     from datetime import datetime, timezone as _tz
     from app.services import settings as st
 
