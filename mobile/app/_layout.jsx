@@ -93,6 +93,7 @@ export default function RootLayout() {
           <Stack.Screen name="sign-in" options={{ headerShown: false }} />
           <Stack.Screen name="draw/[id]" options={{ title: 'Draw' }} />
           <Stack.Screen name="history" options={{ title: 'Draw history' }} />
+          <Stack.Screen name="standings/[id]" options={{ title: 'Standings' }} />
           <Stack.Screen name="hall-of-fame" options={{ title: 'Hall of Fame' }} />
           <Stack.Screen name="rules" options={{ title: 'Rules' }} />
           <Stack.Screen name="forgot-password" options={{ title: 'Forgot password' }} />

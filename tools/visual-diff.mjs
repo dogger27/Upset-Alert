@@ -53,6 +53,8 @@ const SCREENS = [
   { name: 'league-settings', mobile: '/league/10', pwa: '/leagues/10', appClick: 'Settings' },
   // The league page's foot: the Members tally beside the site's Members tab.
   { name: 'league-members', mobile: '/league/10', pwa: '/leagues/10', pwaClick: 'Members', scrollEnd: true },
+  // Global standings for a draw — the site's Global league list for it.
+  { name: 'standings-global', mobile: '/standings/77', pwa: '/leagues' },
   { name: 'washout-open', mobile: '/schedule?date=2026-09-01', pwa: '/schedule?date=2026-09-01', appClick: 'Completed', pwaClick: 'Completed' },
   { name: 'league',    mobile: '/league/10',   pwa: '/leagues/10' },
   // The site keeps standings behind a tab rather than a route, so the PWA side
