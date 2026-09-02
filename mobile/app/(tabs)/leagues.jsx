@@ -70,10 +70,15 @@ export default function Leagues() {
           <Text style={s.shortcutSub}>Best ever performances</Text>
         </CardLink>
       </View>
-      <CardLink href="/rules" style={[s.shortcut, { flex: 0 }]}>
-        <Text style={s.shortcutTitle}>Rules</Text>
-        <Text style={s.shortcutSub}>How picks score, tier by tier</Text>
-      </CardLink>
+      {/* Same row shape as the tiles above, one tile wide: the standalone
+          version overrode flex to 0 on the inner View, which on the web build
+          collapsed the card to its title with the subtitle spilling below it. */}
+      <View style={s.shortcuts}>
+        <CardLink href="/rules" style={s.shortcut} grow>
+          <Text style={s.shortcutTitle}>Rules</Text>
+          <Text style={s.shortcutSub}>How picks score, tier by tier</Text>
+        </CardLink>
+      </View>
 
       {leagues?.length === 0 && (
         <Card>

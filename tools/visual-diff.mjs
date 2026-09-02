@@ -49,6 +49,8 @@ const SCREENS = [
   { name: 'draw-score', mobile: '/draw/77', pwa: '/tournaments/77', appClick: 'Halys', pwaClick: 'Halys' },
   // Another member's picks on the bracket, reached from a standings row.
   { name: 'draw-other', mobile: '/draw/77?user=43&name=piotr_lotr86', pwa: '/tournaments/77?user=43' },
+  // The league settings sheet (owner / league admin / site admin).
+  { name: 'league-settings', mobile: '/league/10', pwa: '/leagues/10', appClick: 'Settings' },
   { name: 'washout-open', mobile: '/schedule?date=2026-09-01', pwa: '/schedule?date=2026-09-01', appClick: 'Completed', pwaClick: 'Completed' },
   { name: 'league',    mobile: '/league/10',   pwa: '/leagues/10' },
   // The site keeps standings behind a tab rather than a route, so the PWA side

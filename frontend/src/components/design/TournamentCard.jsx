@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { TierBadge } from './TierBadge.jsx'
 import { SurfacePill } from './SurfacePill.jsx'
 
@@ -287,6 +287,7 @@ function GlobeIcon() {
 }
 
 export function TournamentCard({ tour = 'ATP', name, city, surface = 'grass', tier = '500', dateRange, section = 'open', pickState = null, drawDates = null, to, wikiUrl, oopTo, onGuestClick }) {
+  const navigate = useNavigate()
   const [hover, setHover] = useState(false)
   const isATP = String(tour).toUpperCase() === 'ATP'
   const accent = isATP ? 'var(--atp-500)' : 'var(--wta-500)'
@@ -403,10 +404,24 @@ export function TournamentCard({ tour = 'ATP', name, city, surface = 'grass', ti
     )
   }
   if (to && interactive) {
+    /* NOT an anchor. The card holds two real links of its own — the order of
+       play and, before a sheet exists, the Wikipedia draw — and an <a> inside
+       an <a> is invalid HTML that the browser splits unpredictably (React
+       warned "validateDOMNesting: <a> cannot appear as a descendant of <a>"
+       on every dashboard render). The card navigates like a link — click,
+       Enter, Space — and stays a div, so the links inside it are the only
+       anchors. Their own stopPropagation keeps a tap on them from also
+       opening the draw. */
+    const go = () => navigate(to)
+    const onKey = (e) => {
+      if (e.target !== e.currentTarget) return
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go() }
+    }
     return (
-      <Link to={to} style={cardStyle} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+      <div role="link" tabIndex={0} style={cardStyle} onClick={go} onKeyDown={onKey}
+           onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
         {inner}
-      </Link>
+      </div>
     )
   }
   return (
