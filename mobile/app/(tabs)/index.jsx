@@ -19,7 +19,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Redirect } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
-import { StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '../../auth'
 import { getDrawStandings, getEntryStatus, listTournaments } from '../../api'
 import { useApi } from '../../useApi'
@@ -29,6 +29,7 @@ import { C, R, S, T } from '../../theme'
 import { StatusChip, SurfacePill, TourCard } from '../../cards'
 import { dateRange } from '../../dates'
 import { Button, Card, CardLink, ErrorNote, Eyebrow, Loading, Muted, Screen, Title } from '../../ui'
+import { MenuSheet } from '../../menu'
 
 /* The site's rule for whether a card is a link at all: a draw that is neither
    completed nor released has nothing to show, and a live link to an empty draw
@@ -170,6 +171,7 @@ export default function Dashboard() {
    and it was the widest thing on the row after the wordmark. The circle goes
    somewhere; the text went nowhere. */
 function Head() {
+  const [menu, setMenu] = useState(false)
   return (
     <View style={s.head}>
       <Text style={s.brand}>UPSET <Text style={{ color: C.clay }}>ALERT!</Text></Text>
@@ -177,9 +179,17 @@ function Head() {
           drops the style — it is the same trap CardLink exists to close, and I
           walked straight back into it: the ring simply did not draw and the
           icon floated in the header. */}
-      <CardLink href="/status" style={s.avatar} pressedOpacity={0.7}>
-        <Ionicons name="person-outline" size={18} color={C.inkBody} />
-      </CardLink>
+      <View style={s.headRight}>
+        <CardLink href="/status" style={s.avatar} pressedOpacity={0.7}>
+          <Ionicons name="person-outline" size={18} color={C.inkBody} />
+        </CardLink>
+        {/* The hamburger, top-right: Draw History, Hall of Fame, Rules, About. */}
+        <Pressable onPress={() => setMenu(true)} style={({ pressed }) => [s.avatar, pressed && { opacity: 0.7 }]}
+                   accessibilityRole="button" accessibilityLabel="Menu">
+          <Ionicons name="menu" size={20} color={C.inkBody} />
+        </Pressable>
+      </View>
+      <MenuSheet visible={menu} onClose={() => setMenu(false)} />
     </View>
   )
 }
@@ -344,6 +354,7 @@ function ordinal(n) {
 
 
 const s = StyleSheet.create({
+  headRight: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
   head: {
     flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between',
     paddingTop: S.sm, paddingBottom: S.xs,

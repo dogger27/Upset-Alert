@@ -60,26 +60,6 @@ export default function Leagues() {
       </View>
       <LeagueForms modal={modal} onClose={() => setModal(null)} onChanged={refetch} />
 
-      <View style={s.shortcuts}>
-        <CardLink href="/history" style={s.shortcut}>
-          <Text style={s.shortcutTitle}>Draw history</Text>
-          <Text style={s.shortcutSub}>Every draw you’ve played</Text>
-        </CardLink>
-        <CardLink href="/hall-of-fame" style={s.shortcut}>
-          <Text style={s.shortcutTitle}>Hall of Fame</Text>
-          <Text style={s.shortcutSub}>Best ever performances</Text>
-        </CardLink>
-      </View>
-      {/* Same row shape as the tiles above, one tile wide: the standalone
-          version overrode flex to 0 on the inner View, which on the web build
-          collapsed the card to its title with the subtitle spilling below it. */}
-      <View style={s.shortcuts}>
-        <CardLink href="/rules" style={s.shortcut} grow>
-          <Text style={s.shortcutTitle}>Rules</Text>
-          <Text style={s.shortcutSub}>How picks score, tier by tier</Text>
-        </CardLink>
-      </View>
-
       {leagues?.length === 0 && (
         <Card>
           <Title>No leagues yet</Title>

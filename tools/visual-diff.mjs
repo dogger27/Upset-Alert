@@ -55,6 +55,8 @@ const SCREENS = [
   { name: 'league-members', mobile: '/league/10', pwa: '/leagues/10', pwaClick: 'Members', scrollEnd: true },
   // Global standings for a draw — the site's Global league list for it.
   { name: 'standings-global', mobile: '/standings/77', pwa: '/leagues' },
+  // The dashboard's hamburger, open.
+  { name: 'menu', mobile: '/', pwa: '/', appClick: 'Menu', pwaClick: 'Menu' },
   { name: 'washout-open', mobile: '/schedule?date=2026-09-01', pwa: '/schedule?date=2026-09-01', appClick: 'Completed', pwaClick: 'Completed' },
   { name: 'league',    mobile: '/league/10',   pwa: '/leagues/10' },
   // The site keeps standings behind a tab rather than a route, so the PWA side
@@ -133,7 +135,10 @@ async function shoot(url, kind, name, click, noAuth, scrollEnd) {
 
   // Optional: put the page into the state being compared (a tab, a filter).
   if (click) {
-    await page.getByText(click, { exact: false }).first().click({ timeout: 8000 }).catch(() => {})
+    // Text first; then the accessible name, for icon buttons (the hamburger).
+    const byText = page.getByText(click, { exact: false }).first()
+    if (await byText.count()) await byText.click({ timeout: 8000 }).catch(() => {})
+    else await page.getByLabel(click, { exact: false }).first().click({ timeout: 8000 }).catch(() => {})
     await page.waitForTimeout(2000)
   }
 
