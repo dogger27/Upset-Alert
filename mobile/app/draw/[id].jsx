@@ -42,10 +42,15 @@ import { Card, ErrorNote, Loading, Muted, Screen, Title } from '../../ui'
 import { RoundScrub } from '../../RoundScrub'
 
 export default function DrawScreen() {
-  const { id } = useLocalSearchParams()
+  const { id, user, name } = useLocalSearchParams()
   const { me } = useAuth()
   const draw = useApi(`draw:${id}`, () => getDraw(id))
-  const preds = useApi(`preds:${id}`, () => getPredictions(id))
+  /* ?user= shows ANOTHER member's picks on this bracket — the site's sidebar
+     click, reached here from a standings row. Their name rides along in
+     ?name= so the banner can say whose picks these are without a second
+     request. Null, or my own id, means me. */
+  const viewing = user && Number(user) !== me?.id ? Number(user) : null
+  const preds = useApi(`preds:${id}:${viewing ?? 'me'}`, () => getPredictions(id, viewing))
   useLiveUpdates(draw.data?.tournament?.id, [`draw:${id}`, 'hist:'])
   const [picked, setPicked] = useState(null)   // null = follow the live round
 
@@ -201,6 +206,21 @@ export default function DrawScreen() {
                 ) : null}
               </View>
             </View>
+          </View>
+        )}
+
+        {viewing != null && (
+          <View style={s.viewing}>
+            <Ionicons name="eye-outline" size={14} color={C.info} />
+            <Text style={[T.small, { color: C.ink, flex: 1 }]} numberOfLines={1}>
+              {preds.error
+                ? `${name ? `${name}’s` : 'Their'} picks are hidden until the first round is complete.`
+                : `Viewing ${name ? `${name}’s` : 'their'} picks`}
+            </Text>
+            <Pressable onPress={() => router.setParams({ user: undefined, name: undefined })} hitSlop={8}
+                       accessibilityRole="button" accessibilityLabel="Back to my picks">
+              <Text style={[T.smallMed, { color: C.clay }]}>Mine</Text>
+            </Pressable>
           </View>
         )}
 
@@ -378,6 +398,11 @@ function MatchRow({ m, pick, drawRanks, zone, slugById, onH2H, onPredictors, onS
 }
 
 const s = StyleSheet.create({
+  viewing: {
+    flexDirection: 'row', alignItems: 'center', gap: S.sm,
+    borderWidth: 1, borderColor: C.info, borderRadius: R.md, backgroundColor: C.card,
+    paddingHorizontal: S.md, paddingVertical: S.sm,
+  },
   /* Tight, because on an undecided match this row holds ONE small chip and
      nothing else, and R128 has sixty-four of those — every point of padding
      here is four hundred points of scrolling. The score supplies its own

@@ -79,10 +79,20 @@ export default function Standings() {
             </View>
             {entries.map((e, i) => {
               const mine = me && e.user_id === me.id
+              /* THE ROW IS A DOOR TO THEIR BRACKET — the site's sidebar click:
+                 once the draw is active or finished, a member's row opens the
+                 draw with their picks on it. Before that their picks are
+                 sealed (the site says so in a toast), so the row stays a row. */
+              const opens = t?.status === 'active' || t?.status === 'completed'
+              /* The link wraps the row's BODY and the history button sits
+                 beside it — never one link inside another (nested anchors on
+                 the web build, the TourCard lesson). */
+              const Body = opens ? CardLink : View
               return (
-                <View
-                  key={e.user_id}
-                  style={[s.row, i % 2 ? s.alt : null, mine && s.mine]}
+                <View key={e.user_id} style={[s.row, i % 2 ? s.alt : null, mine && s.mine]}>
+                <Body
+                  href={opens ? { pathname: `/draw/${drawId}`, params: { user: e.user_id, name: e.username } } : undefined}
+                  grow style={s.body}
                 >
                   {/* The site's place medal, on a finished draw only: a
                       podium mid-tournament would be a prediction. Ties share
@@ -100,6 +110,7 @@ export default function Standings() {
                   </View>
                   <Text style={s.num}>{e.correct_count}</Text>
                   <Text style={[s.num, s.total]}>{e.total}</Text>
+                </Body>
                   {/* The site puts a Draw History button on every row. */}
                   <CardLink href={{ pathname: '/history', params: { user: e.user_id } }} style={s.hist} pressedOpacity={0.6}>
                     <Ionicons name="time-outline" size={16} color={C.muted} />
@@ -115,6 +126,7 @@ export default function Standings() {
 }
 
 const s = StyleSheet.create({
+  body: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   bar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
   link: { color: C.clay, fontWeight: '700', paddingVertical: 6 },
   table: {
