@@ -2156,12 +2156,18 @@ def start_scheduler() -> None:
     # most of the time — see probe_direct's guards) and it is the only thing
     # that ever moves us off the metered proxy, so it runs on its own clock
     # rather than waiting for a deploy.
+    # FIRST RUN SOON, NOT IN SIX HOURS. An interval job first fires a whole
+    # interval after it is added, and every deploy adds it afresh — on
+    # 2026-09-02 eleven restarts in a day meant the probe never ran at all,
+    # and the poller sat on the metered proxy for days after the ban had
+    # aged out, ~1.2 s slower per poll. Two minutes lets startup settle.
     scheduler.add_job(
         _on_shutdown_quietly(_probe_sofa_direct),
         "interval",
         hours=6,
         id="sofa_probe_direct",
         misfire_grace_time=3600,
+        next_run_time=datetime.now(timezone.utc) + timedelta(minutes=2),
     )
     # Sanity sweep for silent failures (released-but-not-open, wiki title
     # never resolving) — see _check_draw_health docstring.
