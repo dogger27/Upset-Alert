@@ -61,6 +61,7 @@ export default function Status() {
         <Row label="Live Activity module" value={isAvailable() ? 'present' : 'ABSENT'} />
         <Row label="ActivityKit" value={caps.supported ? 'supported' : 'no'} />
         <Row label="Activities allowed" value={caps.enabled ? 'yes' : 'no (check Settings)'} />
+        <Row label="Frequent updates" value={caps.frequentPushes ? 'yes' : 'no (Settings › Live Activities)'} />
         <Row label="Push-to-start" value={caps.pushToStart ? 'yes' : 'no (needs iOS 17.2)'} />
       </Card>
 

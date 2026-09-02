@@ -35,17 +35,32 @@ PRIORITY_OPPORTUNISTIC = 5
 # An ordinary point is worth at most one push every this often. Chosen to match
 # the freshness window the rest of the app uses, so an activity is never more
 # stale than the website would let a score be.
-MIN_INTERVAL_P5 = 45.0
+# PRIORITY 5 IS THE UNLIMITED CHANNEL. Apple's own session (WWDC23 10185):
+# priority 5 is "opportunistic delivery … no limit" and never spends the
+# budget; only priority 10 does. The old 45 s here was OUR throttle on the
+# unlimited channel — every point arrived up to a minute late for nothing.
+# The poller reads Sofascore every 10 s, so 8 s lets back-to-back snapshots
+# through and the card moves as fast as the feed does.
+MIN_INTERVAL_P5 = 8.0
 # Two set-wins three seconds apart is a feed glitch, not tennis.
 MIN_INTERVAL_P10 = 3.0
 # Apple's budget is not published as a number, so this is a ceiling we can
 # defend rather than one they gave us: beyond it, everything degrades to
 # priority 5 instead of the activity dying.
 MAX_HIGH_PRIORITY_PER_HOUR = 30
+# With NSSupportsLiveActivitiesFrequentUpdates the device grants a higher
+# priority-10 budget ("can still get throttled" — Apple). The one measurement
+# on record (developer forums, thread 731715): priority 10 every ~8 s WITH the
+# flag froze the activity, and budget can take 24 h to return. So the flag
+# buys a doubling here, not a licence: a break, a set, a match point every
+# minute is already more than a match produces.
+MAX_HIGH_PRIORITY_PER_HOUR_FREQUENT = 60
 # A circuit breaker in the spirit of score_history's PER_MATCH_CAP. If we ever
 # send this many for one match, something is looping and the activity is ended
 # rather than left to burn the budget for every OTHER match too.
-MAX_TOTAL_PER_MATCH = 400
+# Sized for a point-per-snapshot five-setter: one priority-5 push per 10 s
+# poll for four hours is ~1400. Still a circuit breaker, not a budget.
+MAX_TOTAL_PER_MATCH = 1500
 
 # How long a push is worth delivering. A point score is meaningless after a
 # minute and a half — the same reasoning as FRESH_SECONDS — while the end push
@@ -278,7 +293,7 @@ def content_hash(state: dict) -> str:
 
 
 def should_send(activity_id: int, decision: Decision, state: dict,
-                now: Optional[float] = None) -> Decision:
+                now: Optional[float] = None, frequent: bool = False) -> Decision:
     """Apply the budget to a classification. Returns a possibly-downgraded copy.
 
     The end push never reaches here — see dispatch() — because it is the one
@@ -307,7 +322,8 @@ def should_send(activity_id: int, decision: Decision, state: dict,
     prio = decision.priority
     if prio == PRIORITY_IMMEDIATE:
         recent = [t for t in st.p10_times if now - t < 3600]
-        if len(recent) >= MAX_HIGH_PRIORITY_PER_HOUR:
+        cap = MAX_HIGH_PRIORITY_PER_HOUR_FREQUENT if frequent else MAX_HIGH_PRIORITY_PER_HOUR
+        if len(recent) >= cap:
             # Degrade rather than drop: the content is still worth having, it
             # just is not worth interrupting for.
             prio = PRIORITY_OPPORTUNISTIC
@@ -489,7 +505,10 @@ async def dispatch(match_ids: set) -> dict:
             # right or wrong — the payoff the whole feature exists for.
             priority, reason = PRIORITY_IMMEDIATE, "end"
         else:
-            decided = should_send(la.id, info["decision"], state)
+            # The device reported ActivityAuthorizationInfo().frequentPushesEnabled
+            # at registration; the user can switch it off per app in Settings.
+            decided = should_send(la.id, info["decision"], state,
+                                  frequent=bool(getattr(device, 'frequent_pushes', False)))
             if not decided.send:
                 continue
             priority, reason = decided.priority, decided.reason

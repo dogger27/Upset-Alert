@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -63,6 +63,12 @@ class AppDevice(Base):
     # the wrong statement of intent here.
     device_token: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     bundle_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+
+    # ActivityAuthorizationInfo().frequentPushesEnabled, reported by the app.
+    # Decides the priority-10 budget the dispatcher allows this device — the
+    # user can turn "More Frequent Updates" off per app in Settings, and the
+    # server must not spend a budget the device does not have.
+    frequent_pushes: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
 
     # Diagnostics. Worth storing because "it stopped working on my phone" is
     # otherwise unanswerable, which is the state the Web Push table is in.

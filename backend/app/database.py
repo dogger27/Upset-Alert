@@ -528,6 +528,9 @@ async def _migrate(conn):
         "ALTER TABLE schedule_entries ADD COLUMN completed_at DATETIME",
         "ALTER TABLE draws ADD COLUMN sofa_doubles_tournament_id INTEGER",
         "ALTER TABLE draws ADD COLUMN sofa_doubles_season_id INTEGER",
+        # Live Activities: the device's frequentPushesEnabled, which sizes its
+        # priority-10 budget. See AppDevice.frequent_pushes.
+        "ALTER TABLE app_devices ADD COLUMN frequent_pushes BOOLEAN",
         # The floor under the automatic resolver's retries — see the column note
         # in models/tournament.py.
         "ALTER TABLE draws ADD COLUMN sofa_resolved_at DATETIME",

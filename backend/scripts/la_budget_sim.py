@@ -42,12 +42,15 @@ GATE_P10_PER_HOUR_MAX = 30
 # window greys the activity out mid-match. Kept just under it so the gate fails
 # before a user would notice.
 GATE_LONGEST_GAP_MIN = 3.5
-GATE_TOTAL_P95 = 250
+# Priority 5 is unlimited (Apple); the total is a runaway guard, sized to
+# MAX_TOTAL_PER_MATCH rather than to a budget.
+GATE_TOTAL_P95 = 1200
 
 # Consecutive snapshots further apart than this mean the FEED stopped, not that
 # the throttle held something back — a suspension, a poller outage, or a match
 # that simply was not being played.
 SOURCE_CONTINUOUS_SECONDS = 120
+FREQUENT = False   # --frequent: the device has frequent updates enabled
 
 
 def render(snap: dict):
@@ -105,7 +108,7 @@ def replay(rows):
             continue
 
         state = build_content_state(cur, at=datetime.fromisoformat(at))
-        final = should_send(aid, decision, state, now=t)
+        final = should_send(aid, decision, state, now=t, frequent=FREQUENT)
         if not final.send:
             continue
         note_sent(aid, final.priority, state, now=t)
@@ -162,9 +165,13 @@ def pct(values, p):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--draw", type=int, help="limit to one draw")
+    ap.add_argument("--frequent", action="store_true",
+                    help="simulate a device with NSSupportsLiveActivitiesFrequentUpdates granted")
     ap.add_argument("--min-changes", type=int, default=30,
                     help="skip matches too short to be informative")
     args = ap.parse_args()
+    global FREQUENT
+    FREQUENT = bool(args.frequent)
 
     c = sqlite3.connect(DB)
     q = """SELECT s.match_id, s.at, s.snap

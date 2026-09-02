@@ -83,12 +83,15 @@ public class LiveActivityModule: Module {
         var out: [String: Any] = [
           "supported": true,
           "enabled": info.areActivitiesEnabled,
+          // "More Frequent Updates", per app, in Settings. Apple says to send
+          // this to the server before it starts pushing: it sizes the budget.
+          "frequentPushes": info.frequentPushesEnabled,
           "pushToStart": false,
         ]
         if #available(iOS 17.2, *) { out["pushToStart"] = true }
         return out
       }
-      return ["supported": false, "enabled": false, "pushToStart": false]
+      return ["supported": false, "enabled": false, "frequentPushes": false, "pushToStart": false]
     }
 
     Function("attributesType") { () -> String in
