@@ -136,7 +136,6 @@ function MatchRow({ m, pick, drawRanks }) {
               style={[s.player, won && s.won, picked && s.picked]}
             />
             <EntryChip entryType={p?.entry_type} />
-            <View style={{ flex: 1 }} />
             {/* '•' rather than the word "pick": the bracket marks an open pick
                 the same way, and "pick" sitting at the end of a row reads as a
                 button that does something. The clay name already says whose
