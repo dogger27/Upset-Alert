@@ -106,6 +106,16 @@ async function shoot(url, kind, name, click, noAuth) {
     await page.waitForTimeout(2000)
   }
 
+  // EXPO'S RED BOX IS NOT A pageerror. A crash inside a screen is caught and
+  // painted as an overlay, so the console hook above stays silent and the
+  // screenshot shows an error page that reads, at a glance, like a dark
+  // screen. Read the overlay's own text so a crash is reported as one.
+  if (kind === 'app') {
+    const box = await page.evaluate(() =>
+      (document.body.innerText.match(/Uncaught Error[\s\S]{0,160}/) || [null])[0])
+    if (box) errors.push('RED BOX ' + box.replace(/\n+/g, ' ').slice(0, 160))
+  }
+
   const file = join(OUT, `${name}.${kind}.png`)
   await page.screenshot({ path: file, fullPage: full })
   await ctx.close()
