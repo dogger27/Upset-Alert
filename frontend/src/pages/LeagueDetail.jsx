@@ -1058,7 +1058,8 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
             the badge beside it uses, so a glance at the title says which half
             of a combined event this is. */}
         <span className="lt-progress-title">
-          {leagueName && <span className="lt-title-league">{leagueName}: </span>}
+          {leagueName && <span className="lt-title-league">{leagueName}</span>}
+          {leagueName && <span className="lt-title-sep">: </span>}
           {t.name}
           {showGenderLabel && (
             <span className={`lt-title-gender lt-title-gender--${t.gender === 'M' ? 'm' : 'f'}`}>
