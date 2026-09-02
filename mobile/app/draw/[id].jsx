@@ -26,6 +26,7 @@ import { getDraw, getPredictions, listTournaments } from '../../api'
 import { dateRange, shortStart } from '../../dates'
 import { useAuth } from '../../auth'
 import { H2HSheet } from '../../h2h'
+import { useLiveUpdates } from '../../live'
 import { ScoreHistorySheet, entryFromMatch, matchStarted } from '../../scoreHistory'
 import { PredictorsSheet } from '../../predictors'
 import { tourLabel } from '../../category'
@@ -45,6 +46,7 @@ export default function DrawScreen() {
   const { me } = useAuth()
   const draw = useApi(`draw:${id}`, () => getDraw(id))
   const preds = useApi(`preds:${id}`, () => getPredictions(id))
+  useLiveUpdates(draw.data?.tournament?.id, [`draw:${id}`, 'hist:'])
   const [picked, setPicked] = useState(null)   // null = follow the live round
 
   const t = draw.data?.tournament

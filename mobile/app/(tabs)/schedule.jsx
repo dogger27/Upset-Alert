@@ -19,6 +19,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { getScheduleDates, getScheduleDay, listTournaments, updateMe } from '../../api'
 import { useAuth } from '../../auth'
 import { H2HSheet } from '../../h2h'
+import { useLiveUpdates } from '../../live'
 import { useApi } from '../../useApi'
 import { isLive, isSuspended, whenLabel } from '../../schedule'
 import { clockTime, shortStart } from '../../dates'
@@ -81,6 +82,11 @@ export default function ScheduleScreen() {
   const date = pinned ?? landingDay(available, dates.data?.open_counts || {}, asked)
   const idx = available.indexOf(date)
   const day = useApi(`schedule:${date}`, () => getScheduleDay(date))
+  /* Refetch the day whenever any tournament on it changes — the site's rule.
+     A day can span two tournaments, and subscribing to only the first would
+     leave the other silently stale. The history sheet's key changes with the
+     row, so it follows. */
+  useLiveUpdates((day.data?.tournaments || []).map(t => t.id), [`schedule:${date}`, 'hist:'])
 
   // `|| []` allocates a fresh array every render, so the useMemo below would
   // recompute on every keystroke of state elsewhere. Memoised on the identity

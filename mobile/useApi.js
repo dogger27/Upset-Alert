@@ -17,11 +17,20 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 const cache = new Map()     // key -> data
 const inflight = new Map()  // key -> Promise
+/* Every MOUNTED hook, so an invalidation can refetch what is on screen rather
+   than only forgetting it — the site's invalidateQueries does both, and a
+   live-score nudge that merely cleared the cache would leave the row it was
+   about until the next navigation. */
+const mounted = new Set()   // { key, run }
 
-export function invalidate(prefix) {
-  if (!prefix) { cache.clear(); inflight.clear(); return }
-  for (const k of [...cache.keys()]) if (k.startsWith(prefix)) cache.delete(k)
-  for (const k of [...inflight.keys()]) if (k.startsWith(prefix)) inflight.delete(k)
+export function invalidate(prefix, { refetch = true } = {}) {
+  if (!prefix) { cache.clear(); inflight.clear() }
+  else {
+    for (const k of [...cache.keys()]) if (k.startsWith(prefix)) cache.delete(k)
+    for (const k of [...inflight.keys()]) if (k.startsWith(prefix)) inflight.delete(k)
+  }
+  if (!refetch) return
+  for (const m of [...mounted]) if (m.key && (!prefix || m.key.startsWith(prefix))) m.run(true)
 }
 
 export function useApi(key, fetcher, { enabled = true } = {}) {
@@ -59,6 +68,11 @@ export function useApi(key, fetcher, { enabled = true } = {}) {
   }, [key, enabled])
 
   useEffect(() => { alive.current = true; run() }, [run])
+  useEffect(() => {
+    const m = { key, run }
+    mounted.add(m)
+    return () => { mounted.delete(m) }
+  }, [key, run])
 
   return { data, error, loading, refetch: () => run(true) }
 }
