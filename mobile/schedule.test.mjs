@@ -18,6 +18,8 @@ test('wording is canonical whatever the sheet printed', () => {
   const nb = { ...fixed, start_type: 'not_before', start_note: 'Not Before 11:00 AM' }
   assert.equal(whenLabel(nb, NY, true), 'Not before 11:00 AM')
   assert.equal(whenLabel({ ...fixed, start_note: 'Followed By' }, LA, false), 'Followed by')
+  // A dotted clock, as en-CA devices print it, must still split off the wording.
+  assert.equal(whenLabel({ ...fixed, start_note: 'Starts At 11:00 a.m.', start_time_local: '11:00 a.m.' }, NY, true), 'Starting at 11:00 a.m.')
 })
 
 test('long wordings shorten; rows without a note fall back on the same clock rule', () => {

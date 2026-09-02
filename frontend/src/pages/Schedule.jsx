@@ -70,7 +70,11 @@ function prettyDay(iso) {
  */
 function splitTimeLine(text) {
   if (!text) return { label: '', time: '' }
-  const m = text.match(/^(.*?)\s*(~?\d{1,2}[:.]\d{2}\s*(?:[AP]M)?)$/i)
+  // "a.m." as well as "AM": en-CA and en-AU browsers print the dotted form
+  // from toLocaleTimeString, and a clock the split does not recognise leaves
+  // the whole line as wording — nothing canonicalises, "Starts At" survives,
+  // and the time can wrap in half again.
+  const m = text.match(/^(.*?)\s*(~?\d{1,2}[:.]\d{2}\s*(?:[AP]\.?M\.?)?)$/i)
   return m ? { label: m[1].trim(), time: m[2].trim() } : { label: text, time: '' }
 }
 
