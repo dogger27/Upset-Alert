@@ -54,7 +54,16 @@ MAX_HIGH_PRIORITY_PER_HOUR = 30
 # flag froze the activity, and budget can take 24 h to return. So the flag
 # buys a doubling here, not a licence: a break, a set, a match point every
 # minute is already more than a match produces.
-MAX_HIGH_PRIORITY_PER_HOUR_FREQUENT = 60
+MAX_HIGH_PRIORITY_PER_HOUR_FREQUENT = 150
+# PRIORITY 5 IS HELD, NOT DELIVERED. Measured 2026-09-02 on the user's own
+# phone: six priority-5 point updates in four minutes, all accepted by APNs,
+# none shown; a forced priority-10 push showed at once. "Opportunistic" means
+# the phone delivers when it feels like it, which on a Lock Screen someone is
+# watching is never. So on a device that granted frequent updates EVERY change
+# goes at priority 10 — that budget is what the flag buys — up to the cap
+# above (a point every 24 s, sustained, is more than tennis produces), and
+# only past it does anything fall back to 5. Without the flag the old split
+# stands: the moments that matter immediate, the rest opportunistic.
 # A circuit breaker in the spirit of score_history's PER_MATCH_CAP. If we ever
 # send this many for one match, something is looping and the activity is ended
 # rather than left to burn the budget for every OTHER match too.
@@ -320,6 +329,8 @@ def should_send(activity_id: int, decision: Decision, state: dict,
         return Decision(False, decision.priority, "runaway")
 
     prio = decision.priority
+    if frequent and prio == PRIORITY_OPPORTUNISTIC:
+        prio = PRIORITY_IMMEDIATE
     if prio == PRIORITY_IMMEDIATE:
         recent = [t for t in st.p10_times if now - t < 3600]
         cap = MAX_HIGH_PRIORITY_PER_HOUR_FREQUENT if frequent else MAX_HIGH_PRIORITY_PER_HOUR

@@ -38,6 +38,9 @@ DB = "/data/tennis_fantasy.db"
 # if a real Slam final needs more than this, the policy is wrong, not the gate.
 GATE_P10_PER_HOUR_P95 = 20
 GATE_P10_PER_HOUR_MAX = 30
+# --frequent: every change is priority 10, so the gates are the cap itself.
+GATE_P10_PER_HOUR_P95_FREQUENT = 120
+GATE_P10_PER_HOUR_MAX_FREQUENT = 150
 # Tied to STALE_AFTER_SECONDS rather than picked: a gap longer than the stale
 # window greys the activity out mid-match. Kept just under it so the gate fails
 # before a user would notice.
@@ -212,8 +215,10 @@ def main():
 
     print("\n  gates:")
     checks = [
-        ("p95 priority-10 per hour", pct(worst, 95), GATE_P10_PER_HOUR_P95, "<="),
-        ("max priority-10 per hour", max(worst), GATE_P10_PER_HOUR_MAX, "<="),
+        ("p95 priority-10 per hour", pct(worst, 95),
+         GATE_P10_PER_HOUR_P95_FREQUENT if FREQUENT else GATE_P10_PER_HOUR_P95, "<="),
+        ("max priority-10 per hour", max(worst),
+         GATE_P10_PER_HOUR_MAX_FREQUENT if FREQUENT else GATE_P10_PER_HOUR_MAX, "<="),
         ("longest in-play gap (min)", max(gaps), GATE_LONGEST_GAP_MIN, "<="),
         ("p95 total pushes / match", pct(totals, 95), GATE_TOTAL_P95, "<="),
         ("runaway breaker hit", max(totals), MAX_TOTAL_PER_MATCH, "<"),
