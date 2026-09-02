@@ -14,9 +14,9 @@
 
 import { useMemo, useState } from 'react'
 import { Ionicons } from '@expo/vector-icons'
-import { Stack } from 'expo-router'
+import { Stack, useLocalSearchParams } from 'expo-router'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { getScheduleDates, getScheduleDay } from '../../api'
+import { getScheduleDates, getScheduleDay, listTournaments } from '../../api'
 import { useApi } from '../../useApi'
 import {
   gamesOf, isLive, isSuspended, pointOf, servingSide, sideDrawRank, sideFlags,
@@ -25,23 +25,54 @@ import {
 import { clockTime, shortStart } from '../../dates'
 import { FlagSlot, PlayerName, PosBadge, TourBadge } from '../../cards'
 import { C, R, S, T } from '../../theme'
-import { Card, ErrorNote, Eyebrow, Loading, Muted, Screen, Title } from '../../ui'
+import { Card, CardLink, ErrorNote, Eyebrow, Loading, Muted, Screen, Title } from '../../ui'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
+/* THE EARLIEST DAY WITH TENNIS LEFT IN IT, never earlier than today — the
+   site's rule, verbatim in intent. "Today" is not blindly the answer: out of
+   season today has no sheet at all, and at the end of a Slam day every match
+   is decided and the reader wants tomorrow's card. So the day is chosen from
+   the dates that EXIST, a day whose matches are all finished is stepped over,
+   and if nothing from today onward has anything open the last such day stands.
+   A date that was asked for is clamped to the list so an old link cannot
+   strand the page on a day with nothing on it. */
+function landingDay(dates, openCounts, asked) {
+  if (!dates.length) return asked || today()
+  if (asked && dates.includes(asked)) return asked
+  const t = today()
+  const upcoming = dates.filter(d => d >= t)
+  const firstOpen = upcoming.find(d => (openCounts[d] ?? 1) > 0)
+  return firstOpen || upcoming[upcoming.length - 1] || dates[dates.length - 1]
+}
+
 export default function ScheduleScreen() {
-  const [date, setDate] = useState(today)
+  // From a dashboard card: which tournament's sheets, which draw we came from,
+  // and (from a link) which day. The tab still works with none of them.
+  const params = useLocalSearchParams()
+  const tournament = params.tournament ? Number(params.tournament) : undefined
+  const fromDraw = params.draw ? Number(params.draw) : undefined
+  const asked = typeof params.date === 'string' ? params.date : undefined
+  // null = follow the landing rule; a tap on an arrow pins a day.
+  const [pinned, setPinned] = useState(null)
   const [view, setView] = useState('time')
 
-  const dates = useApi('schedule-dates', getScheduleDates)
+  const dates = useApi(`schedule-dates:${tournament ?? 'all'}`, () => getScheduleDates(tournament))
+  const available = dates.data?.dates || []
+  const date = pinned ?? landingDay(available, dates.data?.open_counts || {}, asked)
+  const idx = available.indexOf(date)
   const day = useApi(`schedule:${date}`, () => getScheduleDay(date))
 
   // `|| []` allocates a fresh array every render, so the useMemo below would
   // recompute on every keystroke of state elsewhere. Memoised on the identity
   // of the fetched data instead.
   const all = useMemo(() => day.data?.entries || [], [day.data])
-  const available = dates.data?.dates || []
-  const idx = available.indexOf(date)
+  // Grey the Draw link when its draw has nothing to show — a Slam's qualifying
+  // sheet is live days before the bracket, and a live link to an empty draw
+  // reads as a broken page. Same released rule the dashboard cards use.
+  const drawsList = useApi(fromDraw ? 'tournaments' : null, listTournaments)
+  const fromRow = (drawsList.data || []).find(d => d.id === fromDraw)
+  const drawReady = !drawsList.data || !fromRow || fromRow.status === 'completed' || !!fromRow.draw_released_direct_at
 
   const groups = useMemo(() => {
     if (view === 'court') {
@@ -84,7 +115,7 @@ export default function ScheduleScreen() {
       <Screen onRefresh={refetch} refreshing={day.loading && !!day.data}>
         <View style={s.bar}>
           <Pressable
-            onPress={() => idx > 0 && setDate(available[idx - 1])}
+            onPress={() => idx > 0 && setPinned(available[idx - 1])}
             disabled={idx <= 0} hitSlop={10}
             style={({ pressed }) => [s.arrow, (idx <= 0) && s.arrowOff, pressed && { opacity: 0.6 }]}
             accessibilityRole="button" accessibilityLabel="Previous day"
@@ -98,7 +129,7 @@ export default function ScheduleScreen() {
             )}
           </View>
           <Pressable
-            onPress={() => idx >= 0 && idx < available.length - 1 && setDate(available[idx + 1])}
+            onPress={() => idx >= 0 && idx < available.length - 1 && setPinned(available[idx + 1])}
             disabled={idx < 0 || idx >= available.length - 1} hitSlop={10}
             style={({ pressed }) => [
               s.arrow, (idx < 0 || idx >= available.length - 1) && s.arrowOff,
@@ -109,6 +140,15 @@ export default function ScheduleScreen() {
             <Ionicons name="chevron-forward" size={20} color={C.ink} />
           </Pressable>
         </View>
+
+        {fromDraw ? (
+          <CardLink href={drawReady ? `/draw/${fromDraw}` : undefined} style={[s.back, !drawReady && s.arrowOff]}>
+            <Ionicons name="chevron-back" size={14} color={C.greenLit} />
+            <Text style={[T.smallMed, { color: C.greenLit }]}>
+              {fromRow?.name ? `${fromRow.name} draw` : 'Draw'}
+            </Text>
+          </CardLink>
+        ) : null}
 
         <View style={s.tabs}>
           {['time', 'court'].map(v => (
@@ -264,6 +304,7 @@ const s = StyleSheet.create({
      hand-set lineHeight (26 here) fights the centring rather than fixing it.
      An icon font draws inside its box, so it centres by construction. */
 
+  back: { flexDirection: 'row', alignItems: 'center', gap: 2, alignSelf: 'flex-start', paddingVertical: 4 },
   tabs: { flexDirection: 'row', gap: S.xs, backgroundColor: C.sunken, borderRadius: R.md, padding: 3 },
   tab: { flex: 1, alignItems: 'center', paddingVertical: S.sm, borderRadius: R.sm },
   tabOn: { backgroundColor: C.raised },

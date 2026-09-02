@@ -184,7 +184,10 @@ export const endActivity = (activityId) =>
      live_scores games only, no point — ESPN cannot supply one.
      scores      the final, once completed.
      winner_side 0 = side a, 1 = side b. */
-export const getScheduleDates = () => request('/schedule/dates')
+/* Scoped to one tournament when arriving from its card, so the landing-day
+   rule below picks from THAT event's sheets. open_counts rides along. */
+export const getScheduleDates = (tournamentId) =>
+  request(`/schedule/dates${tournamentId ? `?tournament_id=${tournamentId}` : ''}`)
 
 /* One draw's standings. Public — no auth — and the shape is
    {rank, user, total_points, correct_count, has_upset_pick}. Used on the

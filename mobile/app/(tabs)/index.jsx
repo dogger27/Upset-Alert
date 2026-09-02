@@ -30,6 +30,55 @@ import { StatusChip, SurfacePill, TourCard } from '../../cards'
 import { dateRange } from '../../dates'
 import { Button, Card, CardLink, ErrorNote, Eyebrow, Loading, Muted, Screen, Title } from '../../ui'
 
+/* The site's rule for whether a card is a link at all: a draw that is neither
+   completed nor released has nothing to show, and a live link to an empty draw
+   reads as a broken page. */
+const hasDrawData = t => t.status === 'completed' || !!t.draw_released_direct_at
+
+/* "Order of Play" from a card, keyed on oop_first_seen_at rather than oop_url:
+   the URL holds only today's file and goes null overnight and between rounds,
+   so a link keyed on it would blink in and out. Once a tournament has published
+   an order of play, it has one. No date in the link, deliberately — the
+   schedule lands on the right day itself. */
+const oopHref = t => (t.oop_first_seen_at && t.tournament_id
+  ? { pathname: '/schedule', params: { tournament: t.tournament_id, draw: t.id } }
+  : null)
+
+/* Wrap in a link only when there is somewhere to go. */
+function MaybeLink({ href, children }) {
+  return href ? (
+    <Link href={href} asChild>
+      <Pressable style={({ pressed }) => pressed && { opacity: 0.8 }}>{children}</Pressable>
+    </Link>
+  ) : children
+}
+
+/* The site's footer tracks for a running or finished draw: a state pill, a
+   star when this reader is competing, and the order of play. */
+function ActionRow({ t, state, pickState, starLabel }) {
+  const oop = oopHref(t)
+  return (
+    <View style={s.actions}>
+      <StatusChip tone="muted">{state}</StatusChip>
+      {pickState === 'complete' ? (
+        <View style={s.star} accessibilityLabel={starLabel}>
+          <Ionicons name="star" size={13} color={C.greenLit} />
+        </View>
+      ) : <View />}
+      {oop ? (
+        // CardLink, not <Link asChild><Pressable style>: that form drops the
+        // style — the pill rendered as bare text — and it is the trap CardLink
+        // exists to close. Third time it has been re-typed; last time.
+        <CardLink href={oop} style={s.oop} pressedOpacity={0.7}>
+          <Text style={s.oopText}>Order of Play</Text>
+        </CardLink>
+      ) : (
+        <Text style={[s.oopText, { color: C.faint, opacity: 0.6 }]}>Order of Play</Text>
+      )}
+    </View>
+  )
+}
+
 export default function Dashboard() {
   const { phase, me, retry, error: authError } = useAuth()
   const ready = phase === 'ready'
@@ -98,7 +147,7 @@ export default function Dashboard() {
 
       {buckets.active.length > 0 && (
         <Section title="Playing" tone={C.greenLit}>
-          {buckets.active.map(t => <ActiveCard key={t.id} t={t} userId={me?.id} />)}
+          {buckets.active.map(t => <ActiveCard key={t.id} t={t} userId={me?.id} pickState={entry.data?.[t.id]} />)}
         </Section>
       )}
 
@@ -211,17 +260,17 @@ function OpenCard({ t, status, now }) {
 }
 
 /* Playing: nothing to do, so the only question is where you stand. */
-function ActiveCard({ t, userId }) {
+function ActiveCard({ t, userId, pickState }) {
   const standings = useApi(`standings:${t.id}`, () => getDrawStandings(t.id))
   const rows = standings.data || []
   const mine = rows.find(r => r.user?.id === userId)
 
   return (
-    <Link href={`/draw/${t.id}`} asChild>
-      <Pressable style={({ pressed }) => pressed && { opacity: 0.8 }}>
+    <MaybeLink href={hasDrawData(t) ? `/draw/${t.id}` : null}>
         <TourCard
           tour={t.gender === 'F' ? 'WTA' : 'ATP'} tier={t.category} name={t.name}
           footer={
+            <View style={{ gap: 8 }}>
             <View style={s.footRow}>
               {mine ? (
                 <View style={s.lockLine}>
@@ -239,12 +288,14 @@ function ActiveCard({ t, userId }) {
                   thing about the event this card was not showing anywhere. */}
               <SurfacePill surface={t.surface} />
             </View>
+            {/* The site's row: Closed, the Competing star, Order of Play. */}
+            <ActionRow t={t} state="Closed" pickState={pickState} starLabel="Competing" />
+            </View>
           }
         >
           <Meta t={t} showSurface={false} />
         </TourCard>
-      </Pressable>
-    </Link>
+    </MaybeLink>
   )
 }
 
@@ -252,15 +303,39 @@ function ActiveCard({ t, userId }) {
    carries the only thing that distinguishes them at a glance. */
 function CompactRow({ t, done }) {
   const isATP = t.gender !== 'F'
-  return (
-    <CardLink href={`/draw/${t.id}`} style={s.compact} pressedOpacity={0.7}>
+  /* Upcoming: the site shows WHEN THE DRAW COMES OUT, which is the only thing
+     a reader can act on before it does — the date range says nothing they
+     need yet. Last week: the order of play still matters (results), so it
+     keeps its link; the row itself opens the draw. */
+  const rel = !done ? [
+    t.draw_release_direct && `Draw ${fmtShort(t.draw_release_direct)}`,
+    t.draw_release_qualifiers && `Qual ${fmtShort(t.draw_release_qualifiers)}`,
+  ].filter(Boolean).join(' · ') : ''
+  const oop = done ? oopHref(t) : null
+  const body = (
+    <>
       <View style={[s.compactDot, { backgroundColor: isATP ? C.atp : C.wta }]} />
       <Text style={[T.small, { color: done ? C.muted : C.inkBody, flex: 1 }]} numberOfLines={1}>
         {t.name}
       </Text>
-      <Text style={[T.tiny, { color: C.faint }]}>{dateRange(t)}</Text>
-    </CardLink>
+      <Text style={[T.tiny, { color: C.faint }]} numberOfLines={1}>{rel || dateRange(t)}</Text>
+      {oop ? (
+        <CardLink href={oop} style={s.oopMini} pressedOpacity={0.6}>
+          <Ionicons name="calendar-outline" size={14} color={C.greenLit} />
+        </CardLink>
+      ) : null}
+    </>
   )
+  // A card that has no draw yet is not a link — the site's rule.
+  return hasDrawData(t)
+    ? <CardLink href={`/draw/${t.id}`} style={s.compact} pressedOpacity={0.7}>{body}</CardLink>
+    : <View style={s.compact}>{body}</View>
+}
+
+// "Sep 5" — the release-date form the site's upcoming cards use.
+const fmtShort = iso => {
+  const d = new Date(`${iso}T12:00:00`)
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString([], { month: 'short', day: 'numeric' })
 }
 
 /* 1st, 2nd, 3rd, 4th… The server sends `rank` already computed across the whole
@@ -303,6 +378,14 @@ const s = StyleSheet.create({
     backgroundColor: C.card, borderRadius: R.md, borderWidth: 1, borderColor: C.border,
   },
   compactDot: { width: 6, height: 6, borderRadius: 3 },
+  actions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: S.sm },
+  star: { paddingHorizontal: 4 },
+  oop: {
+    borderRadius: R.pill, borderWidth: 1, borderColor: C.borderOn, backgroundColor: C.raised,
+    paddingHorizontal: 10, paddingVertical: 4,
+  },
+  oopText: { ...T.tiny, color: C.greenLit, letterSpacing: 0.3 },
+  oopMini: { paddingLeft: 6 },
 
   footer: {
     flexDirection: 'row', gap: S.lg, justifyContent: 'center', flexWrap: 'wrap',
