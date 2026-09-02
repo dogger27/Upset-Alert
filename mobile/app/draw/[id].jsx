@@ -19,14 +19,15 @@
 
 import { useMemo, useState } from 'react'
 import { leading } from '../../fontScale.js'
-import { Stack, useLocalSearchParams } from 'expo-router'
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { getDraw, getPredictions } from '../../api'
+import { getDraw, getPredictions, listTournaments } from '../../api'
 import { dateRange, shortStart } from '../../dates'
 import { useAuth } from '../../auth'
 import { H2HSheet } from '../../h2h'
 import { PredictorsSheet } from '../../predictors'
+import { tourLabel } from '../../category'
 import { computeDrawRanks } from '../../drawRanks'
 import { useApi } from '../../useApi'
 import { slotLabel } from '../../scoring'
@@ -46,6 +47,25 @@ export default function DrawScreen() {
   const [picked, setPicked] = useState(null)   // null = follow the live round
 
   const t = draw.data?.tournament
+
+  /* SIBLING DRAWS, the site's rule: every draw with the SAME STATUS as this
+     one, in start-date order, and the arrows wrap around. That is what lets a
+     reader flip from the men's US Open to the women's without going back to
+     the dashboard, and during a normal week it walks the tour's events. Shares
+     the 'tournaments' cache with the dashboard, so this is normally free. */
+  const all = useApi('tournaments', listTournaments)
+  const siblings = useMemo(() => {
+    const status = t?.status
+    if (!all.data || !status) return []
+    return all.data.filter(d => d.status === status).sort((a, b) =>
+      (a.start_date || '').localeCompare(b.start_date || '') ||
+      (a.name || '').localeCompare(b.name || '') || a.id - b.id)
+  }, [all.data, t?.status])
+  const sibIdx = siblings.findIndex(d => String(d.id) === String(id))
+  const step = delta => (siblings.length < 2 || sibIdx < 0)
+    ? null : siblings[(sibIdx + delta + siblings.length) % siblings.length]
+  const prevDraw = step(-1), nextDraw = step(1)
+  const router = useRouter()
 
   /* WHICH CLOCK an upcoming start is shown in — the site's rule, exactly:
      'venue' means the tournament's own timezone, and ANYTHING ELSE means
@@ -131,11 +151,30 @@ export default function DrawScreen() {
                   indistinguishable here too, and the screen title alone
                   ("US Open") does not resolve it. */}
               <View style={s.headTitle}>
+                <Pressable
+                  onPress={() => prevDraw && router.replace(`/draw/${prevDraw.id}`)}
+                  disabled={!prevDraw} hitSlop={10}
+                  style={({ pressed }) => [s.sib, !prevDraw && s.sibOff, pressed && { opacity: 0.6 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={prevDraw ? `Previous draw: ${prevDraw.name} — ${tourLabel(prevDraw)}` : 'No other draws of this type'}
+                >
+                  <Ionicons name="chevron-back" size={16} color={C.inkBody} />
+                </Pressable>
                 <TourBadge gender={t.gender} />
                 <Text style={[T.small, { color: C.muted, flexShrink: 1 }]} numberOfLines={1}>
                   {[t.category, t.surface, t.draw_size ? `${t.draw_size} draw` : null]
                     .filter(Boolean).join(' · ')}
                 </Text>
+                <View style={{ flex: 1 }} />
+                <Pressable
+                  onPress={() => nextDraw && router.replace(`/draw/${nextDraw.id}`)}
+                  disabled={!nextDraw} hitSlop={10}
+                  style={({ pressed }) => [s.sib, !nextDraw && s.sibOff, pressed && { opacity: 0.6 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={nextDraw ? `Next draw: ${nextDraw.name} — ${tourLabel(nextDraw)}` : 'No other draws of this type'}
+                >
+                  <Ionicons name="chevron-forward" size={16} color={C.inkBody} />
+                </Pressable>
               </View>
               {/* `city`, not `location` — the API sends "New York City" under
                   city and leaves location null, so reading location rendered
@@ -345,6 +384,8 @@ const s = StyleSheet.create({
   },
   h2hText: { fontFamily: 'Archivo_700Bold', fontSize: 10, lineHeight: leading(14), letterSpacing: 0.5, color: C.greenLit },
   headTitle: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  sib: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.border },
+  sibOff: { opacity: 0.3 },
   whenRow: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     paddingHorizontal: 10, paddingTop: 8, paddingBottom: 2,
