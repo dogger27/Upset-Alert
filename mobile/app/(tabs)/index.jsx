@@ -17,9 +17,9 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
-import { Link, Redirect } from 'expo-router'
+import { Redirect } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '../../auth'
 import { getDrawStandings, getEntryStatus, listTournaments } from '../../api'
 import { useApi } from '../../useApi'
@@ -43,15 +43,6 @@ const hasDrawData = t => t.status === 'completed' || !!t.draw_released_direct_at
 const oopHref = t => (t.oop_first_seen_at && t.tournament_id
   ? { pathname: '/schedule', params: { tournament: t.tournament_id, draw: t.id } }
   : null)
-
-/* Wrap in a link only when there is somewhere to go. */
-function MaybeLink({ href, children }) {
-  return href ? (
-    <Link href={href} asChild>
-      <Pressable style={({ pressed }) => pressed && { opacity: 0.8 }}>{children}</Pressable>
-    </Link>
-  ) : children
-}
 
 /* The site's footer tracks for a running or finished draw: a state pill, a
    star when this reader is competing, and the order of play. */
@@ -236,10 +227,9 @@ function OpenCard({ t, status, now }) {
     : ['bad', 'Not entered']
 
   return (
-    <Link href={`/draw/${t.id}`} asChild>
-      <Pressable style={({ pressed }) => pressed && { opacity: 0.8 }}>
         <TourCard
           tour={t.gender === 'F' ? 'WTA' : 'ATP'} tier={t.category} name={t.name}
+          href={hasDrawData(t) ? `/draw/${t.id}` : null}
           footer={
             <View style={s.footRow}>
               {lock ? (
@@ -254,8 +244,6 @@ function OpenCard({ t, status, now }) {
         >
           <Meta t={t} />
         </TourCard>
-      </Pressable>
-    </Link>
   )
 }
 
@@ -266,9 +254,9 @@ function ActiveCard({ t, userId, pickState }) {
   const mine = rows.find(r => r.user?.id === userId)
 
   return (
-    <MaybeLink href={hasDrawData(t) ? `/draw/${t.id}` : null}>
         <TourCard
           tour={t.gender === 'F' ? 'WTA' : 'ATP'} tier={t.category} name={t.name}
+          href={hasDrawData(t) ? `/draw/${t.id}` : null}
           footer={
             <View style={{ gap: 8 }}>
             <View style={s.footRow}>
@@ -295,7 +283,6 @@ function ActiveCard({ t, userId, pickState }) {
         >
           <Meta t={t} showSurface={false} />
         </TourCard>
-    </MaybeLink>
   )
 }
 
@@ -319,17 +306,23 @@ function CompactRow({ t, done }) {
         {t.name}
       </Text>
       <Text style={[T.tiny, { color: C.faint }]} numberOfLines={1}>{rel || dateRange(t)}</Text>
+    </>
+  )
+  // A row that has no draw yet is not a link — the site's rule. The order-of
+  // play icon is a SIBLING of the row link, never inside it.
+  const inner = hasDrawData(t)
+    ? <CardLink href={`/draw/${t.id}`} style={s.compactBody} pressedOpacity={0.7} grow>{body}</CardLink>
+    : <View style={[s.compactBody, { flex: 1 }]}>{body}</View>
+  return (
+    <View style={s.compact}>
+      {inner}
       {oop ? (
         <CardLink href={oop} style={s.oopMini} pressedOpacity={0.6}>
           <Ionicons name="calendar-outline" size={14} color={C.greenLit} />
         </CardLink>
       ) : null}
-    </>
+    </View>
   )
-  // A card that has no draw yet is not a link — the site's rule.
-  return hasDrawData(t)
-    ? <CardLink href={`/draw/${t.id}`} style={s.compact} pressedOpacity={0.7}>{body}</CardLink>
-    : <View style={s.compact}>{body}</View>
 }
 
 // "Sep 5" — the release-date form the site's upcoming cards use.
@@ -373,9 +366,13 @@ const s = StyleSheet.create({
   lockLine: { flexDirection: 'row', alignItems: 'baseline', gap: 5 },
 
   compact: {
-    flexDirection: 'row', alignItems: 'center', gap: S.sm,
-    paddingVertical: S.sm, paddingHorizontal: S.md,
+    flexDirection: 'row', alignItems: 'center',
     backgroundColor: C.card, borderRadius: R.md, borderWidth: 1, borderColor: C.border,
+    overflow: 'hidden',
+  },
+  compactBody: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', gap: S.sm,
+    paddingVertical: S.sm, paddingHorizontal: S.md,
   },
   compactDot: { width: 6, height: 6, borderRadius: 3 },
   actions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: S.sm },
@@ -385,7 +382,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 10, paddingVertical: 4,
   },
   oopText: { ...T.tiny, color: C.greenLit, letterSpacing: 0.3 },
-  oopMini: { paddingLeft: 6 },
+  oopMini: { paddingHorizontal: S.md, alignSelf: 'stretch', justifyContent: 'center' },
 
   footer: {
     flexDirection: 'row', gap: S.lg, justifyContent: 'center', flexWrap: 'wrap',

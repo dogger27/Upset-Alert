@@ -13,6 +13,7 @@ import { Image, StyleSheet, Text, View } from 'react-native'
 import { leading } from './fontScale.js'
 import { tierStamp } from './logos'
 import { flagEmoji } from './flags'
+import { CardLink } from './ui'
 import { textWidth } from './measure.js'
 import { nameForms, pairForms } from './names'
 import { BADGE, C, R, S, SHADOW, T, TOUR } from './theme'
@@ -83,12 +84,16 @@ export function StatusChip({ tone = 'muted', children }) {
 /* The card shell: 1px border, radius 12 (--radius-md), shadow-sm, the accent
    bar down the left, and the site's asymmetric padding — 20 on the left so the
    text clears the bar, 16 on the right. */
-export function TourCard({ tour, tier, name, children, footer }) {
+/* `href` makes the card's BODY the link — title, stamp and meta — and leaves
+   the footer as a sibling inside the same frame. The footer carries its own
+   links (Order of Play), and a link inside a link is invalid HTML on the web
+   build and a tap-ownership fight on native. Wrapping the whole card was the
+   nesting the site's own TournamentCard has, and the harness flagged it here
+   the day after I flagged it there. */
+export function TourCard({ tour, tier, name, children, footer, href }) {
   const isATP = String(tour || 'ATP').toUpperCase() === 'ATP'
-  return (
-    <View style={u.card}>
-      <AccentBar from={isATP ? C.atp : C.wta} to={isATP ? C.atpDeep : C.wtaDeep} />
-      <View style={u.body}>
+  const body = (
+    <>
         <View style={u.titleRow}>
           {/* The tour reads BEFORE the name, not under it: a combined event
               supplies two draws both called "US Open" and the tier stamp
@@ -100,6 +105,15 @@ export function TourCard({ tour, tier, name, children, footer }) {
           <TierBadge tour={tour} tier={tier} name={name} />
         </View>
         {children}
+    </>
+  )
+  return (
+    <View style={u.card}>
+      <AccentBar from={isATP ? C.atp : C.wta} to={isATP ? C.atpDeep : C.wtaDeep} />
+      <View style={u.body}>
+        {href
+          ? <CardLink href={href} style={u.bodyLink} pressedOpacity={0.75}>{body}</CardLink>
+          : <View style={u.bodyLink}>{body}</View>}
         {footer ? <View style={u.footer}>{footer}</View> : null}
       </View>
     </View>
@@ -114,6 +128,7 @@ const u = StyleSheet.create({
   },
   // '14px 16px 14px 20px' with gap 9, from the source.
   body: { flex: 1, paddingTop: 14, paddingRight: 16, paddingBottom: 14, paddingLeft: 16, gap: 9 },
+  bodyLink: { gap: 9 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   // 1.18rem at 16px root = 18.9; lineHeight 1.05; letterSpacing 0.01em.
   title: {
