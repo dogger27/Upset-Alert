@@ -251,3 +251,12 @@ export const getMatchScoreHistory = (drawId, matchId) =>
   request(`/tournaments/${drawId}/matches/${matchId}/score-history`)
 export const getEntryScoreHistory = (entryId) =>
   request(`/schedule/entries/${entryId}/score-history`)
+
+/* League settings — the site's LeagueSettings panel. The server's _can_manage
+   gates all four: owner, a league admin, or a site admin. */
+export const updateLeague = (id, data) => request(`/leagues/${id}`, { method: 'PUT', body: data })
+export const deleteLeague = (id) => request(`/leagues/${id}`, { method: 'DELETE' })
+export const setMemberAdmin = (leagueId, userId, isAdmin) =>
+  request(`/leagues/${leagueId}/members/${userId}/admin?is_admin=${isAdmin ? 'true' : 'false'}`, { method: 'PUT' })
+export const removeMember = (leagueId, userId) =>
+  request(`/leagues/${leagueId}/members/${userId}`, { method: 'DELETE' })

@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { getLeague, getLeagueTournaments, shareLeagueByEmail } from '../../../api'
 import { useAuth } from '../../../auth'
 import { Sheet } from '../../../sheet'
+import { LeagueSettingsSheet, canManageLeague } from '../../../leagueSettings'
 import { useApi } from '../../../useApi'
 import { TourBadge } from '../../../cards'
 import { computeCohortInfo, getHomeSection } from '../../../drawStatus'
@@ -41,6 +42,7 @@ export default function LeagueDraws() {
   }, [draws.data])
   const [prevShown, setPrevShown] = useState(5)
   const [invite, setInvite] = useState(false)
+  const [settings, setSettings] = useState(false)
   const { me } = useAuth()
 
   return (
@@ -73,6 +75,18 @@ export default function LeagueDraws() {
           </View>
         ) : null}
         <InviteSheet visible={invite} onClose={() => setInvite(false)} league={league.data} />
+        {/* The site's gear: owner, league admin or site admin — the server's
+            _can_manage, mirrored so the sheet never opens on a 403. */}
+        {canManageLeague(league.data, me) ? (
+          <Pressable onPress={() => setSettings(true)} style={({ pressed }) => [s.settingsBtn, pressed && { opacity: 0.7 }]}
+                     accessibilityRole="button" accessibilityLabel="League settings">
+            <Ionicons name="settings-outline" size={16} color={C.muted} />
+            <Text style={[T.smallMed, { color: C.muted }]}>Settings</Text>
+          </Pressable>
+        ) : null}
+        {settings ? (
+          <LeagueSettingsSheet key={league.data?.id} visible={settings} onClose={() => setSettings(false)} league={league.data} />
+        ) : null}
 
         {current.length > 0 && (
           <>
@@ -137,6 +151,7 @@ function DrawRow({ t, pickers, leagueId }) {
 }
 
 const s = StyleSheet.create({
+  settingsBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingVertical: 4 },
   card: {
     backgroundColor: C.card, borderRadius: 14, borderWidth: 1,
     borderColor: C.border, flexDirection: 'row', alignItems: 'center',
