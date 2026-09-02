@@ -54,7 +54,14 @@ MAX_HIGH_PRIORITY_PER_HOUR = 30
 # flag froze the activity, and budget can take 24 h to return. So the flag
 # buys a doubling here, not a licence: a break, a set, a match point every
 # minute is already more than a match produces.
-MAX_HIGH_PRIORITY_PER_HOUR_FREQUENT = 150
+MAX_HIGH_PRIORITY_PER_HOUR_FREQUENT = 60
+# And no closer than this. Measured 2026-09-02 on the user's phone: every
+# point at priority 10 (~1 a minute) plus a handful of test pushes, and
+# after ~25 minutes iOS stopped showing ANY update to the app's activities —
+# the budget freeze Apple warns of, which it says can take hours to lift.
+# One update per half-minute keeps the card honest and stays well inside
+# what that phone tolerated before it froze.
+MIN_INTERVAL_P10_FREQUENT = 30.0
 # PRIORITY 5 IS HELD, NOT DELIVERED. Measured 2026-09-02 on the user's own
 # phone: six priority-5 point updates in four minutes, all accepted by APNs,
 # none shown; a forced priority-10 push showed at once. "Opportunistic" means
@@ -339,7 +346,7 @@ def should_send(activity_id: int, decision: Decision, state: dict,
             # Degrade rather than drop: the content is still worth having, it
             # just is not worth interrupting for.
             prio = PRIORITY_OPPORTUNISTIC
-        elif now - st.last_p10_at < MIN_INTERVAL_P10:
+        elif now - st.last_p10_at < (MIN_INTERVAL_P10_FREQUENT if frequent else MIN_INTERVAL_P10):
             return Decision(False, decision.priority, "p10_too_soon")
 
     if prio == PRIORITY_OPPORTUNISTIC and now - st.last_sent_at < MIN_INTERVAL_P5:
