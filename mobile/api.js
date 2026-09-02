@@ -260,3 +260,8 @@ export const setMemberAdmin = (leagueId, userId, isAdmin) =>
   request(`/leagues/${leagueId}/members/${userId}/admin?is_admin=${isAdmin ? 'true' : 'false'}`, { method: 'PUT' })
 export const removeMember = (leagueId, userId) =>
   request(`/leagues/${leagueId}/members/${userId}`, { method: 'DELETE' })
+
+/* This year's Grand Slam pick points per member, split ATP / WTA — the site's
+   Members tab. { year, members: [{ user_id, username, full_name, atp_points,
+   wta_points, is_admin }] }. */
+export const getGrandSlamTotals = (leagueId) => request(`/leagues/${leagueId}/grand-slam-totals`)
