@@ -41,6 +41,8 @@ const SCREENS = [
   // The same day scrolled to its end, where the postponed rows live, and with
   // "Completed" switched off, which must take the postponed rows with it.
   { name: 'washout-end',  mobile: '/schedule?date=2026-09-01', pwa: '/schedule?date=2026-09-01', scrollEnd: true },
+  { name: 'schedule-court', mobile: '/schedule', pwa: '/schedule', appClick: 'Court', pwaClick: 'Court' },
+  { name: 'washout-court',  mobile: '/schedule?date=2026-09-01', pwa: '/schedule?date=2026-09-01', appClick: 'Court', pwaClick: 'Court', scrollEnd: true },
   { name: 'washout-open', mobile: '/schedule?date=2026-09-01', pwa: '/schedule?date=2026-09-01', appClick: 'Completed', pwaClick: 'Completed' },
   { name: 'league',    mobile: '/league/10',   pwa: '/leagues/10' },
   // The site keeps standings behind a tab rather than a route, so the PWA side
