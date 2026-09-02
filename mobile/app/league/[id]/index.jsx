@@ -4,7 +4,7 @@ import { Stack, useLocalSearchParams } from 'expo-router'
 import { useMemo, useState } from 'react'
 import { Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { getLeague, getLeagueTournaments, shareLeagueByEmail } from '../../../api'
+import { getGrandSlamTotals, getLeague, getLeagueTournaments, shareLeagueByEmail } from '../../../api'
 import { useAuth } from '../../../auth'
 import { Sheet } from '../../../sheet'
 import { LeagueSettingsSheet, canManageLeague } from '../../../leagueSettings'
@@ -43,6 +43,31 @@ export default function LeagueDraws() {
   const [prevShown, setPrevShown] = useState(5)
   const [invite, setInvite] = useState(false)
   const [settings, setSettings] = useState(false)
+  /* The site's Members tab: this year's Grand Slam point tally, ATP / WTA /
+     combined, sortable by any column. Combined, descending, to start — the
+     column the site opens on. */
+  const gs = useApi(`league:${id}:gs`, () => getGrandSlamTotals(id))
+  const [sortCol, setSortCol] = useState('combined')
+  const [sortDir, setSortDir] = useState('desc')
+  const members = useMemo(() => {
+    const raw = gs.data?.members ?? (league.data?.members ?? []).map(m => ({
+      user_id: m.id, username: m.username, full_name: m.full_name, is_admin: m.is_admin,
+      atp_points: null, wta_points: null,
+    }))
+    const rows = raw.map(m => ({
+      ...m,
+      combined_points: m.atp_points != null && m.wta_points != null ? m.atp_points + m.wta_points : null,
+    }))
+    const key = { atp: 'atp_points', wta: 'wta_points', combined: 'combined_points' }[sortCol]
+    return [...rows].sort((a, b) => {
+      const av = a[key] ?? -Infinity, bv = b[key] ?? -Infinity
+      return sortDir === 'desc' ? bv - av : av - bv
+    })
+  }, [gs.data, league.data, sortCol, sortDir])
+  const sortBy = col => {
+    if (sortCol === col) setSortDir(d => (d === 'desc' ? 'asc' : 'desc'))
+    else { setSortCol(col); setSortDir('desc') }
+  }
   const { me } = useAuth()
 
   return (
@@ -113,6 +138,52 @@ export default function LeagueDraws() {
             )}
           </>
         )}
+
+        {league.data && (
+          <>
+            <Eyebrow>Members ({league.data.member_count ?? members.length})</Eyebrow>
+            <View style={s.tally}>
+              <Text style={[T.small, { color: C.muted, paddingHorizontal: 12, paddingTop: 10 }]}>
+                {gs.data?.year ?? new Date().getFullYear()} Grand Slam point tally
+              </Text>
+              <View style={[s.tRow, s.tHead]}>
+                <View style={s.tName} />
+                {[['atp', 'ATP'], ['wta', 'WTA'], ['combined', 'Comb.']].map(([col, label]) => (
+                  <Pressable key={col} onPress={() => sortBy(col)} style={s.tPts} hitSlop={6}
+                             accessibilityRole="button" accessibilityLabel={`Sort by ${label}`}>
+                    <Text style={[s.tHeadText, sortCol === col && { color: C.ink }]} numberOfLines={1}>
+                      {label}{sortCol === col ? (sortDir === 'desc' ? ' ▼' : ' ▲') : ''}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+              {members.map((m, i) => (
+                <View key={m.user_id} style={[s.tRow, i % 2 ? s.tAlt : null]}>
+                  {/* The name is the door to their draw history, as the site's
+                      person icon is. */}
+                  <CardLink href={{ pathname: '/history', params: { user: m.user_id } }} style={s.tName} grow>
+                    {/* The USERNAME names the member — the site prints it and
+                        keeps the real name for a hover, which a phone has not
+                        got, so it goes beneath when the league shows it. */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Ionicons name="person-circle-outline" size={16} color={C.faint} />
+                      <View style={{ flexShrink: 1 }}>
+                        <Text style={[T.bodyMed, { color: C.ink }]} numberOfLines={1}>{m.username}</Text>
+                        {league.data.show_real_name && m.full_name ? (
+                          <Text style={[T.tiny, { color: C.faint }]} numberOfLines={1}>{m.full_name}</Text>
+                        ) : null}
+                      </View>
+                      {m.is_admin ? <Text style={s.adminBadge}>A</Text> : null}
+                    </View>
+                  </CardLink>
+                  <Text style={[s.tPts, s.tPtsText]}>{m.atp_points ?? '–'}</Text>
+                  <Text style={[s.tPts, s.tPtsText]}>{m.wta_points ?? '–'}</Text>
+                  <Text style={[s.tPts, s.tPtsText, { fontFamily: 'Archivo_700Bold' }]}>{m.combined_points ?? '–'}</Text>
+                </View>
+              ))}
+            </View>
+          </>
+        )}
       </Screen>
     </>
   )
@@ -151,6 +222,15 @@ function DrawRow({ t, pickers, leagueId }) {
 }
 
 const s = StyleSheet.create({
+  tally: { backgroundColor: C.card, borderRadius: 14, borderWidth: 1, borderColor: C.border, overflow: 'hidden' },
+  tRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, gap: 4 },
+  tHead: { borderBottomWidth: 1, borderColor: C.border },
+  tAlt: { backgroundColor: '#ffffff08' },
+  tName: { flex: 1, minWidth: 0 },
+  tPts: { width: 52, alignItems: 'flex-end' },
+  tPtsText: { ...T.body, color: C.ink, textAlign: 'right', width: 52 },
+  tHeadText: { ...T.tiny, color: C.faint, fontFamily: 'Archivo_700Bold', letterSpacing: 0.5 },
+  adminBadge: { ...T.tiny, color: C.info, borderWidth: 1, borderColor: C.info, borderRadius: 4, paddingHorizontal: 4, overflow: 'hidden' },
   settingsBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingVertical: 4 },
   card: {
     backgroundColor: C.card, borderRadius: 14, borderWidth: 1,
