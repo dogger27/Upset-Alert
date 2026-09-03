@@ -631,7 +631,21 @@
    measures the seed's real width before deciding how much. */
 /* The "fingers crossed" mark on the player you picked. Inline with the seed,
    inside .sched-player so it shrinks with the name it belongs to. */
-.sched-pick { margin-left: 0.28rem; font-size: 0.95em; line-height: 1; }
+.sched-pick { margin-left: 0.28rem; font-size: 0.95em; line-height: 1; cursor: pointer; }
+/* Its tip, portalled to <body> — same bubble as the H2H form popup. */
+.sched-pick-tip {
+  z-index: 99999;
+  background: var(--surface-card);
+  color: var(--text);
+  border: 1.5px solid var(--brand-line, var(--border-strong));
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+  padding: 0.4rem 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+}
 .sched-seed {
   color: var(--text-muted);
   font-weight: 700;

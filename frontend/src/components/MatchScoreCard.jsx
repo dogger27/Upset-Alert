@@ -8,7 +8,8 @@
  * and splitting it invites regressions for zero benefit.
  */
 
-import { Fragment, useLayoutEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import useFlashOnChange from '../hooks/useFlashOnChange'
 import { nationalityIso2, splitPlayerName } from '../utils/flags'
@@ -371,10 +372,55 @@ function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp, t
         {/* YOUR PICK. After the seed, so the line reads name, seeding, then
             your stake in it — the two facts about the player, then the one
             about you. */}
-        {pick && <span className="sched-pick" role="img" aria-label="Your pick to win"
-                       title="Your pick to win">🤞</span>}
+        {pick && <PickMark />}
       </span>
     </span>
+  )
+}
+
+/* The pick mark and its tip. A portal, not a title attribute: title never
+   shows on a phone and is clipped here anyway by the name's overflow. Hover
+   opens it on a desktop; a tap toggles it on a phone, and that tap stays on
+   the mark — the row behind it opens the score history on click. */
+const PICK_TIP = 'You predicted this player to win'
+function PickMark() {
+  const ref = useRef(null)
+  const [pos, setPos] = useState(null)
+  const show = () => {
+    const r = ref.current?.getBoundingClientRect()
+    if (r) setPos({ x: r.left + r.width / 2, y: r.top })
+  }
+  /* HOVER IS FOR A MOUSE ONLY. A touch tap plays the whole emulated mouse
+     sequence — enter, click, and then a LEAVE as the browser clears the hover
+     it invented — so a mouseleave handler closed the tip the instant a tap
+     had opened it. Pointer events say what the pointer is: enter/leave count
+     only from a mouse, and a tap shows the tip through click. While it is
+     open, the next press anywhere else — or a scroll — closes it. */
+  useEffect(() => {
+    if (!pos) return undefined
+    const away = (ev) => { if (!ref.current?.contains(ev.target)) setPos(null) }
+    const hide = () => setPos(null)
+    document.addEventListener('pointerdown', away, true)
+    window.addEventListener('scroll', hide, true)
+    return () => {
+      document.removeEventListener('pointerdown', away, true)
+      window.removeEventListener('scroll', hide, true)
+    }
+  }, [pos])
+  return (
+    <>
+      <span ref={ref} className="sched-pick" role="img" aria-label={PICK_TIP}
+            onPointerEnter={(ev) => { if (ev.pointerType === 'mouse') show() }}
+            onPointerLeave={(ev) => { if (ev.pointerType === 'mouse') setPos(null) }}
+            onClick={(ev) => { ev.stopPropagation(); show() }}>🤞</span>
+      {pos && createPortal(
+        <span className="sched-pick-tip" role="tooltip"
+              style={{ position: 'fixed', left: pos.x, top: pos.y - 8, transform: 'translate(-50%, -100%)' }}>
+          {PICK_TIP}
+        </span>,
+        document.body,
+      )}
+    </>
   )
 }
 
