@@ -46,6 +46,9 @@ from app.database import AsyncSessionLocal
 from app.models.tournament import DrawEntry, Match, Draw, LOCK_LEAD_DAYS
 from app.services.rankings import _norm
 from app.services.live_state import note_resumption
+from app.services.settings import sofa_authoritative
+from app.services.system_log import app_log
+from app.services.sofascore_live import live_feed_healthy
 
 logger = logging.getLogger(__name__)
 
@@ -362,7 +365,6 @@ async def _fetch_events(gender: str) -> list:
             logger.debug("ESPN %s unreachable (%d in a row): %s", gender, streak, err_msg)
             over = streak - ESPN_FAIL_STREAK_ALERT
             if over >= 0 and over % ESPN_OUTAGE_REALERT_POLLS == 0:
-                from app.services.system_log import app_log
                 await app_log("error", "espn",
                               f"ESPN {gender} unreachable for {streak} consecutive polls "
                               f"(~{streak} min) — live scores are not updating: {err_msg}",
@@ -371,7 +373,6 @@ async def _fetch_events(gender: str) -> list:
                               dedup_key=f"espn_outage_{gender}", dedup_hours=6)
         else:
             logger.warning("ESPN %s fetch failed: %s", gender, err_msg)
-            from app.services.system_log import app_log
             await app_log("error", "espn", f"ESPN {gender} API failed: {err_msg}",
                           {"gender": gender, "error": err_msg, "exc_type": type(exc).__name__},
                           dedup_key=f"espn_api_fail_{gender}", dedup_hours=2)
@@ -521,6 +522,28 @@ def _comp_result(comp: dict) -> Optional[tuple]:
 class ESPNMonitor:
     def __init__(self):
         self._running = False
+        # None until the first cycle decides; then whether ESPN is the one
+        # writing scores. Only the transitions are logged.
+        self._active: Optional[bool] = None
+
+    async def _scoring_active(self) -> bool:
+        """ONE SOURCE AT A TIME. Sofascore is primary; this monitor writes live
+        scores and results only while Sofascore is not the authority or its
+        feed has gone silent (live_feed_healthy). Everything else it does —
+        pick locking, closing times, naming qualifier slots — is not scoring
+        and carries on regardless."""
+        active = not (sofa_authoritative() and live_feed_healthy())
+        if active != self._active:
+            async with AsyncSessionLocal() as db:
+                if active:
+                    await app_log(db, "warning", "espn_monitor",
+                                  "ESPN scoring ACTIVE — Sofascore is not delivering "
+                                  "(not authoritative, feed stale or blocked)")
+                else:
+                    await app_log(db, "info", "espn_monitor",
+                                  "ESPN scoring standing by — Sofascore is delivering")
+            self._active = active
+        return active
 
     async def start(self) -> None:
         self._running = True
@@ -541,6 +564,7 @@ class ESPNMonitor:
 
     async def _poll(self) -> None:
         today = date.today()
+        scoring = await self._scoring_active()
 
         # Job 1 watchlist: narrow window around start_date for picks locking
         lock_start  = today - timedelta(days=_LOCK_TRAIL_DAYS)
@@ -665,7 +689,6 @@ class ESPNMonitor:
             # the sharpened pick lock both depend on this match.
             started = (by_id[tid].start_date is not None
                        and today >= by_id[tid].start_date)
-            from app.services.system_log import app_log
             await app_log(
                 "warning" if started else "info", "espn",
                 f"'{by_id[tid].name}' ({by_id[tid].gender}) matched ESPN event "
@@ -702,7 +725,6 @@ class ESPNMonitor:
                     and tournament.start_date <= date.today()
                 )
                 if tid in lock_ids and started:
-                    from app.services.system_log import app_log
                     await app_log("warning", "espn",
                                   f"No ESPN event matched for '{tournament.name}' after start — "
                                   f"auto-lock precision unavailable (picks still lock at scheduled closing_time)",
@@ -731,12 +753,12 @@ class ESPNMonitor:
             if tid in result_ids and any(not (e.name or "").strip() for e in entries):
                 await self._fill_unnamed_slots(tournament, espn_event, pairs, tok_index)
 
-            # Job 2: live scores
-            if tid in result_ids:
+            # Job 2: live scores — the standby writes none while Sofascore delivers
+            if tid in result_ids and scoring:
                 await self._sync_live(tournament, espn_event, pairs, tok_index)
 
-            # Job 3: match results
-            if tid in result_ids:
+            # Job 3: match results — likewise
+            if tid in result_ids and scoring:
                 n = await self._sync_results(tournament, espn_event, pairs, tok_index)
                 if n:
                     logger.info(
@@ -869,7 +891,6 @@ class ESPNMonitor:
                 await db.commit()
 
         if filled:
-            from app.services.system_log import app_log
             await app_log(
                 "info", "espn",
                 f"Filled {filled} unnamed slot(s) in {tournament.year} {tournament.name} "
@@ -986,7 +1007,6 @@ class ESPNMonitor:
             return
         tournament.closing_time = new_close
 
-        from app.services.system_log import app_log
         await app_log(
             "info", "espn",
             f"Pick deadline for {tournament.year} {tournament.name} "
@@ -1046,7 +1066,6 @@ class ESPNMonitor:
 
     async def _on_match_start(self, tournament_id: int, trigger_name: str) -> None:
         from app.services import broadcaster
-        from app.services.system_log import app_log
 
         now = datetime.now(timezone.utc)
 
