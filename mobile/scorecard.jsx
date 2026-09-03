@@ -60,7 +60,7 @@ export function MatchCard({ e }) {
               name={sideName(e.players, side)}
               doubles={doubles}
               style={[T.bodyMed, { color: ink, flexShrink: 1 }]}
-              after={picked ? <Text style={s.pick} accessibilityLabel="Your pick to win">🤞</Text> : null}
+              after={picked ? <Text style={s.pick} accessibilityLabel="You predicted this player to win">🤞</Text> : null}
             />
             {end && <Text style={s.end}>{end}</Text>}
             {winner != null && (
