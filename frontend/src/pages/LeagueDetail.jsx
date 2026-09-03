@@ -817,7 +817,7 @@ function CashPoolModal({ league, items, cashPools, onClose }) {
           </div>
           <p className="cp-legend">
             <span className="cp-star" aria-hidden="true">★</span>
-            {competing.size} currently competing in this draw
+            Currently competing in this draw
           </p>
           {err && <p className="cp-error">{err}</p>}
           <div className="cp-actions">
