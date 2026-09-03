@@ -1877,7 +1877,8 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 /* The badge's tip, portalled to <body> — the same bubble as the pick mark's. */
 .dc-pool-tip {
   z-index: 99999;
-  max-width: 18rem;
+  width: max-content;
+  max-width: min(18rem, calc(100vw - 1.5rem));
   background: var(--surface-card);
   color: var(--text);
   border: 1.5px solid var(--brand-line, var(--border-strong));

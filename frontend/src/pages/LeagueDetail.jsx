@@ -618,7 +618,12 @@ function CashPoolBadge() {
   const [pos, setPos] = useState(null)
   const show = () => {
     const r = ref.current?.getBoundingClientRect()
-    if (r) setPos({ x: r.left + r.width / 2, y: r.top })
+    if (!r) return
+    /* The badge lives at the tile's right edge, so a bubble centred on it
+       ran off the screen. Near the edge the bubble hangs from the badge's
+       right corner instead; elsewhere it centres. */
+    const nearEdge = r.left + r.width / 2 > window.innerWidth - 180
+    setPos(nearEdge ? { x: r.right, y: r.top, edge: true } : { x: r.left + r.width / 2, y: r.top, edge: false })
   }
   useEffect(() => {
     if (!pos) return undefined
@@ -641,7 +646,8 @@ function CashPoolBadge() {
       </span>
       {pos && createPortal(
         <span className="dc-pool-tip" role="tooltip"
-              style={{ position: 'fixed', left: pos.x, top: pos.y - 8, transform: 'translate(-50%, -100%)' }}>
+              style={{ position: 'fixed', left: pos.x, top: pos.y - 8,
+                       transform: pos.edge ? 'translate(-100%, -100%)' : 'translate(-50%, -100%)' }}>
           {POOL_TIP}
         </span>,
         document.body,
