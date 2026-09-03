@@ -62,6 +62,7 @@ async def init_db():
     # that trap a little worse.
     import app.models.alert  # noqa: F401
     import app.models.app_device  # noqa: F401
+    import app.models.cash_pool  # noqa: F401
 
     import app.models.draw_history  # noqa: F401
     import app.models.h2h  # noqa: F401

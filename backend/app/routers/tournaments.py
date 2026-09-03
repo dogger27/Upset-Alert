@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -838,6 +838,15 @@ async def match_predictors(
             select(LeagueMember.user_id).where(LeagueMember.league_id == league_id)
         )
         participant_ids &= {r[0] for r in member_res.all()}
+        # A cash pool on this draw: only the members who paid in are the
+        # league's view of it, here as everywhere else the league looks at
+        # the draw (see leagues._pool_visible).
+        from app.models.cash_pool import LeagueCashPool
+        pool = (await db.execute(
+            select(LeagueCashPool).where(LeagueCashPool.league_id == league_id,
+                                         LeagueCashPool.draw_id == tournament_id))).scalar_one_or_none()
+        if pool is not None and pool.enabled:
+            participant_ids &= {m.user_id for m in pool.members}
 
     if not participant_ids:
         return {"correct": [], "incorrect": [], "league_name": league_name}
