@@ -48,6 +48,7 @@ successful poll so a watchdog can alarm on staleness rather than on exceptions.
 """
 
 import asyncio
+import time
 import logging
 from datetime import datetime, timezone
 from typing import Optional
@@ -125,25 +126,26 @@ _tournament_of: dict = {}
 # FEED_STALE_AFTER seconds, and no circuit breaker open. Five minutes is thirty
 # missed polls — a ban, an outage or a dead network, never a slow response.
 FEED_STALE_AFTER = 300.0
-_last_ok = 0.0
+# Healthy from process start: the standby's first cycle runs before this
+# poller's first cycle lands, and one cycle of ESPN writing at every boot is
+# exactly the two-writer overlap this exists to end. The grace period is the
+# same five minutes — if the poller has not marked a cycle by then, it is not
+# delivering, and the standby is right to take over.
+_last_ok = time.monotonic()
 
 
 def _mark_ok() -> None:
     global _last_ok
-    _last_ok = asyncio.get_running_loop().time()
+    _last_ok = time.monotonic()
 
 
 def live_feed_healthy() -> bool:
     """Is the Sofascore live feed delivering right now? False hands scoring to
     the standby (see espn_monitor._poll), True takes it back."""
     from app.services.sofascore import blocked_for
-    try:
-        now = asyncio.get_running_loop().time()
-    except RuntimeError:
-        return False
     if blocked_for() > 0:
         return False
-    return _last_ok > 0 and (now - _last_ok) <= FEED_STALE_AFTER
+    return (time.monotonic() - _last_ok) <= FEED_STALE_AFTER
 
 
 def _norm_point(raw, tiebreak: bool) -> Optional[str]:
