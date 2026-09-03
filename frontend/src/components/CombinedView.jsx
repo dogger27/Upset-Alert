@@ -1569,10 +1569,10 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                         style={{ ...chipTop, left: colIdx * (colW + COL_GAP) - H2H_X, pointerEvents: 'auto' }}
                         title={standoutIds?.has(m.id)
                           ? `You called ${m.winner.name} — most of the field did not`
-                          : `Who predicted ${m.winner.name}?`}
+                          : 'Who got this right?'}
                         aria-label={standoutIds?.has(m.id)
                           ? `Standout pick: you called ${m.winner.name}, which most competitors missed`
-                          : `Who predicted ${m.winner.name}?`}
+                          : 'Who got this right?'}
                         onClick={() => setPredictorsMatch(m)}
                       >
                         <GroupIcon />
