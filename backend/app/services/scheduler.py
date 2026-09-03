@@ -1725,7 +1725,8 @@ async def _refresh_schedule_estimates() -> None:
                 # TimeoutError traceback names the exact awaiting line, so the
                 # next occurrence diagnoses itself in the log.
                 async with asyncio.timeout(120):
-                    await with_write_retry(_one, what=f"estimates {tid}/{day}")
+                    async with schedule_svc.day_write_lock:
+                        await with_write_retry(_one, what=f"estimates {tid}/{day}")
             except TimeoutError:
                 logger.error("Estimate refresh WEDGED on %s/%s — cancelled at "
                              "120s; traceback above names the await", tid, day,
@@ -1834,8 +1835,10 @@ async def _sweep_schedule_invariants() -> None:
     turns the crank. See services/schedule_invariants.py for the doctrine."""
     try:
         from app.services.schedule_invariants import sweep
-        async with AsyncSessionLocal() as db:
-            await sweep(db)
+        # Never between an ingest and its estimates — see schedule.day_write_lock.
+        async with schedule_svc.day_write_lock:
+            async with AsyncSessionLocal() as db:
+                await sweep(db)
     except Exception as exc:
         logger.error("Schedule invariant sweep failed: %s", exc)
 

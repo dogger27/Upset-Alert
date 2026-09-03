@@ -483,8 +483,9 @@ async def _refresh_slam_feed(tournament, draws, season_year: int, today: date):
                     venue_tz=next((d.venue_timezone for d in draws
                                    if d.venue_timezone), None))
 
-            await with_write_retry(_ingest, what=f"uso feed ingest {tournament.id}")
-            await with_write_retry(_estimates, what=f"uso feed estimates {tournament.id}")
+            async with schedule_svc.day_write_lock:   # see schedule.day_write_lock
+                await with_write_retry(_ingest, what=f"uso feed ingest {tournament.id}")
+                await with_write_retry(_estimates, what=f"uso feed estimates {tournament.id}")
             ingested.append((pd, day_url, matches))
 
     if not ingested:
@@ -643,8 +644,9 @@ async def refresh_order_of_play() -> int:
                             venue_tz=next((d.venue_timezone for d in draws
                                            if d.venue_timezone), None))
 
-                    await with_write_retry(_ingest, what=f"oop ingest {tournament.id}")
-                    await with_write_retry(_estimates, what=f"oop estimates {tournament.id}")
+                    async with schedule_svc.day_write_lock:   # see schedule.day_write_lock
+                        await with_write_retry(_ingest, what=f"oop ingest {tournament.id}")
+                        await with_write_retry(_estimates, what=f"oop estimates {tournament.id}")
                 except Exception as exc:
                     await app_log("warning", "order_of_play",
                                   f"Schedule ingest failed for '{tournament.name}': "

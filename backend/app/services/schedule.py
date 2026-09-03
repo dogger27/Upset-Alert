@@ -44,6 +44,16 @@ from app.services.rankings import _norm
 
 logger = logging.getLogger(__name__)
 
+# A DAY'S SHEET IS WRITTEN IN TWO TRANSACTIONS — the ingest, then the estimates
+# — because one that held SQLite's lock across both once wedged the site. For a
+# few seconds between them a row can carry a NEW printed time beside an OLD
+# expected_start_at, and the invariant sweep, a separate job, read exactly that
+# window twice on 2 Sep 2026 ("expected_contradicts_printed" — printed 5:00 PM,
+# expected 4:30) and paged the user for an estimate nobody ever served. Every
+# writer of the pair holds this while it writes; the sweep holds it while it
+# reads. In-process only, which is all there is: one worker.
+day_write_lock = asyncio.Lock()
+
 # Seeds for the chain. No historical durations exist to fit these to —
 # `matches.completed_at` is populated but there is no start time to subtract —
 # so they are deliberate constants, replaceable once this feature has generated
