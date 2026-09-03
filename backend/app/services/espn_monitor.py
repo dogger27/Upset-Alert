@@ -46,7 +46,7 @@ from app.database import AsyncSessionLocal
 from app.models.tournament import DrawEntry, Match, Draw, LOCK_LEAD_DAYS
 from app.services.rankings import _norm
 from app.services.live_state import note_resumption
-from app.services.settings import sofa_authoritative
+from app.services.settings import load_sofa_authoritative, sofa_authoritative
 from app.services.system_log import app_log
 from app.services.sofascore_live import live_feed_healthy
 
@@ -532,6 +532,13 @@ class ESPNMonitor:
         feed has gone silent (live_feed_healthy). Everything else it does —
         pick locking, closing times, naming qualifier slots — is not scoring
         and carries on regardless."""
+        if self._active is None:
+            # The stored setting, not the env default. The cutover watch loads
+            # it too, but later than this monitor's first cycle — and the env
+            # default is False, so every boot began with one cycle of ESPN
+            # writing before the setting had been read.
+            async with AsyncSessionLocal() as db:
+                await load_sofa_authoritative(db)
         active = not (sofa_authoritative() and live_feed_healthy())
         if active != self._active:
             if active:
