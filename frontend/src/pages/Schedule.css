@@ -994,6 +994,13 @@
    A LINE PER COMPETITOR IS THE INVARIANT. Everything below exists to hold it
    — the name shrinks, ellipsises and drops to a surname before it is ever
    allowed to wrap. */
+/* The player rows sit a touch IN from the tag row above and the footer below,
+   so the card reads as a frame around its two names rather than three
+   left-flush lines. Padding on the left only: the score column stays on
+   the right edge. Scoped to the schedule card — the same component in the
+   score-history popup has its own framing. */
+.sched-row-main > .sched-competitors { padding-left: 0.4rem; }
+
 .sched-competitors {
   display: flex;
   flex-direction: column;
