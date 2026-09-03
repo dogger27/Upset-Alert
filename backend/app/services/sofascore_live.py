@@ -117,6 +117,35 @@ state = _State()
 _tournament_of: dict = {}
 
 
+# ── ONE SOURCE AT A TIME ──────────────────────────────────────────────────
+# Sofascore is the primary scoring feed; espn_monitor is the standby. While
+# this poller is healthy the standby writes nothing, so the two can never
+# disagree in the database. "Healthy" is measured, not assumed: a cycle that
+# reached the feed (or found nothing on court, which is not a failure) within
+# FEED_STALE_AFTER seconds, and no circuit breaker open. Five minutes is thirty
+# missed polls — a ban, an outage or a dead network, never a slow response.
+FEED_STALE_AFTER = 300.0
+_last_ok = 0.0
+
+
+def _mark_ok() -> None:
+    global _last_ok
+    _last_ok = asyncio.get_running_loop().time()
+
+
+def live_feed_healthy() -> bool:
+    """Is the Sofascore live feed delivering right now? False hands scoring to
+    the standby (see espn_monitor._poll), True takes it back."""
+    from app.services.sofascore import blocked_for
+    try:
+        now = asyncio.get_running_loop().time()
+    except RuntimeError:
+        return False
+    if blocked_for() > 0:
+        return False
+    return _last_ok > 0 and (now - _last_ok) <= FEED_STALE_AFTER
+
+
 def _norm_point(raw, tiebreak: bool) -> Optional[str]:
     """The point as it should be displayed, or None when there is nothing to show.
 
@@ -541,9 +570,10 @@ async def poll_once(db) -> dict:
                                      match.id)
 
         # Same promotion as the results sweep: when Sofascore is the record,
-        # espn_monitor is not running and live_scores_json would sit frozen at
-        # whatever it last said. Everything that renders a live score reads that
-        # column, so it has to be the one that moves.
+        # espn_monitor stands by (it writes nothing while live_feed_healthy())
+        # and live_scores_json would sit frozen at whatever it last said.
+        # Everything that renders a live score reads that column, so it has to
+        # be the one that moves.
         if sofa_authoritative():
             live = _as_espn_shape(snap)
             # A blank snapshot never replaces a real one — see _has_sets in
@@ -710,6 +740,9 @@ class SofascoreLiveMonitor:
         from app.database import AsyncSessionLocal
 
         logger.info("Sofascore live poller started (interval=%ss)", POLL_INTERVAL)
+        # Healthy from the first tick: the standby must not write in the seconds
+        # before this loop's first cycle lands.
+        _mark_ok()
         while not self._stop.is_set():
             delay = POLL_INTERVAL
             started = asyncio.get_running_loop().time()
@@ -717,9 +750,11 @@ class SofascoreLiveMonitor:
                 async with AsyncSessionLocal() as db:
                     if not await _anything_on_court(db):
                         delay = self.IDLE_INTERVAL
+                        _mark_ok()          # nothing to fetch is not a failure
                     else:
                         report = await poll_once(db)
                         state.consecutive_errors = 0
+                        _mark_ok()
                         if report["written"]:
                             # Only publish when something actually changed —
                             # poll_once already suppresses no-op writes, so this
