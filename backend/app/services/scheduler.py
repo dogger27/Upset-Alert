@@ -1835,6 +1835,7 @@ async def _sweep_schedule_invariants() -> None:
     turns the crank. See services/schedule_invariants.py for the doctrine."""
     try:
         from app.services.schedule_invariants import sweep
+        from app.services import schedule as schedule_svc
         # Never between an ingest and its estimates — see schedule.day_write_lock.
         async with schedule_svc.day_write_lock:
             async with AsyncSessionLocal() as db:
