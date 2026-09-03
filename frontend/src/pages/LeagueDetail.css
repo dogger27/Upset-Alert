@@ -1846,13 +1846,10 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 
 /* ── The cash pool switch, top-right of a draw tile ─────────────────────── */
 
-.dc-card { position: relative; }
-/* Keep the badge row clear of the switch. */
-.dc-card .dc-top { padding-right: 3.6rem; }
+/* Last in the badge row, pushed to its far edge, centred on the badges'
+   own line by the row's align-items. */
 .dc-pool {
-  position: absolute;
-  top: 0.6rem;
-  right: 0.65rem;
+  margin-left: auto;
   display: inline-flex;
   align-items: center;
   gap: 0.28rem;
@@ -1887,25 +1884,47 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 .dc-pool--on .dc-pool-track { background: var(--green-500); }
 .dc-pool--on .dc-pool-knob { left: 14px; }
 
-/* ── The cash pool popup ─────────────────────────────────────────────────── */
-
-/* Narrow, unlike the standings popup: a checklist of names wants a column,
-   not the 72rem floor the compare-picks table needs. */
-.dm-panel.cp-panel { width: min(32rem, 100%); min-width: min(32rem, 100%); max-width: 100%; }
-.cp-title { margin: 0 0 0.6rem; display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
-.cp-title-sub { font-size: 0.85rem; font-weight: 500; color: var(--text-muted); }
-.cp-toggle-row { display: flex; align-items: center; gap: 0.5rem; margin: 0.6rem 0 0.3rem; font-weight: 600; }
-.cp-help { margin: 0 0 0.6rem; font-size: 0.82rem; color: var(--text-muted); }
-.cp-list-head { display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.3rem; }
-.cp-list-actions { display: flex; gap: 0.5rem; }
+/* ── The cash pool popup ─────────────────────────────────────────────────
+   A column of names, not the standings popup: it takes the width a list
+   wants and the height its content needs — the standings panel's fixed
+   90vh left a field of empty space under the buttons here. The list is the
+   one thing that scrolls. */
+.dm-panel.cp-panel {
+  width: min(30rem, 100%);
+  min-width: min(30rem, 100%);
+  max-width: 100%;
+  height: auto;
+  max-height: min(90vh, 100%);
+}
+.cp-body { padding-bottom: var(--dm-gutter); }
+/* The close button is absolute in the panel's corner; the head keeps out
+   of its way. */
+.cp-head { padding-right: 2.8rem; margin-bottom: 0.7rem; }
+.cp-title { margin: 0; display: flex; align-items: center; gap: 0.45rem; line-height: 1.1; }
+.cp-sub { margin: 0.2rem 0 0; font-size: 0.85rem; color: var(--text-muted); }
+/* The tour switch is as wide as its two words, at the left, like a control
+   and not a banner. */
+.cp-tour { align-self: flex-start; width: fit-content; margin: 0 0 0.75rem; }
+.cp-toggle-row { display: flex; align-items: center; gap: 0.5rem; margin: 0 0 0.3rem; font-weight: 600; }
+.cp-toggle-row input, .cp-row input { width: 1.05rem; height: 1.05rem; accent-color: var(--green-500); flex: 0 0 auto; }
+.cp-help { margin: 0 0 0.8rem; font-size: 0.82rem; color: var(--text-muted); line-height: 1.4; }
+.cp-list-head { display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.35rem; }
+.cp-list-actions { display: flex; gap: 0.6rem; }
 .cp-link { background: none; border: 0; padding: 0; color: var(--brand-line, var(--green-500)); font: inherit; cursor: pointer; text-decoration: underline; }
-.cp-list { max-height: 50vh; overflow: auto; border: 1px solid var(--border-strong); border-radius: 8px; padding: 0.2rem 0.5rem; }
-.cp-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0; border-bottom: 1px solid var(--border-strong); }
+.cp-list {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 52vh;
+  overflow: auto;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  padding: 0.15rem 0.6rem;
+}
+.cp-row { display: flex; align-items: center; gap: 0.6rem; padding: 0.42rem 0; border-bottom: 1px solid var(--border-strong); cursor: pointer; }
 .cp-row:last-child { border-bottom: 0; }
 .cp-name { flex: 1; min-width: 0; }
-.cp-error { color: var(--danger, #d9534f); font-size: 0.85rem; }
-.cp-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.8rem; }
-
+.cp-error { margin: 0.5rem 0 0; color: var(--danger, #d9534f); font-size: 0.85rem; }
+.cp-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.9rem; }
 
 /* ── Bigger draw tiles on a desktop ───────────────────────────────────────
    The tile was sized for a phone column and then simply sat, small, in the
@@ -1921,7 +1940,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
     border-radius: 16px;
   }
   .dc-card--pair { gap: 0.7rem; }
-  .dc-card .dc-top { gap: 0.6rem; padding-right: 4.6rem; }
+  .dc-card .dc-top { gap: 0.6rem; }
   .dc-card .lt-gender-badge { font-size: 1rem; padding: 3px 9px; }
   .dc-tier { font-size: 0.92rem; }
   .dc-dates, .dc-surface, .dc-foot { font-size: 1rem; }
@@ -1931,7 +1950,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   .dc-rank--out .dc-rank-of { font-size: 1.1rem; }
   .dc-bar { height: 5px; border-radius: 3px; }
   .dc-bar-fill { border-radius: 3px; }
-  .dc-pool { top: 0.9rem; right: 1rem; font-size: 1.1rem; gap: 0.35rem; }
+  .dc-pool { font-size: 1.1rem; gap: 0.35rem; }
   .dc-pool-track { width: 36px; height: 20px; border-radius: 10px; }
   .dc-pool-knob { width: 16px; height: 16px; }
   .dc-pool--on .dc-pool-knob { left: 18px; }

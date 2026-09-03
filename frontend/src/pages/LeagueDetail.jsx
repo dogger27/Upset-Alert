@@ -635,20 +635,30 @@ function CashPoolSwitch({ on, manage, onOpen }) {
    same tour switch the standings popup uses. */
 function CashPoolModal({ league, items, cashPools, onClose }) {
   const qc = useQueryClient()
+  const members = league.members ?? []
   const [which, setWhich] = useState(0)
   const t = items[which]?.tournament
-  const saved = cashPools.get(t?.id)
-  const [enabled, setEnabled] = useState(!!saved?.enabled)
-  const [paid, setPaid] = useState(() => new Set(saved?.paid_user_ids ?? []))
+  /* A pool nobody has set up yet opens ENABLED WITH EVERYONE TICKED: the
+     admin came here to switch it on, and the common case is a league where
+     most people pay, so the work is unticking the few who have not. A saved
+     pool opens exactly as it was saved. */
+  const formFor = (drawId) => {
+    const saved = cashPools.get(drawId)
+    return saved
+      ? { enabled: !!saved.enabled, paid: new Set(saved.paid_user_ids ?? []) }
+      : { enabled: true, paid: new Set(members.map(m => m.id)) }
+  }
+  const [enabled, setEnabled] = useState(() => formFor(t?.id).enabled)
+  const [paid, setPaid] = useState(() => formFor(t?.id).paid)
   const [err, setErr] = useState(null)
 
-  // Switching tour swaps the whole form for that draw's saved state.
+  // Switching tour swaps the whole form for that draw's state.
   useEffect(() => {
-    const s = cashPools.get(items[which]?.tournament?.id)
-    setEnabled(!!s?.enabled)
-    setPaid(new Set(s?.paid_user_ids ?? []))
+    const f = formFor(items[which]?.tournament?.id)
+    setEnabled(f.enabled)
+    setPaid(f.paid)
     setErr(null)
-  }, [which, items, cashPools])
+  }, [which, items, cashPools])  // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const onKey = e => { if (e.key === 'Escape') onClose() }
@@ -669,7 +679,6 @@ function CashPoolModal({ league, items, cashPools, onClose }) {
     onError: (e) => setErr(e?.response?.data?.detail || 'Could not save the cash pool'),
   })
 
-  const members = league.members ?? []
   const toggle = (uid) => setPaid(prev => {
     const next = new Set(prev)
     next.has(uid) ? next.delete(uid) : next.add(uid)
@@ -683,13 +692,13 @@ function CashPoolModal({ league, items, cashPools, onClose }) {
       <div className="dm-panel cp-panel" role="dialog" aria-modal="true" aria-label="Cash pool"
            onClick={e => e.stopPropagation()}>
         <button type="button" className="dm-close" onClick={onClose} aria-label="Close">×</button>
-        <div className="dm-body">
-          <h3 className="cp-title">
-            <span aria-hidden="true">💰</span> Cash pool
-            <span className="cp-title-sub">{league.name} · {t?.name} {t?.year}</span>
-          </h3>
+        <div className="dm-body cp-body">
+          <div className="cp-head">
+            <h3 className="cp-title"><span aria-hidden="true">💰</span> Cash pool</h3>
+            <p className="cp-sub">{league.name} · {t?.name} {t?.year}</p>
+          </div>
           {items.length > 1 && (
-            <span className="lt-tour" role="group" aria-label="Tour">
+            <span className="lt-tour cp-tour" role="group" aria-label="Tour">
               {items.map((it, i) => (
                 <button key={it.tournament.id} type="button"
                         className={`lt-tour-btn lt-tour-btn--${it.tournament.gender === 'M' ? 'm' : 'f'}${which === i ? ' lt-tour-btn--on' : ''}`}
@@ -704,8 +713,8 @@ function CashPoolModal({ league, items, cashPools, onClose }) {
             <span>Cash pool enabled for this draw</span>
           </label>
           <p className="cp-help">
-            Tick everyone who has paid in. While the pool is on, only they appear in
-            this league's standings and picks for this draw.
+            Tick everyone who has paid in. When Cash Pool is enabled, only they appear
+            in this league's standings and picks for this draw.
           </p>
           <div className="cp-list-head">
             <span>{paid.size} of {members.length} paid</span>
@@ -758,10 +767,6 @@ function DrawCard({ items, leagueId, showGenderLabel, onOpen,
     <button type="button"
             className={`dc-card dc-card--${paired ? 'both' : a.gender === 'M' ? 'atp' : 'wta'}${paired ? ' dc-card--pair' : ''}`}
             onClick={() => onOpen(items)}>
-      {cashPools && (
-        <CashPoolSwitch on={poolOn} manage={canManagePool}
-                        onOpen={() => onCashPool?.(items)} />
-      )}
       <div className="dc-top">
         {paired ? (
           /* Both tours named, then the tier once — it is the same tier for
@@ -776,6 +781,12 @@ function DrawCard({ items, leagueId, showGenderLabel, onOpen,
           <span className={`lt-gender-badge lt-gender-badge--${a.gender === 'M' ? 'm' : 'f'}`}>
             {a.gender === 'M' ? 'ATP' : 'WTA'} {tierLabel(a.category)}
           </span>
+        )}
+        {/* IN the badge row, so it shares the badges' centre line — pinned to
+            the corner it sat a few pixels above them. */}
+        {cashPools && (
+          <CashPoolSwitch on={poolOn} manage={canManagePool}
+                          onOpen={() => onCashPool?.(items)} />
         )}
       </div>
 
