@@ -123,14 +123,15 @@ _tournament_of: dict = {}
 # this poller is healthy the standby writes nothing, so the two can never
 # disagree in the database. "Healthy" is measured, not assumed: a cycle that
 # reached the feed (or found nothing on court, which is not a failure) within
-# FEED_STALE_AFTER seconds, and no circuit breaker open. Five minutes is thirty
-# missed polls — a ban, an outage or a dead network, never a slow response.
-FEED_STALE_AFTER = 300.0
+# FEED_STALE_AFTER seconds, and no circuit breaker open. A ban opens the breaker and
+# hands over at once; the timer is for silent failures — a hung connection, a
+# dead network. Sixty seconds is six missed polls, and the standby polls every
+# sixty seconds itself, so nothing shorter would hand over any sooner.
+FEED_STALE_AFTER = 60.0
 # Healthy from process start: the standby's first cycle runs before this
 # poller's first cycle lands, and one cycle of ESPN writing at every boot is
 # exactly the two-writer overlap this exists to end. The grace period is the
-# same five minutes — if the poller has not marked a cycle by then, it is not
-# delivering, and the standby is right to take over.
+# same sixty seconds — the poller's first cycle lands within one or two.
 _last_ok = time.monotonic()
 
 
