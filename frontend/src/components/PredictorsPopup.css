@@ -22,7 +22,14 @@
   background: var(--surface-card);
   border-radius: 12px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
-  width: min(420px, 100%);
+  /* AS WIDE AS ITS NAMES. A fixed 420px halved into two lists left the
+     pick column ~150px, and "(B. Krejčíková)" became "(B. Krejčí…" on every
+     row. The popup sizes to its content now — the widest column, twice —
+     from the old width up to a cap that still fits a tablet; the ellipsis
+     stays only as the last resort past the cap. */
+  width: fit-content;
+  min-width: min(420px, 100%);
+  max-width: min(780px, 100%);
   max-height: 80vh;
   max-height: 80dvh;
   display: flex;
