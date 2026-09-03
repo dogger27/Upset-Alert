@@ -45,7 +45,7 @@ from sqlalchemy import func, select
 from app.database import AsyncSessionLocal
 from app.models.tournament import DrawEntry, Match, Draw, LOCK_LEAD_DAYS
 from app.services.rankings import _norm
-from app.services.live_state import note_resumption
+from app.services.live_state import note_resumption, note_espn_live
 from app.services.settings import load_sofa_authoritative, sofa_authoritative
 from app.services.system_log import app_log
 from app.services.sofascore_live import live_feed_healthy
@@ -758,6 +758,15 @@ class ESPNMonitor:
             # than waiting another minute.
             if tid in result_ids and any(not (e.name or "").strip() for e in entries):
                 await self._fill_unnamed_slots(tournament, espn_event, pairs, tok_index)
+
+            # Whether standing by or not: SAY what the scoreboard shows, so the
+            # Sofascore poller knows there is something on court to poll for.
+            # A signal, not a write — see live_state.note_espn_live.
+            if tid in result_ids:
+                try:
+                    note_espn_live(bool(_singles_comps(espn_event, tournament.gender, "STATUS_IN_PROGRESS")))
+                except Exception:  # noqa: BLE001 — a signal must never break the poll
+                    pass
 
             # Job 2: live scores — the standby writes none while Sofascore delivers
             if tid in result_ids and scoring:
