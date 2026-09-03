@@ -73,7 +73,7 @@ export default function LeagueDraws() {
   return (
     <>
       <Stack.Screen options={{ title: league.data?.name || 'League' }} />
-      <Screen onRefresh={draws.refetch} refreshing={draws.loading && !!draws.data}>
+      <Screen onRefresh={draws.refetch}>
         {draws.loading && !draws.data ? <Loading /> : null}
         <ErrorNote error={draws.error} onRetry={draws.refetch} />
 

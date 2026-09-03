@@ -194,7 +194,7 @@ export default function ScheduleScreen() {
   return (
     <>
       <Stack.Screen options={{ title: 'Schedule' }} />
-      <Screen onRefresh={refetch} refreshing={day.loading && !!day.data}>
+      <Screen onRefresh={refetch}>
         <View style={s.bar}>
           <Pressable
             onPress={() => idx > 0 && setPinned(available[idx - 1])}

@@ -1,3 +1,4 @@
+import { useState, useCallback } from 'react'
 /* The shared pieces. Not a design system for its own sake — these are the
    components that would otherwise be copy-pasted into six screens and drift. */
 
@@ -23,18 +24,31 @@ import { C, R, S, T, TOUCH } from './theme'
  * headerShown: false, so the dashboard still gets its inset.
  */
 export function Screen({
-  children, scroll = true, edges, onRefresh, refreshing, style,
+  children, scroll = true, edges, onRefresh, style,
 }) {
   const headerHeight = useHeaderHeight()
   const resolvedEdges = edges ?? (headerHeight > 0 ? ['left', 'right'] : ['top', 'left', 'right'])
   const Body = scroll ? ScrollView : View
+  /* THE SPINNER IS THE USER'S PULL, NOTHING ELSE. Screens used to pass
+     `refreshing={loading && !!data}` — true during every BACKGROUND refetch,
+     and live scores refetch every few seconds. On iOS, flipping a
+     RefreshControl to refreshing programmatically animates it into view
+     and scrolls the list to the top, so the app looked as if it kept
+     reloading itself and losing the reader's place. Now the control is
+     refreshing only from a real pull until that pull's fetch settles;
+     background refetches change the data in place and move nothing. */
+  const [pulling, setPulling] = useState(false)
+  const pull = useCallback(async () => {
+    setPulling(true)
+    try { await onRefresh?.() } finally { setPulling(false) }
+  }, [onRefresh])
   const extra = scroll
     ? {
         contentContainerStyle: [u.body, style],
         showsVerticalScrollIndicator: false,
         refreshControl: onRefresh ? (
           <RefreshControl
-            refreshing={!!refreshing} onRefresh={onRefresh}
+            refreshing={pulling} onRefresh={pull}
             tintColor={C.muted} colors={[C.clay]}
           />
         ) : undefined,

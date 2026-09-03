@@ -122,7 +122,7 @@ export default function Dashboard() {
     && !buckets.upcoming.length && !buckets.lastweek.length
 
   return (
-    <Screen onRefresh={refetch} refreshing={tours.loading && !!tours.data}>
+    <Screen onRefresh={refetch}>
       <Head />
 
       <ErrorNote error={tours.error} onRetry={refetch} />

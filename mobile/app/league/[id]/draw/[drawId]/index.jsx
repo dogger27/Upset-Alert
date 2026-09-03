@@ -42,7 +42,7 @@ export default function Standings() {
   return (
     <>
       <Stack.Screen options={{ title: t?.name || 'Standings' }} />
-      <Screen onRefresh={scores.refetch} refreshing={scores.loading && !!scores.data}>
+      <Screen onRefresh={scores.refetch}>
         {scores.loading && !scores.data ? <Loading /> : null}
         <ErrorNote error={scores.error} onRetry={scores.refetch} />
 

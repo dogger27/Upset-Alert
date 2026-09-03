@@ -22,7 +22,7 @@ export default function HallOfFame() {
   return (
     <>
       <Stack.Screen options={{ title: 'Hall of Fame' }} />
-      <Screen onRefresh={q.refetch} refreshing={q.loading && !!q.data}>
+      <Screen onRefresh={q.refetch}>
         {q.loading && !q.data ? <Loading /> : null}
         <ErrorNote error={q.error} onRetry={q.refetch} />
 

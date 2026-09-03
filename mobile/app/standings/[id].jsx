@@ -37,7 +37,7 @@ export default function GlobalStandings() {
   return (
     <>
       <Stack.Screen options={{ title: t?.name ? `${t.name} · Global` : 'Global standings' }} />
-      <Screen onRefresh={standings.refetch} refreshing={standings.loading && !!standings.data}>
+      <Screen onRefresh={standings.refetch}>
         {standings.loading && !standings.data ? <Loading /> : null}
         <ErrorNote error={standings.error} onRetry={standings.refetch} />
         {standings.data && (

@@ -28,7 +28,7 @@ export default function History() {
   return (
     <>
       <Stack.Screen options={{ title: 'Draw history' }} />
-      <Screen onRefresh={q.refetch} refreshing={q.loading && !!q.data}>
+      <Screen onRefresh={q.refetch}>
         {q.loading && !q.data ? <Loading /> : null}
         <ErrorNote error={q.error} onRetry={q.refetch} />
 
