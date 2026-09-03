@@ -31,6 +31,30 @@ def is_suspended(live) -> bool:
 MIN_STOP = timedelta(minutes=15)
 
 
+# ── "IS ANYTHING ON COURT?" — ESPN's answer, kept here for the Sofascore poller.
+# The Sofascore live poller spends a request only while a match is on court,
+# and ESPN's scoreboard — already fetched every minute for pick locking, never
+# rate-limited — is the free way to know. That signal used to be ESPN WRITING
+# live_scores_json; when ESPN became the standby and stopped writing, nothing
+# lit the first match of the day and Sofascore idled through a US Open morning
+# while reporting itself healthy. ESPN now just SAYS what it sees, here, and
+# writes nothing.
+_espn_live_seen_at: Optional[float] = None
+ESPN_LIVE_FRESH = 240.0   # ESPN polls every 60 s; four misses means it really stopped
+
+
+def note_espn_live(seen: bool) -> None:
+    global _espn_live_seen_at
+    if seen:
+        import time
+        _espn_live_seen_at = time.monotonic()
+
+
+def espn_sees_live() -> bool:
+    import time
+    return _espn_live_seen_at is not None and (time.monotonic() - _espn_live_seen_at) <= ESPN_LIVE_FRESH
+
+
 def note_resumption(match, new_live) -> Optional[datetime]:
     """Track the suspended edges of a match and stamp resumed_at when a REAL
     stop ends. Returns the resumption time when one was stamped.
