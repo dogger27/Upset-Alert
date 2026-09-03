@@ -1905,3 +1905,34 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 .cp-name { flex: 1; min-width: 0; }
 .cp-error { color: var(--danger, #d9534f); font-size: 0.85rem; }
 .cp-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.8rem; }
+
+
+/* ── Bigger draw tiles on a desktop ───────────────────────────────────────
+   The tile was sized for a phone column and then simply sat, small, in the
+   room a desktop gives it. The box and everything in it scale together —
+   type, badges, the switch, the bar — so it reads as the same tile, larger,
+   not as a phone tile with big text in it. After the base rules on purpose:
+   see feedback_container_query_cascade. */
+@media (min-width: 900px) {
+  .dc-card {
+    width: 27rem;
+    padding: 1.2rem 1.3rem 1.25rem;
+    gap: 0.6rem;
+    border-radius: 16px;
+  }
+  .dc-card--pair { gap: 0.7rem; }
+  .dc-card .dc-top { gap: 0.6rem; padding-right: 4.6rem; }
+  .dc-card .lt-gender-badge { font-size: 1rem; padding: 3px 9px; }
+  .dc-tier { font-size: 0.92rem; }
+  .dc-dates, .dc-surface, .dc-foot { font-size: 1rem; }
+  .dc-title { font-size: 1.55rem; }
+  .dc-rank-num { font-size: 2.6rem; }
+  .dc-rank-of { font-size: 1.05rem; }
+  .dc-rank--out .dc-rank-of { font-size: 1.1rem; }
+  .dc-bar { height: 5px; border-radius: 3px; }
+  .dc-bar-fill { border-radius: 3px; }
+  .dc-pool { top: 0.9rem; right: 1rem; font-size: 1.1rem; gap: 0.35rem; }
+  .dc-pool-track { width: 36px; height: 20px; border-radius: 10px; }
+  .dc-pool-knob { width: 16px; height: 16px; }
+  .dc-pool--on .dc-pool-knob { left: 18px; }
+}
