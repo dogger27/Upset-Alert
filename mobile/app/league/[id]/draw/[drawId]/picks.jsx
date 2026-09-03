@@ -76,7 +76,7 @@ export default function Picks() {
   return (
     <>
       <Stack.Screen options={{ title: 'Your picks' }} />
-      <Screen onRefresh={refetch} refreshing={draw.loading && !!draw.data}>
+      <Screen onRefresh={refetch}>
         {loading ? <Loading /> : null}
         <ErrorNote error={draw.error || preds.error} onRetry={refetch} />
 

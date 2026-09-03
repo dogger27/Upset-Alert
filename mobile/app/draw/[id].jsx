@@ -146,7 +146,7 @@ export default function DrawScreen() {
   return (
     <>
       <Stack.Screen options={{ title: t?.name || 'Draw' }} />
-      <Screen onRefresh={refetch} refreshing={draw.loading && !!draw.data} scroll={false}>
+      <Screen onRefresh={refetch} scroll={false}>
         {loading ? <Loading /> : null}
         <ErrorNote error={draw.error} onRetry={refetch} />
 

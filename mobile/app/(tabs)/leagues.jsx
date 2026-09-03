@@ -39,7 +39,7 @@ export default function Leagues() {
   }
 
   return (
-    <Screen onRefresh={refetch} refreshing={loading && !!leagues}>
+    <Screen onRefresh={refetch}>
       {loading && !leagues ? <Loading /> : null}
       <ErrorNote error={error} onRetry={refetch} />
 
