@@ -691,6 +691,13 @@ async def _anything_on_court(db) -> bool:
     from sqlalchemy import or_
 
     from app.core.config import settings
+    from app.services.live_state import espn_sees_live
+
+    # ESPN's scoreboard says a match is in progress: poll, whatever the rows
+    # say. This is the trigger that lights the first match of the day now
+    # that ESPN stands by and writes nothing (see live_state.note_espn_live).
+    if espn_sees_live():
+        return True
 
     if settings.sofascore_live_force:
         # Staging, where espn_monitor is not running and the signal below is a
