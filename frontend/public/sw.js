@@ -41,8 +41,17 @@ self.addEventListener('activate', (event) => event.waitUntil((async () => {
   const previouslyControlled = await self.clients.matchAll({ type: 'window' })
   await self.clients.claim()
   if (previouslyControlled.length === 0) return   // first install, nothing stale
+  /*
+   * NOT awaited. A navigation into this worker's scope is held by the browser
+   * until the worker is ACTIVATED, and the worker is not activated until this
+   * waitUntil settles — so awaiting navigate() here waited on a navigation that
+   * was waiting on us. Every deploy left each open tab with a document request
+   * for its own URL stalled forever: Chrome's tab throbber spun until Escape
+   * cancelled it, and the tab kept the stale bundle this handler exists to
+   * replace. Start the navigations, settle, and the browser releases them.
+   */
   for (const client of previouslyControlled) {
-    try { await client.navigate(client.url) } catch { /* client went away */ }
+    client.navigate(client.url).catch(() => { /* client went away */ })
   }
 })()))
 
