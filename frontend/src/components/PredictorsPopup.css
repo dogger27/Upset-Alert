@@ -83,6 +83,7 @@
   gap: 0.9rem;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   overscroll-behavior: contain;
 }
 
@@ -141,10 +142,15 @@
    the same left edge and the split in the room is one vertical scan rather
    than a hunt through ragged parentheses. `display: contents` on the row lets
    the handle and the pick land in the list's grid instead of nesting. */
+/* NEVER WIDER THAN THE POPUP. `max-content` for the handle column let a long
+   handle push the pick column out past the edge, and the pick's nowrap did
+   the rest — the popup grew a horizontal scrollbar. Both columns are capped
+   at the room there is: a long handle wraps, a long pick is clipped with an
+   ellipsis, and the popup never scrolls sideways. */
 .pp-names--wrong {
   display: grid;
-  grid-template-columns: max-content 1fr;
-  column-gap: 14px;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  column-gap: 12px;
   align-items: baseline;
 }
 .pp-names--wrong li { display: contents; }
@@ -153,7 +159,22 @@
   font-size: 0.88em;
   text-align: left;
   white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* "Nobody" is one statement, not a handle and a pick. */
 .pp-names--wrong .pp-none { grid-column: 1 / -1; }
+
+
+/* ONE LIST UNDER THE OTHER ON A PHONE. Side by side, each list had ~150px:
+   the right one holds a handle AND the pick beside it, and clipping the
+   pick to "(B. …)" said nothing. Stacked, each list has the whole popup,
+   the handle and the pick fit on one line, and the reader scrolls down —
+   which they already do — rather than squinting. After the base rules on
+   purpose: see feedback_container_query_cascade. */
+@media (max-width: 480px) {
+  .pp-lists { grid-template-columns: 1fr; row-gap: 0.9rem; }
+  .pp-names--wrong { column-gap: 16px; }
+}
