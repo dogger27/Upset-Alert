@@ -534,14 +534,13 @@ class ESPNMonitor:
         and carries on regardless."""
         active = not (sofa_authoritative() and live_feed_healthy())
         if active != self._active:
-            async with AsyncSessionLocal() as db:
-                if active:
-                    await app_log(db, "warning", "espn_monitor",
-                                  "ESPN scoring ACTIVE — Sofascore is not delivering "
-                                  "(not authoritative, feed stale or blocked)")
-                else:
-                    await app_log(db, "info", "espn_monitor",
-                                  "ESPN scoring standing by — Sofascore is delivering")
+            if active:
+                await app_log("warning", "espn_monitor",
+                              "ESPN scoring ACTIVE — Sofascore is not delivering "
+                              "(not authoritative, feed stale or blocked)")
+            else:
+                await app_log("info", "espn_monitor",
+                              "ESPN scoring standing by — Sofascore is delivering")
             self._active = active
         return active
 

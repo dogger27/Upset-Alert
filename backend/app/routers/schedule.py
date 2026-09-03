@@ -654,7 +654,7 @@ async def schedule_day(
                        UserPrediction.predicted_winner_id.isnot(None)))).all()
             picks = {mid: wid for mid, wid in pick_rows}
         except Exception as exc:  # noqa: BLE001 — decoration, never a 500
-            await app_log(db, "warning", "schedule",
+            await app_log("warning", "schedule",
                           f"pick lookup failed for user {user.id}: {exc}")
     matches = {}
     if match_ids:
