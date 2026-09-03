@@ -71,6 +71,10 @@ class LeagueTournamentOut(BaseModel):
     # appear in the league's views of the draw, and picker_count counts them.
     cash_pool_enabled: bool = False
     cash_pool_paid_ids: list[int] = []
+    # Members with at least one pick in this draw — "competing", whatever the
+    # pool says. The pool popup sorts and stars them, so it needs the whole
+    # league's answer, not the paid-only one the standings show.
+    competing_user_ids: list[int] = []
 
 
 class CashPoolOut(BaseModel):
