@@ -43,6 +43,10 @@ export function MatchCard({ e }) {
         const lost = winner != null && winner !== idx
         const end = endedWith(e.scores, idx)
         const ink = lost ? C.muted : C.ink
+        // Your pick to win, marked after the name: the server stamps the row
+        // with the draw entry you chose (singles only — nobody picks doubles).
+        const picked = !doubles && e.pick_entry_id != null
+          && (e.players || []).some(p => p.side === side && p.draw_entry_id === e.pick_entry_id)
         return (
           <View key={side} style={s.line}>
             {(live || stopped) && (
@@ -56,6 +60,7 @@ export function MatchCard({ e }) {
               name={sideName(e.players, side)}
               doubles={doubles}
               style={[T.bodyMed, { color: ink, flexShrink: 1 }]}
+              after={picked ? <Text style={s.pick} accessibilityLabel="Your pick to win">🤞</Text> : null}
             />
             {end && <Text style={s.end}>{end}</Text>}
             {winner != null && (
@@ -96,6 +101,7 @@ const s = StyleSheet.create({
   slot: { width: 8, alignItems: 'center' },
   ball: { width: 7, height: 7, borderRadius: 4, backgroundColor: C.clay },
   end: { ...T.tiny, color: C.faint, fontStyle: 'italic' },
+  pick: { fontSize: 14, lineHeight: leading(18) },
   mark: { fontSize: 13, lineHeight: leading(16), width: 14, textAlign: 'center' },
   sets: { flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 'auto' },
   setBox: { flexDirection: 'row', alignItems: 'flex-start', minWidth: 16, justifyContent: 'center' },

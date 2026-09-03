@@ -178,7 +178,7 @@ function doublesPresentation(sides, sets, box = null) {
 }
 
 function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp, tight,
-                     sets = SET_SLOTS, form, box = null, hasFlag = true }) {
+                     sets = SET_SLOTS, form, box = null, hasFlag = true, pick = false }) {
   const { seed: printedSeed, first, last, nat, members } = splitPlayerName(raw)
   const isTeam = !!members
   // A seeding sent as a field beats one parsed out of the name: a resolved
@@ -237,6 +237,9 @@ function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp, t
   const flagPx = box && hasFlag ? (1.05 + 0.3) * rem : 0
   const seedPx = box && seedText
     ? textWidth(seedText, px * 0.85, 700) + 0.28 * rem : 0
+  /* The pick mark rides after the seed, inside the run that shrinks, so it is
+     budgeted the same way. An emoji is about 1.25em wide in every font. */
+  const pickPx = box && pick ? px * 1.25 + 0.28 * rem : 0
   const extras = box
     ? flagPx
       // A REAL GAP, not a rounding allowance. The name does not clip by
@@ -250,7 +253,7 @@ function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp, t
   const budget = box ? Math.max(0, box.avail - extras) : null
   // Every rung and the final scale measure the WHOLE run that shrinks — the
   // name and the seed it carries — against that budget.
-  const wide = (text) => textWidth(text, px, 600) + seedPx
+  const wide = (text) => textWidth(text, px, 600) + seedPx + pickPx
   /* The ladder is unchanged — full name, then an initial, then the surname
      alone, then size — but each rung is now accepted or rejected by MEASURING
      it rather than by counting its letters. */
@@ -365,13 +368,18 @@ function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp, t
             whether it had one — so the names never formed an edge to scan. It
             also read as the more important fact, which it is not. */}
         {!hideSeed && seed && <span className="sched-seed">{seed}</span>}
+        {/* YOUR PICK. After the seed, so the line reads name, seeding, then
+            your stake in it — the two facts about the player, then the one
+            about you. */}
+        {pick && <span className="sched-pick" role="img" aria-label="Your pick to win"
+                       title="Your pick to win">🤞</span>}
       </span>
     </span>
   )
 }
 
 function Side({ players, doubles, tbd, tight, sets, form = 'surname', flags = false,
-               box = null }) {
+               box = null, pickEntryId = null }) {
   if (!players.length) return <span className="sched-side">TBD</span>
 
   // An unresolved side is a choice between two whole teams, not a list of
@@ -458,7 +466,8 @@ function Side({ players, doubles, tbd, tight, sets, form = 'surname', flags = fa
                       nationality={p.nationality} seed={p.seed} tight={tight}
                       sets={sets} form={doubles ? form : undefined}
                       box={box}
-                      hasFlag={!doubles || flags} />
+                      hasFlag={!doubles || flags}
+                      pick={!doubles && p.draw_entry_id != null && p.draw_entry_id === pickEntryId} />
         </Fragment>
       ))}
       {/* Same placement as a singles seed, and for the same reason. */}
@@ -669,7 +678,8 @@ function CompetitorRows({ e, a, b }) {
           <span className="sched-competitor-name" ref={side === 0 ? nameBoxRef : undefined}>
             <Side players={players} doubles={doubles} tbd={tbd}
                   tight={serving != null || point != null} sets={n}
-                  form={dbl?.form} flags={dbl?.flags} box={nameBox} />
+                  form={dbl?.form} flags={dbl?.flags} box={nameBox}
+                  pickEntryId={e.pick_entry_id ?? null} />
           </span>
           {/* A SLOT ON BOTH LINES OR ON NEITHER. The ball appears on one line
               only, so rendering it inline shifted that line's scores left of
