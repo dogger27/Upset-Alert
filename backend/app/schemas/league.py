@@ -67,3 +67,18 @@ class LeaderboardOut(BaseModel):
 class LeagueTournamentOut(BaseModel):
     tournament: TournamentOut
     picker_count: int
+    # The league's cash pool on this draw. When enabled, only paid members
+    # appear in the league's views of the draw, and picker_count counts them.
+    cash_pool_enabled: bool = False
+    cash_pool_paid_ids: list[int] = []
+
+
+class CashPoolOut(BaseModel):
+    draw_id: int
+    enabled: bool = False
+    paid_user_ids: list[int] = []
+
+
+class CashPoolIn(BaseModel):
+    enabled: bool
+    paid_user_ids: list[int] = []

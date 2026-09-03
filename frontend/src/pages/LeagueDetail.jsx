@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { useParams, useNavigate, useOutletContext } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getLeague, getLeagueTournaments, getRoundScores, updateLeague, setMemberAdmin, removeMember, deleteLeague, shareLeagueByEmail, getGrandSlamTotals } from '../api/leagues'
+import { getLeague, getLeagueTournaments, getRoundScores, updateLeague, setMemberAdmin, removeMember, deleteLeague, shareLeagueByEmail, getGrandSlamTotals, getCashPools, setCashPool } from '../api/leagues'
 import { getGlobalRoundScores, getGlobalDraws, getGlobalGSTotals, listTournaments } from '../api/tournaments'
 import { PickChip, ROUND_SLOTS, ROUND_TITLES, DEPTH_ROUNDS } from '../components/ComparePicksTable'
 import { getComparePicks } from '../api/tournaments'
@@ -70,6 +70,8 @@ export default function LeagueDetail() {
   // card: the modal must not live inside the scrolling list it was opened
   // from, or it inherits that list's stacking and clipping.
   const [openDraw, setOpenDraw] = useState(null)
+  // The draw(s) whose cash pool an admin is editing, or null.
+  const [poolDraw, setPoolDraw] = useState(null)
 
   const [statusFilter, setStatusFilter] = useState(null) // null = auto (first non-empty)
   const [showMembers, setShowMembers] = useState(false) // "All Members" view instead of draws
@@ -93,6 +95,20 @@ export default function LeagueDetail() {
     queryFn: () => isGlobal ? getGlobalDraws() : getLeagueTournaments(Number(id)),
     refetchInterval: 60_000,
   })
+
+  /* THE LEAGUE'S CASH POOLS, one per draw it has ever switched one on for.
+     Fetched once for the page: every tile's switch reads from this map, and
+     saving from the popup invalidates it. The global pseudo-league has none. */
+  const { data: cashPoolList = [] } = useQuery({
+    queryKey: ['cash-pools', id],
+    queryFn: () => getCashPools(Number(id)),
+    enabled: !isGlobal,
+  })
+  const cashPools = useMemo(() => {
+    const m = new Map()
+    for (const p of cashPoolList) m.set(p.draw_id, p)
+    return m
+  }, [cashPoolList])
 
   const { data: gsData } = useQuery({
     queryKey: isGlobal ? ['global-gs-totals'] : ['gs-totals', id],
@@ -383,6 +399,9 @@ export default function LeagueDetail() {
                                 items={g.items}
                                 leagueId={isGlobal ? null : Number(id)}
                                 showGenderLabel={gendersByName.get(g.items[0].tournament.name)?.size > 1}
+                                cashPools={isGlobal ? null : cashPools}
+                                canManagePool={canManageSettings}
+                                onCashPool={items => setPoolDraw(items)}
                                 onOpen={items => setOpenDraw({
                                   items,
                                   showGenderLabel: gendersByName.get(items[0].tournament.name)?.size > 1,
@@ -416,11 +435,25 @@ export default function LeagueDetail() {
         )
       })()}
 
+      {poolDraw && !isGlobal && (
+        <CashPoolModal
+          league={league}
+          items={poolDraw}
+          cashPools={cashPools}
+          onClose={() => setPoolDraw(null)}
+        />
+      )}
       {openDraw && (
         <DrawModal
           items={openDraw.items}
           leagueId={isGlobal ? null : Number(id)}
-          leagueMemberCount={isGlobal ? null : league?.member_count}
+          /* With a cash pool on, "entered" is measured against the people in
+             it: the others are not in this draw as far as the league is
+             concerned. A combined card reads the first tour's pool. */
+          leagueMemberCount={isGlobal ? null : (() => {
+            const p = cashPools.get(openDraw.items[0]?.tournament?.id)
+            return p?.enabled ? p.paid_user_ids.length : league?.member_count
+          })()}
           showRealName={isGlobal ? false : league?.show_real_name}
           showGenderLabel={openDraw.showGenderLabel}
           /* "Global" is the name of the all-users pseudo-league, and the one
@@ -568,10 +601,150 @@ function DcStanding({ t, stand, pickerCount }) {
 
    Exactly two queries either way, both declared unconditionally: hook order
    cannot depend on how many draws an event happens to run. */
-function DrawCard({ items, leagueId, showGenderLabel, onOpen }) {
+/* THE CASH POOL SWITCH, top-right of a draw tile. It states one fact — this
+   league runs a pool on this draw — and, for whoever runs the league, opens
+   the popup that sets it. It sits inside the tile's button, so it is a span
+   with a role, and its own click never reaches the tile. Members who cannot
+   manage the league see the state and nothing happens when they press it. */
+function CashPoolSwitch({ on, manage, onOpen }) {
+  const act = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (manage) onOpen()
+  }
+  return (
+    <span
+      className={`dc-pool${on ? ' dc-pool--on' : ''}${manage ? ' dc-pool--manage' : ' dc-pool--static'}`}
+      role="switch"
+      aria-checked={on}
+      aria-label={on ? 'Cash pool on' : 'Cash pool off'}
+      tabIndex={manage ? 0 : -1}
+      onClick={act}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') act(e) }}
+    >
+      <span className="dc-pool-emoji" aria-hidden="true">💰</span>
+      <span className="dc-pool-track"><span className="dc-pool-knob" /></span>
+    </span>
+  )
+}
+
+/* THE CASH POOL POPUP. Switch the pool on or off for the draw, and tick who
+   has paid in. Everyone unticked is invisible in this draw for this league —
+   the standings, the picks, the "who picked whom" panel — and only here.
+   A combined card carries two draws, each with its own pool, so it gets the
+   same tour switch the standings popup uses. */
+function CashPoolModal({ league, items, cashPools, onClose }) {
+  const qc = useQueryClient()
+  const [which, setWhich] = useState(0)
+  const t = items[which]?.tournament
+  const saved = cashPools.get(t?.id)
+  const [enabled, setEnabled] = useState(!!saved?.enabled)
+  const [paid, setPaid] = useState(() => new Set(saved?.paid_user_ids ?? []))
+  const [err, setErr] = useState(null)
+
+  // Switching tour swaps the whole form for that draw's saved state.
+  useEffect(() => {
+    const s = cashPools.get(items[which]?.tournament?.id)
+    setEnabled(!!s?.enabled)
+    setPaid(new Set(s?.paid_user_ids ?? []))
+    setErr(null)
+  }, [which, items, cashPools])
+
+  useEffect(() => {
+    const onKey = e => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const mutation = useMutation({
+    mutationFn: () => setCashPool(league.id, t.id, { enabled, paid_user_ids: [...paid] }),
+    onSuccess: () => {
+      const id = String(league.id)
+      qc.invalidateQueries({ queryKey: ['cash-pools', id] })
+      qc.invalidateQueries({ queryKey: ['league-tournaments', id] })
+      qc.invalidateQueries({ queryKey: ['round-scores', league.id] })
+      qc.invalidateQueries({ queryKey: ['gs-totals', id] })
+      onClose()
+    },
+    onError: (e) => setErr(e?.response?.data?.detail || 'Could not save the cash pool'),
+  })
+
+  const members = league.members ?? []
+  const toggle = (uid) => setPaid(prev => {
+    const next = new Set(prev)
+    next.has(uid) ? next.delete(uid) : next.add(uid)
+    return next
+  })
+  const all = () => setPaid(new Set(members.map(m => m.id)))
+  const none = () => setPaid(new Set())
+
+  return (
+    <div className="dm-backdrop" onClick={onClose} role="presentation">
+      <div className="dm-panel cp-panel" role="dialog" aria-modal="true" aria-label="Cash pool"
+           onClick={e => e.stopPropagation()}>
+        <button type="button" className="dm-close" onClick={onClose} aria-label="Close">×</button>
+        <div className="dm-body">
+          <h3 className="cp-title">
+            <span aria-hidden="true">💰</span> Cash pool
+            <span className="cp-title-sub">{league.name} · {t?.name} {t?.year}</span>
+          </h3>
+          {items.length > 1 && (
+            <span className="lt-tour" role="group" aria-label="Tour">
+              {items.map((it, i) => (
+                <button key={it.tournament.id} type="button"
+                        className={`lt-tour-btn lt-tour-btn--${it.tournament.gender === 'M' ? 'm' : 'f'}${which === i ? ' lt-tour-btn--on' : ''}`}
+                        onClick={() => setWhich(i)}>
+                  {it.tournament.gender === 'M' ? 'ATP' : 'WTA'}
+                </button>
+              ))}
+            </span>
+          )}
+          <label className="cp-toggle-row">
+            <input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} />
+            <span>Cash pool enabled for this draw</span>
+          </label>
+          <p className="cp-help">
+            Tick everyone who has paid in. While the pool is on, only they appear in
+            this league's standings and picks for this draw.
+          </p>
+          <div className="cp-list-head">
+            <span>{paid.size} of {members.length} paid</span>
+            <span className="cp-list-actions">
+              <button type="button" className="cp-link" onClick={all}>All</button>
+              <button type="button" className="cp-link" onClick={none}>None</button>
+            </span>
+          </div>
+          <div className="cp-list">
+            {members.map(m => (
+              <label key={m.id} className="cp-row">
+                <input type="checkbox" checked={paid.has(m.id)} onChange={() => toggle(m.id)} />
+                <UserName className="cp-name" user={{ username: m.username, full_name: league.show_real_name ? m.full_name : null }} />
+                {m.id === league.owner?.id && <span className="settings-member-badge owner">Owner</span>}
+                {m.id !== league.owner?.id && m.is_admin && <span className="settings-member-badge admin">Admin</span>}
+              </label>
+            ))}
+          </div>
+          {err && <p className="cp-error">{err}</p>}
+          <div className="cp-actions">
+            <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
+            <button type="button" className="btn-primary" disabled={mutation.isPending}
+                    onClick={() => mutation.mutate()}>
+              {mutation.isPending ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function DrawCard({ items, leagueId, showGenderLabel, onOpen,
+                    cashPools = null, canManagePool = false, onCashPool }) {
   const a = items[0]?.tournament
   const b = items[1]?.tournament
   const paired = !!b
+  // On if either tour of a combined card has a pool switched on.
+  const poolOn = !!cashPools && items.some(it => cashPools.get(it.tournament.id)?.enabled)
   const sa = useDrawStanding(a, leagueId)
   const sb = useDrawStanding(b, leagueId, paired)
 
@@ -585,6 +758,10 @@ function DrawCard({ items, leagueId, showGenderLabel, onOpen }) {
     <button type="button"
             className={`dc-card dc-card--${paired ? 'both' : a.gender === 'M' ? 'atp' : 'wta'}${paired ? ' dc-card--pair' : ''}`}
             onClick={() => onOpen(items)}>
+      {cashPools && (
+        <CashPoolSwitch on={poolOn} manage={canManagePool}
+                        onOpen={() => onCashPool?.(items)} />
+      )}
       <div className="dc-top">
         {paired ? (
           /* Both tours named, then the tier once — it is the same tier for

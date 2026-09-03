@@ -18,5 +18,9 @@ export const getRoundScores = (leagueId, tournamentId) =>
   client.get(`/leagues/${leagueId}/round-scores`, { params: { tournament_id: tournamentId } }).then(r => r.data)
 export const shareLeagueByEmail = (leagueId, emails) =>
   client.post(`/leagues/${leagueId}/share-email`, { emails }).then(r => r.data)
+export const getCashPools = (leagueId) =>
+  client.get(`/leagues/${leagueId}/cash-pools`).then(r => r.data)
+export const setCashPool = (leagueId, drawId, body) =>
+  client.put(`/leagues/${leagueId}/cash-pools/${drawId}`, body).then(r => r.data)
 export const getGrandSlamTotals = (leagueId) =>
   client.get(`/leagues/${leagueId}/grand-slam-totals`).then(r => r.data)

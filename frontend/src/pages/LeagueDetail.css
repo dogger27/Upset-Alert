@@ -1842,3 +1842,66 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   .lt-tab--compare { display: none; }
   .lt-tabs { display: none; }
 }
+
+
+/* ── The cash pool switch, top-right of a draw tile ─────────────────────── */
+
+.dc-card { position: relative; }
+/* Keep the badge row clear of the switch. */
+.dc-card .dc-top { padding-right: 3.6rem; }
+.dc-pool {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.65rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  font-size: 0.85rem;
+  line-height: 1;
+  border-radius: var(--radius-pill);
+  padding: 2px 2px 2px 4px;
+}
+.dc-pool--manage { cursor: pointer; }
+.dc-pool--manage:hover .dc-pool-track,
+.dc-pool--manage:focus-visible .dc-pool-track { box-shadow: 0 0 0 2px var(--brand-line, var(--border-strong)); }
+.dc-pool--manage:focus-visible { outline: none; }
+.dc-pool--static { cursor: default; }
+.dc-pool-track {
+  position: relative;
+  width: 28px;
+  height: 16px;
+  border-radius: 8px;
+  background: var(--border-strong);
+  transition: background 0.15s;
+}
+.dc-pool-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--surface-card);
+  transition: left 0.15s;
+}
+.dc-pool--on .dc-pool-track { background: var(--green-500); }
+.dc-pool--on .dc-pool-knob { left: 14px; }
+
+/* ── The cash pool popup ─────────────────────────────────────────────────── */
+
+/* Narrow, unlike the standings popup: a checklist of names wants a column,
+   not the 72rem floor the compare-picks table needs. */
+.dm-panel.cp-panel { width: min(32rem, 100%); min-width: min(32rem, 100%); max-width: 100%; }
+.cp-title { margin: 0 0 0.6rem; display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
+.cp-title-sub { font-size: 0.85rem; font-weight: 500; color: var(--text-muted); }
+.cp-toggle-row { display: flex; align-items: center; gap: 0.5rem; margin: 0.6rem 0 0.3rem; font-weight: 600; }
+.cp-help { margin: 0 0 0.6rem; font-size: 0.82rem; color: var(--text-muted); }
+.cp-list-head { display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.3rem; }
+.cp-list-actions { display: flex; gap: 0.5rem; }
+.cp-link { background: none; border: 0; padding: 0; color: var(--brand-line, var(--green-500)); font: inherit; cursor: pointer; text-decoration: underline; }
+.cp-list { max-height: 50vh; overflow: auto; border: 1px solid var(--border-strong); border-radius: 8px; padding: 0.2rem 0.5rem; }
+.cp-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0; border-bottom: 1px solid var(--border-strong); }
+.cp-row:last-child { border-bottom: 0; }
+.cp-name { flex: 1; min-width: 0; }
+.cp-error { color: var(--danger, #d9534f); font-size: 0.85rem; }
+.cp-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.8rem; }
