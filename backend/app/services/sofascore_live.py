@@ -125,13 +125,15 @@ _tournament_of: dict = {}
 # reached the feed (or found nothing on court, which is not a failure) within
 # FEED_STALE_AFTER seconds, and no circuit breaker open. A ban opens the breaker and
 # hands over at once; the timer is for silent failures — a hung connection, a
-# dead network. Sixty seconds is six missed polls, and the standby polls every
-# sixty seconds itself, so nothing shorter would hand over any sooner.
-FEED_STALE_AFTER = 60.0
+# dead network. FIVE MINUTES, BY THE USER'S DECISION: ESPN carries game scores
+# only, no points, so handing over on a brief stall trades the point-by-point
+# feed for a coarser one. A stall that long is an outage; anything shorter is
+# worth waiting out.
+FEED_STALE_AFTER = 300.0
 # Healthy from process start: the standby's first cycle runs before this
 # poller's first cycle lands, and one cycle of ESPN writing at every boot is
 # exactly the two-writer overlap this exists to end. The grace period is the
-# same sixty seconds — the poller's first cycle lands within one or two.
+# same five minutes — the poller's first cycle lands within one or two.
 _last_ok = time.monotonic()
 
 
