@@ -274,6 +274,9 @@
   align-items: center;
   gap: 0.6rem;
   padding: 0.55rem 0.6rem;
+  /* Less under the footer than over the tags: the time line is meant to sit
+     close to the card's bottom edge, not float in the middle of a margin. */
+  padding-bottom: 0.3rem;
   border-radius: 9px;
   background: var(--surface-card);
   position: relative;
@@ -401,7 +404,7 @@
   align-items: baseline;
   flex-wrap: wrap;
   gap: 0.2rem 0.6rem;
-  margin-top: 0.3rem;
+  margin-top: 0.4rem;
 }
 .sched-row-foot .sched-time,
 .sched-row-foot .sched-est { flex-direction: row; gap: 0.3rem; }
@@ -928,6 +931,7 @@
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 0.45rem;
     padding: 0.5rem 0.45rem;
+    padding-bottom: 0.28rem;
     /* Full width on a phone. Content-sizing is what makes cards match on a wide
        screen where they sit in separate grids; in a single narrow column they
        are all full width already, and fit-content only invited an overflow.
@@ -999,7 +1003,7 @@
    left-flush lines. Padding on the left only: the score column stays on
    the right edge. Scoped to the schedule card — the same component in the
    score-history popup has its own framing. */
-.sched-row-main > .sched-competitors { padding-left: 0.4rem; }
+.sched-row-main > .sched-competitors { padding-left: 0.6rem; }
 
 .sched-competitors {
   display: flex;
