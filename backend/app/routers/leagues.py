@@ -817,7 +817,13 @@ async def cash_pools(
     current_user: Optional[User] = Depends(get_optional_user),
 ):
     """Every cash pool this league has ever configured, one per draw."""
-    league = await db.get(League, league_id)
+    # Members loaded up front: _check_access reads them for anyone who is not
+    # a site admin, and a lazy load inside the async session is a
+    # MissingGreenlet — a 500 for every ordinary member, invisible to the
+    # admin who tested it.
+    league = (await db.execute(
+        select(League).options(selectinload(League.members))
+        .where(League.id == league_id))).scalar_one_or_none()
     if not league:
         raise HTTPException(404, "League not found")
     _check_access(league, current_user)

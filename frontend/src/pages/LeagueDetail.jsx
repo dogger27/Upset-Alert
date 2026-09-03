@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useParams, useNavigate, useOutletContext } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getLeague, getLeagueTournaments, getRoundScores, updateLeague, setMemberAdmin, removeMember, deleteLeague, shareLeagueByEmail, getGrandSlamTotals, getCashPools, setCashPool } from '../api/leagues'
@@ -606,19 +607,64 @@ function DcStanding({ t, stand, pickerCount }) {
    the popup that sets it. It sits inside the tile's button, so it is a span
    with a role, and its own click never reaches the tile. Members who cannot
    manage the league see the state and nothing happens when they press it. */
+const POOL_TIP = 'This league is a Cash Pool. Only members who have paid the admin will be shown in the standings.'
+
+/* WHAT A MEMBER SEES. No switch — the pool is not theirs to set — just the
+   money bag when one is on, and a word on what it means: hover from a
+   mouse, a tap on a phone, the next press elsewhere closes it. Nothing at
+   all when the pool is off. */
+function CashPoolBadge() {
+  const ref = useRef(null)
+  const [pos, setPos] = useState(null)
+  const show = () => {
+    const r = ref.current?.getBoundingClientRect()
+    if (r) setPos({ x: r.left + r.width / 2, y: r.top })
+  }
+  useEffect(() => {
+    if (!pos) return undefined
+    const away = (ev) => { if (!ref.current?.contains(ev.target)) setPos(null) }
+    const hide = () => setPos(null)
+    document.addEventListener('pointerdown', away, true)
+    window.addEventListener('scroll', hide, true)
+    return () => {
+      document.removeEventListener('pointerdown', away, true)
+      window.removeEventListener('scroll', hide, true)
+    }
+  }, [pos])
+  return (
+    <>
+      <span ref={ref} className="dc-pool dc-pool--badge" role="img" aria-label={POOL_TIP}
+            onPointerEnter={(e) => { if (e.pointerType === 'mouse') show() }}
+            onPointerLeave={(e) => { if (e.pointerType === 'mouse') setPos(null) }}
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); show() }}>
+        <span className="dc-pool-emoji" aria-hidden="true">💰</span>
+      </span>
+      {pos && createPortal(
+        <span className="dc-pool-tip" role="tooltip"
+              style={{ position: 'fixed', left: pos.x, top: pos.y - 8, transform: 'translate(-50%, -100%)' }}>
+          {POOL_TIP}
+        </span>,
+        document.body,
+      )}
+    </>
+  )
+}
+
 function CashPoolSwitch({ on, manage, onOpen }) {
+  // Not an admin: the badge when the pool is on, nothing when it is off.
+  if (!manage) return on ? <CashPoolBadge /> : null
   const act = (e) => {
     e.preventDefault()
     e.stopPropagation()
-    if (manage) onOpen()
+    onOpen()
   }
   return (
     <span
-      className={`dc-pool${on ? ' dc-pool--on' : ''}${manage ? ' dc-pool--manage' : ' dc-pool--static'}`}
+      className={`dc-pool dc-pool--manage${on ? ' dc-pool--on' : ''}`}
       role="switch"
       aria-checked={on}
       aria-label={on ? 'Cash pool on' : 'Cash pool off'}
-      tabIndex={manage ? 0 : -1}
+      tabIndex={0}
       onClick={act}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') act(e) }}
     >
