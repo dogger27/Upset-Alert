@@ -439,8 +439,10 @@ async def league_tournaments(
     # Count members competing in each draw — one pick is enough to be entered.
     from collections import defaultdict
     entered = defaultdict(int)
+    competing = defaultdict(set)
     for r in picks_rows:
         if r.pick_count > 0:
+            competing[r.draw_id].add(r.user_id)
             pool = pools.get(r.draw_id)
             if pool is not None and pool.enabled and r.user_id not in {m.user_id for m in pool.members}:
                 continue
@@ -457,6 +459,7 @@ async def league_tournaments(
                 picker_count=picker_count,
                 cash_pool_enabled=bool(pool and pool.enabled),
                 cash_pool_paid_ids=sorted(m.user_id for m in pool.members) if pool else [],
+                competing_user_ids=sorted(competing.get(t_id, ())),
             ))
 
     # Sort: active first, then open, upcoming, completed; within group by start_date desc

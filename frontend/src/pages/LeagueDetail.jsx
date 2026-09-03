@@ -651,6 +651,18 @@ function CashPoolModal({ league, items, cashPools, onClose }) {
   const [enabled, setEnabled] = useState(() => formFor(t?.id).enabled)
   const [paid, setPaid] = useState(() => formFor(t?.id).paid)
   const [err, setErr] = useState(null)
+  /* MORE BELOW. A phone draws no scrollbar at all and a Mac hides its own
+     until you scroll, so a list of 19 names with 13 showing read as a list
+     of 13. The list keeps its own bar where the platform allows one, and
+     this fade with a word says the same thing everywhere until the reader
+     reaches the end. */
+  const listRef = useRef(null)
+  const [moreBelow, setMoreBelow] = useState(false)
+  const checkMore = () => {
+    const el = listRef.current
+    if (el) setMoreBelow(el.scrollTop + el.clientHeight < el.scrollHeight - 2)
+  }
+  useEffect(() => { checkMore() }, [which, paid.size])
 
   // Switching tour swaps the whole form for that draw's state.
   useEffect(() => {
@@ -679,6 +691,17 @@ function CashPoolModal({ league, items, cashPools, onClose }) {
     onError: (e) => setErr(e?.response?.data?.detail || 'Could not save the cash pool'),
   })
 
+  /* COMPETING FIRST. The members with picks in this draw are the ones a pool
+     is about, so they lead the list with a star; the rest follow. Each group
+     keeps the league's own order. */
+  const competing = useMemo(
+    () => new Set(items[which]?.competing_user_ids ?? []),
+    [items, which])
+  const ordered = useMemo(() => {
+    const yes = members.filter(m => competing.has(m.id))
+    const no = members.filter(m => !competing.has(m.id))
+    return [...yes, ...no]
+  }, [members, competing])
   const toggle = (uid) => setPaid(prev => {
     const next = new Set(prev)
     next.has(uid) ? next.delete(uid) : next.add(uid)
@@ -723,15 +746,25 @@ function CashPoolModal({ league, items, cashPools, onClose }) {
               <button type="button" className="cp-link" onClick={none}>None</button>
             </span>
           </div>
-          <div className="cp-list">
-            {members.map(m => (
-              <label key={m.id} className="cp-row">
+          <p className="cp-legend">
+            <span className="cp-star" aria-hidden="true">★</span>
+            {competing.size} currently competing in this draw
+          </p>
+          <div className="cp-list-wrap">
+          <div className="cp-list" ref={listRef} onScroll={checkMore}>
+            {ordered.map(m => (
+              <label key={m.id} className={`cp-row${competing.has(m.id) ? ' cp-row--competing' : ''}`}>
+                {competing.has(m.id)
+                  ? <span className="cp-star" role="img" aria-label="Competing in this draw">★</span>
+                  : <span className="cp-star cp-star--none" aria-hidden="true" />}
                 <input type="checkbox" checked={paid.has(m.id)} onChange={() => toggle(m.id)} />
                 <UserName className="cp-name" user={{ username: m.username, full_name: league.show_real_name ? m.full_name : null }} />
                 {m.id === league.owner?.id && <span className="settings-member-badge owner">Owner</span>}
                 {m.id !== league.owner?.id && m.is_admin && <span className="settings-member-badge admin">Admin</span>}
               </label>
             ))}
+          </div>
+          {moreBelow && <div className="cp-more" aria-hidden="true">Scroll for more ↓</div>}
           </div>
           {err && <p className="cp-error">{err}</p>}
           <div className="cp-actions">

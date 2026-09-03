@@ -1915,10 +1915,61 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   flex: 0 1 auto;
   min-height: 0;
   max-height: 52vh;
-  overflow: auto;
+  overflow-y: auto;
   border: 1px solid var(--border-strong);
   border-radius: 10px;
   padding: 0.15rem 0.6rem;
+  /* A SCROLLBAR THAT IS ALWAYS THERE. macOS hides its overlay scrollbar
+     until you scroll, so a list of 19 names with 13 showing looked like a
+     list of 13 — nothing said there was more. Styling the bar switches
+     WebKit off the overlay kind, so it is drawn whenever the list can
+     scroll; Firefox gets the same colours and a stable gutter. */
+  scrollbar-gutter: stable;
+}
+/* Firefox only. In Chromium the standard properties, once set, SWITCH OFF
+   the ::-webkit-scrollbar rules below — which is how the bar came to be a
+   blank gutter — so they are scoped to the engine that has nothing else. */
+@supports not selector(::-webkit-scrollbar) {
+  .cp-list {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--text) 55%, transparent) color-mix(in srgb, var(--text) 12%, transparent);
+  }
+}
+.cp-list::-webkit-scrollbar { width: 12px; }
+.cp-list::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+  border-radius: 10px;
+  margin: 4px 0;
+}
+.cp-list::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text) 55%, transparent);
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.cp-list::-webkit-scrollbar-thumb:hover { background-color: color-mix(in srgb, var(--text) 75%, transparent); }
+/* The star: the members with picks in this draw. Same gold as the owner
+   badge, so the popup has one accent and it means "of note". */
+.cp-star { width: 1rem; flex: 0 0 auto; text-align: center; color: var(--warning); font-size: 0.95rem; line-height: 1; }
+.cp-star--none { visibility: hidden; }
+.cp-legend { display: flex; align-items: center; gap: 0.35rem; margin: 0 0 0.4rem; font-size: 0.78rem; color: var(--text-muted); }
+.cp-legend .cp-star { width: auto; }
+.cp-list-wrap { position: relative; display: flex; flex-direction: column; min-height: 0; }
+/* The fade sits over the list's last rows, inside its border, and leaves
+   the scrollbar's column alone so the bar stays readable through it. */
+.cp-more {
+  position: absolute;
+  left: 1px;
+  right: 14px;
+  bottom: 1px;
+  padding: 1.6rem 0 0.4rem;
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: linear-gradient(to bottom, transparent, var(--surface-card) 70%);
+  border-radius: 0 0 10px 10px;
+  pointer-events: none;
 }
 .cp-row { display: flex; align-items: center; gap: 0.6rem; padding: 0.42rem 0; border-bottom: 1px solid var(--border-strong); cursor: pointer; }
 .cp-row:last-child { border-bottom: 0; }
