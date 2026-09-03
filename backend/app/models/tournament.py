@@ -506,6 +506,11 @@ class Match(Base):
     # its start.
     resumed_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True)
+    # WHEN PLAY STOPPED — the start of the stop resumed_at ends. The two
+    # together are what decide whether a resumption is worth naming: see
+    # live_state.note_resumption.
+    suspended_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True)
     status: Mapped[str] = mapped_column(String, default="pending")
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     # First moment ESPN reported this match in progress, and the minutes between
