@@ -679,7 +679,13 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   gap: 3px;
 }
 .lt-bar-col {
-  background: var(--bg-subtle, var(--n-100));
+  /* THE UNFILLED TRACK, in a tone of its own. It used --bg-subtle, which is
+     not defined, so it fell back to a raw ramp shade that matched one of the
+     zebra bands and the empty bar vanished into every other row. Mixed off
+     --text like the bands are, but well past both of them (4% and 0%), so it
+     reads as a track on either band and in either theme. */
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 8%, transparent);
   border-radius: 3px;
   overflow: hidden;
   min-width: 0;
@@ -1606,6 +1612,11 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
     color-mix(in srgb, var(--text) 4%, transparent) 0 41px,
     transparent 41px 82px
   );
+  /* Each band is centred on its row. A row is 34px on a 41px pitch and sat
+     at the TOP of its band, so the bar — which fills the row — read as
+     top-aligned with 7px of band under it. Half the pitch's spare (3.5px)
+     pulls the bands up so the spare splits evenly above and below. */
+  background-position: 0 -3.5px;
   background-attachment: local;
 }
 
