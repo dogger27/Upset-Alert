@@ -99,6 +99,7 @@
   width: fit-content;
   min-width: min(36rem, 100%);
   max-width: 100%;
+  margin-inline: auto;   /* centred, like the page's other content */
 }
 .settings-panel h3 { margin-bottom: 1rem; }
 
@@ -1989,7 +1990,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
    badge, so the popup has one accent and it means "of note". */
 .cp-star { width: 1rem; flex: 0 0 auto; text-align: center; color: var(--warning); font-size: 0.95rem; line-height: 1; }
 .cp-star--none { visibility: hidden; }
-.cp-legend { display: flex; align-items: center; gap: 0.35rem; margin: 0 0 0.4rem; font-size: 0.78rem; color: var(--text-muted); }
+.cp-legend { display: flex; align-items: center; gap: 0.35rem; margin: 0.5rem 0 0; font-size: 0.78rem; color: var(--text-muted); }
 .cp-legend .cp-star { width: auto; }
 .cp-list-wrap { position: relative; display: flex; flex-direction: column; min-height: 0; }
 /* The fade sits over the list's last rows, inside its border, and leaves

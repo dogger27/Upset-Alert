@@ -792,16 +792,13 @@ function CashPoolModal({ league, items, cashPools, onClose }) {
             in this league's standings and picks for this draw.
           </p>
           <div className="cp-list-head">
-            <span>{paid.size} of {members.length} paid</span>
+            {/* The tally means nothing until the pool is on. */}
+            <span>{enabled ? `${paid.size} of ${members.length} paid` : ''}</span>
             <span className="cp-list-actions">
               <button type="button" className="cp-link" onClick={all}>All</button>
               <button type="button" className="cp-link" onClick={none}>None</button>
             </span>
           </div>
-          <p className="cp-legend">
-            <span className="cp-star" aria-hidden="true">★</span>
-            {competing.size} currently competing in this draw
-          </p>
           <div className="cp-list-wrap">
           <div className="cp-list" ref={listRef} onScroll={checkMore}>
             {ordered.map(m => (
@@ -818,6 +815,10 @@ function CashPoolModal({ league, items, cashPools, onClose }) {
           </div>
           {moreBelow && <div className="cp-more" aria-hidden="true">Scroll for more ↓</div>}
           </div>
+          <p className="cp-legend">
+            <span className="cp-star" aria-hidden="true">★</span>
+            {competing.size} currently competing in this draw
+          </p>
           {err && <p className="cp-error">{err}</p>}
           <div className="cp-actions">
             <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
