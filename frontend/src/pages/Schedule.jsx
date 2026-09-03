@@ -216,6 +216,24 @@ const COURT_FIT = 9
 /* Characters a DOUBLES side carries on its one line: two surnames, the slash,
    and the team seed. Fewer than a singles name has, because the line holds two
    people rather than one. */
+/* The court as a TAG has one line and no wrapping, so the whole name is what
+   has to fit — not the longest word. On a phone the tag row is ~220px wide
+   after the tour and round tags, or ~120px when the status pill has the
+   corner, and at 0.66rem upper case runs ~7px a character: past the fit
+   the type shrinks, to a floor; anything longer still is clipped with an
+   ellipsis, and the full name is in the tooltip. The CSS applies the scale
+   only under the phone media query, where the row is actually that narrow. */
+const COURT_CHIP_FIT = 26
+const COURT_CHIP_FIT_BADGED = 15
+function courtChipScale(court, badged) {
+  const len = String(court || '').length
+  const fit = badged ? COURT_CHIP_FIT_BADGED : COURT_CHIP_FIT
+  return len > fit ? { '--court-scale': Math.max(0.6, fit / len) } : undefined
+}
+
+/* The statuses that draw a pill in the card's top-right corner. */
+const BADGED = new Set(['live', 'postponed', 'to_be_completed', 'completed'])
+
 function courtScale(court) {
   /* Measured off the LONGEST WORD, not the whole string. The column wraps
      between words, so "P&G STADIUM COURT" needs no shrinking — it needs two
@@ -508,24 +526,6 @@ function MatchRow({ e, showCourt, zone, venueMode, onH2H, onChampion, onHistory,
       )}
       {e.status === 'completed' && <span className="sched-status sched-status--done">Completed</span>}
 
-      <div className="sched-row-when">
-        <TimeLine
-          className={clsx('sched-time', {
-            'sched-time--est': !started && showCourt && e.expected_source === 'estimated',
-          })}
-          text={started ?? (showCourt ? expectedStart(e, zone, venueMode)
-                                      : printedStart(e, zone, venueMode))} />
-        {showCourt && e.court && (
-          <span className="sched-court" style={courtScale(e.court)}>{e.court}</span>
-        )}
-        {/* Court view keeps the sheet's wording, but "Followed by" alone does
-            not tell you when to turn up. The chained estimate goes underneath.
-            Only when it ADDS something: a slot whose expected time is simply
-            the printed one would just repeat the line above it. */}
-        {!started && !showCourt && e.expected_source === 'estimated' && e.expected_start_at && (
-          <TimeLine className="sched-est" text={expectedStart(e, zone, venueMode)} />
-        )}
-      </div>
       {/* A started match answers a click with its history — the same popup,
           slider and card the draw page opens, because the two surfaces
           describe the same match. Scheduled rows stay inert: nothing to show,
@@ -539,9 +539,21 @@ function MatchRow({ e, showCourt, zone, venueMode, onH2H, onChampion, onHistory,
         onClick={['live', 'completed', 'postponed', 'to_be_completed'].includes(e.status)
           && onHistory ? () => onHistory(e.id) : undefined}
       >
-        <div className="sched-tags">
+        {/* The tag row keeps clear of the status pill only when there IS one:
+            reserving the pill's width on every row cost the court chip the
+            space it needs on the rows that have nothing there. */}
+        <div className={clsx('sched-tags', { 'sched-tags--badged': BADGED.has(e.status) })}>
           {e.tour && <span className={clsx('sched-tag', `sched-tag--${e.tour.toLowerCase()}`)}>{e.tour}</span>}
           {e.round_label && <span className="sched-tag sched-tag--round">{e.round_label}</span>}
+          {/* THE COURT RIDES WITH THE TAGS in the time view — beside the round,
+              where the eye already is — scaled down when its name is long,
+              never wrapped. The court view groups rows under the court and
+              says nothing here. */}
+          {showCourt && e.court && (
+            <span className="sched-tag sched-tag--court" style={courtChipScale(e.court, BADGED.has(e.status))} title={e.court}>
+              {e.court}
+            </span>
+          )}
           {/* Only when the round does not already say so. "Q1" beside a "Q"
               states the same fact twice and costs the tag row the width. It
               still earns its place on a qualifying row whose round we could not
@@ -558,6 +570,26 @@ function MatchRow({ e, showCourt, zone, venueMode, onH2H, onChampion, onHistory,
             unreadable block. Names shrink and fall back to surnames rather than
             wrapping: a line per player is the invariant. */}
         <MatchScoreCard e={e} a={a} b={b} />
+        {/* THE TIME IS A FOOTER, NOT A COLUMN. It used to own a 5.6rem column
+            down the left of every card, which is exactly the width a name
+            with a seed, a flag and a [Q] or [WC] tag needs on a phone. One
+            line under the players costs the card a little height and gives
+            the names the whole width. */}
+        <div className="sched-row-foot">
+          <TimeLine
+            className={clsx('sched-time', {
+              'sched-time--est': !started && showCourt && e.expected_source === 'estimated',
+            })}
+            text={started ?? (showCourt ? expectedStart(e, zone, venueMode)
+                                        : printedStart(e, zone, venueMode))} />
+          {/* Court view keeps the sheet's wording, but "Followed by" alone does
+              not tell you when to turn up. The chained estimate goes beside it —
+              only when it ADDS something: a slot whose expected time is simply
+              the printed one would just repeat the wording. */}
+          {!started && !showCourt && e.expected_source === 'estimated' && e.expected_start_at && (
+            <TimeLine className="sched-est" text={expectedStart(e, zone, venueMode)} />
+          )}
+        </div>
       </div>
       {/* Head-to-head, in the same place and the same shape as the draw page —
           the two surfaces describe the same match and a different affordance
