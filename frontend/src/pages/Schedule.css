@@ -240,7 +240,6 @@
      was just freed from. */
   --sched-card-body: auto;
 }
-.sched-list--time .sched-row-when { max-height: none; }
 .sched-list--time .sched-row-main { height: 100%; }
 
 .sched-row {
@@ -261,14 +260,17 @@
      column can print a wording, a clock, an estimate wording and an estimated
      clock, four lines at 0.9rem and 0.78rem, which is 4.18rem. The players
      column is a tag row and two names, 3.82rem. */
-  --sched-card-body: 4.3rem;
+  /* Content-sized since the time column became a footer: every card is a tag
+     row, two names and one footer line, so a column's cards match by
+     construction and no worst-case height needs asserting. */
+  --sched-card-body: auto;
 
   display: grid;
   /* Third column is the H2H strip. `auto` collapses to nothing on the rows
      that have no button — doubles, qualifying, unresolved slots — so those are
      laid out exactly as before. A two-column grid put the button on a second
      ROW instead of the right edge. */
-  grid-template-columns: 5.6rem 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.6rem;
   padding: 0.55rem 0.6rem;
@@ -377,6 +379,34 @@
 .sched-row-main { min-width: 0; }
 
 .sched-tags { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.2rem; }
+/* The court, as a tag beside the round. Scaled by --court-scale from the whole
+   name's length (courtChipScale), one line, clipped rather than wrapped. */
+.sched-tag--court {
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* The footer: the time (and, in the court view, the estimate beside it) on
+   ONE line under the players — label and clock inline, not stacked, because
+   the row has the whole card's width now. */
+.sched-row-foot {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.6rem;
+  margin-top: 0.3rem;
+}
+.sched-row-foot .sched-time,
+.sched-row-foot .sched-est { flex-direction: row; gap: 0.3rem; }
+.sched-row-foot .sched-time { font-size: 0.82rem; }
+.sched-row-foot .sched-est { font-size: 0.78rem; }
 .sched-tag {
   font-size: 0.63rem;
   font-weight: 800;
@@ -779,7 +809,7 @@
 }
 /* Only the TAGS need to clear the badge. Padding the whole column stopped the
    score short of the right edge, so it never lined up with the pill above it. */
-.sched-tags { padding-right: 7.8rem; }
+.sched-tags--badged { padding-right: 7.8rem; }
 
 /* .sched-topright and .sched-center are display:contents in the header grid at
    the top of this file — their children are placed individually, so neither has
@@ -895,7 +925,7 @@
     /* THREE columns, as at every other width. Dropping the third here left the
        H2H strip with no cell of its own, so it wrapped onto a second grid row
        and rendered sideways under the time column. */
-    grid-template-columns: 4.4rem 1fr auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 0.45rem;
     padding: 0.5rem 0.45rem;
     /* Full width on a phone. Content-sizing is what makes cards match on a wide
@@ -924,7 +954,9 @@
     min-width: 0;
   }
 
-  .sched-tags { padding-right: 6.4rem; }
+  .sched-tags--badged { padding-right: 6.4rem; }
+  /* Only here is the tag row narrow enough for the court to need shrinking. */
+  .sched-tag--court { font-size: calc(0.66rem * var(--court-scale, 1)); }
   .sched-status { min-width: 6rem; font-size: 0.55rem; }
 }
 
@@ -1263,10 +1295,9 @@
    At the end of the file so it wins over anything above it. */
 .sched-abbr-short { display: none; }
 
-@media (max-width: 560px) {
-  .sched-abbr-full  { display: none; }
-  .sched-abbr-short { display: inline; }
-}
+/* No phone-width swap to the short form any more: the wording sits in a footer
+   with the whole card's width, where "Followed by" fits at every size. The
+   short form is kept in the markup for a column that might need it again. */
 
 /* ── Doubles: names over flags ────────────────────────────────────────────
    A doubles row carries four flags, two slashes, two surnames and a team
