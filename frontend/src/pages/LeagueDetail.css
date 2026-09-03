@@ -90,7 +90,16 @@
   align-self: flex-start;
 }
 
-.settings-panel { margin-bottom: 1.5rem; }
+/* AS WIDE AS IT NEEDS TO BE. A block-level card took the whole page on a
+   desktop, and a name field plus a members list do not want 1900px. It sizes
+   to its content — the widest member row, name and two buttons — with a
+   floor so the name field is not cramped, and never past the page. */
+.settings-panel {
+  margin-bottom: 1.5rem;
+  width: fit-content;
+  min-width: min(36rem, 100%);
+  max-width: 100%;
+}
 .settings-panel h3 { margin-bottom: 1rem; }
 
 /* Members */
