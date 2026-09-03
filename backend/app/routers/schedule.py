@@ -26,6 +26,8 @@ from app.models.rankings import TePlayer, TeRankingsSnapshot
 from app.services.schedule import settle_from_result_rows, settled_sides_index
 from app.services.rankings import _norm
 from app.models.tournament import Draw, DrawEntry, Match, Tournament
+from app.models.prediction import UserPrediction
+from app.services.system_log import app_log
 from app.services.sofascore_live import live_point_for
 
 router = APIRouter(prefix="/schedule", tags=["schedule"])
@@ -134,6 +136,12 @@ class ScheduleEntryOut(BaseModel):
     # nothing on screen to explain the difference.
     surface: Optional[str] = None
     gender: Optional[str] = None
+    # THE SIGNED-IN USER'S PICK for this match: the draw_entry_id they chose to
+    # win, or null (nobody signed in, no pick, or a match nobody predicts —
+    # doubles and qualifying have no bracket match). The card marks that
+    # player. Everyone picks every match, so on a main-draw day this is set on
+    # nearly every singles row.
+    pick_entry_id: Optional[int] = None
 
 
 class ScheduleDayOut(BaseModel):
@@ -634,6 +642,20 @@ async def schedule_day(
     extra_by_name = await _profiles_by_name(db, unlinked) if unlinked else {}
 
     match_ids = {e.match_id for e in entries if e.match_id}
+    # The user's own picks, one query for the day. A failure here must not
+    # cost the schedule: the mark is decoration on a page that has to load.
+    picks: dict[int, int] = {}
+    if user is not None and match_ids:
+        try:
+            pick_rows = (await db.execute(
+                select(UserPrediction.match_id, UserPrediction.predicted_winner_id)
+                .where(UserPrediction.user_id == user.id,
+                       UserPrediction.match_id.in_(match_ids),
+                       UserPrediction.predicted_winner_id.isnot(None)))).all()
+            picks = {mid: wid for mid, wid in pick_rows}
+        except Exception as exc:  # noqa: BLE001 — decoration, never a 500
+            await app_log(db, "warning", "schedule",
+                          f"pick lookup failed for user {user.id}: {exc}")
     matches = {}
     if match_ids:
         rows = (await db.execute(
@@ -1003,6 +1025,7 @@ async def schedule_day(
             id=e.id, tournament_id=e.tournament_id,
             tournament_name=t_names.get(e.tournament_id),
             draw_id=e.draw_id, match_id=e.match_id, play_date=e.play_date,
+            pick_entry_id=picks.get(e.match_id) if e.match_id else None,
             tour=e.tour, stage=e.stage, discipline=e.discipline,
             round_label=e.round_label, court=e.court, court_order=e.court_order,
             start_type=e.start_type, start_time_local=e.start_time_local,

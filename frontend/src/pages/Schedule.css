@@ -629,6 +629,9 @@
    `flex: 0 0 auto` so it is never the thing that shrinks, and never overlaps
    the tennis ball beside it: the name is what gives, and PlayerName now
    measures the seed's real width before deciding how much. */
+/* The "fingers crossed" mark on the player you picked. Inline with the seed,
+   inside .sched-player so it shrinks with the name it belongs to. */
+.sched-pick { margin-left: 0.28rem; font-size: 0.95em; line-height: 1; }
 .sched-seed {
   color: var(--text-muted);
   font-weight: 700;

@@ -158,7 +158,7 @@ const u = StyleSheet.create({
   },
   badgeGap: { width: leading(28) },
   flagSlot: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  nameSlot: { flex: 1, minWidth: 0 },
+  nameSlot: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 4 },
   flagGlyph: { fontSize: 13, lineHeight: leading(16) },
   // Same footprint as a flag, so a name never moves because a country is
   // missing. 4:3, like the flag images the site uses.
@@ -300,7 +300,11 @@ export function FlagSlot({ codes, slots = 1 }) {
  * The wrapper takes the row's spare width (flex: 1) precisely so onLayout
  * reports how much room there IS, not how much the text happened to use.
  */
-export function PlayerName({ name, doubles = false, shrinkOnly = false, style }) {
+/* `after`: a mark that rides immediately after the name — the pick's 🤞 —
+   inside the slot, so it follows the name rather than drifting to the row's
+   far edge. Its width comes off what the name may use. */
+const AFTER_PX = 24
+export function PlayerName({ name, doubles = false, shrinkOnly = false, style, after = null }) {
   /* shrinkOnly: a USERNAME. It cannot be initialised or reduced to a surname —
      "koounderpressure" has neither — but the last two rungs still apply:
      shrink first, and only then "…". Truncating a handle is the same loss as
@@ -319,7 +323,7 @@ export function PlayerName({ name, doubles = false, shrinkOnly = false, style })
   if (avail != null) {
     // A point of slack: kerning is not in the tables, and a name that is
     // right on the line should shorten rather than gamble.
-    const room = avail - 1
+    const room = avail - 1 - (after ? AFTER_PX : 0)
     const fits = forms.find(f => textWidth(f, family, size) <= room)
     if (fits) {
       text = fits
@@ -334,9 +338,10 @@ export function PlayerName({ name, doubles = false, shrinkOnly = false, style })
 
   return (
     <View style={u.nameSlot} onLayout={e => setAvail(e.nativeEvent.layout.width)}>
-      <Text style={[style, fontSize !== size && { fontSize }]} numberOfLines={1}>
+      <Text style={[style, { flexShrink: 1 }, fontSize !== size && { fontSize }]} numberOfLines={1}>
         {text}
       </Text>
+      {after}
     </View>
   )
 }
