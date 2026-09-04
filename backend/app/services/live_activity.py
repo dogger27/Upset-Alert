@@ -586,11 +586,20 @@ async def dispatch(match_ids: set) -> dict:
             reasons = {}
             for _, r in bad:
                 reasons[r.reason or f"http_{r.status}"] = reasons.get(r.reason or f"http_{r.status}", 0) + 1
+            # Per-activity detail: the 2026-09-04 row said "BadDeviceToken=1"
+            # across three matches, and which token Apple had refused could
+            # not be recovered afterwards.
+            la_match = {la.id: (la.match_id, la.activity_id) for la, _ in rows}
+            failed = [{"activity": i, "match": la_match.get(i, (None, None))[0],
+                       "activity_id": la_match.get(i, (None, None))[1],
+                       "reason": r.reason, "status": r.status}
+                      for i, r in bad]
             await app_log(
                 "warning", "live_activity",
                 f"{len(bad)} Live Activity push(es) failed: "
                 + ", ".join(f"{k}={v}" for k, v in sorted(reasons.items())),
-                detail={"matches": sorted(match_ids), "reasons": reasons},
+                detail={"matches": sorted(match_ids), "reasons": reasons,
+                        "failed": failed},
                 # One row per distinct failure shape per hour. A match that
                 # keeps failing every ten seconds would otherwise bury every
                 # other issue in /issues within a minute.
@@ -635,15 +644,21 @@ async def _record(outcomes: list) -> None:
                               end_reason="match_complete")
                 forget(la_id)
             elif result is not None and result.activity_is_over:
-                # The user dismissed it, or it aged out. Normal, and it must
-                # never disable the device.
+                # The user dismissed it, it aged out, or Apple no longer knows
+                # its token (BadDeviceToken on a liveactivity push is THIS
+                # activity, not the phone). Normal, and it must never disable
+                # the device — one did, on 2026-09-04, and froze every card.
                 values.update(state=STATE_DEAD, ended_at=now,
-                              end_reason="expired_token")
+                              end_reason=f"apns_{result.reason}")
                 forget(la_id)
             await db.execute(
                 update(LiveActivity).where(LiveActivity.id == la_id).values(**values))
 
             if result is not None and result.token_is_dead:
+                # Unreachable from a liveactivity push by construction
+                # (ApnsResult.token_is_dead); kept for the day an alert push
+                # to the DEVICE token is added, which is the only push that
+                # can prove a device gone.
                 la = await db.get(LiveActivity, la_id)
                 if la is not None:
                     await db.execute(
