@@ -709,11 +709,31 @@ def check_parse(meta, match_count: int | None = None,
     return out
 
 
-async def check_and_log(db, tournament, play_date) -> list[dict]:
-    """Run the law and put violations where the alert digest reads."""
+# NOT EVERY CODE CAN BE JUDGED AT INGEST TIME. `expected_contradicts_printed`
+# compares expected_start_at against the sheet's printed time — and the ingest
+# does not write expected_start_at. Its callers recompute the estimates in the
+# very next statement, under the same day_write_lock, so at the moment the law
+# runs after an ingest the row still holds the PREVIOUS estimate against the
+# NEW printed time. That is a half-finished pipeline, not a bug: on 2026-09-04
+# Court 12 was reported as "printed 5:30 PM but expected 2:30 PM" and was
+# already correct by the time anyone looked. The SWEEP still checks this code,
+# on settled state, so a real contradiction is still caught — just not blamed
+# on the ingest that was about to fix it. Same lesson as the two-transaction
+# window the sweep itself had to learn.
+INGEST_DEFERRED = frozenset({"expected_contradicts_printed"})
+
+
+async def check_and_log(db, tournament, play_date, *,
+                        skip: frozenset = frozenset()) -> list[dict]:
+    """Run the law and put violations where the alert digest reads.
+
+    `skip` drops codes this caller cannot fairly judge yet (see
+    INGEST_DEFERRED); they are still checked by the sweep.
+    """
     from app.services.system_log import app_log
 
-    violations = await check_day(db, tournament.id, play_date)
+    violations = [v for v in await check_day(db, tournament.id, play_date)
+                  if v.get("code") not in skip]
     if violations:
         await app_log(
             "error", "order_of_play",

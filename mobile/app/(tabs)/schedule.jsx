@@ -12,7 +12,7 @@
  * has to be above the fold rather than sorted correctly.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import { Stack, useLocalSearchParams } from 'expo-router'
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native'
@@ -97,12 +97,25 @@ export default function ScheduleScreen() {
   const all = useMemo(() => day.data?.entries || [], [day.data])
   const tours = useMemo(() => [...new Set(all.map(e => e.tour).filter(Boolean))].sort(), [all])
   const hasDoubles = useMemo(() => all.some(e => e.discipline !== 'singles'), [all])
+  /* SEEDED ONCE PER DAY, NOT PER FETCH. This ran on `day.data`, whose identity
+     changes on every poll — and the live subscription refetches this screen
+     about every ten seconds — so switching WTA on held for one cycle and then
+     snapped back to the arriving draw's tour (user, 2026-09-04). The default
+     is still "the tour you came from, else everything"; it is simply a
+     STARTING point the reader is then allowed to keep.
+
+     Keyed on the day and the originating draw, so changing date (or arriving
+     from a different draw) seeds afresh, while a refetch of the same day
+     never touches the selection. */
+  const seededFor = useRef(null)
   useEffect(() => {
-    if (!all.length) return
+    const key = `${date}|${fromDraw ?? ''}`
+    if (seededFor.current === key || !all.length) return
+    seededFor.current = key
     const origin = fromDraw ? all.find(e => e.draw_id === fromDraw) : null
     setTourSel(new Set(origin?.tour ? [origin.tour] : tours))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [day.data, fromDraw])
+  }, [date, fromDraw, all])
   const toggleTour = t => setTourSel(prev => {
     const cur = new Set(prev ?? tours)
     if (cur.has(t)) cur.delete(t); else cur.add(t)

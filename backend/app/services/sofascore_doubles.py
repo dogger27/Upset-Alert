@@ -782,7 +782,11 @@ async def sweep_once(db, day: Optional[date] = None) -> dict:
                 and _sofa_people(held.get("awayTeam") or {})):
             continue
         if _match(e, held, sides_of[e.id], held=True) is None:
-            await app_log("warning", "sofascore_doubles",
+            # Expected after a pairing change (a withdrawal, a slot supersede):
+            # the old event names the old opponents. The next sweep claims the
+            # new one. Info, not warning — the supersede itself is already
+            # logged by the ingest.
+            await app_log("info", "sofascore_doubles",
                     f"dropped event {e.sofa_event_id} from schedule row {e.id} "
                     f"({e.play_date} {e.round_label}) — it no longer identifies "
                     f"this match",

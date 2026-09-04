@@ -15,23 +15,27 @@ FROM = "Upset Alert <info@upsetalert.ca>"
 BASE_URL = "https://upsetalert.ca"
 API_BASE = "https://upsetalert-api.upsetalert.ca"
 
-_LOGO_HEADER = """<table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#1b4332" style="background:#1b4332">
+_LOGO_HEADER = """<table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#1b4332" style="background:#1b4332;border-collapse:collapse">
   <tr>
-    <td align="center" bgcolor="#1b4332" style="background:#1b4332;padding:28px 24px 16px">
-      <table cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto">
-        <tr>
-          <td width="72" height="72" bgcolor="#3d5538" style="background:#3d5538;border-radius:36px;width:72px;height:72px" align="center" valign="middle">
-            <table cellpadding="0" cellspacing="0" border="0" align="center">
-              <tr>
-                <td width="43" height="43" bgcolor="#c9783a" style="background:#c9783a;border-radius:22px;width:43px;height:43px;font-size:0;line-height:0">&nbsp;</td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-      </table>
+    <td align="center" bgcolor="#1b4332" style="background:#1b4332;padding:24px 24px 18px;text-align:center">
+      <img src="https://upsetalert.ca/email-logo-hd.png" width="56" height="56" alt=""
+           style="display:block;margin:0 auto 10px;border:0;outline:none;text-decoration:none;width:56px;height:56px">
+      <div style="font-family:sans-serif;font-size:22px;font-weight:800;letter-spacing:0.04em;line-height:1;color:#ffffff">
+        UPSET <span style="color:#e8a87c">ALERT</span>!
+      </div>
     </td>
   </tr>
 </table>"""
+
+# WHY AN IMAGE AND NOT CSS SHAPES. The header used to draw the logo as two
+# nested table cells with border-radius, to survive Gmail blocking images
+# (2026-06-23). Gmail on iOS strips border-radius from a <td> and inverts the
+# fill in dark mode, so what arrived was a pale rectangle with an orange
+# sliver through it — reported 2026-09-04 with a screenshot. The logo is a
+# hosted PNG again, and the WORDMARK BELOW IT IS LIVE TEXT: when images are
+# blocked the header still reads "UPSET ALERT!", which is what the CSS shapes
+# were protecting against in the first place. alt is empty on purpose so a
+# blocked image leaves no "Upset Alert" placeholder stacked above the words.
 
 # background + color are set EXPLICITLY on the card and body: without them the
 # card inherited whatever the client painted behind it, so every dark-mode
