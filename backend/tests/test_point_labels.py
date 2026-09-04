@@ -74,6 +74,18 @@ def test_orientation_is_discovered_not_assumed():
     assert out == ["Ace", "Double Fault"]
 
 
+def test_a_snapshot_their_list_lacks_does_not_burn_the_game():
+    """Our list carries states theirs does not — the 0-0 that opens every game
+    among them. A miss must not advance the cursor, or the first one eats the
+    rest of the game. This placed 2 labels on a 56-label match once."""
+    pts = normalise(RAW)
+    out = align([snap([["0"], ["0"]], ["0", "0"]),     # never in their list
+                 snap([["0"], ["0"]], ["15", "0"]),    # still findable
+                 snap([["0"], ["0"]], ["40", "A"])],
+                pts)
+    assert out == [None, "Ace", "Double Fault"]
+
+
 def test_missing_or_empty_inputs_are_silent():
     assert align([], {}) == []
     assert align([snap([["0"], ["0"]], ["15", "0"])], {}) == [None]

@@ -715,7 +715,7 @@ async def match_score_history(
     from app.services.sofascore_points import labels_for
     for _snap, _label in zip(
             snapshots,
-            await labels_for(db, snapshots, match.sofa_event_id,
+            await labels_for(snapshots, match.sofa_event_id,
                              finished=match.winner_id is not None)):
         # ON the snapshot, not a parallel array: the client drops snapshots it
         # judges to be feed corrections (sanitizeSnapshots), and an index-based

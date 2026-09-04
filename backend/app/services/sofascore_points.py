@@ -63,41 +63,43 @@ def normalise(payload: dict) -> dict:
     return out
 
 
-async def points_for(db, event_id: Optional[int], *, finished: bool) -> dict:
-    """The normalised point list for an event, from cache or freshly fetched.
+# In PROCESS, deliberately not in the database: this is read from a GET, and
+# a GET that writes takes SQLite's single writer — the trap recorded in
+# feedback_reads_must_not_write. A dict costs nothing, survives as long as the
+# worker, and a restart simply refetches on demand.
+_CACHE: dict = {}                      # event_id -> (fetched_at, final, data)
+_CACHE_MAX = 512
 
-    Never raises: a blocked feed, a 404 on an event too old to carry points, or
+
+async def points_for(event_id: Optional[int], *, finished: bool) -> dict:
+    """The normalised point list for an event, from memory or freshly fetched.
+
+    Never raises: a blocked feed, a 404 on an event with no points recorded, or
     no event id at all all mean the same thing to the caller — no labels.
     """
-    from app.models.score_history import SofaPointsCache
     from app.services import sofascore as sf
 
     if not event_id:
         return {}
 
-    row = await db.get(SofaPointsCache, event_id)
-    if row is not None:
-        fresh = row.final or (
-            datetime.now(timezone.utc) - row.fetched_at.replace(tzinfo=timezone.utc)
-            < LIVE_TTL)
-        if fresh:
-            return row.data_json or {}
+    hit = _CACHE.get(event_id)
+    if hit is not None:
+        at, was_final, data = hit
+        if was_final or datetime.now(timezone.utc) - at < LIVE_TTL:
+            return data
 
     try:
         payload = await sf._get(f"/event/{event_id}/point-by-point")
     except Exception as exc:                                       # noqa: BLE001
-        # Includes SofascoreBlocked. The popup simply shows no labels; it is
-        # never worth failing a score history over a decoration.
+        # Includes SofascoreBlocked. The popup simply shows no labels; a
+        # decoration is never worth failing a score history over.
         logger.info("point-by-point unavailable for %s: %s", event_id, exc)
-        return (row.data_json or {}) if row is not None else {}
+        return hit[2] if hit else {}
 
     data = normalise(payload)
-    now = datetime.now(timezone.utc)
-    if row is None:
-        db.add(SofaPointsCache(event_id=event_id, fetched_at=now,
-                               final=bool(finished), data_json=data))
-    else:
-        row.fetched_at, row.final, row.data_json = now, bool(finished), data
+    if len(_CACHE) >= _CACHE_MAX:
+        _CACHE.pop(next(iter(_CACHE)), None)
+    _CACHE[event_id] = (datetime.now(timezone.utc), bool(finished), data)
     return data
 
 
@@ -136,6 +138,11 @@ def _walk(snapshots: list, points: dict, flip: bool) -> tuple:
             continue
         point = snap.get("point")
         h, a = (point[1], point[0]) if flip else (point[0], point[1])
+        # THE CURSOR ONLY MOVES ON A MATCH. Advancing it on a miss burns the
+        # rest of the game: our list carries states theirs does not — the 0-0
+        # at the start of every game, for one — and the first of those would
+        # otherwise consume every remaining point. That bug placed 2 labels on
+        # a match with 56 of them.
         j = cursor.get(pos, 0)
         while j < len(theirs):
             p = theirs[j]
@@ -143,8 +150,8 @@ def _walk(snapshots: list, points: dict, flip: bool) -> tuple:
             if str(p.get("h")) == str(h) and str(p.get("a")) == str(a):
                 out[i] = p.get("l")
                 placed += 1
+                cursor[pos] = j
                 break
-        cursor[pos] = j
     return out, placed
 
 
@@ -164,9 +171,9 @@ def align(snapshots: list, points: dict) -> list:
     return flipped if n_flipped > n_straight else straight
 
 
-async def labels_for(db, snapshots: list, event_id: Optional[int],
+async def labels_for(snapshots: list, event_id: Optional[int],
                      *, finished: bool) -> list:
     """The whole job: fetch (or reuse) the point list and align it."""
     if not snapshots or not event_id:
         return [None] * len(snapshots)
-    return align(snapshots, await points_for(db, event_id, finished=finished))
+    return align(snapshots, await points_for(event_id, finished=finished))

@@ -57,24 +57,3 @@ class ScheduleScoreSnapshot(Base):
     __table_args__ = (
         Index("ix_sched_score_snapshots_entry_at", "schedule_entry_id", "at"),
     )
-
-
-class SofaPointsCache(Base):
-    """Sofascore's point-by-point for ONE event, as fetched.
-
-    Cached because the whole match arrives in a single request: labelling every
-    point of a match costs one call, not one per point. A finished match never
-    changes, so it is fetched once and kept; a live one grows a point at a time
-    and is refetched on a short TTL, but only while somebody has its popup
-    open — nothing polls this in the background.
-    """
-
-    __tablename__ = "sofa_points_cache"
-
-    event_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    fetched_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    # True once the match is over: the list can never grow again, so the TTL
-    # stops applying and this is never refetched.
-    final: Mapped[bool] = mapped_column(Integer, default=False)
-    # {"<set>-<game>": [{"h": "15", "a": "0", "l": "Ace"|null}, ...]}
-    data_json: Mapped[dict] = mapped_column(JSON, nullable=False)
