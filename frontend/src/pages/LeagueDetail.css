@@ -715,6 +715,19 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 .lt-bar-winner {
   box-shadow: inset 0 0 0 2.5px #000;
 }
+/* THE RING IS BRIGHT IN DARK MODE. Black is the right ring on a white page,
+   but on the dark one it made the round's best score the DARKEST thing on the
+   row — the crown read as a strike-through (user, 2026-09-04). White inside,
+   a hairline and a soft halo outside so the winner still separates from the
+   bar beside it, and a small lift in the fill so the whole bar reads brighter
+   rather than merely outlined. */
+:root[data-theme='dark'] .lt-bar-winner {
+  box-shadow:
+    inset 0 0 0 2.5px rgba(255, 255, 255, 0.95),
+    0 0 0 1px rgba(255, 255, 255, 0.30),
+    0 0 9px rgba(255, 255, 255, 0.16);
+  filter: brightness(1.1) saturate(1.04);
+}
 .lt-bar-label {
   /* 1.4rem in a 34px bar: 22.4px of glyph with ~5px clear above and below,
      including the outline. The number IS the row — it was set smaller than the
