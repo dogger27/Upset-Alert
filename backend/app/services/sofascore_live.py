@@ -551,6 +551,11 @@ async def poll_once(db) -> dict:
         # still true". Refreshing at half the freshness window keeps the stamp
         # honest at 2 writes a minute for a live match instead of 6 — the saving
         # the comparison was for, without the lie.
+        # The event id, kept. It costs nothing here — `ev` is in hand — and it
+        # is the only key the point-by-point feed can be read by later.
+        if match.sofa_event_id != ev.get("id") and ev.get("id"):
+            match.sofa_event_id = ev.get("id")
+
         before = dict(match.sofa_live_json or {})
         prev_at = before.pop("at", None)
         after = dict(snap)

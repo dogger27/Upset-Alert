@@ -484,6 +484,11 @@ class Match(Base):
     # A wrong winner does not render badly, it scores the league wrong and
     # emails everyone about it — and the notification dedup tables mean a bad
     # send cannot be un-sent. Hence: shadow first, diff, then cut over.
+    # THE SOFASCORE EVENT THIS MATCH IS. The live poller identifies it every
+    # ten seconds and used to throw the id away, which left nothing to look a
+    # match up by afterwards — the point-by-point feed is keyed on it. Stamped
+    # on the same branch that writes the live score.
+    sofa_event_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     sofa_winner_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("draw_entries.id"), nullable=True)
     # When we first OBSERVED the match finished, not when it actually ended —
