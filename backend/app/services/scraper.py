@@ -476,7 +476,10 @@ def _parse_params(template_body: str) -> dict[str, str]:
 # ---------------------------------------------------------------------------
 
 _FLAG_RE = re.compile(r'\{\{flagicon[^}]*\}\}', re.IGNORECASE)
-_TB_RE = re.compile(r'(\d+)<sup>(\d+)</sup>', re.IGNORECASE)
+# The closing tag is optional: Wikipedia renders "6<sup>5" (editor forgot the
+# </sup>) exactly like the closed form, and requiring it here turned that cell
+# into "65" once _HTML_TAG_RE stripped the tag — US Open 2026, Badosa–Gauff.
+_TB_RE = re.compile(r'(\d+)<sup>\s*(\d+)\s*(?:</sup>)?', re.IGNORECASE)
 _HTML_TAG_RE = re.compile(r'<[^>]+>')
 _WIKI_LINK_RE = re.compile(r'\[\[([^\]|]+)(?:\|[^\]]+)?\]\]')
 _BOLD_RE = re.compile(r"'''(.*?)'''", re.DOTALL)
