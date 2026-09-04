@@ -172,7 +172,7 @@ def _final_scores(home: dict, away: dict, status_code: int = 100,
     return [p1, p2]
 
 
-async def sweep_once(db) -> dict:
+async def sweep_once(db, *, force: bool = False) -> dict:
     """One pass over every tracked draw's finished events.
 
     Returns a report rather than logging per match; at this cadence a per-match
@@ -195,7 +195,11 @@ async def sweep_once(db) -> dict:
             Match.player1_id.isnot(None), Match.player2_id.isnot(None),
             Match.sofa_winner_id.is_(None),
         ).limit(1))).first()
-    if pending is None:
+    if pending is None and not force:
+        # `force` is the backfill's way in: a draw whose winners are all known
+        # still has nothing to find under the normal guard, which is exactly
+        # the state every match that finished before sofa_event_id existed is
+        # in. Never set on the scheduled path — see the traffic note above.
         return {"draws": len(by_tournament), "seen": 0, "written": 0,
                 "unmatched": 0, "skipped": "all tracked matches resolved"}
 
@@ -284,6 +288,14 @@ async def sweep_once(db) -> dict:
                            if start_ts else None)
 
                 changed = False
+                # THE EVENT ID, for every match this sweep ever resolves — not
+                # just the ones the live poller happened to see on court. It is
+                # the only key the point-by-point feed can be read by, and a
+                # match that finished while nobody was watching would otherwise
+                # never get one.
+                if ev.get("id") and match.sofa_event_id != ev.get("id"):
+                    match.sofa_event_id = ev.get("id")
+                    changed = True
                 if match.sofa_winner_id != sofa_winner:
                     match.sofa_winner_id = sofa_winner
                     changed = True

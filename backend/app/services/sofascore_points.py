@@ -11,12 +11,21 @@ serves.
 
 COST: one request per MATCH, not per point. The whole list arrives at once.
 
-WHY THE MATCHING IS BY SCORE AND ONLY WHEN UNAMBIGUOUS. Measured on a real
-169-point match: only 148 of the (set, game, score) keys were distinct, because
-every deuce cycle repeats 40-40 and 40-A. So roughly a fifth of points share a
-score with another point in the same game, and picking one of them would put an
-"Ace" against a point that was not an ace. Those are left unlabelled. Silence
-is the correct answer when the data cannot tell you.
+HOW POINTS ARE MATCHED: BY ORDER, NOT BY SCORE. A score is not unique inside a
+game — every deuce cycle revisits 40-40 and 40-A, which made a score-based match
+ambiguous for about a fifth of all points. Order is unique: our snapshots and
+their points are both in play order, and ours is a SUBSEQUENCE of theirs (the
+poller can miss a point, it can never invent one). So the two are walked
+together with a greedy two-pointer, which places the first 40-40 against the
+first 40-40, the second against the second, and so on. Nothing is left
+ambiguous by the deuce case any more.
+
+WHAT IS GENUINELY MISSING, and no algorithm can fix it: **their list omits the
+point that ENDS each game.** Verified by walking games against the match's own
+statistics — a match with 26 games carried exactly 26 fewer points than the
+statistics counted, and every game's rows stop one point short of the game
+being won. An ace on game point is therefore invisible here. Tiebreaks, by
+contrast, ARE included: a 6-7 set carries all 13 of its games.
 """
 
 import logging
@@ -92,47 +101,67 @@ async def points_for(db, event_id: Optional[int], *, finished: bool) -> dict:
     return data
 
 
+def _position(snap) -> Optional[tuple]:
+    """The (set, game) a snapshot belongs to, or None if it cannot be placed."""
+    games, point = (snap or {}).get("games"), (snap or {}).get("point")
+    if not games or len(games) < 2 or not point or len(point) < 2:
+        return None
+    set_no = len(games[0] or [])
+    if set_no < 1:
+        return None
+    try:
+        done = int(games[0][set_no - 1] or 0) + int(games[1][set_no - 1] or 0)
+    except (TypeError, ValueError):
+        return None
+    return (set_no, done + 1)
+
+
+def _walk(snapshots: list, points: dict, flip: bool) -> tuple:
+    """Greedy two-pointer per game. Returns (labels, how many points placed).
+
+    Ours is a subsequence of theirs, so within a game the pointer only ever
+    moves forward: for each snapshot, advance through their points until the
+    score agrees. That is what makes a deuce cycle unambiguous — the third
+    40-40 can only match their third 40-40, never their first.
+    """
+    out = [None] * len(snapshots)
+    placed = 0
+    cursor: dict = {}                     # (set, game) -> how far into their list
+    for i, snap in enumerate(snapshots):
+        pos = _position(snap)
+        if pos is None:
+            continue
+        theirs = points.get(_key(*pos))
+        if not theirs:
+            continue
+        point = snap.get("point")
+        h, a = (point[1], point[0]) if flip else (point[0], point[1])
+        j = cursor.get(pos, 0)
+        while j < len(theirs):
+            p = theirs[j]
+            j += 1
+            if str(p.get("h")) == str(h) and str(p.get("a")) == str(a):
+                out[i] = p.get("l")
+                placed += 1
+                break
+        cursor[pos] = j
+    return out, placed
+
+
 def align(snapshots: list, points: dict) -> list:
     """One label per snapshot, or None — parallel to the list handed in.
 
-    A snapshot knows its set (how many sets are on the board) and its game
-    (games played in the current set, plus the one in progress), so the point
-    list is narrowed to a single game before any score is compared. Orientation
-    is decided by trying both and keeping whichever lands more points, because
-    the snapshot is stored in the MATCH's order (player1 first) while Sofascore
-    keeps its own home/away and the two need not agree.
+    Orientation is discovered rather than assumed: the snapshot is stored in
+    the MATCH's order (player1 first) while Sofascore keeps its own home/away,
+    so both are walked and whichever places more points wins. On a real match
+    the two differ by an order of magnitude, so there is nothing marginal about
+    the choice.
     """
     if not points or not snapshots:
         return [None] * len(snapshots)
-
-    best, best_hits = [None] * len(snapshots), -1
-    for flip in (False, True):
-        got, hits = [], 0
-        for snap in snapshots:
-            got.append(None)
-            games, point = (snap or {}).get("games"), (snap or {}).get("point")
-            if not games or len(games) < 2 or not point or len(point) < 2:
-                continue
-            set_no = len(games[0] or [])
-            if set_no < 1:
-                continue
-            try:
-                done = int(games[0][set_no - 1] or 0) + int(games[1][set_no - 1] or 0)
-            except (TypeError, ValueError):
-                continue
-            pts = points.get(_key(set_no, done + 1))
-            if not pts:
-                continue
-            h, a = (point[1], point[0]) if flip else (point[0], point[1])
-            hit = [p for p in pts
-                   if str(p.get("h")) == str(h) and str(p.get("a")) == str(a)]
-            # Exactly one, or nothing: see the note at the top of this file.
-            if len(hit) == 1:
-                got[-1] = hit[0].get("l")
-                hits += 1
-        if hits > best_hits:
-            best, best_hits = got, hits
-    return best
+    straight, n_straight = _walk(snapshots, points, flip=False)
+    flipped, n_flipped = _walk(snapshots, points, flip=True)
+    return flipped if n_flipped > n_straight else straight
 
 
 async def labels_for(db, snapshots: list, event_id: Optional[int],
