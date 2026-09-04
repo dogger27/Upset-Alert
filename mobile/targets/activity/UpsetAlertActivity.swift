@@ -79,20 +79,27 @@ private struct SeedBadge: View {
                 // visibly different sizes on one card. The box is wider and
                 // taller now, and a three-digit number shrinks a little to fit
                 // it rather than overflowing; every pill is the same rectangle.
+                // THREE DIGITS AT THE LOCK SCREEN'S OWN TEXT SIZE. The Lock Screen
+                // renders .caption larger than a default-size preview does, and
+                // 32pt truncated "126" to "1…". The box is sized for three bold
+                // digits at that size; the number tightens and, past that,
+                // shrinks — it is never truncated, because a rank cut to "1…"
+                // says nothing. Fixed width, so every name starts at the same x.
                 Text("\(value)")
                     .font(.caption).fontWeight(.bold)
                     .foregroundColor(isSeed ? seedInk : rankInk)
                     .monospacedDigit()
                     .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-                    .padding(.horizontal, 3)
-                    .frame(width: 32, height: 21)
+                    .allowsTightening(true)
+                    .minimumScaleFactor(0.6)
+                    .padding(.horizontal, 2)
+                    .frame(width: 38, height: 22)
                     .background(RoundedRectangle(cornerRadius: 4).fill(isSeed ? seedBg : rankBg))
                     .overlay(RoundedRectangle(cornerRadius: 4).stroke(isSeed ? seedLine : rankLine, lineWidth: 0.5))
             } else {
                 // No number at all still reserves the column, or the two names
                 // would start at different x.
-                Color.clear.frame(width: 32, height: 21)
+                Color.clear.frame(width: 38, height: 22)
             }
         }
     }

@@ -20,38 +20,52 @@ private struct SeedBadge: View {
                 // visibly different sizes on one card. The box is wider and
                 // taller now, and a three-digit number shrinks a little to fit
                 // it rather than overflowing; every pill is the same rectangle.
+                // THREE DIGITS AT THE LOCK SCREEN'S OWN TEXT SIZE. The Lock Screen
+                // renders .caption larger than a default-size preview does, and
+                // 32pt truncated "126" to "1…". The box is sized for three bold
+                // digits at that size; the number tightens and, past that,
+                // shrinks — it is never truncated, because a rank cut to "1…"
+                // says nothing. Fixed width, so every name starts at the same x.
                 Text("\(value)")
                     .font(.caption).fontWeight(.bold)
                     .foregroundColor(isSeed ? seedInk : rankInk)
                     .monospacedDigit()
                     .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-                    .padding(.horizontal, 3)
-                    .frame(width: 32, height: 21)
+                    .allowsTightening(true)
+                    .minimumScaleFactor(0.6)
+                    .padding(.horizontal, 2)
+                    .frame(width: 38, height: 22)
                     .background(RoundedRectangle(cornerRadius: 4).fill(isSeed ? seedBg : rankBg))
                     .overlay(RoundedRectangle(cornerRadius: 4).stroke(isSeed ? seedLine : rankLine, lineWidth: 0.5))
             } else {
                 // No number at all still reserves the column, or the two names
                 // would start at different x.
-                Color.clear.frame(width: 32, height: 21)
+                Color.clear.frame(width: 38, height: 22)
             }
         }
     }
 }
 
 
+struct Row: View {
+    let seed: Int?; let rank: Int?; let name: String
+    var body: some View {
+        HStack(spacing: 8) { SeedBadge(seed: seed, drawRank: rank); Text(name).font(.system(size: 17, weight: .semibold)).foregroundColor(.white) }
+    }
+}
 struct Sheet: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                SeedBadge(seed: 6, drawRank: nil); SeedBadge(seed: 31, drawRank: nil)
-                SeedBadge(seed: nil, drawRank: 50); SeedBadge(seed: nil, drawRank: 66)
-                SeedBadge(seed: nil, drawRank: 67); SeedBadge(seed: nil, drawRank: 110)
-                SeedBadge(seed: 128, drawRank: nil); SeedBadge(seed: nil, drawRank: nil)
-                Text("← blank keeps the column").font(.caption).foregroundColor(.white)
+        HStack(alignment: .top, spacing: 28) {
+            ForEach([("default", ContentSizeCategory.large), ("xxxLarge", .extraExtraExtraLarge), ("AX2", .accessibilityLarge)], id: \.0) { pair in
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(pair.0).font(.caption).foregroundColor(.gray)
+                    Row(seed: nil, rank: 126, name: "Gaël Monfils")
+                    Row(seed: 14, rank: nil, name: "Learner Tien")
+                    Row(seed: 6, rank: nil, name: "Alex de Minaur")
+                    Row(seed: nil, rank: 110, name: "Arthur Géa")
+                    Row(seed: 128, rank: nil, name: "Long seed")
+                }.environment(\.sizeCategory, pair.1)
             }
-            HStack(spacing: 8) { SeedBadge(seed: 31, drawRank: nil); Text("Zizou Bergs").font(.system(size: 17, weight: .semibold)).foregroundColor(.white) }
-            HStack(spacing: 8) { SeedBadge(seed: nil, drawRank: 110); Text("Arthur Géa").font(.system(size: 17, weight: .semibold)).foregroundColor(.white) }
         }
         .padding(16)
         .background(Color(red: 0.12, green: 0.13, blue: 0.13))
