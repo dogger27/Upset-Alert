@@ -2,6 +2,24 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+/* BEFORE App, DELIBERATELY, and this is the whole reason it lives here.
+   BracketView.css holds the shared draw/schedule vocabulary —
+   .in-progress-badge and its variants, .pos-badge, .upset-tooltip*,
+   .h2h-strip, .match-box — which pages then override with plain single-class
+   selectors of EQUAL specificity (.sched-status positions that badge on a
+   schedule row, .sched-status--done recolours it). Equal specificity means
+   the later rule wins, so this must be emitted BEFORE any page stylesheet,
+   and Rollup emits CSS in module-evaluation order: everything App pulls in
+   is evaluated before the entry's own later imports, which is why
+   `import './index.css'` below lands last and cannot host this.
+
+   It was ordered correctly by accident until 2026-09-04 — BracketView.jsx
+   imported it, and that component sat earlier in the graph than the pages.
+   Switching Live Draw off moved the import to a page, it landed after
+   Schedule.css, and the schedule's "In progress" pill jumped to the top
+   centre of the card at full width, wearing .in-progress-badge's own
+   left:50% and transform. */
+import './components/BracketView.css'
 import App from './App'
 import './index.css'
 import 'flag-icons/css/flag-icons.min.css'

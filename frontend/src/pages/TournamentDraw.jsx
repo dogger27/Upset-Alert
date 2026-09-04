@@ -34,16 +34,6 @@ import ScoreHistoryPopup from '../components/ScoreHistoryPopup'
 import { matchStarted } from '../utils/score'
 import { rootFontPx, textWidth } from '../utils/text'
 import './TournamentDraw.css'
-/* BracketView.css is NOT only BracketView's. It also defines rules the Picks
-   view and the Schedule page depend on — .in-progress-badge and its variants,
-   .pos-badge, .upset-tooltip*, .h2h-strip, .match-box, .bracket-col,
-   .bracket-scroll — and it reached the bundle only because BracketView.jsx
-   imported it. Commenting that import out (LIVE DRAW, above) therefore
-   stripped the styling from every one of them: the draw page's "In Progress"
-   and "Scheduled" pills rendered as bare text, as did the schedule's status
-   badges. 13.8 KB of CSS, and the component itself stays out of the bundle.
-   If Live Draw ever comes back, this import becomes redundant, not wrong. */
-import '../components/BracketView.css'
 
 // Tier as it appears in the site's tournament-type pills — "GS" for the slams,
 // otherwise the tour level (mirrors DrawHistory's categoryShort).
