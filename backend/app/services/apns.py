@@ -46,13 +46,25 @@ _MAX_PAYLOAD = 3072
 
 # The token is finished. Stop using it — but see the 410 note in send(): a
 # timestamp check has to gate the actual deactivation.
+#
+# WHICH token is finished depends on the push type, and that distinction cost
+# a live outage on 2026-09-04 01:49 UTC. A `liveactivity` push is addressed to
+# a PER-ACTIVITY token, so every one of these reasons then describes that one
+# activity — dismissed, ended, or registered a moment too late — and says
+# nothing about the device. The old code disabled the whole AppDevice on one
+# BadDeviceToken from one activity, the dispatcher's read filters disabled
+# devices out, and every card on the phone froze mid-match while the matches
+# played on. Only an `alert` push (device token) may kill a device; see
+# ApnsResult.token_is_dead / activity_is_over.
 DEAD_TOKEN = frozenset({
     "Unregistered", "BadDeviceToken", "DeviceTokenNotForTopic",
 })
 
 # The ACTIVITY is over, not the device. Entirely normal: the user dismissed it,
 # or it aged out. Not an error, and it must never disable a device.
-ACTIVITY_OVER = frozenset({"ExpiredActivityToken"})
+# ExpiredToken (410) is Apple's own wording for an activity token that has
+# aged out; ExpiredActivityToken was the guess this set began with.
+ACTIVITY_OVER = frozenset({"ExpiredActivityToken", "ExpiredToken"})
 
 # We built the request wrong. Never retry, never blame the token, and say so
 # loudly — every one of these is a bug on this side.
@@ -71,14 +83,23 @@ class ApnsResult:
     apns_id: Optional[str] = None
     # Set when Apple reports a token as invalid AS OF a moment in time.
     unregistered_at: Optional[datetime] = None
+    # What kind of token the request addressed — send() stamps it. The two
+    # properties below are meaningless without it: the same reason string
+    # names a dead DEVICE on an alert push and a dead ACTIVITY on a
+    # liveactivity push.
+    push_type: Optional[str] = None
 
     @property
     def token_is_dead(self) -> bool:
-        return self.reason in DEAD_TOKEN
+        """The DEVICE token is finished — only ever true for an alert push."""
+        return self.push_type != "liveactivity" and self.reason in DEAD_TOKEN
 
     @property
     def activity_is_over(self) -> bool:
-        return self.reason in ACTIVITY_OVER
+        """This one ACTIVITY is finished; the device is fine. Any dead-token
+        reason on a liveactivity push lands here, never on token_is_dead."""
+        return (self.push_type == "liveactivity"
+                and (self.reason in ACTIVITY_OVER or self.reason in DEAD_TOKEN))
 
 
 def apns_enabled() -> bool:
@@ -180,6 +201,27 @@ async def send(
     expiration: Optional[int] = None,
     collapse_id: Optional[str] = None,
     topic: Optional[str] = None,
+) -> ApnsResult:
+    """One payload to one token. Never raises. Every result carries the
+    push_type it was sent as, which is what makes token_is_dead and
+    activity_is_over answer the right question (see DEAD_TOKEN)."""
+    result = await _send(token=token, payload=payload, push_type=push_type,
+                         env=env, priority=priority, expiration=expiration,
+                         collapse_id=collapse_id, topic=topic)
+    result.push_type = push_type
+    return result
+
+
+async def _send(
+    *,
+    token: str,
+    payload: dict,
+    push_type: str,
+    env: Optional[str],
+    priority: int,
+    expiration: Optional[int],
+    collapse_id: Optional[str],
+    topic: Optional[str],
 ) -> ApnsResult:
     """
     One payload to one token. Never raises.
