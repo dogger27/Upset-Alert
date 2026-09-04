@@ -157,13 +157,13 @@ const u = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   badgeGap: { width: leading(28) },
-  flagSlot: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  flagSlot: { flexDirection: 'row', alignItems: 'center', gap: leading(3) },
   nameSlot: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 4 },
   flagGlyph: { fontSize: 13, lineHeight: leading(16) },
   // Same footprint as a flag, so a name never moves because a country is
   // missing. 4:3, like the flag images the site uses.
   flagEmpty: {
-    width: 16, height: 12, borderRadius: 2,
+    width: leading(16), height: leading(12), borderRadius: 2,
     borderWidth: 1, borderColor: C.borderOn, backgroundColor: 'transparent',
   },
   // .dh-category: 0.65rem/700/uppercase, 0.06em tracking, radius 4, 2px 6px.
@@ -267,8 +267,11 @@ export function TourBadge({ gender, style }) {
 export function FlagSlot({ codes, slots = 1 }) {
   const list = (codes && codes.length ? codes : [null]).slice(0, slots)
   while (list.length < slots) list.push(null)
+  // Widths scale with the reader's text size, as the glyph does: fixed points
+  // here let a large-text phone draw the second flag over the gap and hard
+  // against the name.
   return (
-    <View style={[u.flagSlot, { width: slots * 17 + (slots - 1) * 3 }]}>
+    <View style={[u.flagSlot, { width: slots * leading(17) + (slots - 1) * leading(3) }]}>
       {list.map((c, i) => {
         const glyph = flagEmoji(c)
         return glyph
