@@ -273,10 +273,17 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.6rem;
-  padding: 0.55rem 0.6rem;
+  /* Named, because the H2H strip bleeds out through this padding to reach the
+     card's edges and had the numbers copied into its own margin. The bottom
+     was later reduced on its own (see below) and the strip kept pulling the
+     old 0.55rem, so it hung past the bottom edge. One source now. */
+  --row-pad-y: 0.55rem;
+  --row-pad-x: 0.6rem;
+  --row-pad-bottom: 0.3rem;
+  padding: var(--row-pad-y) var(--row-pad-x);
   /* Less under the footer than over the tags: the time line is meant to sit
      close to the card's bottom edge, not float in the middle of a margin. */
-  padding-bottom: 0.3rem;
+  padding-bottom: var(--row-pad-bottom);
   border-radius: 9px;
   background: var(--surface-card);
   position: relative;
@@ -947,8 +954,11 @@
        and rendered sideways under the time column. */
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 0.45rem;
-    padding: 0.5rem 0.45rem;
-    padding-bottom: 0.28rem;
+    --row-pad-y: 0.5rem;
+    --row-pad-x: 0.45rem;
+    --row-pad-bottom: 0.28rem;
+    padding: var(--row-pad-y) var(--row-pad-x);
+    padding-bottom: var(--row-pad-bottom);
     /* Full width on a phone. Content-sizing is what makes cards match on a wide
        screen where they sit in separate grids; in a single narrow column they
        are all full width already, and fit-content only invited an overflow.
@@ -1206,7 +1216,11 @@
      because a schedule row is taller, so the bar is a longer, thinner shape and
      needs the extra to stay in proportion. */
   width: 24px;
-  margin: -0.55rem -0.6rem -0.55rem 0;
+  /* Flush with the card on all three sides, whatever the row's padding is —
+     these were literals, and the bottom one went stale the moment the row's
+     bottom padding was reduced, leaving the strip hanging below the card. */
+  margin: calc(-1 * var(--row-pad-y)) calc(-1 * var(--row-pad-x))
+          calc(-1 * var(--row-pad-bottom)) 0;
   border-radius: 0 9px 9px 0;
   border-left: 1px solid var(--n-300);
 }
