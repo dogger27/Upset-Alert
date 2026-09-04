@@ -244,6 +244,7 @@ async def apply_all_schedules(
     tournaments = result.scalars().all()
 
     schedule_set = closing_set = 0
+
     for t in tournaments:
         if apply_schedule(t):
             schedule_set += 1
@@ -1954,6 +1955,9 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
 
     # Upsert matches — update in place to preserve prediction foreign keys
     seen_match_keys: set[tuple] = set()
+    # One read per scrape: is Sofascore the source of record right now?
+    from app.services.settings import load_sofa_authoritative
+    sofa_is_record = await load_sofa_authoritative(db)
     for mr in parsed.matches:
         p1_id = pos_to_player_id.get(mr.player1_position)
         p2_id = pos_to_player_id.get(mr.player2_position) if mr.player2_position else None
@@ -1965,8 +1969,36 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
             match.player1_id = p1_id
             match.player2_id = p2_id
             match.is_bye = mr.is_bye
-            if w_id is not None:
-                # Wikipedia has a result — always trust it (includes tiebreak scores)
+            # SOFASCORE IS THE SOURCE OF RECORD FOR RESULTS; Wikipedia is the
+            # fallback for a match it has none for. Until 2026-09-04 this block
+            # "always trusted" Wikipedia, so every 30-minute scrape overwrote
+            # the score the results sweep had written minutes earlier, and the
+            # sweep wrote it back — the same tiebreak flipped between "6(5)"
+            # and "65" (an unclosed <sup> on Wikipedia) all evening. The draw
+            # SHAPE (players, byes, positions) stays Wikipedia's either way.
+            sofa_has_it = (sofa_is_record and match.sofa_winner_id is not None)
+            if sofa_has_it:
+                if w_id is not None and w_id != match.sofa_winner_id:
+                    # Worth a row in /issues, not an overwrite: a disagreement
+                    # here is either a Wikipedia edit error or a wrong event
+                    # mapping, and both need eyes rather than a coin toss.
+                    try:
+                        from app.services.system_log import app_log
+                        await app_log(
+                            "warning", "scraper",
+                            f"Wikipedia and Sofascore disagree on the winner of match "
+                            f"{match.id} (draw {tournament.id}); kept Sofascore's",
+                            detail={"match_id": match.id, "wiki_winner_id": w_id,
+                                    "sofa_winner_id": match.sofa_winner_id},
+                            dedup_key=f"scraper:winner-mismatch:{match.id}",
+                            dedup_hours=24.0,
+                        )
+                    except Exception:                                    # noqa: BLE001
+                        pass
+            elif w_id is not None:
+                # Wikipedia has a result and Sofascore does not (yet, or ever:
+                # an unlisted walkover, an unmapped draw) — take it, tiebreak
+                # scores included.
                 if match.winner_id != w_id:
                     # Only stamp completed_at if ESPN hasn't already recorded it;
                     # ESPN timestamps are more accurate (per-match, within 1 min).
