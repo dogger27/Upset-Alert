@@ -1,10 +1,10 @@
-"""Aces and double faults on the scrubber: only where the data is certain.
+"""Aces and double faults on the scrubber.
 
-Sofascore labels ~8% of points (ace / double fault) and says nothing about the
-rest. Within a game a score can repeat — every deuce cycle revisits 40-40 and
-40-A — so a score that appears twice must go UNLABELLED rather than take a
-guess. Measured on a real 169-point match: 148 distinct (set, game, score)
-keys, so ~18% of points are ambiguous."""
+Matching is by ORDER inside the game, not by score: a deuce cycle revisits
+40-40 and 40-A, so score alone is ambiguous, while order is not. Our snapshots
+are a subsequence of theirs (the poller can miss a point, never invent one), so
+a greedy two-pointer places every point exactly — including the third 40-40 of
+a long deuce game."""
 from app.services.sofascore_points import align, normalise
 
 RAW = {"pointByPoint": [
@@ -36,13 +36,28 @@ def test_only_aces_and_double_faults_are_named():
     assert pts["1-1"][1]["l"] is None
 
 
-def test_unique_score_is_labelled_ambiguous_one_is_not():
+def test_deuce_cycle_is_resolved_by_order():
+    """The score 40-40 occurs twice; order says which is which."""
     pts = normalise(RAW)
-    out = align([snap([["0"], ["0"]], ["15", "0"]),    # once in the game
-                 snap([["0"], ["0"]], ["40", "40"]),   # twice — deuce cycle
-                 snap([["0"], ["0"]], ["40", "A"])],   # once
+    out = align([snap([["0"], ["0"]], ["15", "0"]),
+                 snap([["0"], ["0"]], ["15", "15"]),
+                 snap([["0"], ["0"]], ["40", "40"]),   # their 1st 40-40
+                 snap([["0"], ["0"]], ["40", "A"]),    # the double fault
+                 snap([["0"], ["0"]], ["40", "40"])],  # their 2nd 40-40
                 pts)
-    assert out == ["Ace", None, "Double Fault"]
+    assert out == ["Ace", None, None, "Double Fault", None]
+
+
+def test_a_missed_snapshot_does_not_desync_the_rest():
+    """The poller samples every 10s and can miss a point; the walk skips over
+    it rather than shifting every later label by one."""
+    pts = normalise(RAW)
+    out = align([snap([["0"], ["0"]], ["15", "0"]),
+                 # 15-15 and the first 40-40 never observed
+                 snap([["0"], ["0"]], ["40", "A"]),
+                 snap([["0"], ["0"]], ["40", "40"])],
+                pts)
+    assert out == ["Ace", "Double Fault", None]
 
 
 def test_game_number_comes_from_games_played_in_the_current_set():
