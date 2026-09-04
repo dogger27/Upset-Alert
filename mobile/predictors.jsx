@@ -18,6 +18,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { getPredictors } from './api'
 import { useApi } from './useApi'
 import { BADGE, C, R, S, T } from './theme'
+import { leading } from './fontScale'
 import { Loading } from './ui'
 
 export function PredictorsSheet({ visible, onClose, drawId, match, meId }) {
@@ -27,12 +28,15 @@ export function PredictorsSheet({ visible, onClose, drawId, match, meId }) {
 
   const winner = match?.winner?.name
   const pending = !match?.winner
-  // Names only once the ACTUAL players are known; a later round still
-  // waiting on its feeders shows the round instead.
+  // Names only once the ACTUAL players are known; the round and status pills
+  // below are always there.
   const known = !!(match?.player1?.name && match?.player2?.name)
   const sub = pending
-    ? (known ? `${match.player1.name} vs. ${match.player2.name}` : (match?.round_name || null))
+    ? (known ? `${match.player1.name} vs. ${match.player2.name}` : null)
     : winner ? `${winner} won` : null
+  const live = pending && !!(match?.live_scores || match?.live_point)
+  const status = !pending ? 'Completed' : !known ? 'TBD' : live ? 'In Progress' : 'Upcoming'
+  const statusStyle = !pending ? s.pillDone : !known ? s.pillTbd : live ? s.pillLive : s.pillUpcoming
 
   return (
     <Modal visible={!!visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -41,6 +45,10 @@ export function PredictorsSheet({ visible, onClose, drawId, match, meId }) {
         <View style={s.grabber} />
         <Text style={s.title}>{pending ? 'Who’s still in it' : 'Who called it'}</Text>
         {sub ? <Text style={s.sub} numberOfLines={1}>{sub}</Text> : null}
+        <View style={s.meta}>
+          <View style={[s.pill, s.pillRound]}><Text style={[s.pillText, s.pillRoundText]}>{match?.round_name || '—'}</Text></View>
+          <View style={[s.pill, statusStyle]}><Text style={[s.pillText, statusStyle]}>{status}</Text></View>
+        </View>
 
         {q.loading && !d ? <Loading /> : null}
         {q.error ? <Text style={s.err}>Couldn’t load predictions.</Text> : null}
@@ -108,6 +116,17 @@ const s = StyleSheet.create({
   },
   title: { ...T.h2, color: C.ink, textAlign: 'center' },
   sub: { ...T.small, color: C.muted, textAlign: 'center', marginTop: 2 },
+  meta: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 6 },
+  // The draw's SCHEDULED chip, one per state. `color` on the pill style is
+  // read by the Text, borderColor/backgroundColor by the View.
+  pill: { borderRadius: 4, borderWidth: 1, paddingHorizontal: 6, paddingVertical: 1 },
+  pillText: { fontFamily: 'Archivo_700Bold', fontSize: 9, lineHeight: leading(13), letterSpacing: 0.5 },
+  pillRound: { borderColor: C.border, backgroundColor: C.raised },
+  pillRoundText: { color: C.inkBody },
+  pillLive: { borderColor: C.greenLit, backgroundColor: C.raised, color: C.greenLit },
+  pillUpcoming: { borderColor: '#3b4c8a', backgroundColor: '#182140', color: '#9db4ff' },
+  pillDone: { borderColor: C.border, backgroundColor: C.raised, color: C.muted },
+  pillTbd: { borderColor: C.border, borderStyle: 'dashed', backgroundColor: 'transparent', color: C.muted },
   list: { marginTop: S.md },
   group: { marginBottom: S.md },
   groupLabel: { ...T.smallMed, marginBottom: S.xs },
