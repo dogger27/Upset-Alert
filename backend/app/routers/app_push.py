@@ -468,10 +468,15 @@ async def offer(
         select(UserPrediction).where(UserPrediction.user_id == current_user.id,
                                      UserPrediction.draw_id.in_(draw_ids))
     )).scalars().all()
-    if not preds:
+    # A CHOSEN MATCH IS NOT RANKED, ONLY CHECKED. The relevance score exists to
+    # pick ONE match for a user who did not; a match the user tapped is shown
+    # whatever it scores — a pick two sets down is exactly the card some
+    # people want — and whether they have picks in that draw at all.
+    chosen = {m.draw_id for m in live} if match_id is not None else set()
+    if not preds and not chosen:
         return {"match": None}
 
-    entered = {p.draw_id for p in preds}
+    entered = {p.draw_id for p in preds} | chosen
     draws = {d.id: d for d in (await db.execute(
         select(Draw).where(Draw.id.in_(entered)))).scalars().all()}
     all_matches = (await db.execute(
@@ -501,6 +506,8 @@ async def offer(
             num_rounds=draw.num_rounds or 1,
             tier_weight=_TIER_WEIGHT.get(draw.scoring_tier, 0.3),
         )
+    if match_id is not None and not any(r["match_id"] == match_id for r in ranked):
+        ranked = [{"match_id": match_id, "score": 0.0, "reason": "Your choice"}]
     if not ranked:
         return {"match": None}
 
