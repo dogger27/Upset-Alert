@@ -357,7 +357,12 @@ async def sweep_once(db, *, force: bool = False) -> dict:
             # are by definition recent. Previously this only broke from page 1
             # onward, so a steady state still cost two pages per draw per sweep
             # to learn nothing twice.
-            if page_wrote == 0:
+            # The backfill is the exception: it is looking for an id on
+            # matches whose WINNER is already known, so a page that writes
+            # nothing new is exactly what it expects to see on its way to the
+            # older events it is actually after. Bounded by MAX_PAGES either
+            # way, and it is a one-off.
+            if page_wrote == 0 and not force:
                 break
 
     # A recorded winner is the single most visible thing this service does, and
