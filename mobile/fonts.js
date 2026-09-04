@@ -14,6 +14,7 @@
 import {
   SairaCondensed_600SemiBold,
   SairaCondensed_700Bold,
+  SairaCondensed_900Black,
 } from '@expo-google-fonts/saira-condensed'
 import {
   Archivo_400Regular,
@@ -25,6 +26,7 @@ import {
 export const FONTS = {
   SairaCondensed_600SemiBold,
   SairaCondensed_700Bold,
+  SairaCondensed_900Black,     // the wordmark only — the site sets it at 900
   Archivo_400Regular,
   Archivo_400Regular_Italic,   // the wordmark's slogan, and nothing else
   Archivo_500Medium,

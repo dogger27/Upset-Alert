@@ -400,7 +400,9 @@ const s = StyleSheet.create({
   brandTop: { flexDirection: 'row', alignItems: 'center', gap: 9 },
   // Tight leading on the wordmark: the display face's default line box left
   // a gap under the caps that pushed the slogan away from it.
-  brand: { ...T.display, lineHeight: leading(27), color: C.ink },
+  // The site's wordmark face: Saira Condensed BLACK (Navbar.css sets 900),
+  // not the 700 the rest of the app's display text uses.
+  brand: { ...T.display, fontFamily: 'SairaCondensed_900Black', lineHeight: leading(27), letterSpacing: 0.9, color: C.ink },
   // Navbar.css .navbar-brand-slogan, a size down and tucked right under the
   // wordmark (user, 2026-09-04). fontStyle as well as the italic face: if the
   // face is ever not loaded, the system fallback still slants.
