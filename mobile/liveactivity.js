@@ -147,6 +147,10 @@ export async function showOnLockScreen(offerMatch, contentVersion = 1) {
   if (!attributes || !state) {
     throw new Error('This match cannot be shown yet — the server sent no activity payload')
   }
+  // ONE CARD: whatever is showing now comes off first (see MAX_LOCK_SCREEN).
+  // Ended before the new one starts so the phone never holds two, however
+  // briefly — the budget the second card would spend is the whole point.
+  await endActivities(runningActivities().filter(a => Number(a.matchId) !== Number(match_id)))
   const activityId = await startActivity(attributes, state)
   const install_id = await getInstallId()
   await registerActivity({
@@ -165,10 +169,16 @@ export async function showOnLockScreen(offerMatch, contentVersion = 1) {
 /* THE USER CHOOSES. Any live singles match can go on the Lock Screen from
    its row; the server's offer endpoint validates the choice (it must be live
    and have a payload) and hands back the same attributes and state the
-   automatic offer would. A few at a time: iOS stacks them, but the update
-   budget is per activity and a Lock Screen of five cards is not a Lock
-   Screen anyone reads. */
-export const MAX_LOCK_SCREEN = 3
+   automatic offer would.
+
+   ONE CARD AT A TIME (the user's call, 2026-09-04). It was three: iOS stacks
+   them, but Apple's update budget is per APP, not per card, and three cards
+   each taking a push every 20 s emptied it in half an hour — iOS then held
+   every update and put up its "enable More Frequent Updates" alert. One card
+   is one budget, which is the cadence the dispatcher was tuned for. Choosing
+   another match REPLACES the card rather than refusing, so the tap always
+   does what it looks like it does. */
+export const MAX_LOCK_SCREEN = 1
 
 export function lockScreenCount() {
   return runningActivities().length
@@ -176,26 +186,28 @@ export function lockScreenCount() {
 
 export async function showMatchOnLockScreen(matchId, contentVersion = 1) {
   if (runningActivities().some(a => Number(a.matchId) === Number(matchId))) return 'already'
-  if (lockScreenCount() >= MAX_LOCK_SCREEN) {
-    throw new Error(`Up to ${MAX_LOCK_SCREEN} matches at a time — remove one first`)
-  }
   const offer = await getOffer(matchId)
   if (!offer?.match) throw new Error(offer?.reason || 'This match cannot be shown right now')
   return showOnLockScreen(offer.match, contentVersion)
 }
 
-/* Take a match off the Lock Screen. The native end is immediate where this
-   build has it; the server's DELETE also sends an end push, which is what
-   removes the card on builds that do not. Both are asked, so the card goes
-   whichever answers first. */
-export async function hideFromLockScreen(matchId) {
+/* End these activities. The native end is immediate where this build has it;
+   the server's DELETE also sends an end push, which is what removes the card
+   on builds that do not. Both are asked, so the card goes whichever answers
+   first. */
+async function endActivities(list) {
+  if (!list.length) return 0
   const { endActivity: endNative } = await import('./modules/live-activity')
-  const mine = runningActivities().filter(a => Number(a.matchId) === Number(matchId))
-  for (const a of mine) {
+  for (const a of list) {
     try { await endNative(a.activityId) } catch { /* older build */ }
     await endActivity(a.activityId).catch(e => console.warn('[LA] server end failed:', e.message))
   }
-  return mine.length
+  return list.length
+}
+
+/* Take a match off the Lock Screen. */
+export async function hideFromLockScreen(matchId) {
+  return endActivities(runningActivities().filter(a => Number(a.matchId) === Number(matchId)))
 }
 
 export async function stopLiveActivityBridge() {
