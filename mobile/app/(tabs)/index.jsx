@@ -30,7 +30,7 @@ import { StatusChip, SurfacePill, TourCard } from '../../cards'
 import { dateRange } from '../../dates'
 import { Button, Card, CardLink, ErrorNote, Eyebrow, Loading, Muted, Screen, Title } from '../../ui'
 import { MenuSheet } from '../../menu'
-import { leading } from '../../fontScale'
+import { FONT_SCALE, leading } from '../../fontScale'
 
 /* The site's rule for whether a card is a link at all: a draw that is neither
    completed nor released has nothing to show, and a live link to an empty draw
@@ -400,17 +400,25 @@ const s = StyleSheet.create({
   brandTop: { flexDirection: 'row', alignItems: 'center', gap: 9 },
   // Tight leading on the wordmark: the display face's default line box left
   // a gap under the caps that pushed the slogan away from it.
-  brand: { ...T.display, lineHeight: leading(31), color: C.ink },
+  brand: { ...T.display, lineHeight: leading(27), color: C.ink },
   // Navbar.css .navbar-brand-slogan, a size down and tucked right under the
   // wordmark (user, 2026-09-04). fontStyle as well as the italic face: if the
   // face is ever not loaded, the system fallback still slants.
   slogan: {
     fontFamily: 'Archivo_400Regular_Italic', fontStyle: 'italic', fontSize: 11, lineHeight: leading(13),
-    letterSpacing: 0.9, color: C.muted, textAlign: 'center', marginTop: -2,
+    // The lift is a line, not a ratio: measured at text scale 1.0 (+2, any
+    // higher and the slogan climbs into the letters) and at the phone's 1.7
+    // (-10, any lower and a gap opens), and interpolated between. The room it
+    // closes is the wordmark's descender space, which grows faster than the
+    // slogan does, so a plain scaled offset fit one size and not the other.
+    letterSpacing: 0.9, color: C.muted, textAlign: 'center', marginTop: Math.round(19 - 17 * FONT_SCALE),
   },
-  dotWrap: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
-  dotRing: { position: 'absolute', width: 24, height: 24, borderRadius: 12, backgroundColor: C.clayLight },
-  dot: { width: 12, height: 12, borderRadius: 6, backgroundColor: C.clayLight },
+  // A size up from the site's 12px, and lifted: the row centres the dot on
+  // the wordmark's line box, whose centre sits below the caps' centre (the
+  // box keeps room for descenders the caps never use).
+  dotWrap: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', marginTop: -leading(3) },
+  dotRing: { position: 'absolute', width: 30, height: 30, borderRadius: 15, backgroundColor: C.clayLight },
+  dot: { width: 15, height: 15, borderRadius: 7.5, backgroundColor: C.clayLight },
   avatar: {
     width: 36, height: 36, borderRadius: 18,
     // borderOn, not border: C.border on C.card is a 1.1:1 edge and the circle
