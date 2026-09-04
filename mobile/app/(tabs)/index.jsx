@@ -16,10 +16,10 @@
  *   is the thing most worth knowing without opening anything.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Redirect } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '../../auth'
 import { getDrawStandings, getEntryStatus, listTournaments } from '../../api'
 import { useApi } from '../../useApi'
@@ -30,6 +30,7 @@ import { StatusChip, SurfacePill, TourCard } from '../../cards'
 import { dateRange } from '../../dates'
 import { Button, Card, CardLink, ErrorNote, Eyebrow, Loading, Muted, Screen, Title } from '../../ui'
 import { MenuSheet } from '../../menu'
+import { leading } from '../../fontScale'
 
 /* The site's rule for whether a card is a link at all: a draw that is neither
    completed nor released has nothing to show, and a live link to an empty draw
@@ -170,18 +171,52 @@ export default function Dashboard() {
    The name told the reader something they already knew — whose phone this is —
    and it was the widest thing on the row after the wordmark. The circle goes
    somewhere; the text went nowhere. */
+/* The site's brand dot: a 12px clay circle whose ring breathes from 3px to
+   6px every 2.8 s (Navbar.css, logo-ring-pulse). There are no box-shadow
+   rings in React Native, so the ring is a second circle behind the dot,
+   scaled and faded on the native driver — nothing re-renders per frame. */
+function BrandDot() {
+  const ring = useRef(new Animated.Value(0)).current
+  useEffect(() => {
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(ring, { toValue: 1, duration: 1400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      Animated.timing(ring, { toValue: 0, duration: 1400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+    ]))
+    loop.start()
+    return () => loop.stop()
+  }, [ring])
+  return (
+    <View style={s.dotWrap}>
+      <Animated.View style={[s.dotRing, {
+        opacity: ring.interpolate({ inputRange: [0, 1], outputRange: [0.15, 0.42] }),
+        transform: [{ scale: ring.interpolate({ inputRange: [0, 1], outputRange: [0.75, 1] }) }],
+      }]} />
+      <View style={s.dot} />
+    </View>
+  )
+}
+
 function Head() {
   const [menu, setMenu] = useState(false)
   return (
     <View style={s.head}>
-      <View style={s.headLeft}>
-        {/* The hamburger, top-LEFT (moved 2026-09-04 at the user's request):
-            Draw History, Hall of Fame, Rules, About. */}
-        <Pressable onPress={() => setMenu(true)} style={({ pressed }) => [s.avatar, pressed && { opacity: 0.7 }]}
-                   accessibilityRole="button" accessibilityLabel="Menu">
-          <Ionicons name="menu" size={20} color={C.inkBody} />
-        </Pressable>
-        <Text style={s.brand}>UPSET <Text style={{ color: C.clay }}>ALERT!</Text></Text>
+      {/* The hamburger, top-LEFT (moved 2026-09-04 at the user's request):
+          Draw History, Hall of Fame, Rules, About. */}
+      <Pressable onPress={() => setMenu(true)} style={({ pressed }) => [s.avatar, pressed && { opacity: 0.7 }]}
+                 accessibilityRole="button" accessibilityLabel="Menu">
+        <Ionicons name="menu" size={20} color={C.inkBody} />
+      </Pressable>
+      {/* The site's wordmark, exactly: pulsing dot, UPSET ALERT! with only
+          ALERT in clay (the "!" is white), and the slogan centred beneath.
+          Centred between the two buttons, as the navbar centres it. */}
+      <View style={s.brandBlock}>
+        <View style={s.brandTop}>
+          <BrandDot />
+          <Text style={s.brand} numberOfLines={1}>
+            UPSET <Text style={{ color: C.clay }}>ALERT</Text>!
+          </Text>
+        </View>
+        <Text style={s.slogan} numberOfLines={1}>Your Wildest Fantasy Tennis</Text>
       </View>
       {/* CardLink, not <Link asChild><Pressable style=...>. That second form
           drops the style — it is the same trap CardLink exists to close, and I
@@ -355,14 +390,21 @@ function ordinal(n) {
 
 
 const s = StyleSheet.create({
-  headLeft: { flexDirection: 'row', alignItems: 'center', gap: S.sm, flexShrink: 1 },
   head: {
-    // Centred, not baseline: the row now opens with a 36px circle, and a
+    // Centred, not baseline: the row opens with a 36px circle, and a
     // baseline row hung the wordmark off the circle's bottom edge.
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingTop: S.sm, paddingBottom: S.xs,
+    gap: S.sm, paddingTop: S.sm, paddingBottom: S.xs,
   },
+  brandBlock: { flex: 1, alignItems: 'center', gap: 3, minWidth: 0 },
+  brandTop: { flexDirection: 'row', alignItems: 'center', gap: 9 },
   brand: { ...T.display, color: C.ink },
+  // Navbar.css .navbar-brand-slogan: 0.78rem italic body face, 0.08em
+  // tracking, at about half strength.
+  slogan: { fontFamily: 'Archivo_400Regular_Italic', fontSize: 12.5, lineHeight: leading(14), letterSpacing: 1, color: C.muted, textAlign: 'center' },
+  dotWrap: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
+  dotRing: { position: 'absolute', width: 24, height: 24, borderRadius: 12, backgroundColor: C.clayLight },
+  dot: { width: 12, height: 12, borderRadius: 6, backgroundColor: C.clayLight },
   avatar: {
     width: 36, height: 36, borderRadius: 18,
     // borderOn, not border: C.border on C.card is a 1.1:1 edge and the circle
