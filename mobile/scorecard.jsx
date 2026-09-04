@@ -36,6 +36,19 @@ export function MatchCard({ e }) {
   /* The column is sized for the widest thing it can hold, per match: a "10"
      from a match tiebreak, else one digit — the site's --sched-set-w. */
   const twoDigit = (sets || []).some(row => (row || []).some(c => parseSet(c).g.length > 1))
+  /* FOUR OR FIVE SETS: the cells give way, not the name. At full size a
+     five-setter's six columns left the name "Zver…" even after the ladder
+     had shortened and shrunk it (US Open R64, 2026-09-04). The site does
+     the same with .cv-live-score--s4/--s5. Everything in the block scales
+     together so the columns stay columns. */
+  const k = n >= 5 ? 0.76 : n === 4 ? 0.88 : 1
+  const dense = k < 1 ? {
+    sets: { gap: Math.round(6 * k) },
+    box: { minWidth: Math.round((twoDigit ? 26 : 16) * k) },
+    set: { fontSize: Math.round(20 * k), lineHeight: leading(Math.round(22 * k)) },
+    sup: { fontSize: Math.round(10 * k), lineHeight: leading(Math.round(12 * k)) },
+    point: { fontSize: Math.round(20 * k), lineHeight: leading(Math.round(22 * k)), minWidth: Math.round(26 * k) },
+  } : null
 
   return (
     <View style={s.rows}>
@@ -68,24 +81,24 @@ export function MatchCard({ e }) {
                 {winner === idx ? '✓' : '✗'}
               </Text>
             )}
-            <View style={s.sets}>
+            <View style={[s.sets, dense?.sets]}>
               {Array.from({ length: n }, (_, i) => {
                 const { g, tb } = parseSet(sets?.[idx]?.[i])
                 const won = setWon(sets, i, idx, live, lp)
                 if (g === '' && tb == null) {
-                  return <Text key={i} style={[s.set, twoDigit && s.setWide, { color: C.faint }]}>·</Text>
+                  return <Text key={i} style={[s.set, twoDigit && s.setWide, dense?.set, dense?.box, { color: C.faint }]}>·</Text>
                 }
                 return (
-                  <View key={i} style={[s.setBox, twoDigit && s.setWide]}>
-                    <Text style={[s.set, { color: won ? C.ink : C.muted }, won && s.setWon]}>{g}</Text>
-                    {tb != null && <Text style={[s.sup, { color: won ? C.ink : C.muted }]}>{tb}</Text>}
+                  <View key={i} style={[s.setBox, twoDigit && s.setWide, dense?.box]}>
+                    <Text style={[s.set, dense?.set, { color: won ? C.ink : C.muted }, won && s.setWon]}>{g}</Text>
+                    {tb != null && <Text style={[s.sup, dense?.sup, { color: won ? C.ink : C.muted }]}>{tb}</Text>}
                   </View>
                 )
               })}
               {point ? (
-                <Text style={[s.point, lp?.tiebreak && s.pointTb]}>{point[idx] ?? '0'}</Text>
+                <Text style={[s.point, dense?.point, lp?.tiebreak && s.pointTb]}>{point[idx] ?? '0'}</Text>
               ) : live && !stopped ? (
-                <Text style={[s.point, { color: C.faint }]}>–</Text>
+                <Text style={[s.point, dense?.point, { color: C.faint }]}>–</Text>
               ) : null}
             </View>
           </View>
