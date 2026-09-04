@@ -388,11 +388,12 @@ function MatchRow({ m, pick, drawRanks, zone, slugById, onH2H, onPredictors, onS
           {/* A GLYPH, NOT A SENTENCE. "WHO CALLED IT" spelled out was ~200pt
               of chip on every decided match, repeated the whole way down the
               column and shoving the score off to the left. The site uses a
-              two-person mark here for the same reason. Only once there is a
-              result to have been right about. */}
-          {decided && !m.is_bye ? (
+              two-person mark here for the same reason. On EVERY real match:
+              decided, it says who called it; not yet, whose pick is still
+              standing — even before the players are known. */}
+          {!m.is_bye ? (
             <Pressable onPress={() => onPredictors(m)} hitSlop={10} style={s.iconChip}
-                       accessibilityLabel="Who called it">
+                       accessibilityLabel={decided ? 'Who called it' : 'Who’s still in it'}>
               <Ionicons name="people" size={13} color={C.muted} />
             </Pressable>
           ) : null}

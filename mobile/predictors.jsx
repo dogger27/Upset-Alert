@@ -1,8 +1,10 @@
 /*
- * Who called this match right.
+ * Who called this match right — or, before it is decided, whose pick is still
+ * standing and whose has already gone out.
  *
- * Offered only on a COMPLETED match: the endpoint answers for nothing else, and
- * a chip on an undecided match would promise something it cannot deliver.
+ * Offered on every real match. Undecided (`pending`), the server puts anyone
+ * whose pick has not lost yet in `correct`, the rest in `incorrect`, names the
+ * pick on both, and orders each by how many backed that player.
  *
  * USERNAMES, NOT display_name. display_name on this project is very often the
  * person's real name — it is what the standings deliberately hide behind a
@@ -15,7 +17,7 @@
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { getPredictors } from './api'
 import { useApi } from './useApi'
-import { C, R, S, T } from './theme'
+import { BADGE, C, R, S, T } from './theme'
 import { Loading } from './ui'
 
 export function PredictorsSheet({ visible, onClose, drawId, match, meId }) {
@@ -24,14 +26,21 @@ export function PredictorsSheet({ visible, onClose, drawId, match, meId }) {
   const d = q.data
 
   const winner = match?.winner?.name
+  const pending = !match?.winner
+  // Names only once the ACTUAL players are known; a later round still
+  // waiting on its feeders shows the round instead.
+  const known = !!(match?.player1?.name && match?.player2?.name)
+  const sub = pending
+    ? (known ? `${match.player1.name} vs. ${match.player2.name}` : (match?.round_name || null))
+    : winner ? `${winner} won` : null
 
   return (
     <Modal visible={!!visible} animationType="slide" transparent onRequestClose={onClose}>
       <Pressable style={s.scrim} onPress={onClose} />
       <View style={s.sheet}>
         <View style={s.grabber} />
-        <Text style={s.title}>Who called it</Text>
-        {winner ? <Text style={s.sub} numberOfLines={1}>{winner} won</Text> : null}
+        <Text style={s.title}>{pending ? 'Who’s still in it' : 'Who called it'}</Text>
+        {sub ? <Text style={s.sub} numberOfLines={1}>{sub}</Text> : null}
 
         {q.loading && !d ? <Loading /> : null}
         {q.error ? <Text style={s.err}>Couldn’t load predictions.</Text> : null}
@@ -39,11 +48,11 @@ export function PredictorsSheet({ visible, onClose, drawId, match, meId }) {
         {d ? (
           <ScrollView style={s.list} contentContainerStyle={{ paddingBottom: S.lg }}>
             <Group
-              label={`Right (${(d.correct || []).length})`}
-              tone={C.greenLit} people={d.correct} meId={meId}
+              label={`${pending ? 'Still in it' : 'Right'} (${(d.correct || []).length})`}
+              tone={pending ? BADGE.seeded.fg : C.greenLit} people={d.correct} meId={meId}
             />
             <Group
-              label={`Wrong (${(d.incorrect || []).length})`}
+              label={`${pending ? 'Out' : 'Wrong'} (${(d.incorrect || []).length})`}
               tone={C.bad} people={d.incorrect} meId={meId}
             />
           </ScrollView>
@@ -57,6 +66,13 @@ export function PredictorsSheet({ visible, onClose, drawId, match, meId }) {
   )
 }
 
+/** "Sho Shimabukuro" → "Shimabukuro": surname only, as on the site. A
+    two-word surname ("Díaz Acosta") stays whole. */
+function shortName(raw) {
+  const parts = String(raw || '').trim().split(/\s+/)
+  return parts.length > 1 ? parts.slice(1).join(' ') : raw
+}
+
 function Group({ label, tone, people, meId }) {
   if (!people?.length) return null
   return (
@@ -68,7 +84,7 @@ function Group({ label, tone, people, meId }) {
           return (
             <View key={p.id} style={[s.chip, mine && { borderColor: C.clay }]}>
               <Text style={[s.chipText, mine && { color: C.clay }]} numberOfLines={1}>
-                {p.username}
+                {p.username}{p.picked ? ` (${shortName(p.picked)})` : ''}
               </Text>
             </View>
           )

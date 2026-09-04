@@ -1,9 +1,14 @@
 /**
- * PredictorsPopup — who called a finished match right, and who didn't.
+ * PredictorsPopup — who called a finished match right, and who didn't; on a
+ * match still to be decided, whose pick is still standing and whose is out.
  *
- * Opened from the group chip on the left edge of a completed match box (the
- * mirror of the H2H chip on its right edge). Scoped to the league the draw
- * page currently has selected; on Global that's every participant in the draw.
+ * Opened from the group chip on the left edge of a match box (the mirror of
+ * the H2H chip on its right edge). Scoped to the league the draw page
+ * currently has selected; on Global that's every participant in the draw.
+ *
+ * Undecided match: the left column's check becomes a yellow "?" (nobody has
+ * been proven right yet), both columns name the pick, and the server orders
+ * them by how many backed each player.
  *
  * Portalled to <body> so it isn't clipped by the bracket's scroller, and so a
  * chip near the edge of the draw doesn't push the popup off screen.
@@ -25,11 +30,17 @@ function CheckMark() {
   )
 }
 
-/** "Sho Shimabukuro" → "S. Shimabukuro"; a two-word surname stays whole. */
+/** The match is still open: nobody is right yet, only still in it. */
+function QuestionMark() {
+  return <span className="pp-question" aria-hidden="true">?</span>
+}
+
+/** "Sho Shimabukuro" → "Shimabukuro": surname only, as asked — the handle
+    beside it is the point, the pick just needs to be recognisable. A
+    two-word surname ("Díaz Acosta") stays whole. */
 function shortName(raw) {
-  const { first, last } = splitPlayerName(raw)
-  if (!last) return raw
-  return first ? `${first[0]}. ${last}` : last
+  const { last } = splitPlayerName(raw)
+  return last || raw
 }
 
 
@@ -57,18 +68,47 @@ export default function PredictorsPopup({ drawId, match, leagueId, onClose }) {
 
   const winner = match?.winner
   const loser = match?.player1?.id === winner?.id ? match?.player2 : match?.player1
+  // Decided by the match itself, not the response, so the title and the "?"
+  // are right from the first paint rather than after the fetch. player1 and
+  // player2 here are the draw's own entrants (the /draw payload), not the
+  // user's cascade — the names line is shown only once both are known.
+  const pending = winner?.id == null
+  const known = !!(match?.player1?.id && match?.player2?.id)
   const correct = data?.correct ?? []
   const incorrect = data?.incorrect ?? []
+
+  const PickedRow = ({ u }) => (
+    <li key={u.id}>
+      <UserName user={u} />
+      <span className="pp-picked">{u.picked ? `(${shortName(u.picked)})` : ''}</span>
+    </li>
+  )
 
   return createPortal(
     <div className="pp-backdrop" onClick={onClose}>
       <div className="pp-popup" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
         <div className="pp-header">
-          <div className="pp-title">
-            <span className="pp-winner">{winner?.name || '—'}</span>
-            <span className="pp-def"> def. </span>
-            <span className="pp-loser">{loser?.name || '—'}</span>
-          </div>
+          {/* Names only once the ACTUAL players of this match are known: a
+              later round still waiting on its feeders gets no "TBD vs. TBD". */}
+          {pending && !known ? (
+            <div className="pp-title pp-title--open">{match?.round_name || ''}</div>
+          ) : (
+            <div className="pp-title">
+              {pending ? (
+                <>
+                  <span className="pp-winner">{match.player1.name}</span>
+                  <span className="pp-def"> vs. </span>
+                  <span className="pp-winner">{match.player2.name}</span>
+                </>
+              ) : (
+                <>
+                  <span className="pp-winner">{winner?.name || '—'}</span>
+                  <span className="pp-def"> def. </span>
+                  <span className="pp-loser">{loser?.name || '—'}</span>
+                </>
+              )}
+            </div>
+          )}
           <button className="pp-close" onClick={onClose} aria-label="Close">✕</button>
         </div>
         <div className="pp-scope">{data?.league_name || 'Global'}</div>
@@ -80,11 +120,17 @@ export default function PredictorsPopup({ drawId, match, leagueId, onClose }) {
           <div className="pp-lists">
             <div className="pp-list">
               <div className="pp-list-head pp-list-head--correct">
-                <span className="pp-badge pp-badge--check"><CheckMark /></span>
+                {pending
+                  ? <span className="pp-badge pp-badge--question"><QuestionMark /></span>
+                  : <span className="pp-badge pp-badge--check"><CheckMark /></span>}
                 <span className="pp-count">{correct.length}</span>
               </div>
-              <ul className="pp-names">
-                {correct.map(u => <li key={u.id}><UserName user={u} /></li>)}
+              <ul className={`pp-names${pending ? ' pp-names--picked' : ''}`}>
+                {/* Still open: the pick is named here too, since neither
+                    player is "the winner, already in the title" yet. */}
+                {correct.map(u => pending
+                  ? <PickedRow key={u.id} u={u} />
+                  : <li key={u.id}><UserName user={u} /></li>)}
                 {correct.length === 0 && <li className="pp-none">Nobody</li>}
               </ul>
             </div>
@@ -93,18 +139,13 @@ export default function PredictorsPopup({ drawId, match, leagueId, onClose }) {
                 <span className="pp-badge pp-badge--square" />
                 <span className="pp-count">{incorrect.length}</span>
               </div>
-              <ul className="pp-names pp-names--wrong">
+              <ul className="pp-names pp-names--picked">
                 {/* Name the player they backed. The handle alone says a pick
                     missed; the name says what they believed — and whether the
                     room split or everyone backed the same loser. Initial and
                     surname only: the column is narrow and the full name would
                     wrap under every handle. */}
-                {incorrect.map(u => (
-                  <li key={u.id}>
-                    <UserName user={u} />
-                    <span className="pp-picked">{u.picked ? `(${shortName(u.picked)})` : ''}</span>
-                  </li>
-                ))}
+                {incorrect.map(u => <PickedRow key={u.id} u={u} />)}
                 {incorrect.length === 0 && <li className="pp-none">Nobody</li>}
               </ul>
             </div>
