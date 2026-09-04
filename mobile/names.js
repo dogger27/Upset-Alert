@@ -1,14 +1,13 @@
 /*
  * Shortening a player's name to fit, in the order a person would do it.
  *
- * THE LADDER, and "…" is the LAST rung, not the first:
+ * THE LADDER — and there is NO ellipsis rung (user, 2026-09-04):
  *   1. initials for the given names   "Juan Manuel Cerúndolo" -> "J. M. Cerúndolo"
  *   2. drop the given names entirely  -> "Cerúndolo"
- *   3. shrink the type
- *   4. only then, ellipsis
+ *   3. shrink the type, as far as it has to go
  *
- * Truncation is the worst of the four because it destroys the one part of the
- * name that identifies the player — "Juan Manuel Cerú…" tells you less than
+ * Truncation is never an option because it destroys the one part of the name
+ * that identifies the player — "Juan Manuel Cerú…" tells you less than
  * "Cerúndolo" does, in more space.
  *
  * WHERE THE SURNAME STARTS is a guess, and there is no rule that is right for
@@ -77,4 +76,29 @@ export function pairForms(name) {
     out.push(each.map(f => f[Math.min(i, f.length - 1)]).join(' / '))
   }
   return out.filter((f, i) => i === 0 || f !== out[i - 1])
+}
+
+/* SHEET SURNAMES ARRIVE SHOUTING. The order of play prints "Constantin
+   FRANTZEN"; singles never showed it because entry_name (proper case, from
+   the draw) took precedence, and a doubles pair has no draw entry — so the
+   app printed "FRANTZEN / HAASE" beside "Cerúndolo / Cerúndolo" on the same
+   court (2026-09-04). Lower the caps, keep the shapes: a capital after an
+   apostrophe or hyphen, Mc + capital, particles lower unless they lead. */
+const LOWER_PARTICLES = new Set(['de', 'van', 'der', 'den', 'da', 'di', 'du', 'la', 'le', 'von', 'del', 'della', 'dos', 'das', 'do'])
+const SHOUTING = /^[A-ZÀ-ÖØ-Þ'’-]{2,}$/
+
+export function properName(raw) {
+  const parts = String(raw || '').split(/(\s+)/)
+  let seenWord = false
+  return parts.map(tok => {
+    if (/^\s*$/.test(tok)) return tok
+    const first = !seenWord
+    seenWord = true
+    if (!SHOUTING.test(tok)) return tok
+    const low = tok.toLowerCase()
+    if (!first && LOWER_PARTICLES.has(low)) return low
+    let out = low.replace(/(^|['’-])([a-zà-öø-ÿ])/g, (m, p, c) => p + c.toUpperCase())
+    out = out.replace(/^Mc([a-zà-öø-ÿ])/, (m, c) => 'Mc' + c.toUpperCase())
+    return out
+  }).join('')
 }

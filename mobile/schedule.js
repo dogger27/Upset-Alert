@@ -10,13 +10,14 @@
  *
  * Everything here is display-only. Nothing infers a result.
  */
+import { properName } from './names'
 
 export function sideName(players, side) {
   const ps = (players || []).filter(p => p.side === side)
   if (!ps.length) return 'TBD'
   // entry_name is proper case; `name` is the sheet's SURNAME IN CAPS. Doubles
   // has two per side, joined the way a scoreboard does.
-  return ps.map(p => p.entry_name || p.name || 'TBD').join(' / ')
+  return ps.map(p => p.entry_name || properName(p.name) || 'TBD').join(' / ')
 }
 
 /* The flag codes for a side, in the order the names are joined — so doubles
