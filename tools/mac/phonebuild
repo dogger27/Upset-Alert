@@ -1,0 +1,20 @@
+#!/bin/bash
+# phonebuild — rebuild the Upset Alert dev client onto the iPhone (USB or Wi-Fi).
+#   phonebuild        full: pull, clean prebuild (regenerates ios/ + widget target), build + install
+#   phonebuild quick  skip the prebuild — fine when only Swift or JS changed, not app.json/targets
+# The phone is named by UDID so nothing ever prompts, and --no-bundler means the
+# command EXITS after the install instead of sitting on a Metro of its own —
+# the phone loads its JavaScript from Jupiter's Metro, not this Mac's.
+set -e
+export PATH=/opt/homebrew/bin:/usr/local/bin:$PATH
+PHONE_UDID="${PHONE_UDID:-00008140-000C0DC41A88801C}"
+cd ~/Projects/TennisFantasyLeague/mobile
+echo "▶ git pull"
+git pull
+if [ "$1" != "quick" ]; then
+  echo "▶ npx expo prebuild --platform ios --clean   (~3 min; needed for app.json / widget target changes)"
+  npx expo prebuild --platform ios --clean
+fi
+echo "▶ npx expo run:ios --device $PHONE_UDID --no-bundler   (unlock the phone; same Wi-Fi as the Mac if not plugged in)"
+npx expo run:ios --device "$PHONE_UDID" --no-bundler
+echo "▶ installed. The app loads its JavaScript from Jupiter's Metro (jupiter.tail600879.ts.net:8081)."
