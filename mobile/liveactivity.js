@@ -18,7 +18,7 @@ import {
 import { useCallback, useEffect, useState } from 'react'
 import { useFocusEffect } from 'expo-router'
 import { getInstallId } from './install'
-import { endActivity, listActivities, registerActivity, registerPushToStart } from './api'
+import { endActivity, getOffer, listActivities, registerActivity, registerPushToStart } from './api'
 
 let started = false
 const subs = []
@@ -160,6 +160,42 @@ export async function showOnLockScreen(offerMatch, contentVersion = 1) {
     started_by: 'client',
   })
   return activityId
+}
+
+/* THE USER CHOOSES. Any live singles match can go on the Lock Screen from
+   its row; the server's offer endpoint validates the choice (it must be live
+   and have a payload) and hands back the same attributes and state the
+   automatic offer would. A few at a time: iOS stacks them, but the update
+   budget is per activity and a Lock Screen of five cards is not a Lock
+   Screen anyone reads. */
+export const MAX_LOCK_SCREEN = 3
+
+export function lockScreenCount() {
+  return runningActivities().length
+}
+
+export async function showMatchOnLockScreen(matchId, contentVersion = 1) {
+  if (runningActivities().some(a => Number(a.matchId) === Number(matchId))) return 'already'
+  if (lockScreenCount() >= MAX_LOCK_SCREEN) {
+    throw new Error(`Up to ${MAX_LOCK_SCREEN} matches at a time — remove one first`)
+  }
+  const offer = await getOffer(matchId)
+  if (!offer?.match) throw new Error(offer?.reason || 'This match cannot be shown right now')
+  return showOnLockScreen(offer.match, contentVersion)
+}
+
+/* Take a match off the Lock Screen. The native end is immediate where this
+   build has it; the server's DELETE also sends an end push, which is what
+   removes the card on builds that do not. Both are asked, so the card goes
+   whichever answers first. */
+export async function hideFromLockScreen(matchId) {
+  const { endActivity: endNative } = await import('./modules/live-activity')
+  const mine = runningActivities().filter(a => Number(a.matchId) === Number(matchId))
+  for (const a of mine) {
+    try { await endNative(a.activityId) } catch { /* older build */ }
+    await endActivity(a.activityId).catch(e => console.warn('[LA] server end failed:', e.message))
+  }
+  return mine.length
 }
 
 export async function stopLiveActivityBridge() {

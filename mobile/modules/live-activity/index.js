@@ -64,6 +64,14 @@ export async function startActivity(attributes, contentState) {
   return native.startActivity(JSON.stringify(attributes), JSON.stringify(contentState))
 }
 
+/* End ONE activity by id. Only builds that carry the native function can;
+   older builds return false and the caller falls back to the server's end
+   push, which reaches the card either way. */
+export async function endActivity(activityId) {
+  if (!native?.endActivity) return false
+  try { return !!(await native.endActivity(String(activityId))) } catch { return false }
+}
+
 export async function stopListening() {
   if (native) await native.stopListening()
 }

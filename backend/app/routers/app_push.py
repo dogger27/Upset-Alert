@@ -29,6 +29,7 @@ from app.models.live_activity import (
     STATE_ACTIVE, STATE_ENDED, LiveActivity,
 )
 from app.models.tournament import Match
+from app.services.system_log import app_log
 from app.models.schedule import ScheduleEntry
 from app.models.user import User
 from app.services.rounds import compact_round
@@ -346,8 +347,18 @@ async def end_activity(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """The user dismissed it, or the client is tidying up after itself."""
+    """The user dismissed it, or the client is tidying up after itself.
+
+    Also ends it ON THE DEVICE with a push: the user can take a match off the
+    Lock Screen from its row, and builds without a native per-activity end
+    rely on this to remove the card."""
     now = _now()
+    row = (await db.execute(
+        select(LiveActivity, AppDevice)
+        .join(AppDevice, AppDevice.id == LiveActivity.device_id)
+        .where(LiveActivity.user_id == current_user.id,
+               LiveActivity.activity_id == activity_id,
+               LiveActivity.state == STATE_ACTIVE))).first()
     await db.execute(
         update(LiveActivity)
         .where(LiveActivity.user_id == current_user.id,
@@ -356,6 +367,14 @@ async def end_activity(
         .values(state=STATE_ENDED, ended_at=now, end_reason="client", updated_at=now)
     )
     await db.commit()
+    if row is not None:
+        la, device = row
+        match = await db.get(Match, la.match_id) if la.match_id else None
+        from app.services.live_activity import end_now
+        pushed = await end_now(la, device, match)
+        await app_log("info", "live_activity",
+                      f"user {current_user.id} removed match {la.match_id} from the Lock Screen "
+                      f"(end push {'sent' if pushed else 'not sent'})")
 
 
 @router.get("/live-activities")
