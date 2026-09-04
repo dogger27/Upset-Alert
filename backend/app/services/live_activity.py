@@ -580,6 +580,21 @@ async def dispatch(match_ids: set) -> dict:
     # system_logs is what /issues reads, so anything worth investigating has to
     # land there rather than only in a file. Failures only: a healthy round is
     # in the log above and does not need a row each time.
+    # An activity the phone has already ended answers with a dead token: the
+    # push raced the user's own removal (2026-09-04 06:03, activity 34, ended
+    # by the client the same second). Normal, recorded as info — a warning is
+    # for something someone should act on.
+    over = [(i, r) for i, r in bad if r.activity_is_over]
+    bad = [(i, r) for i, r in bad if not r.activity_is_over]
+    if over:
+        try:
+            from app.services.system_log import app_log
+            await app_log("info", "live_activity",
+                          f"{len(over)} Live Activity push(es) landed on an activity that had "
+                          f"already ended: " + ", ".join(f"#{i} {r.reason}" for i, r in over),
+                          detail={"activities": [i for i, _ in over]})
+        except Exception:                                            # noqa: BLE001
+            pass
     if bad:
         try:
             from app.services.system_log import app_log

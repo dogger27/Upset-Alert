@@ -1008,8 +1008,11 @@ async def ingest_document(db, tournament, play_date: date, url: str,
         # the loop above looked for it. Run BEFORE the law, so a link the
         # bracket can now support is made rather than merely reported.
         await relink_bracket_matches(db, tournament.id)
-        from app.services.schedule_invariants import check_and_log
-        await check_and_log(db, tournament, play_date)
+        from app.services.schedule_invariants import INGEST_DEFERRED, check_and_log
+        # The estimates have not been recomputed yet — the caller does that
+        # next, under the same lock — so the codes that read expected_start_at
+        # are left to the sweep. See INGEST_DEFERRED.
+        await check_and_log(db, tournament, play_date, skip=INGEST_DEFERRED)
         await _log_parse_violations(tournament, play_date, parse_violations)
     except Exception:
         logging.getLogger(__name__).exception(
