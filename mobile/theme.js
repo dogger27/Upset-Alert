@@ -36,6 +36,7 @@ export const C = {
 
   // The "ALERT!" clay. The brand's one warm note; spend it, do not spread it.
   clay:      '#c9783a',
+  clayLight: '#e8a87c',   // the site's --clay-300: the brand dot and its ring
   clayDeep:  '#7d451f',
 
   ok:        '#52b788',
