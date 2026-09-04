@@ -23,14 +23,23 @@ const inflight = new Map()  // key -> Promise
    about until the next navigation. */
 const mounted = new Set()   // { key, run }
 
+/* STALE DATA STAYS ON SCREEN WHILE THE FRESH COPY LOADS. This used to delete
+   the cache first, so every live-score nudge — one per Sofascore poll, every
+   ten seconds while play is on — left each mounted screen with NO data for
+   the length of the fetch: the list unmounted, iOS clamped the scroll to the
+   top, and the live subscription (keyed on the tournaments in that data)
+   tore down and reconnected, which the server answers with a catch-up event,
+   which started the next round. The app looked as if it reloaded itself
+   every ten seconds. Now a key with a screen on it keeps its data and just
+   refetches in place; only keys nobody is showing are forgotten, so the
+   next navigation loads fresh. */
 export function invalidate(prefix, { refetch = true } = {}) {
-  if (!prefix) { cache.clear(); inflight.clear() }
-  else {
-    for (const k of [...cache.keys()]) if (k.startsWith(prefix)) cache.delete(k)
-    for (const k of [...inflight.keys()]) if (k.startsWith(prefix)) inflight.delete(k)
-  }
+  const shown = new Set([...mounted].map(m => m.key))
+  const hit = (k) => !prefix || k.startsWith(prefix)
+  for (const k of [...cache.keys()]) if (hit(k) && !shown.has(k)) cache.delete(k)
+  for (const k of [...inflight.keys()]) if (hit(k)) inflight.delete(k)
   if (!refetch) return
-  for (const m of [...mounted]) if (m.key && (!prefix || m.key.startsWith(prefix))) m.run(true)
+  for (const m of [...mounted]) if (m.key && hit(m.key)) m.run(true)
 }
 
 export function useApi(key, fetcher, { enabled = true } = {}) {
@@ -49,7 +58,10 @@ export function useApi(key, fetcher, { enabled = true } = {}) {
     // Drop whatever the PREVIOUS key produced. Without this, navigating from
     // one league to another shows the first league's rows under the second
     // league's header until the new request lands — briefly, and wrongly.
-    setData(cache.get(key))
+    // A refetch of the SAME key keeps what is on screen (see invalidate);
+    // only a new key replaces it, so a league's rows never show under
+    // another league's header while the new request lands.
+    if (cache.has(key) || !force) setData(cache.get(key))
     setLoading(true); setError(null)
     try {
       // Dedupe: two screens mounting at once must not fire the same request
