@@ -14,6 +14,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { AuthProvider, useAuth } from '../auth'
 import { FONTS } from '../fonts'
 import { C, T } from '../theme'
+import { ToastHost } from '../toast'
 
 
 /* WHY THE NAVIGATOR WAITS FOR AUTH BOOT.
@@ -102,6 +103,7 @@ export default function RootLayout() {
         </Stack>
         </Gate>
       </AuthProvider>
+          <ToastHost />
     </SafeAreaProvider>
   )
 }
