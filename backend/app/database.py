@@ -518,6 +518,7 @@ async def _migrate(conn):
         # its own and would have to be read with a tuned gap threshold.
         "ALTER TABLE matches ADD COLUMN resumed_at DATETIME",
         "ALTER TABLE matches ADD COLUMN suspended_at DATETIME",
+        "ALTER TABLE matches ADD COLUMN sofa_event_id INTEGER",
         # Doubles scoring. Doubles has no draw and no bracket row — see the note
         # on ScheduleEntry — so its result lives on the schedule row, which is
         # the only record of the match there is.

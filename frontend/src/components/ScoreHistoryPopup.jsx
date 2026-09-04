@@ -157,6 +157,12 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
     () => timelineMarkers(snapshots, { completed, winnerSide }),
     [data?.snapshots, completed, winnerSide])
 
+  /* The point the scrub is sitting ON. A snapshot records the score AFTER a
+     point, so the snapshot at this position IS the point just played — which
+     is why the label reads "Prev Point" rather than "Next". At the end
+     position the last snapshot is the most recent point of all. */
+  const prevPoint = (atEnd ? snapshots[snapshots.length - 1] : snapshots[pos])?.point_label ?? null
+
   /* Point statistics, derived from the same snapshots — no second data
      source. Cumulative per position, so the numbers WIND BACK as you scrub:
      the stats panel always describes the moment under the thumb, which the
@@ -231,8 +237,16 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
               aria-label="Scrub through the match's score history"
             />
             </div>
-            {markers.length > 0 && (
-              <div className="shp-legend">
+            {/* WHAT THE LAST POINT WAS, when it was something worth naming.
+                Sofascore labels only aces and double faults — roughly 8% of
+                points — and nothing at all describes how any other point was
+                won, so this line is blank most of the time by nature rather
+                than by omission. It sits beside the legend so the row keeps
+                its height whether or not there is anything to say, and the
+                block below never jumps as you scrub. */}
+            <div className="shp-underline">
+              {markers.length > 0 && (
+                <div className="shp-legend">
                 <span className="shp-legend-item">
                   <span className="shp-legend-box shp-tick--break" /> break
                 </span>
@@ -244,8 +258,17 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
                     <span className="shp-legend-box shp-tick--match" /> match
                   </span>
                 )}
+                </div>
+              )}
+              <div className="shp-prev-point" aria-live="polite">
+                {prevPoint && (
+                  <>
+                    <span className="shp-prev-point-label">Prev Point:</span>
+                    <span className="shp-prev-point-value">{prevPoint}</span>
+                  </>
+                )}
               </div>
-            )}
+            </div>
             {statsUsable && (() => {
               const snap = stats.at[Math.min(atEnd ? stats.at.length - 1 : pos, stats.at.length - 1)]
               const top = snap[topIsP1 ? 0 : 1]

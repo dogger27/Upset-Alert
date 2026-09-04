@@ -277,3 +277,31 @@
 }
 .shp-stat-name--l { color: var(--h2h-p1); }
 .shp-stat-name--r { color: var(--h2h-p2); text-align: right; }
+
+/* The legend and the "Prev Point" line share one row: the legend sits left,
+   the point label right. Reserving the row's height unconditionally is what
+   stops the statistics below it jumping every time the scrub lands on a point
+   that has nothing to say — which is most of them. */
+.shp-underline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 1.15rem;
+}
+
+.shp-prev-point {
+  margin-left: auto;
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+.shp-prev-point-label { color: var(--text-muted); }
+.shp-prev-point-value {
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}

@@ -708,6 +708,20 @@ async def match_score_history(
     # has to be able to line the two orientations up; id for the stamped case,
     # name for the rows the resolver has not reached.
     p1 = await db.get(DrawEntry, match.player1_id) if match.player1_id else None
+    # "Prev Point: Ace". One label per snapshot, mostly null — an ace or a
+    # double fault is about 8% of points and nothing else can be said about an
+    # individual point (see services/sofascore_points.py). Fetched on demand,
+    # one request per MATCH, and never allowed to fail the score history.
+    from app.services.sofascore_points import labels_for
+    for _snap, _label in zip(
+            snapshots,
+            await labels_for(db, snapshots, match.sofa_event_id,
+                             finished=match.winner_id is not None)):
+        # ON the snapshot, not a parallel array: the client drops snapshots it
+        # judges to be feed corrections (sanitizeSnapshots), and an index-based
+        # list would silently shift a label onto the wrong point.
+        if _label:
+            _snap["point_label"] = _label
     return {
         "status": match.status,
         "completed_at": match.completed_at,

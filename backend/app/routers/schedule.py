@@ -1171,6 +1171,19 @@ async def entry_score_history(entry_id: int, db: AsyncSession = Depends(get_db))
                ScheduleEntryPlayer.side == "a")
         .order_by(ScheduleEntryPlayer.position)
     )).scalars().first()
+    # "Prev Point: Ace" — see the twin in tournaments.py. These rows already
+    # carry the Sofascore event id (they are the ones with no bracket match,
+    # which is exactly where the claim is stored), so nothing extra is needed.
+    from app.services.sofascore_points import labels_for
+    for _snap, _label in zip(
+            snapshots,
+            await labels_for(db, snapshots, entry.sofa_event_id,
+                             finished=final is not None)):
+        # ON the snapshot, not a parallel array: the client drops snapshots it
+        # judges to be feed corrections (sanitizeSnapshots), and an index-based
+        # list would silently shift a label onto the wrong point.
+        if _label:
+            _snap["point_label"] = _label
     return {
         "status": entry.status,
         "completed_at": None,
