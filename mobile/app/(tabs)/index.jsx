@@ -174,21 +174,22 @@ function Head() {
   const [menu, setMenu] = useState(false)
   return (
     <View style={s.head}>
-      <Text style={s.brand}>UPSET <Text style={{ color: C.clay }}>ALERT!</Text></Text>
-      {/* CardLink, not <Link asChild><Pressable style=...>. That second form
-          drops the style — it is the same trap CardLink exists to close, and I
-          walked straight back into it: the ring simply did not draw and the
-          icon floated in the header. */}
-      <View style={s.headRight}>
-        <CardLink href="/status" style={s.avatar} pressedOpacity={0.7}>
-          <Ionicons name="person-outline" size={18} color={C.inkBody} />
-        </CardLink>
-        {/* The hamburger, top-right: Draw History, Hall of Fame, Rules, About. */}
+      <View style={s.headLeft}>
+        {/* The hamburger, top-LEFT (moved 2026-09-04 at the user's request):
+            Draw History, Hall of Fame, Rules, About. */}
         <Pressable onPress={() => setMenu(true)} style={({ pressed }) => [s.avatar, pressed && { opacity: 0.7 }]}
                    accessibilityRole="button" accessibilityLabel="Menu">
           <Ionicons name="menu" size={20} color={C.inkBody} />
         </Pressable>
+        <Text style={s.brand}>UPSET <Text style={{ color: C.clay }}>ALERT!</Text></Text>
       </View>
+      {/* CardLink, not <Link asChild><Pressable style=...>. That second form
+          drops the style — it is the same trap CardLink exists to close, and I
+          walked straight back into it: the ring simply did not draw and the
+          icon floated in the header. */}
+      <CardLink href="/status" style={s.avatar} pressedOpacity={0.7}>
+        <Ionicons name="person-outline" size={18} color={C.inkBody} />
+      </CardLink>
       <MenuSheet visible={menu} onClose={() => setMenu(false)} />
     </View>
   )
@@ -354,9 +355,11 @@ function ordinal(n) {
 
 
 const s = StyleSheet.create({
-  headRight: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
+  headLeft: { flexDirection: 'row', alignItems: 'center', gap: S.sm, flexShrink: 1 },
   head: {
-    flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between',
+    // Centred, not baseline: the row now opens with a 36px circle, and a
+    // baseline row hung the wordmark off the circle's bottom edge.
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingTop: S.sm, paddingBottom: S.xs,
   },
   brand: { ...T.display, color: C.ink },
