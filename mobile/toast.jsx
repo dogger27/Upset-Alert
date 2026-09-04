@@ -33,7 +33,9 @@ export function ToastHost() {
   return (
     <View pointerEvents="none" style={[s.host, { bottom: insets.bottom + 84 }]}>
       <Animated.View style={[s.toast, { opacity: fade }]} accessibilityLiveRegion="polite">
-        <Text style={s.text}>{msg}</Text>
+        <Text style={s.text} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+          {msg}
+        </Text>
       </Animated.View>
     </View>
   )
@@ -43,7 +45,9 @@ const s = StyleSheet.create({
   host: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   toast: {
     backgroundColor: C.ink, borderRadius: R.md, paddingHorizontal: S.md, paddingVertical: S.sm,
-    maxWidth: '86%', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
+    maxWidth: '94%', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
   },
-  text: { ...T.bodyMed, color: C.bg, textAlign: 'center' },
+  // One line, always: the message is short by contract and a phone at a
+  // large Dynamic Type size shrinks it rather than wrapping it.
+  text: { ...T.smallMed, color: C.bg, textAlign: 'center' },
 })
