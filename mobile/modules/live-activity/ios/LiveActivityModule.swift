@@ -177,6 +177,18 @@ public class LiveActivityModule: Module {
       }
     }
 
+    // ONE activity, by id — the user unpinned a match. Returns whether it was
+    // found; a stale id (already swiped away) is not an error.
+    AsyncFunction("endActivity") { (activityId: String) -> Bool in
+      if #available(iOS 16.2, *) {
+        if let activity = Activity<MatchActivityAttributes>.activities.first(where: { $0.id == activityId }) {
+          await activity.end(nil, dismissalPolicy: .immediate)
+          return true
+        }
+      }
+      return false
+    }
+
     OnDestroy {
       self.pushToStartTask?.cancel()
       self.activityTask?.cancel()

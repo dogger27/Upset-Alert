@@ -115,7 +115,8 @@ export const changePassword = (currentPassword, newPassword) =>
 export const deleteAccount = (currentPassword) =>
   request('/auth/me', { method: 'DELETE', body: { current_password: currentPassword } })
 export const getAppConfig = () => request('/app/config')
-export const getOffer = () => request('/app/live-activities/offer')
+export const getOffer = (matchId) =>
+  request(matchId != null ? `/app/live-activities/offer?match_id=${matchId}` : '/app/live-activities/offer')
 export const getScheduleDay = (playDate) =>
   request(`/schedule/day${playDate ? `?play_date=${playDate}` : ''}`)
 

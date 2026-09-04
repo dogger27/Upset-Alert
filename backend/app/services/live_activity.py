@@ -659,6 +659,34 @@ async def _record(outcomes: list) -> None:
         await db.commit()
 
 
+async def end_now(la, device, match=None) -> bool:
+    """End ONE activity on the device, right now — the user took the match off
+    their Lock Screen. An end push with immediate dismissal, addressed like
+    the dispatcher's; the content state is the match's current point so the
+    card's last frame is true. Never raises. Older app builds have no native
+    per-activity end, so this push is what removes their card."""
+    from app.services import apns
+    from app.services.live_activity_content import (STATUS_IN_PROGRESS, build_content_state,
+                                                     build_payload)
+    from app.services.sofascore_live import live_point_for
+    if not la or not la.push_token or la.push_token == "pending" or device is None:
+        return False
+    try:
+        point = live_point_for(match) if match is not None else None
+        state = build_content_state(point, status=STATUS_IN_PROGRESS)
+        payload = build_payload(state, event="end", timestamp=int(time.time()),
+                                dismissal_seconds=0)
+        result = await apns.send(
+            token=la.push_token, payload=payload, push_type="liveactivity",
+            env=device.apns_env, priority=PRIORITY_IMMEDIATE, expiration=EXPIRY_END,
+            collapse_id=f"la-{la.match_id}")
+        forget(la.id)
+        return bool(getattr(result, "ok", False))
+    except Exception as exc:  # noqa: BLE001 — a failed end push is a card that lingers, not an outage
+        logger.warning("end push failed for activity %s: %s", la.activity_id, exc)
+        return False
+
+
 async def reap() -> int:
     """End activities the dispatcher will never hear about again.
 

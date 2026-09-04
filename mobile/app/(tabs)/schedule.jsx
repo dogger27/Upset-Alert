@@ -15,10 +15,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import { Stack, useLocalSearchParams } from 'expo-router'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native'
 import { getScheduleDates, getScheduleDay, listTournaments, updateMe } from '../../api'
 import { useAuth } from '../../auth'
 import { H2HSheet } from '../../h2h'
+import { isAvailable as lockScreenAvailable } from '../../modules/live-activity'
+import { hideFromLockScreen, showMatchOnLockScreen, useShowingOnLockScreen } from '../../liveactivity'
 import { useLiveUpdates } from '../../live'
 import { useApi } from '../../useApi'
 import { isLive, isSuspended, whenLabel } from '../../schedule'
@@ -323,6 +325,39 @@ export default function ScheduleScreen() {
   )
 }
 
+/* ON THE LOCK SCREEN, OR NOT — and the switch for it. Left of H2H, in the
+   same chip language. Lit while this match has a Live Activity; a tap on a
+   live match puts it there, a tap on a lit one takes it off. Only rows that
+   could be there show it: a live singles match, or one still showing after
+   it finished (the end push retires that one on its own). Nothing on builds
+   without the native module. */
+function LockPill({ matchId, live }) {
+  const [showing, recheck] = useShowingOnLockScreen(matchId)
+  const [busy, setBusy] = useState(false)
+  if (!lockScreenAvailable() || (!showing && !live)) return null
+  const toggle = async () => {
+    if (busy) return
+    setBusy(true)
+    try {
+      if (showing) await hideFromLockScreen(matchId)
+      else await showMatchOnLockScreen(matchId)
+    } catch (err) {
+      Alert.alert('Lock Screen', err?.message || 'Could not change the Lock Screen')
+    } finally {
+      setBusy(false)
+      recheck()
+    }
+  }
+  return (
+    <Pressable onPress={toggle} hitSlop={8}
+               accessibilityRole="switch" accessibilityState={{ checked: showing, busy }}
+               accessibilityLabel={showing ? 'On your Lock Screen — tap to remove' : 'Show on your Lock Screen'}
+               style={[s.h2hChip, showing && s.lockChipOn, busy && { opacity: 0.6 }]}>
+      <Text style={[s.h2hText, showing && s.lockTextOn]}>{showing ? '🔒 ON LOCK SCREEN' : '🔒 LOCK SCREEN'}</Text>
+    </Pressable>
+  )
+}
+
 function EntryRow({ e, venueMode, venueTz, onH2H, onHistory, inCourt }) {
   const live = isLive(e)
   const suspended = isSuspended(e)
@@ -400,6 +435,9 @@ function EntryRow({ e, venueMode, venueTz, onH2H, onHistory, inCourt }) {
             {/* Grouped under its court already, a row need not repeat it. */}
             {[inCourt ? null : e.court, started ? `${startedWord} ${started}` : upcoming].filter(Boolean).join(' · ')}
           </Text>
+          {e.match_id != null && (live || done) && (
+            <LockPill matchId={e.match_id} live={live} />
+          )}
           {h2hPair && (
             <Pressable onPress={() => onH2H(h2hPair)} hitSlop={8} style={s.h2hChip}>
               <Text style={s.h2hText}>H2H</Text>
@@ -442,6 +480,8 @@ const s = StyleSheet.create({
   footLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   h2hChip: { borderRadius: 4, borderWidth: 1, borderColor: C.borderOn, paddingHorizontal: 7, paddingVertical: 2 },
   h2hText: { fontFamily: 'Archivo_700Bold', fontSize: 10, lineHeight: leading(14), letterSpacing: 0.5, color: C.greenLit },
+  lockChipOn: { backgroundColor: C.greenLit, borderColor: C.greenLit },
+  lockTextOn: { color: C.bg },
   tabs: { flexDirection: 'row', gap: S.xs, backgroundColor: C.sunken, borderRadius: R.md, padding: 3 },
   tab: { flex: 1, alignItems: 'center', paddingVertical: S.sm, borderRadius: R.sm },
   tabOn: { backgroundColor: C.raised },
