@@ -132,8 +132,10 @@ export default function About() {
                 page's JavaScript never arrives. */}
             <details className="about-install">
               <summary className="about-install-head">
+                {/* NO BROWSER NAMED. The taps are the same in Safari and in
+                    Chrome on iOS — ••• then Share then Add to Home Screen —
+                    so naming one sent readers in the other away. */}
                 <span className="about-install-os">iPhone &amp; iPad</span>
-                <span className="about-install-meta">Safari</span>
               </summary>
               <ol className="about-install-steps">
                 <li>
@@ -157,11 +159,20 @@ export default function About() {
                   Screen — open it from there.
                 </li>
               </ol>
+              {/* The four steps above are the default browser's. Chrome puts a
+                  Share button in the address bar instead, which skips straight
+                  to step 3 — named here rather than in the heading, so a reader
+                  in either browser finds themselves. */}
               <p className="about-install-note">
-                Using Chrome on your iPhone? Tap the Share button inside the address bar at the
-                <strong> top</strong> of the screen, then <strong>“Add to Home Screen”</strong>.
+                Using a different browser? Some put a Share button in the address bar at the
+                <strong> top</strong> of the screen. Tap that instead, then carry on from
+                <strong> “Add to Home Screen”</strong>.
+                <img className="about-install-shot about-install-shot--inline" src="/install/chrome-share.jpg"
+                     loading="lazy" decoding="async"
+                     alt="An address bar with the Share button at its right end ringed" />
                 Links opened inside another app — WhatsApp, Instagram, Facebook — can’t add
-                anything: choose <strong>“Open in Safari”</strong> from that app’s menu first.
+                anything at all: choose <strong>“Open in Safari”</strong> or
+                <strong> “Open in browser”</strong> from that app’s menu first.
               </p>
             </details>
             <details className="about-install">

@@ -389,3 +389,6 @@
 @media (prefers-reduced-motion: reduce) {
   .about-install-head::after { transition: none; }
 }
+/* The one shot that sits inside the note rather than under a numbered step. */
+.about-install-shot--inline { margin: 10px 0; }
+

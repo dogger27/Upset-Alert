@@ -20,6 +20,7 @@ const SHOTS = {
   'safari-more': require('../assets/about/safari-more.jpg'),
   'safari-share': require('../assets/about/safari-share.jpg'),
   'add-to-home': require('../assets/about/add-to-home.jpg'),
+  'chrome-share': require('../assets/about/chrome-share.jpg'),
 }
 
 /* One platform's instructions, closed until tapped — the site's <details>,
@@ -31,7 +32,7 @@ function Steps({ os, meta, children, open, onToggle }) {
                  accessibilityRole="button" accessibilityState={{ expanded: open }}
                  accessibilityLabel={`${os} instructions`}>
         <Text style={s.accOs}>{os}</Text>
-        <Text style={s.accMeta}>{meta}</Text>
+        {meta ? <Text style={s.accMeta}>{meta}</Text> : null}
         <Text style={s.accChev}>{open ? '\u2303' : '\u2304'}</Text>
       </Pressable>
       {open ? <View style={s.accBody}>{children}</View> : null}
@@ -99,7 +100,9 @@ export default function About() {
             your home screen and it opens full screen like any other app, keeps you signed
             in, and can notify you the moment a draw is released.
           </Muted>
-          <Steps os="iPhone & iPad" meta="Safari" open={openOs === 'ios'}
+          {/* No browser named: the taps are the same in Safari and in Chrome
+              on iOS, so naming one sent readers in the other away. */}
+          <Steps os="iPhone & iPad" open={openOs === 'ios'}
                  onToggle={() => setOpenOs(o => (o === 'ios' ? null : 'ios'))}>
             <Step n={1}>
               Tap the <Text style={s.b}>•••</Text> button at the <Text style={s.b}>bottom</Text> of
@@ -119,12 +122,21 @@ export default function About() {
               Tap <Text style={s.b}>“Add”</Text>, top right. Upset Alert is now an icon on your
               Home Screen — open it from there.
             </Step>
+            {/* The four steps above are the default browser's. Chrome puts a
+                Share button in the address bar instead, which skips straight to
+                step 3 — named here rather than in the heading, so a reader in
+                either browser finds themselves. */}
             <Text style={s.note}>
-              Using Chrome on your iPhone? Tap the Share button inside the address bar at the{' '}
-              <Text style={s.b}>top</Text> of the screen, then <Text style={s.b}>“Add to Home
-              Screen”</Text>. Links opened inside another app — WhatsApp, Instagram, Facebook —
-              can’t add anything: choose <Text style={s.b}>“Open in Safari”</Text> from that
-              app’s menu first.
+              Using a different browser? Some put a Share button in the address bar at the{' '}
+              <Text style={s.b}>top</Text> of the screen. Tap that instead, then carry on from{' '}
+              <Text style={s.b}>“Add to Home Screen”</Text>.
+            </Text>
+            <Shot src="chrome-share" w={642} h={240}
+                  alt="An address bar with the Share button at its right end ringed" />
+            <Text style={s.note}>
+              Links opened inside another app — WhatsApp, Instagram, Facebook — can’t add
+              anything at all: choose <Text style={s.b}>“Open in Safari”</Text> or{' '}
+              <Text style={s.b}>“Open in browser”</Text> from that app’s menu first.
             </Text>
           </Steps>
           <Steps os="Android" meta="Chrome" open={openOs === 'android'}
