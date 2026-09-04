@@ -32,6 +32,17 @@ async def main() -> None:
             Match.sofa_event_id.isnot(None)))).scalar_one()
         return total, have
 
+    # THE ROUTE THE APP IS ACTUALLY ON. A fresh process defaults to the
+    # residential proxy, and this one is a fresh process: without this every
+    # request dies at the proxy with "402 CONNECT tunnel failed" and the
+    # backfill silently does nothing. The running app loads the same setting
+    # at startup (scheduler._load_sofa_egress).
+    from app.services.sofascore import load_egress
+
+    async with AsyncSessionLocal() as db:
+        direct = await load_egress(db)
+    print("egress:", "direct" if direct else "residential proxy")
+
     async with AsyncSessionLocal() as db:
         total, before = await counts(db)
         print(f"before: {before} of {total} playable matches carry an event id")
