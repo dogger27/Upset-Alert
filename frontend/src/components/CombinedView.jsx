@@ -1556,23 +1556,29 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                     {/* Group chip: same pill as H2H, on the match outline's
                         LEFT border instead of its right (the outline overhangs
                         its column by 8px each side, which is what H2H_X
-                        centres on). Completed matches only — an undecided
-                        match has no outcome to have been right about. */}
+                        centres on). EVERY real match, decided or not, even
+                        one whose players are not known yet: before a result
+                        the popup shows whose pick is still standing rather
+                        than who was right. */}
                     {/* Hidden entirely while other players' picks are withheld
                         (a draw whose picks stay editable after the first ball).
                         The popup would open onto "0 / 0 / Nobody", which reads
                         as "nobody predicted this" rather than "not shown yet" —
                         a wrong answer is worse than no button. */}
-                    {m.winner?.id != null && !m.is_bye && !predictionsHidden && (
+                    {!m.is_bye && !predictionsHidden && (
                       <button
-                        className={`cv-group${standoutIds?.has(m.id) ? ' cv-group--standout' : ''}`}
+                        className={`cv-group${m.winner?.id != null && standoutIds?.has(m.id) ? ' cv-group--standout' : ''}`}
                         style={{ ...chipTop, left: colIdx * (colW + COL_GAP) - H2H_X, pointerEvents: 'auto' }}
-                        title={standoutIds?.has(m.id)
-                          ? `You called ${m.winner.name} — most of the field did not`
-                          : 'Who got this right?'}
-                        aria-label={standoutIds?.has(m.id)
-                          ? `Standout pick: you called ${m.winner.name}, which most competitors missed`
-                          : 'Who got this right?'}
+                        title={m.winner?.id == null
+                          ? 'Who’s still in it?'
+                          : standoutIds?.has(m.id)
+                            ? `You called ${m.winner.name} — most of the field did not`
+                            : 'Who got this right?'}
+                        aria-label={m.winner?.id == null
+                          ? 'Who’s still in it?'
+                          : standoutIds?.has(m.id)
+                            ? `Standout pick: you called ${m.winner.name}, which most competitors missed`
+                            : 'Who got this right?'}
                         onClick={() => setPredictorsMatch(m)}
                       >
                         <GroupIcon />

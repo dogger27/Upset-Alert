@@ -96,7 +96,7 @@ async def refresh_all_completed(
     - Upcoming tournaments whose expected draw date has passed but draw is not yet confirmed
     """
     import logging
-    from datetime import date, timedelta
+    from datetime import date
     from sqlalchemy import or_, and_
     logger = logging.getLogger(__name__)
     today = date.today()
@@ -783,7 +783,8 @@ async def match_predictors(
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_user),
 ):
-    """Who called a finished match right, and who didn't.
+    """Who called a match right, and who didn't — or, before it is decided,
+    whose pick is still standing and whose has already gone out.
 
     Scoped to the league the draw page currently has selected, or to every
     participant in the draw when it is on Global. "Participant" means at least
@@ -791,17 +792,24 @@ async def match_predictors(
     never entered this draw is not wrong about the match, they simply are not
     playing it, and listing them would misrepresent both columns.
 
-    Only completed non-bye matches answer; anything else has no outcome to have
-    been right about.
+    Completed match: `correct` picked the winner, `incorrect` did not (their
+    pick named). Undecided match (`pending: true`): `correct` picked a player
+    who has not lost yet — one of the two on court, or, while a slot is still
+    open, anyone in it who has no loss in this draw — and `incorrect` picked
+    someone already beaten. Both columns then name the pick and are ordered
+    by how many backed it, so the room's split reads at a glance. Byes answer
+    with nothing: there is no contest to have called.
     """
+    from collections import Counter
     from app.models.league import League, LeagueMember
     from app.routers.leagues import _check_access
 
     match = await db.get(Match, match_id)
     if not match or match.draw_id != tournament_id:
         raise HTTPException(404, "Match not found")
-    if match.is_bye or match.winner_id is None:
-        return {"correct": [], "incorrect": [], "league_name": None}
+    pending = match.winner_id is None
+    if match.is_bye:
+        return {"correct": [], "incorrect": [], "league_name": None, "pending": pending}
 
     # Naming who called a match right names their pick. Held back until the
     # first round is complete for the same reason the brackets are: under
@@ -809,7 +817,8 @@ async def match_predictors(
     from app.services.locking import predictions_visible
     _draw = await db.get(Draw, tournament_id)
     if _draw is not None and not await predictions_visible(db, _draw):
-        return {"correct": [], "incorrect": [], "league_name": None, "hidden": True}
+        return {"correct": [], "incorrect": [], "league_name": None, "hidden": True,
+                "pending": pending}
 
     # Everyone with a pick in this draw — the participant pool.
     participants_res = await db.execute(
@@ -849,7 +858,8 @@ async def match_predictors(
             participant_ids &= {m.user_id for m in pool.members}
 
     if not participant_ids:
-        return {"correct": [], "incorrect": [], "league_name": league_name}
+        return {"correct": [], "incorrect": [], "league_name": league_name,
+                "pending": pending}
 
     picks_res = await db.execute(
         select(UserPrediction.user_id, UserPrediction.predicted_winner_id).where(
@@ -858,6 +868,26 @@ async def match_predictors(
         )
     )
     picked_winner = {uid: wid for uid, wid in picks_res.all()}
+
+    # UNDECIDED: "still standing" is being one of the two in this match. While
+    # a slot is still open (its feeder not yet decided) nobody is on court for
+    # that side, so anyone without a loss in this draw still qualifies —
+    # a pick can only be from the match's own feeder subtree, so this never
+    # counts a survivor from elsewhere in the draw.
+    in_match = {pid for pid in (match.player1_id, match.player2_id) if pid is not None}
+    slots_open = match.player1_id is None or match.player2_id is None
+    eliminated: set = set()
+    if pending and slots_open:
+        for p1, p2, w in (await db.execute(
+            select(Match.player1_id, Match.player2_id, Match.winner_id)
+            .where(Match.draw_id == tournament_id, Match.winner_id.isnot(None),
+                   Match.is_bye == False)  # noqa: E712
+        )).all():
+            eliminated.update(pid for pid in (p1, p2) if pid is not None and pid != w)
+
+    def _still_in(pid) -> bool:
+        return pid is not None and (pid in in_match
+                                    or (slots_open and pid not in eliminated))
 
     # Case-insensitive: a plain ORDER BY username puts every capitalised handle
     # ahead of every lowercase one ("Tono" before "dogger27"), which reads as
@@ -873,19 +903,25 @@ async def match_predictors(
     # way to see whether the room split or everyone backed the same loser.
     # Only the losers need naming: a correct pick is the winner, already in
     # the title.
-    wrong_ids = {wid for uid, wid in picked_winner.items()
-                 if wid is not None and wid != match.winner_id}
+    # Undecided: both columns name the pick — nobody is "the winner, already
+    # in the title" yet.
+    if pending:
+        name_ids = {wid for wid in picked_winner.values() if wid is not None}
+    else:
+        name_ids = {wid for uid, wid in picked_winner.items()
+                    if wid is not None and wid != match.winner_id}
     picked_names = {}
-    if wrong_ids:
+    if name_ids:
         picked_names = {e.id: e.name for e in (await db.execute(
-            select(DrawEntry).where(DrawEntry.id.in_(wrong_ids)))).scalars()}
+            select(DrawEntry).where(DrawEntry.id.in_(name_ids)))).scalars()}
 
     correct, incorrect = [], []
     for u in users_res.scalars().all():
-        got_it = picked_winner.get(u.id) == match.winner_id
+        pid = picked_winner.get(u.id)
+        got_it = _still_in(pid) if pending else pid == match.winner_id
         out = UserPublicOut.model_validate(u).model_dump()
-        if not got_it:
-            out["picked"] = picked_names.get(picked_winner.get(u.id))
+        if pending or not got_it:
+            out["picked"] = picked_names.get(pid)
         (correct if got_it else incorrect).append(out)
 
     # Wrong picks group by WHO they backed, so the split in the room reads at a
@@ -898,9 +934,21 @@ async def match_predictors(
         surname = parts[-1].casefold() if parts else ""
         return (surname, name.casefold(),
                 (u.get("username") or u.get("display_name") or "").casefold())
-    incorrect.sort(key=_by_pick)
 
-    return {"correct": correct, "incorrect": incorrect, "league_name": league_name}
+    if pending:
+        # Most-backed pick first in BOTH columns; a user with no pick for this
+        # match (a partial bracket) has nothing to count and sorts last.
+        freq = Counter(u.get("picked") for u in correct + incorrect if u.get("picked"))
+
+        def _by_freq(u):
+            return (-freq.get(u.get("picked"), 0),) + _by_pick(u)
+        correct.sort(key=_by_freq)
+        incorrect.sort(key=_by_freq)
+    else:
+        incorrect.sort(key=_by_pick)
+
+    return {"correct": correct, "incorrect": incorrect, "league_name": league_name,
+            "pending": pending}
 
 
 @router.get("/{tournament_id}/standings", response_model=list[LeaderboardEntry])

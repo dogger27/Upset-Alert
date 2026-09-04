@@ -34,9 +34,15 @@ as an overlay, not thrown to `pageerror`, so a dark screenshot is not "fine".
 | 5173 | the PWA | `VITE_API_URL=http://localhost:8010 npm run dev -- --port 5173` |
 | — | a token at `/tmp/ua_token.txt` | `create_access_token('1')` from `app.core.security` |
 
-Refresh the local DB first, or the comparison is against stale draws:
+Refresh the local DB first, or the comparison is against stale draws. STOP
+the local backend before copying and delete the copy's `-wal`/`-shm`
+siblings: a running backend leaves its write-ahead log next to the file, and
+the next open replays that OLD log into the NEW copy — "malformed database
+schema" on startup (paid for on 2026-09-04).
 
 ```bash
+kill $(ss -ltnp | grep ':8010' | grep -o 'pid=[0-9]*' | cut -d= -f2)
+rm -f backend/tennis_fantasy.db-wal backend/tennis_fantasy.db-shm
 sqlite3 /home/paulwiens/upsetalert/data/tennis_fantasy.db \
   ".backup /tmp/s.db" && cp /tmp/s.db backend/tennis_fantasy.db
 ```
