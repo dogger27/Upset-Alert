@@ -97,10 +97,14 @@ export default function About() {
 
         <div className="about-body">
           <div className="about-bio-card">
+            {/* 720px wide, ~75 KB. The original is 4024px and 4 MB, which
+                every phone was downloading to fill a 340px box. */}
             <img
               className="about-photo"
-              src="/paul-wiens.jpg"
+              src="/paul-wiens-720.jpg"
               alt="Paul Wiens"
+              width="720" height="1082"
+              loading="lazy" decoding="async"
             />
             <div className="about-bio-text">
               <h2 className="about-name">Paul Wiens</h2>
@@ -114,6 +118,67 @@ export default function About() {
                 I built this for the community to enjoy. No subscriptions, no ads, no catches.
               </p>
             </div>
+          </div>
+
+          <div className="about-section">
+            <h3 className="about-section-title">Add to Your Home Screen</h3>
+            <p className="about-prose">
+              Upset Alert runs in your browser — there is nothing to download. Add it to your
+              home screen and it opens full screen like any other app, keeps you signed in, and
+              can notify you the moment a draw is released.
+            </p>
+            {/* <details>, not a JS toggle: closed by default for free, keyboard
+                and screen-reader accessible for free, and it still opens if the
+                page's JavaScript never arrives. */}
+            <details className="about-install">
+              <summary className="about-install-head">
+                <span className="about-install-os">iPhone &amp; iPad</span>
+                <span className="about-install-meta">Safari</span>
+              </summary>
+              <ol className="about-install-steps">
+                <li>
+                  Tap the <strong>•••</strong> button at the <strong>bottom</strong> of the screen.
+                  Don’t see the bar? Scroll up, or tap the very bottom once to bring it back.
+                  <img className="about-install-shot" src="/install/safari-more.jpg" loading="lazy" decoding="async"
+                       alt="Safari’s bottom bar, with the ••• button at its right end ringed" />
+                </li>
+                <li>
+                  Tap <strong>“Share”</strong> at the top of that menu.
+                  <img className="about-install-shot" src="/install/safari-share.jpg" loading="lazy" decoding="async"
+                       alt="Safari’s menu, with Share at the top ringed" />
+                </li>
+                <li>
+                  Scroll down that list and tap <strong>“Add to Home Screen”</strong>.
+                  <img className="about-install-shot" src="/install/add-to-home.jpg" loading="lazy" decoding="async"
+                       alt="The share sheet scrolled down, with Add to Home Screen ringed" />
+                </li>
+                <li>
+                  Tap <strong>“Add”</strong>, top right. Upset Alert is now an icon on your Home
+                  Screen — open it from there.
+                </li>
+              </ol>
+              <p className="about-install-note">
+                Using Chrome on your iPhone? Tap the Share button inside the address bar at the
+                <strong> top</strong> of the screen, then <strong>“Add to Home Screen”</strong>.
+                Links opened inside another app — WhatsApp, Instagram, Facebook — can’t add
+                anything: choose <strong>“Open in Safari”</strong> from that app’s menu first.
+              </p>
+            </details>
+            <details className="about-install">
+              <summary className="about-install-head">
+                <span className="about-install-os">Android</span>
+                <span className="about-install-meta">Chrome</span>
+              </summary>
+              <ol className="about-install-steps">
+                <li>Tap the <strong>⋮</strong> menu in the top right.</li>
+                <li>Tap <strong>“Install app”</strong> — some phones say <strong>“Add to Home screen”</strong>.</li>
+                <li>Tap <strong>“Install”</strong> to confirm. Upset Alert is now an icon on your home screen.</li>
+              </ol>
+              <p className="about-install-note">
+                Some phones offer the same thing as a banner at the bottom of the screen the
+                first time you visit. Either way gets you the same app.
+              </p>
+            </details>
           </div>
 
           <div className="about-section">
