@@ -74,21 +74,25 @@ private struct SeedBadge: View {
         let value = seed ?? drawRank
         return Group {
             if let value {
+                // ONE SIZE FOR EVERY NUMBER. The box was 24×16 and the type fixed,
+                // so "110" ran past its own edges while "6" swam — pills of three
+                // visibly different sizes on one card. The box is wider and
+                // taller now, and a three-digit number shrinks a little to fit
+                // it rather than overflowing; every pill is the same rectangle.
                 Text("\(value)")
-                    .font(.caption2).fontWeight(.bold)
+                    .font(.caption).fontWeight(.bold)
                     .foregroundColor(isSeed ? seedInk : rankInk)
                     .monospacedDigit()
                     .lineLimit(1)
-                    // fixedSize before the frame, for the same reason the score
-                    // cells do it: overflow a tight box rather than wrap.
-                    .fixedSize(horizontal: true, vertical: false)
-                    .frame(width: 24, height: 16)
-                    .background(RoundedRectangle(cornerRadius: 3).fill(isSeed ? seedBg : rankBg))
-                    .overlay(RoundedRectangle(cornerRadius: 3).stroke(isSeed ? seedLine : rankLine, lineWidth: 0.5))
+                    .minimumScaleFactor(0.75)
+                    .padding(.horizontal, 3)
+                    .frame(width: 32, height: 21)
+                    .background(RoundedRectangle(cornerRadius: 4).fill(isSeed ? seedBg : rankBg))
+                    .overlay(RoundedRectangle(cornerRadius: 4).stroke(isSeed ? seedLine : rankLine, lineWidth: 0.5))
             } else {
                 // No number at all still reserves the column, or the two names
                 // would start at different x.
-                Color.clear.frame(width: 24, height: 16)
+                Color.clear.frame(width: 32, height: 21)
             }
         }
     }
