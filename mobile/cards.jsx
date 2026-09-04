@@ -328,17 +328,22 @@ export function PlayerName({ name, doubles = false, shrinkOnly = false, style, a
     if (fits) {
       text = fits
     } else {
-      // Every rung is too wide: the shortest one, shrunk — but no further than
-      // 60%, past which the ellipsis is the lesser evil.
+      // Every rung is too wide: the shortest one, shrunk TO FIT. No floor and
+      // never "…" — a cut name is a name nobody can read, and the user ruled
+      // it out outright (2026-09-04, "Auger-Aliassi…" on a four-set row).
       text = forms[forms.length - 1]
       const need = textWidth(text, family, size)
-      fontSize = Math.max(size * 0.6, (size * room) / need)
+      fontSize = Math.max(6, (size * room) / need)
     }
   }
 
   return (
     <View style={u.nameSlot} onLayout={e => setAvail(e.nativeEvent.layout.width)}>
-      <Text style={[style, { flexShrink: 1 }, fontSize !== size && { fontSize }]} numberOfLines={1}>
+      {/* adjustsFontSizeToFit is the backstop: the arithmetic above uses our
+          own metrics tables, and where iOS measures the face a hair wider the
+          native shrink takes the last step rather than an ellipsis. */}
+      <Text style={[style, { flexShrink: 1 }, fontSize !== size && { fontSize }]} numberOfLines={1}
+            adjustsFontSizeToFit minimumFontScale={0.3}>
         {text}
       </Text>
       {after}

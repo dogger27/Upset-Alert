@@ -413,7 +413,7 @@ function EntryRow({ e, venueMode, venueTz, onH2H, onHistory, inCourt }) {
         {/* The tour, named. A combined day lists the men's and women's US Open
             as the same "US Open · R128" and nothing else separated them. */}
         <TourBadge gender={e.gender} />
-        <Text style={[T.tiny, { color: C.faint, flex: 1 }]} numberOfLines={1}>
+        <Text style={[T.tiny, { color: C.faint, flex: 1 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
           {[e.tournament_name, e.round_label, e.discipline !== 'singles' ? 'Doubles' : null]
             .filter(Boolean).join(' · ')}
         </Text>
@@ -437,7 +437,7 @@ function EntryRow({ e, venueMode, venueTz, onH2H, onHistory, inCourt }) {
           never tap. The site's rail sits beside the row for the same reason. */}
       {((!inCourt && e.court) || started || upcoming || h2hPair) && (
         <View style={s.footLine}>
-          <Text style={[T.tiny, { color: C.faint, flex: 1 }]} numberOfLines={1}>
+          <Text style={[T.tiny, { color: C.faint, flex: 1 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
             {/* Grouped under its court already, a row need not repeat it. */}
             {[inCourt ? null : e.court, started ? `${startedWord} ${started}` : upcoming].filter(Boolean).join(' · ')}
           </Text>
