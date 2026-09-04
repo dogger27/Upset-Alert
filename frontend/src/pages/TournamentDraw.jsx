@@ -12,7 +12,22 @@ import { getDraw, listTournaments, refreshDraw, toggleUnlockSelections } from '.
 import { getPredictions, savePredictions } from '../api/predictions'
 import { getMyStandouts } from '../api/tournaments'
 import { useAuth } from '../store/auth'
-import BracketView, { COL_W as BV_COL_W, COL_W_SCORES as BV_COL_W_SCORES, COL_GAP as BV_COL_GAP } from '../components/BracketView'
+/* LIVE DRAW IS OFF (2026-09-04, at the owner's request) and the component is
+   deliberately NOT imported, so BracketView and its stylesheet stay out of the
+   bundle entirely rather than being shipped to every reader and never shown.
+   Picks (CombinedView) is the only view.
+
+   TO PUT IT BACK, four places, all marked "LIVE DRAW":
+     1. this import,
+     2. the Picks / Live Draw switcher in the header,
+     3. the <BracketView> branch in the render,
+     4. the two colUnit calculations, which must branch on viewMode again —
+        BracketView's columns are a different width, and hardcoding Combined's
+        here is exactly what mis-sized the round pager the last time this was
+        re-enabled.
+   The rest of the machinery — viewMode state, picksOwner, the 'picks'-only
+   mode inside BracketView — is untouched and still works. */
+// import BracketView, { COL_W as BV_COL_W, COL_W_SCORES as BV_COL_W_SCORES, COL_GAP as BV_COL_GAP } from '../components/BracketView'
 import CombinedView, { COL_W as CV_COL_W, COMPACT_COL_W as CV_COMPACT_COL_W, COL_GAP as CV_COL_GAP, H2H_X as CV_H2H_X } from '../components/CombinedView'
 import DrawSidebar from '../components/DrawSidebar'
 import ScoreHistoryPopup from '../components/ScoreHistoryPopup'
@@ -411,10 +426,9 @@ function TournamentDraw() {
     if (sidebarManual || bodyWidth <= 0 || !data) return
     // Column widths come from the view components themselves — see the note on
     // the fit calc below for why these must not be re-typed as literals here.
-    const anyScores = data.matches.some(m => (m.scores?.length > 0) || m.live_scores != null)
-    const colUnit = viewMode === 'combined'
-      ? CV_COL_W + CV_COL_GAP
-      : (anyScores ? BV_COL_W_SCORES : BV_COL_W) + BV_COL_GAP
+    // LIVE DRAW: while Picks is the only view this is Combined's column, flat.
+    // Restore the viewMode branch (and `anyScores`) when Live Draw comes back.
+    const colUnit = CV_COL_W + CV_COL_GAP
     const needed4Main = 4 * colUnit + 16 // draw-main width needed to fit 4 full rounds
     const projMainIfExpanded = bodyWidth - expandedSidebarW.current
     setSidebarCollapsed(projMainIfExpanded < needed4Main)
@@ -1221,11 +1235,10 @@ function TournamentDraw() {
   // stale the moment the feeder gap changed: the page then computed the fit and
   // the zoom against columns wider than the ones on screen, so it shrank the
   // draw further than it needed to and dropped columns sooner than it had to.
-  const COL_GAP_PX = BV_COL_GAP // credited back for the last column's missing trailing gap
-  const anyScores = matches.some(m => (m.scores?.length > 0) || m.live_scores != null)
-  const colUnit = viewMode === 'combined'
-    ? CV_COL_W + CV_COL_GAP
-    : (anyScores ? BV_COL_W_SCORES : BV_COL_W) + BV_COL_GAP
+  // LIVE DRAW: BracketView's own gap (24) while it was selectable; Combined is
+  // the only view now, so its gap is the one to credit back.
+  const COL_GAP_PX = CV_COL_GAP // credited back for the last column's missing trailing gap
+  const colUnit = CV_COL_W + CV_COL_GAP
   // Left gutter reserved INSIDE the draw, in compact mode only, for the
   // sidebar's floating reveal button. Tuned tight to that button's own
   // footprint (left:3px + its CHAMP-sized width) plus a few px of breathing
@@ -1571,13 +1584,11 @@ function TournamentDraw() {
           </div>
         </div>
         )}
-        {/* Picks/Live Draw switcher. "Picks" renders CombinedView (picks +
-            live result merged); "Live Draw" renders BracketView in 'live'
-            mode (actual results only, no predictions). Default is 'combined'
-            (Picks). BracketView's dedicated picks-only mode ('picks') is
-            still supported by the code (see picksOwner/lossRound logic
-            elsewhere in this file and in BracketView) but unreachable from
-            this switcher, which only offers the two user-facing choices. */}
+        {/* LIVE DRAW: the Picks / Live Draw switcher lived here. With Live
+            Draw off there is nothing to switch between, so the whole control
+            is gone rather than left as a single dead button. Its styles
+            (.draw-mode-buttons / .draw-mode-btn) are still in the stylesheet.
+
         <div className="draw-mode-buttons">
           <button
             className={clsx('draw-mode-btn', { active: viewMode === 'combined' })}
@@ -1594,6 +1605,7 @@ function TournamentDraw() {
             Live Draw
           </button>
         </div>
+        */}
         <div className="draw-header-center">
           {showPager && headerStage === 'minimal' && (
             <div className="bracket-pager bracket-pager--minimal">
@@ -1851,27 +1863,28 @@ function TournamentDraw() {
         />
 
         <div className="draw-main" ref={mainRef}>
-          {viewMode === 'combined' ? (
             <CombinedView
-              tournament={tournament}
-              matches={matches}
-              players={players}
-              picks={activePicks}
-              onPick={viewingOther ? handlePickForOther : handlePick}
-              locked={!user || locked || (viewingOther && !canEditOther)}
-              lockedMatchIds={lockedMatchIds}
-              windowStart={windowPos}
-              windowSize={DRAW_WINDOW}
-              labelsHidden={headerHidden}
-              insetLeft={drawInsetLeft}
-              compact={compactDraw}
-              standoutIds={standoutSet}
-              zoom={drawZoom}
-              scrubRef={scrubApi}
-              leagueId={activeLeagueId}
-              predictionsHidden={!!data.predictions_hidden}
-            />
-          ) : (
+            tournament={tournament}
+            matches={matches}
+            players={players}
+            picks={activePicks}
+            onPick={viewingOther ? handlePickForOther : handlePick}
+            locked={!user || locked || (viewingOther && !canEditOther)}
+            lockedMatchIds={lockedMatchIds}
+            windowStart={windowPos}
+            windowSize={DRAW_WINDOW}
+            labelsHidden={headerHidden}
+            insetLeft={drawInsetLeft}
+            compact={compactDraw}
+            standoutIds={standoutSet}
+            zoom={drawZoom}
+            scrubRef={scrubApi}
+            leagueId={activeLeagueId}
+            predictionsHidden={!!data.predictions_hidden}
+          />
+
+          {/* LIVE DRAW: BracketView rendered here in 'live' mode.
+
             <BracketView
               tournament={tournament}
               matches={matches}
@@ -1888,8 +1901,7 @@ function TournamentDraw() {
               labelsHidden={headerHidden}
               insetLeft={drawInsetLeft}
             />
-          )}
-
+          */}
         </div>
 
         {scoreMatch != null && (
