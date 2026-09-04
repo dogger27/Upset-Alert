@@ -21,6 +21,7 @@ import { useAuth } from '../../auth'
 import { H2HSheet } from '../../h2h'
 import { isAvailable as lockScreenAvailable } from '../../modules/live-activity'
 import { hideFromLockScreen, showMatchOnLockScreen, useShowingOnLockScreen } from '../../liveactivity'
+import { showToast } from '../../toast'
 import { useLiveUpdates } from '../../live'
 import { useApi } from '../../useApi'
 import { isLive, isSuspended, whenLabel } from '../../schedule'
@@ -339,8 +340,13 @@ function LockPill({ matchId, live }) {
     if (busy) return
     setBusy(true)
     try {
-      if (showing) await hideFromLockScreen(matchId)
-      else await showMatchOnLockScreen(matchId)
+      if (showing) {
+        await hideFromLockScreen(matchId)
+        showToast('Removed from the Lock Screen')
+      } else {
+        await showMatchOnLockScreen(matchId)
+        showToast('Now showing on the Lock Screen')
+      }
     } catch (err) {
       Alert.alert('Lock Screen', err?.message || 'Could not change the Lock Screen')
     } finally {
@@ -352,8 +358,8 @@ function LockPill({ matchId, live }) {
     <Pressable onPress={toggle} hitSlop={8}
                accessibilityRole="switch" accessibilityState={{ checked: showing, busy }}
                accessibilityLabel={showing ? 'On your Lock Screen — tap to remove' : 'Show on your Lock Screen'}
-               style={[s.h2hChip, showing && s.lockChipOn, busy && { opacity: 0.6 }]}>
-      <Text style={[s.h2hText, showing && s.lockTextOn]}>{showing ? '🔒 ON LOCK SCREEN' : '🔒 LOCK SCREEN'}</Text>
+               style={[s.h2hChip, s.lockChip, showing && s.lockChipOn, busy && { opacity: 0.6 }]}>
+      <Text style={[s.h2hText, s.lockIcon]}>🔒</Text>
     </Pressable>
   )
 }
@@ -480,8 +486,10 @@ const s = StyleSheet.create({
   footLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   h2hChip: { borderRadius: 4, borderWidth: 1, borderColor: C.borderOn, paddingHorizontal: 7, paddingVertical: 2 },
   h2hText: { fontFamily: 'Archivo_700Bold', fontSize: 10, lineHeight: leading(14), letterSpacing: 0.5, color: C.greenLit },
+  // Icon only, the same height as H2H; lit green while the match is showing.
+  lockChip: { paddingHorizontal: 6 },
   lockChipOn: { backgroundColor: C.greenLit, borderColor: C.greenLit },
-  lockTextOn: { color: C.bg },
+  lockIcon: { fontSize: 11 },
   tabs: { flexDirection: 'row', gap: S.xs, backgroundColor: C.sunken, borderRadius: R.md, padding: 3 },
   tab: { flex: 1, alignItems: 'center', paddingVertical: S.sm, borderRadius: R.sm },
   tabOn: { backgroundColor: C.raised },
