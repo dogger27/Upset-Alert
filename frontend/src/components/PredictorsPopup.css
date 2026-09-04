@@ -49,8 +49,37 @@
   line-height: 1.3;
   color: var(--text);
 }
-/* Players not yet known: the round stands in for the names line, muted. */
-.pp-title--open { color: var(--text-muted, var(--n-600)); font-weight: 600; }
+.pp-head-main { flex: 1; min-width: 0; }
+
+/* Round + status, always present. The status pill is the bracket's own
+   "In Progress"/"Scheduled" badge (BracketView.css) taken out of its absolute
+   position, so the two read as the same mark; Completed and TBD extend it. */
+.pp-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+}
+.pp-round, .pp-status {
+  display: inline-flex;
+  align-items: center;
+  height: 17px;
+  padding: 0 8px;
+  border-radius: 10px;
+  border: 1px solid var(--n-150);
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--text-muted, var(--n-600));
+}
+.pp-status--live     { background: var(--atp-tint); border-color: var(--atp-500); color: var(--info); }
+.pp-status--upcoming { background: var(--eta-bg); border-color: var(--eta-text); color: var(--eta-text); }
+.pp-status--done     { background: color-mix(in srgb, var(--pick-correct) 14%, transparent);
+                       border-color: var(--pick-correct); color: var(--pick-correct); }
+.pp-status--tbd      { border-style: dashed; }
+
 .pp-winner { font-weight: 800; }
 .pp-def    { color: var(--text-muted, var(--n-600)); font-weight: 600; }
 .pp-loser  { font-weight: 600; color: var(--text-muted, var(--n-600)); }

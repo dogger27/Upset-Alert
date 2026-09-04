@@ -74,6 +74,11 @@ export default function PredictorsPopup({ drawId, match, leagueId, onClose }) {
   // user's cascade — the names line is shown only once both are known.
   const pending = winner?.id == null
   const known = !!(match?.player1?.id && match?.player2?.id)
+  // Same test as the bracket's own "In Progress" badge (CombinedView's
+  // isLiveMatch), so the pill here never disagrees with the box it came from.
+  const live = pending && match?.live_scores != null
+  const status = !pending ? 'Completed' : !known ? 'TBD' : live ? 'In Progress' : 'Upcoming'
+  const statusMod = { Completed: 'done', TBD: 'tbd', 'In Progress': 'live', Upcoming: 'upcoming' }[status]
   const correct = data?.correct ?? []
   const incorrect = data?.incorrect ?? []
 
@@ -88,27 +93,33 @@ export default function PredictorsPopup({ drawId, match, leagueId, onClose }) {
     <div className="pp-backdrop" onClick={onClose}>
       <div className="pp-popup" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
         <div className="pp-header">
-          {/* Names only once the ACTUAL players of this match are known: a
-              later round still waiting on its feeders gets no "TBD vs. TBD". */}
-          {pending && !known ? (
-            <div className="pp-title pp-title--open">{match?.round_name || ''}</div>
-          ) : (
-            <div className="pp-title">
-              {pending ? (
-                <>
-                  <span className="pp-winner">{match.player1.name}</span>
-                  <span className="pp-def"> vs. </span>
-                  <span className="pp-winner">{match.player2.name}</span>
-                </>
-              ) : (
-                <>
-                  <span className="pp-winner">{winner?.name || '—'}</span>
-                  <span className="pp-def"> def. </span>
-                  <span className="pp-loser">{loser?.name || '—'}</span>
-                </>
-              )}
+          <div className="pp-head-main">
+            {/* Names only once the ACTUAL players of this match are known: a
+                later round still waiting on its feeders gets no "TBD vs. TBD"
+                — the round and status pills below carry it instead. */}
+            {(known || !pending) && (
+              <div className="pp-title">
+                {pending ? (
+                  <>
+                    <span className="pp-winner">{match.player1.name}</span>
+                    <span className="pp-def"> vs. </span>
+                    <span className="pp-winner">{match.player2.name}</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="pp-winner">{winner?.name || '—'}</span>
+                    <span className="pp-def"> def. </span>
+                    <span className="pp-loser">{loser?.name || '—'}</span>
+                  </>
+                )}
+              </div>
+            )}
+            {/* Always: which round this is, and where the match stands. */}
+            <div className="pp-meta">
+              <span className="pp-round">{match?.round_name || '—'}</span>
+              <span className={`pp-status pp-status--${statusMod}`}>{status}</span>
             </div>
-          )}
+          </div>
           <button className="pp-close" onClick={onClose} aria-label="Close">✕</button>
         </div>
         <div className="pp-scope">{data?.league_name || 'Global'}</div>
