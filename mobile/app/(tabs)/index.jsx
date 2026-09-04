@@ -411,12 +411,12 @@ const s = StyleSheet.create({
     // in tools/visual-diff.mjs left a ~20pt gap on the device (2026-09-04).
     // The room this closes is the wordmark's descender space, which scales
     // with the reader's text size, hence leading().
-    letterSpacing: 0.9, color: C.muted, textAlign: 'center', marginTop: -leading(16),
+    letterSpacing: 0.9, color: C.muted, textAlign: 'center', marginTop: -leading(12),
   },
   // A size up from the site's 12px, and lifted: the row centres the dot on
   // the wordmark's line box, whose centre sits below the caps' centre (the
   // box keeps room for descenders the caps never use).
-  dotWrap: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', marginTop: -leading(7) },
+  dotWrap: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', marginTop: -leading(12) },
   dotRing: { position: 'absolute', width: 30, height: 30, borderRadius: 15, backgroundColor: C.clayLight },
   dot: { width: 15, height: 15, borderRadius: 7.5, backgroundColor: C.clayLight },
   avatar: {
