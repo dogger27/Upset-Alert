@@ -127,15 +127,25 @@ export default function About() {
               home screen and it opens full screen like any other app, keeps you signed in, and
               can notify you the moment a draw is released.
             </p>
+            <p className="about-install-lede">
+              Opened this from a link inside another app — WhatsApp, Instagram, Facebook? Those
+              browsers can’t add anything at all. Choose <strong>“Open in Safari”</strong> or
+              <strong> “Open in browser”</strong> from that app’s menu first, then follow the
+              steps below.
+            </p>
             {/* <details>, not a JS toggle: closed by default for free, keyboard
                 and screen-reader accessible for free, and it still opens if the
-                page's JavaScript never arrives. */}
+                page's JavaScript never arrives.
+
+                Safari and Chrome get their OWN set on iPhone. The first two
+                taps genuinely differ — Safari hides Share inside the ••• menu
+                at the bottom, Chrome puts it in the address bar at the top —
+                and one merged set had to hedge, which is how a reader ends up
+                looking for a button that is not on their screen. */}
             <details className="about-install">
               <summary className="about-install-head">
-                {/* NO BROWSER NAMED. The taps are the same in Safari and in
-                    Chrome on iOS — ••• then Share then Add to Home Screen —
-                    so naming one sent readers in the other away. */}
                 <span className="about-install-os">iPhone &amp; iPad</span>
+                <span className="about-install-meta">Safari</span>
               </summary>
               <ol className="about-install-steps">
                 <li>
@@ -159,21 +169,28 @@ export default function About() {
                   Screen — open it from there.
                 </li>
               </ol>
-              {/* The four steps above are the default browser's. Chrome puts a
-                  Share button in the address bar instead, which skips straight
-                  to step 3 — named here rather than in the heading, so a reader
-                  in either browser finds themselves. */}
-              <p className="about-install-note">
-                Using a different browser? Some put a Share button in the address bar at the
-                <strong> top</strong> of the screen. Tap that instead, then carry on from
-                <strong> “Add to Home Screen”</strong>.
-                <img className="about-install-shot about-install-shot--inline" src="/install/chrome-share.jpg"
-                     loading="lazy" decoding="async"
-                     alt="An address bar with the Share button at its right end ringed" />
-                Links opened inside another app — WhatsApp, Instagram, Facebook — can’t add
-                anything at all: choose <strong>“Open in Safari”</strong> or
-                <strong> “Open in browser”</strong> from that app’s menu first.
-              </p>
+            </details>
+            <details className="about-install">
+              <summary className="about-install-head">
+                <span className="about-install-os">iPhone &amp; iPad</span>
+                <span className="about-install-meta">Chrome</span>
+              </summary>
+              <ol className="about-install-steps">
+                <li>
+                  Tap the Share button in the address bar, at the <strong>top</strong> of the screen.
+                  <img className="about-install-shot" src="/install/chrome-share.jpg" loading="lazy" decoding="async"
+                       alt="Chrome’s address bar, with the Share button at its right end ringed" />
+                </li>
+                <li>
+                  Scroll down that list and tap <strong>“Add to Home Screen”</strong>.
+                  <img className="about-install-shot" src="/install/add-to-home.jpg" loading="lazy" decoding="async"
+                       alt="The share sheet scrolled down, with Add to Home Screen ringed" />
+                </li>
+                <li>
+                  Tap <strong>“Add”</strong>, top right. Upset Alert is now an icon on your Home
+                  Screen — open it from there.
+                </li>
+              </ol>
             </details>
             <details className="about-install">
               <summary className="about-install-head">

@@ -389,6 +389,14 @@
 @media (prefers-reduced-motion: reduce) {
   .about-install-head::after { transition: none; }
 }
-/* The one shot that sits inside the note rather than under a numbered step. */
-.about-install-shot--inline { margin: 10px 0; }
+/* The one caveat that belongs to no single platform: an in-app browser cannot
+   add anything, whichever phone it is running on. */
+.about-install-lede {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--text-soft);
+}
+.about-install-lede strong { color: var(--text-body); }
 

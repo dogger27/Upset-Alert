@@ -102,7 +102,18 @@ export default function About() {
           </Muted>
           {/* No browser named: the taps are the same in Safari and in Chrome
               on iOS, so naming one sent readers in the other away. */}
-          <Steps os="iPhone & iPad" open={openOs === 'ios'}
+          <Text style={s.note}>
+            Opened this from a link inside another app — WhatsApp, Instagram, Facebook? Those
+            browsers can’t add anything at all. Choose <Text style={s.b}>“Open in Safari”</Text>{' '}
+            or <Text style={s.b}>“Open in browser”</Text> from that app’s menu first, then follow
+            the steps below.
+          </Text>
+          {/* Safari and Chrome get their OWN set on iPhone. The first two taps
+              genuinely differ — Safari hides Share inside the ••• menu at the
+              bottom, Chrome puts it in the address bar at the top — and one
+              merged set had to hedge, which is how a reader ends up looking for
+              a button that is not on their screen. */}
+          <Steps os="iPhone & iPad" meta="Safari" open={openOs === 'ios'}
                  onToggle={() => setOpenOs(o => (o === 'ios' ? null : 'ios'))}>
             <Step n={1}>
               Tap the <Text style={s.b}>•••</Text> button at the <Text style={s.b}>bottom</Text> of
@@ -122,22 +133,24 @@ export default function About() {
               Tap <Text style={s.b}>“Add”</Text>, top right. Upset Alert is now an icon on your
               Home Screen — open it from there.
             </Step>
-            {/* The four steps above are the default browser's. Chrome puts a
-                Share button in the address bar instead, which skips straight to
-                step 3 — named here rather than in the heading, so a reader in
-                either browser finds themselves. */}
-            <Text style={s.note}>
-              Using a different browser? Some put a Share button in the address bar at the{' '}
-              <Text style={s.b}>top</Text> of the screen. Tap that instead, then carry on from{' '}
-              <Text style={s.b}>“Add to Home Screen”</Text>.
-            </Text>
-            <Shot src="chrome-share" w={642} h={240}
-                  alt="An address bar with the Share button at its right end ringed" />
-            <Text style={s.note}>
-              Links opened inside another app — WhatsApp, Instagram, Facebook — can’t add
-              anything at all: choose <Text style={s.b}>“Open in Safari”</Text> or{' '}
-              <Text style={s.b}>“Open in browser”</Text> from that app’s menu first.
-            </Text>
+          </Steps>
+          <Steps os="iPhone & iPad" meta="Chrome" open={openOs === 'ios-chrome'}
+                 onToggle={() => setOpenOs(o => (o === 'ios-chrome' ? null : 'ios-chrome'))}>
+            <Step n={1}>
+              Tap the Share button in the address bar, at the <Text style={s.b}>top</Text> of
+              the screen.
+            </Step>
+            <Shot src="chrome-share" w={660} h={157}
+                  alt="Chrome’s address bar, with the Share button at its right end ringed" />
+            <Step n={2}>
+              Scroll down that list and tap <Text style={s.b}>“Add to Home Screen”</Text>.
+            </Step>
+            <Shot src="add-to-home" w={660} h={675}
+                  alt="The share sheet scrolled down, with Add to Home Screen ringed" />
+            <Step n={3}>
+              Tap <Text style={s.b}>“Add”</Text>, top right. Upset Alert is now an icon on your
+              Home Screen — open it from there.
+            </Step>
           </Steps>
           <Steps os="Android" meta="Chrome" open={openOs === 'android'}
                  onToggle={() => setOpenOs(o => (o === 'android' ? null : 'android'))}>
