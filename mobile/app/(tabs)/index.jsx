@@ -396,12 +396,18 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     gap: S.sm, paddingTop: S.sm, paddingBottom: S.xs,
   },
-  brandBlock: { flex: 1, alignItems: 'center', gap: 3, minWidth: 0 },
+  brandBlock: { flex: 1, alignItems: 'center', minWidth: 0 },
   brandTop: { flexDirection: 'row', alignItems: 'center', gap: 9 },
-  brand: { ...T.display, color: C.ink },
-  // Navbar.css .navbar-brand-slogan: 0.78rem italic body face, 0.08em
-  // tracking, at about half strength.
-  slogan: { fontFamily: 'Archivo_400Regular_Italic', fontSize: 12.5, lineHeight: leading(14), letterSpacing: 1, color: C.muted, textAlign: 'center' },
+  // Tight leading on the wordmark: the display face's default line box left
+  // a gap under the caps that pushed the slogan away from it.
+  brand: { ...T.display, lineHeight: leading(31), color: C.ink },
+  // Navbar.css .navbar-brand-slogan, a size down and tucked right under the
+  // wordmark (user, 2026-09-04). fontStyle as well as the italic face: if the
+  // face is ever not loaded, the system fallback still slants.
+  slogan: {
+    fontFamily: 'Archivo_400Regular_Italic', fontStyle: 'italic', fontSize: 11, lineHeight: leading(13),
+    letterSpacing: 0.9, color: C.muted, textAlign: 'center', marginTop: -2,
+  },
   dotWrap: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
   dotRing: { position: 'absolute', width: 24, height: 24, borderRadius: 12, backgroundColor: C.clayLight },
   dot: { width: 12, height: 12, borderRadius: 6, backgroundColor: C.clayLight },
