@@ -416,13 +416,16 @@
   /* THE PLACE IS THE HEADLINE of a standings table, and it used to be the
      dimmest, smallest thing in the row — smaller than the points beside it and
      in a grey two steps down from the name. Now it reads first.
-     (`--n-400` was also a raw ramp token, which this theme forbids: ramp
-     values do not flip between light and dark, so the row would have gone
-     nearly invisible in the other mode.) */
+     Brand green, through --brand-text-strong rather than a ramp step: that
+     role resolves to a light mint (#7fd4a6) on the dark field and to a deep
+     green on white, so the place stays bright in dark mode without becoming
+     illegible in light. A fixed light green would do the first and fail the
+     second. (`--n-400`, what this used to be, was a raw ramp token — the very
+     thing that cannot flip.) */
   font-size: 0.9rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: var(--text);
+  color: var(--brand-text-strong);
   text-align: center;
 }
 
