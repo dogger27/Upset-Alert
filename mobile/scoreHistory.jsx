@@ -319,15 +319,15 @@ function Stats({ stats, pos, topIsP1, left, right }) {
           colour, so name, bar and column read as one. */}
       {rows.map(([label, lw, lt, rw, rt]) => (
         <View key={label} style={s.statRow}>
-          <Text style={s.statNum} numberOfLines={1}>
-            {lt ? `${pct(lw, lt)}%` : '—'}<Text style={s.statSmall}>{lt ? ` (${lw}/${lt})` : ''}</Text>
-          </Text>
+          {/* PERCENTAGE ONLY on the phone. "(88/136)" beside it needed a
+              number column wide enough that the column clipped its own text;
+              the percentage is the comparison, the raw count is detail. The
+              site keeps the count at desktop widths. */}
+          <Text style={s.statNum} numberOfLines={1}>{lt ? `${pct(lw, lt)}%` : '—'}</Text>
           <View style={s.barL}><View style={[s.barFill, { backgroundColor: C.h2hP1, width: `${lt ? pct(lw, lt) : 0}%` }]} /></View>
-          <Text style={s.statLabel} numberOfLines={1}>{label}</Text>
+          <Text style={s.statLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>{label}</Text>
           <View style={s.barR}><View style={[s.barFill, { backgroundColor: C.h2hP2, width: `${rt ? pct(rw, rt) : 0}%` }]} /></View>
-          <Text style={[s.statNum, { textAlign: 'right' }]} numberOfLines={1}>
-            {rt ? `${pct(rw, rt)}%` : '—'}<Text style={s.statSmall}>{rt ? ` (${rw}/${rt})` : ''}</Text>
-          </Text>
+          <Text style={[s.statNum, { textAlign: 'right' }]} numberOfLines={1}>{rt ? `${pct(rw, rt)}%` : '—'}</Text>
         </View>
       ))}
     </View>
@@ -370,17 +370,11 @@ function SofaStats({ rows, topIsP1, loading, left, right, splitSuspect }) {
           <View key={r.label}>
             {head ? <Text style={s.statSection}>{head}</Text> : null}
             <View style={s.statRow}>
-              <Text style={s.statNum} numberOfLines={1}>
-                {ratio ? `${pct(l)}%` : l[0]}
-                <Text style={s.statSmall}>{ratio ? ` (${l[0]}/${l[1]})` : ''}</Text>
-              </Text>
+              <Text style={s.statNum} numberOfLines={1}>{ratio ? `${pct(l)}%` : l[0]}</Text>
               <View style={s.barL}><View style={[s.barFill, { backgroundColor: C.h2hP1, width: `${width(l)}%` }]} /></View>
-              <Text style={s.statLabel} numberOfLines={1}>{r.label}</Text>
+              <Text style={s.statLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>{r.label}</Text>
               <View style={s.barR}><View style={[s.barFill, { backgroundColor: C.h2hP2, width: `${width(rt)}%` }]} /></View>
-              <Text style={[s.statNum, { textAlign: 'right' }]} numberOfLines={1}>
-                {ratio ? `${pct(rt)}%` : rt[0]}
-                <Text style={s.statSmall}>{ratio ? ` (${rt[0]}/${rt[1]})` : ''}</Text>
-              </Text>
+              <Text style={[s.statNum, { textAlign: 'right' }]} numberOfLines={1}>{ratio ? `${pct(rt)}%` : rt[0]}</Text>
             </View>
           </View>
         )
@@ -438,9 +432,14 @@ const s = StyleSheet.create({
   statNames: { flexDirection: 'row', justifyContent: 'space-between', gap: S.sm },
   statName: { ...T.smallMed, flex: 1 },
   statRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  statNum: { ...T.tiny, color: C.ink, fontFamily: 'Archivo_700Bold', width: 78 },
-  statSmall: { ...T.tiny, color: C.faint, fontFamily: 'Archivo_400Regular' },
-  statLabel: { ...T.tiny, color: C.faint, textAlign: 'center', flexShrink: 1 },
+  statNum: { ...T.tiny, color: C.ink, fontFamily: 'Archivo_700Bold', width: 40 },
+  /* FIXED, not flexShrink. Unsized, the label took its own natural width and
+     the bars (flex: 1) absorbed whatever was left — so every row had a
+     different bar length and the two tabs, whose labels differ, disagreed with
+     each other. Wide enough for the longest label either panel carries
+     ("Break points converted"); longer ones shrink their type rather than
+     truncate. */
+  statLabel: { ...T.tiny, color: C.faint, textAlign: 'center', width: 130 },
   barL: { flex: 1, height: 5, borderRadius: 3, backgroundColor: C.border, overflow: 'hidden', alignItems: 'flex-end' },
   barR: { flex: 1, height: 5, borderRadius: 3, backgroundColor: C.border, overflow: 'hidden' },
   barFill: { height: 5, borderRadius: 3 },
