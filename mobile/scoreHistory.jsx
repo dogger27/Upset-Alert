@@ -147,15 +147,22 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
         ? new Date(snap.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
         : `${pos + 1} / ${max}`)
 
+  /* The sheet takes a FIXED height, so the timeline stays where the reader
+     left it. The tabs swap panels with different row counts and a bottom sheet
+     grows upward, so a content-sized sheet slid the whole timeline up the
+     screen on every tab switch. Fixed, the top edge never moves and the
+     scroller absorbs the difference.
+     (Comment out here, not between `return (` and the element — a comment in
+     that position has broken the Metro bundle before.) */
   return (
-    <Sheet visible={visible} onClose={onClose}>
+    <Sheet visible={visible} onClose={onClose} height="80%">
       <Text style={[s.when, atEnd && live && { color: C.greenLit }]}>{when}</Text>
       {/* The scroll is OFF while the slider is held. Refusing to hand the
           responder over is enough on iOS; Android's ScrollView can still take
           a vertical drag, and the symptom is the whole sheet moving under the
           finger. Turning it off for the duration of the drag is the one thing
           that cannot be argued with. */}
-      <ScrollView scrollEnabled={!holding}
+      <ScrollView scrollEnabled={!holding} style={{ flex: 1 }}
                   contentContainerStyle={{ gap: S.md, paddingBottom: S.sm }}>
         <MatchCard e={row} />
         {hist.loading && !data ? <Loading /> : null}

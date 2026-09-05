@@ -4,11 +4,16 @@
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
 import { C, S, T } from './theme'
 
-export function Sheet({ visible, onClose, title, children }) {
+/* `height` fixes the sheet's height instead of letting it size to its content.
+   Only worth passing when the content CHANGES height while open — the score
+   history's tabs swap panels with different row counts, and a bottom sheet
+   grows upward, so without this the timeline slid up the screen as the reader
+   switched tabs. Everything else leaves it off and keeps hugging its content. */
+export function Sheet({ visible, onClose, title, children, height }) {
   return (
     <Modal visible={!!visible} animationType="slide" transparent onRequestClose={onClose}>
       <Pressable style={s.scrim} onPress={onClose} accessibilityLabel="Close" />
-      <View style={s.sheet}>
+      <View style={[s.sheet, height ? { height } : null]}>
         <View style={s.grabber} />
         {title ? <Text style={s.title}>{title}</Text> : null}
         {children}
