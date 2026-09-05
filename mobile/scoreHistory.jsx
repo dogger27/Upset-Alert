@@ -125,6 +125,11 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
     { enabled: canAskStats && tab === 'serve' },
   )
   const sofaRows = sofa.data?.periods?.ALL || []
+  /* Sofascore counts nearly every serve as a FIRST serve while a match is in
+     play, splitting them properly only about ten minutes after it ends. The
+     server drops the rows built on that split and sets this; we explain the
+     gap rather than leave a panel looking half-drawn. */
+  const splitSuspect = !!sofa.data?.split_suspect?.ALL
 
   if (!entry) return null
 
@@ -195,6 +200,7 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
             )}
             {tab === 'serve' && canAskStats && (
               <SofaStats rows={sofaRows} topIsP1={topIsP1} loading={sofa.loading}
+                         splitSuspect={splitSuspect}
                          left={cleanName(a[0])} right={cleanName(b[0])} />
             )}
           </>
@@ -308,6 +314,9 @@ function Stats({ stats, pos, topIsP1, left, right }) {
         <Text style={[s.statName, { color: C.h2hP1 }]} numberOfLines={1}>{left}</Text>
         <Text style={[s.statName, { color: C.h2hP2, textAlign: 'right' }]} numberOfLines={1}>{right}</Text>
       </View>
+      {splitSuspect ? (
+        <Text style={s.err}>The serve breakdown is published once the match finishes.</Text>
+      ) : null}
       {/* ONE LINE PER STATISTIC, the site's grid: number, bar, label, bar,
           number. The bars grow from the label outward, in each player's own
           colour, so name, bar and column read as one. */}
@@ -331,9 +340,13 @@ function Stats({ stats, pos, topIsP1, left, right }) {
 /* Sofascore's serve/return tally. Same five-column grid as Stats so the two
    tabs read as one table with two pages — but WHOLE MATCH, said plainly at the
    top because the panel next door moves with the slider and this one cannot. */
-function SofaStats({ rows, topIsP1, loading, left, right }) {
+function SofaStats({ rows, topIsP1, loading, left, right, splitSuspect }) {
   if (loading && rows.length === 0) return <Loading />
-  if (rows.length === 0) return <Text style={s.err}>No serve statistics for this match.</Text>
+  if (rows.length === 0) {
+    return <Text style={s.err}>{splitSuspect
+      ? 'The serve breakdown is published once the match finishes.'
+      : 'No serve statistics for this match.'}</Text>
+  }
   let section = null
   return (
     <View style={s.stats}>
