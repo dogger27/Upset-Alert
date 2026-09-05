@@ -42,14 +42,29 @@
     <!-- Link previews (WhatsApp, iMessage, Slack, X). Absolute URLs only:
          scrapers resolve nothing. -->
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="Upset Alert" />
-    <meta property="og:title" content="Upset Alert — Your Wildest Fantasy Tennis" />
+    <!-- NO og:site_name, deliberately. Apple's link preview strips the site
+         name off the front of the title when the two agree, which is how
+         "Upset Alert — Your Wildest Fantasy Tennis" arrived in iMessage as
+         "Your Wildest Fantasy Tennis" — the brand gone and the tagline
+         standing in for it. With no site name there is nothing to strip.
+         Facebook falls back to the domain, which is what we want anyway. -->
+    <meta property="og:title" content="Upset Alert" />
     <meta property="og:description" content="Pick every match of ATP and WTA draws, score points for calling upsets, and follow live scores with your league." />
     <meta property="og:url" content="https://upsetalert.ca/" />
     <!-- 192px, deliberately: WhatsApp gives an image ~300px or larger on
          both sides the full-width banner treatment; a smaller one renders as
-         the compact thumbnail beside the title, which is the card we want. -->
-    <meta property="og:image" content="https://upsetalert.ca/favicon-192x192.png" />
+         the compact thumbnail beside the title, which is the card we want.
+
+         OPAQUE, and its own file rather than the favicon. The favicon has a
+         transparent background, so iMessage filled the card by sampling a
+         colour out of the image itself — it picked the clay of the dot, and
+         the logo then sat on a background almost its own colour. Painting the
+         background green settles it, and keeps the clay dot the only warm
+         thing on the card. Regenerate with tools/make-og-image.py. -->
+    <meta property="og:image" content="https://upsetalert.ca/og-image.png" />
+    <meta property="og:image:width" content="192" />
+    <meta property="og:image:height" content="192" />
+    <meta property="og:image:alt" content="Upset Alert" />
     <meta name="twitter:card" content="summary" />
     <meta name="description" content="Pick every match of ATP and WTA draws, score points for calling upsets, and follow live scores with your league." />
 
