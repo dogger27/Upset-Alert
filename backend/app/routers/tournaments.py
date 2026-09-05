@@ -732,6 +732,41 @@ async def match_score_history(
     }
 
 
+@router.get("/{tournament_id}/matches/{match_id}/statistics")
+async def match_statistics(
+    tournament_id: int,
+    match_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Sofascore's serve and return figures for the Match Stats tab.
+
+    Deliberately a SEPARATE endpoint from score-history, because the two have
+    different natural cadences: the history is polled every ten seconds while
+    a popup is open, whereas these numbers only move when a game ends. The
+    client asks for them far less often, and the service caches per event.
+
+    Unlike the scrubber's own statistics — which are computed from our
+    snapshots and follow the slider — these have no per-point history.
+    Sofascore keeps a running total per period only, so this answers "how has
+    the match gone", never "how had it gone at point 47". `order` lists the
+    periods it holds: `ALL` plus one per set played.
+
+    Public, like the score history and the draw itself.
+    """
+    from app.services.sofascore_stats import stats_for
+
+    match = await db.get(Match, match_id)
+    if not match or match.draw_id != tournament_id:
+        raise HTTPException(404, "Match not found")
+
+    # An empty answer is normal, not an error: a match with no Sofascore event
+    # id (played before the column existed, or never matched) simply has no
+    # figures, and the tab says so rather than erroring.
+    data = await stats_for(match.sofa_event_id,
+                           finished=match.winner_id is not None)
+    return {"order": data.get("order") or [], "periods": data.get("periods") or {}}
+
+
 @router.get("/{tournament_id}/my-standouts")
 async def my_standout_picks(
     tournament_id: int,

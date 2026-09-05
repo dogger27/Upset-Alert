@@ -15,6 +15,11 @@ export const getGlobalStandings = (id) => client.get(`/tournaments/${id}/standin
 // leagueId null = Global (every participant in the draw)
 export const getMatchScoreHistory = (id, matchId) =>
   client.get(`/tournaments/${id}/matches/${matchId}/score-history`).then(r => r.data)
+/* Sofascore's serve/return figures. Separate from score-history on purpose:
+   these only move when a GAME ends, so the client asks far less often than the
+   ten-second history poll. */
+export const getMatchStatistics = (id, matchId) =>
+  client.get(`/tournaments/${id}/matches/${matchId}/statistics`).then(r => r.data)
 export const getMatchPredictors = (id, matchId, leagueId) =>
   client.get(`/tournaments/${id}/matches/${matchId}/predictors`, {
     params: leagueId != null ? { league_id: leagueId } : {},
