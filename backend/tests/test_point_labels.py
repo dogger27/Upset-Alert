@@ -5,7 +5,7 @@ Matching is by ORDER inside the game, not by score: a deuce cycle revisits
 are a subsequence of theirs (the poller can miss a point, never invent one), so
 a greedy two-pointer places every point exactly — including the third 40-40 of
 a long deuce game."""
-from app.services.sofascore_points import align, normalise
+from app.services.sofascore_points import _covers, _need, align, normalise
 
 RAW = {"pointByPoint": [
     {"set": 1, "games": [
@@ -91,6 +91,28 @@ def test_missing_or_empty_inputs_are_silent():
     assert align([snap([["0"], ["0"]], ["15", "0"])], {}) == [None]
     assert align([{"games": None, "point": None}], normalise(RAW)) == [None]
     assert normalise({}) == {}
+
+
+def test_coverage_decides_when_to_refetch():
+    """A list is fresh while it accounts for the newest point we hold, and
+    stale the moment one arrives that it does not — which is what puts the
+    label on screen at the same time as the score."""
+    pts = normalise(RAW)                     # game 1-1 holds 5 points
+    # We hold 5 in that game plus the 0-0 opener they never carry: covered.
+    assert _covers(pts, (1, 1, 6)) is True
+    # A point lands, we now hold 7 and they still have 5: not covered.
+    assert _covers(pts, (1, 1, 8)) is False
+    # A game they have not started at all is not something to wait for.
+    assert _covers(pts, (9, 9, 1)) is True
+    assert _covers(pts, None) is True
+
+
+def test_need_describes_the_newest_point():
+    snaps = [snap([["0"], ["0"]], ["15", "0"]),
+             snap([["0"], ["0"]], ["30", "0"]),
+             snap([["1"], ["0"]], ["0", "0"])]     # a new game started
+    assert _need(snaps) == (1, 2, 1)
+    assert _need([]) is None
 
 
 if __name__ == "__main__":

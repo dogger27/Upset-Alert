@@ -38,12 +38,18 @@ logger = logging.getLogger(__name__)
 # pointDescription → what we print. Anything else is an ordinary point.
 LABELS = {1: "Ace", 2: "Double Fault"}
 
-# How stale a LIVE match's point list may be before it is refetched. Short,
-# because the point of the label is that it appears WHEN the ace is hit — but
-# not so short that a watched match costs more than a few requests a minute.
-# The cache is per process and shared, so ten readers on one match cost the
-# same as one, and nothing fetches at all unless a popup is open.
-LIVE_TTL = timedelta(seconds=20)
+# THE CACHE IS JUDGED ON COVERAGE, NOT ON A CLOCK. A clock is the wrong
+# question: a twenty-second TTL meant a new point could appear on the timeline
+# with no label and gain one later, which reads as a glitch. What matters is
+# whether their list already contains the point we are being asked about. It
+# does for every poll where nothing was played, and it does not the moment a
+# point lands — so a fetch happens exactly when a point arrives and at no
+# other time. In real tennis that is roughly two a minute per WATCHED match,
+# against six a minute for a blind twenty-second TTL.
+#
+# The floor is the only clock left: it stops a match whose points can never be
+# matched from asking again on every poll.
+MIN_REFETCH = timedelta(seconds=5)
 
 
 def _key(set_no, game_no) -> str:
@@ -77,13 +83,19 @@ _CACHE_MAX = 512
 # readers opening the same match must not become two requests to Sofascore.
 _INFLIGHT: dict = {}
 
-# HOW LONG A READER WAITS FOR A DECORATION: barely. The labels are the last
-# thing on the popup and the score history is the first, so the response must
-# not sit behind a network call — a fetch that queues behind the 10-second
-# poller at the shared rate gate can take many seconds, and the popup showed
-# nothing at all until it returned. Past this the answer goes out without
-# labels and the fetch keeps running, so the next poll has them.
-WAIT_FOR_LABELS = 1.5
+# HOW LONG A READER WAITS FOR THE LABELS, and it depends on whether there is
+# anything on screen yet.
+#
+# COLD — nothing cached, so this is somebody opening the popup. The response
+# IS the popup, so it must not sit behind a network call; past this it goes
+# out unlabelled and the fetch keeps running for the next poll.
+WAIT_COLD = 1.5
+# WARM — a list is already cached, so this is a poll on a match being watched
+# and the client is still showing the previous answer. Waiting here costs the
+# reader nothing visible and buys the thing that matters: the new point and
+# its label arrive in the SAME response, so a score never appears for a
+# moment without the "Ace" beside it.
+WAIT_WARM = 6.0
 
 
 async def _fetch(event_id: int, finished: bool) -> dict:
@@ -108,8 +120,22 @@ _CACHE: dict = {}                      # event_id -> (fetched_at, final, data)
 _CACHE_MAX = 512
 
 
-async def points_for(event_id: Optional[int], *, finished: bool) -> dict:
-    """The point list for an event: cached if we have it, else briefly awaited.
+def _covers(data: dict, need: Optional[tuple]) -> bool:
+    """Does this list already account for the newest point we hold?
+
+    `need` is (set, game, how many snapshots WE have in that game). Ours counts
+    one they never have — the 0-0 that opens a game — and they omit the point
+    that ends one, so "caught up" is their count being within one of ours.
+    """
+    if need is None:
+        return True
+    set_no, game_no, ours = need
+    return len(data.get(_key(set_no, game_no), [])) >= ours - 1
+
+
+async def points_for(event_id: Optional[int], *, finished: bool,
+                     need: Optional[tuple] = None) -> dict:
+    """The point list for an event: cached when it covers `need`, else fetched.
 
     Never raises, and never blocks the caller for long — see WAIT_FOR_LABELS.
     """
@@ -121,7 +147,10 @@ async def points_for(event_id: Optional[int], *, finished: bool) -> dict:
     hit = _CACHE.get(event_id)
     if hit is not None:
         at, was_final, data = hit
-        if was_final or datetime.now(timezone.utc) - at < LIVE_TTL:
+        fresh = was_final or _covers(data, need)
+        # The floor: having just asked, do not ask again for this poll even if
+        # the answer still does not cover us — some points never will.
+        if fresh or datetime.now(timezone.utc) - at < MIN_REFETCH:
             return data
 
     task = _INFLIGHT.get(event_id)
@@ -132,7 +161,8 @@ async def points_for(event_id: Optional[int], *, finished: bool) -> dict:
     try:
         # shield: the wait may give up, the FETCH must not — it is what makes
         # the next request instant.
-        return await asyncio.wait_for(asyncio.shield(task), WAIT_FOR_LABELS)
+        return await asyncio.wait_for(asyncio.shield(task),
+                                      WAIT_WARM if hit else WAIT_COLD)
     except asyncio.TimeoutError:
         return hit[2] if hit else {}
     except Exception:                                              # noqa: BLE001
@@ -208,9 +238,26 @@ def align(snapshots: list, points: dict) -> list:
     return flipped if n_flipped > n_straight else straight
 
 
+def _need(snapshots: list) -> Optional[tuple]:
+    """(set, game, our snapshots in that game) for the NEWEST point we hold."""
+    if not snapshots:
+        return None
+    pos = _position(snapshots[-1])
+    if pos is None:
+        return None
+    return (pos[0], pos[1], sum(1 for s in snapshots if _position(s) == pos))
+
+
 async def labels_for(snapshots: list, event_id: Optional[int],
                      *, finished: bool) -> list:
-    """The whole job: fetch (or reuse) the point list and align it."""
+    """The whole job: fetch (or reuse) the point list and align it.
+
+    The newest point we hold is handed down as `need`, so the list is refetched
+    exactly when a point has arrived that it does not yet describe — which is
+    what makes the label appear WITH the score rather than after it.
+    """
     if not snapshots or not event_id:
         return [None] * len(snapshots)
-    return align(snapshots, await points_for(event_id, finished=finished))
+    points = await points_for(event_id, finished=finished,
+                              need=None if finished else _need(snapshots))
+    return align(snapshots, points)
