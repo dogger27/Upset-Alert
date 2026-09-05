@@ -1862,7 +1862,29 @@ function TournamentDraw() {
           }}
         />
 
-        <div className="draw-main" ref={mainRef}>
+        {/* TAP THE DRAW TO DISMISS THE DRAWER. In compact mode the sidebar is
+            absolutely positioned OVER the draw — the CSS calls it "a temporary
+            drawer" — and a drawer that stays open once you have reached past it
+            is just something covering the bracket. Only in that mode: on wider
+            screens the sidebar is a column beside the draw, and closing it
+            whenever the bracket was touched would be maddening.
+
+            CAPTURE, so a child that stops propagation cannot swallow it, and
+            pointerdown so it goes on touch rather than on release. The click
+            itself is left alone and still reaches the match box: the draw does
+            not move when the drawer closes (the sidebar is out of flow in this
+            mode), so the box under the finger is the box that gets picked.
+
+            `setSidebarManual` matches the collapse button — a deliberate close
+            hands control to the reader for this draw, rather than letting the
+            width-based auto-hide reopen it. */}
+        <div
+          className="draw-main"
+          ref={mainRef}
+          onPointerDownCapture={compactDraw && !sidebarCollapsed
+            ? () => { setSidebarManual(true); setSidebarCollapsed(true) }
+            : undefined}
+        >
             <CombinedView
             tournament={tournament}
             matches={matches}
