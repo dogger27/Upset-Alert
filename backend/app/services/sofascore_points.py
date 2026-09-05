@@ -73,13 +73,47 @@ _CACHE: dict = {}                      # event_id -> (fetched_at, final, data)
 _CACHE_MAX = 512
 
 
-async def points_for(event_id: Optional[int], *, finished: bool) -> dict:
-    """The normalised point list for an event, from memory or freshly fetched.
+# One fetch per event at a time, shared by every request that wants it. Two
+# readers opening the same match must not become two requests to Sofascore.
+_INFLIGHT: dict = {}
 
-    Never raises: a blocked feed, a 404 on an event with no points recorded, or
-    no event id at all all mean the same thing to the caller — no labels.
-    """
+# HOW LONG A READER WAITS FOR A DECORATION: barely. The labels are the last
+# thing on the popup and the score history is the first, so the response must
+# not sit behind a network call — a fetch that queues behind the 10-second
+# poller at the shared rate gate can take many seconds, and the popup showed
+# nothing at all until it returned. Past this the answer goes out without
+# labels and the fetch keeps running, so the next poll has them.
+WAIT_FOR_LABELS = 1.5
+
+
+async def _fetch(event_id: int, finished: bool) -> dict:
     from app.services import sofascore as sf
+    try:
+        data = normalise(await sf._get(f"/event/{event_id}/point-by-point"))
+    except Exception as exc:                                       # noqa: BLE001
+        # Includes SofascoreBlocked. A decoration is never worth an error.
+        logger.info("point-by-point unavailable for %s: %s", event_id, exc)
+        return _CACHE.get(event_id, (None, False, {}))[2]
+    if len(_CACHE) >= _CACHE_MAX:
+        _CACHE.pop(next(iter(_CACHE)), None)
+    _CACHE[event_id] = (datetime.now(timezone.utc), bool(finished), data)
+    return data
+
+
+# In PROCESS, deliberately not in the database: this is read from a GET, and a
+# GET that writes takes SQLite's single writer — the trap recorded in
+# feedback_reads_must_not_write. A dict costs nothing, survives as long as the
+# worker, and a restart simply refetches on demand.
+_CACHE: dict = {}                      # event_id -> (fetched_at, final, data)
+_CACHE_MAX = 512
+
+
+async def points_for(event_id: Optional[int], *, finished: bool) -> dict:
+    """The point list for an event: cached if we have it, else briefly awaited.
+
+    Never raises, and never blocks the caller for long — see WAIT_FOR_LABELS.
+    """
+    import asyncio
 
     if not event_id:
         return {}
@@ -90,19 +124,20 @@ async def points_for(event_id: Optional[int], *, finished: bool) -> dict:
         if was_final or datetime.now(timezone.utc) - at < LIVE_TTL:
             return data
 
+    task = _INFLIGHT.get(event_id)
+    if task is None or task.done():
+        task = asyncio.create_task(_fetch(event_id, finished))
+        _INFLIGHT[event_id] = task
+        task.add_done_callback(lambda t, e=event_id: _INFLIGHT.pop(e, None))
     try:
-        payload = await sf._get(f"/event/{event_id}/point-by-point")
-    except Exception as exc:                                       # noqa: BLE001
-        # Includes SofascoreBlocked. The popup simply shows no labels; a
-        # decoration is never worth failing a score history over.
-        logger.info("point-by-point unavailable for %s: %s", event_id, exc)
+        # shield: the wait may give up, the FETCH must not — it is what makes
+        # the next request instant.
+        return await asyncio.wait_for(asyncio.shield(task), WAIT_FOR_LABELS)
+    except asyncio.TimeoutError:
         return hit[2] if hit else {}
-
-    data = normalise(payload)
-    if len(_CACHE) >= _CACHE_MAX:
-        _CACHE.pop(next(iter(_CACHE)), None)
-    _CACHE[event_id] = (datetime.now(timezone.utc), bool(finished), data)
-    return data
+    except Exception:                                              # noqa: BLE001
+        # _fetch swallows its own errors; this is the belt-and-braces path.
+        return hit[2] if hit else {}
 
 
 def _position(snap) -> Optional[tuple]:
