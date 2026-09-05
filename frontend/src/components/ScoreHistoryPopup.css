@@ -12,11 +12,21 @@
   background: var(--overlay);
   z-index: 400;
   display: flex;
-  align-items: center;
+  /* TOP-ANCHORED, not centred. Centring means every change in the popup's
+     height moves its top edge by half the difference — so switching tabs to a
+     panel with more rows slid the timeline up under the reader's finger, and
+     scrubbing to a longer scoreline nudged it too. Anchored, the popup grows
+     downward and the timeline never moves. Centred within the available space
+     while it is short, via auto margins on the popup itself. */
+  align-items: flex-start;
   justify-content: center;
   padding: 1rem;
   overscroll-behavior: contain;
 }
+/* Keeps the near-centred look for a short popup without letting height
+   changes move the top: the margin is computed once from the space left over,
+   and `max` stops a tall popup being pushed off the top of the screen. */
+.shp-backdrop > .shp-popup { margin-top: max(0px, 6vh); }
 
 .shp-popup {
   /* Thumb diameter. A VARIABLE because the tick positions are computed
@@ -233,7 +243,12 @@
 }
 .shp-stat-row {
   display: grid;
-  grid-template-columns: 4.6em 1fr auto 1fr 4.6em;
+  /* FIXED label column, not `auto`. With `auto` the column took each label's
+     own width, so every row got different bar lengths and switching tabs —
+     whose labels differ — shifted the whole table sideways. A fixed column
+     makes all rows and both tabs share one geometry. Wide enough for the
+     longest label either panel holds ("Break points converted"). */
+  grid-template-columns: 4.6em 1fr 10.5em 1fr 4.6em;
   align-items: center;
   column-gap: 0.5rem;
   font-size: 0.72rem;
@@ -246,6 +261,9 @@
   font-size: 0.7rem;
   white-space: nowrap;
   text-align: center;
+  /* Never let a long label widen its column and push the bars around. */
+  overflow: hidden;
+  text-overflow: clip;
 }
 .shp-stat-bar {
   height: 5px;
