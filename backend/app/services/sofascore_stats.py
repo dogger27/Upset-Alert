@@ -103,6 +103,52 @@ def _rows_for(idx: dict, period: str) -> list:
     return rows
 
 
+# ROWS THAT DEPEND ON THE FIRST/SECOND SERVE SPLIT, which Sofascore gets wrong
+# while a match is in play — see _split_is_impossible.
+SPLIT_DEPENDENT = {
+    "First serve %", "First serve points won", "Second serve points won",
+    "1st serve return points won", "2nd serve return points won",
+}
+
+# A first-serve percentage no professional reaches over a match. Tour figures
+# run 55-70%, the very best seasons touch 75%, and a single strong match might
+# reach 80%. Everything above this has been Sofascore mid-match, never a player.
+IMPLAUSIBLE_FIRST_SERVE_PCT = 85
+
+
+def _split_is_impossible(rows: list) -> bool:
+    """Is the first/second serve split obviously wrong?
+
+    MEASURED 2026-09-05, end to end on one match. Through the whole live match
+    Sofascore reported `First serve` at 93-99% — it counts very nearly every
+    serve as a first serve while play is on. About ten minutes AFTER the final
+    point it corrected in one step, denominators untouched:
+
+        live:        138/140 (99%)   122/130 (94%)
+        corrected:    98/140 (70%)    74/130 (57%)
+
+    Forty serves reclassified. Three finished matches read 49-70%, so this is a
+    live defect rather than a quirk of one match.
+
+    There is NO structural test for it: the broken figures are internally
+    consistent (double faults never exceed the implied second serves, second
+    serve attempts always equal the first serves missed), so nothing in the
+    payload contradicts itself. Implausibility is the only signal there is —
+    which is why this checks the one number that is impossible on its face
+    rather than asking whether the match has finished. A live match whose split
+    Sofascore ever gets right will show; a finished one not yet corrected will
+    not. That is "hide it when it is wrong", not "hide it while it is live".
+    """
+    for r in rows:
+        if r["label"] != "First serve %":
+            continue
+        for side in ("home", "away"):
+            won, tot = r[side]
+            if tot and (100 * won) / tot > IMPLAUSIBLE_FIRST_SERVE_PCT:
+                return True
+    return False
+
+
 def _counts_fell(old: list, new: list) -> bool:
     """THE STALE-READ GUARD. True when any count went backwards.
 
@@ -144,6 +190,14 @@ async def stats_for(event_id: Optional[int], *, finished: bool) -> dict:
     periods = [p.get("period") for p in (payload.get("statistics") or [])
                if p.get("period")]
     fresh = {p: _rows_for(idx, p) for p in periods}
+    # Drop what we cannot trust, and say so, rather than printing 99% first
+    # serve beside a real figure as though the two were equally sound.
+    suspect = {}
+    for period, rows in fresh.items():
+        bad = _split_is_impossible(rows)
+        suspect[period] = bad
+        if bad:
+            fresh[period] = [r for r in rows if r["label"] not in SPLIT_DEPENDENT]
 
     # THE GUARD. Keep the period we already had whenever the new copy counts
     # DOWN — that read came off a stale cache node and the next one recovers.
@@ -155,7 +209,7 @@ async def stats_for(event_id: Optional[int], *, finished: bool) -> dict:
                             event_id, period)
                 fresh[period] = old_rows
 
-    out = {"periods": fresh, "order": periods}
+    out = {"periods": fresh, "order": periods, "split_suspect": suspect}
     if len(_CACHE) >= _CACHE_MAX:
         _CACHE.pop(next(iter(_CACHE)), None)
     _CACHE[event_id] = (datetime.now(timezone.utc), bool(finished), out)

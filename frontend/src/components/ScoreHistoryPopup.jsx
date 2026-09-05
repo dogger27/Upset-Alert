@@ -219,6 +219,11 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
     refetchInterval: maybeLive ? 90_000 : false,
   })
   const sofaRows = sofaStats?.periods?.ALL || []
+  /* Sofascore counts nearly every serve as a FIRST serve while a match is in
+     play, and only splits them properly about ten minutes after it ends. The
+     server drops the rows built on that split and sets this; all we do is
+     explain the gap rather than leave a panel looking half-drawn. */
+  const splitSuspect = !!sofaStats?.split_suspect?.ALL
 
   if (!match && !entry) return null
 
@@ -349,6 +354,11 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
                   <span className="shp-stat-name--l">{cleanName(a[0])}</span>
                   <span className="shp-stat-name--r">{cleanName(b[0])}</span>
                 </div>
+                {splitSuspect && (
+                  <p className="shp-stats-empty">
+                    The serve breakdown is published once the match finishes.
+                  </p>
+                )}
                 {sofaRows.length === 0
                   ? <p className="shp-stats-empty">No serve statistics for this match.</p>
                   : (() => {

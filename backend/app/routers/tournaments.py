@@ -764,7 +764,12 @@ async def match_statistics(
     # figures, and the tab says so rather than erroring.
     data = await stats_for(match.sofa_event_id,
                            finished=match.winner_id is not None)
-    return {"order": data.get("order") or [], "periods": data.get("periods") or {}}
+    return {"order": data.get("order") or [],
+            "periods": data.get("periods") or {},
+            # Per period: is the first/second serve split obviously wrong? When
+            # it is, the rows built on it are already gone from `periods` and
+            # the client says why instead of drawing a blank panel.
+            "split_suspect": data.get("split_suspect") or {}}
 
 
 @router.get("/{tournament_id}/my-standouts")
