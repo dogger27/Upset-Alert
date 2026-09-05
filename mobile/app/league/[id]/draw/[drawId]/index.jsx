@@ -144,7 +144,9 @@ const s = StyleSheet.create({
   headText: { color: C.muted, fontSize: 12, fontWeight: '700', textTransform: 'uppercase' },
   alt: { backgroundColor: '#14201c' },
   mine: { backgroundColor: '#1d3329' },
-  rank: { color: C.muted, width: 28, fontWeight: '700' },
+  /* The place is the headline of a standings table; it used to be the dimmest
+     thing in the row. Wider too, or a three-figure place clips at this size. */
+  rank: { color: C.ink, width: 34, fontSize: 16, fontWeight: '700' },
   who: { flex: 1, minWidth: 0 },
   name: { color: C.ink, fontWeight: '600' },
   nameMine: { color: C.clay, fontWeight: '800' },
