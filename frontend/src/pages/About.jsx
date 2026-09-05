@@ -121,6 +121,14 @@ export default function About() {
           </div>
 
           <div className="about-section">
+            <h3 className="about-section-title">Contact</h3>
+            <p className="about-prose">
+              Please connect with me for bug fixes, feature requests, or a friendly hello!
+            </p>
+            <ContactForm />
+          </div>
+
+          <div className="about-section">
             <h3 className="about-section-title">Add to Your Home Screen</h3>
             <p className="about-prose">
               Upset Alert runs in your browser — there is nothing to download. Add it to your
@@ -207,14 +215,6 @@ export default function About() {
                 first time you visit. Either way gets you the same app.
               </p>
             </details>
-          </div>
-
-          <div className="about-section">
-            <h3 className="about-section-title">Contact</h3>
-            <p className="about-prose">
-              Please connect with me for bug fixes, feature requests, or a friendly hello!
-            </p>
-            <ContactForm />
           </div>
 
           <div className="about-section">
