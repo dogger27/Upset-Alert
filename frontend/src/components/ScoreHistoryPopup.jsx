@@ -20,7 +20,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
-import { getMatchScoreHistory } from '../api/tournaments'
+import { getMatchScoreHistory, getMatchStatistics } from '../api/tournaments'
 import { getEntryScoreHistory } from '../api/schedule'
 import MatchScoreCard from './MatchScoreCard'
 import { pointStats, sanitizeSnapshots, timelineMarkers } from '../utils/scoreTimeline'
@@ -45,6 +45,8 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
   const maybeLive = entry
     ? (entry.status !== 'completed' && entry.winner_side == null)
     : (match?.winner == null)
+
+  const [tab, setTab] = useState('points')
 
   const { data } = useQuery({
     queryKey: entryOnly
@@ -197,6 +199,27 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
   const stats = useMemo(() => pointStats(snapshots), [snapshots])
   const statsUsable = stats.counted >= 20 && stats.counted / Math.max(1, stats.transitions) >= 0.7
 
+  /* THE SECOND TAB. Sofascore's own serve and return figures, which our
+     snapshots cannot produce: nothing in a score tells you whether a point was
+     played on a first or a second serve. Only for bracket matches — an
+     entry-only row (doubles, qualifying) has no match to ask about.
+
+     Note what this tab CANNOT do: these figures have no per-point history, so
+     unlike the Points tab they do not follow the slider. They describe the
+     match as a whole. Hence the two tabs rather than one panel — a number that
+     silently ignores the thumb sitting beside numbers that obey it would read
+     as a bug. Refetched on a GAME's cadence, not a point's, because that is
+     the only time they move. */
+  const canAskStats = !entryOnly && histDrawId != null && histMatchId != null
+  const { data: sofaStats } = useQuery({
+    queryKey: ['match-statistics', histDrawId, histMatchId],
+    queryFn: () => getMatchStatistics(histDrawId, histMatchId),
+    enabled: canAskStats && tab === 'serve',
+    staleTime: 60_000,
+    refetchInterval: maybeLive ? 90_000 : false,
+  })
+  const sofaRows = sofaStats?.periods?.ALL || []
+
   if (!match && !entry) return null
 
   const initials = (row) => {
@@ -294,7 +317,64 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
                 )}
               </div>
             </div>
-            {statsUsable && (() => {
+            {/* TABS. Only drawn when there is a second thing to show — a
+                match with no Sofascore event id, or a doubles row, keeps the
+                single panel it has always had rather than growing a tab bar
+                that leads nowhere. */}
+            {statsUsable && canAskStats && (
+              <div className="shp-tabs" role="tablist">
+                <button role="tab" aria-selected={tab === 'points'}
+                        className={`shp-tab${tab === 'points' ? ' is-on' : ''}`}
+                        onClick={() => setTab('points')}>Points</button>
+                <button role="tab" aria-selected={tab === 'serve'}
+                        className={`shp-tab${tab === 'serve' ? ' is-on' : ''}`}
+                        onClick={() => setTab('serve')}>Serve &amp; Return</button>
+              </div>
+            )}
+            {tab === 'serve' && canAskStats && (
+              <div className="shp-stats shp-stats--sofa">
+                {/* Says plainly that this panel does NOT follow the slider,
+                    because the panel beside it does. */}
+                <p className="shp-stats-note">Whole match — these figures don’t follow the slider.</p>
+                {sofaRows.length === 0
+                  ? <p className="shp-stats-empty">No serve statistics for this match.</p>
+                  : (() => {
+                      const flip = !topIsP1          // rows come home-first
+                      let section = null
+                      return sofaRows.map(r => {
+                        const l = flip ? r.away : r.home
+                        const rt = flip ? r.home : r.away
+                        // A bare count (no denominator) gets no percentage —
+                        // "Return games played 13 v 13" as a bar would imply a
+                        // contest that isn't one. Bars scale to the larger.
+                        const ratio = l[1] != null && rt[1] != null
+                        const pc = (v) => (v[1] ? Math.round((100 * v[0]) / v[1]) : 0)
+                        const peak = Math.max(l[0], rt[0], 1)
+                        const width = (v) => (ratio ? pc(v) : Math.round((100 * v[0]) / peak))
+                        const head = r.section !== section ? (section = r.section) : null
+                        return (
+                          <div key={r.label}>
+                            {head && <div className="shp-stat-section">{head}</div>}
+                            <div className="shp-stat-row">
+                              <span className="shp-stat-num">
+                                {ratio ? `${pc(l)}%` : l[0]}
+                                <small>{ratio ? ` (${l[0]}/${l[1]})` : ''}</small></span>
+                              <span className="shp-stat-bar shp-stat-bar--l">
+                                <i style={{ width: `${width(l)}%` }} /></span>
+                              <span className="shp-stat-label">{r.label}</span>
+                              <span className="shp-stat-bar shp-stat-bar--r">
+                                <i style={{ width: `${width(rt)}%` }} /></span>
+                              <span className="shp-stat-num shp-stat-num--r">
+                                {ratio ? `${pc(rt)}%` : rt[0]}
+                                <small>{ratio ? ` (${rt[0]}/${rt[1]})` : ''}</small></span>
+                            </div>
+                          </div>
+                        )
+                      })
+                    })()}
+              </div>
+            )}
+            {tab === 'points' && statsUsable && (() => {
               const snap = stats.at[Math.min(atEnd ? stats.at.length - 1 : pos, stats.at.length - 1)]
               const top = snap[topIsP1 ? 0 : 1]
               const bot = snap[topIsP1 ? 1 : 0]

@@ -252,6 +252,11 @@ export const getMatchScoreHistory = (drawId, matchId) =>
   request(`/tournaments/${drawId}/matches/${matchId}/score-history`)
 export const getEntryScoreHistory = (entryId) =>
   request(`/schedule/entries/${entryId}/score-history`)
+/* Sofascore's serve/return figures for the Match Stats tab. Separate from
+   score-history because these only move when a GAME ends, so the client asks
+   far less often than the ten-second history poll. */
+export const getMatchStatistics = (drawId, matchId) =>
+  request(`/tournaments/${drawId}/matches/${matchId}/statistics`)
 
 /* League settings — the site's LeagueSettings panel. The server's _can_manage
    gates all four: owner, a league admin, or a site admin. */

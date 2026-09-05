@@ -15,7 +15,7 @@
  */
 import { useMemo, useRef, useState } from 'react'
 import { PanResponder, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { getEntryScoreHistory, getMatchScoreHistory } from './api'
+import { getEntryScoreHistory, getMatchScoreHistory, getMatchStatistics } from './api'
 import { leading } from './fontScale.js'
 import { MatchCard } from './scorecard'
 import { pointStats, sanitizeSnapshots, timelineMarkers } from './scoreTimeline'
@@ -76,6 +76,7 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
   const [pos, setPos] = useState(null)
   // True while a finger is on the slider — see the ScrollView below.
   const [holding, setHolding] = useState(false)
+  const [tab, setTab] = useState('points')
 
   /* Snapshots arrive in the MATCH's orientation (side 1 = the bracket's
      player1); the sheet shows the SHEET's order, which need not agree. Line
@@ -107,6 +108,23 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
     [snapshots, completed, winnerSide])
   const stats = useMemo(() => pointStats(snapshots), [snapshots])
   const statsUsable = stats.counted >= 20 && stats.counted / Math.max(1, stats.transitions) >= 0.7
+
+  /* THE SECOND TAB — Sofascore's own serve and return figures, which our
+     snapshots cannot produce: no score says whether a point was played on a
+     first or a second serve. Only for bracket matches; an entry-only row
+     (doubles, qualifying) has no match to ask about.
+
+     These have NO per-point history, so unlike the Points tab they do not
+     follow the slider — hence two tabs rather than one panel, or a number
+     ignoring the thumb would sit beside numbers obeying it. Fetched only when
+     the tab is actually open. */
+  const canAskStats = !entryOnly && entry?.draw_id != null && entry?.match_id != null
+  const sofa = useApi(
+    canAskStats ? `match-stats:${entry.draw_id}:${entry.match_id}` : null,
+    () => getMatchStatistics(entry.draw_id, entry.match_id),
+    { enabled: canAskStats && tab === 'serve' },
+  )
+  const sofaRows = sofa.data?.periods?.ALL || []
 
   if (!entry) return null
 
@@ -154,9 +172,22 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
                 {markers.some(m => m.kind === 'match') && <Legend color={TICK.match} label="match" />}
               </View>
             )}
-            {statsUsable && (
+            {/* Tabs only when there IS a second panel — a match with no
+                Sofascore event id keeps the single panel it always had. */}
+            {statsUsable && canAskStats && (
+              <View style={s.tabs}>
+                {[['points', 'Points'], ['serve', 'Serve & Return']].map(([k, label]) => (
+                  <Text key={k} onPress={() => setTab(k)} accessibilityRole="button"
+                        style={[s.tab, tab === k && s.tabOn]}>{label}</Text>
+                ))}
+              </View>
+            )}
+            {tab === 'points' && statsUsable && (
               <Stats stats={stats} pos={Math.min(atEnd ? stats.at.length - 1 : pos, stats.at.length - 1)}
                      topIsP1={topIsP1} left={cleanName(a[0])} right={cleanName(b[0])} />
+            )}
+            {tab === 'serve' && canAskStats && (
+              <SofaStats rows={sofaRows} topIsP1={topIsP1} loading={sofa.loading} />
             )}
           </>
         )}
@@ -289,6 +320,49 @@ function Stats({ stats, pos, topIsP1, left, right }) {
   )
 }
 
+/* Sofascore's serve/return tally. Same five-column grid as Stats so the two
+   tabs read as one table with two pages — but WHOLE MATCH, said plainly at the
+   top because the panel next door moves with the slider and this one cannot. */
+function SofaStats({ rows, topIsP1, loading }) {
+  if (loading && rows.length === 0) return <Loading />
+  if (rows.length === 0) return <Text style={s.err}>No serve statistics for this match.</Text>
+  let section = null
+  return (
+    <View style={s.stats}>
+      <Text style={s.statsNote}>Whole match — these don’t follow the slider.</Text>
+      {rows.map(r => {
+        const l = topIsP1 ? r.home : r.away
+        const rt = topIsP1 ? r.away : r.home
+        // A bare count has no denominator, so no percentage: "Return games
+        // played 13 v 13" as a percentage bar would imply a contest it isn't.
+        const ratio = l[1] != null && rt[1] != null
+        const pct = (v) => (v[1] ? Math.round((100 * v[0]) / v[1]) : 0)
+        const peak = Math.max(l[0], rt[0], 1)
+        const width = (v) => (ratio ? pct(v) : Math.round((100 * v[0]) / peak))
+        const head = r.section !== section ? (section = r.section) : null
+        return (
+          <View key={r.label}>
+            {head ? <Text style={s.statSection}>{head}</Text> : null}
+            <View style={s.statRow}>
+              <Text style={s.statNum} numberOfLines={1}>
+                {ratio ? `${pct(l)}%` : l[0]}
+                <Text style={s.statSmall}>{ratio ? ` (${l[0]}/${l[1]})` : ''}</Text>
+              </Text>
+              <View style={s.barL}><View style={[s.barFill, { backgroundColor: C.h2hP1, width: `${width(l)}%` }]} /></View>
+              <Text style={s.statLabel} numberOfLines={1}>{r.label}</Text>
+              <View style={s.barR}><View style={[s.barFill, { backgroundColor: C.h2hP2, width: `${width(rt)}%` }]} /></View>
+              <Text style={[s.statNum, { textAlign: 'right' }]} numberOfLines={1}>
+                {ratio ? `${pct(rt)}%` : rt[0]}
+                <Text style={s.statSmall}>{ratio ? ` (${rt[0]}/${rt[1]})` : ''}</Text>
+              </Text>
+            </View>
+          </View>
+        )
+      })}
+    </View>
+  )
+}
+
 /* "MK" for the gutter beside the track: the top player's initials above the
    track's level, the bottom player's below — the same order as the card. */
 function initialsOf(name) {
@@ -323,6 +397,18 @@ const s = StyleSheet.create({
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   legendBox: { width: 8, height: 8, borderRadius: 2 },
   legendText: { ...T.tiny, color: C.faint },
+  /* Tabs: two views of the same table. The active one is marked by weight
+     and an underline, not a filled pill — a pill here would compete with the
+     score card above it for the eye. */
+  tabs: { flexDirection: 'row', gap: 2, marginTop: S.sm,
+          borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
+  tab: { ...T.tiny, color: C.faint, fontFamily: 'Archivo_700Bold',
+         paddingVertical: 5, paddingHorizontal: 10, marginBottom: -StyleSheet.hairlineWidth,
+         borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  tabOn: { color: C.ink, borderBottomColor: C.greenLit },
+  statsNote: { ...T.tiny, color: C.faint, textAlign: 'center', marginBottom: 2 },
+  statSection: { ...T.tiny, color: C.faint, fontFamily: 'Archivo_700Bold',
+                 letterSpacing: 0.6, textTransform: 'uppercase', marginTop: 6, marginBottom: 1 },
   stats: { gap: 8, marginTop: S.xs },
   statNames: { flexDirection: 'row', justifyContent: 'space-between', gap: S.sm },
   statName: { ...T.smallMed, flex: 1 },
