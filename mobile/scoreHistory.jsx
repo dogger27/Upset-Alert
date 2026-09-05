@@ -74,6 +74,8 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
 
   // null = fully right = follow live / show final. An index otherwise.
   const [pos, setPos] = useState(null)
+  // True while a finger is on the slider — see the ScrollView below.
+  const [holding, setHolding] = useState(false)
 
   /* Snapshots arrive in the MATCH's orientation (side 1 = the bracket's
      player1); the sheet shows the SHEET's order, which need not agree. Line
@@ -130,14 +132,20 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
   return (
     <Sheet visible={visible} onClose={onClose}>
       <Text style={[s.when, atEnd && live && { color: C.greenLit }]}>{when}</Text>
-      <ScrollView contentContainerStyle={{ gap: S.md, paddingBottom: S.sm }}>
+      {/* The scroll is OFF while the slider is held. Refusing to hand the
+          responder over is enough on iOS; Android's ScrollView can still take
+          a vertical drag, and the symptom is the whole sheet moving under the
+          finger. Turning it off for the duration of the drag is the one thing
+          that cannot be argued with. */}
+      <ScrollView scrollEnabled={!holding}
+                  contentContainerStyle={{ gap: S.md, paddingBottom: S.sm }}>
         <MatchCard e={row} />
         {hist.loading && !data ? <Loading /> : null}
         {hist.error ? <Text style={s.err}>Couldn’t load the match history.</Text> : null}
         {max > 0 && (
           <>
             <Scrub max={max} pos={atEnd ? max : pos} onChange={v => setPos(v >= max ? null : v)}
-                   markers={markers} topIsP1={topIsP1}
+                   onHold={setHolding} markers={markers} topIsP1={topIsP1}
                    top={initialsOf(a[0]?.name)} bottom={initialsOf(b[0]?.name)} />
             {markers.length > 0 && (
               <View style={s.legend}>
@@ -164,20 +172,43 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
    a tick at i/max sits exactly under the thumb when the thumb is at i. Drag
    anywhere on the track: the touch decides the position, the same as the
    site's range input. */
-function Scrub({ max, pos, onChange, markers, topIsP1, top, bottom }) {
+function Scrub({ max, pos, onChange, markers, topIsP1, top, bottom, onHold }) {
   const [w, setW] = useState(0)
   const wRef = useRef(0); wRef.current = w
   const startX = useRef(0)
+  /* Read through refs inside the responder. PanResponder.create runs ONCE, so
+     the handlers close over the first render's props for ever — `max` was
+     captured at 0 on the first frame and every drag then computed against it. */
+  const maxRef = useRef(max); maxRef.current = max
+  const onChangeRef = useRef(onChange); onChangeRef.current = onChange
+  const onHoldRef = useRef(onHold); onHoldRef.current = onHold
   const at = (x) => {
     const travel = Math.max(1, wRef.current - THUMB)
-    const v = Math.round(((x - THUMB / 2) / travel) * max)
-    onChange(Math.max(0, Math.min(max, v)))
+    const v = Math.round(((x - THUMB / 2) / travel) * maxRef.current)
+    onChangeRef.current(Math.max(0, Math.min(maxRef.current, v)))
   }
   const pan = useRef(PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: () => true,
-    onPanResponderGrant: (evt) => { startX.current = evt.nativeEvent.locationX; at(startX.current) },
+    /* CAPTURE, not the plain variants. Two things follow from it, and both
+       were bugs: the track claims the touch before its own children, so
+       `locationX` is measured against the TRACK rather than against whichever
+       tick or thumb happened to be under the finger — a touch on the thumb
+       reported a few px and threw the scrub back to the start. And it takes
+       the gesture before the enclosing ScrollView can. */
+    onStartShouldSetPanResponderCapture: () => true,
+    onMoveShouldSetPanResponderCapture: () => true,
+    /* NO, the ScrollView may not have it. The default here is YES, which is
+       why a few pixels of vertical drift handed the gesture over: the sheet
+       scrolled under the finger and the slider was left where it stood. */
+    onPanResponderTerminationRequest: () => false,
+    onShouldBlockNativeResponder: () => true,
+    onPanResponderGrant: (evt) => {
+      startX.current = evt.nativeEvent.locationX
+      onHoldRef.current?.(true)
+      at(startX.current)
+    },
     onPanResponderMove: (_, g) => at(startX.current + g.dx),
+    onPanResponderRelease: () => onHoldRef.current?.(false),
+    onPanResponderTerminate: () => onHoldRef.current?.(false),
   })).current
   const x = THUMB / 2 + (w - THUMB) * (max ? pos / max : 0)
   return (
@@ -189,17 +220,21 @@ function Scrub({ max, pos, onChange, markers, topIsP1, top, bottom }) {
       <View style={[s.track, { touchAction: 'none' }]} onLayout={ev => setW(ev.nativeEvent.layout.width)}
             {...pan.panHandlers} accessibilityRole="adjustable"
             accessibilityLabel="Scrub through the match's score history">
-        <View style={s.rail} />
-        <View style={[s.fill, { width: x }]} />
+        {/* pointerEvents none on every visual part: belt and braces beside the
+            capture above, so a tick or the thumb can never be the touch's
+            target and mis-measure locationX. */}
+        <View style={s.rail} pointerEvents="none" />
+        <View style={[s.fill, { width: x }]} pointerEvents="none" />
         {w > 0 && markers.map(m => {
           const up = (m.side === 1) === topIsP1
           const left = THUMB / 2 + (w - THUMB) * (m.i / max) - (m.adj ? 3 : 0) - 1.5
           return (
             <View key={`${m.kind}${m.i}${m.adj ? 'a' : ''}`}
+                  pointerEvents="none"
                   style={[s.tick, up ? s.tickUp : s.tickDown, { left, backgroundColor: TICK[m.kind] }]} />
           )
         })}
-        <View style={[s.thumb, { left: x - THUMB / 2 }]} />
+        <View style={[s.thumb, { left: x - THUMB / 2 }]} pointerEvents="none" />
       </View>
     </View>
   )
