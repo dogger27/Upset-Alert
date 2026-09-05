@@ -286,6 +286,12 @@
    line as "break" and "set", which is what makes it look like one legend
    rather than a caption stuck alongside. */
 .shp-underline {
+  /* SPANS BOTH GRID COLUMNS, as the legend did before it was wrapped. Without
+     this the wrapper lands in .shp-scrub's `auto` names column and its own
+     content sets that column's width — so the track's left edge moved every
+     time the label changed between nothing, "Ace" and "Double Fault", which
+     is exactly the jumping this row was blamed for. */
+  grid-column: 1 / -1;
   display: flex;
   /* CENTRED, not baseline-aligned. The legend item is an inline-flex whose
      first child is the colour box, so its baseline is the BOX's bottom edge
