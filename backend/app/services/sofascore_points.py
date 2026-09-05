@@ -38,10 +38,12 @@ logger = logging.getLogger(__name__)
 # pointDescription → what we print. Anything else is an ordinary point.
 LABELS = {1: "Ace", 2: "Double Fault"}
 
-# How stale a LIVE match's point list may be before it is refetched. A point is
-# a few seconds of tennis, and this only runs while a reader has the popup
-# open, so a short window costs at most one request per reader per minute.
-LIVE_TTL = timedelta(seconds=45)
+# How stale a LIVE match's point list may be before it is refetched. Short,
+# because the point of the label is that it appears WHEN the ace is hit — but
+# not so short that a watched match costs more than a few requests a minute.
+# The cache is per process and shared, so ten readers on one match cost the
+# same as one, and nothing fetches at all unless a popup is open.
+LIVE_TTL = timedelta(seconds=20)
 
 
 def _key(set_no, game_no) -> str:
