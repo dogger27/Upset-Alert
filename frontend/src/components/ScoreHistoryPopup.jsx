@@ -40,6 +40,12 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
   // A row with no bracket match — qualifying singles, doubles — keeps its
   // history under its own schedule-entry id; the response shape is identical.
   const entryOnly = !!entry && !entry.match_id
+  /* Decided from the props rather than from the response, so the first fetch
+     already polls instead of waiting for a round trip to find out. */
+  const maybeLive = entry
+    ? (entry.status !== 'completed' && entry.winner_side == null)
+    : (match?.winner == null)
+
   const { data } = useQuery({
     queryKey: entryOnly
       ? ['score-history-entry', entry.id]
@@ -48,7 +54,13 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
       ? getEntryScoreHistory(entry.id)
       : getMatchScoreHistory(histDrawId, histMatchId),
     enabled: entryOnly ? !!entry.id : (!!histDrawId && !!histMatchId),
-    staleTime: 15_000,
+    staleTime: 5_000,
+    /* WHILE THE MATCH IS ON, THIS POLLS. The point label arrives with the
+       snapshots, so a match still being played has to be asked again for the
+       ace that was just hit to appear — the draw page's own nudges do not
+       carry this key. Only while the popup is open, and only for a match that
+       has no winner yet, so it stops by itself. */
+    refetchInterval: maybeLive ? 10_000 : false,
   })
 
   // null = fully right = follow live / show final. An index otherwise.
@@ -75,8 +87,21 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
   /* The feed's own corrections are erased before anything reads the list —
      display and markers both, so a premature point neither replays in the
      scrub nor mints a phantom break tick. See sanitizeSnapshots. */
-  const snapshots = useMemo(
+  const live = useMemo(
     () => sanitizeSnapshots(data?.snapshots ?? []), [data?.snapshots])
+
+  /* THE TIMELINE HOLDS STILL WHILE YOU SCRUB. A live match gains a snapshot
+     every few seconds, and each one lengthens the track — so the thumb, the
+     ticks and the position under your finger all slid sideways while you were
+     reading them. Once a position is held, the list is frozen at what it was;
+     letting go (fully right, following live again) releases it. */
+  const [frozen, setFrozen] = useState(null)
+  const scrubbing = pos != null
+  useEffect(() => {
+    if (!scrubbing) { setFrozen(null); return }
+    setFrozen(prev => prev ?? live)
+  }, [scrubbing, live])
+  const snapshots = frozen ?? live
   const max = snapshots.length            // rightmost notch = live/final
   const atEnd = pos == null || pos >= max
   const completed = entry
@@ -155,7 +180,7 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
      memoised because a live match re-renders this popup on every point. */
   const markers = useMemo(
     () => timelineMarkers(snapshots, { completed, winnerSide }),
-    [data?.snapshots, completed, winnerSide])
+    [snapshots, completed, winnerSide])
 
   /* The point the scrub is sitting ON. A snapshot records the score AFTER a
      point, so the snapshot at this position IS the point just played — which
@@ -169,7 +194,7 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
      broadcast graphic this mirrors cannot do. Hidden when too little of the
      match carried point data (ESPN-only histories) — a stats panel built on
      scraps would state percentages it cannot back. */
-  const stats = useMemo(() => pointStats(snapshots), [data?.snapshots])
+  const stats = useMemo(() => pointStats(snapshots), [snapshots])
   const statsUsable = stats.counted >= 20 && stats.counted / Math.max(1, stats.transitions) >= 0.7
 
   if (!match && !entry) return null

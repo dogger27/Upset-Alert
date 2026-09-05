@@ -278,30 +278,39 @@
 .shp-stat-name--l { color: var(--h2h-p1); }
 .shp-stat-name--r { color: var(--h2h-p2); text-align: right; }
 
-/* The legend and the "Prev Point" line share one row: the legend sits left,
-   the point label right. Reserving the row's height unconditionally is what
-   stops the statistics below it jumping every time the scrub lands on a point
-   that has nothing to say — which is most of them. */
+/* The legend and the "Prev Point" line are ONE line, sharing a baseline.
+   The legend carries its own margin-top (it used to be a grid child), so that
+   margin moves to this row and is cleared on the legend itself — otherwise the
+   legend sits lower than the label beside it and the two read as two rows.
+   align-items: baseline, not center: the label's text sits on exactly the same
+   line as "break" and "set", which is what makes it look like one legend
+   rather than a caption stuck alongside. */
 .shp-underline {
   display: flex;
+  /* CENTRED, not baseline-aligned. The legend item is an inline-flex whose
+     first child is the colour box, so its baseline is the BOX's bottom edge
+     and aligning to it left the words 1.6px apart. Both sides carry the same
+     font, size and line-height, so centring the two boxes puts the two text
+     baselines on exactly the same line. */
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  min-height: 1.15rem;
+  gap: 1.1rem;
+  margin-top: 0.35rem;
+  /* Held constant so the block below never moves as the scrub lands on a
+     point that has something to say and then one that does not. */
+  min-height: 1.05rem;
 }
+.shp-underline .shp-legend { margin-top: 0; line-height: 1.2; }
 
+/* Same size, family and colour as a legend item — only the value is bolder,
+   which is the one thing that should stand out on the row. */
 .shp-prev-point {
   margin-left: auto;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 0.35rem;
-  font-family: var(--font-body);
   font-size: 0.72rem;
+  line-height: 1.2;
+  color: var(--text-muted);
   white-space: nowrap;
 }
-.shp-prev-point-label { color: var(--text-muted); }
-.shp-prev-point-value {
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  color: var(--text);
-}
+.shp-prev-point-value { font-weight: 800; color: var(--text); }
