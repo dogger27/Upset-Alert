@@ -94,6 +94,30 @@ export default function About() {
         </Card>
 
         <Card>
+          <Title>Contact</Title>
+          <Muted>Please connect with me for bug fixes, feature requests, or a friendly hello!</Muted>
+          {status === 'sent' ? (
+            <Text style={{ color: C.greenLit }}>Message sent! I’ll get back to you soon.</Text>
+          ) : (
+            <>
+              <Text style={s.label}>Name</Text>
+              <TextInput style={s.input} value={form.name} onChangeText={set('name')} placeholderTextColor={C.muted} autoComplete="name" />
+              <Text style={s.label}>Your email</Text>
+              <TextInput style={s.input} value={form.email} onChangeText={set('email')} placeholderTextColor={C.muted}
+                         keyboardType="email-address" autoCapitalize="none" autoComplete="email" />
+              <Text style={s.label}>Subject</Text>
+              <TextInput style={s.input} value={form.subject} onChangeText={set('subject')} placeholderTextColor={C.muted} />
+              <Text style={s.label}>Message</Text>
+              <TextInput style={[s.input, s.area]} value={form.body} onChangeText={set('body')} placeholderTextColor={C.muted}
+                         multiline numberOfLines={5} textAlignVertical="top" />
+              {status === 'error' && <Text style={{ color: C.bad }}>Something went wrong — please try again.</Text>}
+              <Button label={status === 'sending' ? 'Sending…' : 'Send message'} onPress={send} busy={status === 'sending'} />
+              {!canSend && <Muted>All four fields are needed.</Muted>}
+            </>
+          )}
+        </Card>
+
+        <Card>
           <Title>Add to your home screen</Title>
           <Muted>
             Upset Alert also runs in your browser — there is nothing to download. Add it to
@@ -168,30 +192,6 @@ export default function About() {
               time you visit. Either way gets you the same app.
             </Text>
           </Steps>
-        </Card>
-
-        <Card>
-          <Title>Contact</Title>
-          <Muted>Please connect with me for bug fixes, feature requests, or a friendly hello!</Muted>
-          {status === 'sent' ? (
-            <Text style={{ color: C.greenLit }}>Message sent! I’ll get back to you soon.</Text>
-          ) : (
-            <>
-              <Text style={s.label}>Name</Text>
-              <TextInput style={s.input} value={form.name} onChangeText={set('name')} placeholderTextColor={C.muted} autoComplete="name" />
-              <Text style={s.label}>Your email</Text>
-              <TextInput style={s.input} value={form.email} onChangeText={set('email')} placeholderTextColor={C.muted}
-                         keyboardType="email-address" autoCapitalize="none" autoComplete="email" />
-              <Text style={s.label}>Subject</Text>
-              <TextInput style={s.input} value={form.subject} onChangeText={set('subject')} placeholderTextColor={C.muted} />
-              <Text style={s.label}>Message</Text>
-              <TextInput style={[s.input, s.area]} value={form.body} onChangeText={set('body')} placeholderTextColor={C.muted}
-                         multiline numberOfLines={5} textAlignVertical="top" />
-              {status === 'error' && <Text style={{ color: C.bad }}>Something went wrong — please try again.</Text>}
-              <Button label={status === 'sending' ? 'Sending…' : 'Send message'} onPress={send} busy={status === 'sending'} />
-              {!canSend && <Muted>All four fields are needed.</Muted>}
-            </>
-          )}
         </Card>
 
         <Card>
