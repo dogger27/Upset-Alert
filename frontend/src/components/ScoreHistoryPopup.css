@@ -254,7 +254,11 @@
   font-size: 0.72rem;
 }
 .shp-stat-num { font-weight: 700; color: var(--text); white-space: nowrap; }
-.shp-stat-num small { font-weight: 400; color: var(--text-muted); }
+/* PHONE FIRST, like the rest of this file: no room for "(12/15)" beside the
+   percentage at this width — it forced the number column wide enough to clip
+   its own text. The percentage is the comparison anyway; the fraction is
+   detail, and it comes back on desktop where the column can hold it. */
+.shp-stat-num small { display: none; }
 .shp-stat-num--r { text-align: right; }
 .shp-stat-label {
   color: var(--text-muted);
@@ -391,4 +395,14 @@
   text-transform: uppercase;
   color: var(--text-muted);
   margin: 0.35rem 0 0.1rem;
+}
+
+/* Desktop puts the raw counts back beside each percentage.
+   AFTER the base rule on purpose: a media query carries no extra specificity,
+   so at equal specificity source order decides. Placed higher in the file —
+   next to the other min-width:900px block — this loses to the `display: none`
+   below it and silently does nothing. Same trap recorded in
+   feedback_container_query_cascade. */
+@media (min-width: 900px) {
+  .shp-stat-num small { display: inline; font-weight: 400; color: var(--text-muted); }
 }
