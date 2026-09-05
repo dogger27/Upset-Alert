@@ -378,7 +378,6 @@
 }
 /* The tab bar already draws the rule, so this panel must not draw a second. */
 .shp-stats--sofa { border-top: 0; padding-top: 0.15rem; }
-.shp-stats-note,
 .shp-stats-empty {
   margin: 0.1rem 0 0.2rem;
   font-size: 0.65rem;
