@@ -314,9 +314,6 @@ function Stats({ stats, pos, topIsP1, left, right }) {
         <Text style={[s.statName, { color: C.h2hP1 }]} numberOfLines={1}>{left}</Text>
         <Text style={[s.statName, { color: C.h2hP2, textAlign: 'right' }]} numberOfLines={1}>{right}</Text>
       </View>
-      {splitSuspect ? (
-        <Text style={s.err}>The serve breakdown is published once the match finishes.</Text>
-      ) : null}
       {/* ONE LINE PER STATISTIC, the site's grid: number, bar, label, bar,
           number. The bars grow from the label outward, in each player's own
           colour, so name, bar and column read as one. */}
@@ -356,6 +353,9 @@ function SofaStats({ rows, topIsP1, loading, left, right, splitSuspect }) {
         <Text style={[s.statName, { color: C.h2hP1 }]} numberOfLines={1}>{left}</Text>
         <Text style={[s.statName, { color: C.h2hP2, textAlign: 'right' }]} numberOfLines={1}>{right}</Text>
       </View>
+      {splitSuspect ? (
+        <Text style={s.err}>The serve breakdown is published once the match finishes.</Text>
+      ) : null}
       {rows.map(r => {
         const l = topIsP1 ? r.home : r.away
         const rt = topIsP1 ? r.away : r.home
