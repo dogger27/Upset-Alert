@@ -194,7 +194,8 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
                      topIsP1={topIsP1} left={cleanName(a[0])} right={cleanName(b[0])} />
             )}
             {tab === 'serve' && canAskStats && (
-              <SofaStats rows={sofaRows} topIsP1={topIsP1} loading={sofa.loading} />
+              <SofaStats rows={sofaRows} topIsP1={topIsP1} loading={sofa.loading}
+                         left={cleanName(a[0])} right={cleanName(b[0])} />
             )}
           </>
         )}
@@ -330,13 +331,18 @@ function Stats({ stats, pos, topIsP1, left, right }) {
 /* Sofascore's serve/return tally. Same five-column grid as Stats so the two
    tabs read as one table with two pages — but WHOLE MATCH, said plainly at the
    top because the panel next door moves with the slider and this one cannot. */
-function SofaStats({ rows, topIsP1, loading }) {
+function SofaStats({ rows, topIsP1, loading, left, right }) {
   if (loading && rows.length === 0) return <Loading />
   if (rows.length === 0) return <Text style={s.err}>No serve statistics for this match.</Text>
   let section = null
   return (
     <View style={s.stats}>
-      <Text style={s.statsNote}>Whole match — these don’t follow the slider.</Text>
+      {/* The same column heads the Points panel carries, each in that side's
+          own bar colour, so name, bar and column read as one. */}
+      <View style={s.statNames}>
+        <Text style={[s.statName, { color: C.h2hP1 }]} numberOfLines={1}>{left}</Text>
+        <Text style={[s.statName, { color: C.h2hP2, textAlign: 'right' }]} numberOfLines={1}>{right}</Text>
+      </View>
       {rows.map(r => {
         const l = topIsP1 ? r.home : r.away
         const rt = topIsP1 ? r.away : r.home
@@ -413,7 +419,6 @@ const s = StyleSheet.create({
          paddingVertical: 5, paddingHorizontal: 10, marginBottom: -StyleSheet.hairlineWidth,
          borderBottomWidth: 2, borderBottomColor: 'transparent' },
   tabOn: { color: C.ink, borderBottomColor: C.greenLit },
-  statsNote: { ...T.tiny, color: C.faint, textAlign: 'center', marginBottom: 2 },
   statSection: { ...T.tiny, color: C.faint, fontFamily: 'Archivo_700Bold',
                  letterSpacing: 0.6, textTransform: 'uppercase', marginTop: 6, marginBottom: 1 },
   stats: { gap: 8, marginTop: S.xs },
