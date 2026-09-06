@@ -2452,24 +2452,38 @@ async def recompute_expected_starts(db, tournament_id: int, play_date: date,
     for r in rows:
         by_court.setdefault(r.court or '', []).append(r)
 
-    # HOW LONG A MATCH TAKES HERE, measured, once per pass rather than per
-    # slot. Falls back to the constants when this kind of match has not been
-    # timed often enough to say — which is the honest answer, not a worse one.
-    draw = await db.get(Draw, tournament_id)
-    obs_dur, obs_n, obs_basis = (await _observed_duration(db, draw)) if draw else (None, 0, '')
-    # Five sets or three, for the slots we have NOT timed. Without this the
-    # fallback was the best-of-three figure for everything, so an untimed
-    # men's Slam — Wimbledon, Roland Garros, the Australian — was planned at
-    # 105 minutes for matches that take nearer three hours.
-    singles_best_of = _best_of(draw, 'singles')
-    if obs_dur:
-        logger.info("expected starts: singles %d min from %d timed matches (%s)",
-                    obs_dur, obs_n, obs_basis)
-    else:
-        logger.info("expected starts: singles %d min (constant, best of %d; "
-                    "only %d timed matches)",
-                    _duration_for('singles', singles_best_of, True),
-                    singles_best_of, obs_n)
+    # HOW LONG A MATCH TAKES HERE — resolved PER ROW, because one court's day
+    # is not one draw. `tournament_id` here is the parent TOURNAMENT: at a Slam
+    # it spans the men's draw and the women's, and Louis Armstrong will host an
+    # ATP best-of-five and a WTA best-of-three back to back. The row's own
+    # draw_id is the only thing that says which.
+    #
+    # (This was `db.get(Draw, tournament_id)` — a Draw looked up by a Tournament
+    # id, which matches nothing. It returned None for every row, so the whole
+    # measurement was inert and every match fell back to the same constant.)
+    draws = {d.id: d for d in (await db.execute(
+        select(Draw).where(Draw.tournament_id == tournament_id))).scalars().all()}
+    # Doubles and qualifying carry no draw_id at all. They still need to know
+    # whether this is a Slam, and every draw of one tournament shares that.
+    any_draw = next(iter(draws.values()), None)
+
+    _dur_cache: dict = {}
+
+    async def _duration_of(slot):
+        """Minutes for THIS slot: measured where we can, format table otherwise."""
+        d = draws.get(slot.draw_id) or any_draw
+        stage = slot.stage or 'main'
+        key = (getattr(d, 'id', None), slot.discipline, stage)
+        if key not in _dur_cache:
+            obs, n, basis = await _observed_duration(db, d, slot.discipline, stage) \
+                if d is not None else (None, 0, '')
+            if obs:
+                logger.info("expected starts: %s %s %d min from %d timed (%s)",
+                            slot.discipline, stage, obs, n, basis)
+            _dur_cache[key] = obs or _duration_for(
+                slot.discipline, _best_of(d, slot.discipline, stage),
+                _full_decider(d, slot.discipline, stage))
+        return _dur_cache[key], d
 
     touched = 0
     for court, slots in by_court.items():
@@ -2478,13 +2492,7 @@ async def recompute_expected_starts(db, tournament_id: int, play_date: date,
             m = matches.get(s.match_id) if s.match_id else None
             # Doubles keeps the constant: only main-draw singles are timed, so
             # a measured figure would be one borrowed from a different game.
-            # Measured where this exact kind of match has been timed enough;
-            # the format table otherwise, chosen by discipline, best-of AND
-            # stage — a Slam's qualifying doubles is not its main-draw doubles.
-            main_singles = s.discipline == 'singles' and (s.stage or 'main') == 'main'
-            dur = (obs_dur if (obs_dur and main_singles)
-                   else _duration_for(s.discipline, _best_of(draw, s.discipline, s.stage),
-                                      _full_decider(draw, s.discipline, s.stage)))
+            dur, draw = await _duration_of(s)
             before = (s.expected_start_at, s.expected_source)
 
             # Resolve the printed clock FIRST, so every branch below can write a
@@ -2582,7 +2590,7 @@ async def recompute_expected_starts(db, tournament_id: int, play_date: date,
                         minutes=_remaining_minutes(
                             live_json, s.discipline,
                             sets_to_win=_best_of(draw, s.discipline, s.stage) // 2 + 1,
-                            total_min=obs_dur if main_singles else None,
+                            total_min=dur,
                             full_decider=_full_decider(
                                 draw, s.discipline, s.stage))) + gap
                     s.estimated_duration_min = dur
