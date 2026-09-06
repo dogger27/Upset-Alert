@@ -442,14 +442,13 @@ function EntryRow({ e, venueMode, venueTz, onH2H, onHistory, inCourt }) {
                  the same reading in the app's palette. An ESTIMATE stays faded
                  and italic, exactly as the site fades a chained guess — it must
                  never read with the authority of a printed time. */
+              /* Faded and italic when the time is a GUESS of ours rather than
+                 one the tournament printed — it must never read with the same
+                 authority. The tilde says so too; this says it twice, quietly. */
               <Text style={[s.footTime, when.estimated && s.footTimeEst]} numberOfLines={1}
-                    adjustsFontSizeToFit minimumFontScale={0.7}>
-                {when.text}
-                {/* Only the GUESS is faded, not the wording it hangs off:
-                    "Followed by" is what the sheet printed and carries the
-                    sheet's authority; "~2:10 PM" is ours. */}
-                {when.est ? <Text style={s.footTimeEst}> {when.est}</Text> : null}
-              </Text>
+                    adjustsFontSizeToFit minimumFontScale={0.7}
+                    accessibilityLabel={when.displaced
+                      ? `${when.text}, ${when.displaced}` : undefined}>{when.text}</Text>
             ) : null}
           </View>
           {e.match_id != null && (live || done) && (

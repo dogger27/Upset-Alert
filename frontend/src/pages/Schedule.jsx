@@ -123,12 +123,12 @@ function canonLabel(label) {
   return t
 }
 
-function TimeLine({ text, className }) {
+function TimeLine({ text, className, title }) {
   const { label: printed, time } = splitTimeLine(text)
   const label = canonLabel(printed)
   const short = abbreviate(label)
   return (
-    <span className={className}>
+    <span className={className} title={title || undefined}>
       {label && (
         <span className="sched-time-label">
           {/* Both forms, with CSS choosing. Picking in JS would need a width
@@ -181,16 +181,28 @@ function printedStart(e, zone, venueMode) {
   return 'TBA'
 }
 
-/* A "not before" floor the estimate has already overtaken says nothing the
-   estimate does not say better: "Not before 9:30 AM" above "~10:05 AM" prints
-   two times where the later one is the answer. Only when the estimate is
-   GENUINELY later — one that lands on the printed floor IS the floor, and the
-   sheet's own wording should stand. */
+/* WHEN WE HAVE AN ESTIMATE, THE ESTIMATE IS THE LINE. The sheet's wording
+   answers a different question — "Followed by" and "Not before 9:30 AM" say
+   where a match sits in the day's ORDER, not when to turn up — and once a
+   chained estimate exists it answers the asked one better on its own.
+
+   The single exception is a "not before" floor, which is a hard constraint
+   rather than a guess: a match CANNOT begin before it, so an estimate falling
+   below one is impossible and the floor stays. Above it, the floor is no
+   longer news. */
+/* What the row WOULD have said, for the tooltip on a line the estimate has
+   replaced. Canonicalised the same way TimeLine canonicalises what it draws,
+   so the hover text and the line it explains speak with one voice. */
+function displacedWording(e, zone, venueMode) {
+  const { label, time } = splitTimeLine(printedStart(e, zone, venueMode))
+  return [canonLabel(label), time].filter(Boolean).join(' ')
+}
+
 function estimateSupersedes(e) {
-  return e.start_type === 'not_before'
-    && e.expected_source === 'estimated'
-    && !!e.expected_start_at && !!e.printed_start_at
-    && new Date(e.expected_start_at) > new Date(e.printed_start_at)
+  if (e.expected_source !== 'estimated' || !e.expected_start_at) return false
+  if (e.start_type === 'not_before' && e.printed_start_at
+      && new Date(e.expected_start_at) <= new Date(e.printed_start_at)) return false
+  return true
 }
 
 /** Estimated starts are hedged with a tilde so they never read as announced. */
@@ -598,16 +610,14 @@ function MatchRow({ e, showCourt, zone, venueMode, onH2H, onChampion, onHistory,
             })}
             text={started ?? (showCourt || estimateSupersedes(e)
                                 ? expectedStart(e, zone, venueMode)
-                                : printedStart(e, zone, venueMode))} />
-          {/* Court view keeps the sheet's wording, but "Followed by" alone does
-              not tell you when to turn up. The chained estimate goes beside it —
-              only when it ADDS something: a slot whose expected time is simply
-              the printed one would just repeat the wording, and one that has
-              overtaken a "not before" floor has already replaced it above. */}
-          {!started && !showCourt && !estimateSupersedes(e)
-            && e.expected_source === 'estimated' && e.expected_start_at && (
-            <TimeLine className="sched-est" text={expectedStart(e, zone, venueMode)} />
-          )}
+                                : printedStart(e, zone, venueMode))}
+            /* The sheet's own wording, kept within reach rather than lost:
+               "Followed by" and "Not before 9:30 AM" still say where a match
+               sits in the day's order, which the estimate alone does not. */
+            title={!started && estimateSupersedes(e)
+              ? displacedWording(e, zone, venueMode) : undefined} />
+          {/* No second line: the estimate used to sit BESIDE the sheet's
+              wording, and now replaces it. */}
         </div>
       </div>
       {/* Head-to-head, in the same place and the same shape as the draw page —
