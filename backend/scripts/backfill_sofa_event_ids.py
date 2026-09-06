@@ -1,4 +1,8 @@
-"""Give every already-finished match its Sofascore event id.
+"""Give every already-finished match its Sofascore event id and playing time.
+
+Both, because both are stamped on the same branch of the results sweep and
+both are read straight out of a payload it already holds. The name predates
+the duration; it is one pass either way.
 
 The id is stamped going forward by the live poller and by the results sweep,
 but a match that finished before the column existed has none — and without it

@@ -172,6 +172,31 @@ def _final_scores(home: dict, away: dict, status_code: int = 100,
     return [p1, p2]
 
 
+def _played_minutes(ev: dict) -> Optional[int]:
+    """PLAYING time from Sofascore's per-set clocks, in minutes.
+
+    `time` carries period1..period5 in seconds — the length of each SET — and
+    summing them gives how long tennis was actually played. Wall-clock does
+    not: a match suspended for rain between sets comes back hours later, and
+    completed-minus-started would call that a six-hour match and poison any
+    average built from it.
+
+    It is not perfect — a suspension DURING a set still sits inside that set's
+    own clock — so the bounds below throw out what remains. They are wide
+    enough for a five-set epic (Isner-Mahut aside) and tight enough that a
+    delayed match cannot pass as a long one.
+
+    Free: the results sweep already holds this payload, so nothing extra is
+    fetched to read it.
+    """
+    periods = [v for k, v in (ev.get("time") or {}).items()
+               if k.startswith("period") and isinstance(v, int) and v > 0]
+    if not periods:
+        return None
+    mins = int(round(sum(periods) / 60))
+    return mins if 15 <= mins <= 360 else None
+
+
 async def sweep_once(db, *, force: bool = False) -> dict:
     """One pass over every tracked draw's finished events.
 
@@ -295,6 +320,12 @@ async def sweep_once(db, *, force: bool = False) -> dict:
                 # never get one.
                 if ev.get("id") and match.sofa_event_id != ev.get("id"):
                     match.sofa_event_id = ev.get("id")
+                    changed = True
+                # How long the tennis actually took, for the order-of-play
+                # estimator. Read from the payload already in hand.
+                played = _played_minutes(ev)
+                if played is not None and match.sofa_duration_min != played:
+                    match.sofa_duration_min = played
                     changed = True
                 if match.sofa_winner_id != sofa_winner:
                     match.sofa_winner_id = sofa_winner
