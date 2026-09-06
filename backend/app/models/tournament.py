@@ -489,6 +489,11 @@ class Match(Base):
     # match up by afterwards — the point-by-point feed is keyed on it. Stamped
     # on the same branch that writes the live score.
     sofa_event_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # PLAYING time, in minutes, as Sofascore reports it — the sum of its
+    # per-set durations, not wall-clock. That distinction is the whole point:
+    # a match suspended for rain between sets returns to the court hours later,
+    # and its wall-clock length says nothing about how long tennis takes.
+    sofa_duration_min: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     sofa_winner_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("draw_entries.id"), nullable=True)
     # When we first OBSERVED the match finished, not when it actually ended —

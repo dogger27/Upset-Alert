@@ -77,6 +77,10 @@ _DEFAULT_CHANGEOVER_MIN = 21
 # Below this many observations a median says more about luck than the venue.
 _MIN_CHANGEOVER_SAMPLES = 4
 
+# Below this, an observed match length says more about WHICH matches happened
+# to be timed than about how long tennis takes here.
+_MIN_DURATION_SAMPLES = 5
+
 # Seeding and entry status — [1], [WC], [Q], [LL]. Removed wherever they sit,
 # not just at the front: the tours disagree about where they go, and the ATP
 # puts them AFTER the country ("Tristan MCCORMICK USA [1]"), which leaves the
@@ -2211,6 +2215,73 @@ async def _observed_changeover(db, tournament_id: int) -> tuple[int, int]:
     return int(round(median)), len(gaps)
 
 
+async def _observed_duration(db, draw) -> tuple[Optional[int], int, str]:
+    """(minutes, samples, basis) — how long a singles match really takes here.
+
+    The constants below were honest placeholders: when they were written no
+    match had both a start and an end recorded, so there was nothing to fit
+    them to. There is now, and the gap is not small — a men's Grand Slam match
+    measures about 177 minutes against the 105 the chain assumed, because
+    `_duration_for(s.discipline)` never passed a best_of and so took the
+    best-of-3 figure for every match on earth.
+
+    WHAT COUNTS AS THE SAME KIND OF MATCH:
+      * A Grand Slam is compared against ITSELF — same tournament, same tour,
+        any year. Best-of-five, its own courts, its own balls; no other event
+        predicts it, and one edition supplies a hundred matches within days.
+      * Everything else groups by tour, level and surface — "ATP 500 on clay".
+        That is the unit that behaves alike: clay rallies are longer than hard,
+        and a 250 field holds shorter matches than a 1000 field.
+
+    THE MEDIAN, not the mean. One five-set epic in a sample of a dozen drags a
+    mean by a quarter of an hour; the median describes the match in the middle,
+    which is what a schedule should plan around. (The same reasoning as
+    _observed_changeover, one line up.)
+
+    Sofascore's PLAYING time is preferred over our own, which is wall-clock and
+    therefore counts a rain delay as tennis — see the filter below.
+    """
+    is_slam = (draw.category or "").strip().lower() == "grand slam"
+
+    def _q(where):
+        return (select(Match.sofa_duration_min, Match.duration_min)
+                .join(Draw, Draw.id == Match.draw_id)
+                .where(Match.winner_id.isnot(None), *where))
+
+    # Same tournament for a Slam; same tour/level/surface otherwise. Gender is
+    # in both keys: it decides best-of-five, which is the single biggest term
+    # in how long a match lasts.
+    if is_slam and draw.tournament_id is not None:
+        where = [Draw.tournament_id == draw.tournament_id, Draw.gender == draw.gender]
+        basis = "tournament"
+    else:
+        where = [Draw.gender == draw.gender, Draw.category == draw.category,
+                 Draw.surface == draw.surface]
+        basis = "tour-level-surface"
+
+    rows = (await db.execute(_q(where))).all()
+
+    # SOFASCORE'S FIGURE FIRST, and on a different footing from ours. Theirs is
+    # the sum of the set clocks, so a delay BETWEEN sets already falls outside
+    # it; ours is completed minus started, which counts every stopped hour as
+    # tennis. So theirs is taken whenever it exists, and ours only as a
+    # fallback and only inside a range a real match can occupy — a wall-clock
+    # measure above five hours is far likelier to be a delay than an epic, and
+    # one match wrongly kept moves the median less than a four-hour phantom.
+    mins = []
+    for sofa, own in rows:
+        if sofa:
+            mins.append(int(sofa))
+        elif own and 15 <= own <= 300:
+            mins.append(int(own))
+    mins.sort()
+    if len(mins) < _MIN_DURATION_SAMPLES:
+        return None, len(mins), basis
+    mid = len(mins) // 2
+    median = mins[mid] if len(mins) % 2 else (mins[mid - 1] + mins[mid]) / 2
+    return int(round(median)), len(mins), basis
+
+
 async def recompute_expected_starts(db, tournament_id: int, play_date: date,
                                     venue_tz: Optional[str] = None) -> int:
     """Chain expected starts per court, anchored on what has actually happened.
@@ -2295,12 +2366,24 @@ async def recompute_expected_starts(db, tournament_id: int, play_date: date,
     for r in rows:
         by_court.setdefault(r.court or '', []).append(r)
 
+    # HOW LONG A MATCH TAKES HERE, measured, once per pass rather than per
+    # slot. Falls back to the constants when this kind of match has not been
+    # timed often enough to say — which is the honest answer, not a worse one.
+    draw = await db.get(Draw, tournament_id)
+    obs_dur, obs_n, obs_basis = (await _observed_duration(db, draw)) if draw else (None, 0, '')
+    if obs_dur:
+        logger.info("expected starts: singles %d min from %d timed matches (%s)",
+                    obs_dur, obs_n, obs_basis)
+
     touched = 0
     for court, slots in by_court.items():
         prev_end: Optional[datetime] = None
         for s in sorted(slots, key=lambda x: x.court_order):
             m = matches.get(s.match_id) if s.match_id else None
-            dur = _duration_for(s.discipline)
+            # Doubles keeps the constant: only main-draw singles are timed, so
+            # a measured figure would be one borrowed from a different game.
+            dur = (obs_dur if (obs_dur and s.discipline == 'singles')
+                   else _duration_for(s.discipline))
             before = (s.expected_start_at, s.expected_source)
 
             # Resolve the printed clock FIRST, so every branch below can write a
