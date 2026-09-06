@@ -197,6 +197,23 @@ function expectedStart(e, zone, venueMode) {
   return printed ? t : `~${t}`
 }
 
+/* Labels that are pure scaffolding in front of a clock. "Started at 8:17 AM"
+   and "Starting at 4:00 PM" say nothing the time does not; the words go and
+   the clock stands alone, with the full phrase kept for hover.
+
+   Deliberately NOT here: "Not before" is a constraint (the match cannot begin
+   earlier), "Resumed at" says this match came back from a delay, and "Followed
+   by" places it in the day's order. Each earns its words. */
+const BARE_LABELS = new Set(['Started at', 'Starting at'])
+
+function stripScaffolding(text) {
+  const m = (text || '').match(/^(.*?)\s*(~?\d{1,2}[:.]\d{2}\s*(?:[AP]\.?M\.?)?)$/i)
+  if (!m) return { text, displaced: null }
+  const label = m[1].trim()
+  if (!BARE_LABELS.has(label)) return { text, displaced: null }
+  return { text: m[2].trim(), displaced: text }
+}
+
 /* WHEN WE HAVE AN ESTIMATE, THE ESTIMATE IS THE LINE. The sheet's wording
    answers a different question — "Followed by" and "Not before 9:30 AM" say
    where a match sits in the day's order, not when to turn up — and once a
@@ -226,20 +243,26 @@ function estimateSupersedes(e) {
    itself. */
 export function footTime(e, zone, venueMode, inCourt) {
   if (!e) return { text: '', estimated: false, displaced: null }
+
+  /* `displaced` is whatever wording the line no longer shows. The site keeps
+     it as hover text; a phone has no hover, so it goes to the accessibility
+     label instead. Either way it should not simply vanish — "Followed by"
+     says where a match sits in the day's ORDER, and "Started at" tells a
+     reader the clock is a fact rather than a plan. */
   const started = startedLine(e, zone)
-  if (started) return { text: started, estimated: false, displaced: null }
+  if (started) return { ...stripScaffolding(started), estimated: false }
+
   if (!inCourt || estimateSupersedes(e)) {
+    const bare = stripScaffolding(expectedStart(e, zone, venueMode))
     return {
-      text: expectedStart(e, zone, venueMode),
+      text: bare.text,
       estimated: e.expected_source === 'estimated',
-      /* What the row WOULD have said. The site keeps this as hover text; a
-         phone has no hover, so it goes to the accessibility label instead —
-         "Followed by" still says where a match sits in the day's ORDER, which
-         the estimate alone does not, and that should not simply vanish. */
-      displaced: estimateSupersedes(e) ? canon(printedStart(e, zone, venueMode)) : null,
+      displaced: estimateSupersedes(e)
+        ? canon(printedStart(e, zone, venueMode))
+        : bare.displaced,
     }
   }
-  return { text: canon(printedStart(e, zone, venueMode)), estimated: false, displaced: null }
+  return { ...stripScaffolding(canon(printedStart(e, zone, venueMode))), estimated: false }
 }
 
 /* The STATUS, and only the status — the site's pill block, which draws
