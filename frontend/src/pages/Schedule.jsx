@@ -123,12 +123,24 @@ function canonLabel(label) {
   return t
 }
 
+/* Labels that are pure scaffolding in front of a clock: "Started at 8:17 AM"
+   and "Starting at 4:00 PM" say nothing the time does not. The words go, the
+   clock stands alone, and the full phrase moves to the hover.
+
+   Deliberately NOT here: "Not before" is a constraint (the match cannot begin
+   earlier), "Resumed at" says this one came back from a delay, "Followed by"
+   places it in the day's order. Each earns its words. */
+const BARE_LABELS = new Set(['Started at', 'Starting at'])
+
 function TimeLine({ text, className, title }) {
   const { label: printed, time } = splitTimeLine(text)
-  const label = canonLabel(printed)
+  const full = canonLabel(printed)
+  const bare = !!time && BARE_LABELS.has(full)
+  const label = bare ? '' : full
   const short = abbreviate(label)
   return (
-    <span className={className} title={title || undefined}>
+    <span className={className}
+          title={title || (bare ? [full, time].join(' ') : undefined)}>
       {label && (
         <span className="sched-time-label">
           {/* Both forms, with CSS choosing. Picking in JS would need a width
