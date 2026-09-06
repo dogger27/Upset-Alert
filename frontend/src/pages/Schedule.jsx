@@ -181,6 +181,18 @@ function printedStart(e, zone, venueMode) {
   return 'TBA'
 }
 
+/* A "not before" floor the estimate has already overtaken says nothing the
+   estimate does not say better: "Not before 9:30 AM" above "~10:05 AM" prints
+   two times where the later one is the answer. Only when the estimate is
+   GENUINELY later — one that lands on the printed floor IS the floor, and the
+   sheet's own wording should stand. */
+function estimateSupersedes(e) {
+  return e.start_type === 'not_before'
+    && e.expected_source === 'estimated'
+    && !!e.expected_start_at && !!e.printed_start_at
+    && new Date(e.expected_start_at) > new Date(e.printed_start_at)
+}
+
 /** Estimated starts are hedged with a tilde so they never read as announced. */
 const FIVE_MIN = 5 * 60 * 1000
 
@@ -578,15 +590,22 @@ function MatchRow({ e, showCourt, zone, venueMode, onH2H, onChampion, onHistory,
         <div className="sched-row-foot">
           <TimeLine
             className={clsx('sched-time', {
-              'sched-time--est': !started && showCourt && e.expected_source === 'estimated',
+              // Faded and italic wherever the MAIN line is a guess — in time
+              // view always, and in court view once the estimate has replaced
+              // the "not before" floor above.
+              'sched-time--est': !started && (showCourt || estimateSupersedes(e))
+                && e.expected_source === 'estimated',
             })}
-            text={started ?? (showCourt ? expectedStart(e, zone, venueMode)
-                                        : printedStart(e, zone, venueMode))} />
+            text={started ?? (showCourt || estimateSupersedes(e)
+                                ? expectedStart(e, zone, venueMode)
+                                : printedStart(e, zone, venueMode))} />
           {/* Court view keeps the sheet's wording, but "Followed by" alone does
               not tell you when to turn up. The chained estimate goes beside it —
               only when it ADDS something: a slot whose expected time is simply
-              the printed one would just repeat the wording. */}
-          {!started && !showCourt && e.expected_source === 'estimated' && e.expected_start_at && (
+              the printed one would just repeat the wording, and one that has
+              overtaken a "not before" floor has already replaced it above. */}
+          {!started && !showCourt && !estimateSupersedes(e)
+            && e.expected_source === 'estimated' && e.expected_start_at && (
             <TimeLine className="sched-est" text={expectedStart(e, zone, venueMode)} />
           )}
         </div>

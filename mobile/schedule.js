@@ -197,6 +197,18 @@ function expectedStart(e, zone, venueMode) {
   return printed ? t : `~${t}`
 }
 
+/* A "not before" floor the estimate has already overtaken says nothing the
+   estimate does not say better: "Not before 9:30 AM ~10:05 AM" prints two
+   times where the later one is the answer. Only when the estimate is GENUINELY
+   later — an estimate that lands on the printed floor is the floor, and the
+   sheet's own wording should stand. */
+function estimateSupersedes(e) {
+  return e.start_type === 'not_before'
+    && e.expected_source === 'estimated'
+    && !!e.expected_start_at && !!e.printed_start_at
+    && new Date(e.expected_start_at) > new Date(e.printed_start_at)
+}
+
 /* THE SITE'S BOTTOM-LEFT LINE, as one expression:
      startedLine ?? (names its own court ? expectedStart : printedStart)
    `inCourt` is the app's name for a card grouped UNDER its court, which is the
@@ -209,15 +221,19 @@ function expectedStart(e, zone, venueMode) {
    up, but a slot whose expected time is simply the printed one would repeat
    itself. */
 export function footTime(e, zone, venueMode, inCourt) {
-  if (!e) return { text: '', est: null }
+  if (!e) return { text: '', est: null, estimated: false }
   const started = startedLine(e, zone)
-  if (started) return { text: started, est: null }
+  if (started) return { text: started, est: null, estimated: false }
+  // The estimate has overtaken the floor: it IS the line, alone.
+  if (inCourt && estimateSupersedes(e)) {
+    return { text: expectedStart(e, zone, venueMode), est: null, estimated: true }
+  }
   const text = inCourt ? printedStart(e, zone, venueMode)
                        : expectedStart(e, zone, venueMode)
   const est = inCourt && e.expected_source === 'estimated' && e.expected_start_at
     ? expectedStart(e, zone, venueMode)
     : null
-  return { text: canon(text), est }
+  return { text: canon(text), est, estimated: !inCourt && e.expected_source === 'estimated' }
 }
 
 /* The STATUS, and only the status — the site's pill block, which draws

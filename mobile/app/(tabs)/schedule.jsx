@@ -442,9 +442,13 @@ function EntryRow({ e, venueMode, venueTz, onH2H, onHistory, inCourt }) {
                  the same reading in the app's palette. An ESTIMATE stays faded
                  and italic, exactly as the site fades a chained guess — it must
                  never read with the authority of a printed time. */
-              <Text style={[s.footTime, when.est && s.footTimeEst]} numberOfLines={1}
+              <Text style={[s.footTime, when.estimated && s.footTimeEst]} numberOfLines={1}
                     adjustsFontSizeToFit minimumFontScale={0.7}>
-                {when.text}{when.est ? ` ${when.est}` : ''}
+                {when.text}
+                {/* Only the GUESS is faded, not the wording it hangs off:
+                    "Followed by" is what the sheet printed and carries the
+                    sheet's authority; "~2:10 PM" is ours. */}
+                {when.est ? <Text style={s.footTimeEst}> {when.est}</Text> : null}
               </Text>
             ) : null}
           </View>
