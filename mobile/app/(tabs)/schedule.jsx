@@ -495,8 +495,13 @@ const s = StyleSheet.create({
      leading so they read as one block rather than two stray lines — through
      leading(), never a fixed number, so they still grow with Dynamic Type. */
   footCourt: { ...T.tiny, color: C.faint, lineHeight: leading(13) },
+  /* Pulled up against the court. The line boxes cannot close the gap on their
+     own — a lineHeight under about 1.2x the font size starts clipping
+     descenders — so the last of it comes off as a negative margin. Through
+     leading() like the rest, so it scales with Dynamic Type instead of
+     becoming a bigger and bigger bite as the type grows. */
   footTime: { ...T.smallMed, color: C.greenBright, fontFamily: 'Archivo_700Bold',
-              lineHeight: leading(17) },
+              lineHeight: leading(16), marginTop: leading(-3) },
   footTimeEst: { color: C.muted, fontStyle: 'italic' },
   h2hChip: { borderRadius: 4, borderWidth: 1, borderColor: C.borderOn, paddingHorizontal: 7, paddingVertical: 2 },
   h2hText: { fontFamily: 'Archivo_700Bold', fontSize: 10, lineHeight: leading(14), letterSpacing: 0.5, color: C.greenLit },
