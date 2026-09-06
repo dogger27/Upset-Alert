@@ -159,6 +159,16 @@ function printedStart(e, zone, venueMode) {
   return 'TBA'
 }
 
+/* The phrase the SITE keeps at a card's bottom-left, whatever the match is
+   doing — "Starting at 8:30 AM", "Not before 11:00 AM", "Followed by ~6:00 PM".
+   whenLabel gives that slot up to the status the moment a match goes live or
+   finishes; this one never does, so a finished match still says when it was
+   due on court. */
+export function printedWhen(e, zone, venueMode) {
+  if (!e) return ''
+  return canon(printedStart(e, zone, venueMode))
+}
+
 /* zone: an IANA name for venue mode, undefined for the device's own. */
 export function whenLabel(e, zone, venueMode) {
   if (!e) return ''

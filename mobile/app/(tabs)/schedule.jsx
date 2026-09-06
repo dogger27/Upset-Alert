@@ -24,8 +24,7 @@ import { hideFromLockScreen, showMatchOnLockScreen, useShowingOnLockScreen } fro
 import { showToast } from '../../toast'
 import { useLiveUpdates } from '../../live'
 import { useApi } from '../../useApi'
-import { isLive, isSuspended, whenLabel } from '../../schedule'
-import { clockTime, shortStart } from '../../dates'
+import { isLive, isSuspended, printedWhen, whenLabel } from '../../schedule'
 import { leading } from '../../fontScale.js'
 import { TourBadge } from '../../cards'
 import { MatchCard } from '../../scorecard'
@@ -381,38 +380,21 @@ function EntryRow({ e, venueMode, venueTz, onH2H, onHistory, inCourt }) {
   const live = isLive(e)
   const suspended = isSuspended(e)
   const done = e.status === 'completed'
-  /* resumed_at wins over started_at: after a rain delay the resumption is the
-     time that answers "when did this get going", and the original start is
-     hours of stopped play ago. See the rain-delay lifecycle. */
   const a = (e.players || []).find(p => p.side === 'a'), b = (e.players || []).find(p => p.side === 'b')
   const h2hPair = e.discipline === 'singles' && a?.te_slug && b?.te_slug
     ? { a: { name: a.entry_name || a.name, te_slug: a.te_slug }, b: { name: b.entry_name || b.name, te_slug: b.te_slug } }
     : null
-  /* The same split the site makes: venue mode renders a started match's
-     time in the VENUE's zone, the reader's mode in theirs. Both show it —
-     hiding it in venue mode was this app's invention. */
-  /* The site's startedLine, exactly: only a match on court or finished names
-     its start, and one picked up again names the time it came BACK. A row
-     carried over from yesterday still holds yesterday's started_at — that is
-     what the field means — so it names the slot it returns in instead, like
-     any pending row. */
-  const resumed = !!e.resumed_at
-    && (!e.started_at || new Date(e.resumed_at) > new Date(e.started_at))
-  const started = (live || done)
-    ? clockTime(resumed ? e.resumed_at : e.started_at, venueMode ? venueTz : undefined)
-    : null
-  const startedWord = resumed ? 'Resumed' : 'Started'
   const postponed = e.status === 'postponed'
   const carried = e.status === 'to_be_completed'
-  /* "Wed 8:00 AM", never "Tomorrow at 8:00 AM PDT" — that ran off the end of
-     the row and truncated to "Tomorrow at 8:00 …". Note the site does NOT show
-     an expected start on its schedule at all: the printed start already sits at
-     the top-right of every row. This is the same moment in the READER's zone
-     rather than the venue's, which is the only thing the printed time cannot
-     tell them. */
-  const upcoming = !started && !done
-    ? shortStart(e.expected_start_at, e.expected_source, venueMode ? venueTz : undefined)
-    : null
+  /* What the footer prints under the court: the SITE's phrase, always — the
+     printed start rather than the actual one, and kept even once the match is
+     over.
+
+     This replaced two other readings of the time that used to share the line:
+     the ACTUAL start of a played match ("Started 8:30 AM") and the EXPECTED
+     start of a pending one in the reader's own zone ("Sun 8:30 AM"). Both are
+     gone; the site shows neither here, and the owner asked for the site's. */
+  const when = printedWhen(e, venueMode ? venueTz : undefined, venueMode)
 
   /* A started match answers a tap with its history — the same sheet, slider
      and card the draw page opens, because the two surfaces describe the same
@@ -442,18 +424,29 @@ function EntryRow({ e, venueMode, venueTz, onH2H, onHistory, inCourt }) {
 
       <MatchCard e={e} />
 
-      {/* Court and time on ONE line. The site gives the time its own block, but
-          a phone row that already carries two players and a set-by-set score
-          cannot spend a whole line saying "Started at". */}
-      {/* Court and time on the left, H2H on the right — ONE line. The chip had
-          its own row, which cost every match a line for a button most rows
-          never tap. The site's rail sits beside the row for the same reason. */}
-      {((!inCourt && e.court) || started || upcoming || h2hPair) && (
+      {/* Court on its own line, the time UNDER it — the site's own stacking.
+          They shared a line while the time was a bare clock; the site's phrase
+          ("Not before 11:00 AM", "Followed by ~6:00 PM") is too long to sit
+          after a stadium name without shrinking both to nothing.
+
+          printedWhen, not whenLabel: the site keeps this phrase at a card's
+          bottom-left whatever the match is doing, so a finished match still
+          says when it was due on court. whenLabel gives the slot up to the
+          status ("Completed") the moment there is one — which is right for the
+          top-right corner, where it already is. */}
+      {((!inCourt && e.court) || when || h2hPair) && (
         <View style={s.footLine}>
-          <Text style={[T.tiny, { color: C.faint, flex: 1 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+          <View style={{ flex: 1 }}>
             {/* Grouped under its court already, a row need not repeat it. */}
-            {[inCourt ? null : e.court, started ? `${startedWord} ${started}` : upcoming].filter(Boolean).join(' · ')}
-          </Text>
+            {!inCourt && e.court ? (
+              <Text style={[T.tiny, { color: C.faint }]} numberOfLines={1}
+                    adjustsFontSizeToFit minimumFontScale={0.7}>{e.court}</Text>
+            ) : null}
+            {when ? (
+              <Text style={[T.tiny, { color: C.faint }]} numberOfLines={1}
+                    adjustsFontSizeToFit minimumFontScale={0.7}>{when}</Text>
+            ) : null}
+          </View>
           {e.match_id != null && (live || done) && (
             <LockPill matchId={e.match_id} live={live} />
           )}
