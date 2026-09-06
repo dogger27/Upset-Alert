@@ -159,18 +159,72 @@ function printedStart(e, zone, venueMode) {
   return 'TBA'
 }
 
-/* The phrase the SITE keeps at a card's bottom-left, whatever the match is
-   doing — "Starting at 8:30 AM", "Not before 11:00 AM", "Followed by ~6:00 PM".
-   whenLabel gives that slot up to the status the moment a match goes live or
-   finishes; this one never does, so a finished match still says when it was
-   due on court. */
-export function printedWhen(e, zone, venueMode) {
-  if (!e) return ''
-  return canon(printedStart(e, zone, venueMode))
+/* The site's startedLine, ported whole (pages/Schedule.jsx). Only a match on
+   court or finished names a start; a resumed one names the time it came BACK,
+   because started_at is the first point and does not move — a match suspended
+   overnight still started yesterday. */
+function startedLine(e, zone) {
+  if (e.status !== 'live' && e.status !== 'completed') return null
+  if (e.resumed_at && (!e.started_at || new Date(e.resumed_at) > new Date(e.started_at))) {
+    return `Resumed at ${clockIn(e.resumed_at, zone)}`
+  }
+  if (e.started_at) return `Started at ${clockIn(e.started_at, zone)}`
+  // started_at comes from the live feeds, which never saw doubles, qualifying,
+  // or anything already under way when we began recording. The match has
+  // demonstrably started though, so keep the printed time and fix the TENSE:
+  // "Starting at 11:00 AM" on a finished match is the one thing it must not say.
+  if (e.printed_start_at && e.start_type === 'fixed') {
+    return `Started at ${clockIn(e.printed_start_at, zone)}`
+  }
+  // A FINISHED match says nothing rather than guessing — the pill already says
+  // Completed, and "In progress" beside it would contradict it.
+  return e.status === 'completed' ? null : 'In progress'
 }
 
-/* zone: an IANA name for venue mode, undefined for the device's own. */
-export function whenLabel(e, zone, venueMode) {
+const FIVE_MIN = 5 * 60 * 1000
+
+/* Estimates are hedged with a tilde so they never read as announced, and
+   rounded to five minutes — a guess chained from average match lengths has no
+   business reporting "4:27". Printed times are left exactly as stated. */
+function expectedStart(e, zone, venueMode) {
+  if (!e.expected_start_at) return printedStart(e, zone, venueMode)
+  const printed = e.expected_source === 'printed'
+  let d = new Date(e.expected_start_at)
+  if (!printed) d = new Date(Math.round(d.getTime() / FIVE_MIN) * FIVE_MIN)
+  const t = d.toLocaleTimeString([], {
+    hour: 'numeric', minute: '2-digit', ...(zone ? { timeZone: zone } : {}),
+  })
+  return printed ? t : `~${t}`
+}
+
+/* THE SITE'S BOTTOM-LEFT LINE, as one expression:
+     startedLine ?? (names its own court ? expectedStart : printedStart)
+   `inCourt` is the app's name for a card grouped UNDER its court, which is the
+   site's !showCourt — grouped that way the sheet's own wording is shown
+   ("Followed by"), and elsewhere the clock, because a card that already names
+   its court has no room for a phrase.
+
+   `est` is the chained estimate the site prints BESIDE the wording, and only
+   where it adds something: "Followed by" alone does not tell you when to turn
+   up, but a slot whose expected time is simply the printed one would repeat
+   itself. */
+export function footTime(e, zone, venueMode, inCourt) {
+  if (!e) return { text: '', est: null }
+  const started = startedLine(e, zone)
+  if (started) return { text: started, est: null }
+  const text = inCourt ? printedStart(e, zone, venueMode)
+                       : expectedStart(e, zone, venueMode)
+  const est = inCourt && e.expected_source === 'estimated' && e.expected_start_at
+    ? expectedStart(e, zone, venueMode)
+    : null
+  return { text: canon(text), est }
+}
+
+/* The STATUS, and only the status — the site's pill block, which draws
+   nothing at all on a row that has not started (pages/Schedule.jsx). This used
+   to fall through to the printed start, so a scheduled row announced its time
+   twice: once here and again on the line below. */
+export function whenLabel(e) {
   if (!e) return ''
   if (e.status === 'completed') return 'Completed'
   // The two halves of a washed-out day, in the site's words: abandoned here,
@@ -179,5 +233,5 @@ export function whenLabel(e, zone, venueMode) {
   if (e.status === 'to_be_completed') return 'To be completed'
   if (isSuspended(e)) return 'Suspended'
   if (e.status === 'live') return 'In progress'
-  return canon(printedStart(e, zone, venueMode))
+  return ''
 }

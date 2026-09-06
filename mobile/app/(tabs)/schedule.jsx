@@ -24,7 +24,7 @@ import { hideFromLockScreen, showMatchOnLockScreen, useShowingOnLockScreen } fro
 import { showToast } from '../../toast'
 import { useLiveUpdates } from '../../live'
 import { useApi } from '../../useApi'
-import { isLive, isSuspended, printedWhen, whenLabel } from '../../schedule'
+import { footTime, isLive, isSuspended, whenLabel } from '../../schedule'
 import { leading } from '../../fontScale.js'
 import { TourBadge } from '../../cards'
 import { MatchCard } from '../../scorecard'
@@ -386,15 +386,12 @@ function EntryRow({ e, venueMode, venueTz, onH2H, onHistory, inCourt }) {
     : null
   const postponed = e.status === 'postponed'
   const carried = e.status === 'to_be_completed'
-  /* What the footer prints under the court: the SITE's phrase, always — the
-     printed start rather than the actual one, and kept even once the match is
-     over.
-
-     This replaced two other readings of the time that used to share the line:
-     the ACTUAL start of a played match ("Started 8:30 AM") and the EXPECTED
-     start of a pending one in the reader's own zone ("Sun 8:30 AM"). Both are
-     gone; the site shows neither here, and the owner asked for the site's. */
-  const when = printedWhen(e, venueMode ? venueTz : undefined, venueMode)
+  /* The site's bottom-left line, through its own rule — see footTime, which is
+     pages/Schedule.jsx's expression ported whole. It reads differently by
+     status and by view, and every one of those readings is deliberate there:
+     "Started at 8:30 AM" once a match is on court, the sheet's wording in
+     court view, the clock in time view. */
+  const when = footTime(e, venueMode ? venueTz : undefined, venueMode, inCourt)
 
   /* A started match answers a tap with its history — the same sheet, slider
      and card the draw page opens, because the two surfaces describe the same
@@ -418,7 +415,7 @@ function EntryRow({ e, venueMode, venueTz, onH2H, onHistory, inCourt }) {
           color: suspended || postponed ? C.warn : carried ? C.info
             : live ? C.greenLit : done ? C.faint : C.muted,
         }]}>
-          {whenLabel(e, venueMode ? venueTz : undefined, venueMode)}
+          {whenLabel(e)}
         </Text>
       </View>
 
@@ -429,12 +426,9 @@ function EntryRow({ e, venueMode, venueTz, onH2H, onHistory, inCourt }) {
           ("Not before 11:00 AM", "Followed by ~6:00 PM") is too long to sit
           after a stadium name without shrinking both to nothing.
 
-          printedWhen, not whenLabel: the site keeps this phrase at a card's
-          bottom-left whatever the match is doing, so a finished match still
-          says when it was due on court. whenLabel gives the slot up to the
-          status ("Completed") the moment there is one — which is right for the
-          top-right corner, where it already is. */}
-      {((!inCourt && e.court) || when || h2hPair) && (
+          The site's split, exactly: STATUS top-right (and nothing there at all
+          until a match has started), the TIME bottom-left. */}
+      {((!inCourt && e.court) || when.text || h2hPair) && (
         <View style={s.footLine}>
           <View style={{ flex: 1 }}>
             {/* Grouped under its court already, a row need not repeat it. */}
@@ -442,9 +436,11 @@ function EntryRow({ e, venueMode, venueTz, onH2H, onHistory, inCourt }) {
               <Text style={[T.tiny, { color: C.faint }]} numberOfLines={1}
                     adjustsFontSizeToFit minimumFontScale={0.7}>{e.court}</Text>
             ) : null}
-            {when ? (
+            {when.text ? (
               <Text style={[T.tiny, { color: C.faint }]} numberOfLines={1}
-                    adjustsFontSizeToFit minimumFontScale={0.7}>{when}</Text>
+                    adjustsFontSizeToFit minimumFontScale={0.7}>
+                {when.text}{when.est ? ` ${when.est}` : ''}
+              </Text>
             ) : null}
           </View>
           {e.match_id != null && (live || done) && (
