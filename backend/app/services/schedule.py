@@ -59,7 +59,17 @@ day_write_lock = asyncio.Lock()
 # so they are deliberate constants, replaceable once this feature has generated
 # a season of its own data. They only affect slots with no stated time, and
 # every live result collapses the error for everything after it on that court.
-_DURATION_MIN = {("singles", 3): 105, ("singles", 5): 170, ("doubles", 3): 80}
+# Keyed by (discipline, sets to win a match, whether the DECIDER is a real set).
+# That third dimension is doubles, and it is not a detail: on tour the third
+# set is replaced outright by a first-to-10 match tiebreak, and the scoring is
+# no-ad besides, so a tour doubles match is a materially shorter thing than the
+# Slam doubles match it looks identical to on a sheet.
+_DURATION_MIN = {
+    ("singles", 3, True): 105,
+    ("singles", 5, True): 170,
+    ("doubles", 3, False): 80,    # tour: no-ad, and a match tiebreak for a third set
+    ("doubles", 3, True): 100,    # Slam: a real third set, played out
+}
 _DEFAULT_DURATION = 105
 
 # Minutes between one match finishing on a court and the next starting: warm-up,
@@ -149,8 +159,37 @@ def _played(scores) -> bool:
     return True
 
 
-def _duration_for(discipline: str, best_of: int = 3) -> int:
-    return _DURATION_MIN.get((discipline, best_of), _DEFAULT_DURATION)
+def _duration_for(discipline: str, best_of: int = 3,
+                  full_decider: bool = True) -> int:
+    return _DURATION_MIN.get((discipline, best_of, full_decider), _DEFAULT_DURATION)
+
+
+def _is_slam(draw) -> bool:
+    return (getattr(draw, 'category', '') or '').strip().lower() == 'grand slam'
+
+
+def _best_of(draw, discipline: str) -> int:
+    """Sets in the match. Men's Grand Slam singles is five; everything else three.
+
+    This exists because nothing was asking the question. `_duration_for` has
+    taken a best_of since it was written and no caller ever passed one, so the
+    best-of-five entry in its table was unreachable and every men's Slam match
+    — the longest matches in tennis — was planned as a best-of-three.
+    """
+    if discipline != 'singles' or draw is None:
+        return 3
+    return 5 if _is_slam(draw) and (getattr(draw, 'gender', '') or '') == 'M' else 3
+
+
+def _full_decider(draw, discipline: str) -> bool:
+    """Is a deciding set actually played out?
+
+    Singles always. Doubles only at a Slam: the tours replace a third set with
+    a first-to-10 match tiebreak and play no-ad throughout, which makes a tour
+    doubles match a shorter thing than the Slam doubles match it is
+    indistinguishable from on an order-of-play sheet.
+    """
+    return discipline != 'doubles' or _is_slam(draw)
 
 
 def _parse_clock(value: Optional[str]) -> Optional[time]:
@@ -2132,7 +2171,9 @@ def _aware(dt):
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
-def _remaining_minutes(live, discipline: str, sets_to_win: int = 2) -> int:
+def _remaining_minutes(live, discipline: str, sets_to_win: int = 2,
+                       total_min: Optional[int] = None,
+                       full_decider: bool = True) -> int:
     """Roughly how much longer a match in progress has to run.
 
     live_scores_json carries games per set for both players, so we know how far
@@ -2151,8 +2192,11 @@ def _remaining_minutes(live, discipline: str, sets_to_win: int = 2) -> int:
     end it). Progress through the current set comes from its game count, a set
     being about twelve games at its longest before a breaker.
     """
-    total = _duration_for(discipline)
-    per_set = total / 2.5          # a best-of-3 averages about two and a half sets
+    # The measured length when the caller has one, else the constant for THIS
+    # shape of match — best-of-five included, which the default never reached.
+    total = total_min or _duration_for(discipline, 2 * sets_to_win - 1, full_decider)
+    # Sets per match, not a constant 2.5: a best-of-five averages about four.
+    per_set = total / (2.5 if sets_to_win == 2 else 4.0)
     try:
         a_sets, b_sets = live[0] or [], live[1] or []
         decided = max(max(len(a_sets), len(b_sets)) - 1, 0)   # last entry is in play
@@ -2371,9 +2415,19 @@ async def recompute_expected_starts(db, tournament_id: int, play_date: date,
     # timed often enough to say — which is the honest answer, not a worse one.
     draw = await db.get(Draw, tournament_id)
     obs_dur, obs_n, obs_basis = (await _observed_duration(db, draw)) if draw else (None, 0, '')
+    # Five sets or three, for the slots we have NOT timed. Without this the
+    # fallback was the best-of-three figure for everything, so an untimed
+    # men's Slam — Wimbledon, Roland Garros, the Australian — was planned at
+    # 105 minutes for matches that take nearer three hours.
+    singles_best_of = _best_of(draw, 'singles')
     if obs_dur:
         logger.info("expected starts: singles %d min from %d timed matches (%s)",
                     obs_dur, obs_n, obs_basis)
+    else:
+        logger.info("expected starts: singles %d min (constant, best of %d; "
+                    "only %d timed matches)",
+                    _duration_for('singles', singles_best_of, True),
+                    singles_best_of, obs_n)
 
     touched = 0
     for court, slots in by_court.items():
@@ -2383,7 +2437,8 @@ async def recompute_expected_starts(db, tournament_id: int, play_date: date,
             # Doubles keeps the constant: only main-draw singles are timed, so
             # a measured figure would be one borrowed from a different game.
             dur = (obs_dur if (obs_dur and s.discipline == 'singles')
-                   else _duration_for(s.discipline))
+                   else _duration_for(s.discipline, _best_of(draw, s.discipline),
+                                      _full_decider(draw, s.discipline)))
             before = (s.expected_start_at, s.expected_source)
 
             # Resolve the printed clock FIRST, so every branch below can write a
@@ -2478,7 +2533,11 @@ async def recompute_expected_starts(db, tournament_id: int, play_date: date,
                             s.expected_source = ('printed' if anchor == printed_dt
                                                  else 'estimated')
                     prev_end = anchor + timedelta(
-                        minutes=_remaining_minutes(live_json, s.discipline)) + gap
+                        minutes=_remaining_minutes(
+                            live_json, s.discipline,
+                            sets_to_win=_best_of(draw, s.discipline) // 2 + 1,
+                            total_min=obs_dur if s.discipline == 'singles' else None,
+                            full_decider=_full_decider(draw, s.discipline))) + gap
                     s.estimated_duration_min = dur
                 if before != (s.expected_start_at, s.expected_source):
                     touched += 1
