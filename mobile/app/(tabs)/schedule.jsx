@@ -433,11 +433,16 @@ function EntryRow({ e, venueMode, venueTz, onH2H, onHistory, inCourt }) {
           <View style={{ flex: 1 }}>
             {/* Grouped under its court already, a row need not repeat it. */}
             {!inCourt && e.court ? (
-              <Text style={[T.tiny, { color: C.faint }]} numberOfLines={1}
+              <Text style={s.footCourt} numberOfLines={1}
                     adjustsFontSizeToFit minimumFontScale={0.7}>{e.court}</Text>
             ) : null}
             {when.text ? (
-              <Text style={[T.tiny, { color: C.faint }]} numberOfLines={1}
+              /* The time carries the card, so it is the bright line: the site
+                 sets it a size up and bold against a muted court, and this is
+                 the same reading in the app's palette. An ESTIMATE stays faded
+                 and italic, exactly as the site fades a chained guess — it must
+                 never read with the authority of a printed time. */
+              <Text style={[s.footTime, when.est && s.footTimeEst]} numberOfLines={1}
                     adjustsFontSizeToFit minimumFontScale={0.7}>
                 {when.text}{when.est ? ` ${when.est}` : ''}
               </Text>
@@ -486,6 +491,13 @@ const s = StyleSheet.create({
   tzBtn: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: R.pill },
   tzOn: { backgroundColor: C.green },
   footLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  /* The court sits QUIETLY above its time. Both lines carry a tightened
+     leading so they read as one block rather than two stray lines — through
+     leading(), never a fixed number, so they still grow with Dynamic Type. */
+  footCourt: { ...T.tiny, color: C.faint, lineHeight: leading(13) },
+  footTime: { ...T.smallMed, color: C.greenBright, fontFamily: 'Archivo_700Bold',
+              lineHeight: leading(17) },
+  footTimeEst: { color: C.muted, fontStyle: 'italic' },
   h2hChip: { borderRadius: 4, borderWidth: 1, borderColor: C.borderOn, paddingHorizontal: 7, paddingVertical: 2 },
   h2hText: { fontFamily: 'Archivo_700Bold', fontSize: 10, lineHeight: leading(14), letterSpacing: 0.5, color: C.greenLit },
   // Icon only, the same height as H2H; lit green while the match is showing.
