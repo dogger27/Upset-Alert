@@ -224,6 +224,12 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
      server drops the rows built on that split and sets this; all we do is
      explain the gap rather than leave a panel looking half-drawn. */
   const splitSuspect = !!sofaStats?.split_suspect?.ALL
+  const playedFor = (() => {
+    const mins = data?.duration_min
+    if (!mins || mins <= 0) return null
+    const h = Math.floor(mins / 60), m = mins % 60
+    return h ? `${h}h ${m}m` : `${m}m`
+  })()
 
   if (!match && !entry) return null
 
@@ -418,6 +424,10 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
                     <span className="shp-stat-name--l">{cleanName(a[0])}</span>
                     <span className="shp-stat-name--r">{cleanName(b[0])}</span>
                   </div>
+                  {/* How long the tennis took. Sofascore's PLAYING time where
+                      we have it — the sum of its set clocks — so a match
+                      suspended for rain does not count the delay as play. */}
+                  {playedFor && <p className="shp-duration">{playedFor} played</p>}
                   {rows.map(([label, lw, lt, rw, rt]) => (
                     <div className="shp-stat-row" key={label}>
                       <span className="shp-stat-num">{lt ? `${pct(lw, lt)}%` : '—'}

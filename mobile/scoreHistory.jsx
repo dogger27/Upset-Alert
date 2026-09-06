@@ -76,7 +76,11 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
   const [pos, setPos] = useState(null)
   // True while a finger is on the slider — see the ScrollView below.
   const [holding, setHolding] = useState(false)
-  const [tab, setTab] = useState('points')
+  // null = "not chosen yet", so the sheet can open on whichever panel has
+  // something in it. A plain 'points' default would land on an empty panel
+  // whenever the point history is thin, which is exactly when the other one
+  // matters most. Once the reader taps, their choice stands.
+  const [tab, setTab] = useState(null)
 
   /* Snapshots arrive in the MATCH's orientation (side 1 = the bracket's
      player1); the sheet shows the SHEET's order, which need not agree. Line
@@ -119,10 +123,13 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
      ignoring the thumb would sit beside numbers obeying it. Fetched only when
      the tab is actually open. */
   const canAskStats = !entryOnly && entry?.draw_id != null && entry?.match_id != null
+  /* Declared BEFORE the query below, which reads it: `const` is not hoisted,
+     so using it above this line throws and the sheet never opens. */
+  const shownTab = tab ?? (statsUsable || !canAskStats ? 'points' : 'serve')
   const sofa = useApi(
     canAskStats ? `match-stats:${entry.draw_id}:${entry.match_id}` : null,
     () => getMatchStatistics(entry.draw_id, entry.match_id),
-    { enabled: canAskStats && tab === 'serve' },
+    { enabled: canAskStats && shownTab === 'serve' },
   )
   const sofaRows = sofa.data?.periods?.ALL || []
   /* Sofascore counts nearly every serve as a FIRST serve while a match is in
@@ -186,19 +193,28 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
             )}
             {/* Tabs only when there IS a second panel — a match with no
                 Sofascore event id keeps the single panel it always had. */}
-            {statsUsable && canAskStats && (
+            {/* The tab bar used to require statsUsable — the POINTS panel
+                having enough of the match to be worth drawing — so a match with
+                thin point history (an ESPN-only one, say) hid the tabs
+                entirely and put Serve & Return out of reach even though its
+                figures were sitting there. It asks about the tabs now, not
+                about one of them. */}
+            {canAskStats && (
               <View style={s.tabs}>
                 {[['points', 'Points'], ['serve', 'Serve & Return']].map(([k, label]) => (
                   <Text key={k} onPress={() => setTab(k)} accessibilityRole="button"
-                        style={[s.tab, tab === k && s.tabOn]}>{label}</Text>
+                        style={[s.tab, shownTab === k && s.tabOn]}>{label}</Text>
                 ))}
               </View>
             )}
-            {tab === 'points' && statsUsable && (
+            {shownTab === 'points' && (statsUsable ? (
               <Stats stats={stats} pos={Math.min(atEnd ? stats.at.length - 1 : pos, stats.at.length - 1)}
-                     topIsP1={topIsP1} left={cleanName(a[0])} right={cleanName(b[0])} />
-            )}
-            {tab === 'serve' && canAskStats && (
+                     topIsP1={topIsP1} left={cleanName(a[0])} right={cleanName(b[0])}
+                     durationMin={data?.duration_min} />
+            ) : (
+              <Text style={s.err}>Not enough point-by-point history for this match.</Text>
+            ))}
+            {shownTab === 'serve' && canAskStats && (
               <SofaStats rows={sofaRows} topIsP1={topIsP1} loading={sofa.loading}
                          splitSuspect={splitSuspect}
                          left={cleanName(a[0])} right={cleanName(b[0])} />
@@ -296,7 +312,16 @@ function Legend({ color, label }) {
 
 /* Point statistics at the scrubbed moment — cumulative per position, so the
    numbers wind back with the thumb. Bars grow outward from the label. */
-function Stats({ stats, pos, topIsP1, left, right }) {
+/* "2h 39m", or "47m" under the hour. Sofascore's PLAYING time where we have
+   it — the sum of its set clocks — so a match suspended for rain does not
+   claim the delay as tennis. */
+function prettyDuration(mins) {
+  if (!mins || mins <= 0) return null
+  const h = Math.floor(mins / 60), m = mins % 60
+  return h ? `${h}h ${m}m` : `${m}m`
+}
+
+function Stats({ stats, pos, topIsP1, left, right, durationMin }) {
   const snap = stats.at[pos]
   const top = snap[topIsP1 ? 0 : 1], bot = snap[topIsP1 ? 1 : 0]
   const pct = (w, t) => (t ? Math.round((100 * w) / t) : 0)
@@ -314,6 +339,9 @@ function Stats({ stats, pos, topIsP1, left, right }) {
         <Text style={[s.statName, { color: C.h2hP1 }]} numberOfLines={1}>{left}</Text>
         <Text style={[s.statName, { color: C.h2hP2, textAlign: 'right' }]} numberOfLines={1}>{right}</Text>
       </View>
+      {prettyDuration(durationMin) ? (
+        <Text style={s.duration}>{prettyDuration(durationMin)} played</Text>
+      ) : null}
       {/* ONE LINE PER STATISTIC, the site's grid: number, bar, label, bar,
           number. The bars grow from the label outward, in each player's own
           colour, so name, bar and column read as one. */}
@@ -426,6 +454,7 @@ const s = StyleSheet.create({
          paddingVertical: 5, paddingHorizontal: 10, marginBottom: -StyleSheet.hairlineWidth,
          borderBottomWidth: 2, borderBottomColor: 'transparent' },
   tabOn: { color: C.ink, borderBottomColor: C.greenLit },
+  duration: { ...T.tiny, color: C.faint, textAlign: 'center', marginTop: -2 },
   statSection: { ...T.tiny, color: C.faint, fontFamily: 'Archivo_700Bold',
                  letterSpacing: 0.6, textTransform: 'uppercase', marginTop: 6, marginBottom: 1 },
   stats: { gap: 8, marginTop: S.xs },

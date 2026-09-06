@@ -406,3 +406,11 @@
 @media (min-width: 900px) {
   .shp-stat-num small { display: inline; font-weight: 400; color: var(--text-muted); }
 }
+
+/* How long the match took, under the two names on the Points panel. */
+.shp-duration {
+  margin: 0.05rem 0 0.15rem;
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  text-align: center;
+}
