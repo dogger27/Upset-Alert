@@ -46,8 +46,33 @@
 .shp-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  /* The scrub time keeps the middle and stays there. space-between would let
+     it slide as the round pill and the duration come and go, and that time
+     changes on every drag — a number that moves while you read it is the one
+     thing this row must not do. */
+  gap: 0.5rem;
   margin-bottom: 0.5rem;
+}
+.shp-header .shp-when { margin: 0 auto; }
+/* The round, in a pill: it is a label, not a number, and the box keeps it from
+   reading as part of the clock beside it. */
+.shp-round {
+  flex: none;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.shp-header-dur {
+  flex: none;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .shp-when {
   font-size: 0.8rem;
