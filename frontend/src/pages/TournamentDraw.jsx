@@ -60,6 +60,11 @@ export default function TournamentDrawRoute() {
 const MISSING_PICK_SEL = '.cv-match-outline--missing, .match-box.missing-pick'
 // How far past the viewport edge a box must be before it counts as off-screen.
 const EDGE_SLACK = 8
+/* How long after the tap that dismissed the overlay sidebar a click still
+   counts as that same tap's, and is therefore thrown away. Long enough for a
+   slow finger (a click follows its pointerdown by the press duration), short
+   enough that it has always lapsed before the reader can aim a real one. */
+const DISMISS_CLICK_MS = 700
 
 /* The slim bar that replaces the draw header on a phone: name, page dots,
    category. Its own component because it owns hooks, and the page that renders
@@ -159,6 +164,11 @@ function TournamentDraw() {
   const [bodyWidth, setBodyWidth] = useState(0) // width of the whole draw body (stable, drives sidebar auto-hide)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [sidebarManual, setSidebarManual] = useState(false) // user overrode auto-hide?
+  /* When a tap dismissed the overlay sidebar, the CLICK that tap is about to
+     produce must be thrown away — see the handlers on .draw-main. Holds the
+     time of the dismissing pointerdown; a click within DISMISS_CLICK_MS of it
+     is that tap's own click and nothing else's. */
+  const dismissedAt = useRef(0)
   const expandedSidebarW = useRef(290) // cached expanded sidebar width (updated while expanded)
 
   // Callback refs + ResizeObservers on .draw-main / .draw-body. (Callback refs
@@ -1869,11 +1879,25 @@ function TournamentDraw() {
             screens the sidebar is a column beside the draw, and closing it
             whenever the bracket was touched would be maddening.
 
-            CAPTURE, so a child that stops propagation cannot swallow it, and
-            pointerdown so it goes on touch rather than on release. The click
-            itself is left alone and still reaches the match box: the draw does
-            not move when the drawer closes (the sidebar is out of flow in this
-            mode), so the box under the finger is the box that gets picked.
+            THE TAP ONLY DISMISSES. It must not also pick a match, open the
+            score history, or follow a link — reaching past a drawer to shut it
+            is not a considered choice about the thing underneath. Everything
+            in the draw acts on CLICK, so dismissing means closing on
+            pointerdown (immediate, on touch rather than release) and then
+            throwing that same tap's click away.
+
+            The click cannot be recognised by state, because the pointerdown
+            has already re-rendered with the sidebar closed by the time it
+            arrives. Hence the timestamp latch: a click within
+            DISMISS_CLICK_MS is this tap's own. A window rather than a plain
+            flag because the click may never come — drag to scroll instead of
+            tapping and the browser suppresses it, leaving a bare flag armed to
+            eat somebody's next real pick.
+
+            preventDefault is deliberately NOT called on the pointerdown: it
+            would cancel the scroll gesture too, and only the click needs
+            stopping. CAPTURE on both, so a child that stops propagation cannot
+            get in first.
 
             `setSidebarManual` matches the collapse button — a deliberate close
             hands control to the reader for this draw, rather than letting the
@@ -1882,8 +1906,18 @@ function TournamentDraw() {
           className="draw-main"
           ref={mainRef}
           onPointerDownCapture={compactDraw && !sidebarCollapsed
-            ? () => { setSidebarManual(true); setSidebarCollapsed(true) }
+            ? () => {
+                dismissedAt.current = Date.now()
+                setSidebarManual(true)
+                setSidebarCollapsed(true)
+              }
             : undefined}
+          onClickCapture={e => {
+            if (Date.now() - dismissedAt.current > DISMISS_CLICK_MS) return
+            dismissedAt.current = 0
+            e.preventDefault()
+            e.stopPropagation()
+          }}
         >
             <CombinedView
             tournament={tournament}
