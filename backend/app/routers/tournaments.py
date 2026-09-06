@@ -729,6 +729,10 @@ async def match_score_history(
         "player1_name": p1.name if p1 else None,
         "snapshots": snapshots,
         "final": match.scores_json,
+        # HOW LONG IT TOOK. Sofascore's figure first — it is the sum of the set
+        # clocks, so a rain delay between sets is already outside it, where our
+        # own is completed-minus-started and counts a suspension as tennis.
+        "duration_min": match.sofa_duration_min or match.duration_min,
     }
 
 
