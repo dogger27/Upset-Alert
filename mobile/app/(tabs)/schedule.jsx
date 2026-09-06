@@ -510,7 +510,10 @@ const s = StyleSheet.create({
 
   group: { gap: S.xs, marginTop: S.sm },
   entry: {
-    backgroundColor: C.card, borderRadius: R.md, borderWidth: 1, borderColor: C.border,
+    /* borderOn, not border: against C.card these rows sit on a page barely
+       lighter than they are, and the dimmer token left each card's edge to be
+       inferred from the gap between them rather than seen. */
+    backgroundColor: C.card, borderRadius: R.md, borderWidth: 1, borderColor: C.borderOn,
     padding: S.md, gap: 3,
   },
   entryLive: { borderColor: C.green },
