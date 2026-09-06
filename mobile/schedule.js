@@ -197,14 +197,19 @@ function expectedStart(e, zone, venueMode) {
   return printed ? t : `~${t}`
 }
 
-/* Labels that are pure scaffolding in front of a clock. "Started at 8:17 AM"
-   and "Starting at 4:00 PM" say nothing the time does not; the words go and
-   the clock stands alone, with the full phrase kept for hover.
+/* Labels that are pure scaffolding in front of a clock. "Started at 8:17 AM",
+   "Starting at 4:00 PM" and "Not before 11:00 AM" all reduce to their time;
+   the words go to hover, where a reader who wants them can still find them.
 
-   Deliberately NOT here: "Not before" is a constraint (the match cannot begin
-   earlier), "Resumed at" says this match came back from a delay, and "Followed
-   by" places it in the day's order. Each earns its words. */
-const BARE_LABELS = new Set(['Started at', 'Starting at'])
+   Deliberately NOT here: "Resumed at" says this match came back from a delay,
+   which is the whole reason its clock disagrees with the score beside it, and
+   "Followed by" places a match in the day's order with no clock of its own to
+   fall back on. Those two earn their words.
+
+   Note what stripping "Not before" does NOT change: the floor is still a hard
+   constraint, so an estimate below one still loses to it (estimateSupersedes)
+   and the time shown is the floor's. Only the label goes. */
+const BARE_LABELS = new Set(['Started at', 'Starting at', 'Not before'])
 
 function stripScaffolding(text) {
   const m = (text || '').match(/^(.*?)\s*(~?\d{1,2}[:.]\d{2}\s*(?:[AP]\.?M\.?)?)$/i)
