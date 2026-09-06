@@ -197,16 +197,20 @@ function expectedStart(e, zone, venueMode) {
   return printed ? t : `~${t}`
 }
 
-/* A "not before" floor the estimate has already overtaken says nothing the
-   estimate does not say better: "Not before 9:30 AM ~10:05 AM" prints two
-   times where the later one is the answer. Only when the estimate is GENUINELY
-   later — an estimate that lands on the printed floor is the floor, and the
-   sheet's own wording should stand. */
+/* WHEN WE HAVE AN ESTIMATE, THE ESTIMATE IS THE LINE. The sheet's wording
+   answers a different question — "Followed by" and "Not before 9:30 AM" say
+   where a match sits in the day's order, not when to turn up — and once a
+   chained estimate exists it answers the asked one better on its own.
+
+   The single exception is a "not before" floor, which is a hard constraint
+   rather than a guess: a match CANNOT start before it, so an estimate that
+   falls below one is impossible and the floor stays. Above it, the floor is no
+   longer news. */
 function estimateSupersedes(e) {
-  return e.start_type === 'not_before'
-    && e.expected_source === 'estimated'
-    && !!e.expected_start_at && !!e.printed_start_at
-    && new Date(e.expected_start_at) > new Date(e.printed_start_at)
+  if (e.expected_source !== 'estimated' || !e.expected_start_at) return false
+  if (e.start_type === 'not_before' && e.printed_start_at
+      && new Date(e.expected_start_at) <= new Date(e.printed_start_at)) return false
+  return true
 }
 
 /* THE SITE'S BOTTOM-LEFT LINE, as one expression:
@@ -221,19 +225,21 @@ function estimateSupersedes(e) {
    up, but a slot whose expected time is simply the printed one would repeat
    itself. */
 export function footTime(e, zone, venueMode, inCourt) {
-  if (!e) return { text: '', est: null, estimated: false }
+  if (!e) return { text: '', estimated: false, displaced: null }
   const started = startedLine(e, zone)
-  if (started) return { text: started, est: null, estimated: false }
-  // The estimate has overtaken the floor: it IS the line, alone.
-  if (inCourt && estimateSupersedes(e)) {
-    return { text: expectedStart(e, zone, venueMode), est: null, estimated: true }
+  if (started) return { text: started, estimated: false, displaced: null }
+  if (!inCourt || estimateSupersedes(e)) {
+    return {
+      text: expectedStart(e, zone, venueMode),
+      estimated: e.expected_source === 'estimated',
+      /* What the row WOULD have said. The site keeps this as hover text; a
+         phone has no hover, so it goes to the accessibility label instead —
+         "Followed by" still says where a match sits in the day's ORDER, which
+         the estimate alone does not, and that should not simply vanish. */
+      displaced: estimateSupersedes(e) ? canon(printedStart(e, zone, venueMode)) : null,
+    }
   }
-  const text = inCourt ? printedStart(e, zone, venueMode)
-                       : expectedStart(e, zone, venueMode)
-  const est = inCourt && e.expected_source === 'estimated' && e.expected_start_at
-    ? expectedStart(e, zone, venueMode)
-    : null
-  return { text: canon(text), est, estimated: !inCourt && e.expected_source === 'estimated' }
+  return { text: canon(printedStart(e, zone, venueMode)), estimated: false, displaced: null }
 }
 
 /* The STATUS, and only the status — the site's pill block, which draws
