@@ -337,7 +337,12 @@ function startedLine(e, zone) {
   // The observed start — when the first point was played, stamped by whichever
   // poller saw it. This is the normal path now for anything live or finished.
   if (e.started_at) {
-    return `Started at ${new Date(e.started_at).toLocaleTimeString([], opts)}`
+    // A RECONSTRUCTED start wears the tilde every other estimate wears: we did
+    // not see this one begin, and the time is the finish less the playing
+    // time, good to about five minutes. Saying so is the point — the
+    // alternative was printing the scheduled slot as though it were observed.
+    const tilde = e.started_estimated ? '~' : ''
+    return `Started at ${tilde}${new Date(e.started_at).toLocaleTimeString([], opts)}`
   }
   // We often do not. started_at comes from ESPN, which covers only main-draw
   // singles and only since we began recording it, so doubles, qualifying and

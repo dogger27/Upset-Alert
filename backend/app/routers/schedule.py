@@ -102,6 +102,7 @@ class ScheduleEntryOut(BaseModel):
     # carry this — ESPN is the source and it covers nothing else — and only from
     # the moment we started recording it, so the client must fall back.
     started_at: Optional[datetime] = None
+    started_estimated: bool = False
     # WHEN PLAY CAME BACK, for a match that was suspended and picked up again.
     # started_at stays at the first point of the match, because that is what it
     # means; a row on the day of the resumption needs this instead, or it
@@ -1021,6 +1022,18 @@ async def schedule_day(
                 ws = {"a": 0, "b": 1}.get(carried_done[e.id]["winner"])
             if done_at is None:
                 done_at = _utc(carried_done[e.id]["done_at"])
+        # WE MISSED THE START, so work it out rather than fall back to the
+        # scheduled slot. Sofascore's playing time subtracted from the finish
+        # lands within 15 minutes of the truth on 192 of the 224 matches where
+        # both are known, median 5 — where a printed slot on a busy court can
+        # be an hour or more out. Marked as an estimate so the row can say so;
+        # what it must never do is claim we watched a start we did not see.
+        started_est = False
+        if began is None and done_at is not None and m is not None:
+            played = getattr(m, "sofa_duration_min", None) or getattr(m, "duration_min", None)
+            if played:
+                began = done_at - timedelta(minutes=played)
+                started_est = True
         out.append(ScheduleEntryOut(
             id=e.id, tournament_id=e.tournament_id,
             tournament_name=t_names.get(e.tournament_id),
@@ -1035,6 +1048,9 @@ async def schedule_day(
             # Singles reads it off the match; doubles has none and carries its
             # own, so the field means the same thing either way.
             started_at=began,
+            # True when `started_at` was RECONSTRUCTED from the finish and the
+            # playing time rather than observed. The client hedges it.
+            started_estimated=started_est,
             # Only when it is genuinely later than the start — a match that has
             # never been suspended has no resumption to report, and one
             # resumed within the same session should not claim a second start.
