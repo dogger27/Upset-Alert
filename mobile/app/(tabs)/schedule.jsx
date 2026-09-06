@@ -508,12 +508,14 @@ const s = StyleSheet.create({
   tab: { flex: 1, alignItems: 'center', paddingVertical: S.sm, borderRadius: R.sm },
   tabOn: { backgroundColor: C.raised },
 
-  group: { gap: S.xs, marginTop: S.sm },
+  // Rows breathe: the gap is what separates one match from the next, and at
+  // S.xs the cards read as a single ruled block rather than a stack of cards.
+  group: { gap: S.sm, marginTop: S.sm },
   entry: {
-    /* borderOn, not border: against C.card these rows sit on a page barely
-       lighter than they are, and the dimmer token left each card's edge to be
-       inferred from the gap between them rather than seen. */
-    backgroundColor: C.card, borderRadius: R.md, borderWidth: 1, borderColor: C.borderOn,
+    /* borderLit, the brightest of the three: against C.card these rows sit on
+       a page barely lighter than they are, and both dimmer tokens left each
+       card's edge to be inferred from the gap between them rather than seen. */
+    backgroundColor: C.card, borderRadius: R.md, borderWidth: 1, borderColor: C.borderLit,
     padding: S.md, gap: 3,
   },
   entryLive: { borderColor: C.green },

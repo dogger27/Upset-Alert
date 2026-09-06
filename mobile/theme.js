@@ -23,6 +23,10 @@ export const C = {
   control:   '#22322c',
   border:    '#253430',
   borderOn:  '#3a4b45',
+  // A third step, for an edge that has to carry a card on a field almost its
+  // own colour — the schedule's rows. borderOn is the RAISED edge (chips,
+  // controls); this is brighter still and deliberately rare.
+  borderLit: '#4e625b',
 
   // Off-white, not #fff — pure white on a dark field haloes at text sizes.
   ink:       '#e6eeea',
