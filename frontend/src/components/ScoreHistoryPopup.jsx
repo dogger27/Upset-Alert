@@ -224,9 +224,15 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
      server drops the rows built on that split and sets this; all we do is
      explain the gap rather than leave a panel looking half-drawn. */
   const splitSuspect = !!sofaStats?.split_suspect?.ALL
+  /* How long the match took, or has been going. A finished one has a total —
+     Sofascore's playing time, so a rain delay is not counted as tennis. A live
+     one has no total yet, so it counts up from the start; that IS wall-clock,
+     which is what "how long has this been on" means while you are watching. */
   const playedFor = (() => {
-    const mins = data?.duration_min
-    if (!mins || mins <= 0) return null
+    const mins = data?.duration_min ?? (data?.started_at && !completed
+      ? Math.floor((Date.now() - new Date(data.started_at).getTime()) / 60000)
+      : null)
+    if (!mins || mins <= 0 || mins > 900) return null
     const h = Math.floor(mins / 60), m = mins % 60
     return h ? `${h}h ${m}m` : `${m}m`
   })()
@@ -258,7 +264,11 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
     <div className="shp-backdrop" onClick={onClose}>
       <div className="shp-popup" onClick={e2 => e2.stopPropagation()} role="dialog" aria-modal="true">
         <div className="shp-header">
+          {/* Round first — it is the one fact about a match that never
+              changes while the sheet is open, so it anchors the row. */}
+          {data?.round_label && <span className="shp-round">{data.round_label}</span>}
           <span className={`shp-when${atEnd && !completed ? ' shp-when--live' : ''}`}>{when}</span>
+          {playedFor && <span className="shp-header-dur">{playedFor}</span>}
           <button className="shp-close" onClick={onClose} aria-label="Close">×</button>
         </div>
         <div className="shp-card">

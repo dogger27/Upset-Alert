@@ -16,11 +16,10 @@
 import { useMemo, useRef, useState } from 'react'
 import { PanResponder, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { getEntryScoreHistory, getMatchScoreHistory, getMatchStatistics } from './api'
-import { leading } from './fontScale.js'
 import { MatchCard } from './scorecard'
 import { pointStats, sanitizeSnapshots, timelineMarkers } from './scoreTimeline'
 import { Sheet } from './sheet'
-import { C, S, T } from './theme'
+import { C, R, S, T } from './theme'
 import { Loading } from './ui'
 import { useApi } from './useApi'
 
@@ -137,6 +136,16 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
      server drops the rows built on that split and sets this; we explain the
      gap rather than leave a panel looking half-drawn. */
   const splitSuspect = !!sofa.data?.split_suspect?.ALL
+  /* A finished match has a total — Sofascore's playing time, so a rain delay
+     is not counted as tennis. A live one has none yet and counts up from the
+     start, which IS wall-clock: while you are watching, "how long has this
+     been on" includes the rain. */
+  const playedFor = (() => {
+    const mins = data?.duration_min ?? (data?.started_at && !completed
+      ? Math.floor((Date.now() - new Date(data.started_at).getTime()) / 60000)
+      : null)
+    return prettyDuration(mins && mins <= 900 ? mins : null)
+  })()
 
   if (!entry) return null
 
@@ -168,7 +177,21 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
      that position has broken the Metro bundle before.) */
   return (
     <Sheet visible={visible} onClose={onClose} height="80%">
-      <Text style={[s.when, atEnd && live && { color: C.greenLit }]}>{when}</Text>
+      {/* Round, scrub time, duration. The TIME keeps the centre and stays
+          there — it changes on every drag, and a number that moves sideways
+          while you read it is the one thing this row must not do. The other
+          two are pinned to the edges and simply absent when unknown. */}
+      <View style={s.head}>
+        <View style={s.headSide}>
+          {data?.round_label ? (
+            <Text style={s.roundPill}>{data.round_label}</Text>
+          ) : null}
+        </View>
+        <Text style={[s.when, atEnd && live && { color: C.greenLit }]}>{when}</Text>
+        <View style={[s.headSide, { alignItems: 'flex-end' }]}>
+          {playedFor ? <Text style={s.headDur}>{playedFor}</Text> : null}
+        </View>
+      </View>
       {/* The scroll is OFF while the slider is held. Refusing to hand the
           responder over is enough on iOS; Android's ScrollView can still take
           a vertical drag, and the symptom is the whole sheet moving under the
@@ -425,7 +448,16 @@ function cleanName(p) {
 }
 
 const s = StyleSheet.create({
+  head: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
+  headSide: { flex: 1, justifyContent: 'center' },
   when: { ...T.h2, color: C.ink, textAlign: 'center' },
+  roundPill: {
+    ...T.tiny, color: C.faint, fontFamily: 'Archivo_700Bold',
+    alignSelf: 'flex-start', paddingHorizontal: 7, paddingVertical: 2,
+    borderWidth: 1, borderColor: C.borderOn, borderRadius: R.pill,
+    letterSpacing: 0.4, overflow: 'hidden',
+  },
+  headDur: { ...T.tiny, color: C.faint },
   err: { ...T.small, color: C.muted, textAlign: 'center' },
   scrubRow: { flexDirection: 'row', alignItems: 'center', gap: S.sm, marginTop: S.xs },
   names: { width: 28, height: 44, justifyContent: 'space-between' },

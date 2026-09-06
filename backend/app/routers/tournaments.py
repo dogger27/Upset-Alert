@@ -682,6 +682,7 @@ async def match_score_history(
     and was pruned. The popup shows the final score alone.
     """
     from app.models.score_history import MatchScoreSnapshot
+    from app.services.rounds import compact_round
     from app.services.sofascore_live import renderable_history
 
     match = await db.get(Match, match_id)
@@ -708,6 +709,7 @@ async def match_score_history(
     # has to be able to line the two orientations up; id for the stamped case,
     # name for the rows the resolver has not reached.
     p1 = await db.get(DrawEntry, match.player1_id) if match.player1_id else None
+    draw = await db.get(Draw, match.draw_id)
     # "Prev Point: Ace". One label per snapshot, mostly null — an ace or a
     # double fault is about 8% of points and nothing else can be said about an
     # individual point (see services/sofascore_points.py). Fetched on demand,
@@ -733,6 +735,14 @@ async def match_score_history(
         # clocks, so a rain delay between sets is already outside it, where our
         # own is completed-minus-started and counts a suspension as tennis.
         "duration_min": match.sofa_duration_min or match.duration_min,
+        # For a match still on court there is no total yet, so the client
+        # counts up from here. Wall-clock by nature: what a viewer means by
+        # "how long has this been going" includes the rain.
+        "started_at": match.started_at or match.sofa_started_at,
+        # Through compact_round, not a fourth spelling of the same idea — see
+        # the note at the top of services/rounds.py.
+        "round_label": compact_round(draw.round_name(match.round_number))
+                       if draw and match.round_number else None,
     }
 
 
