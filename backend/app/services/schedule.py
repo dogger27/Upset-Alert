@@ -59,16 +59,27 @@ day_write_lock = asyncio.Lock()
 # so they are deliberate constants, replaceable once this feature has generated
 # a season of its own data. They only affect slots with no stated time, and
 # every live result collapses the error for everything after it on that court.
-# Keyed by (discipline, sets to win a match, whether the DECIDER is a real set).
-# That third dimension is doubles, and it is not a detail: on tour the third
-# set is replaced outright by a first-to-10 match tiebreak, and the scoring is
-# no-ad besides, so a tour doubles match is a materially shorter thing than the
-# Slam doubles match it looks identical to on a sheet.
+# STARTING POINTS ONLY, and every one of them an assumption until measured.
+# Keyed by (discipline, sets to win, whether the DECIDER is a real set).
+#
+# The decider dimension is doubles, and it is not a detail: replacing a third
+# set with a first-to-10 match tiebreak, plus no-ad scoring, makes a materially
+# shorter match than the one it is indistinguishable from on a sheet. Which
+# events do which is a rulebook question, it varies by tour, by stage and by
+# year, and NOTHING HERE VERIFIES IT — _observed_duration measures per
+# discipline and stage precisely so that data, not this table, has the last
+# word wherever enough of it exists.
+#
+# Mixed doubles has its own entry rather than falling through to the default.
+# It used to reach _DEFAULT_DURATION and be planned as a 105-minute singles
+# match, which is roughly double what it takes.
 _DURATION_MIN = {
     ("singles", 3, True): 105,
     ("singles", 5, True): 170,
-    ("doubles", 3, False): 80,    # tour: no-ad, and a match tiebreak for a third set
-    ("doubles", 3, True): 100,    # Slam: a real third set, played out
+    ("doubles", 3, False): 80,    # tour, and Slam qualifying: match-tiebreak decider
+    ("doubles", 3, True): 100,    # Slam main draw: a third set played out
+    ("mixed", 3, False): 60,
+    ("mixed", 3, True): 75,
 }
 _DEFAULT_DURATION = 105
 
@@ -168,28 +179,45 @@ def _is_slam(draw) -> bool:
     return (getattr(draw, 'category', '') or '').strip().lower() == 'grand slam'
 
 
-def _best_of(draw, discipline: str) -> int:
-    """Sets in the match. Men's Grand Slam singles is five; everything else three.
+def _best_of(draw, discipline: str, stage: Optional[str] = None) -> int:
+    """Sets in the match. Men's Grand Slam MAIN-DRAW singles is five.
 
-    This exists because nothing was asking the question. `_duration_for` has
+    The stage matters and is easy to miss: Slam qualifying is best-of-three for
+    the men too, so a qualifier planned as a best-of-five runs an hour long in
+    the chain — the same class of error as the one this function was added to
+    fix, one level down.
+
+    That original error was that nothing asked at all. `_duration_for` has
     taken a best_of since it was written and no caller ever passed one, so the
     best-of-five entry in its table was unreachable and every men's Slam match
     — the longest matches in tennis — was planned as a best-of-three.
     """
     if discipline != 'singles' or draw is None:
         return 3
-    return 5 if _is_slam(draw) and (getattr(draw, 'gender', '') or '') == 'M' else 3
+    if not _is_slam(draw) or (getattr(draw, 'gender', '') or '') != 'M':
+        return 3
+    return 5 if (stage or 'main').strip().lower() == 'main' else 3
 
 
-def _full_decider(draw, discipline: str) -> bool:
+def _full_decider(draw, discipline: str, stage: Optional[str] = None) -> bool:
     """Is a deciding set actually played out?
 
-    Singles always. Doubles only at a Slam: the tours replace a third set with
-    a first-to-10 match tiebreak and play no-ad throughout, which makes a tour
-    doubles match a shorter thing than the Slam doubles match it is
-    indistinguishable from on an order-of-play sheet.
+    Singles yes — a final-set tiebreak is still the end of a set that was
+    played. Team-format events are the question, and the answer moves with the
+    STAGE as well as the tour: Grand Slam doubles plays a real third set in the
+    main draw, but its qualifying can use a match tiebreak like the tours do.
+
+    Treat this as a documented guess, not a fact. It is the published format as
+    best understood, it is not verified against our own results, and formats
+    change between seasons. _observed_duration measures per discipline and
+    stage for exactly this reason — once five matches of a given kind have been
+    timed, what actually happened replaces everything decided here.
     """
-    return discipline != 'doubles' or _is_slam(draw)
+    if discipline == 'singles':
+        return True
+    if not _is_slam(draw):
+        return False
+    return (stage or 'main').strip().lower() == 'main'
 
 
 def _parse_clock(value: Optional[str]) -> Optional[time]:
@@ -2259,7 +2287,8 @@ async def _observed_changeover(db, tournament_id: int) -> tuple[int, int]:
     return int(round(median)), len(gaps)
 
 
-async def _observed_duration(db, draw) -> tuple[Optional[int], int, str]:
+async def _observed_duration(db, draw, discipline: str = 'singles',
+                             stage: str = 'main') -> tuple[Optional[int], int, str]:
     """(minutes, samples, basis) — how long a singles match really takes here.
 
     The constants below were honest placeholders: when they were written no
@@ -2284,8 +2313,21 @@ async def _observed_duration(db, draw) -> tuple[Optional[int], int, str]:
 
     Sofascore's PLAYING time is preferred over our own, which is wall-clock and
     therefore counts a rain delay as tennis — see the filter below.
+
+    MEASURED PER DISCIPLINE AND STAGE, so that the format guesses in
+    _DURATION_MIN and _full_decider are superseded rather than trusted. Whether
+    a given event plays a third set or a match tiebreak, and whether its
+    qualifying differs from its main draw, are rulebook questions that vary by
+    tour and by season; a timed sample answers them for this event without
+    anyone having to be right about the rulebook.
     """
     is_slam = (draw.category or "").strip().lower() == "grand slam"
+
+    # `matches` holds MAIN-DRAW SINGLES only — doubles and qualifying have no
+    # bracket rows, which is why their timings cannot come from here yet. They
+    # fall back to the format table, and the caller says which entry.
+    if discipline != 'singles' or (stage or 'main') != 'main':
+        return None, 0, 'not timed'
 
     def _q(where):
         return (select(Match.sofa_duration_min, Match.duration_min)
@@ -2436,9 +2478,13 @@ async def recompute_expected_starts(db, tournament_id: int, play_date: date,
             m = matches.get(s.match_id) if s.match_id else None
             # Doubles keeps the constant: only main-draw singles are timed, so
             # a measured figure would be one borrowed from a different game.
-            dur = (obs_dur if (obs_dur and s.discipline == 'singles')
-                   else _duration_for(s.discipline, _best_of(draw, s.discipline),
-                                      _full_decider(draw, s.discipline)))
+            # Measured where this exact kind of match has been timed enough;
+            # the format table otherwise, chosen by discipline, best-of AND
+            # stage — a Slam's qualifying doubles is not its main-draw doubles.
+            main_singles = s.discipline == 'singles' and (s.stage or 'main') == 'main'
+            dur = (obs_dur if (obs_dur and main_singles)
+                   else _duration_for(s.discipline, _best_of(draw, s.discipline, s.stage),
+                                      _full_decider(draw, s.discipline, s.stage)))
             before = (s.expected_start_at, s.expected_source)
 
             # Resolve the printed clock FIRST, so every branch below can write a
@@ -2535,9 +2581,10 @@ async def recompute_expected_starts(db, tournament_id: int, play_date: date,
                     prev_end = anchor + timedelta(
                         minutes=_remaining_minutes(
                             live_json, s.discipline,
-                            sets_to_win=_best_of(draw, s.discipline) // 2 + 1,
-                            total_min=obs_dur if s.discipline == 'singles' else None,
-                            full_decider=_full_decider(draw, s.discipline))) + gap
+                            sets_to_win=_best_of(draw, s.discipline, s.stage) // 2 + 1,
+                            total_min=obs_dur if main_singles else None,
+                            full_decider=_full_decider(
+                                draw, s.discipline, s.stage))) + gap
                     s.estimated_duration_min = dur
                 if before != (s.expected_start_at, s.expected_source):
                     touched += 1
