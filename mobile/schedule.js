@@ -168,7 +168,14 @@ function startedLine(e, zone) {
   if (e.resumed_at && (!e.started_at || new Date(e.resumed_at) > new Date(e.started_at))) {
     return `Resumed at ${clockIn(e.resumed_at, zone)}`
   }
-  if (e.started_at) return `Started at ${clockIn(e.started_at, zone)}`
+  // A RECONSTRUCTED start wears the tilde every other estimate here wears.
+  // We did not see this one begin; the time is the finish less the playing
+  // time, good to about five minutes. Saying it plainly is the point — the
+  // alternative was printing the scheduled slot as though it were observed.
+  if (e.started_at) {
+    const t = clockIn(e.started_at, zone)
+    return `Started at ${e.started_estimated ? '~' : ''}${t}`
+  }
   // started_at comes from the live feeds, which never saw doubles, qualifying,
   // or anything already under way when we began recording. The match has
   // demonstrably started though, so keep the printed time and fix the TENSE:
