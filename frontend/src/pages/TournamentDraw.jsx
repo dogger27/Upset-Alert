@@ -1277,8 +1277,14 @@ function TournamentDraw() {
   // + the collapsed sidebar strip (44) + scroll padding (24) + scrollbar (16)
   // − the last column's trailing-gap credit (COL_GAP_PX).
   const COMPACT_BREAK = 2 * colUnit + 44 + 24 + 16 - COL_GAP_PX
-  const compactDraw = viewMode === 'combined' && bodyWidth > 0 && sidebarCollapsed
+  /* The WIDTH test on its own, without asking what the sidebar is doing:
+     "this screen is too narrow to show the draw and the sidebar at once".
+     compactDraw adds `sidebarCollapsed` to it, so compactDraw can only ever be
+     true while the sidebar is shut — which makes `compactDraw && !collapsed` a
+     contradiction, and any handler gated on it dead code. */
+  const narrowDraw = viewMode === 'combined' && bodyWidth > 0
     && bodyWidth < COMPACT_BREAK
+  const compactDraw = narrowDraw && sidebarCollapsed
   // Zoomed content is inset by the left nav gutter (drawInsetLeft below, +4 —
   // mirrors CombinedView's actual paddingLeft). The right boundary targets the
   // right round-nav button's OWN measured position (navBtnW, pinned at
@@ -1880,11 +1886,14 @@ function TournamentDraw() {
             whenever the bracket was touched would be maddening.
 
             THE TAP ONLY DISMISSES. It must not also pick a match, open the
-            score history, or follow a link — reaching past a drawer to shut it
-            is not a considered choice about the thing underneath. Everything
-            in the draw acts on CLICK, so dismissing means closing on
-            pointerdown (immediate, on touch rather than release) and then
-            throwing that same tap's click away.
+            score history, or follow a link — reaching past the sidebar to shut
+            it is not a considered choice about the thing underneath. That is
+            not merely good manners here: EXPANDED, this sidebar is still in
+            flow, so closing it widens the draw and everything slides left
+            under the finger. Whatever the click then landed on would not be
+            what was aimed at. Everything in the draw acts on CLICK, so
+            dismissing means closing on pointerdown (immediate, on touch rather
+            than release) and then throwing that same tap's click away.
 
             The click cannot be recognised by state, because the pointerdown
             has already re-rendered with the sidebar closed by the time it
@@ -1905,7 +1914,7 @@ function TournamentDraw() {
         <div
           className="draw-main"
           ref={mainRef}
-          onPointerDownCapture={compactDraw && !sidebarCollapsed
+          onPointerDownCapture={narrowDraw && !sidebarCollapsed
             ? () => {
                 dismissedAt.current = Date.now()
                 setSidebarManual(true)
