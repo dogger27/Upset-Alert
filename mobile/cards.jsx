@@ -16,7 +16,7 @@ import { flagEmoji } from './flags'
 import { CardLink } from './ui'
 import { textWidth } from './measure.js'
 import { nameForms, pairForms } from './names'
-import { BADGE, C, R, S, SHADOW, T, TOUR } from './theme'
+import { BADGE, C, R, SHADOW, T, TOUR } from './theme'
 
 /* The accent bar: a 4px vertical gradient from the tour's 500 to its 700.
    Six stacked bands rather than a real gradient — expo-linear-gradient is a
@@ -175,9 +175,18 @@ const u = StyleSheet.create({
      fourth fixed-width cell in this project to truncate or wrap its contents
      rather than grow; the lesson each time is that the override belongs in a
      standalone style, not layered on top of a fixed one. */
+  /* THE SAME BOX AS `badge`, bar its width. It shares badgeText already, so
+     the only thing that made a "Q" render unlike a seed was this height: a
+     FIXED 18 against badge's leading(18). The text inside scales with the
+     reader's setting and the box did not, so past ~1.1 the glyph was
+     squeezed and sat off its line while the seed beside it stayed perfect.
+     Padding scales for the same reason — a chip that grows taller but not
+     wider crowds its own letters. Width stays content-driven, which is the
+     one difference from `badge` and the reason this style exists. */
   entryChip: {
-    height: 18, borderRadius: 3, borderWidth: 1, paddingHorizontal: 5,
-    alignItems: 'center', justifyContent: 'center', marginLeft: 6,
+    height: leading(18), borderRadius: 3, borderWidth: 1,
+    paddingHorizontal: leading(5),
+    alignItems: 'center', justifyContent: 'center', marginLeft: leading(6),
   },
   badgeText: { fontFamily: 'Archivo_700Bold', fontSize: 11, lineHeight: leading(13) },
 })
