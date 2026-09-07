@@ -204,13 +204,16 @@ const s = StyleSheet.create({
   // line here that belongs to the whole screen rather than to the title above
   // it, and centring is what says so.
   sub: { ...T.small, color: C.muted, marginTop: 4, textAlign: 'center' },
-  /* THE TWO PLAYERS. Bigger, bold, pure white, underlined — this line names
-     the match the whole sheet is about, and it was reading as a caption. The
-     underline covers the names only: "vs." is not a name, and running it
-     under the same rule would make the three read as one. */
+  /* THE TWO PLAYERS, in the brand's clay. This line names the match the whole
+     sheet is about and was reading as a caption; size, weight and the one warm
+     colour on the palette carry it now.
+
+     Still built from separate pieces even without an underline to place: the
+     colour lands on the names and the "vs." between them stays muted, which is
+     what keeps the two players reading as two things. */
   subName: {
     fontFamily: 'Archivo_700Bold', fontSize: 17, lineHeight: leading(23),
-    color: C.inkBright, textDecorationLine: 'underline',
+    color: C.clay,
   },
   meta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 'auto' },
   // The draw's SCHEDULED chip, one per state. `color` on the pill style is
