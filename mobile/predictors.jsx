@@ -43,6 +43,8 @@ export function PredictorsSheet({ visible, onClose, drawId, match, meId }) {
   const status = !pending ? 'Completed' : !known ? 'TBD' : live ? 'In Progress' : 'Upcoming'
   const statusStyle = !pending ? s.pillDone : !known ? s.pillTbd : live ? s.pillLive : s.pillUpcoming
 
+  const fieldSize = (d?.correct?.length || 0) + (d?.incorrect?.length || 0)
+
   return (
     <Modal visible={!!visible} animationType="slide" transparent onRequestClose={onClose}>
       <Pressable style={s.scrim} onPress={onClose} />
@@ -90,8 +92,12 @@ export function PredictorsSheet({ visible, onClose, drawId, match, meId }) {
                 Right and wrong even before a result: the server puts a pick
                 whose player has already lost into `incorrect`, and that pick
                 is not provisionally wrong, it is wrong. */}
-            <Group label="Right" tone={C.greenLit} people={d.correct} meId={meId} />
-            <Group label="Wrong" tone={C.bad} people={d.incorrect} meId={meId} />
+            {/* Both sections share one denominator — everyone who picked this
+                match — so the percentages across the whole sheet add to 100. */}
+            <Group label="Right" tone={C.greenLit} people={d.correct} meId={meId}
+                   fieldSize={fieldSize} />
+            <Group label="Wrong" tone={C.bad} people={d.incorrect} meId={meId}
+                   fieldSize={fieldSize} />
           </ScrollView>
         ) : null}
 
@@ -116,7 +122,7 @@ export function PredictorsSheet({ visible, onClose, drawId, match, meId }) {
 /* `isMine`, not `mine`: the chip loop below declares its own per-PERSON
    `mine`, and two different meanings of one word in one function is how a
    later edit ends up highlighting every chip in your bucket. */
-function PickBucket({ picked, people, tone, meId, isMine }) {
+function PickBucket({ picked, people, tone, meId, isMine, fieldSize }) {
   const [open, setOpen] = useState(false)
   return (
     <View style={s.bucket}>
@@ -126,6 +132,16 @@ function PickBucket({ picked, people, tone, meId, isMine }) {
                  accessibilityLabel={`${picked || 'No pick'}, ${people.length} `
                    + `${people.length === 1 ? 'person' : 'people'}`}
                  style={s.bucketHead}>
+        {/* SHARE OF THE WHOLE FIELD, not of this section: "86%" means 86% of
+            everyone who picked this match, which is the comparison worth
+            making. Against the section it would read 100% for the only group
+            in it and say nothing at all.
+
+            Fixed width and right-aligned so the chevrons and names below line
+            up whether the number is 3% or 86%. */}
+        <Text style={[s.pct, { color: tone }]}>
+          {fieldSize ? `${Math.round((100 * people.length) / fieldSize)}%` : ''}
+        </Text>
         <Ionicons name={open ? 'chevron-down' : 'chevron-forward'}
                   size={14} color={tone} style={s.chev} />
         <Text style={s.bucketName} numberOfLines={1}>
@@ -160,7 +176,7 @@ function PickBucket({ picked, people, tone, meId, isMine }) {
   )
 }
 
-function Group({ label, tone, people, meId }) {
+function Group({ label, tone, people, meId, fieldSize }) {
   /* Bucketed by pick, fewest backers first. Ties keep the order the server
      sent, which is already by weight of support. */
   const buckets = useMemo(() => {
@@ -185,7 +201,7 @@ function Group({ label, tone, people, meId }) {
         {buckets.map(b => (
           <PickBucket
             key={b.picked || '_none'} picked={b.picked} people={b.list}
-            tone={tone} meId={meId}
+            tone={tone} meId={meId} fieldSize={fieldSize}
             isMine={meId != null && b.list.some(p => p.id === meId)}
           />
         ))}
@@ -250,6 +266,9 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingVertical: 7, paddingHorizontal: 2,
   },
+  // Tabular so the digits sit in columns down the sheet.
+  pct: { ...T.smallMed, width: 38, textAlign: 'right',
+         fontVariant: ['tabular-nums'] },
   chev: { width: 14, textAlign: 'center' },
   // The name takes the space and the count sits tight against it, so the
   // count never drifts to the far edge on a short name.
