@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { getPredictors } from './api'
 import { nameForms } from './names'
+import { shortRound } from './rounds'
 import { useApi } from './useApi'
 import { C, R, S, T } from './theme'
 import { leading } from './fontScale'
@@ -67,7 +68,12 @@ export function PredictorsSheet({ visible, onClose, drawId, match, meId }) {
         <View style={s.head}>
           <Text style={s.title} numberOfLines={1}>Who got it right?</Text>
           <View style={s.meta}>
-            <View style={[s.pill, s.pillRound]}><Text style={[s.pillText, s.pillRoundText]}>{match?.round_name || '—'}</Text></View>
+            {/* R32, never "Round of 32". The two callers disagree about this
+                field — the schedule hands over `round_label`, already compact,
+                while the draw screen hands over Draw.round_name()'s long form
+                — so the pill compacts whatever it gets. shortRound is a no-op
+                on a label that is already short. */}
+            <View style={[s.pill, s.pillRound]}><Text style={[s.pillText, s.pillRoundText]}>{shortRound(match?.round_name) || '—'}</Text></View>
             <View style={[s.pill, statusStyle]}><Text style={[s.pillText, statusStyle]}>{status}</Text></View>
           </View>
         </View>
