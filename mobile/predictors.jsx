@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { getPredictors } from './api'
 import { useApi } from './useApi'
-import { BADGE, C, R, S, T } from './theme'
+import { C, R, S, T } from './theme'
 import { leading } from './fontScale'
 import { Loading } from './ui'
 
@@ -45,7 +45,7 @@ export function PredictorsSheet({ visible, onClose, drawId, match, meId }) {
       <Pressable style={s.scrim} onPress={onClose} />
       <View style={s.sheet}>
         <View style={s.grabber} />
-        <Text style={s.title}>{pending ? 'Who’s still in it' : 'Who called it'}</Text>
+        <Text style={s.title}>Who got it right?</Text>
         {sub ? <Text style={s.sub} numberOfLines={1}>{sub}</Text> : null}
         <View style={s.meta}>
           <View style={[s.pill, s.pillRound]}><Text style={[s.pillText, s.pillRoundText]}>{match?.round_name || '—'}</Text></View>
@@ -57,14 +57,17 @@ export function PredictorsSheet({ visible, onClose, drawId, match, meId }) {
 
         {d ? (
           <ScrollView style={s.list} contentContainerStyle={{ paddingBottom: S.lg }}>
-            <Group
-              label={`${pending ? 'Still in it' : 'Right'} (${(d.correct || []).length})`}
-              tone={pending ? BADGE.seeded.fg : C.greenLit} people={d.correct} meId={meId}
-            />
-            <Group
-              label={`${pending ? 'Out' : 'Wrong'} (${(d.incorrect || []).length})`}
-              tone={C.bad} people={d.incorrect} meId={meId}
-            />
+            {/* BOTH, always, empty or not. A missing heading reads as a
+                loading gap or a bug, where "Right (0)" is a fact about the
+                match — and a strong one: every pick in the draw has already
+                gone out. Holding both positions between matches also lets the
+                eye learn where to look.
+
+                Right and wrong even before a result: the server puts a pick
+                whose player has already lost into `incorrect`, and that pick
+                is not provisionally wrong, it is wrong. */}
+            <Group label="Right" tone={C.greenLit} people={d.correct} meId={meId} />
+            <Group label="Wrong" tone={C.bad} people={d.incorrect} meId={meId} />
           </ScrollView>
         ) : null}
 
@@ -141,10 +144,12 @@ function Group({ label, tone, people, meId }) {
       .sort((a, b) => a.list.length - b.list.length)
   }, [people])
 
-  if (!people?.length) return null
   return (
     <View style={s.group}>
-      <Text style={[s.groupLabel, { color: tone }]}>{label}</Text>
+      <Text style={[s.groupLabel, { color: tone }]}>
+        {label} ({(people || []).length})
+      </Text>
+      {!people?.length ? <Text style={s.none}>No one.</Text> : null}
       <View>
         {buckets.map(b => (
           <PickBucket
@@ -190,6 +195,7 @@ const s = StyleSheet.create({
   groupLabel: { ...T.smallMed, marginBottom: S.xs },
   /* A pick and its backers. The header is a touch target, so it takes the
      full width and a real row height rather than hugging its text. */
+  none: { ...T.tiny, color: C.faint, paddingVertical: 4 },
   bucket: { marginBottom: S.xs },
   bucketHead: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
