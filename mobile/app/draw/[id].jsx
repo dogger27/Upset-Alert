@@ -348,13 +348,17 @@ function MatchRow({ m, pick, drawRanks, zone, slugById, onH2H, onPredictors, onS
         const isPick = p && pick != null && p.id === pick
         const won = decided && p && m.winner.id === p.id
         return (
-          <View key={i} style={[s.side, i === 0 && s.sideDivider]}>
+          <View key={i} style={s.side}>
             <PosBadge seed={p?.seed} drawRank={p ? drawRanks[p.id] : null} />
             <PlayerName
               name={slotLabel(p, m)}
               style={[
                 T.bodyMed,
-                { color: decided && !won ? C.muted : C.ink, flexShrink: 1 },
+                /* 1.27x rather than bodyMed's 1.4 — the line box is most of the
+                   gap between the two players, exactly as on the schedule's
+                   match card, and still clear of the ~1.2 clipping floor. */
+                { color: decided && !won ? C.muted : C.ink, flexShrink: 1,
+                  lineHeight: leading(19) },
                 won && { fontFamily: 'Archivo_700Bold' },
               ]}
             />
@@ -485,11 +489,18 @@ const s = StyleSheet.create({
   },
   // min-height 28 on the web at a 252pt column; 34 here, because a phone gives
   // the column 361pt and the extra goes into being readable.
+  /* THE TWO PLAYERS ARE ONE MATCH, so they sit as one block: no rule between
+     them, and the padding cut from 7 to 2. The divider was drawing a boundary
+     through the thing it should have been holding together — the tile already
+     has a border and a tint saying where one match ends and the next begins,
+     so a second line inside it only split the pair.
+
+     minHeight scales, because the row's own content does; at a fixed 34 it
+     simply stopped applying once the reader's text outgrew it. */
   side: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    paddingVertical: 7, paddingHorizontal: 8, minHeight: 34,
+    paddingVertical: 2, paddingHorizontal: 8, minHeight: leading(26),
   },
-  sideDivider: { borderBottomWidth: 1, borderBottomColor: C.border },
   // Under the names, like the site puts it under the box. Tabular so the sets
   // of one match line up with the next one down the column.
   score: {
