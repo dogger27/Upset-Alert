@@ -117,6 +117,10 @@ export default function TabLayout() {
              "ATX Open" — the name of a tournament where the name of a
              destination belongs. The screen sets headerTitle now. */
           title: 'Draw',
+          /* No navigation header: the screen's own tinted box carries the
+             tour and the tournament name, and a bar repeating the name above
+             it made the top of the screen two rows saying one thing. */
+          headerShown: false,
           tabBarIcon: ({ color, size }) => <BracketIcon size={size ?? 22} color={color} />,
           href: drawId != null ? `/draw/${drawId}` : null,
         }}
