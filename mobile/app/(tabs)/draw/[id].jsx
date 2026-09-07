@@ -157,7 +157,11 @@ export default function DrawScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: t?.name || 'Draw' }} />
+      {/* headerTitle, NOT title. As a tab screen `title` drives the tab's
+          LABEL as well as the header, so setting it here put "ATX Open" on
+          the bar where the destination's name belongs. The tab is called
+          Draw by the layout; only the header names the tournament. */}
+      <Stack.Screen options={{ headerTitle: t?.name || 'Draw' }} />
       <Screen onRefresh={refetch} scroll={false}>
         <View style={s.sheet} {...roundPan}>
         {loading ? <Loading /> : null}
