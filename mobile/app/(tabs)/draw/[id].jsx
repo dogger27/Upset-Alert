@@ -419,10 +419,9 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: C.border, overflow: 'hidden',
   },
   tint: { width: 4 },
-  // One row now, so the body centres its two children instead of stacking.
-  /* One line of text, so it is padded like a header bar rather than a card:
-     S.md across, S.sm down. The full S.md all round was sized for the four
-     stacked rows this box used to hold. */
+  /* One row of one line, so it is padded like a header bar rather than a
+     card: S.md across, S.xs down. The full S.md all round was sized for the
+     four stacked rows this box used to hold. */
   headBody: {
     flex: 1, flexDirection: 'row', alignItems: 'center',
     justifyContent: 'space-between', gap: 10,
@@ -431,14 +430,23 @@ const s = StyleSheet.create({
   headName: { ...T.h2, color: C.ink, flexShrink: 1 },
 
 
+  /* Screen's shared body padding frames every OTHER screen; this one is a
+     full-bleed column between two bars and wants neither end of it.
+
+     TOP: S.lg sat the banner a thumb's width below the status bar for no
+     reason — the safe-area inset already clears the island, so at zero the
+     banner is the first thing under the clock.
+
+     BOTTOM: S.xxl was black space above the tab bar, and worse than idle.
+     This screen does not scroll (scroll={false}); the draw list scrolls
+     INSIDE it, so bottom padding here shortened the scroll viewport and
+     clipped the last match mid-card. The list keeps its own paddingBottom,
+     which is the right place for it: that one scrolls.
+
+     Horizontal padding is untouched. */
+  body: { paddingTop: 0, paddingBottom: 0 },
   // Fills the screen so the scrub is available over all of it, not only the
   // rows — a gesture you have to find is a gesture nobody uses.
-  /* Screen's shared body padding puts S.lg above every screen's first
-     element. Here that sat the banner a thumb's width below the status bar
-     for no reason: the safe-area inset already clears the island, so this
-     screen starts at zero and the banner is the first thing under the clock.
-     Horizontal padding is untouched. */
-  body: { paddingTop: 0 },
   sheet: { flex: 1 },
   /* paddingTop MATCHES RoundStrip's marginTop, so the round strip sits in
      the same amount of black above and below. They are two different files;
