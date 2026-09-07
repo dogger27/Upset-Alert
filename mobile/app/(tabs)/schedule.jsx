@@ -16,7 +16,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams } from 'expo-router'
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native'
-import { getScheduleDates, getScheduleDay, listTournaments, updateMe } from '../../api'
+import { getScheduleDates, getScheduleDay, listTournaments } from '../../api'
 import { useAuth } from '../../auth'
 import { H2HSheet } from '../../h2h'
 import { PredictorsSheet } from '../../predictors'
@@ -67,15 +67,13 @@ export default function ScheduleScreen() {
   const [showDone, setShowDone] = useState(true)
   const [showDoubles, setShowDoubles] = useState(false)
   const [tourSel, setTourSel] = useState(null)
-  /* Venue clock or the reader's own — an ACCOUNT preference (users.schedule_tz),
-     saved through the same PATCH the site uses, so it follows the reader from
-     phone to desktop. Optimistic; a failed save keeps the local choice. */
-  const { me, retry: refreshMe } = useAuth()
-  const [tzMode, setTzModeState] = useState(me?.schedule_tz === 'user' ? 'user' : 'venue')
-  const setTzMode = (mode) => {
-    setTzModeState(mode)
-    updateMe({ schedule_tz: mode }).then(() => refreshMe?.()).catch(() => {})
-  }
+  /* Venue clock or the reader's own — an ACCOUNT preference (users.schedule_tz)
+     this screen READS and no longer offers. The switch sat in the filter strip,
+     beside controls people change every visit, to set something they change
+     once; it is on the Status tab with the other preferences now. Absent means
+     my time: that is the question a schedule is usually being asked. */
+  const { me } = useAuth()
+  const tzMode = me?.schedule_tz === 'venue' ? 'venue' : 'user'
   const [h2h, setH2H] = useState(null)
   const [hist, setHist] = useState(null)
   const [predictors, setPredictors] = useState(null)
@@ -274,16 +272,6 @@ export default function ScheduleScreen() {
                      accessibilityRole="button" accessibilityState={{ selected: showDone }}>
             <Text style={[s.chipText, showDone && { color: '#fff' }]}>Completed</Text>
           </Pressable>
-          <View style={{ flex: 1 }} />
-          <View style={s.tz}>
-            {[['venue', 'Venue'], ['user', 'My time']].map(([k, label]) => (
-              <Pressable key={k} onPress={() => setTzMode(k)}
-                         style={[s.tzBtn, tzMode === k && s.tzOn]}
-                         accessibilityRole="button" accessibilityState={{ selected: tzMode === k }}>
-                <Text style={[s.chipText, tzMode === k && { color: '#fff' }]}>{label}</Text>
-              </Pressable>
-            ))}
-          </View>
         </View>
 
         <View style={s.tabs}>
@@ -511,9 +499,6 @@ const s = StyleSheet.create({
   chipAtp: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
   chipWta: { backgroundColor: '#db2777', borderColor: '#db2777' },
   chipText: { ...T.tiny, color: C.muted, fontFamily: 'Archivo_700Bold' },
-  tz: { flexDirection: 'row', backgroundColor: C.sunken, borderRadius: R.pill, padding: 2 },
-  tzBtn: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: R.pill },
-  tzOn: { backgroundColor: C.green },
   /* flex-end, not center. The left side is TWO lines — court above time — so
      centring left the buttons floating on the seam between them, level with
      neither. Bottom-aligned they sit on the time, which is the line they are

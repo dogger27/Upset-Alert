@@ -5,7 +5,8 @@
  */
 import { useEffect, useState } from 'react'
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
-import { changePassword, deleteAccount, getNotificationPrefs, setNotificationPrefs } from './api'
+import { changePassword, deleteAccount, getNotificationPrefs, setNotificationPrefs, updateMe } from './api'
+import { useAuth } from './auth'
 import { useApi } from './useApi'
 import { Sheet } from './sheet'
 import { Button, Card, Muted, Title } from './ui'
@@ -35,6 +36,50 @@ function Toggle({ on, locked, onPress, label }) {
                style={[s.toggle, on && s.toggleOn, locked && { opacity: 0.45 }]}>
       <View style={[s.knob, on && s.knobOn]} />
     </Pressable>
+  )
+}
+
+/*
+ * Display preferences.
+ *
+ * The venue/my-time switch used to sit in the schedule's filter strip, one tap
+ * from the chips people change every visit — to set something they change once,
+ * if ever. It belongs here, with the account's other standing choices.
+ *
+ * MY TIME IS THE DEFAULT (the toggle is off), so a null schedule_tz reads as
+ * "user": "when is this on?" is a question about the reader's evening, not the
+ * tournament's, and for most readers those are different clocks.
+ */
+export function DisplayPrefs() {
+  const { me, retry: refreshMe } = useAuth()
+  // Optimistic like the notification switches: the toggle moves now, the save
+  // follows, and a failed save costs a preference rather than the screen.
+  const [pending, setPending] = useState(null)
+  const venue = pending ?? (me?.schedule_tz === 'venue')
+
+  const flip = () => {
+    const next = !venue
+    setPending(next)
+    updateMe({ schedule_tz: next ? 'venue' : 'user' })
+      .then(() => refreshMe?.())
+      .catch(() => setPending(!next))
+  }
+
+  return (
+    <Card>
+      <Title>Display</Title>
+      <View style={s.row}>
+        <View style={{ flex: 1 }}>
+          <Text style={[T.smallMed, { color: C.ink }]}>Venue time</Text>
+          <Text style={[T.tiny, { color: C.faint }]}>
+            {venue
+              ? "Schedule times are shown in the tournament's local time"
+              : 'Schedule times are shown in your time'}
+          </Text>
+        </View>
+        <Toggle label="Venue time" on={venue} onPress={flip} />
+      </View>
+    </Card>
   )
 }
 

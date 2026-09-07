@@ -40,7 +40,7 @@
   grid-template-columns: 1fr auto 1fr;
   grid-template-areas:
     "title date pdf"
-    "modes date tz";
+    "modes date .";
   align-items: start;
   gap: 0.5rem 1rem;
   margin-bottom: 0.7rem;
@@ -53,7 +53,6 @@
 .sched-daynav { grid-area: date; align-self: center; }
 .sched-viewswitch { grid-area: modes; justify-self: start; align-self: start; }
 .sched-pdf { grid-area: pdf; justify-self: end; }
-.sched-tzswitch { grid-area: tz; justify-self: end; }
 .sched-topbar .sched-pdf { justify-self: end; }
 .sched-titleblock { min-width: 0; }
 
@@ -115,12 +114,11 @@
 
 
 /* ── Segmented switches ──
-   ONE definition for both Time|Court and Venue|My time. They were written
-   separately and drifted on four properties at once — radius, height, padding
-   and font size — which is plain to see when they sit one above the other.
-   Grouped so they cannot diverge again; a change to one is a change to both. */
-.sched-viewswitch,
-.sched-tzswitch {
+   The Venue|My time pill used to share this definition — the two had been
+   written separately and drifted on radius, height, padding and font size at
+   once. That switch is a preference now and lives in the profile menu, so only
+   Time|Court is left here; the grouping is kept in case a second pill returns. */
+.sched-viewswitch {
   display: inline-flex;
   align-items: stretch;
   height: 1.85rem;
@@ -129,8 +127,7 @@
   overflow: hidden;
 }
 
-.sched-viewbtn,
-.sched-tzbtn {
+.sched-viewbtn {
   display: inline-flex;
   align-items: center;
   padding: 0 0.85rem;
@@ -143,8 +140,7 @@
   cursor: pointer;
 }
 
-.sched-viewbtn--on,
-.sched-tzbtn--on { background: var(--brand-fill); color: var(--on-brand); }
+.sched-viewbtn--on { background: var(--brand-fill); color: var(--on-brand); }
 
 /* ── Filters ── */
 .sched-filters {
@@ -896,7 +892,7 @@
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
       "title date"
-      "modes tz";
+      "modes .";
     align-items: center;
     gap: 0.45rem 0.6rem;
     margin-bottom: 0.5rem;
@@ -905,12 +901,11 @@
   .sched-center,
   .sched-topright { display: contents; }
   .sched-pdf { display: none; }
-  /* Both switches need an explicit cell AND justify-self. A grid item defaults
-     to stretch, which is what made them span the full width when the page
+  /* The switch needs an explicit cell AND justify-self. A grid item defaults
+     to stretch, which is what made it span the full width when the page
      narrowed — the pill grew while its two labels stayed put, so the control
      read as a wide empty bar with a chip at one end. */
   .sched-viewswitch { grid-area: modes; justify-self: start; }
-  .sched-tzswitch { grid-area: tz; justify-self: end; }
     
   /* A long tournament name gives way before the date does — the date is the
      one thing on this row you cannot infer from context. */

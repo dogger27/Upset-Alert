@@ -15,7 +15,7 @@ import { useAuth } from '../../auth'
 import { getOffer } from '../../api'
 import { useApi } from '../../useApi'
 import { capabilities, isAvailable } from '../../modules/live-activity'
-import { DeleteAccountSheet, NotificationPrefs, PasswordSheet } from '../../account'
+import { DeleteAccountSheet, DisplayPrefs, NotificationPrefs, PasswordSheet } from '../../account'
 import { showOnLockScreen, useShowingOnLockScreen } from '../../liveactivity'
 import { C, T } from '../../theme'
 import { Button, Card, ErrorNote, Muted, Row, Screen, Title } from '../../ui'
@@ -126,6 +126,8 @@ export default function Status() {
           cards on the opening screen, which put a destructive action in the
           middle of the one screen the app opens to. Status is the account
           screen; this is where someone goes looking for it. */}
+      <DisplayPrefs />
+
       <NotificationPrefs />
 
       <Card>

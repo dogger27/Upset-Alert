@@ -12,29 +12,14 @@ import { useSearchParams, Link } from 'react-router-dom'
 import clsx from 'clsx'
 import { listTournaments } from '../api/tournaments'
 import { getScheduleDay, getScheduleDates } from '../api/schedule'
-import { updateMe } from '../api/auth'
+import { useScheduleTz } from '../store/scheduleTz'
 import { getPredictions } from '../api/predictions'
-import { useAuth } from '../store/auth'
 import { nationalityIso2, splitPlayerName } from '../utils/flags'
 import { rootFontPx, textWidth } from '../utils/text'
 import { parseSet } from '../utils/score'
 import './Schedule.css'
 
 const VIEW_KEY = 'ua-schedule-view'
-const TZ_KEY = 'ua-schedule-tz'
-
-// Venue time by default: the sheet prints venue local, so showing anything else
-// puts our estimates on a different clock from the times beside them.
-//
-// localStorage is a CACHE, not the record. The preference lives on the account
-// (users.schedule_tz) so it follows a reader from phone to desktop — same
-// arrangement as the theme — but the account value is unknown until /auth/me
-// returns, and the page must render before then without flipping clocks.
-function storedTz() {
-  try { return localStorage.getItem(TZ_KEY) === 'user' ? 'user' : 'venue' }
-  catch { return 'venue' }
-}
-
 // Time view is the default: a flat list needs no horizontal space, which is
 // what makes it the workable one on a phone. Whichever view is used last wins
 // next time.
@@ -734,25 +719,12 @@ export default function Schedule() {
   // playing for, and doubles is not in the draws — but it is on the sheet, and
   // asking for it should not mean switching to the court view to find it.
   const [showDoubles, setShowDoubles] = useState(false)
-  const [tzMode, setTzModeState] = useState(storedTz)
-  const user = useAuth(s => s.user)
-
-  // Adopt the account's choice once it arrives, unless this session has already
-  // changed it — a write in flight must not be undone by the value it replaces.
-  const tzTouched = useRef(false)
-  useEffect(() => {
-    if (tzTouched.current) return
-    const saved = user?.schedule_tz
-    if (saved === 'venue' || saved === 'user') setTzModeState(saved)
-  }, [user])
-
-  const setTzMode = (mode) => {
-    tzTouched.current = true
-    setTzModeState(mode)
-    // Fire and forget: a signed-out reader still gets the local cache, and a
-    // failed write costs a preference rather than the page.
-    if (user) updateMe({ schedule_tz: mode }).catch(() => {})
-  }
+  /* Venue clock or the reader's own. This page READS the preference and no
+     longer offers it: the switch lived in the filter strip, one tap from
+     controls people change every visit, to set something they change once.
+     It is in the profile menu with the other preferences now, and the store
+     handles the account round trip. */
+  const tzMode = useScheduleTz(s => s.tzMode)
 
   const tournamentId = params.get('tournament') ? Number(params.get('tournament')) : undefined
 
@@ -819,7 +791,6 @@ export default function Schedule() {
   const [tourSel, setTourSel] = useState(null)
 
   useEffect(() => { try { localStorage.setItem(VIEW_KEY, view) } catch {} }, [view])
-  useEffect(() => { try { localStorage.setItem(TZ_KEY, tzMode) } catch {} }, [tzMode])
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['schedule', day, tournamentId ?? 'all'],
@@ -1099,17 +1070,6 @@ export default function Schedule() {
               PDF
             </a>
           ))}
-
-          {venueTz && (
-            <div className="sched-tzswitch" role="tablist" aria-label="Time zone">
-              <button role="tab" aria-selected={tzMode === 'venue'}
-                      className={clsx('sched-tzbtn', { 'sched-tzbtn--on': tzMode === 'venue' })}
-                      onClick={() => setTzMode('venue')}>Venue</button>
-              <button role="tab" aria-selected={tzMode === 'user'}
-                      className={clsx('sched-tzbtn', { 'sched-tzbtn--on': tzMode === 'user' })}
-                      onClick={() => setTzMode('user')}>My time</button>
-            </div>
-          )}
         </div>
       </div>
 

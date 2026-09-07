@@ -3,6 +3,7 @@ import { getMe, login as apiLogin, register as apiRegister, updateMe as apiUpdat
 import { AUTH_EXPIRED } from '../api/client'
 import { queryClient } from '../main'
 import { useTheme } from './theme'
+import { useScheduleTz } from './scheduleTz'
 
 // The server needs the reader's zone only to render deadlines in outgoing
 // email, where no browser is present to do it. Take it from the browser rather
@@ -86,6 +87,7 @@ export const useAuth = create((set) => ({
     // point of storing it server-side. Deliberately after the session is
     // established, so a bad theme value costs the wrong palette, not the login.
     try { useTheme.getState().adoptAccountTheme(user.theme) } catch { /* cosmetic */ }
+    try { useScheduleTz.getState().adoptAccountTz(user.schedule_tz) } catch { /* cosmetic */ }
     set({ user: await syncTimezone(user) })
   },
 
@@ -94,6 +96,7 @@ export const useAuth = create((set) => ({
     localStorage.setItem('token', access_token)
     const user = await getMe()
     useTheme.getState().adoptAccountTheme(user.theme)
+    useScheduleTz.getState().adoptAccountTz(user.schedule_tz)
     queryClient.clear()
     set({ user: await syncTimezone(user) })
   },
@@ -105,6 +108,7 @@ export const useAuth = create((set) => ({
     localStorage.setItem('token', accessToken)
     const user = await getMe()
     useTheme.getState().adoptAccountTheme(user.theme)
+    useScheduleTz.getState().adoptAccountTz(user.schedule_tz)
     queryClient.clear()
     set({ user: await syncTimezone(user) })
   },
