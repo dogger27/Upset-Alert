@@ -116,7 +116,15 @@ export function PredictorsSheet({ visible, onClose, drawId, match, meId }) {
                 is not provisionally wrong, it is wrong. */}
             {/* Both sections share one denominator — everyone who picked this
                 match — so the percentages across the whole sheet add to 100. */}
-            <Group label="Right" tone={C.greenLit} people={d.correct} meId={meId}
+            {/* NOBODY IS RIGHT YET while a match is undecided — "Maybe", in
+                gold, until there is a winner to be right about. `pending` is
+                the server's own "no winner", so this covers a match not yet
+                started and one on court alike; only a finished match earns
+                the green "Right". The site's popup has always drawn a gold
+                "?" here rather than its green check, for the same reason. */}
+            <Group label={d.pending ? 'Maybe' : 'Right'}
+                   tone={d.pending ? C.warn : C.greenLit}
+                   people={d.correct} meId={meId}
                    fieldSize={fieldSize} fallback={d.pending ? '' : shortP(winner)} />
             <Group label="Wrong" tone={C.bad} people={d.incorrect} meId={meId}
                    fieldSize={fieldSize} />
