@@ -21,7 +21,7 @@ import { useMemo, useState } from 'react'
 import { leading } from '../../fontScale.js'
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { getDraw, getPredictions, listTournaments } from '../../api'
 import { dateRange, shortStart } from '../../dates'
 import { useAuth } from '../../auth'
@@ -240,27 +240,34 @@ export default function DrawScreen() {
           </View>
         )}
 
+        {/* EVERY ROUND ON ONE LINE. As pills in a horizontal ScrollView the
+            last rounds sat off-screen, so the one place that tells you how far
+            a draw has come needed a swipe to read — and a slam's seven rounds
+            is exactly when that matters.
+
+            ONE Text with pressable children, not a row of Pressables: a single
+            Text shrinks the whole strip as a unit to fit the width. Laid out
+            as separate views each cell would shrink on its own and "R128"
+            would end up smaller than "F". The cost is that a hit area is the
+            glyphs rather than a padded box; the dots keep them apart. */}
         {rounds.length > 1 && (
-          <ScrollView
-            horizontal showsHorizontalScrollIndicator={false}
-            contentContainerStyle={s.strip}
-            style={s.stripWrap}
-          >
-            {rounds.map(([num, matches]) => {
+          <Text style={s.strip} numberOfLines={1}
+                adjustsFontSizeToFit minimumFontScale={0.6}>
+            {rounds.flatMap(([num, matches], i) => {
               const on = num === active
-              const done = matches.every(m => m.is_bye || m.winner)
-              return (
-                <Pressable key={num} onPress={() => setPicked(num)}
-                           style={[s.chip, on && s.chipOn]}>
-                  <Text style={[T.tiny, {
-                    color: on ? C.ink : done ? C.faint : C.muted,
-                  }]}>
-                    {shortRound(matches[0]?.round_name, num)}
-                  </Text>
-                </Pressable>
+              const label = (
+                <Text key={num} onPress={() => setPicked(num)} suppressHighlighting
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: on }}
+                      style={on ? s.roundOn : s.roundOff}>
+                  {shortRound(matches[0]?.round_name, num)}
+                </Text>
               )
+              return i === 0
+                ? [label]
+                : [<Text key={`dot${num}`} style={s.roundDot}>  •  </Text>, label]
             })}
-          </ScrollView>
+          </Text>
         )}
 
         {/* Swipe sideways to pull the next round in; the row under the
@@ -471,14 +478,14 @@ const s = StyleSheet.create({
   headBody: { flex: 1, padding: S.md, gap: 3 },
   headStats: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: S.md },
 
-  stripWrap: { flexGrow: 0, marginTop: S.sm },
-  strip: { gap: S.xs, paddingVertical: 2 },
-  chip: {
-    paddingHorizontal: S.md, paddingVertical: S.sm, borderRadius: R.pill,
-    borderWidth: 1, borderColor: C.border, backgroundColor: C.card, minWidth: 46,
-    alignItems: 'center',
-  },
-  chipOn: { backgroundColor: C.raised, borderColor: C.borderOn },
+  strip: { ...T.smallMed, marginTop: S.sm, paddingVertical: S.xs, textAlign: 'center' },
+  // The round you are on, and the only bright thing in the strip.
+  roundOn: { color: C.greenBright, fontFamily: 'Archivo_700Bold' },
+  // Dimmed but still READ — these are the control, not decoration, so they
+  // stay well clear of the faint end of the ramp.
+  roundOff: { color: C.muted },
+  // Punctuation, so it sits below the labels it separates without vanishing.
+  roundDot: { color: C.borderLit },
 
   list: { gap: S.xs, paddingTop: S.sm, paddingBottom: S.xxl },
   // radius 5 and a 1px border, from BracketView.css — a bracket's boxes are
