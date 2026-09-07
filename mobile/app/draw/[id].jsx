@@ -127,8 +127,8 @@ export default function DrawScreen() {
   // the screen under someone because a match finished elsewhere is worse than
   // being one round stale.
   const active = picked ?? currentRound(rounds)
-  /* ONE scrub for the whole screen — header, strip and the draw itself — so
-     the gesture is not a hidden strip somewhere. RoundScrub's own gesture is
+  /* ONE swipe gesture for the whole screen — header, strip and the draw
+     itself — and one swipe moves one round. RoundScrub's own gesture is
      switched off below; two capture responders over the same pixels fight. */
   const roundPan = useRoundSwipe({ rounds, active, onPick: setPicked })
   const shown = rounds.find(([n]) => n === active) || rounds[0]
