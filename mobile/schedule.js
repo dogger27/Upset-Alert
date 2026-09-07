@@ -324,6 +324,10 @@ export function matchFromEntry(e) {
     // Carried ON the object: a schedule day mixes the men's draw and the
     // women's, so there is no single draw id the page could supply.
     draw_id: e.draw_id,
+    // The sheet's round pill reads `round_name`; a schedule row spells the
+    // same thing `round_label`, already in the compact form a pill wants
+    // ("R16"). Without this the pill had nothing and drew a bare dash.
+    round_name: e.round_label,
     player1: nameOf(a),
     player2: nameOf(b),
     winner: nameOf(won),
