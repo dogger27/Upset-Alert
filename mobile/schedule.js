@@ -266,6 +266,16 @@ function estimateSupersedes(e) {
 export function footTime(e, zone, venueMode, inCourt) {
   if (!e) return { text: '', estimated: false, displaced: null }
 
+  /* NOTHING AT ALL once a match is on court or over. The status beside it
+     already says "In progress" or "Completed", the score says the rest, and
+     the hour it began answers a question nobody is asking by then — a reader
+     looking at a live row wants to know where the match IS. Falling through to
+     the scheduled time would be worse than saying nothing: a finished match
+     labelled with the slot it was due in reads as though it had not started. */
+  if (e.status === 'live' || e.status === 'completed' || isSuspended(e)) {
+    return { text: '', estimated: false, displaced: null }
+  }
+
   /* `displaced` is whatever wording the line no longer shows. The site keeps
      it as hover text; a phone has no hover, so it goes to the accessibility
      label instead. Either way it should not simply vanish — "Followed by"
