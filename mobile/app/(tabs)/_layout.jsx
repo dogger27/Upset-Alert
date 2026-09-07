@@ -28,6 +28,22 @@ import { C, T } from '../../theme'
    test, so the tab cannot offer a tournament whose bracket is unreleased. */
 const hasDrawData = t => t.status === 'completed' || !!t.draw_released_direct_at
 
+/* THE TAB BAR'S OWN HEIGHT ARITHMETIC, because it has to be reproduced to be
+   trimmed. getTabBarHeight() returns TABBAR_HEIGHT_UIKIT + insets.bottom and
+   only a NUMERIC height in tabBarStyle overrides it — which is why setting
+   paddingBottom alone changed nothing visible: the padding shrank inside a bar
+   that stayed exactly as tall.
+
+   49 is that constant, module-private in @react-navigation/bottom-tabs 7.18,
+   so it is copied here rather than imported. It is the icon-and-label box; it
+   is NOT touched, so nothing clips at any text size — the only thing trimmed
+   is the home-indicator inset below it. */
+const TAB_CONTENT_H = 49
+/* Enough to clear the indicator (~8pt up, ~5pt tall) and no more. A notched
+   phone hands us 34, which is generous for a gap whose whole job is to keep
+   labels off a 5pt line. */
+const TAB_BOTTOM_MAX = 12
+
 /* LIVE ONLY. The chooser was listing every draw that had ever been released,
    so a season of finished tournaments buried the two being played. These are
    the dashboard's own top two sections: picks still open, or play under way.
@@ -51,12 +67,12 @@ export default function TabLayout() {
      tapping Draw never swaps the women's bracket for the men's. Otherwise the
      first worth opening — shared cache key with the dashboard, so this costs
      no extra request. With none at all the tab is hidden rather than dead. */
-  /* The bar's bottom padding is the home-indicator inset. It is there to keep
-     the labels off the indicator, but the full inset leaves more air under
-     them than that needs — so take a few points back and keep the rest. Read
-     rather than hardcoded: it is 34 on a notched phone and 0 on a flat one,
-     and a fixed number would either waste space or bury the labels. */
+  /* Read rather than hardcoded: the inset is 34 on a notched phone and 0 on a
+     flat one, so a fixed number would either waste the space on one or bury
+     the labels on the other. Capped, not subtracted, so the result is the same
+     deliberate gap on every device. */
   const insets = useSafeAreaInsets()
+  const tabBottom = Math.min(insets.bottom, TAB_BOTTOM_MAX)
   const [picking, setPicking] = useState(false)
   const showing = useCurrentDraw()
   /* Gated on a real session, exactly as the dashboard gates it: the tabs can
@@ -94,7 +110,10 @@ export default function TabLayout() {
           backgroundColor: C.card,
           borderTopColor: C.border,
           borderTopWidth: 1,
-          paddingBottom: Math.max(0, insets.bottom - 8),
+          // BOTH, or neither works: height is what the bar measures itself by,
+          // paddingBottom is where that height goes.
+          height: TAB_CONTENT_H + tabBottom,
+          paddingBottom: tabBottom,
         },
         // Archivo rather than the system face, so the bar belongs to the app.
         tabBarLabelStyle: { ...T.tiny, marginTop: 1 },
