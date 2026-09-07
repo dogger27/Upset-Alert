@@ -129,7 +129,7 @@ export default function Dashboard() {
       <ErrorNote error={tours.error} onRetry={refetch} />
       {loading ? <Loading /> : null}
 
-      <Section title="Pick now" tone={C.clay}>
+      <Section title="Open" tone={C.clay}>
         {buckets.open.map(t => (
           <OpenCard key={t.id} t={t} status={entry.data?.[t.id]} now={now} />
         ))}
@@ -139,7 +139,7 @@ export default function Dashboard() {
       </Section>
 
       {buckets.active.length > 0 && (
-        <Section title="Playing" tone={C.greenLit}>
+        <Section title="Active" tone={C.greenLit}>
           {buckets.active.map(t => <ActiveCard key={t.id} t={t} userId={me?.id} pickState={entry.data?.[t.id]} />)}
         </Section>
       )}
@@ -293,7 +293,7 @@ function OpenCard({ t, status, now }) {
   )
 }
 
-/* Playing: nothing to do, so the only question is where you stand. */
+/* Active: nothing to do, so the only question is where you stand. */
 function ActiveCard({ t, userId, pickState }) {
   const standings = useApi(`standings:${t.id}`, () => getDrawStandings(t.id))
   const rows = standings.data || []
