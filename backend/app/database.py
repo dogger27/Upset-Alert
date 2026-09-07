@@ -65,6 +65,7 @@ async def init_db():
     import app.models.cash_pool  # noqa: F401
 
     import app.models.draw_history  # noqa: F401
+    import app.models.duration_sample  # noqa: F401
     import app.models.h2h  # noqa: F401
     import app.models.league  # noqa: F401
     import app.models.live_activity  # noqa: F401
