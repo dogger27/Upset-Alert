@@ -180,23 +180,37 @@ def _is_slam(draw) -> bool:
 
 
 def _best_of(draw, discipline: str, stage: Optional[str] = None) -> int:
-    """Sets in the match. Men's Grand Slam MAIN-DRAW singles is five.
+    """Sets to win. Sofascore's stated format first, our own rules only after.
 
-    The stage matters and is easy to miss: Slam qualifying is best-of-three for
-    the men too, so a qualifier planned as a best-of-five runs an hour long in
-    the chain — the same class of error as the one this function was added to
-    fix, one level down.
+    `draws.sofa_number_of_sets` is `uniqueTournament.numberOfSets` — the
+    tournament's own declared format, 5 for a men's Slam and 3 elsewhere. It
+    replaces a guess this function used to make from category, gender and
+    stage, which the owner rightly objected to: a category does not determine a
+    format, and the rules differ by tour, stage and season.
 
-    That original error was that nothing asked at all. `_duration_for` has
-    taken a best_of since it was written and no caller ever passed one, so the
-    best-of-five entry in its table was unreachable and every men's Slam match
-    — the longest matches in tennis — was planned as a best-of-three.
+    TWO PLACES THE STATED VALUE STILL DOES NOT REACH, and both fall back:
+      * DOUBLES. The draw's uniqueTournament is the SINGLES event; doubles is a
+        separate one (draws.sofa_doubles_tournament_id) whose format we do not
+        store. Doubles is best-of-three wherever it is played, so the fallback
+        is not in doubt — what IS in doubt is whether a third set is played
+        out, and numberOfSets cannot answer that either. See _full_decider.
+      * QUALIFYING. numberOfSets describes the tournament, and a Slam's is 5,
+        but its qualifying is best-of-three. Stage still overrides.
+
+    The original fault this function was written for stands as a warning:
+    `_duration_for` had taken a best_of since it was written and no caller ever
+    passed one, so its best-of-five entry was unreachable and every men's Slam
+    match was planned as a best-of-three.
     """
     if discipline != 'singles' or draw is None:
         return 3
-    if not _is_slam(draw) or (getattr(draw, 'gender', '') or '') != 'M':
+    if (stage or 'main').strip().lower() != 'main':
         return 3
-    return 5 if (stage or 'main').strip().lower() == 'main' else 3
+    stated = getattr(draw, 'sofa_number_of_sets', None)
+    if stated in (3, 5):
+        return stated
+    # Never resolved against Sofascore, or resolved before we recorded this.
+    return 5 if _is_slam(draw) and (getattr(draw, 'gender', '') or '') == 'M' else 3
 
 
 def _full_decider(draw, discipline: str, stage: Optional[str] = None) -> bool:

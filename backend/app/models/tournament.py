@@ -178,6 +178,11 @@ class Draw(Base):
     # the attempt that retry has no floor: a draw with four names Sofascore
     # simply does not carry would be re-resolved every single pass, forever,
     # spending a request per pass on an answer that is not going to change.
+    # Sets to WIN a match, as Sofascore states it for this tournament
+    # (`uniqueTournament.numberOfSets`: 5 for a men's Slam, 3 otherwise).
+    # Stated, not inferred — see schedule.py::_best_of, which had to guess it
+    # from category, gender and stage and said so.
+    sofa_number_of_sets: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     sofa_resolved_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True)
     venue_timezone: Mapped[Optional[str]] = mapped_column(String, nullable=True)
