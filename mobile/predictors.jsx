@@ -34,9 +34,11 @@ export function PredictorsSheet({ visible, onClose, drawId, match, meId }) {
   // Names only once the ACTUAL players are known; the round and status pills
   // below are always there.
   const known = !!(match?.player1?.name && match?.player2?.name)
-  const sub = pending
-    ? (known ? `${match.player1.name} vs. ${match.player2.name}` : null)
-    : winner ? `${winner} won` : null
+  /* WHO IS PLAYING, as the line the sheet is about. Built as pieces rather
+     than one string so the underline lands on the names and not on the "vs."
+     joining them. */
+  const shortP = (n) => (n ? (nameForms(n)[1] || nameForms(n)[0]) : '')
+  const sub = pending ? (known ? 'players' : null) : winner ? 'winner' : null
   const live = pending && !!(match?.live_scores || match?.live_point)
   const status = !pending ? 'Completed' : !known ? 'TBD' : live ? 'In Progress' : 'Upcoming'
   const statusStyle = !pending ? s.pillDone : !known ? s.pillTbd : live ? s.pillLive : s.pillUpcoming
@@ -57,7 +59,22 @@ export function PredictorsSheet({ visible, onClose, drawId, match, meId }) {
             <View style={[s.pill, statusStyle]}><Text style={[s.pillText, statusStyle]}>{status}</Text></View>
           </View>
         </View>
-        {sub ? <Text style={s.sub} numberOfLines={1}>{sub}</Text> : null}
+        {sub ? (
+          <Text style={s.sub} numberOfLines={1}>
+            {sub === 'players' ? (
+              <>
+                <Text style={s.subName}>{shortP(match.player1.name)}</Text>
+                <Text> vs. </Text>
+                <Text style={s.subName}>{shortP(match.player2.name)}</Text>
+              </>
+            ) : (
+              <>
+                <Text style={s.subName}>{shortP(winner)}</Text>
+                <Text> won</Text>
+              </>
+            )}
+          </Text>
+        ) : null}
 
         {q.loading && !d ? <Loading /> : null}
         {q.error ? <Text style={s.err}>Couldn’t load predictions.</Text> : null}
@@ -108,12 +125,8 @@ function PickBucket({ picked, people, tone, meId, defaultOpen }) {
                  style={s.bucketHead}>
         <Ionicons name={open ? 'chevron-down' : 'chevron-forward'}
                   size={14} color={tone} style={s.chev} />
-        {/* "F. Cobolli" — the project's own shortening ladder, second rung:
-            initials for the given names, surname whole. Through nameForms so
-            particles survive ("B. van de Zandschulp", never "B. v. d. Z.")
-            and a single-token name simply stays as it is. */}
         <Text style={s.bucketName} numberOfLines={1}>
-          {picked ? (nameForms(picked)[1] || nameForms(picked)[0]) : 'No pick'}
+          {picked || 'No pick'}
         </Text>
         <Text style={[s.bucketCount, { color: tone }]}>({people.length})</Text>
       </Pressable>
@@ -189,7 +202,16 @@ const s = StyleSheet.create({
   title: { ...T.h2, color: C.ink, flexShrink: 1 },
   // Left, under the title it belongs to, now that the title is no longer
   // centred — a centred line beneath a left-aligned heading reads as unrelated.
-  sub: { ...T.small, color: C.muted, marginTop: 2 },
+  // The joining words stay muted; the names are the part that carries.
+  sub: { ...T.small, color: C.muted, marginTop: 4 },
+  /* THE TWO PLAYERS. Bigger, bold, pure white, underlined — this line names
+     the match the whole sheet is about, and it was reading as a caption. The
+     underline covers the names only: "vs." is not a name, and running it
+     under the same rule would make the three read as one. */
+  subName: {
+    fontFamily: 'Archivo_700Bold', fontSize: 17, lineHeight: leading(23),
+    color: C.inkBright, textDecorationLine: 'underline',
+  },
   meta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 'auto' },
   // The draw's SCHEDULED chip, one per state. `color` on the pill style is
   // read by the Text, borderColor/backgroundColor by the View.
@@ -215,14 +237,9 @@ const s = StyleSheet.create({
   chev: { width: 14, textAlign: 'center' },
   // The name takes the space and the count sits tight against it, so the
   // count never drifts to the far edge on a short name.
-  /* The subject of the row, and it should look like it: bigger than anything
-     around it, bold, pure white, underlined. The underline is on the NAME
-     alone — the count beside it is a different fact and pulling it under the
-     same rule would read as one long link. */
-  bucketName: {
-    fontFamily: 'Archivo_700Bold', fontSize: 17, lineHeight: leading(23),
-    color: C.inkBright, textDecorationLine: 'underline', flexShrink: 1,
-  },
+  // The pick, as a heading. Plain: the treatment belongs to the MATCH-UP line
+  // above, and giving it to both would leave neither looking like the subject.
+  bucketName: { ...T.smallMed, color: C.ink, flexShrink: 1 },
   bucketCount: { ...T.smallMed, opacity: 0.75 },
   // Indented under their heading, so an open bucket reads as belonging to it.
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6,
