@@ -72,7 +72,10 @@ export function MatchCard({ e }) {
             <PlayerName
               name={sideName(e.players, side)}
               doubles={doubles}
-              style={[T.bodyMed, { color: ink, flexShrink: 1 }]}
+              /* 1.27x rather than bodyMed's 1.4: tight enough to pull the two
+                 rows together, and still clear of the ~1.2 floor where
+                 descenders start to clip. */
+              style={[T.bodyMed, { color: ink, flexShrink: 1, lineHeight: leading(19) }]}
               after={picked ? <Text style={s.pick} accessibilityLabel="You predicted this player to win">🤞</Text> : null}
             />
             {end && <Text style={s.end}>{end}</Text>}
@@ -109,7 +112,11 @@ export function MatchCard({ e }) {
 }
 
 const s = StyleSheet.create({
-  rows: { gap: 4 },
+  // The two players are one unit, so they sit close. Most of the air between
+  // them was never this gap — it is bodyMed's 21pt line box around 15pt text —
+  // so the name below tightens its own leading too, and both stay in leading()
+  // so they still grow with Dynamic Type.
+  rows: { gap: 2 },
   line: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
   slot: { width: 8, alignItems: 'center' },
   ball: { width: 7, height: 7, borderRadius: 4, backgroundColor: C.clay },
