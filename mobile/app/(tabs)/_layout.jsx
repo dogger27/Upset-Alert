@@ -48,9 +48,12 @@ export default function TabLayout() {
         name="index"
         options={{ title: 'Today', headerShown: false, tabBarIcon: icon('home') }}
       />
+      {/* No header, like Today: the lit tab already names the page, and the
+          screen's own date bar is the thing worth the top of the phone.
+          `title` stays — it is the TAB's label, not the header's. */}
       <Tabs.Screen
         name="schedule"
-        options={{ title: 'Schedule', tabBarIcon: icon('calendar') }}
+        options={{ title: 'Schedule', headerShown: false, tabBarIcon: icon('calendar') }}
       />
       <Tabs.Screen
         name="leagues"
