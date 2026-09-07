@@ -45,12 +45,18 @@ export function PredictorsSheet({ visible, onClose, drawId, match, meId }) {
       <Pressable style={s.scrim} onPress={onClose} />
       <View style={s.sheet}>
         <View style={s.grabber} />
-        <Text style={s.title}>Who got it right?</Text>
-        {sub ? <Text style={s.sub} numberOfLines={1}>{sub}</Text> : null}
-        <View style={s.meta}>
-          <View style={[s.pill, s.pillRound]}><Text style={[s.pillText, s.pillRoundText]}>{match?.round_name || '—'}</Text></View>
-          <View style={[s.pill, statusStyle]}><Text style={[s.pillText, statusStyle]}>{status}</Text></View>
+        {/* Title left, state right, on one line. The round travels with the
+            status because the two are one thought — which match, and where it
+            has got to — and splitting them would leave a lone "—" stranded
+            mid-sheet. */}
+        <View style={s.head}>
+          <Text style={s.title} numberOfLines={1}>Who got it right?</Text>
+          <View style={s.meta}>
+            <View style={[s.pill, s.pillRound]}><Text style={[s.pillText, s.pillRoundText]}>{match?.round_name || '—'}</Text></View>
+            <View style={[s.pill, statusStyle]}><Text style={[s.pillText, statusStyle]}>{status}</Text></View>
+          </View>
         </View>
+        {sub ? <Text style={s.sub} numberOfLines={1}>{sub}</Text> : null}
 
         {q.loading && !d ? <Loading /> : null}
         {q.error ? <Text style={s.err}>Couldn’t load predictions.</Text> : null}
@@ -106,7 +112,7 @@ function PickBucket({ picked, people, tone, meId, defaultOpen }) {
             chip; as the heading it is the main fact on the row, and the player
             picked is often not one of the two in the subtitle above — someone
             beaten a round ago. */}
-        <Text style={[s.bucketName, { color: tone }]} numberOfLines={1}>
+        <Text style={s.bucketName} numberOfLines={1}>
           {picked || 'No pick'}
         </Text>
         <Text style={[s.bucketCount, { color: tone }]}>({people.length})</Text>
@@ -177,9 +183,14 @@ const s = StyleSheet.create({
     width: 36, height: 4, borderRadius: 2, backgroundColor: C.border,
     alignSelf: 'center', marginBottom: S.sm,
   },
-  title: { ...T.h2, color: C.ink, textAlign: 'center' },
-  sub: { ...T.small, color: C.muted, textAlign: 'center', marginTop: 2 },
-  meta: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 6 },
+  head: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
+  // flexShrink, not flex: the title yields to the pills on a narrow screen
+  // rather than pushing them off the edge.
+  title: { ...T.h2, color: C.ink, flexShrink: 1 },
+  // Left, under the title it belongs to, now that the title is no longer
+  // centred — a centred line beneath a left-aligned heading reads as unrelated.
+  sub: { ...T.small, color: C.muted, marginTop: 2 },
+  meta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 'auto' },
   // The draw's SCHEDULED chip, one per state. `color` on the pill style is
   // read by the Text, borderColor/backgroundColor by the View.
   pill: { borderRadius: 4, borderWidth: 1, paddingHorizontal: 6, paddingVertical: 1 },
@@ -204,7 +215,9 @@ const s = StyleSheet.create({
   chev: { width: 14, textAlign: 'center' },
   // The name takes the space and the count sits tight against it, so the
   // count never drifts to the far edge on a short name.
-  bucketName: { ...T.smallMed, flexShrink: 1 },
+  // White: the player is the subject of the row, and right or wrong is
+  // already said by the heading above and by the count beside it.
+  bucketName: { ...T.smallMed, color: C.ink, flexShrink: 1 },
   bucketCount: { ...T.smallMed, opacity: 0.75 },
   // Indented under their heading, so an open bucket reads as belonging to it.
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6,
