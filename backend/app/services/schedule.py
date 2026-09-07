@@ -2326,6 +2326,66 @@ async def _observed_changeover(db, tournament_id: int) -> tuple[int, int]:
     return int(round(median)), len(gaps)
 
 
+# OUR VOCABULARY TO SOFASCORE'S, for the archive lookup. Ours came from
+# Wikipedia and theirs from their own catalogue; neither is going to change to
+# suit the other, so the translation lives here in one place.
+_SURFACE_TO_GROUND = {
+    'hard': 'Hardcourt outdoor',
+    'hard (i)': 'Hardcourt indoor',
+    'clay': 'Red clay',
+    'grass': 'Grass',
+}
+_CATEGORY_TO_LEVEL = {
+    'grand slam': 2000, 'atp 1000': 1000, 'wta 1000': 1000,
+    'atp 500': 500, 'wta 500': 500, 'atp 250': 250, 'wta 250': 250,
+}
+
+# The archive is deep enough to ask for more than a handful before trusting it.
+_MIN_ARCHIVE_SAMPLES = 20
+
+
+async def _archive_duration(db, draw, discipline: str,
+                            stage: str) -> tuple[Optional[int], int, str]:
+    """Median minutes from the timed archive, for this exact kind of match.
+
+    `match_duration_samples` is richer than anything `matches` can offer:
+    hundreds of matches per group rather than a handful, four surfaces rather
+    than whichever we happened to time, and — the part nothing else could give
+    — DOUBLES and QUALIFYING, which have no bracket rows at all.
+
+    It is ATP-ONLY. The collection was stopped by a Sofascore block partway
+    through, having walked the ATP catalogue and not yet reached the WTA one,
+    so a women's draw finds nothing here and falls through to the older path.
+    That is a gap in the data, not in the code; it closes on its own as the
+    results sweep times matches at the app's normal cadence.
+    """
+    from app.models.duration_sample import MatchDurationSample
+
+    tour = 'ATP' if (getattr(draw, 'gender', '') or '') == 'M' else 'WTA'
+    level = _CATEGORY_TO_LEVEL.get((getattr(draw, 'category', '') or '').strip().lower())
+    ground = _SURFACE_TO_GROUND.get((getattr(draw, 'surface', '') or '').strip().lower())
+    if not level or not ground:
+        return None, 0, 'unmapped'
+
+    mins = sorted(v for (v,) in (await db.execute(
+        select(MatchDurationSample.duration_min).where(
+            MatchDurationSample.tour == tour,
+            MatchDurationSample.level == level,
+            MatchDurationSample.surface == ground,
+            MatchDurationSample.discipline == discipline,
+            MatchDurationSample.stage == stage,
+            MatchDurationSample.duration_min.isnot(None),
+        ))).all() if v)
+    # The same bounds duration_stats trims by: a retirement and a rain-swollen
+    # row are both real rows and neither is a match length.
+    mins = [v for v in mins if 30 <= v <= 300]
+    if len(mins) < _MIN_ARCHIVE_SAMPLES:
+        return None, len(mins), 'archive-thin'
+    mid = len(mins) // 2
+    median = mins[mid] if len(mins) % 2 else (mins[mid - 1] + mins[mid]) / 2
+    return int(round(median)), len(mins), 'archive'
+
+
 async def _observed_duration(db, draw, discipline: str = 'singles',
                              stage: str = 'main') -> tuple[Optional[int], int, str]:
     """(minutes, samples, basis) — how long a singles match really takes here.
@@ -2360,13 +2420,20 @@ async def _observed_duration(db, draw, discipline: str = 'singles',
     tour and by season; a timed sample answers them for this event without
     anyone having to be right about the rulebook.
     """
+    # THE ARCHIVE FIRST. Hundreds of timed matches of exactly this kind beats
+    # a handful of our own, and it is the only source that knows anything about
+    # doubles or qualifying.
+    archived = await _archive_duration(db, draw, discipline, stage or 'main')
+    if archived[0]:
+        return archived
+
     is_slam = (draw.category or "").strip().lower() == "grand slam"
 
     # `matches` holds MAIN-DRAW SINGLES only — doubles and qualifying have no
-    # bracket rows, which is why their timings cannot come from here yet. They
-    # fall back to the format table, and the caller says which entry.
+    # bracket rows, which is why their timings cannot come from here. Anything
+    # else falls back to the format table, and the caller says which entry.
     if discipline != 'singles' or (stage or 'main') != 'main':
-        return None, 0, 'not timed'
+        return None, archived[1], archived[2]
 
     def _q(where):
         return (select(Match.sofa_duration_min, Match.duration_min)
