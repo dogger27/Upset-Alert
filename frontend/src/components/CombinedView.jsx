@@ -1352,16 +1352,20 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                           // the type to fit one line — everywhere but the
                           // leftmost column, which has no vertical room for a
                           // second line and shrinks instead (see the CSS).
+                          // A today match has no day part at all, so the
+                          // WHOLE label is the time — the other way round from
+                          // the old fallback, which put it in the day span and
+                          // would have styled a bare time as a weekday.
                           const cut = label.indexOf(' at ')
-                          const day = cut > 0 ? label.slice(0, cut + 3) : label
-                          const time = cut > 0 ? label.slice(cut + 4) : ''
+                          const day = cut > 0 ? label.slice(0, cut + 3) : ''
+                          const time = cut > 0 ? label.slice(cut + 4) : label
                           return (
                             <span
                               className={`cv-eta${colIdx > 0 ? ' cv-eta--roomy' : ''}${bell ? ' cv-eta--bell' : ''}`}
                               style={gapMidTravel}
                             >
-                              <span className="cv-eta-day">{day}</span>
-                              {time && <> <span className="cv-eta-time">{time}</span></>}
+                              {day && <span className="cv-eta-day">{day}</span>}
+                              {time && <>{day ? ' ' : ''}<span className="cv-eta-time">{time}</span></>}
                             </span>
                           )
                         })()}
