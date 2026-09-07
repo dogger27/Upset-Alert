@@ -34,12 +34,13 @@ import { computeDrawRanks } from '../../drawRanks'
 import { useApi } from '../../useApi'
 import { slotLabel } from '../../scoring'
 import { lockLabel } from '../../lock'
-import { currentRound, shortRound } from '../../rounds'
+import { currentRound } from '../../rounds'
 import { C, PICK, R, S, SHADOW, T } from '../../theme'
 import { EntryChip, PlayerName, PosBadge, TourBadge } from '../../cards'
 import { scoreLine } from '../../score'
 import { Card, CardLink, ErrorNote, Loading, Muted, Screen, Title } from '../../ui'
 import { RoundScrub } from '../../RoundScrub'
+import { RoundStrip } from '../../RoundStrip'
 
 export default function DrawScreen() {
   const { id, user, name } = useLocalSearchParams()
@@ -240,34 +241,11 @@ export default function DrawScreen() {
           </View>
         )}
 
-        {/* EVERY ROUND ON ONE LINE. As pills in a horizontal ScrollView the
-            last rounds sat off-screen, so the one place that tells you how far
-            a draw has come needed a swipe to read — and a slam's seven rounds
-            is exactly when that matters.
-
-            ONE Text with pressable children, not a row of Pressables: a single
-            Text shrinks the whole strip as a unit to fit the width. Laid out
-            as separate views each cell would shrink on its own and "R128"
-            would end up smaller than "F". The cost is that a hit area is the
-            glyphs rather than a padded box; the dots keep them apart. */}
+        {/* Every round on one line, and a scrub along it to move between
+            them. RoundScrub below is the same journey at fine resolution;
+            this is the coarse one. */}
         {rounds.length > 1 && (
-          <Text style={s.strip} numberOfLines={1}
-                adjustsFontSizeToFit minimumFontScale={0.6}>
-            {rounds.flatMap(([num, matches], i) => {
-              const on = num === active
-              const label = (
-                <Text key={num} onPress={() => setPicked(num)} suppressHighlighting
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: on }}
-                      style={on ? s.roundOn : s.roundOff}>
-                  {shortRound(matches[0]?.round_name, num)}
-                </Text>
-              )
-              return i === 0
-                ? [label]
-                : [<Text key={`dot${num}`} style={s.roundDot}>  •  </Text>, label]
-            })}
-          </Text>
+          <RoundStrip rounds={rounds} active={active} onPick={setPicked} />
         )}
 
         {/* Swipe sideways to pull the next round in; the row under the
@@ -478,14 +456,6 @@ const s = StyleSheet.create({
   headBody: { flex: 1, padding: S.md, gap: 3 },
   headStats: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: S.md },
 
-  strip: { ...T.smallMed, marginTop: S.sm, paddingVertical: S.xs, textAlign: 'center' },
-  // The round you are on, and the only bright thing in the strip.
-  roundOn: { color: C.greenBright, fontFamily: 'Archivo_700Bold' },
-  // Dimmed but still READ — these are the control, not decoration, so they
-  // stay well clear of the faint end of the ramp.
-  roundOff: { color: C.muted },
-  // Punctuation, so it sits below the labels it separates without vanishing.
-  roundDot: { color: C.borderLit },
 
   list: { gap: S.xs, paddingTop: S.sm, paddingBottom: S.xxl },
   // radius 5 and a 1px border, from BracketView.css — a bracket's boxes are
