@@ -188,9 +188,13 @@ export function expectedStartLabel(iso, source, zone) {
   const today = dayOf(new Date())
   const thatDay = dayOf(when)
 
+  /* TODAY SAYS NOTHING, so it is not said. Most of a live draw is being
+     played today, and "Today at" on every row spends the width on the one
+     part a reader can already assume while burying the rows where the day
+     genuinely differs. Returned early, before the "X at" shape below. */
   let prefix
   if (thatDay === today) {
-    prefix = 'Today'
+    prefix = null
   } else {
     const tomorrow = new Date()
     tomorrow.setDate(tomorrow.getDate() + 1)
@@ -214,5 +218,6 @@ export function expectedStartLabel(iso, source, zone) {
   }
 
   const hedge = source === 'printed' ? '' : '~'
+  if (prefix === null) return `${hedge}${time}${suffix}`
   return `${prefix} at ${hedge}${time}${suffix}`
 }

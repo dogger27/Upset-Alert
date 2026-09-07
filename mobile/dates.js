@@ -100,9 +100,10 @@ export function expectedStartLabel(iso, source, zone) {
   const today = dayOf(new Date())
   const thatDay = dayOf(when)
 
+  /* Today says nothing, so it is not said — the site's rule, kept in step. */
   let prefix
   if (thatDay === today) {
-    prefix = 'Today'
+    prefix = null
   } else {
     const tomorrow = new Date()
     tomorrow.setDate(tomorrow.getDate() + 1)
@@ -126,6 +127,7 @@ export function expectedStartLabel(iso, source, zone) {
   }
 
   const hedge = source === 'printed' ? '' : '~'
+  if (prefix === null) return `${hedge}${time}${suffix}`
   return `${prefix} at ${hedge}${time}${suffix}`
 }
 
@@ -142,7 +144,13 @@ export function clockTime(iso, zone) {
   return formatter('time', zone).format(d)
 }
 
-/* "Wed 8:00 AM" — a start time short enough for a phone row.
+/* "Wed 8:00 AM", or just "8:00 AM" when it is today.
+ *
+ * TODAY IS THE DEFAULT CASE, so it says nothing. Most of what a draw shows is
+ * being played today; stamping "Mon" on every one of those rows spends the
+ * width on the word a reader can already assume, and buries the two rows where
+ * the day actually differs. Naming the day only when it is NOT today makes it
+ * information again.
  *
  * NEVER "Tomorrow". expectedStartLabel above says "Tomorrow at ~8:00 AM PDT"
  * because a bracket column on a desktop has room for a sentence; in a schedule
@@ -163,7 +171,12 @@ export function shortStart(iso, source, zone) {
   if (source !== 'printed') {
     when = new Date(Math.round(when.getTime() / FIVE_MIN) * FIVE_MIN)
   }
-  const day = formatter('weekday', zone).format(when)
   const time = formatter('time', zone).format(when)
-  return `${source === 'printed' ? '' : '~'}${day} ${time}`
+  const hedge = source === 'printed' ? '' : '~'
+  /* Compared in the SAME zone the time is rendered in — otherwise a late match
+     is "today" to one reader and named by weekday to another looking at the
+     identical row. The same rule the site's expectedStartLabel follows. */
+  const dayFmt = formatter('day', zone)
+  if (dayFmt.format(when) === dayFmt.format(new Date())) return `${hedge}${time}`
+  return `${hedge}${formatter('weekday', zone).format(when)} ${time}`
 }
