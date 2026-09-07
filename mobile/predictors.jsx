@@ -37,7 +37,6 @@ export function PredictorsSheet({ visible, onClose, drawId, match, meId }) {
   /* WHO IS PLAYING, as the line the sheet is about. Built as pieces rather
      than one string so the underline lands on the names and not on the "vs."
      joining them. */
-  const shortP = (n) => (n ? (nameForms(n)[1] || nameForms(n)[0]) : '')
   /* The one this match was won against. Both callers hand us the site's match
      shape (player1/player2/winner), so the loser is simply the side the winner
      is not. */
@@ -112,7 +111,7 @@ export function PredictorsSheet({ visible, onClose, drawId, match, meId }) {
             {/* Both sections share one denominator — everyone who picked this
                 match — so the percentages across the whole sheet add to 100. */}
             <Group label="Right" tone={C.greenLit} people={d.correct} meId={meId}
-                   fieldSize={fieldSize} anonymous={!d.pending} />
+                   fieldSize={fieldSize} fallback={d.pending ? '' : shortP(winner)} />
             <Group label="Wrong" tone={C.bad} people={d.incorrect} meId={meId}
                    fieldSize={fieldSize} />
           </ScrollView>
@@ -139,18 +138,26 @@ export function PredictorsSheet({ visible, onClose, drawId, match, meId }) {
 /* `isMine`, not `mine`: the chip loop below declares its own per-PERSON
    `mine`, and two different meanings of one word in one function is how a
    later edit ends up highlighting every chip in your bucket. */
-function PickBucket({ picked, people, tone, meId, isMine, fieldSize, anonymous }) {
-  const [open, setOpen] = useState(false)
-  /* A FINISHED match sends no pick name for the people who got it right — the
-     server omits it deliberately, since a correct pick can only be the winner
-     (routers/tournaments.py: "a correct pick is the winner, already in the
-     title"). Rendering that absence as "No pick" was a lie about 18 people who
-     picked perfectly well, so the name is simply left out; the site's popup
-     has always printed '' here for the same reason.
+/* "A. Zverev", the initials-and-surname rung of the ladder, falling back to
+   the full name when a name has no rung to drop to. Shared by the match-up
+   line and the bucket rows so one player cannot appear as two. */
+const shortP = (n) => (n ? (nameForms(n)[1] || nameForms(n)[0]) : '')
 
-     "No pick" still stands everywhere it is TRUE — anyone with no pick fails
-     `pid == winner_id` and lands in Wrong, where the label is earned. */
-  const label = picked || (anonymous ? '' : 'No pick')
+function PickBucket({ picked, people, tone, meId, isMine, fieldSize, fallback }) {
+  const [open, setOpen] = useState(false)
+  /* Every row names the player it is about, both columns alike: "A. Zverev
+     (28)" over "A. Tabilo (1)" is a scoreline you can read in one glance.
+
+     A FINISHED match sends no pick name for the people who got it right — the
+     server omits it on purpose, since a correct pick can only be the winner
+     (routers/tournaments.py: "a correct pick is the winner, already in the
+     title"). `fallback` supplies that name back rather than leaving the row
+     unlabelled, and it is only ever passed for the right column of a decided
+     match, where the winner IS what all of them picked.
+
+     "No pick" is left for where it is TRUE: anyone with no pick fails
+     `pid == winner_id`, lands in Wrong, and gets no fallback. */
+  const label = shortP(picked) || fallback || 'No pick'
   const count = `${people.length} ${people.length === 1 ? 'person' : 'people'}`
   return (
     <View style={s.bucket}>
@@ -171,9 +178,7 @@ function PickBucket({ picked, people, tone, meId, isMine, fieldSize, anonymous }
         </Text>
         <Ionicons name={open ? 'chevron-down' : 'chevron-forward'}
                   size={14} color={tone} style={s.chev} />
-        {label ? (
-          <Text style={s.bucketName} numberOfLines={1}>{label}</Text>
-        ) : null}
+        <Text style={s.bucketName} numberOfLines={1}>{label}</Text>
         <Text style={[s.bucketCount, { color: tone }]}>({people.length})</Text>
         {/* YOUR pick, named without opening anything. Auto-expanding this row
             was the wrong way to answer "which one is mine": it dumped a list
@@ -203,7 +208,7 @@ function PickBucket({ picked, people, tone, meId, isMine, fieldSize, anonymous }
   )
 }
 
-function Group({ label, tone, people, meId, fieldSize, anonymous }) {
+function Group({ label, tone, people, meId, fieldSize, fallback }) {
   /* Bucketed by pick, fewest backers first. Ties keep the order the server
      sent, which is already by weight of support. */
   const buckets = useMemo(() => {
@@ -228,7 +233,7 @@ function Group({ label, tone, people, meId, fieldSize, anonymous }) {
         {buckets.map(b => (
           <PickBucket
             key={b.picked || '_none'} picked={b.picked} people={b.list}
-            tone={tone} meId={meId} fieldSize={fieldSize} anonymous={anonymous}
+            tone={tone} meId={meId} fieldSize={fieldSize} fallback={fallback}
             isMine={meId != null && b.list.some(p => p.id === meId)}
           />
         ))}
