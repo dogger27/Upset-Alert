@@ -187,7 +187,8 @@ function PickBucket({ picked, people, tone, meId, isMine, fieldSize, fallback })
 
             Fixed width and right-aligned so the chevrons and names below line
             up whether the number is 3% or 86%. */}
-        <Text style={[s.pct, { color: tone }]}>
+        <Text style={[s.pct, { color: tone }]} numberOfLines={1}
+              adjustsFontSizeToFit minimumFontScale={0.8}>
           {fieldSize ? `${Math.round((100 * people.length) / fieldSize)}%` : ''}
         </Text>
         <Ionicons name={open ? 'chevron-down' : 'chevron-forward'}
@@ -322,9 +323,14 @@ const s = StyleSheet.create({
   // Held off the sheet's edge rather than flush against it. Still fixed-width
   // and right-aligned, so the indent moves the whole column and the chevrons
   // and names behind it stay in line.
-  pct: { ...T.smallMed, width: 38, marginLeft: 10, textAlign: 'right',
+  /* leading(), not a bare 38: the GLYPHS grow with the reader's text size but
+     a hard-coded width does not, so "100%" — the widest this ever gets — ran
+     out of column and wrapped the "%" onto its own line. The column now grows
+     by the same factor the text does. Same reason the chevron's box scales:
+     an icon font scales too, and a fixed box clips it. */
+  pct: { ...T.smallMed, width: leading(38), marginLeft: 10, textAlign: 'right',
          fontVariant: ['tabular-nums'] },
-  chev: { width: 14, textAlign: 'center' },
+  chev: { width: leading(14), textAlign: 'center' },
   // The name takes the space and the count sits tight against it, so the
   // count never drifts to the far edge on a short name.
   // The pick, as a heading. Plain: the treatment belongs to the MATCH-UP line

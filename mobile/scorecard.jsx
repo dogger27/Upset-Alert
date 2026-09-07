@@ -122,7 +122,10 @@ const s = StyleSheet.create({
   ball: { width: 7, height: 7, borderRadius: 4, backgroundColor: C.clay },
   end: { ...T.tiny, color: C.faint, fontStyle: 'italic' },
   pick: { fontSize: 14, lineHeight: leading(18) },
-  mark: { fontSize: 13, lineHeight: leading(16), width: 14, textAlign: 'center' },
+  // leading() on the WIDTH too: a 13pt glyph in a 14pt box has one point of
+  // room, so any text size above ~1.08 clipped the tick. The box now grows
+  // with the mark it holds.
+  mark: { fontSize: 13, lineHeight: leading(16), width: leading(14), textAlign: 'center' },
   sets: { flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 'auto' },
   setBox: { flexDirection: 'row', alignItems: 'flex-start', minWidth: 16, justifyContent: 'center' },
   setWide: { minWidth: 26 },
