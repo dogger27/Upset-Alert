@@ -1,5 +1,18 @@
 """Collect how long tennis actually takes, from Sofascore's own set clocks.
 
+    DO NOT RUN THIS. Kept for the record, not for use.
+
+    It was run once, on 2026-09-07, and got Jupiter's IP 403-ed by Sofascore
+    after 605 requests. There is no pace that makes it safe: the app itself is
+    already spending this IP's budget continuously, and bulk collection on top
+    of that is what tips it. The consequence was not a failed script — the app
+    switched itself onto the residential proxy, which is CANCELLED, and its
+    24-hour cooloff would have kept it there. Live scoring fell back to ESPN
+    for the duration.
+
+    If this is ever wanted again it needs an egress that is not the one the
+    site depends on. See [[sofascore-egress]].
+
     docker compose exec -T backend python -m scripts.backfill_durations --help
     ... --from-year 2022 --pace 5
     ... --from-year 2022 --pace 5 --max-requests 400     # a chunk at a time
@@ -188,16 +201,33 @@ async def main() -> None:
                     rows = [r for r in (_classify(e) for e in events) if r]
                     for r in rows:
                         r["season_year"] = year_i
+                    fresh = 0
                     if rows:
                         async with AsyncSessionLocal() as db:
-                            # Ignore anything already held: the event id is
-                            # unique, so re-running costs nothing and repairs
-                            # a half-finished run.
-                            res = await db.execute(
-                                sqlite_insert(MatchDurationSample)
-                                .values(rows).prefix_with("OR IGNORE"))
-                            await db.commit()
-                            stored += res.rowcount or 0
+                            # WHAT IS ACTUALLY NEW, asked before the insert.
+                            # `barren` has to mean "nothing new here", not
+                            # "nothing here" — a resumed run re-walks seasons
+                            # it already has, and if a page of duplicates reset
+                            # the counter it would re-read every page of every
+                            # season before reaching new work. On a deadline
+                            # that is the difference between finishing and not.
+                            ids = [r["sofa_event_id"] for r in rows]
+                            have = set((await db.execute(
+                                select(MatchDurationSample.sofa_event_id)
+                                .where(MatchDurationSample.sofa_event_id.in_(ids))
+                            )).scalars().all())
+                            new_rows = [r for r in rows
+                                        if r["sofa_event_id"] not in have]
+                            if new_rows:
+                                # OR IGNORE as well: two overlapping runs must
+                                # not turn a race into a crash.
+                                await db.execute(
+                                    sqlite_insert(MatchDurationSample)
+                                    .values(new_rows).prefix_with("OR IGNORE"))
+                                await db.commit()
+                                fresh = len(new_rows)
+                                stored += fresh
+                    if fresh:
                         barren = 0
                     else:
                         barren += 1
