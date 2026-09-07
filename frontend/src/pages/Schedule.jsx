@@ -481,6 +481,12 @@ function MatchRow({ e, showCourt, zone, venueMode, onH2H, onChampion, onHistory,
   // beside a score that had not moved since the night before.
   const suspended = e.live_scores?.[4] === 'suspended' || !!e.live_point?.suspended
   const started = startedLine(e, zone)
+  // On court, finished, or stopped mid-match: the time line goes entirely.
+  //
+  // NOT postponed or to-be-completed, though both have played some tennis.
+  // Those rows are waiting for a NEW slot, and when they will resume is the
+  // one thing a reader actually wants from them.
+  const underWay = e.status === 'live' || e.status === 'completed' || suspended
 
   // The biggest thing that just happened to this match, or null. Marks the CARD
   // rather than a digit: a set belongs to the match, and putting the emphasis
@@ -632,7 +638,13 @@ function MatchRow({ e, showCourt, zone, venueMode, onH2H, onChampion, onHistory,
             line under the players costs the card a little height and gives
             the names the whole width. */}
         <div className="sched-row-foot">
-          <TimeLine
+          {/* NOTHING AT ALL once a match is on court or over. The badge beside
+              it already says "In progress" or "Completed", the score says the
+              rest, and the hour it began answers a question nobody is asking
+              by then. Falling through to the scheduled time would be worse
+              than silence: a finished match labelled with the slot it was due
+              in reads as though it had not started. */}
+          {!underWay && <TimeLine
             className={clsx('sched-time', {
               // Faded and italic wherever the MAIN line is a guess — in time
               // view always, and in court view once the estimate has replaced
@@ -647,7 +659,7 @@ function MatchRow({ e, showCourt, zone, venueMode, onH2H, onChampion, onHistory,
                "Followed by" and "Not before 9:30 AM" still say where a match
                sits in the day's order, which the estimate alone does not. */
             title={!started && estimateSupersedes(e)
-              ? displacedWording(e, zone, venueMode) : undefined} />
+              ? displacedWording(e, zone, venueMode) : undefined} />}
           {/* No second line: the estimate used to sit BESIDE the sheet's
               wording, and now replaces it. */}
         </div>
