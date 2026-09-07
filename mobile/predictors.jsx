@@ -231,7 +231,10 @@ const s = StyleSheet.create({
   groupLabel: { ...T.smallMed, marginBottom: S.xs },
   /* A pick and its backers. The header is a touch target, so it takes the
      full width and a real row height rather than hugging its text. */
-  none: { ...T.tiny, color: C.faint, paddingVertical: 4 },
+  // Indented to 20 like the chips, so an empty section sits exactly where a
+  // full one's names would — the eye reads it as the section's content rather
+  // than as another heading.
+  none: { ...T.tiny, color: C.faint, paddingVertical: 4, paddingLeft: 20 },
   bucket: { marginBottom: S.xs },
   bucketHead: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
