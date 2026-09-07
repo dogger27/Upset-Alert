@@ -311,7 +311,19 @@ function MatchRow({ m, pick, drawRanks, zone, slugById, onH2H, onPredictors, onS
   const correct = decided && pick != null && pick === m.winner.id
   const wrong = decided && pick != null && pick !== m.winner.id
   const state = correct ? PICK.correct : wrong ? PICK.wrong : null
-  const line = scoreLine(m.scores)
+  /* ON COURT NOW. The API has always sent live_scores and live_point for the
+     draw's matches; this tile only ever asked whether there was a WINNER, so
+     a match in its second set was still announced as SCHEDULED at its start
+     time. Anything with a live score and no result yet is in progress. */
+  const live = !decided && !m.is_bye && !!(m.live_scores || m.live_point)
+  /* Rain, light, anything: play stopped but the match is not over. The site
+     reads the same flag off live_scores[4] (BracketView), and without it a
+     suspended match sat here claiming to be LIVE. */
+  const stopped = live && m.live_scores?.[4] === 'suspended'
+  /* scores_json is only written when a match ENDS, so a live match's games
+     live in live_scores. Its extra elements (current set, flags) are ignored
+     by scoreLine, which reads the first two. */
+  const line = scoreLine(m.scores || m.live_scores)
   /* Both players real AND both matched to a TE profile. A qualifier who never
      matched has no slug, and asking the endpoint for one returns nothing
      useful — so the button is simply absent rather than present and empty. */
@@ -320,7 +332,8 @@ function MatchRow({ m, pick, drawRanks, zone, slugById, onH2H, onPredictors, onS
 
   /* Only for a match that has not started. Once there is a result the start
      time is history, and the site drops it there too. */
-  const when = !decided && !m.is_bye ? shortStart(m.expected_start_at, m.expected_source, zone) : null
+  const when = !decided && !live && !m.is_bye
+    ? shortStart(m.expected_start_at, m.expected_source, zone) : null
 
   const openable = !!onShowScore && matchStarted(m)
   const Wrap = openable ? Pressable : View
@@ -330,7 +343,15 @@ function MatchRow({ m, pick, drawRanks, zone, slugById, onH2H, onPredictors, onS
       state && { backgroundColor: state.bg, borderColor: state.border },
       m.is_bye && { opacity: 0.5 },
     ]} onPress={openable ? () => onShowScore(m) : undefined}>
-      {when ? (
+      {live ? (
+        <View style={s.whenRow}>
+          <View style={[s.liveChip, stopped && s.stoppedChip]}>
+            <Text style={[s.liveText, stopped && s.stoppedText]}>
+              {stopped ? 'SUSPENDED' : 'LIVE'}
+            </Text>
+          </View>
+        </View>
+      ) : when ? (
         <View style={s.whenRow}>
           <View style={s.schedChip}><Text style={s.schedText}>SCHEDULED</Text></View>
           <Text style={s.whenText} numberOfLines={1}>{when}</Text>
@@ -452,6 +473,16 @@ const s = StyleSheet.create({
     backgroundColor: '#182140', paddingHorizontal: 5, paddingVertical: 1,
   },
   schedText: { fontFamily: 'Archivo_700Bold', fontSize: 9, lineHeight: leading(13), letterSpacing: 0.5, color: '#9db4ff' },
+  // Same shape as SCHEDULED, in the app's green: the two are one slot saying
+  // where a match has got to, so they should differ only in colour and word.
+  liveChip: {
+    borderRadius: 4, borderWidth: 1, borderColor: C.greenLit,
+    backgroundColor: '#12301f', paddingHorizontal: 5, paddingVertical: 1,
+  },
+  liveText: { fontFamily: 'Archivo_700Bold', fontSize: 9, lineHeight: leading(13), letterSpacing: 0.5, color: C.greenBright },
+  // Stopped, not finished — the warn gold the app already uses for "hold on".
+  stoppedChip: { borderColor: C.warn, backgroundColor: '#33240f' },
+  stoppedText: { color: C.warn },
   whenText: { ...T.tiny, color: C.muted, flexShrink: 1 },
   pickMark: { fontFamily: 'Archivo_700Bold', fontSize: 13, marginLeft: 8 },
   head: {
