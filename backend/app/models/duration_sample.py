@@ -19,7 +19,7 @@ a rain delay between sets is outside it by construction.
 
 from typing import Optional
 
-from sqlalchemy import Integer, String, UniqueConstraint
+from sqlalchemy import Integer, JSON, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -44,3 +44,22 @@ class MatchDurationSample(Base):
     stage: Mapped[Optional[str]] = mapped_column(String(16))      # main / qualifying
     sets_played: Mapped[Optional[int]] = mapped_column(Integer)
     duration_min: Mapped[Optional[int]] = mapped_column(Integer)
+
+    # THE RAW PER-SET DATA, because summing it away throws out most of the
+    # model. From these three, everything else is derivable and nothing has to
+    # be re-fetched to ask a new question:
+    #
+    #   set_seconds  how long each SET took   -> the length of a set, by
+    #                                            surface and level and tour
+    #   set_games    games in each set, [home, away] — a 10-point match
+    #                tiebreak in place of a third set shows up here as its own
+    #                shape, so the format is observed rather than assumed
+    #   winner_code  1 home, 2 away
+    #
+    # Together they give the set SEQUENCE, and with it the question a live
+    # match actually poses: given someone leads two sets to love, how often
+    # does this finish in three, four or five? A total duration cannot answer
+    # that; a sequence can.
+    set_seconds_json: Mapped[Optional[list]] = mapped_column(JSON)
+    set_games_json: Mapped[Optional[list]] = mapped_column(JSON)
+    winner_code: Mapped[Optional[int]] = mapped_column(Integer)

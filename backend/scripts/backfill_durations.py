@@ -77,7 +77,19 @@ def _classify(ev: dict) -> Optional[dict]:
     name = ((ev.get("roundInfo") or {}).get("name") or "").lower()
     slug = ((ev.get("roundInfo") or {}).get("slug") or "").lower()
     qualifying = "qualif" in name or "qualif" in slug
-    sets_played = len([k for k in (ev.get("time") or {}) if k.startswith("period")])
+    # THE SETS THEMSELVES, in order, not just their total. `time.periodN` is
+    # the clock; homeScore/awayScore.periodN are the games. Keeping both is
+    # what lets a later question — how long is a set here, how often does a
+    # two-set lead end it — be answered without fetching any of this again.
+    home, away = ev.get("homeScore") or {}, ev.get("awayScore") or {}
+    clocks = ev.get("time") or {}
+    seconds, games = [], []
+    for i in range(1, 6):
+        key = f"period{i}"
+        if key not in clocks and key not in home:
+            break
+        seconds.append(clocks.get(key))
+        games.append([home.get(key), away.get(key)])
     return {
         "sofa_event_id": ev.get("id"),
         "tour": (ut.get("category") or {}).get("name"),
@@ -85,8 +97,11 @@ def _classify(ev: dict) -> Optional[dict]:
         "surface": ut.get("groundType"),
         "discipline": "doubles" if pair else "singles",
         "stage": "qualifying" if qualifying else "main",
-        "sets_played": sets_played or None,
+        "sets_played": len(games) or None,
         "duration_min": mins,
+        "set_seconds_json": seconds or None,
+        "set_games_json": games or None,
+        "winner_code": ev.get("winnerCode"),
     }
 
 
