@@ -19,26 +19,24 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { leading } from '../../../fontScale.js'
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { getDraw, getPredictions, listTournaments } from '../../../api'
-import { dateRange, shortStart } from '../../../dates'
+import { getDraw, getPredictions } from '../../../api'
+import { shortStart } from '../../../dates'
 import { useAuth } from '../../../auth'
 import { H2HSheet } from '../../../h2h'
 import { useLiveUpdates } from '../../../live'
 import { ScoreHistorySheet, entryFromMatch, matchStarted } from '../../../scoreHistory'
 import { PredictorsSheet } from '../../../predictors'
-import { tourLabel } from '../../../category'
 import { computeDrawRanks } from '../../../drawRanks'
 import { useApi } from '../../../useApi'
 import { slotLabel } from '../../../scoring'
-import { lockLabel } from '../../../lock'
 import { currentRound } from '../../../rounds'
 import { C, PICK, R, S, SHADOW, T } from '../../../theme'
 import { EntryChip, PlayerName, PosBadge, TourBadge } from '../../../cards'
 import { scoreLine } from '../../../score'
-import { Card, CardLink, ErrorNote, Loading, Muted, Screen, Title } from '../../../ui'
+import { Card, ErrorNote, Loading, Muted, Screen, Title } from '../../../ui'
 import { RoundScrub } from '../../../RoundScrub'
 import { RoundStrip } from '../../../RoundStrip'
 import { useRoundSwipe } from '../../../roundSwipe'
@@ -59,23 +57,9 @@ export default function DrawScreen() {
 
   const t = draw.data?.tournament
 
-  /* SIBLING DRAWS, the site's rule: every draw with the SAME STATUS as this
-     one, in start-date order, and the arrows wrap around. That is what lets a
-     reader flip from the men's US Open to the women's without going back to
-     the dashboard, and during a normal week it walks the tour's events. Shares
-     the 'tournaments' cache with the dashboard, so this is normally free. */
-  const all = useApi('tournaments', listTournaments)
-  const siblings = useMemo(() => {
-    const status = t?.status
-    if (!all.data || !status) return []
-    return all.data.filter(d => d.status === status).sort((a, b) =>
-      (a.start_date || '').localeCompare(b.start_date || '') ||
-      (a.name || '').localeCompare(b.name || '') || a.id - b.id)
-  }, [all.data, t?.status])
-  const sibIdx = siblings.findIndex(d => String(d.id) === String(id))
-  const step = delta => (siblings.length < 2 || sibIdx < 0)
-    ? null : siblings[(sibIdx + delta + siblings.length) % siblings.length]
-  const prevDraw = step(-1), nextDraw = step(1)
+  /* The sibling-draw arrows lived in the header and went with it. Moving
+     between draws is the Draw tab's chooser now, which lists them all rather
+     than stepping through one at a time. */
   const router = useRouter()
 
   /* WHICH CLOCK an upcoming start is shown in — the site's rule, exactly:
@@ -148,103 +132,27 @@ export default function DrawScreen() {
   const roundPan = useRoundSwipe({ rounds, active, onPick: setPicked })
   const shown = rounds.find(([n]) => n === active) || rounds[0]
 
-  const tally = useMemo(() => {
-    let right = 0, decided = 0
-    for (const m of draw.data?.matches || []) {
-      if (m.is_bye || !m.winner) continue
-      const p = pickBy.get(m.id)
-      if (p == null) continue
-      decided += 1
-      if (p === m.winner.id) right += 1
-    }
-    return { right, decided }
-  }, [draw.data, pickBy])
-
   const loading = (draw.loading && !draw.data) || (preds.loading && !preds.data)
   const refetch = () => { draw.refetch(); preds.refetch() }
-  const lock = lockLabel(t)
 
   return (
     <>
-      {/* headerTitle, NOT title. As a tab screen `title` drives the tab's
-          LABEL as well as the header, so setting it here put "ATX Open" on
-          the bar where the destination's name belongs. The tab is called
-          Draw by the layout; only the header names the tournament. */}
-      <Stack.Screen options={{ headerTitle: t?.name || 'Draw' }} />
       <Screen onRefresh={refetch} scroll={false}>
         <View style={s.sheet} {...roundPan}>
         {loading ? <Loading /> : null}
         <ErrorNote error={draw.error} onRetry={refetch} />
 
+        {/* THE HEADER, not a card under one. The navigation bar said
+            "US Open" and this box said everything else, so the top of the
+            screen was two rows saying one thing. The bar is switched off for
+            this tab and the name moved in here, beside the tour it belongs
+            to: a pink or blue edge, WTA or ATP, and the tournament. */}
         {t && (
           <View style={s.head}>
             <View style={[s.tint, { backgroundColor: t.gender === 'F' ? C.wta : C.atp }]} />
             <View style={s.headBody}>
-              {/* The draw screen was the one place that never said whose draw
-                  it was: no tour, no city, no dates — just "Grand Slam · Hard".
-                  With a combined event that made the men's and women's US Open
-                  indistinguishable here too, and the screen title alone
-                  ("US Open") does not resolve it. */}
-              <View style={s.headTitle}>
-                <Pressable
-                  onPress={() => prevDraw && router.replace(`/draw/${prevDraw.id}`)}
-                  disabled={!prevDraw} hitSlop={10}
-                  style={({ pressed }) => [s.sib, !prevDraw && s.sibOff, pressed && { opacity: 0.6 }]}
-                  accessibilityRole="button"
-                  accessibilityLabel={prevDraw ? `Previous draw: ${prevDraw.name} — ${tourLabel(prevDraw)}` : 'No other draws of this type'}
-                >
-                  <Ionicons name="chevron-back" size={16} color={C.inkBody} />
-                </Pressable>
-                <TourBadge gender={t.gender} />
-                <Text style={[T.small, { color: C.muted, flexShrink: 1 }]} numberOfLines={1}>
-                  {[t.category, t.surface, t.draw_size ? `${t.draw_size} draw` : null]
-                    .filter(Boolean).join(' · ')}
-                </Text>
-                <View style={{ flex: 1 }} />
-                <Pressable
-                  onPress={() => nextDraw && router.replace(`/draw/${nextDraw.id}`)}
-                  disabled={!nextDraw} hitSlop={10}
-                  style={({ pressed }) => [s.sib, !nextDraw && s.sibOff, pressed && { opacity: 0.6 }]}
-                  accessibilityRole="button"
-                  accessibilityLabel={nextDraw ? `Next draw: ${nextDraw.name} — ${tourLabel(nextDraw)}` : 'No other draws of this type'}
-                >
-                  <Ionicons name="chevron-forward" size={16} color={C.inkBody} />
-                </Pressable>
-              </View>
-              {/* `city`, not `location` — the API sends "New York City" under
-                  city and leaves location null, so reading location rendered
-                  an empty string with no error anywhere. */}
-              {(t.city || dateRange(t)) ? (
-                <Text style={[T.tiny, { color: C.faint }]} numberOfLines={1}>
-                  {[t.city, dateRange(t)].filter(Boolean).join(' · ')}
-                </Text>
-              ) : null}
-              <View style={s.headStats}>
-                {/* The tally is the door to the global standings — the list
-                    the site's sidebar keeps beside the bracket. */}
-                {tally.decided > 0 && (
-                  <CardLink href={`/standings/${id}`} style={s.tallyLink} pressedOpacity={0.6}>
-                    <Text style={[T.smallMed, { color: C.ink }]}>
-                      {tally.right} of {tally.decided} right
-                    </Text>
-                    <Ionicons name="chevron-forward" size={14} color={C.muted} />
-                  </CardLink>
-                )}
-                {/* The site's sidebar carries the Order of Play button on the
-                    draw page; the schedule lands on the right day itself. */}
-                {t.oop_first_seen_at && t.tournament_id ? (
-                  <CardLink href={{ pathname: '/schedule', params: { tournament: t.tournament_id, draw: id } }}
-                            style={s.oopChip} pressedOpacity={0.6}>
-                    <Ionicons name="calendar-outline" size={13} color={C.greenLit} />
-                    <Text style={[T.tiny, { color: C.greenLit }]}>Order of Play</Text>
-                  </CardLink>
-                ) : null}
-                {lock ? (
-                  <Text style={[T.small, { color: lock.urgent ? C.clay : C.muted }]}>
-                    {lock.text}
-                  </Text>
-                ) : null}
-              </View>
+              <TourBadge gender={t.gender} />
+              <Text style={s.headName} numberOfLines={1}>{t.name}</Text>
             </View>
           </View>
         )}
@@ -454,8 +362,6 @@ function MatchRow({ m, pick, drawRanks, zone, slugById, onH2H, onPredictors, onS
 }
 
 const s = StyleSheet.create({
-  tallyLink: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  oopChip: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderColor: C.borderOn, borderRadius: R.pill, paddingHorizontal: 8, paddingVertical: 3 },
   viewing: {
     flexDirection: 'row', alignItems: 'center', gap: S.sm,
     borderWidth: 1, borderColor: C.info, borderRadius: R.md, backgroundColor: C.card,
@@ -479,9 +385,6 @@ const s = StyleSheet.create({
     paddingHorizontal: 7, paddingVertical: 2,
   },
   h2hText: { fontFamily: 'Archivo_700Bold', fontSize: 10, lineHeight: leading(14), letterSpacing: 0.5, color: C.greenLit },
-  headTitle: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  sib: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.border },
-  sibOff: { opacity: 0.3 },
   whenRow: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     paddingHorizontal: 10, paddingTop: 8, paddingBottom: 2,
@@ -509,8 +412,9 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: C.border, overflow: 'hidden',
   },
   tint: { width: 4 },
-  headBody: { flex: 1, padding: S.md, gap: 3 },
-  headStats: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: S.md },
+  // One row now, so the body centres its two children instead of stacking.
+  headBody: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, padding: S.md },
+  headName: { ...T.h2, color: C.ink, flexShrink: 1 },
 
 
   // Fills the screen so the scrub is available over all of it, not only the
