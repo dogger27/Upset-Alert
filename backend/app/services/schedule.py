@@ -95,6 +95,14 @@ _DEFAULT_DURATION = 105
 # been recorded there; this is only the starting point.
 _DEFAULT_CHANGEOVER_MIN = 21
 
+# A first-to-10 match tiebreak in place of a third set. A STARTING POINT, like
+# the durations above: it is roughly a third of a set, and the whole reason it
+# is separate is that costing it as a set tells the court behind it to expect
+# half an hour that will not happen. Sofascore's per-set clocks can measure
+# this properly once enough tiebreak deciders have been captured — its `time`
+# object times that "set" like any other.
+_MATCH_TIEBREAK_MIN = 12
+
 # Below this many observations a median says more about luck than the venue.
 _MIN_CHANGEOVER_SAMPLES = 4
 
@@ -214,24 +222,25 @@ def _best_of(draw, discipline: str, stage: Optional[str] = None) -> int:
 
 
 def _full_decider(draw, discipline: str, stage: Optional[str] = None) -> bool:
-    """Is a deciding set actually played out?
+    """Is a deciding set played out, or replaced by a first-to-10 tiebreak?
 
-    Singles yes — a final-set tiebreak is still the end of a set that was
-    played. Team-format events are the question, and the answer moves with the
-    STAGE as well as the tour: Grand Slam doubles plays a real third set in the
-    main draw, but its qualifying can use a match tiebreak like the tours do.
+    The draw's own column answers it where set — `final_set_tiebreak` for
+    singles, `doubles_final_set_tiebreak` for doubles — because this is a
+    rulebook question that moves with the tour and the season, and a stored
+    value can move with it where code cannot.
 
-    Treat this as a documented guess, not a fact. It is the published format as
-    best understood, it is not verified against our own results, and formats
-    change between seasons. _observed_duration measures per discipline and
-    stage for exactly this reason — once five matches of a given kind have been
-    timed, what actually happened replaces everything decided here.
+    The fallback is the published format: Grand Slams play a real third set,
+    in singles and doubles and in qualifying too; the tours replace doubles'
+    third set with a super tiebreak and play no-ad besides. Singles plays its
+    decider everywhere, though the column allows for an event that does not.
     """
+    col = 'doubles_final_set_tiebreak' if discipline == 'doubles' else 'final_set_tiebreak'
+    stored = getattr(draw, col, None) if draw is not None else None
+    if stored is not None:
+        return not stored
     if discipline == 'singles':
         return True
-    if not _is_slam(draw):
-        return False
-    return (stage or 'main').strip().lower() == 'main'
+    return _is_slam(draw)
 
 
 def _parse_clock(value: Optional[str]) -> Optional[time]:
@@ -2239,16 +2248,32 @@ def _remaining_minutes(live, discipline: str, sets_to_win: int = 2,
     total = total_min or _duration_for(discipline, 2 * sets_to_win - 1, full_decider)
     # Sets per match, not a constant 2.5: a best-of-five averages about four.
     per_set = total / (2.5 if sets_to_win == 2 else 4.0)
+    # WHAT A DECIDER COSTS. Where a third set is replaced by a first-to-10
+    # tiebreak, the match does not have a set left in it — it has about twelve
+    # minutes. Costing that as a set is the difference between telling the next
+    # court half an hour and telling it ten minutes, and it lands exactly when
+    # the answer matters most: a match on court, one set all.
+    decider_cost = per_set if full_decider else _MATCH_TIEBREAK_MIN
     try:
         a_sets, b_sets = live[0] or [], live[1] or []
         decided = max(max(len(a_sets), len(b_sets)) - 1, 0)   # last entry is in play
         games = int(a_sets[-1] or 0) + int(b_sets[-1] or 0) if a_sets or b_sets else 0
-        part = min(games / 12.0, 1.0)
+        # A match tiebreak's "games" are POINTS, first to 10 — see the note on
+        # period scores in the sofascore data model. Twelve games is a set.
+        in_decider = decided >= 2 * sets_to_win - 2
+        scale = 10.0 if (in_decider and not full_decider) else 12.0
+        part = min(games / scale, 1.0)
+        # `additional` is the expected value of sets still to come after this
+        # one. In a best-of-three that is ENTIRELY the possible decider, so it
+        # is costed as one; a best-of-five always plays its fifth, so there the
+        # distinction does not arise.
         additional = max(sets_to_win - 1 - decided / 2.0, 0.0)
-        remaining_sets = additional + (1.0 - part)
+        current_cost = decider_cost if in_decider else per_set
+        remaining = (1.0 - part) * current_cost + additional * (
+            decider_cost if sets_to_win == 2 else per_set)
     except Exception:
-        remaining_sets = 1.0
-    return max(int(remaining_sets * per_set), 5)
+        remaining = per_set
+    return max(int(remaining), 5)
 
 
 async def _observed_changeover(db, tournament_id: int) -> tuple[int, int]:

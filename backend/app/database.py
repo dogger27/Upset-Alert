@@ -521,6 +521,8 @@ async def _migrate(conn):
         "ALTER TABLE matches ADD COLUMN sofa_event_id INTEGER",
         "ALTER TABLE matches ADD COLUMN sofa_duration_min INTEGER",
         "ALTER TABLE draws ADD COLUMN sofa_number_of_sets INTEGER",
+        "ALTER TABLE draws ADD COLUMN final_set_tiebreak BOOLEAN",
+        "ALTER TABLE draws ADD COLUMN doubles_final_set_tiebreak BOOLEAN",
         # Doubles scoring. Doubles has no draw and no bracket row — see the note
         # on ScheduleEntry — so its result lives on the schedule row, which is
         # the only record of the match there is.
@@ -545,6 +547,21 @@ async def _migrate(conn):
             await conn.execute(_text(sql))
         except Exception:
             pass  # Column already exists — safe to ignore
+
+    # Seed the deciding-set format from the published rules: singles plays its
+    # third set everywhere; doubles plays one at a Grand Slam and replaces it
+    # with a first-to-10 super tiebreak on tour.
+    #
+    # ONLY WHERE NULL. This is a starting point, not an authority — the whole
+    # reason it is a column is that the rulebook moves and a per-draw override
+    # should survive the next boot. A backfill that kept rewriting every row
+    # would quietly undo exactly the corrections the column exists to hold.
+    await conn.execute(_text(
+        "UPDATE draws SET final_set_tiebreak = 0 WHERE final_set_tiebreak IS NULL"))
+    await conn.execute(_text(
+        "UPDATE draws SET doubles_final_set_tiebreak = "
+        "  CASE WHEN LOWER(COALESCE(category,'')) = 'grand slam' THEN 0 ELSE 1 END "
+        "WHERE doubles_final_set_tiebreak IS NULL"))
 
     # Backfill ATP tennis week number for draws.  Recompute all rows so any
     # previously ISO-stamped values are corrected.
