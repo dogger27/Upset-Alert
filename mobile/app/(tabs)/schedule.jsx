@@ -467,7 +467,7 @@ function EntryRow({ e, venueMode, venueTz, onH2H, onHistory, onPredictors, inCou
               carry none. */}
           {e.match_id != null && (
             <Pressable onPress={() => onPredictors(matchFromEntry(e))} hitSlop={8}
-                       style={s.iconChip}
+                       style={[s.h2hChip, s.iconChip]}
                        accessibilityLabel={e.winner_side != null
                          ? 'Who called it' : 'Who’s still in it'}>
               <Ionicons name="people" size={13} color={C.muted} />
@@ -525,9 +525,24 @@ const s = StyleSheet.create({
   footTime: { ...T.smallMed, color: C.greenBright, fontFamily: 'Archivo_700Bold',
               lineHeight: leading(16), marginTop: leading(-3) },
   footTimeEst: { color: C.muted, fontStyle: 'italic' },
-  h2hChip: { borderRadius: 4, borderWidth: 1, borderColor: C.borderOn, paddingHorizontal: 7, paddingVertical: 2 },
-  iconChip: { borderRadius: 4, borderWidth: 1, borderColor: C.borderOn,
-              paddingHorizontal: 6, paddingVertical: 3 },
+  /* THE CHIP, and every chip on this row is this chip. An explicit height
+     rather than padding around whatever is inside: "H2H" is text, the Lock
+     Screen switch is an emoji in a Text, and the predictors button is an
+     Ionicons component that shares none of the text metrics — so sizing by
+     content made three buttons of three heights sitting in a row. Height plus
+     centring makes the content irrelevant, which is the only version that
+     stays true when the next one is added.
+
+     Through leading(), so the box grows with Dynamic Type like the text it
+     sits beside. */
+  h2hChip: {
+    borderRadius: 4, borderWidth: 1, borderColor: C.borderOn,
+    paddingHorizontal: 7, height: leading(20),
+    alignItems: 'center', justifyContent: 'center',
+  },
+  // Icon-only chips: a touch more room either side, nothing else. Height is
+  // never overridden — that is the point of it living on h2hChip.
+  iconChip: { paddingHorizontal: 8 },
   h2hText: { fontFamily: 'Archivo_700Bold', fontSize: 10, lineHeight: leading(14), letterSpacing: 0.5, color: C.greenLit },
   // Icon only, the same height as H2H; lit green while the match is showing.
   lockChip: { paddingHorizontal: 6 },
