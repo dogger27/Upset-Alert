@@ -13,6 +13,7 @@
 import { router, Tabs } from 'expo-router'
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { BracketIcon } from '../../BracketIcon'
 import { Sheet } from '../../sheet'
@@ -50,6 +51,12 @@ export default function TabLayout() {
      tapping Draw never swaps the women's bracket for the men's. Otherwise the
      first worth opening — shared cache key with the dashboard, so this costs
      no extra request. With none at all the tab is hidden rather than dead. */
+  /* The bar's bottom padding is the home-indicator inset. It is there to keep
+     the labels off the indicator, but the full inset leaves more air under
+     them than that needs — so take a few points back and keep the rest. Read
+     rather than hardcoded: it is 34 on a notched phone and 0 on a flat one,
+     and a fixed number would either waste space or bury the labels. */
+  const insets = useSafeAreaInsets()
   const [picking, setPicking] = useState(false)
   const showing = useCurrentDraw()
   /* Gated on a real session, exactly as the dashboard gates it: the tabs can
@@ -87,6 +94,7 @@ export default function TabLayout() {
           backgroundColor: C.card,
           borderTopColor: C.border,
           borderTopWidth: 1,
+          paddingBottom: Math.max(0, insets.bottom - 8),
         },
         // Archivo rather than the system face, so the bar belongs to the app.
         tabBarLabelStyle: { ...T.tiny, marginTop: 1 },
