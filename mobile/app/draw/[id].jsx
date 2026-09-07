@@ -334,7 +334,6 @@ function MatchRow({ m, pick, drawRanks, zone, slugById, onH2H, onPredictors, onS
         <View style={s.whenRow}>
           <View style={s.schedChip}><Text style={s.schedText}>SCHEDULED</Text></View>
           <Text style={s.whenText} numberOfLines={1}>{when}</Text>
-          {m.court ? <Text style={s.courtText} numberOfLines={1}>{m.court}</Text> : null}
         </View>
       ) : null}
       {[m.player1, m.player2].map((p, i) => {
@@ -454,7 +453,6 @@ const s = StyleSheet.create({
   },
   schedText: { fontFamily: 'Archivo_700Bold', fontSize: 9, lineHeight: leading(13), letterSpacing: 0.5, color: '#9db4ff' },
   whenText: { ...T.tiny, color: C.muted, flexShrink: 1 },
-  courtText: { ...T.tiny, color: C.faint },
   pickMark: { fontFamily: 'Archivo_700Bold', fontSize: 13, marginLeft: 8 },
   head: {
     flexDirection: 'row', backgroundColor: C.card, borderRadius: R.md,
