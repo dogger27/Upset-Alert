@@ -14,6 +14,7 @@
  * chip near the edge of the draw doesn't push the popup off screen.
  */
 import { useEffect } from 'react'
+import { shortRound } from '../utils/rounds'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getMatchPredictors } from '../api/tournaments'
@@ -116,7 +117,9 @@ export default function PredictorsPopup({ drawId, match, leagueId, onClose }) {
             )}
             {/* Always: which round this is, and where the match stands. */}
             <div className="pp-meta">
-              <span className="pp-round">{match?.round_name || '—'}</span>
+              {/* R32, never "Round of 32" — the compact form everywhere a
+                  round is a chip rather than a column header. */}
+              <span className="pp-round">{shortRound(match?.round_name) || '—'}</span>
               <span className={`pp-status pp-status--${statusMod}`}>{status}</span>
             </div>
           </div>
