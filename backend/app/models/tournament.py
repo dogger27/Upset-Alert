@@ -183,6 +183,18 @@ class Draw(Base):
     # Stated, not inferred — see schedule.py::_best_of, which had to guess it
     # from category, gender and stage and said so.
     sofa_number_of_sets: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # IS A DECIDING SET PLAYED OUT, or replaced by a first-to-10 match
+    # tiebreak? Only meaningful for a best-of-THREE match; a best-of-five
+    # always plays its fifth. Two columns because one tournament answers it
+    # twice: a 250's singles plays a real third set while its doubles does not.
+    # NULL means unknown and the caller falls back to its own rule.
+    #
+    # Seeded from the published formats (Grand Slams play a full third set in
+    # both singles and doubles, qualifying included; the tours replace it with
+    # a super tiebreak in doubles), and overridable per draw, because that is a
+    # rulebook that moves and this column is the thing that should move with it.
+    final_set_tiebreak: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    doubles_final_set_tiebreak: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     sofa_resolved_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True)
     venue_timezone: Mapped[Optional[str]] = mapped_column(String, nullable=True)
