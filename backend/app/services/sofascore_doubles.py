@@ -57,8 +57,25 @@ POLL_INTERVAL = 60.0
 # eventually fell back to "scheduled" with the score dropped. Both mean the
 # same thing to a reader: the match is real, the score stands, nobody is
 # playing right now. "willcontinue" is the same state after a scheduled break.
+# Play is not happening right now. ALL of these must keep taking writes — a
+# status left out of this list gets no write at all, its sets freeze and its
+# point ages out of freshness (twelve of thirteen US Open qualifying matches
+# read as dead that way during one delay).
 _STOPPED = ("interrupted", "suspended", "willcontinue")
 _PLAYING_OR_STOPPED = ("inprogress",) + _STOPPED
+
+# ...but only THESE mean "suspended" to a reader.
+#
+# Sofascore separates a SHORT halt from play being properly off, and we were
+# throwing that distinction away: `interrupted` covers a medical timeout, a
+# equipment change, a brief hold — three minutes and they are back on. Badging
+# that "Suspended" told everyone watching that a match they were following had
+# stopped for the day. Cerundolo's medical timeout, 2026-09-07.
+#
+# `interrupted` still belongs to _STOPPED above: no server is inferred and the
+# point is still carried forward, because the feed reports 0-0 during any halt.
+# The only thing that changes is what the reader is TOLD.
+_SUSPENDED = ("suspended", "willcontinue")
 # How many claimed-but-unlisted events one sweep will fetch individually. A
 # Slam qualifying day needs a few dozen; the cap keeps a pathological day from
 # becoming a request storm against a host that answers a burst with a ban.
@@ -874,8 +891,11 @@ async def sweep_once(db, day: Optional[date] = None) -> dict:
         # so the page can label it rather than imply play is going on.
         if status in _PLAYING_OR_STOPPED:
             snap = _snapshot(ev)
-            snap["suspended"] = status in _STOPPED
-            if snap["suspended"]:
+            # Two different questions. `stopped` decides how we READ the feed;
+            # `suspended` decides what the reader is TOLD.
+            stopped = status in _STOPPED
+            snap["suspended"] = status in _SUSPENDED
+            if stopped:
                 # THE FEED FORGETS THE POINT, WE DO NOT. An interrupted event
                 # reports point 0-0 — not the score when the covers came on,
                 # just an absence. The last point we recorded IS that score,
