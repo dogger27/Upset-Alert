@@ -18,6 +18,7 @@ import { useMemo, useState } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { getPredictors } from './api'
+import { nameForms } from './names'
 import { useApi } from './useApi'
 import { C, R, S, T } from './theme'
 import { leading } from './fontScale'
@@ -107,13 +108,12 @@ function PickBucket({ picked, people, tone, meId, defaultOpen }) {
                  style={s.bucketHead}>
         <Ionicons name={open ? 'chevron-down' : 'chevron-forward'}
                   size={14} color={tone} style={s.chev} />
-        {/* The FULL name here, where the chips used to carry a surname. The
-            surname was right when the pick was a parenthetical on a crowded
-            chip; as the heading it is the main fact on the row, and the player
-            picked is often not one of the two in the subtitle above — someone
-            beaten a round ago. */}
+        {/* "F. Cobolli" — the project's own shortening ladder, second rung:
+            initials for the given names, surname whole. Through nameForms so
+            particles survive ("B. van de Zandschulp", never "B. v. d. Z.")
+            and a single-token name simply stays as it is. */}
         <Text style={s.bucketName} numberOfLines={1}>
-          {picked || 'No pick'}
+          {picked ? (nameForms(picked)[1] || nameForms(picked)[0]) : 'No pick'}
         </Text>
         <Text style={[s.bucketCount, { color: tone }]}>({people.length})</Text>
       </Pressable>
@@ -215,9 +215,14 @@ const s = StyleSheet.create({
   chev: { width: 14, textAlign: 'center' },
   // The name takes the space and the count sits tight against it, so the
   // count never drifts to the far edge on a short name.
-  // White: the player is the subject of the row, and right or wrong is
-  // already said by the heading above and by the count beside it.
-  bucketName: { ...T.smallMed, color: C.ink, flexShrink: 1 },
+  /* The subject of the row, and it should look like it: bigger than anything
+     around it, bold, pure white, underlined. The underline is on the NAME
+     alone — the count beside it is a different fact and pulling it under the
+     same rule would read as one long link. */
+  bucketName: {
+    fontFamily: 'Archivo_700Bold', fontSize: 17, lineHeight: leading(23),
+    color: C.inkBright, textDecorationLine: 'underline', flexShrink: 1,
+  },
   bucketCount: { ...T.smallMed, opacity: 0.75 },
   // Indented under their heading, so an open bucket reads as belonging to it.
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6,
