@@ -10,8 +10,12 @@
  * used a few times a day that trade is not worth making.
  */
 
-import { Tabs } from 'expo-router'
+import { router, Tabs } from 'expo-router'
+import { useState } from 'react'
+import { Pressable, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { BracketIcon } from '../../BracketIcon'
+import { Sheet } from '../../sheet'
 import { listTournaments } from '../../api'
 import { useAuth } from '../../auth'
 import { useApi } from '../../useApi'
@@ -37,6 +41,7 @@ export default function TabLayout() {
      tapping Draw never swaps the women's bracket for the men's. Otherwise the
      first worth opening — shared cache key with the dashboard, so this costs
      no extra request. With none at all the tab is hidden rather than dead. */
+  const [picking, setPicking] = useState(false)
   const showing = useCurrentDraw()
   /* Gated on a real session, exactly as the dashboard gates it: the tabs can
      render for a beat while signed out, and an unauthenticated call here
@@ -44,10 +49,11 @@ export default function TabLayout() {
   const { phase } = useAuth()
   const ready = phase === 'ready'
   const tours = useApi(ready ? 'tournaments' : null, listTournaments, { enabled: ready })
-  const fallback = (tours.data || []).find(hasDrawData)?.id ?? null
-  const drawId = showing ?? fallback
+  const openable = (tours.data || []).filter(hasDrawData)
+  const drawId = showing ?? openable[0]?.id ?? null
 
   return (
+    <>
     <Tabs
       screenOptions={{
         headerStyle: { backgroundColor: C.bg },
@@ -80,9 +86,18 @@ export default function TabLayout() {
       {/* The bracket, between the day's play and the people you play it with. */}
       <Tabs.Screen
         name="draw/[id]"
+        /* ASK WHICH ONE. There is never a single "the draw" — two at every
+           slam — so the tab opens a chooser instead of guessing. The href
+           still points somewhere real: it is what keeps the tab on the bar
+           and gives the press a destination if this listener ever misses. */
+        listeners={{ tabPress: e => { e.preventDefault(); setPicking(true) } }}
         options={{
+          /* The LABEL is always "Draw". The screen used to set `title`, which
+             drives the tab label as well as the header, so the bar read
+             "ATX Open" — the name of a tournament where the name of a
+             destination belongs. The screen sets headerTitle now. */
           title: 'Draw',
-          tabBarIcon: icon('git-network'),
+          tabBarIcon: ({ color, size }) => <BracketIcon size={size ?? 22} color={color} />,
           href: drawId != null ? `/draw/${drawId}` : null,
         }}
       />
@@ -96,5 +111,34 @@ export default function TabLayout() {
           the four things this app is opened for. */}
       <Tabs.Screen name="status" options={{ title: 'Status', href: null }} />
     </Tabs>
+
+    <Sheet visible={picking} onClose={() => setPicking(false)} title="Draws">
+      {openable.length ? openable.map(t => (
+        <Pressable key={t.id} style={s.row}
+                   onPress={() => { setPicking(false); router.push(`/draw/${t.id}`) }}>
+          {/* The tour's colour is how the two halves of a combined event tell
+              themselves apart everywhere else in the app; a list of draws is
+              exactly where that matters most. */}
+          <View style={[s.tint, { backgroundColor: t.gender === 'F' ? C.wta : C.atp }]} />
+          <Text style={s.name} numberOfLines={1}>{t.name}</Text>
+          <Text style={s.tour}>{t.gender === 'F' ? 'WTA' : 'ATP'}</Text>
+          {t.id === showing ? <Ionicons name="checkmark" size={16} color={C.greenBright} /> : null}
+        </Pressable>
+      )) : (
+        <Text style={s.none}>No draws are open at this time.</Text>
+      )}
+    </Sheet>
+    </>
   )
+}
+
+const s = {
+  row: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingVertical: 12, borderTopWidth: 1, borderTopColor: C.border,
+  },
+  tint: { width: 3, height: 20, borderRadius: 2 },
+  name: { ...T.bodyMed, color: C.ink, flex: 1 },
+  tour: { ...T.tiny, color: C.muted },
+  none: { ...T.smallMed, color: C.muted, textAlign: 'center', paddingVertical: 12 },
 }
