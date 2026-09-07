@@ -200,10 +200,10 @@ const s = StyleSheet.create({
   // flexShrink, not flex: the title yields to the pills on a narrow screen
   // rather than pushing them off the edge.
   title: { ...T.h2, color: C.ink, flexShrink: 1 },
-  // Left, under the title it belongs to, now that the title is no longer
-  // centred — a centred line beneath a left-aligned heading reads as unrelated.
-  // The joining words stay muted; the names are the part that carries.
-  sub: { ...T.small, color: C.muted, marginTop: 4 },
+  // Centred across the sheet, on the owner's call — the match-up is the one
+  // line here that belongs to the whole screen rather than to the title above
+  // it, and centring is what says so.
+  sub: { ...T.small, color: C.muted, marginTop: 4, textAlign: 'center' },
   /* THE TWO PLAYERS. Bigger, bold, pure white, underlined — this line names
      the match the whole sheet is about, and it was reading as a caption. The
      underline covers the names only: "vs." is not a name, and running it
