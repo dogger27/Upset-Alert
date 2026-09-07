@@ -470,7 +470,10 @@ function EntryRow({ e, venueMode, venueTz, onH2H, onHistory, onPredictors, inCou
                        style={[s.h2hChip, s.iconChip]}
                        accessibilityLabel={e.winner_side != null
                          ? 'Who called it' : 'Who’s still in it'}>
-              <Ionicons name="people" size={13} color={C.muted} />
+              {/* Sized and coloured to sit level with "H2H" beside it: same green,
+                  and big enough to read as a peer of that word rather than a
+                  faint mark in a box. */}
+              <Ionicons name="people" size={16} color={C.greenLit} />
             </Pressable>
           )}
           {h2hPair && (

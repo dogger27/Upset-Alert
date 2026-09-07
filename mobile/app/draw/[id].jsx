@@ -394,7 +394,10 @@ function MatchRow({ m, pick, drawRanks, zone, slugById, onH2H, onPredictors, onS
           {!m.is_bye ? (
             <Pressable onPress={() => onPredictors(m)} hitSlop={10} style={s.iconChip}
                        accessibilityLabel={decided ? 'Who called it' : 'Who’s still in it'}>
-              <Ionicons name="people" size={13} color={C.muted} />
+              {/* Sized and coloured to sit level with "H2H" beside it: same green,
+                  and big enough to read as a peer of that word rather than a
+                  faint mark in a box. */}
+              <Ionicons name="people" size={16} color={C.greenLit} />
             </Pressable>
           ) : null}
           {canH2H ? (
