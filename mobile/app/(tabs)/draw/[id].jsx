@@ -17,31 +17,32 @@
  * same ones, so reaching a draw should not require choosing a league first.
  */
 
-import { useMemo, useState } from 'react'
-import { leading } from '../../fontScale.js'
+import { useEffect, useMemo, useState } from 'react'
+import { leading } from '../../../fontScale.js'
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { getDraw, getPredictions, listTournaments } from '../../api'
-import { dateRange, shortStart } from '../../dates'
-import { useAuth } from '../../auth'
-import { H2HSheet } from '../../h2h'
-import { useLiveUpdates } from '../../live'
-import { ScoreHistorySheet, entryFromMatch, matchStarted } from '../../scoreHistory'
-import { PredictorsSheet } from '../../predictors'
-import { tourLabel } from '../../category'
-import { computeDrawRanks } from '../../drawRanks'
-import { useApi } from '../../useApi'
-import { slotLabel } from '../../scoring'
-import { lockLabel } from '../../lock'
-import { currentRound } from '../../rounds'
-import { C, PICK, R, S, SHADOW, T } from '../../theme'
-import { EntryChip, PlayerName, PosBadge, TourBadge } from '../../cards'
-import { scoreLine } from '../../score'
-import { Card, CardLink, ErrorNote, Loading, Muted, Screen, Title } from '../../ui'
-import { RoundScrub } from '../../RoundScrub'
-import { RoundStrip } from '../../RoundStrip'
-import { useRoundSwipe } from '../../roundSwipe'
+import { getDraw, getPredictions, listTournaments } from '../../../api'
+import { dateRange, shortStart } from '../../../dates'
+import { useAuth } from '../../../auth'
+import { H2HSheet } from '../../../h2h'
+import { useLiveUpdates } from '../../../live'
+import { ScoreHistorySheet, entryFromMatch, matchStarted } from '../../../scoreHistory'
+import { PredictorsSheet } from '../../../predictors'
+import { tourLabel } from '../../../category'
+import { computeDrawRanks } from '../../../drawRanks'
+import { useApi } from '../../../useApi'
+import { slotLabel } from '../../../scoring'
+import { lockLabel } from '../../../lock'
+import { currentRound } from '../../../rounds'
+import { C, PICK, R, S, SHADOW, T } from '../../../theme'
+import { EntryChip, PlayerName, PosBadge, TourBadge } from '../../../cards'
+import { scoreLine } from '../../../score'
+import { Card, CardLink, ErrorNote, Loading, Muted, Screen, Title } from '../../../ui'
+import { RoundScrub } from '../../../RoundScrub'
+import { RoundStrip } from '../../../RoundStrip'
+import { useRoundSwipe } from '../../../roundSwipe'
+import { setCurrentDraw } from '../../../currentDraw'
 
 export default function DrawScreen() {
   const { id, user, name } = useLocalSearchParams()
@@ -126,6 +127,11 @@ export default function DrawScreen() {
   // Follows the live round until the user picks one, then stays put — moving
   // the screen under someone because a match finished elsewhere is worse than
   // being one round stale.
+  /* The Draw TAB has to point somewhere, and "the draw" is whichever one you
+     are reading — there are two at every slam. Reported here so the tab
+     follows you rather than always reopening the same one. */
+  useEffect(() => { setCurrentDraw(id) }, [id])
+
   const active = picked ?? currentRound(rounds)
   /* ONE swipe gesture for the whole screen — header, strip and the draw
      itself — and one swipe moves one round. RoundScrub's own gesture is
