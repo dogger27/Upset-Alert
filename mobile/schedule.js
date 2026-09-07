@@ -10,7 +10,7 @@
  *
  * Everything here is display-only. Nothing infers a result.
  */
-import { properName } from './names'
+import { properName } from './names.js'
 
 export function sideName(players, side) {
   const ps = (players || []).filter(p => p.side === side)

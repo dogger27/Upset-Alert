@@ -1,42 +1,35 @@
 /*
  * One draw, one round at a time.
  *
- * NOT A SCALED-DOWN BRACKET, and that is the point. The website shows four
- * rounds at once in 252pt columns; two of those on a 393pt phone would be
- * 171pt each — below what the desktop already treats as its minimum, before
- * any name-fitting. One round gets the full width instead, which is MORE room
- * per match than the desktop ever gives it: both names, both seeds and a full
- * score line, with nothing squeezed.
- *
- * What that loses is the shape of the draw — who meets whom two rounds out.
- * The round strip across the top is the answer to that: it says where you are
- * in the draw without pretending a phone can render connectors nobody could
- * follow at that size.
+ * THE SITE'S BRACKET, ONE COLUMN OF IT. The website shows two rounds side by
+ * side on a phone in 107pt columns; one round gets the full width here
+ * instead, and every match group is the site's own — the same outline, the
+ * same graded boxes, the same pill and gap (bracket.jsx has the anatomy and
+ * the reasons). What a single column loses is the shape of the draw — who
+ * meets whom two rounds out — and the round strip across the top is the
+ * answer to that: it says where you are, and a swipe moves one round.
  *
  * Not under a league: you make one set of picks and every league scores the
  * same ones, so reaching a draw should not require choosing a league first.
  */
 
 import { useEffect, useMemo, useState } from 'react'
-import { leading } from '../../../fontScale.js'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { getDraw, getPredictions } from '../../../api'
-import { shortStart } from '../../../dates'
 import { useAuth } from '../../../auth'
 import { H2HSheet } from '../../../h2h'
 import { useLiveUpdates } from '../../../live'
-import { ScoreHistorySheet, entryFromMatch, matchStarted } from '../../../scoreHistory'
+import { ScoreHistorySheet, entryFromMatch } from '../../../scoreHistory'
 import { PredictorsSheet } from '../../../predictors'
 import { computeDrawRanks } from '../../../drawRanks'
 import { useApi } from '../../../useApi'
-import { slotLabel } from '../../../scoring'
 import { currentRound } from '../../../rounds'
-import { C, PICK, R, S, SHADOW, T } from '../../../theme'
-import { EntryChip, PlayerName, PosBadge, TourBadge } from '../../../cards'
-import { scoreLine } from '../../../score'
+import { C, R, S, T } from '../../../theme'
+import { TourBadge } from '../../../cards'
 import { Card, ErrorNote, Loading, Muted, Screen, Title } from '../../../ui'
+import { CHIP_OVERHANG, CONNECTOR_W, MatchGroup, buildBracket } from '../../../bracket'
 import { RoundScrub } from '../../../RoundScrub'
 import { RoundStrip } from '../../../RoundStrip'
 import { useRoundSwipe } from '../../../roundSwipe'
@@ -77,15 +70,6 @@ export default function DrawScreen() {
     [draw.data?.draw_entries],
   )
 
-  /* Matches carry no te_slug — it lives on draw_entries — so H2H needs this
-     bridge. A null slug means the player never matched a Tennis Explorer
-     profile, and the button must not be offered for them at all. */
-  const slugById = useMemo(() => {
-    const m = new Map()
-    for (const e of draw.data?.draw_entries || []) if (e.te_slug) m.set(e.id, e.te_slug)
-    return m
-  }, [draw.data?.draw_entries])
-
   const [h2h, setH2H] = useState(null)
   const [predictors, setPredictors] = useState(null)
   const [scoreMatch, setScoreMatch] = useState(null)
@@ -96,17 +80,16 @@ export default function DrawScreen() {
     return m
   }, [preds.data])
 
-  const rounds = useMemo(() => {
-    const by = new Map()
-    for (const m of draw.data?.matches || []) {
-      if (!by.has(m.round_number)) by.set(m.round_number, [])
-      by.get(m.round_number).push(m)
-    }
-    for (const list of by.values()) {
-      list.sort((a, b) => (a.match_number ?? 0) - (b.match_number ?? 0))
-    }
-    return [...by.entries()].sort((a, b) => a[0] - b[0])
-  }, [draw.data])
+  /* The bracket as a whole — who fed whom, whose pick stands where, who is
+     already out — built once per fetch. Every group on screen reads it; none
+     of them could work it out alone, since a box's colour depends on a match
+     in the round BEFORE the one being shown. */
+  const B = useMemo(
+    () => buildBracket(draw.data?.matches || [], draw.data?.draw_entries, pickBy),
+    [draw.data, pickBy],
+  )
+  const rounds = B.rounds
+  const roundIdx = useMemo(() => new Map(rounds.map(([n], i) => [n, i])), [rounds])
 
   // Follows the live round until the user picks one, then stays put — moving
   // the screen under someone because a match finished elsewhere is worse than
@@ -198,9 +181,9 @@ export default function DrawScreen() {
             onCommit={setPicked}
             columnStyle={s.list}
             renderRow={m => (
-              <MatchRow m={m} pick={pickBy.get(m.id)} drawRanks={drawRanks}
-                        zone={zone} slugById={slugById} onH2H={setH2H}
-                        onPredictors={setPredictors} onShowScore={setScoreMatch} />
+              <MatchGroup m={m} roundIdx={roundIdx.get(m.round_number) ?? 0} B={B}
+                          drawRanks={drawRanks} zone={zone} onH2H={setH2H}
+                          onPredictors={setPredictors} onShowScore={setScoreMatch} />
             )}
           />
         )}
@@ -228,192 +211,12 @@ export default function DrawScreen() {
   )
 }
 
-/* The bracket's match box, ported.
- *
- * THE WHOLE BOX CARRIES THE RESULT — green when your pick came off, red when
- * it did not, background and border together. A tick in the corner of a grey
- * box makes a round read as a list; this makes it scannable without reading.
- *
- * THE SCORE IS A LINE, NOT COLUMNS. The first version gave each set a fixed
- * 15pt cell, so "6(7)" had nowhere to go and wrapped one character per row —
- * a box six hundred points tall with a lone bracket on a line of its own. Sets
- * are a sentence: "6-4  7-5  6⁷-7  6-1", under the names, the way the site
- * puts them under the box.
- */
-function MatchRow({ m, pick, drawRanks, zone, slugById, onH2H, onPredictors, onShowScore }) {
-  const decided = !!m.winner
-  const correct = decided && pick != null && pick === m.winner.id
-  const wrong = decided && pick != null && pick !== m.winner.id
-  const state = correct ? PICK.correct : wrong ? PICK.wrong : null
-  /* ON COURT NOW. The API has always sent live_scores and live_point for the
-     draw's matches; this tile only ever asked whether there was a WINNER, so
-     a match in its second set was still announced as SCHEDULED at its start
-     time. Anything with a live score and no result yet is in progress. */
-  const live = !decided && !m.is_bye && !!(m.live_scores || m.live_point)
-  /* Rain, light, anything: play stopped but the match is not over. The site
-     reads the same flag off live_scores[4] (BracketView), and without it a
-     suspended match sat here claiming to be LIVE. */
-  const stopped = live && m.live_scores?.[4] === 'suspended'
-  /* scores_json is only written when a match ENDS, so a live match's games
-     live in live_scores. Its extra elements (current set, flags) are ignored
-     by scoreLine, which reads the first two. */
-  const line = scoreLine(m.scores || m.live_scores)
-  /* Both players real AND both matched to a TE profile. A qualifier who never
-     matched has no slug, and asking the endpoint for one returns nothing
-     useful — so the button is simply absent rather than present and empty. */
-  const canH2H = !!(m.player1?.id && m.player2?.id && !m.is_bye &&
-    slugById?.get(m.player1.id) && slugById?.get(m.player2.id))
-
-  /* Only for a match that has not started. Once there is a result the start
-     time is history, and the site drops it there too. */
-  const when = !decided && !live && !m.is_bye
-    ? shortStart(m.expected_start_at, m.expected_source, zone) : null
-
-  const openable = !!onShowScore && matchStarted(m)
-  const Wrap = openable ? Pressable : View
-  return (
-    <Wrap style={[
-      s.match,
-      state && { backgroundColor: state.bg, borderColor: state.border },
-      m.is_bye && { opacity: 0.5 },
-    ]} onPress={openable ? () => onShowScore(m) : undefined}>
-      {live ? (
-        <View style={s.whenRow}>
-          <View style={[s.liveChip, stopped && s.stoppedChip]}>
-            <Text style={[s.liveText, stopped && s.stoppedText]}>
-              {stopped ? 'SUSPENDED' : 'LIVE'}
-            </Text>
-          </View>
-        </View>
-      ) : when ? (
-        <View style={s.whenRow}>
-          <View style={s.schedChip}><Text style={s.schedText}>SCHEDULED</Text></View>
-          <Text style={s.whenText} numberOfLines={1}>{when}</Text>
-        </View>
-      ) : null}
-      {[m.player1, m.player2].map((p, i) => {
-        const isPick = p && pick != null && p.id === pick
-        const won = decided && p && m.winner.id === p.id
-        return (
-          <View key={i} style={s.side}>
-            <PosBadge seed={p?.seed} drawRank={p ? drawRanks[p.id] : null} />
-            <PlayerName
-              name={slotLabel(p, m)}
-              style={[
-                T.bodyMed,
-                /* 1.27x rather than bodyMed's 1.4 — the line box is most of the
-                   gap between the two players, exactly as on the schedule's
-                   match card, and still clear of the ~1.2 clipping floor. */
-                { color: decided && !won ? C.muted : C.ink, flexShrink: 1,
-                  lineHeight: leading(19) },
-                won && { fontFamily: 'Archivo_700Bold' },
-              ]}
-            />
-            <EntryChip entryType={p?.entry_type} />
-            {/* WHO YOU PICKED, always — not only while the match is open.
-                The tint says right or wrong; on its own it never says WHICH
-                player you backed, and once a match was decided this row lost
-                its marker entirely, so a red box left you to infer your own
-                pick from the two names. The site marks it with a glyph; so do
-                we, and it stays put after the result lands. */}
-            {/* WHITE NAMES, MARKER CARRIES IT. The pick used to be clay AND
-                marked, which is the doubled signal the Lock Screen card just
-                lost — and a coloured name reads as the app rating a player
-                rather than reporting a match. A star while it is undecided
-                (the same glyph the Lock Screen uses), then the verdict. */}
-            {isPick && (
-              <Text style={[s.pickMark, { color: state ? state.border : C.clay }]}>
-                {correct ? '✓' : wrong ? '✗' : '★'}
-              </Text>
-            )}
-          </View>
-        )
-      })}
-      {(line || canH2H) ? (
-        <View style={s.footRow}>
-          {line ? (
-            <Text style={[s.score, state && { color: state.border }]} numberOfLines={1}>
-              {line}
-            </Text>
-          ) : <View style={{ flex: 1 }} />}
-          {/* A GLYPH, NOT A SENTENCE. "WHO CALLED IT" spelled out was ~200pt
-              of chip on every decided match, repeated the whole way down the
-              column and shoving the score off to the left. The site uses a
-              two-person mark here for the same reason. On EVERY real match:
-              decided, it says who called it; not yet, whose pick is still
-              standing — even before the players are known. */}
-          {!m.is_bye ? (
-            <Pressable onPress={() => onPredictors(m)} hitSlop={10} style={s.iconChip}
-                       accessibilityLabel={decided ? 'Who called it' : 'Who’s still in it'}>
-              {/* Sized and coloured to sit level with "H2H" beside it: same green,
-                  and big enough to read as a peer of that word rather than a
-                  faint mark in a box. */}
-              <Ionicons name="people" size={16} color={C.greenLit} />
-            </Pressable>
-          ) : null}
-          {canH2H ? (
-            <Pressable
-              onPress={() => onH2H({
-                a: { name: m.player1.name, te_slug: slugById.get(m.player1.id) },
-                b: { name: m.player2.name, te_slug: slugById.get(m.player2.id) },
-              })}
-              hitSlop={8} style={s.h2hChip}
-            >
-              <Text style={s.h2hText}>H2H</Text>
-            </Pressable>
-          ) : null}
-        </View>
-      ) : null}
-    </Wrap>
-  )
-}
-
 const s = StyleSheet.create({
   viewing: {
     flexDirection: 'row', alignItems: 'center', gap: S.sm,
     borderWidth: 1, borderColor: C.info, borderRadius: R.md, backgroundColor: C.card,
     paddingHorizontal: S.md, paddingVertical: S.sm,
   },
-  /* Tight, because on an undecided match this row holds ONE small chip and
-     nothing else, and R128 has sixty-four of those — every point of padding
-     here is four hundred points of scrolling. The score supplies its own
-     padding, so the row adds only what the chips need. */
-  footRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    paddingRight: 8, paddingBottom: 6, paddingTop: 2,
-  },
-  iconChip: {
-    borderRadius: 4, borderWidth: 1, borderColor: C.borderOn,
-    paddingHorizontal: 7, paddingVertical: 2,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  h2hChip: {
-    borderRadius: 4, borderWidth: 1, borderColor: C.borderOn,
-    paddingHorizontal: 7, paddingVertical: 2,
-  },
-  h2hText: { fontFamily: 'Archivo_700Bold', fontSize: 10, lineHeight: leading(14), letterSpacing: 0.5, color: C.greenLit },
-  whenRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    paddingHorizontal: 10, paddingTop: 8, paddingBottom: 2,
-  },
-  // The site's SCHEDULED pill: small, outlined, and never competing with a name.
-  schedChip: {
-    borderRadius: 4, borderWidth: 1, borderColor: '#3b4c8a',
-    backgroundColor: '#182140', paddingHorizontal: 5, paddingVertical: 1,
-  },
-  schedText: { fontFamily: 'Archivo_700Bold', fontSize: 9, lineHeight: leading(13), letterSpacing: 0.5, color: '#9db4ff' },
-  // Same shape as SCHEDULED, in the app's green: the two are one slot saying
-  // where a match has got to, so they should differ only in colour and word.
-  liveChip: {
-    borderRadius: 4, borderWidth: 1, borderColor: C.greenLit,
-    backgroundColor: '#12301f', paddingHorizontal: 5, paddingVertical: 1,
-  },
-  liveText: { fontFamily: 'Archivo_700Bold', fontSize: 9, lineHeight: leading(13), letterSpacing: 0.5, color: C.greenBright },
-  // Stopped, not finished — the warn gold the app already uses for "hold on".
-  stoppedChip: { borderColor: C.warn, backgroundColor: '#33240f' },
-  stoppedText: { color: C.warn },
-  whenText: { ...T.tiny, color: C.muted, flexShrink: 1 },
-  pickMark: { fontFamily: 'Archivo_700Bold', fontSize: 13, marginLeft: 8 },
   head: {
     flexDirection: 'row', backgroundColor: C.card, borderRadius: R.md,
     borderWidth: 1, borderColor: C.border, overflow: 'hidden',
@@ -448,35 +251,15 @@ const s = StyleSheet.create({
   // Fills the screen so the scrub is available over all of it, not only the
   // rows — a gesture you have to find is a gesture nobody uses.
   sheet: { flex: 1 },
-  /* paddingTop MATCHES RoundStrip's marginTop, so the round strip sits in
-     the same amount of black above and below. They are two different files;
-     if one moves the other has to. */
-  list: { gap: S.xs, paddingTop: S.xs, paddingBottom: S.xxl },
-  // radius 5 and a 1px border, from BracketView.css — a bracket's boxes are
-  // squarer than the app's cards, and that difference is part of reading as one.
-  match: {
-    backgroundColor: C.card, borderRadius: 5, borderWidth: 1, borderColor: C.borderOn,
-    overflow: 'hidden', ...SHADOW,
-  },
-  // min-height 28 on the web at a 252pt column; 34 here, because a phone gives
-  // the column 361pt and the extra goes into being readable.
-  /* THE TWO PLAYERS ARE ONE MATCH, so they sit as one block: no rule between
-     them, and the padding cut from 7 to 2. The divider was drawing a boundary
-     through the thing it should have been holding together — the tile already
-     has a border and a tint saying where one match ends and the next begins,
-     so a second line inside it only split the pair.
-
-     minHeight scales, because the row's own content does; at a fixed 34 it
-     simply stopped applying once the reader's text outgrew it. */
-  side: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    paddingVertical: 2, paddingHorizontal: 8, minHeight: leading(26),
-  },
-  // Under the names, like the site puts it under the box. Tabular so the sets
-  // of one match line up with the next one down the column.
-  score: {
-    fontFamily: 'SairaCondensed_600SemiBold', fontSize: 14, lineHeight: leading(17),
-    color: C.muted, paddingHorizontal: 8,
-    fontVariant: ['tabular-nums'],
+  /* Sideways, the column has to make room for what hangs OFF a group: the
+     predictors chip on the left border, the H2H chip and the connector elbow
+     on the right. RoundScrub clips its strip, so anything past the column's
+     edge is simply cut — these paddings are where the overhang lives.
+     Vertically, the status pill straddles each outline's top border and
+     stands 9pt above it; the gap between groups and the top padding both
+     leave it clear. */
+  list: {
+    gap: 14, paddingTop: S.md, paddingBottom: S.xxl,
+    paddingLeft: CHIP_OVERHANG, paddingRight: CONNECTOR_W,
   },
 })
