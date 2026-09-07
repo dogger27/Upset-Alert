@@ -30,11 +30,6 @@ export const C = {
 
   // Off-white, not #fff — pure white on a dark field haloes at text sizes.
   ink:       '#e6eeea',
-  // Pure white, and the ONE place the rule above is set aside: a heading big
-  // and bold enough that haloing does not bite, where the extra step above
-  // `ink` is the difference between a line reading as a label and reading as
-  // the subject. Not for body text — that is what `ink` is for.
-  inkBright: '#ffffff',
   inkBody:   '#c8d6d0',
   muted:     '#9fb0a9',
   faint:     '#8a9a94',
