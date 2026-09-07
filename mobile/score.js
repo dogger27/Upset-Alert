@@ -79,7 +79,10 @@ export function winnerSideOf(e) {
 const SUP = { 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' }
 const sup = n => String(n).split('').map(c => SUP[c] ?? c).join('')
 
-export function scoreLine(scores) {
+/* `sep` is the space between sets. Two spaces on the schedule and history
+   sheet, where the row is narrow and a comma would strand at a line's end;
+   ", " on the draw, which has the width and reads the site's way. */
+export function scoreLine(scores, sep = '  ') {
   if (!scores || scores.length < 2) return null
   const [a, b] = scores
   if ([a, b].some(arr => arr?.some(v => /^w\/?o$/i.test(String(v ?? '').trim())))) return 'walkover'
@@ -97,5 +100,5 @@ export function scoreLine(scores) {
     else sets.push(`${A.g}-${B.g}`)
   }
   if (!sets.length) return null
-  return sets.join('  ') + (retired ? ' (ret.)' : '')
+  return sets.join(sep) + (retired ? ' (ret.)' : '')
 }

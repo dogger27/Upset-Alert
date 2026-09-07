@@ -34,6 +34,15 @@ const DSF = 2
 const SCREENS = [
   { name: 'dashboard', mobile: '/',            pwa: '/' },
   { name: 'draw',      mobile: '/draw/77',     pwa: '/tournaments/77' },
+  // The other states a match group can be in: the draw as drawn (R1, seeds
+  // and entry chips), a round with SCHEDULED pills and expected starts, and
+  // one whose boxes are still picks and TBDs. The strip label is the click.
+  { name: 'draw-r1',   mobile: '/draw/77', pwa: '/tournaments/77', appClick: 'R128' },
+  { name: 'draw-r32',  mobile: '/draw/77', pwa: '/tournaments/77', appClick: 'R32' },
+  { name: 'draw-qf',   mobile: '/draw/77', pwa: '/tournaments/77', appClick: 'QF' },
+  // The women's draw's R32 was scheduled top-first in the DB snapshot, so its
+  // first groups carry the SCHEDULED pill and an expected start.
+  { name: 'draw-eta',  mobile: '/draw/78', pwa: '/tournaments/78', appClick: 'R32' },
   { name: 'leagues',   mobile: '/leagues',     pwa: '/leagues' },
   { name: 'schedule',  mobile: '/schedule',    pwa: '/schedule' },
   // A day with a washout behind it: postponed, carried-over and resumed rows.
