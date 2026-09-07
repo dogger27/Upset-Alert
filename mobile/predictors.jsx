@@ -267,7 +267,10 @@ const s = StyleSheet.create({
     paddingVertical: 7, paddingHorizontal: 2,
   },
   // Tabular so the digits sit in columns down the sheet.
-  pct: { ...T.smallMed, width: 38, textAlign: 'right',
+  // Held off the sheet's edge rather than flush against it. Still fixed-width
+  // and right-aligned, so the indent moves the whole column and the chevrons
+  // and names behind it stay in line.
+  pct: { ...T.smallMed, width: 38, marginLeft: 10, textAlign: 'right',
          fontVariant: ['tabular-nums'] },
   chev: { width: 14, textAlign: 'center' },
   // The name takes the space and the count sits tight against it, so the
