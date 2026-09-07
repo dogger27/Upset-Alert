@@ -130,7 +130,16 @@ export default function DrawScreen() {
   /* The Draw TAB has to point somewhere, and "the draw" is whichever one you
      are reading — there are two at every slam. Reported here so the tab
      follows you rather than always reopening the same one. */
-  useEffect(() => { setCurrentDraw(id) }, [id])
+  useEffect(() => {
+    setCurrentDraw(id)
+    /* AND LET GO OF THE ROUND. The draw is a tab now, so this screen stays
+       mounted when you switch away and comes back holding whatever round you
+       had scrubbed to — right for the same draw, wrong for a different one.
+       Swapping the men's bracket for the women's from the chooser would
+       otherwise land on the old round number, which may not even exist in a
+       draw of a different size. Null means "follow the live round" again. */
+    setPicked(null)
+  }, [id])
 
   const active = picked ?? currentRound(rounds)
   /* ONE swipe gesture for the whole screen — header, strip and the draw
