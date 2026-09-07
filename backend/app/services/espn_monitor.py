@@ -36,6 +36,7 @@ Name matching reuses _norm() from rankings.py (token-set algebra):
 
 import asyncio
 import logging
+import time
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
@@ -333,6 +334,26 @@ def _match_event(tournament, events: list, entries: list) -> tuple[Optional[dict
 # would be useless for a weekly job, which is why rankings/ELO staleness is
 # checked against the data instead (see _check_rankings_health).
 _ESPN_FAIL_STREAK: dict[str, int] = {}
+
+# ESPN NAMES A SUSPENSION ONLY SOMETIMES, so the rest is inferred — and an
+# inference has to be slower than the thing it can be confused with.
+#
+# A genuinely suspended match reaches us two ways: STATUS_SUSPENDED, which is
+# ESPN saying it outright, or a revert to STATUS_SCHEDULED with the linescores
+# left standing, which is how a match awaiting resumption appears. The second
+# is a guess, and it looks identical to a match that has simply dropped out of
+# STATUS_IN_PROGRESS for a minute — which is what happens during a medical
+# timeout. Cerundolo's, 2026-09-07, was badged Suspended within a poll.
+#
+# So the guess now has to HOLD. A stoppage that clears in under ten minutes was
+# a medical timeout, an equipment change or a feed hiccup, and the reader is
+# told nothing; a rain delay stays for hours and is named. ESPN's own
+# STATUS_SUSPENDED is trusted immediately — it needs no corroboration.
+#
+# Keyed by (draw, entry pair). In-process, like the rest of the poller's state
+# (single worker); a restart only costs a suspension its ten minutes again.
+_SUSPECT_SUSPENDED_SINCE: dict[tuple, float] = {}
+_SUSPEND_DWELL_SECONDS = 10 * 60
 ESPN_FAIL_STREAK_ALERT = 20
 # Once alerted, stay quiet for this many further failed polls (~6h at 60s)
 # before saying it again. Without this the alert fires on EVERY poll past the
@@ -1133,7 +1154,6 @@ class ESPNMonitor:
             tournament.picks_locked_at = now
             tournament.closing_time = now
             name, year, tid = tournament.name, tournament.year, tournament.id
-            category, gender = tournament.category or "", tournament.gender or "M"
             await db.commit()
 
         # Build timing comparison
@@ -1198,17 +1218,29 @@ class ESPNMonitor:
         # resumption) with the linescores left in place. Only the second was
         # handled, so rain at 2026 Canadian Open R1 left three matches with no
         # live state at all — the draw looked like play had never begun.
-        suspended_comps = [
-            c for c in _singles_comps(
-                espn_event, tournament.gender, ("STATUS_SUSPENDED", "STATUS_SCHEDULED")
-            )
+        # ESPN's own word for it. Trusted on sight.
+        stated_comps = [
+            c for c in _singles_comps(espn_event, tournament.gender, "STATUS_SUSPENDED")
+            if _comp_has_linescores(c)
+        ]
+        # Our inference: back to SCHEDULED with a score already on the board.
+        # True of a match awaiting resumption — and equally true of one that
+        # ducked out of IN_PROGRESS for a couple of minutes, so it must dwell
+        # before it counts (see _SUSPEND_DWELL_SECONDS).
+        suspect_comps = [
+            c for c in _singles_comps(espn_event, tournament.gender, "STATUS_SCHEDULED")
             if _comp_has_linescores(c)
         ]
 
+        now_mono = time.monotonic()
+        seen_suspect: set[tuple] = set()
+
         # Map (entry_id_a, entry_id_b) → (scores_a, scores_b, serving, set_wins, suspended)
         in_progress: dict[tuple, tuple] = {}
-        for comp, is_suspended in (
-            [(c, False) for c in live_comps] + [(c, True) for c in suspended_comps]
+        for comp, kind in (
+            [(c, "live") for c in live_comps]
+            + [(c, "stated") for c in stated_comps]
+            + [(c, "suspect") for c in suspect_comps]
         ):
             result = _comp_live_scores(comp)
             if not result:
@@ -1218,12 +1250,34 @@ class ESPNMonitor:
             entry_b = _find_entry(name_b, pairs, tok_index)
             if not entry_a or not entry_b or entry_a.id == entry_b.id:
                 continue
-            if is_suspended:
-                serving = None  # nobody is serving a suspended match
+
+            if kind == "live":
+                is_suspended = False
+                _SUSPECT_SUSPENDED_SINCE.pop((tournament.id, entry_a.id, entry_b.id), None)
+            elif kind == "stated":
+                is_suspended = True
+            else:
+                # Play HAS stopped either way, so the score stands and no
+                # server is inferred; the only question is whether to say
+                # "Suspended" out loud yet.
+                key = (tournament.id, entry_a.id, entry_b.id)
+                seen_suspect.add(key)
+                since = _SUSPECT_SUSPENDED_SINCE.setdefault(key, now_mono)
+                is_suspended = (now_mono - since) >= _SUSPEND_DWELL_SECONDS
+
+            if kind != "live":
+                serving = None  # nobody is serving a match that is not being played
             serving_b = (3 - serving) if serving else None
             set_wins_b = [(not w if w is not None else None) for w in set_wins_a]
             in_progress[(entry_a.id, entry_b.id)] = (sc_a, sc_b, serving, set_wins_a, is_suspended)
             in_progress[(entry_b.id, entry_a.id)] = (sc_b, sc_a, serving_b, set_wins_b, is_suspended)
+
+        # A match that stopped being suspect without ever becoming live — it
+        # finished, or ESPN dropped it — must not keep its timer, or a later
+        # unrelated halt would inherit a clock that had already run out.
+        for key in [k for k in _SUSPECT_SUSPENDED_SINCE
+                    if k[0] == tournament.id and k not in seen_suspect]:
+            _SUSPECT_SUSPENDED_SINCE.pop(key, None)
 
         async with AsyncSessionLocal() as db:
             m_res = await db.execute(
@@ -1356,7 +1410,6 @@ class ESPNMonitor:
 
         updated = 0
         rounds_updated: set[int] = set()
-        now = datetime.now(timezone.utc)
 
         async with AsyncSessionLocal() as db:
             # Load pending matches (both players known, no winner yet, not a bye)
