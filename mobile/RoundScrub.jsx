@@ -52,7 +52,8 @@ function atIndex(centres, idx) {
 const forwardIdx = idx => (idx - 0.5) / 2
 const backwardIdx = idx => idx * 2 + 0.5
 
-export function RoundScrub({ rounds, active, onCommit, renderRow, columnStyle }) {
+export function RoundScrub({ rounds, active, onCommit, renderRow, columnStyle,
+                             gestures = true }) {
   const cur = Math.max(0, rounds.findIndex(([n]) => n === active))
   const [dir, setDir] = useState(0)          // +1 pulling a later round in, -1 earlier, 0 idle
   const [width, setWidth] = useState(0)
@@ -185,8 +186,12 @@ export function RoundScrub({ rounds, active, onCommit, renderRow, columnStyle })
     const [num, matches] = r
     return (
       <View key={num} style={[{ width }, columnStyle]}>
-        {matches.map(m => (
-          <View key={m.id} onLayout={measure(num, m.id)} collapsable={false}>
+        {matches.map((m, i) => (
+          /* A slot with no match — an unplayed half of the bracket — has no
+             id, and every one of them collided on `undefined`. The round and
+             position make a key that exists for every row. */
+          <View key={m.id ?? `slot-${num}-${i}`} onLayout={measure(num, m.id)}
+                collapsable={false}>
             {renderRow(m)}
           </View>
         ))}
@@ -210,7 +215,11 @@ export function RoundScrub({ rounds, active, onCommit, renderRow, columnStyle })
         setWidth(e.nativeEvent.layout.width)
         wrapRef.current?.measureInWindow?.((_x, y) => { viewportTop.current = y })
       }}
-      {...pan.panHandlers}
+      /* The screen-wide scrub (roundSwipe.js) owns the gesture now: it keeps
+         going for as many rounds as the finger travels, where this one
+         committed at most one per drag. Two capture responders over the same
+         pixels would fight, so only one of them may be armed. */
+      {...(gestures ? pan.panHandlers : null)}
     >
       <ScrollView
         ref={scrollRef}

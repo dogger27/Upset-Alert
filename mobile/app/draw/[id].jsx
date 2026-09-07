@@ -41,6 +41,7 @@ import { scoreLine } from '../../score'
 import { Card, CardLink, ErrorNote, Loading, Muted, Screen, Title } from '../../ui'
 import { RoundScrub } from '../../RoundScrub'
 import { RoundStrip } from '../../RoundStrip'
+import { useRoundSwipe } from '../../roundSwipe'
 
 export default function DrawScreen() {
   const { id, user, name } = useLocalSearchParams()
@@ -126,6 +127,10 @@ export default function DrawScreen() {
   // the screen under someone because a match finished elsewhere is worse than
   // being one round stale.
   const active = picked ?? currentRound(rounds)
+  /* ONE scrub for the whole screen — header, strip and the draw itself — so
+     the gesture is not a hidden strip somewhere. RoundScrub's own gesture is
+     switched off below; two capture responders over the same pixels fight. */
+  const roundPan = useRoundSwipe({ rounds, active, onPick: setPicked })
   const shown = rounds.find(([n]) => n === active) || rounds[0]
 
   const tally = useMemo(() => {
@@ -148,6 +153,7 @@ export default function DrawScreen() {
     <>
       <Stack.Screen options={{ title: t?.name || 'Draw' }} />
       <Screen onRefresh={refetch} scroll={false}>
+        <View style={s.sheet} {...roundPan}>
         {loading ? <Loading /> : null}
         <ErrorNote error={draw.error} onRetry={refetch} />
 
@@ -252,6 +258,7 @@ export default function DrawScreen() {
             finger stays under the finger. The strip above still jumps. */}
         {rounds.length > 0 && (
           <RoundScrub
+            gestures={false}
             rounds={rounds}
             active={shown ? shown[0] : active}
             onCommit={setPicked}
@@ -266,6 +273,7 @@ export default function DrawScreen() {
         {draw.data && !rounds.length && (
           <Card><Title>No matches yet</Title><Muted>This draw hasn’t been released.</Muted></Card>
         )}
+        </View>
       </Screen>
 
       {/* One sheet for the whole screen, not one per match: 64 mounted Modals
@@ -457,6 +465,9 @@ const s = StyleSheet.create({
   headStats: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: S.md },
 
 
+  // Fills the screen so the scrub is available over all of it, not only the
+  // rows — a gesture you have to find is a gesture nobody uses.
+  sheet: { flex: 1 },
   list: { gap: S.xs, paddingTop: S.sm, paddingBottom: S.xxl },
   // radius 5 and a 1px border, from BracketView.css — a bracket's boxes are
   // squarer than the app's cards, and that difference is part of reading as one.
