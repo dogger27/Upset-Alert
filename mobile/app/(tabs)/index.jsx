@@ -134,7 +134,7 @@ export default function Dashboard() {
           <OpenCard key={t.id} t={t} status={entry.data?.[t.id]} now={now} />
         ))}
         {!buckets.open.length && !loading && (
-          <Muted>Nothing open. A draw appears here the moment it’s released.</Muted>
+          <Muted>No draws are open at this time.</Muted>
         )}
       </Section>
 
