@@ -301,6 +301,37 @@ export function footTime(e, zone, venueMode, inCourt) {
    nothing at all on a row that has not started (pages/Schedule.jsx). This used
    to fall through to the printed start, so a scheduled row announced its time
    twice: once here and again on the line below. */
+/* An entry dressed as a MATCH, for the predictors sheet.
+ *
+ * The inverse of scoreHistory's entryFromMatch, and needed for the same
+ * reason: the two surfaces describe one match through two shapes, and the
+ * sheet was written against the draw page's. Only rows with a bracket match
+ * have anyone to report — doubles and qualifying carry no picks.
+ *
+ * Sides here are the SHEET's order, which need not be the bracket's. That only
+ * reaches the "X vs. Y" caption; everything the sheet actually fetches is
+ * keyed on the match id.
+ */
+export function matchFromEntry(e) {
+  if (!e?.match_id) return null
+  const players = e.players || []
+  const a = players.find(p => p.side === 'a')
+  const b = players.find(p => p.side === 'b')
+  const nameOf = (p) => (p ? { name: p.entry_name || p.name } : null)
+  const won = e.winner_side == null ? null : (e.winner_side === 0 ? a : b)
+  return {
+    id: e.match_id,
+    // Carried ON the object: a schedule day mixes the men's draw and the
+    // women's, so there is no single draw id the page could supply.
+    draw_id: e.draw_id,
+    player1: nameOf(a),
+    player2: nameOf(b),
+    winner: nameOf(won),
+    live_scores: e.live_scores || null,
+    live_point: e.live_point || null,
+  }
+}
+
 export function whenLabel(e) {
   if (!e) return ''
   if (e.status === 'completed') return 'Completed'

@@ -19,12 +19,13 @@ import { Alert, Pressable, StyleSheet, Text, View } from 'react-native'
 import { getScheduleDates, getScheduleDay, listTournaments, updateMe } from '../../api'
 import { useAuth } from '../../auth'
 import { H2HSheet } from '../../h2h'
+import { PredictorsSheet } from '../../predictors'
 import { isAvailable as lockScreenAvailable } from '../../modules/live-activity'
 import { hideFromLockScreen, showMatchOnLockScreen, useShowingOnLockScreen } from '../../liveactivity'
 import { showToast } from '../../toast'
 import { useLiveUpdates } from '../../live'
 import { useApi } from '../../useApi'
-import { footTime, isLive, isSuspended, whenLabel } from '../../schedule'
+import { footTime, isLive, isSuspended, matchFromEntry, whenLabel } from '../../schedule'
 import { leading } from '../../fontScale.js'
 import { TourBadge } from '../../cards'
 import { MatchCard } from '../../scorecard'
@@ -77,6 +78,7 @@ export default function ScheduleScreen() {
   }
   const [h2h, setH2H] = useState(null)
   const [hist, setHist] = useState(null)
+  const [predictors, setPredictors] = useState(null)
   const [view, setView] = useState('time')
 
   const dates = useApi(`schedule-dates:${tournament ?? 'all'}`, () => getScheduleDates(tournament))
@@ -325,11 +327,16 @@ export default function ScheduleScreen() {
         {groups.map(([court, list]) => (
           <View key={court || 'all'} style={s.group}>
             {court ? <Eyebrow>{court}</Eyebrow> : null}
-            {list.map(e => <EntryRow venueMode={venueMode} venueTz={venueTzOf(e)} onH2H={setH2H} onHistory={setHist} key={e.id} e={e} inCourt={view === 'court'} />)}
+            {list.map(e => <EntryRow venueMode={venueMode} venueTz={venueTzOf(e)} onH2H={setH2H} onHistory={setHist} onPredictors={setPredictors} key={e.id} e={e} inCourt={view === 'court'} />)}
           </View>
         ))}
       </Screen>
       <H2HSheet visible={!!h2h} onClose={() => setH2H(null)} a={h2h?.a} b={h2h?.b} />
+      {/* drawId comes off the ROW, not the page: the schedule mixes the men's
+          and women's draws on one day, so there is no single draw to pass. */}
+      <PredictorsSheet
+        visible={!!predictors} onClose={() => setPredictors(null)}
+        drawId={predictors?.draw_id} match={predictors} meId={me?.id} />
       {/* The row as the schedule holds it NOW, looked up by id, so a live match
           keeps ticking in the sheet while it is open. */}
       <ScoreHistorySheet visible={!!hist} onClose={() => setHist(null)}
@@ -376,7 +383,7 @@ function LockPill({ matchId, live }) {
   )
 }
 
-function EntryRow({ e, venueMode, venueTz, onH2H, onHistory, inCourt }) {
+function EntryRow({ e, venueMode, venueTz, onH2H, onHistory, onPredictors, inCourt }) {
   const live = isLive(e)
   const suspended = isSuspended(e)
   const done = e.status === 'completed'
@@ -428,7 +435,7 @@ function EntryRow({ e, venueMode, venueTz, onH2H, onHistory, inCourt }) {
 
           The site's split, exactly: STATUS top-right (and nothing there at all
           until a match has started), the TIME bottom-left. */}
-      {((!inCourt && e.court) || when.text || h2hPair) && (
+      {((!inCourt && e.court) || when.text || h2hPair || e.match_id != null) && (
         <View style={s.footLine}>
           <View style={{ flex: 1 }}>
             {/* Grouped under its court already, a row need not repeat it. */}
@@ -453,6 +460,18 @@ function EntryRow({ e, venueMode, venueTz, onH2H, onHistory, inCourt }) {
           </View>
           {e.match_id != null && (live || done) && (
             <LockPill matchId={e.match_id} live={live} />
+          )}
+          {/* WHO CALLED IT — the draw page's own affordance, in the draw
+              page's own icon, so one feature is not two shapes. Only where
+              there is a bracket match to have picks on: doubles and qualifying
+              carry none. */}
+          {e.match_id != null && (
+            <Pressable onPress={() => onPredictors(matchFromEntry(e))} hitSlop={8}
+                       style={s.iconChip}
+                       accessibilityLabel={e.winner_side != null
+                         ? 'Who called it' : 'Who’s still in it'}>
+              <Ionicons name="people" size={13} color={C.muted} />
+            </Pressable>
           )}
           {h2hPair && (
             <Pressable onPress={() => onH2H(h2hPair)} hitSlop={8} style={s.h2hChip}>
@@ -507,6 +526,8 @@ const s = StyleSheet.create({
               lineHeight: leading(16), marginTop: leading(-3) },
   footTimeEst: { color: C.muted, fontStyle: 'italic' },
   h2hChip: { borderRadius: 4, borderWidth: 1, borderColor: C.borderOn, paddingHorizontal: 7, paddingVertical: 2 },
+  iconChip: { borderRadius: 4, borderWidth: 1, borderColor: C.borderOn,
+              paddingHorizontal: 6, paddingVertical: 3 },
   h2hText: { fontFamily: 'Archivo_700Bold', fontSize: 10, lineHeight: leading(14), letterSpacing: 0.5, color: C.greenLit },
   // Icon only, the same height as H2H; lit green while the match is showing.
   lockChip: { paddingHorizontal: 6 },
