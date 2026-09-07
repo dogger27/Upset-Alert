@@ -515,7 +515,12 @@ const s = StyleSheet.create({
   tz: { flexDirection: 'row', backgroundColor: C.sunken, borderRadius: R.pill, padding: 2 },
   tzBtn: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: R.pill },
   tzOn: { backgroundColor: C.green },
-  footLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  /* flex-end, not center. The left side is TWO lines — court above time — so
+     centring left the buttons floating on the seam between them, level with
+     neither. Bottom-aligned they sit on the time, which is the line they are
+     read alongside. In court view, where the court name is dropped and only
+     the time remains, the two alignments agree anyway. */
+  footLine: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
   /* The court sits QUIETLY above its time. Both lines carry a tightened
      leading so they read as one block rather than two stray lines — through
      leading(), never a fixed number, so they still grow with Dynamic Type. */
