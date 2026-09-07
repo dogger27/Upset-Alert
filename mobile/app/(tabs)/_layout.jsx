@@ -19,12 +19,21 @@ import { Sheet } from '../../sheet'
 import { listTournaments } from '../../api'
 import { useAuth } from '../../auth'
 import { useApi } from '../../useApi'
+import { computeCohortInfo, getHomeSection } from '../../drawStatus'
 import { useCurrentDraw } from '../../currentDraw'
 import { C, T } from '../../theme'
 
 /* Openable means the draw actually exists to look at — the dashboard's own
    test, so the tab cannot offer a tournament whose bracket is unreleased. */
 const hasDrawData = t => t.status === 'completed' || !!t.draw_released_direct_at
+
+/* LIVE ONLY. The chooser was listing every draw that had ever been released,
+   so a season of finished tournaments buried the two being played. These are
+   the dashboard's own top two sections: picks still open, or play under way.
+   getHomeSection also promotes a completed draw back to 'active' while the
+   rest of its cohort is still going — a men's final does not retire the
+   event while the women's is on court. */
+const LIVE_SECTIONS = new Set(['open', 'active'])
 
 function icon(name) {
   // The filled/outline pair is what makes the selected tab obvious without
@@ -49,8 +58,19 @@ export default function TabLayout() {
   const { phase } = useAuth()
   const ready = phase === 'ready'
   const tours = useApi(ready ? 'tournaments' : null, listTournaments, { enabled: ready })
-  const openable = (tours.data || []).filter(hasDrawData)
-  const drawId = showing ?? openable[0]?.id ?? null
+  /* computeCohortInfo needs EVERY draw: clustering a filtered list moves the
+     boundaries it works out, which is how "Last Week" starts stealing from
+     "Active". Filter AFTER, never before. */
+  const all = tours.data || []
+  const cohort = computeCohortInfo(all)
+  const openable = all.filter(hasDrawData)
+  // What the CHOOSER lists. The href below is a separate question.
+  const live = openable.filter(t => LIVE_SECTIONS.has(getHomeSection(t, cohort)))
+  /* The tab's destination falls back past `live` to any released draw, so the
+     bar keeps four tabs through an off-season week with nothing being played.
+     The chooser still lists only what is live and says so when that is
+     nothing — a tab that vanishes teaches people it might not be there. */
+  const drawId = showing ?? live[0]?.id ?? openable[0]?.id ?? null
 
   return (
     <>
@@ -113,7 +133,7 @@ export default function TabLayout() {
     </Tabs>
 
     <Sheet visible={picking} onClose={() => setPicking(false)} title="Draws">
-      {openable.length ? openable.map(t => (
+      {live.length ? live.map(t => (
         <Pressable key={t.id} style={s.row}
                    onPress={() => { setPicking(false); router.push(`/draw/${t.id}`) }}>
           {/* The tour's colour is how the two halves of a combined event tell
@@ -125,7 +145,7 @@ export default function TabLayout() {
           {t.id === showing ? <Ionicons name="checkmark" size={16} color={C.greenBright} /> : null}
         </Pressable>
       )) : (
-        <Text style={s.none}>No draws are open at this time.</Text>
+        <Text style={s.none}>No draws are being played right now.</Text>
       )}
     </Sheet>
     </>
