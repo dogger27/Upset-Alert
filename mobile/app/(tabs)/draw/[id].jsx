@@ -137,7 +137,7 @@ export default function DrawScreen() {
 
   return (
     <>
-      <Screen onRefresh={refetch} scroll={false}>
+      <Screen onRefresh={refetch} scroll={false} style={s.body}>
         <View style={s.sheet} {...roundPan}>
         {loading ? <Loading /> : null}
         <ErrorNote error={draw.error} onRetry={refetch} />
@@ -426,15 +426,24 @@ const s = StyleSheet.create({
   headBody: {
     flex: 1, flexDirection: 'row', alignItems: 'center',
     justifyContent: 'space-between', gap: 10,
-    paddingHorizontal: S.md, paddingVertical: S.sm,
+    paddingHorizontal: S.md, paddingVertical: S.xs,
   },
   headName: { ...T.h2, color: C.ink, flexShrink: 1 },
 
 
   // Fills the screen so the scrub is available over all of it, not only the
   // rows — a gesture you have to find is a gesture nobody uses.
+  /* Screen's shared body padding puts S.lg above every screen's first
+     element. Here that sat the banner a thumb's width below the status bar
+     for no reason: the safe-area inset already clears the island, so this
+     screen starts at zero and the banner is the first thing under the clock.
+     Horizontal padding is untouched. */
+  body: { paddingTop: 0 },
   sheet: { flex: 1 },
-  list: { gap: S.xs, paddingTop: S.sm, paddingBottom: S.xxl },
+  /* paddingTop MATCHES RoundStrip's marginTop, so the round strip sits in
+     the same amount of black above and below. They are two different files;
+     if one moves the other has to. */
+  list: { gap: S.xs, paddingTop: S.xs, paddingBottom: S.xxl },
   // radius 5 and a 1px border, from BracketView.css — a bracket's boxes are
   // squarer than the app's cards, and that difference is part of reading as one.
   match: {

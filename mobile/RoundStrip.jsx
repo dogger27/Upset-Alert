@@ -36,7 +36,10 @@ export function RoundStrip({ rounds, active, onPick }) {
 }
 
 const s = {
-  strip: { ...T.smallMed, marginTop: S.sm, paddingVertical: S.xs, textAlign: 'center' },
+  /* marginTop MATCHES the draw list's paddingTop (app/(tabs)/draw/[id].jsx),
+     so the strip sits in equal air above and below. Two files, one number:
+     if one moves the other has to. */
+  strip: { ...T.smallMed, marginTop: S.xs, paddingVertical: S.xs, textAlign: 'center' },
   // The round you are on, and the only bright thing in the strip.
   roundOn: { color: C.greenBright, fontFamily: 'Archivo_700Bold' },
   // Dimmed but still READ — these are the control, not decoration, so they
