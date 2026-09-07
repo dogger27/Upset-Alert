@@ -38,7 +38,18 @@ export function PredictorsSheet({ visible, onClose, drawId, match, meId }) {
      than one string so the underline lands on the names and not on the "vs."
      joining them. */
   const shortP = (n) => (n ? (nameForms(n)[1] || nameForms(n)[0]) : '')
-  const sub = pending ? (known ? 'players' : null) : winner ? 'winner' : null
+  /* The one this match was won against. Both callers hand us the site's match
+     shape (player1/player2/winner), so the loser is simply the side the winner
+     is not. */
+  const loser = !pending && known
+    ? (match.winner?.name === match.player1?.name ? match.player2?.name : match.player1?.name)
+    : null
+  /* A finished match names BOTH players — "A. Michelsen def. T. Etcheverry" —
+     the way the site's PredictorsPopup already did. The winner alone answered
+     "who won" while leaving "won what?" hanging, which is the more useful half
+     on a sheet about who predicted this match. 'winner' remains for the case
+     where a result exists but a player's name does not. */
+  const sub = pending ? (known ? 'players' : null) : winner ? (loser ? 'result' : 'winner') : null
   const live = pending && !!(match?.live_scores || match?.live_point)
   const status = !pending ? 'Completed' : !known ? 'TBD' : live ? 'In Progress' : 'Upcoming'
   const statusStyle = !pending ? s.pillDone : !known ? s.pillTbd : live ? s.pillLive : s.pillUpcoming
@@ -62,12 +73,18 @@ export function PredictorsSheet({ visible, onClose, drawId, match, meId }) {
           </View>
         </View>
         {sub ? (
-          <Text style={s.sub} numberOfLines={1}>
+          <Text style={s.sub} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
             {sub === 'players' ? (
               <>
                 <Text style={s.subName}>{shortP(match.player1.name)}</Text>
                 <Text> vs. </Text>
                 <Text style={s.subName}>{shortP(match.player2.name)}</Text>
+              </>
+            ) : sub === 'result' ? (
+              <>
+                <Text style={s.subName}>{shortP(winner)}</Text>
+                <Text> def. </Text>
+                <Text style={s.subLoser}>{shortP(loser)}</Text>
               </>
             ) : (
               <>
@@ -237,6 +254,12 @@ const s = StyleSheet.create({
      Still built from separate pieces even without an underline to place: the
      colour lands on the names and the "vs." between them stays muted, which is
      what keeps the two players reading as two things. */
+  /* The beaten player, same size and weight so the line reads as one pairing,
+     but muted so the winner still wins the eye — the site's .pp-loser. */
+  subLoser: {
+    fontFamily: 'Archivo_700Bold', fontSize: 17, lineHeight: leading(23),
+    color: C.muted,
+  },
   subName: {
     fontFamily: 'Archivo_700Bold', fontSize: 17, lineHeight: leading(23),
     color: C.clay,
