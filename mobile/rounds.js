@@ -28,15 +28,28 @@ export function shortRound(name, roundNumber) {
 
 /* Which round to open on.
  *
- * The one being PLAYED — the earliest with anything undecided. Opening on
- * R128 of a completed slam means scrolling past six rounds of history to reach
- * what is happening; opening on the final of a draw that has not started means
- * a screen of TBD. When everything is done, the last round is the answer,
- * because that is where the result is.
+ * THE FURTHEST ROUND THAT HAS ACTUALLY HAPPENED — the one holding the latest
+ * result, or the matches on court right now. Rounds only ever move forward, so
+ * the last round with a started match IS the live edge of the draw.
+ *
+ * It used to open on the EARLIEST round with anything undecided, which is a
+ * different question and a worse one: a single straggler left behind — a
+ * suspended match, a qualifying slot that never resolved, a walkover never
+ * stamped — pinned the whole screen back on R128 while the quarter-finals
+ * were being played.
+ *
+ * "Started" rather than "won", so a round whose first matches are on court but
+ * none yet finished is still the answer. Opening on the previous round to show
+ * settled results, while the draw's live edge sits one tab away, is the same
+ * mistake in the other direction.
+ *
+ * Nothing started at all — a draw released, picks not yet playable — opens at
+ * the first round, which is where the picking is.
  */
 export function currentRound(rounds) {
-  for (const [num, matches] of rounds) {
-    if (matches.some(m => !m.is_bye && !m.winner)) return num
+  const started = m => !m.is_bye && !!(m.winner || m.live_scores || m.live_point)
+  for (let i = rounds.length - 1; i >= 0; i--) {
+    if (rounds[i][1].some(started)) return rounds[i][0]
   }
-  return rounds.length ? rounds[rounds.length - 1][0] : null
+  return rounds.length ? rounds[0][0] : null
 }
