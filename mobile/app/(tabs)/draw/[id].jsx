@@ -151,7 +151,11 @@ export default function DrawScreen() {
           <View style={s.head}>
             <View style={[s.tint, { backgroundColor: t.gender === 'F' ? C.wta : C.atp }]} />
             <View style={s.headBody}>
-              <TourBadge gender={t.gender} />
+              {/* alignSelf overrides the row's alignItems, and TourBadge
+                  carries alignSelf:'flex-start' for the stacked layouts it
+                  usually sits in — which pinned it to the TOP of this row.
+                  Centred explicitly so it sits on the name's line. */}
+              <TourBadge gender={t.gender} style={{ alignSelf: 'center' }} />
               <Text style={s.headName} numberOfLines={1}>{t.name}</Text>
             </View>
           </View>
@@ -413,7 +417,13 @@ const s = StyleSheet.create({
   },
   tint: { width: 4 },
   // One row now, so the body centres its two children instead of stacking.
-  headBody: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, padding: S.md },
+  /* One line of text, so it is padded like a header bar rather than a card:
+     S.md across, S.sm down. The full S.md all round was sized for the four
+     stacked rows this box used to hold. */
+  headBody: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: S.md, paddingVertical: S.sm,
+  },
   headName: { ...T.h2, color: C.ink, flexShrink: 1 },
 
 
