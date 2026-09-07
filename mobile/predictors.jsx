@@ -113,8 +113,11 @@ export function PredictorsSheet({ visible, onClose, drawId, match, meId }) {
  * Upset Alert the three people who went the other way are — and putting the
  * long list last also keeps the short ones above the fold.
  */
-function PickBucket({ picked, people, tone, meId, defaultOpen }) {
-  const [open, setOpen] = useState(!!defaultOpen)
+/* `isMine`, not `mine`: the chip loop below declares its own per-PERSON
+   `mine`, and two different meanings of one word in one function is how a
+   later edit ends up highlighting every chip in your bucket. */
+function PickBucket({ picked, people, tone, meId, isMine }) {
+  const [open, setOpen] = useState(false)
   return (
     <View style={s.bucket}>
       <Pressable onPress={() => setOpen(o => !o)} hitSlop={6}
@@ -129,6 +132,15 @@ function PickBucket({ picked, people, tone, meId, defaultOpen }) {
           {picked || 'No pick'}
         </Text>
         <Text style={[s.bucketCount, { color: tone }]}>({people.length})</Text>
+        {/* YOUR pick, named without opening anything. Auto-expanding this row
+            was the wrong way to answer "which one is mine": it dumped a list
+            of other people's names to say one thing about you, and on a busy
+            match that was the longest row on the screen. The mark says it
+            while the row stays shut. */}
+        {isMine ? (
+          <Text style={s.mineMark}
+                accessibilityLabel="You predicted this player to win">🤞</Text>
+        ) : null}
       </Pressable>
       {open ? (
         <View style={s.chips}>
@@ -174,9 +186,7 @@ function Group({ label, tone, people, meId }) {
           <PickBucket
             key={b.picked || '_none'} picked={b.picked} people={b.list}
             tone={tone} meId={meId}
-            /* Your own pick opens itself: it is the one row a reader came to
-               find, and making them hunt for it defeats the collapsing. */
-            defaultOpen={meId != null && b.list.some(p => p.id === meId)}
+            isMine={meId != null && b.list.some(p => p.id === meId)}
           />
         ))}
       </View>
@@ -247,6 +257,8 @@ const s = StyleSheet.create({
   // above, and giving it to both would leave neither looking like the subject.
   bucketName: { ...T.smallMed, color: C.ink, flexShrink: 1 },
   bucketCount: { ...T.smallMed, opacity: 0.75 },
+  // The same 🤞 the score cards use for a pick, at the same size.
+  mineMark: { fontSize: 14, lineHeight: leading(18), marginLeft: 2 },
   // Indented under their heading, so an open bucket reads as belonging to it.
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6,
            paddingLeft: 20, paddingBottom: S.xs },
