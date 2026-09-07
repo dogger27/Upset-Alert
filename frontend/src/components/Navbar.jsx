@@ -6,6 +6,7 @@ import { useAuth } from '../store/auth'
 import { deleteAccount } from '../api/auth'
 import { deletePasskey, enrolPasskey, listPasskeys, passkeysSupported, renamePasskey } from '../api/passkeys'
 import { useTheme } from '../store/theme'
+import { useScheduleTz } from '../store/scheduleTz'
 import './Navbar.css'
 
 // Below this navbar width the primary nav links collapse into a hamburger menu.
@@ -21,6 +22,8 @@ export default function Navbar() {
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
   const { theme, toggleTheme } = useTheme()
+  const tzMode = useScheduleTz(s => s.tzMode)
+  const setTzMode = useScheduleTz(s => s.setTzMode)
   const navigate = useNavigate()
   const location = useLocation()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -562,6 +565,24 @@ export default function Navbar() {
                         <span>Dark mode</span>
                         <span
                           className={clsx('ua-switch', { 'ua-switch--on': theme === 'dark' })}
+                          aria-hidden="true"
+                        />
+                      </button>
+                      {/* Moved here from the schedule's filter strip. It is a
+                          preference — set once, if ever — and it was sitting
+                          among the controls people touch every visit. Off is
+                          "my time", which is the answer to the question
+                          almost everyone is asking of a schedule. */}
+                      <button
+                        className="profile-dropdown-item profile-dropdown-switch"
+                        role="switch"
+                        aria-checked={tzMode === 'venue'}
+                        onClick={() => setTzMode(tzMode === 'venue' ? 'user' : 'venue')}
+                        title="Show schedule times in the tournament's local time instead of yours"
+                      >
+                        <span>Venue time</span>
+                        <span
+                          className={clsx('ua-switch', { 'ua-switch--on': tzMode === 'venue' })}
                           aria-hidden="true"
                         />
                       </button>
