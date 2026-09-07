@@ -14,6 +14,8 @@
  * roster.
  */
 
+import { useMemo, useState } from 'react'
+import { Ionicons } from '@expo/vector-icons'
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { getPredictors } from './api'
 import { useApi } from './useApi'
@@ -74,29 +76,85 @@ export function PredictorsSheet({ visible, onClose, drawId, match, meId }) {
   )
 }
 
-/** "Sho Shimabukuro" → "Shimabukuro": surname only, as on the site. A
-    two-word surname ("Díaz Acosta") stays whole. */
-function shortName(raw) {
-  const parts = String(raw || '').trim().split(/\s+/)
-  return parts.length > 1 ? parts.slice(1).join(' ') : raw
+/* One PLAYER and everyone who backed them, collapsed until asked.
+ *
+ * A flat list of names repeated the same pick twenty-nine times and made the
+ * reader count to learn the only thing the screen is for: how the field
+ * split. The pick is the heading now and the names are behind it.
+ *
+ * FEWEST FIRST. The lopsided side is never the news — on a screen called
+ * Upset Alert the three people who went the other way are — and putting the
+ * long list last also keeps the short ones above the fold.
+ */
+function PickBucket({ picked, people, tone, meId, defaultOpen }) {
+  const [open, setOpen] = useState(!!defaultOpen)
+  return (
+    <View style={s.bucket}>
+      <Pressable onPress={() => setOpen(o => !o)} hitSlop={6}
+                 accessibilityRole="button"
+                 accessibilityState={{ expanded: open }}
+                 accessibilityLabel={`${picked || 'No pick'}, ${people.length} `
+                   + `${people.length === 1 ? 'person' : 'people'}`}
+                 style={s.bucketHead}>
+        <Ionicons name={open ? 'chevron-down' : 'chevron-forward'}
+                  size={14} color={tone} style={s.chev} />
+        {/* The FULL name here, where the chips used to carry a surname. The
+            surname was right when the pick was a parenthetical on a crowded
+            chip; as the heading it is the main fact on the row, and the player
+            picked is often not one of the two in the subtitle above — someone
+            beaten a round ago. */}
+        <Text style={[s.bucketName, { color: tone }]} numberOfLines={1}>
+          {picked || 'No pick'}
+        </Text>
+        <Text style={[s.bucketCount, { color: tone }]}>({people.length})</Text>
+      </Pressable>
+      {open ? (
+        <View style={s.chips}>
+          {people.map(p => {
+            const mine = meId != null && p.id === meId
+            return (
+              <View key={p.id} style={[s.chip, mine && { borderColor: C.clay }]}>
+                <Text style={[s.chipText, mine && { color: C.clay }]} numberOfLines={1}>
+                  {p.username}
+                </Text>
+              </View>
+            )
+          })}
+        </View>
+      ) : null}
+    </View>
+  )
 }
 
 function Group({ label, tone, people, meId }) {
+  /* Bucketed by pick, fewest backers first. Ties keep the order the server
+     sent, which is already by weight of support. */
+  const buckets = useMemo(() => {
+    const by = new Map()
+    for (const p of people || []) {
+      const key = p.picked || ''
+      if (!by.has(key)) by.set(key, [])
+      by.get(key).push(p)
+    }
+    return [...by.entries()]
+      .map(([picked, list]) => ({ picked, list }))
+      .sort((a, b) => a.list.length - b.list.length)
+  }, [people])
+
   if (!people?.length) return null
   return (
     <View style={s.group}>
       <Text style={[s.groupLabel, { color: tone }]}>{label}</Text>
-      <View style={s.chips}>
-        {people.map(p => {
-          const mine = meId != null && p.id === meId
-          return (
-            <View key={p.id} style={[s.chip, mine && { borderColor: C.clay }]}>
-              <Text style={[s.chipText, mine && { color: C.clay }]} numberOfLines={1}>
-                {p.username}{p.picked ? ` (${shortName(p.picked)})` : ''}
-              </Text>
-            </View>
-          )
-        })}
+      <View>
+        {buckets.map(b => (
+          <PickBucket
+            key={b.picked || '_none'} picked={b.picked} people={b.list}
+            tone={tone} meId={meId}
+            /* Your own pick opens itself: it is the one row a reader came to
+               find, and making them hunt for it defeats the collapsing. */
+            defaultOpen={meId != null && b.list.some(p => p.id === meId)}
+          />
+        ))}
       </View>
     </View>
   )
@@ -130,7 +188,21 @@ const s = StyleSheet.create({
   list: { marginTop: S.md },
   group: { marginBottom: S.md },
   groupLabel: { ...T.smallMed, marginBottom: S.xs },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  /* A pick and its backers. The header is a touch target, so it takes the
+     full width and a real row height rather than hugging its text. */
+  bucket: { marginBottom: S.xs },
+  bucketHead: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingVertical: 7, paddingHorizontal: 2,
+  },
+  chev: { width: 14, textAlign: 'center' },
+  // The name takes the space and the count sits tight against it, so the
+  // count never drifts to the far edge on a short name.
+  bucketName: { ...T.smallMed, flexShrink: 1 },
+  bucketCount: { ...T.smallMed, opacity: 0.75 },
+  // Indented under their heading, so an open bucket reads as belonging to it.
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6,
+           paddingLeft: 20, paddingBottom: S.xs },
   chip: {
     backgroundColor: C.raised, borderRadius: R.sm, borderWidth: 1, borderColor: C.border,
     paddingHorizontal: 9, paddingVertical: 4, maxWidth: '100%',
