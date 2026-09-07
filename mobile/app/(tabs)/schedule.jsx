@@ -14,7 +14,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Ionicons } from '@expo/vector-icons'
-import { Stack, useLocalSearchParams } from 'expo-router'
+import { useLocalSearchParams } from 'expo-router'
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native'
 import { getScheduleDates, getScheduleDay, listTournaments, updateMe } from '../../api'
 import { useAuth } from '../../auth'
@@ -210,7 +210,6 @@ export default function ScheduleScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: 'Schedule' }} />
       <Screen onRefresh={refetch}>
         <View style={s.bar}>
           <Pressable
