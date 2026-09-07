@@ -112,7 +112,7 @@ export function PredictorsSheet({ visible, onClose, drawId, match, meId }) {
             {/* Both sections share one denominator — everyone who picked this
                 match — so the percentages across the whole sheet add to 100. */}
             <Group label="Right" tone={C.greenLit} people={d.correct} meId={meId}
-                   fieldSize={fieldSize} />
+                   fieldSize={fieldSize} anonymous={!d.pending} />
             <Group label="Wrong" tone={C.bad} people={d.incorrect} meId={meId}
                    fieldSize={fieldSize} />
           </ScrollView>
@@ -139,15 +139,25 @@ export function PredictorsSheet({ visible, onClose, drawId, match, meId }) {
 /* `isMine`, not `mine`: the chip loop below declares its own per-PERSON
    `mine`, and two different meanings of one word in one function is how a
    later edit ends up highlighting every chip in your bucket. */
-function PickBucket({ picked, people, tone, meId, isMine, fieldSize }) {
+function PickBucket({ picked, people, tone, meId, isMine, fieldSize, anonymous }) {
   const [open, setOpen] = useState(false)
+  /* A FINISHED match sends no pick name for the people who got it right — the
+     server omits it deliberately, since a correct pick can only be the winner
+     (routers/tournaments.py: "a correct pick is the winner, already in the
+     title"). Rendering that absence as "No pick" was a lie about 18 people who
+     picked perfectly well, so the name is simply left out; the site's popup
+     has always printed '' here for the same reason.
+
+     "No pick" still stands everywhere it is TRUE — anyone with no pick fails
+     `pid == winner_id` and lands in Wrong, where the label is earned. */
+  const label = picked || (anonymous ? '' : 'No pick')
+  const count = `${people.length} ${people.length === 1 ? 'person' : 'people'}`
   return (
     <View style={s.bucket}>
       <Pressable onPress={() => setOpen(o => !o)} hitSlop={6}
                  accessibilityRole="button"
                  accessibilityState={{ expanded: open }}
-                 accessibilityLabel={`${picked || 'No pick'}, ${people.length} `
-                   + `${people.length === 1 ? 'person' : 'people'}`}
+                 accessibilityLabel={[label, count].filter(Boolean).join(', ')}
                  style={s.bucketHead}>
         {/* SHARE OF THE WHOLE FIELD, not of this section: "86%" means 86% of
             everyone who picked this match, which is the comparison worth
@@ -161,9 +171,9 @@ function PickBucket({ picked, people, tone, meId, isMine, fieldSize }) {
         </Text>
         <Ionicons name={open ? 'chevron-down' : 'chevron-forward'}
                   size={14} color={tone} style={s.chev} />
-        <Text style={s.bucketName} numberOfLines={1}>
-          {picked || 'No pick'}
-        </Text>
+        {label ? (
+          <Text style={s.bucketName} numberOfLines={1}>{label}</Text>
+        ) : null}
         <Text style={[s.bucketCount, { color: tone }]}>({people.length})</Text>
         {/* YOUR pick, named without opening anything. Auto-expanding this row
             was the wrong way to answer "which one is mine": it dumped a list
@@ -193,7 +203,7 @@ function PickBucket({ picked, people, tone, meId, isMine, fieldSize }) {
   )
 }
 
-function Group({ label, tone, people, meId, fieldSize }) {
+function Group({ label, tone, people, meId, fieldSize, anonymous }) {
   /* Bucketed by pick, fewest backers first. Ties keep the order the server
      sent, which is already by weight of support. */
   const buckets = useMemo(() => {
@@ -218,7 +228,7 @@ function Group({ label, tone, people, meId, fieldSize }) {
         {buckets.map(b => (
           <PickBucket
             key={b.picked || '_none'} picked={b.picked} people={b.list}
-            tone={tone} meId={meId} fieldSize={fieldSize}
+            tone={tone} meId={meId} fieldSize={fieldSize} anonymous={anonymous}
             isMine={meId != null && b.list.some(p => p.id === meId)}
           />
         ))}
