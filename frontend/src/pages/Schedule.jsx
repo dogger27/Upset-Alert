@@ -132,10 +132,20 @@ function canonLabel(label) {
    "Followed by" places a match in the day's order with no clock of its own to
    fall back on. Those two earn their words.
 
-   Note what stripping "Not before" does NOT change: the floor is still a hard
-   constraint, so an estimate below one still loses to it (estimateSupersedes)
-   and the time shown is the floor's. Only the label goes. */
-const BARE_LABELS = new Set(['Started at', 'Starting at', 'Not before'])
+/* Labels that are pure scaffolding in front of a clock. "Starting at 4:00 PM"
+   and "Not before 11:00 AM" both reduce to their time; the words go to hover,
+   where a reader who wants them can still find them.
+
+   "STARTED AT" IS NOT AMONG THEM, deliberately, though it was for a while.
+   Stripped to a bare clock it becomes ambiguous in the one place it matters:
+   on a live or finished row, "8:17 AM" reads exactly like a scheduled slot,
+   and the whole point of that line is to say the match REALLY began then
+   rather than that it was due to. The tense is the information.
+
+   "Resumed at" stays for the same reason and one more: it explains why its
+   clock disagrees with the score beside it. "Followed by" has no clock of its
+   own to fall back on. */
+const BARE_LABELS = new Set(['Starting at', 'Not before'])
 
 function TimeLine({ text, className, title }) {
   const { label: printed, time } = splitTimeLine(text)
