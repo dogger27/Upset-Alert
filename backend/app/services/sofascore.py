@@ -805,6 +805,32 @@ async def _resolve_against_field(draw: Draw, entries: list) -> Optional[tuple]:
     return None
 
 
+async def _stamp_number_of_sets(db: AsyncSession, draw: Draw) -> None:
+    """Record how many sets this tournament plays, from Sofascore's own field.
+
+    `uniqueTournament.numberOfSets` is STATED — 5 for a men's Slam, 3 for
+    everything else measured so far — where schedule.py::_best_of had to derive
+    it from category, gender and stage and carried a comment conceding those
+    were unverified guesses. A stated format beats a good guess.
+
+    One request per draw, once, on a path that already runs rarely. Never
+    allowed to fail the resolve: the ids are the point of that function and a
+    missing format simply leaves the guess in place.
+    """
+    try:
+        payload = await _get(f"/unique-tournament/{draw.sofa_tournament_id}")
+        sets = ((payload or {}).get("uniqueTournament") or {}).get("numberOfSets")
+    except Exception as exc:                                       # noqa: BLE001
+        logger.info("numberOfSets unavailable for draw %s: %s", draw.id, exc)
+        return
+    # Tennis is best-of-3 or best-of-5 and nothing else; anything outside that
+    # is a field we have misread, and a wrong format is worse than no format.
+    if sets in (3, 5) and draw.sofa_number_of_sets != sets:
+        draw.sofa_number_of_sets = sets
+        await db.commit()
+        logger.info("draw %s plays best of %d (Sofascore)", draw.id, sets)
+
+
 async def resolve_tournament(db: AsyncSession, draw: Draw) -> Optional[tuple]:
     """
     Persisted (uniqueTournament id, season id) for a draw, resolving if needed.
@@ -814,6 +840,10 @@ async def resolve_tournament(db: AsyncSession, draw: Draw) -> Optional[tuple]:
     working id alone rather than replace it with nothing.
     """
     if draw.sofa_tournament_id and draw.sofa_season_id:
+        # Ids already known, but the FORMAT may not be — this is one request
+        # per draw, once, and only for a draw that has never had it.
+        if draw.sofa_number_of_sets is None:
+            await _stamp_number_of_sets(db, draw)
         return draw.sofa_tournament_id, draw.sofa_season_id
 
     entries = (await db.execute(
@@ -824,6 +854,7 @@ async def resolve_tournament(db: AsyncSession, draw: Draw) -> Optional[tuple]:
         return None
     draw.sofa_tournament_id, draw.sofa_season_id = found[0], found[1]
     await db.commit()
+    await _stamp_number_of_sets(db, draw)
     return found[0], found[1]
 
 
