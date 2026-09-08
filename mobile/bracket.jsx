@@ -531,14 +531,20 @@ const s = StyleSheet.create({
   noteTick: { color: PICK.correct.border },
   /* .cv-real-winner: 11px, centred on the box's top border, the wrong fill
      behind it. */
+  /* The line box is TALLER than the type, on purpose. iOS honours a
+     lineHeight below the font's natural line by pushing the glyphs to the
+     bottom of it, so at 13 the caps sat on the floor of the red strip with
+     the air all above them. At 15 the font fits its line and the row's
+     alignItems does the centring. The strip still straddles the border:
+     top is half its own height. */
   realWinner: {
-    position: 'absolute', left: 7, top: -(leading(13) / 2),
-    height: leading(13), paddingHorizontal: 2, gap: 7,
+    position: 'absolute', left: 7, top: -(leading(15) / 2),
+    height: leading(15), paddingHorizontal: 2, gap: 7,
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: PICK.wrong.bg, zIndex: 2,
   },
   realWinnerText: {
-    fontFamily: 'Archivo_700Bold', fontSize: 11, lineHeight: leading(13), color: DANGER_STRONG,
+    fontFamily: 'Archivo_700Bold', fontSize: 11, lineHeight: leading(15), color: DANGER_STRONG,
   },
 
   gap: { height: leading(GAP_H), justifyContent: 'center' },
