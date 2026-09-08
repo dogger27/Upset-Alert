@@ -510,12 +510,11 @@ const s = StyleSheet.create({
     borderWidth: 2, borderColor: N[300], borderRadius: 10, backgroundColor: N[100],
     paddingVertical: PAD, paddingHorizontal: PAD,
   },
-  /* A finished match goes to a COOL SLATE inside — cooled off — while a
-     match to play keeps the warm green-grey. A hue shift, not a brightness
-     step: a step small enough to keep the grey player boxes distinct from
-     the fill was too small to see, and one big enough to see swallowed the
-     boxes. The site's --match-done-fill, dark. The border is left alone. */
-  outlineDone: { backgroundColor: '#1e2d34' },   // the slate, pulled ~12% back toward n-100
+  /* A finished match: a cool slate inside, a step brighter than the warm
+     fill of a match still to play, and a teal edge — back at a member's
+     suggestion, as an accent now that the fill carries the difference. The
+     site's --match-done-fill / --match-done-line, dark. */
+  outlineDone: { backgroundColor: '#263842', borderColor: '#2ec4b6' },
   /* .in-progress-badge: centred on the outline's top border. top is measured
      from inside the border, so -1 puts the pill's centre on the border's own
      centre line. */
