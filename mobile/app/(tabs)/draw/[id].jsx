@@ -269,10 +269,11 @@ const s = StyleSheet.create({
      edge is simply cut — these paddings are where the overhang lives.
      Vertically, the status pill straddles each outline's top border and
      stands 9pt above it; the gap between groups and the top padding both
-     leave it clear — 20 puts 11pt of black between a pill and the group
-     above it, and still fits four and a half groups on a screen. */
+     leave it clear — 14 puts 6pt of black between a pill and the group
+     above it, which with the scaled-down group fits four on a screen at the
+     phone's larger text size (the point of the scale-down). */
   list: {
-    gap: 20, paddingTop: S.md, paddingBottom: S.xxl,
+    gap: 14, paddingTop: S.sm, paddingBottom: S.xxl,
     paddingLeft: CHIP_OVERHANG, paddingRight: CONNECTOR_W,
   },
 })
