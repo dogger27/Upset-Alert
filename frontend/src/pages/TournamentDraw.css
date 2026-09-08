@@ -757,6 +757,9 @@
   background: var(--danger-fill-hover);
 }
 
+/* Rendered through a portal onto the body and positioned inline from the
+   pill's rect (TournamentDraw.jsx) — the header is overflow:hidden, and a
+   box hanging below the pill inside it was clipped at the header's edge. */
 .unlock-confirm {
   position: absolute;
   top: calc(100% + 8px);

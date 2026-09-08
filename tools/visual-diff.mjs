@@ -43,6 +43,8 @@ const SCREENS = [
   // The women's draw's R32 was scheduled top-first in the DB snapshot, so its
   // first groups carry the SCHEDULED pill and an expected start.
   { name: 'draw-eta',  mobile: '/draw/78', pwa: '/tournaments/78', appClick: 'R32' },
+  // The admin's unlock confirm, which must clear the header's overflow clip.
+  { name: 'draw-lock', mobile: '/draw/77', pwa: '/tournaments/77', pwaClick: 'Predictions locked' },
   { name: 'leagues',   mobile: '/leagues',     pwa: '/leagues' },
   { name: 'schedule',  mobile: '/schedule',    pwa: '/schedule' },
   // A day with a washout behind it: postponed, carried-over and resumed rows.
