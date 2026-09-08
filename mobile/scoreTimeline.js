@@ -41,24 +41,52 @@ const RANK = { '0': 0, '15': 1, '30': 2, '40': 3, 'A': 4 }
  * - ESPN rows: no point to compare (null), games rules still apply
  * - tiebreaks: numeric points, same one-way rule
  */
+/* How far back a correction can reach. Sofascore takes back a premature
+   point within seconds and our poll is ten, so a regression that contradicts
+   snapshots older than this is not the feed correcting itself: it is a STALE
+   READ, a cache node serving an older copy of the match. Measured on the US
+   Open: fifteen such reads across two draws, every one ten seconds behind the
+   state it contradicted — and one, a minute after the last point of a 7-6(8)
+   decider, that erased the whole third set from the scrubber, aces and all. */
+const CORRECTION_WINDOW_MS = 120_000
+
 export function sanitizeSnapshots(snapshots) {
   if (!Array.isArray(snapshots)) return []
   const out = []
   for (const cur of snapshots) {
+    // Pop the run this snapshot contradicts — a RECENT run. If the
+    // contradiction reaches back past the window, the old points are the
+    // truth and this read is the stale one: put the run back and skip it.
+    const popped = []
+    let stale = false
     while (out.length) {
       const prev = out[out.length - 1]
       if (!_illegalRegression(prev, cur)) break
-      out.pop()
+      if (_ageMs(prev, cur) > CORRECTION_WINDOW_MS) { stale = true; break }
+      popped.push(out.pop())
+    }
+    if (stale) {
+      while (popped.length) out.push(popped.pop())
+      continue
     }
     // Erasing a premature run can leave the state it regressed TO sitting
     // beside its own earlier copy — two identical 40-30s where the feed went
     // 40-30, (phantom game), 40-30. One state, one snapshot: keep the
-    // earlier, whose timestamp is when it first became true.
+    // earlier, whose timestamp is when it first became true — carrying over
+    // a label only the later copy had, or the ace goes with it.
     const top = out[out.length - 1]
-    if (top && _sameState(top, cur)) continue
+    if (top && _sameState(top, cur)) {
+      if (cur.point_label && !top.point_label) out[out.length - 1] = { ...top, point_label: cur.point_label }
+      continue
+    }
     out.push(cur)
   }
   return out
+}
+
+function _ageMs(prev, cur) {
+  const a = Date.parse(prev?.at), b = Date.parse(cur?.at)
+  return Number.isFinite(a) && Number.isFinite(b) ? b - a : 0
 }
 
 function _sameState(a, b) {

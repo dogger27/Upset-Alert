@@ -170,6 +170,23 @@ async def points_for(event_id: Optional[int], *, finished: bool,
         return hit[2] if hit else {}
 
 
+def labels_pending(event_id: Optional[int]) -> bool:
+    """Is a point list still on its way for this event?
+
+    The cold wait is short (WAIT_COLD) so the popup is never held for a
+    decoration; when it runs out the fetch carries on, shielded, and the answer
+    that went out had no labels. A live match's own polling picks them up
+    within ten seconds. A FINISHED match is never polled — so its first open
+    showed no aces at all and its second, once the query had gone stale,
+    showed every one. The client asks again in a couple of seconds while this
+    is True; that is all it is for.
+    """
+    if not event_id:
+        return False
+    task = _INFLIGHT.get(event_id)
+    return task is not None and not task.done()
+
+
 def _position(snap) -> Optional[tuple]:
     """The (set, game) a snapshot belongs to, or None if it cannot be placed."""
     games, point = (snap or {}).get("games"), (snap or {}).get("point")

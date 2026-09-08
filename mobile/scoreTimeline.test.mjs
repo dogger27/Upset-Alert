@@ -44,3 +44,40 @@ test('point stats credit the server and the returner', () => {
   assert.equal(last[1].retWon, 1); assert.equal(last[1].retTot, 2)
   assert.equal(st.counted, 2)
 })
+
+test('a stale read that contradicts minutes of play is dropped, not the play', () => {
+  const at = m => new Date(Date.UTC(2026, 8, 6, 22, m)).toISOString()
+  const h = [
+    snap([['6'], ['7']], ['0', '0'], 1, { at: at(0) }),
+    snap([['6', '0'], ['7', '0']], ['15', '0'], 1, { at: at(1) }),
+    snap([['6', '0'], ['7', '0']], ['30', '0'], 1, { at: at(2) }),
+    snap([['6', '1'], ['7', '0']], ['0', '0'], 2, { at: at(5) }),
+    // A cache node's old copy of the set's end, six minutes on: the column
+    // count falls, and popping back to agree with it would erase the set.
+    snap([['6'], ['7']], ['0', '0'], 1, { at: at(6) }),
+  ]
+  const s = sanitizeSnapshots(h)
+  assert.equal(s.length, 4)
+  assert.deepEqual(s[3].games, [['6', '1'], ['7', '0']])
+})
+
+test('a correction seconds later still erases the premature point', () => {
+  const at = s => new Date(Date.UTC(2026, 8, 6, 22, 0, s)).toISOString()
+  const h = [
+    snap([['0'], ['0']], ['0', '30'], 1, { at: at(0) }),
+    snap([['0'], ['0']], ['0', '40'], 1, { at: at(10) }),
+    snap([['0'], ['0']], ['0', '30'], 1, { at: at(20) }),
+    snap([['0'], ['0']], ['15', '30'], 1, { at: at(30) }),
+  ]
+  assert.deepEqual(sanitizeSnapshots(h).map(x => x.point.join('-')), ['0-30', '15-30'])
+})
+
+test('a label on a duplicate state survives the duplicate being dropped', () => {
+  const h = [
+    snap([['0'], ['0']], ['15', '0'], 1),
+    snap([['0'], ['0']], ['15', '0'], 1, { point_label: 'Ace' }),
+  ]
+  const s = sanitizeSnapshots(h)
+  assert.equal(s.length, 1)
+  assert.equal(s[0].point_label, 'Ace')
+})

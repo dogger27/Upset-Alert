@@ -22,6 +22,9 @@
   justify-content: center;
   padding: 1rem;
   overscroll-behavior: contain;
+  /* Scrolls when even 1x will not fit — a short window, a phone with the
+     serve panel open — the one case the desktop scale cannot solve. */
+  overflow-y: auto;
 }
 /* Keeps the near-centred look for a short popup without letting height
    changes move the top: the margin is computed once from the space left over,
@@ -218,15 +221,23 @@
        growing this widens the box and the track while every letter stays
        exactly as it was. 490 x 1.8 = 882px fits the 900px gate. */
     width: min(490px, 100%);
-    --shp-thumb: 14px;
-    /* "Even LARGER", round three. transform scale does not scroll, so a
-       popup scaled past the viewport clips its top unreachably — the height
-       gates step up only where the window can hold it: 1.8x (~792px) as the
-       floor, 2.0x (~880px) on ordinary desktop heights, 2.35x (~1034px) on
-       tall monitors. The thumb's pre-scale size drops per step so its
-       VISUAL size stays near the original; the tick travel math follows
-       through the variable. */
-    transform: scale(1.8);
+    /* THE FACTOR IS MEASURED, NOT GATED. transform scale does not scroll, so
+       a popup scaled past the viewport clips its top unreachably — and the
+       height gates that used to pick 1.8 / 2.0 / 2.35 were sized for a popup
+       without the stats panel, which then overran the top of the screen on
+       an ordinary monitor. ScoreHistoryPopup.jsx measures the popup's
+       laid-out height against the window and writes --shp-scale: as large as
+       fits, up to the old 2.35 ceiling; 1.8 stands only until it has. The
+       thumb's pre-scale size follows the factor so its VISUAL size stays
+       about 27px at any scale; the tick travel math follows through the
+       variable. */
+    --shp-scale: 1.8;
+    --shp-thumb: calc(27px / var(--shp-scale));
+    transform: scale(var(--shp-scale));
+    /* From the TOP, so the box grows downward from where it is anchored.
+       About the centre it grew upward by half the difference, and that half
+       was the part off the screen. */
+    transform-origin: top center;
   }
   /* The card's own type, bumped BEYOND the uniform scale — the owner asked
      for the names and score especially. Safe with the measured name-fitting:
@@ -238,12 +249,6 @@
   .shp-card .sched-sets { font-size: 1.28rem; }
   .shp-card .sched-point { font-size: 1.15rem; min-width: 2.1rem; }
   .shp-card .sched-seed { font-size: 0.95rem; }
-}
-@media (min-width: 900px) and (min-height: 760px) {
-  .shp-popup { --shp-thumb: 13px; transform: scale(2.0); }
-}
-@media (min-width: 900px) and (min-height: 1050px) {
-  .shp-popup { --shp-thumb: 12px; transform: scale(2.35); }
 }
 
 /* The match's end: red, at the timeline's last stop. Hidden beneath the
