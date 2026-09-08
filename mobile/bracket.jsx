@@ -543,8 +543,12 @@ const s = StyleSheet.create({
      on its own. The strip is a hair taller than that line and the row's
      alignItems does the rest. It still straddles the border: top is half
      its own height. */
+  /* Sits a little INSIDE the box rather than centred on its border: 4.5pt
+     above the line, 10.5pt below — the site's own note leans in the same
+     way (5px out, 6px in), and dead-centred it looked as if it were
+     floating off the box. */
   realWinner: {
-    position: 'absolute', left: 7, top: -(leading(15) / 2),
+    position: 'absolute', left: 7, top: -(leading(15) / 2) + leading(3),
     height: leading(15), paddingHorizontal: 2, gap: 7,
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: PICK.wrong.bg, zIndex: 2,
