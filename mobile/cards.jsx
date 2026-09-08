@@ -156,7 +156,7 @@ const u = StyleSheet.create({
      app had grown to (28×18), at the owner's ask. The entry chip below
      takes the SAME height rule, so the two never differ by a point. */
   badge: {
-    width: leading(26), height: leading(17), borderRadius: 3, borderWidth: 1,
+    width: leading(26), height: leading(16), borderRadius: 3, borderWidth: 1,
     paddingVertical: 0, alignItems: 'center', justifyContent: 'center',
   },
   badgeGap: { width: leading(26) },
@@ -187,11 +187,14 @@ const u = StyleSheet.create({
      wider crowds its own letters. Width stays content-driven, which is the
      one difference from `badge` and the reason this style exists. */
   entryChip: {
-    height: leading(17), borderRadius: 3, borderWidth: 1,
+    height: leading(16), borderRadius: 3, borderWidth: 1,
     paddingHorizontal: leading(5), paddingVertical: 0,
     alignItems: 'center', justifyContent: 'center', marginLeft: leading(6),
   },
-  badgeText: { fontFamily: 'Archivo_700Bold', fontSize: 11, lineHeight: leading(13) },
+  /* NO lineHeight: on iOS a lineHeight sinks the digits toward the bottom
+     of the box (the draw's pills taught this); the font's own line, centred
+     by the box, puts them on its middle. */
+  badgeText: { fontFamily: 'Archivo_700Bold', fontSize: 11 },
 })
 
 
