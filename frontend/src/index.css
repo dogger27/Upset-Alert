@@ -293,7 +293,7 @@
      player boxes distinct from the fill was too small to see, and one big
      enough to see swallowed the boxes. The border stays the default. */
   --match-fill: var(--n-150);
-  --match-done-fill: #e6edf2;
+  --match-done-fill: #e7edf0;
   --gold-ink: #b8860b;
 
   --success-tint: #f0fdf4;
@@ -489,7 +489,7 @@
   --atp-text-strong: #a8c8ff;
   --brand-line-strong: #4a8f6c;
   --match-fill: var(--n-100);
-  --match-done-fill: #1f2e37;
+  --match-done-fill: #1e2d34;   /* the slate, pulled ~12% back toward --match-fill */
   --gold-ink: #e0b34a;
 
   --success-tint: #16301f;
