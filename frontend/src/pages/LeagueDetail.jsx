@@ -91,7 +91,12 @@ export default function LeagueDetail() {
     enabled: !isGlobal,
   })
 
-  const { data: leagueTournaments = [] } = useQuery({
+  /* drawsLoading gates the empty states below. The default of [] is what the
+     grouping code wants, but on a cold load it also meant "no draws" was TRUE
+     for the first render — so the page flashed "No picks have been submitted
+     yet" at everyone before their draws appeared. A wrong answer for a
+     moment is worse than no answer; a spinner is no answer. */
+  const { data: leagueTournaments = [], isLoading: drawsLoading } = useQuery({
     queryKey: isGlobal ? ['global-draws'] : ['league-tournaments', id],
     queryFn: () => isGlobal ? getGlobalDraws() : getLeagueTournaments(Number(id)),
     refetchInterval: 60_000,
@@ -301,6 +306,10 @@ export default function LeagueDetail() {
                     </table>
                   )
                 })()}
+              </div>
+            ) : drawsLoading ? (
+              <div className="card league-tournaments-section lt-loading" role="status" aria-label="Loading draws">
+                <span className="lt-spinner" />
               </div>
             ) : categoryGroups.length === 0 ? (
               <div className="card league-tournaments-section">
@@ -1103,7 +1112,10 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
   const flashKey = useRef(0)
 
 
-  const { data: rawData } = useQuery({
+  /* scoresLoading: `entries` below is derived from rawData, so before the
+     first response it is [] and the table said "No picks submitted yet" for
+     a beat on every open — the same false flash the draws list had. */
+  const { data: rawData, isLoading: scoresLoading } = useQuery({
     queryKey: leagueId != null ? ['round-scores', leagueId, t.id] : ['global-round-scores', t.id],
     queryFn: leagueId != null ? () => getRoundScores(leagueId, t.id) : () => getGlobalRoundScores(t.id),
     refetchInterval: 60_000,
@@ -1375,7 +1387,11 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
       </div>
 
       {toast && <LgToast key={toast.key} message={toast.msg} onDone={() => setToast(null)} />}
-      {comparing && cmp?.hidden ? (
+      {scoresLoading ? (
+        <div className="lt-progress-empty lt-loading" role="status" aria-label="Loading standings">
+          <span className="lt-spinner" />
+        </div>
+      ) : comparing && cmp?.hidden ? (
         <p className="lt-progress-empty">Picks are hidden until the draw locks.</p>
       ) : entries.length === 0 ? (
         <p className="lt-progress-empty">No picks submitted yet.</p>
