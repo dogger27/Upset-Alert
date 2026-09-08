@@ -604,8 +604,14 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'flex-start',
     backgroundColor: PICK.wrong.bg, zIndex: 2,
   },
+  /* AN EXPLICIT HEIGHT, TALLER THAN THE FILL. Without it Yoga measures the
+     text against the fill's own height (cap height plus two points), the
+     glyph frame comes out shorter than the line, and iOS clips the bottoms
+     of the letters at the fill's edge. The frame paints nothing, so a tall
+     one costs nothing; only the fill behind it is tight. */
   realWinnerText: {
     fontFamily: 'Archivo_700Bold', fontSize: NOTE_FONT, color: DANGER_STRONG,
+    height: NOTE_FONT * 1.4 * FONT_SCALE,
     marginTop: NOTE_TEXT_SHIFT * FONT_SCALE,
   },
 
