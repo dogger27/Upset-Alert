@@ -464,7 +464,8 @@ export function MatchGroup({ m, roundIdx, B, drawRanks, zone, onH2H, onPredictor
   const Wrap = openable ? Pressable : View
 
   return (
-    <Wrap style={s.outline} onPress={openable ? () => onShowScore(m) : undefined}>
+    <Wrap style={[s.outline, decided && !m.is_bye && s.outlineDone]}
+          onPress={openable ? () => onShowScore(m) : undefined}>
       {pill && (
         <View style={s.pillWrap} pointerEvents="none">
           <View style={[s.pill, pillTone]}>
@@ -508,6 +509,11 @@ const s = StyleSheet.create({
     borderWidth: 2, borderColor: N[300], borderRadius: 10, backgroundColor: N[150],
     paddingVertical: PAD, paddingHorizontal: PAD,
   },
+  /* A finished match wears a green edge, so a round reads as done/not-done
+     at a glance. The site's --brand-line-strong: green enough to be seen
+     against the grey outline, and clearly NOT the pick-correct green the
+     boxes inside use, which says something else. */
+  outlineDone: { borderColor: '#4a8f6c' },
   /* .in-progress-badge: centred on the outline's top border. top is measured
      from inside the border, so -1 puts the pill's centre on the border's own
      centre line. */
