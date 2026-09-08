@@ -16,7 +16,6 @@
 
 import { Link, Stack, useLocalSearchParams } from 'expo-router'
 import { StyleSheet, Text, View } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../../../auth'
 import { getLeague, getLeagueTournaments, getRoundScores } from '../../../../../api'
 import { useApi } from '../../../../../useApi'
@@ -77,7 +76,15 @@ export default function Standings() {
                   a second vocabulary for the same two numbers. */}
               <Text style={[s.rank, s.headText]} numberOfLines={1}>#</Text>
               <Text style={[s.who, s.headText]} numberOfLines={1}>Player</Text>
-              <Text style={[s.num, s.headText]} numberOfLines={1}>Right</Text>
+              {/* The site's header, exactly: correct picks out of the matches
+                  played so far — the count means nothing without its
+                  denominator. Shrinks to fit rather than cutting to "RIG…",
+                  which is what a fixed column did to "Right" at a larger
+                  text size. */}
+              <Text style={[s.right, s.headText]} numberOfLines={1}
+                    adjustsFontSizeToFit minimumFontScale={0.6}>
+                ✓ / {scores.data?.completed_matches_count ?? '–'}
+              </Text>
               {/* ONE HEADING OVER TWO COLUMNS: "Score", then "Curr." and
                   "Max" beneath it — where a bracket stands and the best it
                   can still finish on are one fact read two ways. The group
@@ -88,8 +95,10 @@ export default function Standings() {
               <View style={s.scoreHead}>
                 <Text style={[s.headText, s.scoreHeadTitle]} numberOfLines={1}>Score</Text>
                 <View style={s.scoreHeadRow}>
-                  <Text style={[s.num, s.headText]} numberOfLines={1}>Curr.</Text>
-                  <Text style={[s.num, s.headText]} numberOfLines={1}>Max</Text>
+                  <Text style={[s.num, s.headText]} numberOfLines={1}
+                        adjustsFontSizeToFit minimumFontScale={0.6}>Curr.</Text>
+                  <Text style={[s.num, s.headText]} numberOfLines={1}
+                        adjustsFontSizeToFit minimumFontScale={0.6}>Max</Text>
                 </View>
               </View>
             </View>
@@ -124,14 +133,10 @@ export default function Standings() {
                       <PlayerName name={e.full_name} style={s.real} />
                     ) : null}
                   </View>
-                  <Text style={s.num}>{e.correct_count}</Text>
+                  <Text style={s.right}>{e.correct_count}</Text>
                   <Text style={[s.num, s.total]}>{e.total}</Text>
                   <Text style={[s.num, s.max]}>{e.max_points != null ? Math.round(e.max_points) : '–'}</Text>
                 </Body>
-                  {/* The site puts a Draw History button on every row. */}
-                  <CardLink href={{ pathname: '/history', params: { user: e.user_id } }} style={s.hist} pressedOpacity={0.6}>
-                    <Ionicons name="time-outline" size={16} color={C.muted} />
-                  </CardLink>
                 </View>
               )
             })}
@@ -165,6 +170,10 @@ const s = StyleSheet.create({
   name: { color: C.ink, fontWeight: '600' },
   nameMine: { color: C.clay, fontWeight: '800' },
   real: { color: C.muted, fontSize: 12 },
+  /* The correct-picks column is wider than the score columns: its header is
+     "✓ / 120", the widest label on the row, and the room came from the
+     history button that used to end every row. */
+  right: { color: C.ink, width: 60, textAlign: 'right' },
   num: { color: C.ink, width: 46, textAlign: 'right' },
   // Two `num` cells and the row's gap: the same width the cells below take.
   scoreHead: { width: 46 * 2 + 8, alignItems: 'center', gap: 2 },
@@ -172,5 +181,4 @@ const s = StyleSheet.create({
   scoreHeadRow: { flexDirection: 'row', gap: 8 },
   total: { fontWeight: '800' },
   max: { color: C.muted, fontWeight: '600' },
-  hist: { paddingLeft: 6, paddingVertical: 4 },
 })
