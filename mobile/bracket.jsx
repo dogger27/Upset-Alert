@@ -609,13 +609,15 @@ const s = StyleSheet.create({
     borderColor: CHIP.line, backgroundColor: C.card,
     alignItems: 'center', justifyContent: 'center', transform: [{ rotate: '-90deg' }],
   },
-  /* The same nudge the real-winner note needed: iOS sets these caps ~1.6pt
-     below the centre of their line, which after the rotation reads as the
-     word crowding one END of the pill. Padding under the glyphs lifts them
-     by half of itself. */
+  /* A GEOMETRIC SHIFT, measured off the phone (2026-09-08). Inside the
+     rotated pill iOS draws the word ~2pt (at the phone's 1.3 text scale)
+     toward the pill's TOP end — the LEFT on screen — and padding on the
+     text did not move it at all, so the correction is a translate, which
+     nothing can ignore. +y here is the pill's own "down", which the -90°
+     rotation turns into screen right. */
   chipText: {
     fontFamily: 'Archivo_700Bold', fontSize: 12, letterSpacing: 0.25, color: CHIP.text,
-    paddingBottom: 3.3 * FONT_SCALE,
+    transform: [{ translateY: 1.6 * FONT_SCALE }],
   },
   // Undo the pill's rotation so the glyph stands upright.
   chipIcon: { transform: [{ rotate: '90deg' }] },
