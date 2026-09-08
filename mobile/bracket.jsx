@@ -85,8 +85,12 @@ const PICK_PX = 24        // room the 🤞 takes after a name
    phone's, not the table's. */
 const NOTE_FONT = 10
 const NOTE_CAP_H = 6.86            // 686/1000 at 10pt
-const NOTE_CAP_TOP = 3.7 * (NOTE_FONT / 11)   // calibrated at 11pt; scales with the type
 const NOTE_PAD = 1
+/* Where the text sits inside its fill, MEASURED OFF THE PHONE at 10pt
+   (2026-09-08): the caps landed ~2.9pt above the border the fill is centred
+   on, so the text is pushed down by that. The border is meant to pass
+   through the middle of the letters. */
+const NOTE_TEXT_SHIFT = 0.5
 const NOTE_BOX_H = (NOTE_CAP_H + 2 * NOTE_PAD) * FONT_SCALE
 /* How far the note stands up into the gap above the lower box (its top is
    4pt above the box's edge), plus a little air — what the gap's content
@@ -599,14 +603,14 @@ const s = StyleSheet.create({
      inside it, which is where the site's own note sits and clear of the
      badge, whose top is 7pt in. */
   realWinner: {
-    position: 'absolute', left: 7, top: -4.5 * FONT_SCALE,
+    position: 'absolute', left: 7, top: -NOTE_BOX_H / 2,
     height: NOTE_BOX_H, paddingHorizontal: 1.5 * FONT_SCALE, gap: 7,
     flexDirection: 'row', alignItems: 'flex-start',
     backgroundColor: PICK.wrong.bg, zIndex: 2,
   },
   realWinnerText: {
     fontFamily: 'Archivo_700Bold', fontSize: NOTE_FONT, color: DANGER_STRONG,
-    marginTop: -(NOTE_CAP_TOP - NOTE_PAD) * FONT_SCALE,
+    marginTop: NOTE_TEXT_SHIFT * FONT_SCALE,
   },
 
   gap: { height: leading(GAP_H) },
