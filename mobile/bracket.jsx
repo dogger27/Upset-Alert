@@ -515,7 +515,7 @@ const s = StyleSheet.create({
      step: a step small enough to keep the grey player boxes distinct from
      the fill was too small to see, and one big enough to see swallowed the
      boxes. The site's --match-done-fill, dark. The border is left alone. */
-  outlineDone: { backgroundColor: '#1f2e37' },
+  outlineDone: { backgroundColor: '#1e2d34' },   // the slate, pulled ~12% back toward n-100
   /* .in-progress-badge: centred on the outline's top border. top is measured
      from inside the border, so -1 puts the pill's centre on the border's own
      centre line. */
