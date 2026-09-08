@@ -25,6 +25,8 @@ import { scheduleOnUI } from 'react-native-worklets'
 import { shortRound } from './rounds'
 import { C, S, T } from './theme'
 
+const PILL_W = 40   // the pill's layout width; scaled to each label
+
 export function RoundStrip({ rounds, active, onPick, scrub }) {
   const activeIdx = rounds.findIndex(([n]) => n === active)
   // Without a scrub to follow (none is wired), the pill sits on the active round.
@@ -43,6 +45,11 @@ export function RoundStrip({ rounds, active, onPick, scrub }) {
     scheduleOnUI(() => { 'worklet'; frames.value = next })
   }, [frames])
 
+  /* BY TRANSFORM ONLY. A width is a layout prop, and a layout prop changing
+     every frame of a pull is a shadow-tree commit every frame — the whole
+     draw laid out again to move one pill. The pill is a fixed PILL_W wide
+     and scaled in X to the label under it; its border grows a hair with it,
+     which is invisible at these widths. */
   const pillStyle = useAnimatedStyle(() => {
     const f = frames.value
     const p = pos.value
@@ -52,7 +59,7 @@ export function RoundStrip({ rounds, active, onPick, scrub }) {
     const t = b ? p - lo : 0
     const x = b ? a.x + (b.x - a.x) * t : a.x
     const w = b ? a.w + (b.w - a.w) * t : a.w
-    return { opacity: 1, width: w, transform: [{ translateX: x }] }
+    return { opacity: 1, transform: [{ translateX: x + (w - PILL_W) / 2 }, { scaleX: w / PILL_W }] }
   })
 
   return (
@@ -132,7 +139,7 @@ const s = StyleSheet.create({
   // The pill: a filled, edged rounded rectangle the size of a label's frame,
   // behind whichever label pos says — the only bright thing here.
   pill: {
-    position: 'absolute', left: 0, top: 0, bottom: 0,
+    position: 'absolute', left: 0, top: 0, bottom: 0, width: PILL_W,
     borderRadius: 5, borderWidth: 1,
     backgroundColor: C.greenDeep, borderColor: C.greenLit,
   },
