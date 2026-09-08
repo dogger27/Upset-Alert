@@ -37,8 +37,8 @@
  * anchor was committing the whole tree each frame — silky at the final, a
  * shake by R128 (owner, 2026-09-08). The pull now holds the anchor by
  * TRANSLATING the content and scrolls once, on landing. The leaving round
- * fades under a flat veil, not by its own opacity, which would render the
- * column offscreen every frame. And the row window follows the scroll inside
+ * does not fade (a fade by the column's own opacity would render it
+ * offscreen every frame). And the row window follows the scroll inside
  * RoundScrubView alone, with memoised rows, so a scroll report re-renders
  * nothing that was already there; the row registry the reaction walks is a
  * shared value, never React state.
@@ -67,7 +67,6 @@ import { ScrubContext } from './scrubContext'
 import {
   anchorY, boxOffset, contentHeightAt, rowIndexAt, rowInWindow, rowShift, scrollLimitAt, settleTarget,
 } from './scrubGeometry'
-import { C } from './theme'
 
 /* Rows this far outside the viewport, in groups, are still driven: room for
    a frame of scroll and a row arriving at speed before it is seen. */
@@ -513,21 +512,14 @@ const Row = memo(function Row({ ri, i, m, renderRow, scrub }) {
 })
 
 /* A round's column, at its own place on the strip: index times the width,
-   whatever pos is doing — which is why a commit moves nothing. The round a
-   pull left from, leaving to the left, fades on its way out UNDER A VEIL: a
-   flat view in the page's colour whose opacity rises, which costs one layer,
-   where opacity on the column itself would render its whole tree offscreen
-   every frame. */
+   whatever pos is doing — which is why a commit moves nothing. NO FADE on
+   the way out, either way: a leaving round just goes, and its groups piling
+   onto one another as they condense is fine (owner, 2026-09-08). The site
+   fades its leaving column; the phone did, first by the column's opacity —
+   an offscreen render of the whole tree every frame — then under a flat
+   veil, and then not at all. */
 function Column({ ri, num, matches, window, scrub, renderRow, columnStyle }) {
-  const { pos, r0, width, rowHeight, onColumnLayout } = scrub
-  /* Only a round leaving to the LEFT fades — its groups are condensing onto
-     one another, and the fade is what keeps that from reading as a pile-up.
-     A round leaving to the right spreads, overlaps nothing, and just goes
-     (owner, 2026-09-08). */
-  const veil = useAnimatedStyle(() => {
-    const s = pos.value - ri
-    return { opacity: r0.value === ri && s > 0 ? Math.min(1, s) : 0 }
-  }, [ri])
+  const { width, rowHeight, onColumnLayout } = scrub
   const [lo, hi] = window
   return (
     <View style={[s.column, { left: ri * width, width }]}>
@@ -542,7 +534,6 @@ function Column({ ri, num, matches, window, scrub, renderRow, columnStyle }) {
           return <Row key={key} ri={ri} i={i} m={m} renderRow={renderRow} scrub={scrub} />
         })}
       </View>
-      <Animated.View style={[s.veil, veil]} pointerEvents="none" />
     </View>
   )
 }
@@ -634,10 +625,4 @@ const s = StyleSheet.create({
   scroller: { minHeight: 0, touchAction: 'pan-y' },
   strip: { width: '100%' },
   column: { position: 'absolute', top: 0 },
-  /* TWICE THE COLUMN'S HEIGHT. A round leaving to the right spreads to twice
-     its settled span, and rows below the finger slide out from under a veil
-     the size of the column at rest — its bottom edge crossed the boxes as a
-     dark band travelling up the screen (owner, 2026-09-08). A flat colour
-     costs nothing however tall. */
-  veil: { position: 'absolute', left: 0, right: 0, top: 0, bottom: '-100%', backgroundColor: C.bg },
 })
