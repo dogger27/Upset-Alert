@@ -19,6 +19,7 @@ from app.services.draw_changes import classify_change
 from app.services.rankings import assign_rankings
 from app.services.scraper import scrape_tournament, snap_to_monday
 from app.services.scoring import UserScore, _points_table, rank_users
+from app.services.scoring import potential_points
 from app.services.upsets import has_upset_pick
 
 router = APIRouter(prefix="/tournaments", tags=["tournaments"])
@@ -1077,6 +1078,8 @@ async def global_standings(tournament_id: int, db: AsyncSession = Depends(get_db
 
     scores: list[UserScore] = []
     has_upset_map: dict[int, bool] = {}
+    max_map: dict[int, float] = {}
+    position_by_entry = {e.id: e.bracket_position for e in all_entries}
     for user in users:
         preds_result = await db.execute(
             select(UserPrediction).where(
@@ -1101,12 +1104,15 @@ async def global_standings(tournament_id: int, db: AsyncSession = Depends(get_db
                 correct_by_round[m.round_number] = correct_by_round.get(m.round_number, 0) + 1
         scores.append(UserScore(user_id=user.id, total_points=total_pts, correct_count=correct,
                                 correct_by_round=correct_by_round))
+        max_map[user.id] = total_pts + potential_points(
+            pred_by_match, all_matches, position_by_entry, pts_table)
 
     ranked = rank_users(scores, tournament.num_rounds)
     user_map = {u.id: u for u in users}
     return [
         LeaderboardEntry(rank=i + 1, user=user_map[s.user_id], total_points=s.total_points,
-                         correct_count=s.correct_count, has_upset_pick=has_upset_map[s.user_id])
+                         correct_count=s.correct_count, max_points=max_map[s.user_id],
+                         has_upset_pick=has_upset_map[s.user_id])
         for i, s in enumerate(ranked)
     ]
 
@@ -1133,6 +1139,15 @@ async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get
         )
     )
     completed_matches = completed_matches_result.scalars().all()
+
+    # Every match and every line, for the best case still open to each
+    # bracket (potential_points): who is out, and which half each pick is in.
+    all_matches = (await db.execute(
+        select(Match).where(Match.draw_id == tournament_id))).scalars().all()
+    position_by_entry = {
+        e.id: e.bracket_position for e in
+        (await db.execute(select(DrawEntry).where(DrawEntry.draw_id == tournament_id))).scalars().all()
+    }
 
     # Anyone with at least one pick is competing — a partial bracket simply
     # scores nothing on the matches it left unpicked.
@@ -1176,6 +1191,8 @@ async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get
             "round_points": pts_list,
             "total": sum(pts_list),
             "correct_count": correct_count,
+            "max_points": sum(pts_list) + potential_points(
+                pred_by_match, all_matches, position_by_entry, pts_table),
         })
 
     entries.sort(key=lambda x: (-x["total"],) + tuple(-rp for rp in reversed(x["round_points"])))

@@ -51,6 +51,9 @@ class LeaderboardEntry(BaseModel):
     user: UserOut
     total_points: float
     correct_count: int
+    # The score this bracket ends on if every pick that can still come true
+    # does — total_points plus scoring.potential_points.
+    max_points: float = 0.0
     # Picking zero upsets is the only thing that disqualifies an entry; an
     # unfinished bracket still competes.
     has_upset_pick: bool = True

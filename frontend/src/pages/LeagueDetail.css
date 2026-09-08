@@ -642,7 +642,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 /* Completed/active view: bracket button, then draw-history button, in their own far-left columns */
 .lt-progress-row--abs,
 .lt-progress-header-row {
-  grid-template-columns: 28px 22px 22px var(--name-col-width, 120px) 3rem 52px 1fr;
+  grid-template-columns: 28px 22px 22px var(--name-col-width, 120px) 3rem 52px 2.6rem 1fr;
 }
 .lt-progress-row--abs {
   position: absolute; width: 100%;
@@ -769,6 +769,13 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 }
 
 .lt-progress-total { font-size: 0.8rem; color: var(--ink, var(--n-950)); font-weight: 700; text-align: center; white-space: nowrap; }
+/* The ceiling beside the score: quieter than the score, since it is a
+   possibility and the score is a fact, and never dropped at any width — it
+   is the one number that says whether the race is still on. */
+.lt-progress-max {
+  font-size: 0.8rem; font-weight: 600; color: var(--text-muted);
+  text-align: center; white-space: nowrap; font-variant-numeric: tabular-nums;
+}
 .lt-progress-col-header { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
 /* Ruled above and below, so the header reads as a band rather than as a first
    row that happens to hold labels. Both lines, not just the one underneath:
@@ -839,7 +846,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   .lt-bar-track { display: none; }
   .lt-progress-row--abs,
   .lt-progress-header-row {
-    grid-template-columns: 28px 22px 22px var(--name-col-width, 120px) 3rem 52px;
+    grid-template-columns: 28px 22px 22px var(--name-col-width, 120px) 3rem 52px 2.6rem;
   }
 }
 @container (max-width: 530px) {
@@ -871,7 +878,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   .lt-pos-num { font-size: 0.7rem; }
   .lt-progress-row--abs,
   .lt-progress-header-row {
-    grid-template-columns: 22px 22px 20px var(--name-col-width, 92px) 3rem 52px;
+    grid-template-columns: 22px 22px 20px var(--name-col-width, 92px) 3rem 52px 2.6rem;
   }
 }
 @container (max-width: 300px) {
@@ -882,7 +889,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   .lt-progress-correct { display: none; }
   .lt-progress-row--abs,
   .lt-progress-header-row {
-    grid-template-columns: var(--name-col-width, 92px) 52px;
+    grid-template-columns: var(--name-col-width, 92px) 52px 2.6rem;
   }
 }
 

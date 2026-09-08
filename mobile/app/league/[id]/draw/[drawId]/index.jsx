@@ -79,6 +79,10 @@ export default function Standings() {
               <Text style={[s.who, s.headText]} numberOfLines={1}>Player</Text>
               <Text style={[s.num, s.headText]} numberOfLines={1}>Right</Text>
               <Text style={[s.num, s.headText]} numberOfLines={1}>Pts</Text>
+              {/* The best this bracket can still finish on — every pick
+                  that can yet come true, paid out. Quieter than the score:
+                  a possibility beside a fact. */}
+              <Text style={[s.num, s.headText]} numberOfLines={1}>Max</Text>
             </View>
             {entries.map((e, i) => {
               const mine = me && e.user_id === me.id
@@ -113,6 +117,7 @@ export default function Standings() {
                   </View>
                   <Text style={s.num}>{e.correct_count}</Text>
                   <Text style={[s.num, s.total]}>{e.total}</Text>
+                  <Text style={[s.num, s.max]}>{e.max_points != null ? Math.round(e.max_points) : '–'}</Text>
                 </Body>
                   {/* The site puts a Draw History button on every row. */}
                   <CardLink href={{ pathname: '/history', params: { user: e.user_id } }} style={s.hist} pressedOpacity={0.6}>
@@ -151,7 +156,8 @@ const s = StyleSheet.create({
   name: { color: C.ink, fontWeight: '600' },
   nameMine: { color: C.clay, fontWeight: '800' },
   real: { color: C.muted, fontSize: 12 },
-  num: { color: C.ink, width: 62, textAlign: 'right' },
+  num: { color: C.ink, width: 46, textAlign: 'right' },
   total: { fontWeight: '800' },
+  max: { color: C.muted, fontWeight: '600' },
   hist: { paddingLeft: 6, paddingVertical: 4 },
 })
