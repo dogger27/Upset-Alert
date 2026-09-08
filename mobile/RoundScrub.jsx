@@ -53,7 +53,7 @@ const forwardIdx = idx => (idx - 0.5) / 2
 const backwardIdx = idx => idx * 2 + 0.5
 
 export function RoundScrub({ rounds, active, onCommit, renderRow, columnStyle,
-                             gestures = true }) {
+                             gestures = true, style = null }) {
   const cur = Math.max(0, rounds.findIndex(([n]) => n === active))
   const [dir, setDir] = useState(0)          // +1 pulling a later round in, -1 earlier, 0 idle
   const [width, setWidth] = useState(0)
@@ -210,7 +210,7 @@ export function RoundScrub({ rounds, active, onCommit, renderRow, columnStyle,
   return (
     <View
       ref={wrapRef}
-      style={s.wrap}
+      style={[s.wrap, style]}
       onLayout={e => {
         setWidth(e.nativeEvent.layout.width)
         wrapRef.current?.measureInWindow?.((_x, y) => { viewportTop.current = y })

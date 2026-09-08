@@ -181,6 +181,11 @@ export default function DrawScreen() {
         {rounds.length > 0 && (
           <RoundScrub
             gestures={false}
+            /* The strip runs to the screen's right edge — into the body's
+               padding — so a group's connector stub can run off the glass
+               rather than stopping at the column. The column pads the same
+               amount back, so the groups themselves do not move. */
+            style={s.scrub}
             rounds={rounds}
             active={shown ? shown[0] : active}
             onCommit={setPicked}
@@ -279,6 +284,7 @@ const s = StyleSheet.create({
      phone's larger text size (the point of the scale-down). */
   list: {
     gap: 14, paddingTop: S.md, paddingBottom: S.xxl,
-    paddingLeft: CHIP_OVERHANG, paddingRight: CONNECTOR_W,
+    paddingLeft: CHIP_OVERHANG, paddingRight: CONNECTOR_W + S.lg,
   },
+  scrub: { marginRight: -S.lg },
 })

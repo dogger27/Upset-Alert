@@ -80,8 +80,14 @@ const PILL_H = 15
    end to end on a phone with larger text. */
 const CHIP_W = 40
 const CHIP_H = 24         // the on-screen WIDTH of the rotated pill; 24 at the owner's ask
-const CONN_RUN = 12       // border → the vertical bar
-const CONN_STUB = 10      // the bar → off to the next round
+/* The feeder runs go PAST the H2H pill before the bar joins them — the pill
+   is centred on the border and reaches ~17pt beyond it at the phone's text
+   size, and a bar at 12 was hidden behind it. The stub then runs on to the
+   screen's edge: the column is padded only as far as the bar, and the
+   stub overflows into the strip's extra width (the screen padding the draw
+   reclaims for it) until the glass cuts it. */
+const CONN_RUN = 24       // border → the vertical bar, clear of the pill
+const CONN_STUB = 120     // the bar → off the edge of the screen
 const BELL_CORNER = 42    // .cv-eta--bell / .cv-live-score--bell: right: 42px
 const NAME_FONT = 12      // the site's 0.8rem, a point down with the box
 const NAME_FAMILY = 'Archivo_700Bold'
@@ -103,7 +109,7 @@ const NOTE_BOX_H = (NOTE_CAP_H + 2 * NOTE_PAD) * FONT_SCALE
    gives up when there is a note. */
 const NOTE_RISE = 3 * FONT_SCALE     // 6 sat the text hard under the upper box (owner, 2026-09-08)
 const TICK_PX = 22        // and the winner's ✓, with its leading space
-export const CONNECTOR_W = 2 + CONN_RUN + CONN_STUB   // beyond the outline's outer edge
+export const CONNECTOR_W = 2 + CONN_RUN + 3   // room reserved beyond the outline: up to the bar
 /* How far the chips poke past the outline's outer edge — SCALED, because the
    chip's short side is leading(18): on a phone with larger text the pill is
    ~23pt across, and a fixed 8 here had RoundScrub's clip slicing its left
