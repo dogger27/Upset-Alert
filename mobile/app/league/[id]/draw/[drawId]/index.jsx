@@ -15,7 +15,8 @@
  */
 
 import { Link, Stack, useLocalSearchParams } from 'expo-router'
-import { StyleSheet, Text, View } from 'react-native'
+import { useState } from 'react'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '../../../../../auth'
 import { getLeague, getLeagueTournaments, getRoundScores } from '../../../../../api'
 import { useApi } from '../../../../../useApi'
@@ -36,6 +37,23 @@ export default function Standings() {
   const t = draws.data?.find(x => String(x.tournament?.id) === String(drawId))?.tournament
   const entries = scores.data?.entries || []
   const ranks = competitionRanks(entries)
+  /* WHICH NUMBER THE ROWS ARE SORTED BY: the score (the standings, and the
+     default), the correct count, or the ceiling. A person's RANK never
+     changes with it — it is stamped off the standings order here, and
+     travels with the row — so sorting by Max reads as "who can still win
+     this" with everyone's real standing still beside their name. Ties keep
+     the standings order. */
+  const [sortKey, setSortKey] = useState('total')
+  const rankOf = new Map(entries.map((e, i) => [e.user_id, ranks[i]]))
+  const order = new Map(entries.map((e, i) => [e.user_id, i]))
+  const rows = sortKey === 'total' ? entries : [...entries].sort((a, b) =>
+    ((b[sortKey] ?? 0) - (a[sortKey] ?? 0)) || (order.get(a.user_id) - order.get(b.user_id)))
+  const sortHead = (key, label, style, extra) => (
+    <Pressable onPress={() => setSortKey(key)} hitSlop={8} accessibilityRole="button"
+               accessibilityState={{ selected: sortKey === key }} accessibilityLabel={`Sort by ${label}`}>
+      <Text style={[style, s.headText, sortKey === key && s.headOn]} numberOfLines={1} {...extra}>{label}</Text>
+    </Pressable>
+  )
   const showReal = !!league.data?.show_real_name
 
   return (
@@ -81,10 +99,8 @@ export default function Standings() {
                   denominator. Shrinks to fit rather than cutting to "RIG…",
                   which is what a fixed column did to "Right" at a larger
                   text size. */}
-              <Text style={[s.right, s.headText]} numberOfLines={1}
-                    adjustsFontSizeToFit minimumFontScale={0.6}>
-                ✓ / {scores.data?.completed_matches_count ?? '–'}
-              </Text>
+              {sortHead('correct_count', `✓ / ${scores.data?.completed_matches_count ?? '–'}`, s.right,
+                        { adjustsFontSizeToFit: true, minimumFontScale: 0.6 })}
               {/* ONE HEADING OVER TWO COLUMNS: "Score", then "Curr." and
                   "Max" beneath it — where a bracket stands and the best it
                   can still finish on are one fact read two ways. The group
@@ -96,14 +112,12 @@ export default function Standings() {
                 <Text style={[s.headText, s.scoreHeadTitle]} numberOfLines={1}
                       adjustsFontSizeToFit minimumFontScale={0.6}>Score (pts)</Text>
                 <View style={s.scoreHeadRow}>
-                  <Text style={[s.num, s.headText]} numberOfLines={1}
-                        adjustsFontSizeToFit minimumFontScale={0.6}>Curr.</Text>
-                  <Text style={[s.num, s.headText]} numberOfLines={1}
-                        adjustsFontSizeToFit minimumFontScale={0.6}>Max</Text>
+                  {sortHead('total', 'Curr.', s.num, { adjustsFontSizeToFit: true, minimumFontScale: 0.6 })}
+                  {sortHead('max_points', 'Max', s.num, { adjustsFontSizeToFit: true, minimumFontScale: 0.6 })}
                 </View>
               </View>
             </View>
-            {entries.map((e, i) => {
+            {rows.map((e, i) => {
               const mine = me && e.user_id === me.id
               /* THE ROW IS A DOOR TO THEIR BRACKET — the site's sidebar click:
                  once the draw is active or finished, a member's row opens the
@@ -124,9 +138,9 @@ export default function Standings() {
                       podium mid-tournament would be a prediction. Ties share
                       a place, so two 1sts both get the trophy. */}
                   <Text style={s.rank}>
-                    {t?.status === 'completed' && ranks[i] <= 3
-                      ? ['🏆', '🥈', '🥉'][ranks[i] - 1]
-                      : ranks[i]}
+                    {t?.status === 'completed' && rankOf.get(e.user_id) <= 3
+                      ? ['🏆', '🥈', '🥉'][rankOf.get(e.user_id) - 1]
+                      : rankOf.get(e.user_id)}
                   </Text>
                   <View style={s.who}>
                     <PlayerName name={e.username} shrinkOnly style={[s.name, mine && s.nameMine]} />
@@ -162,6 +176,8 @@ const s = StyleSheet.create({
   },
   head: { backgroundColor: C.raised, paddingVertical: 8 },
   headText: { color: C.muted, fontSize: 12, fontWeight: '700', textTransform: 'uppercase' },
+  // The header the rows are sorted by.
+  headOn: { color: C.greenBright, textDecorationLine: 'underline' },
   alt: { backgroundColor: '#14201c' },
   mine: { backgroundColor: '#1d3329' },
   /* The place is the headline of a standings table; it used to be the dimmest
