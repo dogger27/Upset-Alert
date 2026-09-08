@@ -505,7 +505,10 @@ const s = StyleSheet.create({
     height: leading(PILL_H), borderRadius: 999, borderWidth: 1,
     paddingHorizontal: 8, justifyContent: 'center',
   },
-  pillText: { fontFamily: 'Archivo_700Bold', fontSize: 9.5, lineHeight: leading(12), letterSpacing: 0.8 },
+  /* NO lineHeight ON ANY SINGLE-LINE TEXT IN THIS FILE — see the note on
+     realWinnerText below. Every one of these sits in a container that
+     centres it, and on iOS a lineHeight only ever sinks the glyphs. */
+  pillText: { fontFamily: 'Archivo_700Bold', fontSize: 9.5, letterSpacing: 0.8 },
   pillScheduled: { backgroundColor: ETA.bg, borderColor: ETA.text },
   pillLive: { backgroundColor: LIVE.bg, borderColor: LIVE.line },
   pillSuspended: { backgroundColor: STOP.bg, borderColor: STOP.text },
@@ -523,11 +526,11 @@ const s = StyleSheet.create({
   // .cv-scroll--compact .cv-badges { margin-right: 6px }
   badge: { marginRight: 6 },
   nameSlot: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 4 },
-  name: { fontFamily: NAME_FAMILY, fontSize: NAME_FONT, lineHeight: leading(17), color: N[950], flexShrink: 1 },
+  name: { fontFamily: NAME_FAMILY, fontSize: NAME_FONT, color: N[950], flexShrink: 1 },
   nameMuted: { fontFamily: 'Archivo_500Medium', fontStyle: 'italic', color: C.muted },
-  pick: { fontSize: 14, lineHeight: leading(18) },
+  pick: { fontSize: 14 },
   // The winner's tick, in the pick-correct green the box already uses.
-  tick: { fontFamily: 'Archivo_700Bold', fontSize: 14, lineHeight: leading(18), color: PICK.correct.border },
+  tick: { fontFamily: 'Archivo_700Bold', fontSize: 14, color: PICK.correct.border },
   noteTick: { color: PICK.correct.border },
   /* .cv-real-winner: 11px, centred on the box's top border, the wrong fill
      behind it. */
@@ -555,18 +558,18 @@ const s = StyleSheet.create({
   },
   gapLineBell: { right: BELL_CORNER },
   // .cv-eta--roomy: bold, eta-text, tabular.
-  eta: { fontFamily: 'Archivo_700Bold', fontSize: 15, lineHeight: leading(19), color: ETA.text, fontVariant: ['tabular-nums'] },
+  eta: { fontFamily: 'Archivo_700Bold', fontSize: 15, color: ETA.text, fontVariant: ['tabular-nums'] },
   // .cv-live-score: 1.05rem 700 --info.
-  live: { fontFamily: 'Archivo_700Bold', fontSize: 17, lineHeight: leading(21), color: LIVE.text, fontVariant: ['tabular-nums'] },
+  live: { fontFamily: 'Archivo_700Bold', fontSize: 17, color: LIVE.text, fontVariant: ['tabular-nums'] },
   liveStopped: { color: STOP.text },
   // .cv-score: 0.92rem 600 text-muted.
-  finalScore: { fontFamily: 'Archivo_700Bold', fontSize: 15, lineHeight: leading(19), color: C.muted, fontVariant: ['tabular-nums'] },
+  finalScore: { fontFamily: 'Archivo_700Bold', fontSize: 15, color: C.muted, fontVariant: ['tabular-nums'] },
   point: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5, backgroundColor: POINT.bg },
   pointTb: { backgroundColor: POINT_TB.bg },
-  pointText: { fontFamily: 'Archivo_700Bold', fontSize: 15, lineHeight: leading(19), color: POINT.fg, fontVariant: ['tabular-nums'] },
+  pointText: { fontFamily: 'Archivo_700Bold', fontSize: 15, color: POINT.fg, fontVariant: ['tabular-nums'] },
   pointTbText: { color: POINT_TB.fg },
   /* .cv-bell: 1.5rem, in the gap's right corner, free to overlap the boxes. */
-  bell: { position: 'absolute', right: 8, fontSize: 22, lineHeight: leading(26), zIndex: 3 },
+  bell: { position: 'absolute', right: 8, fontSize: 22, zIndex: 3 },
 
   /* .cv-h2h / .cv-group: 34×18 turned -90°, 1px green-500 on the card fill,
      centred on the outline's border at the pair's midpoint. */
@@ -576,7 +579,7 @@ const s = StyleSheet.create({
     borderColor: CHIP.line, backgroundColor: C.card,
     alignItems: 'center', justifyContent: 'center', transform: [{ rotate: '-90deg' }],
   },
-  chipText: { fontFamily: 'Archivo_700Bold', fontSize: 12, lineHeight: leading(15), letterSpacing: 0.25, color: CHIP.text },
+  chipText: { fontFamily: 'Archivo_700Bold', fontSize: 12, letterSpacing: 0.25, color: CHIP.text },
   // Undo the pill's rotation so the glyph stands upright.
   chipIcon: { transform: [{ rotate: '90deg' }] },
 
