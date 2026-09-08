@@ -715,7 +715,7 @@ async def match_score_history(
     # double fault is about 8% of points and nothing else can be said about an
     # individual point (see services/sofascore_points.py). Fetched on demand,
     # one request per MATCH, and never allowed to fail the score history.
-    from app.services.sofascore_points import labels_for
+    from app.services.sofascore_points import labels_for, labels_pending
     for _snap, _label in zip(
             snapshots,
             await labels_for(snapshots, match.sofa_event_id,
@@ -740,6 +740,10 @@ async def match_score_history(
         # counts up from here. Wall-clock by nature: what a viewer means by
         # "how long has this been going" includes the rain.
         "started_at": match.started_at or match.sofa_started_at,
+        # The point labels' fetch outran the wait above and is still running:
+        # the client asks again shortly, so a finished match's first open is
+        # not the one open that never shows an ace.
+        "labels_pending": labels_pending(match.sofa_event_id),
         # Through compact_round, not a fourth spelling of the same idea — see
         # the note at the top of services/rounds.py.
         "round_label": compact_round(draw.round_name(match.round_number))

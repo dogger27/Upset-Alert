@@ -17,7 +17,7 @@
  * Modal skeleton follows PredictorsPopup; the slider follows LeagueDetail's
  * timeline scrubber, including its "fully right = null = live" convention.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getMatchScoreHistory, getMatchStatistics } from '../api/tournaments'
@@ -34,6 +34,13 @@ import './ScoreHistoryPopup.css'
    two surfaces cannot drift. A schedule row without a mapped bracket match
    (doubles — their draws have no rows in `matches`) still opens: it shows
    the live/final card with no slider, because there is no history to scrub. */
+/* Desktop's ceiling on the scale — the largest the popup ever gets, on a
+   monitor with room to spare. Below the width gate the CSS applies no
+   transform and the measurement in the popup never runs. Both numbers are
+   the CSS's; keep them in step with the @media block there. */
+const DESKTOP_SCALE_MAX = 2.35
+const DESKTOP_MIN_WIDTH = 900
+
 export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
   const histDrawId = entry ? entry.draw_id : drawId
   const histMatchId = entry ? entry.match_id : match?.id
@@ -62,11 +69,53 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
        ace that was just hit to appear — the draw page's own nudges do not
        carry this key. Only while the popup is open, and only for a match that
        has no winner yet, so it stops by itself. */
-    refetchInterval: maybeLive ? 10_000 : false,
+    refetchInterval: (q) => (maybeLive ? 10_000
+      /* A FINISHED match is asked once — unless the server says the labels'
+         fetch was still running when it answered (labels_pending). Then a
+         couple of seconds, until it is not: without this the first open of a
+         finished match showed no ace at all, and the second showed them all. */
+      : (q.state.data?.labels_pending ? 2_000 : false)),
   })
 
   // null = fully right = follow live / show final. An index otherwise.
   const [pos, setPos] = useState(null)
+
+  /* HOW BIG, ON DESKTOP. Wide screens scale the popup up (see the CSS), and
+     a fixed factor was sized for a popup without the stats panel: with it,
+     the scaled box overran the top of the screen — unreachably, since a
+     transform adds nothing to scroll. So the factor is MEASURED: the popup's
+     laid-out height (transforms leave layout metrics alone, so this never
+     feeds back on itself) against the room the backdrop leaves, capped at the
+     old ceiling. It only ratchets DOWN while open — switching to a taller tab
+     shrinks the box once rather than pumping it on every switch — and a
+     window resize starts over. A layout effect, so the first frame painted is
+     already the right size. */
+  const popupRef = useRef(null)
+  const [scale, setScale] = useState(null)
+  useLayoutEffect(() => {
+    const el = popupRef.current
+    if (!el || !window.matchMedia?.(`(min-width: ${DESKTOP_MIN_WIDTH}px)`).matches) return undefined
+    let floor = Infinity
+    const fit = () => {
+      const back = el.parentElement
+      if (!back) return
+      const bs = getComputedStyle(back), ps = getComputedStyle(el)
+      const px = v => parseFloat(v) || 0
+      const roomH = back.clientHeight - px(bs.paddingTop) - px(bs.paddingBottom)
+        - px(ps.marginTop) - px(ps.marginBottom)
+      const roomW = back.clientWidth - px(bs.paddingLeft) - px(bs.paddingRight)
+      const h = el.offsetHeight, w = el.offsetWidth
+      if (!(h > 0) || !(w > 0)) return
+      floor = Math.min(floor, DESKTOP_SCALE_MAX, roomH / h, roomW / w)
+      setScale(Math.max(1, Math.floor(floor * 100) / 100))
+    }
+    const reset = () => { floor = Infinity; fit() }
+    fit()
+    const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(fit) : null
+    ro?.observe(el)
+    window.addEventListener('resize', reset)
+    return () => { ro?.disconnect(); window.removeEventListener('resize', reset) }
+  }, [histMatchId, entry?.id])
 
 
 
@@ -262,7 +311,9 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
 
   return createPortal(
     <div className="shp-backdrop" onClick={onClose}>
-      <div className="shp-popup" onClick={e2 => e2.stopPropagation()} role="dialog" aria-modal="true">
+      <div className="shp-popup" ref={popupRef}
+           style={scale != null ? { '--shp-scale': scale } : undefined}
+           onClick={e2 => e2.stopPropagation()} role="dialog" aria-modal="true">
         <div className="shp-header">
           {/* Round first — it is the one fact about a match that never
               changes while the sheet is open, so it anchors the row. */}

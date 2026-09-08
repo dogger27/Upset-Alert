@@ -49,6 +49,7 @@ successful poll so a watchdog can alarm on staleness rather than on exceptions.
 
 import asyncio
 import time
+import json
 import logging
 from datetime import datetime, timezone
 from typing import Optional
@@ -200,16 +201,47 @@ def _sets_and_tiebreak(home: dict, away: dict) -> tuple[list, bool, bool]:
     if current_tb and sets:
         a, b = sets[-1]
         try:
-            at_six_all = int(a) == 6 and int(b) == 6
+            games = {int(a), int(b)}
+            # 6-6: a set tiebreak being played. 7-6 either way: a set tiebreak
+            # just DECIDED — Sofascore leaves periodNTieBreak on the finished
+            # set until the next one opens (for good, when it was the last),
+            # and the period now names who won it. Read as a match tiebreak,
+            # that popped the set: a 7-6(8) decider left the stored history
+            # ending two sets in, on a snapshot claiming a match tiebreak at
+            # 0-0. A doubles match tiebreak passing 7-6 reads as this for one
+            # point, which is the smaller error by far.
+            set_tb = games == {6} or games == {6, 7}
         except (TypeError, ValueError):
             # Unreadable rather than not-6-6. Leaving the set in place is the
             # behaviour that predates this, and a wrong SET is a smaller error
             # than dropping a real one.
-            at_six_all = True
-        if not at_six_all:
+            set_tb = True
+        if not set_tb:
             match_tb = True
             sets.pop()
     return sets, current_tb, match_tb
+
+
+def _lost_a_set(before: dict, after: dict) -> bool:
+    """Fewer set columns than the state we hold — see the hold in the poll loop."""
+    return len(after.get("sets") or []) < len(before.get("sets") or [])
+
+
+# match id -> the shrunk state held back once, as a canonical string. Process
+# memory like the rest of this module's per-match state: a restart forgets it
+# and the next read is simply judged afresh.
+_HELD: dict = {}
+
+
+def _hold_once(match_id: int, after: dict) -> bool:
+    """True the FIRST time this exact shrunk state is seen for the match — hold
+    it back — and False when it comes straight back, which is a correction."""
+    key = json.dumps(after, sort_keys=True, default=str)
+    if _HELD.get(match_id) == key:
+        _HELD.pop(match_id, None)
+        return False
+    _HELD[match_id] = key
+    return True
 
 
 def _serving(first_to_serve: Optional[int], sets: list) -> Optional[int]:
@@ -560,6 +592,18 @@ async def poll_once(db) -> dict:
         prev_at = before.pop("at", None)
         after = dict(snap)
         after.pop("at", None)
+        # A READ THAT LOSES A SET IS STALE, NOT A CORRECTION. About one live
+        # read in five comes off a cache node holding an older copy of the
+        # match (measured on the statistics feed; fifteen times across the two
+        # US Open draws on this one). At a set boundary that is the previous
+        # set's last game, ten seconds after the set was over — and writing it
+        # through sent the site's score back a set for one poll and banked a
+        # snapshot the history then had to explain away. Held for ONE read: a
+        # shrink that comes back identical on the next poll is Sofascore's own
+        # correction, and goes through.
+        if _lost_a_set(before, after) and _hold_once(match.id, after):
+            continue
+        _HELD.pop(match.id, None)
         if before != after or _older_than(prev_at, FRESH_SECONDS / 2):
             match.sofa_live_json = snap
             written += 1

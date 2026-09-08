@@ -37,6 +37,10 @@ _CACHE_MAX = 256
 # Sofascore row; `pair` names a second row supplying the denominator when the
 # figure is a bare count that only means something against a total.
 SERVE = [
+    # Bare counts, and safe while the match is on: neither depends on the
+    # first/second serve split that _split_is_impossible guards.
+    ("Aces",                     "Service", "Aces",                None),
+    ("Double faults",            "Service", "Double faults",       None),
     ("First serve %",            "Service", "First serve",         None),
     ("First serve points won",   "Service", "First serve points",  None),
     ("Second serve points won",  "Service", "Second serve points", None),
