@@ -66,7 +66,8 @@ export default function GlobalStandings() {
                   that can yet come true, paid out. Quieter than the score,
                   a possibility beside a fact. */}
               <View style={s.scoreHead}>
-                <Text style={[s.headText, s.scoreHeadTitle]} numberOfLines={1}>Score</Text>
+                <Text style={[s.headText, s.scoreHeadTitle]} numberOfLines={1}
+                      adjustsFontSizeToFit minimumFontScale={0.6}>Score (pts)</Text>
                 <View style={s.scoreHeadRow}>
                   <Text style={[s.num, s.headText]} numberOfLines={1}
                         adjustsFontSizeToFit minimumFontScale={0.6}>Curr.</Text>
