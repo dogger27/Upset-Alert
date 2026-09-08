@@ -504,16 +504,16 @@ export function MatchGroup({ m, roundIdx, B, drawRanks, zone, onH2H, onPredictor
 }
 
 const s = StyleSheet.create({
-  /* .cv-match-outline: 2px n-300, radius 10, n-150 fill. */
+  /* .cv-match-outline: 2px n-300, radius 10. n-100 while the match is still
+     to play — a step above the page, and a step below a finished one. */
   outline: {
-    borderWidth: 2, borderColor: N[300], borderRadius: 10, backgroundColor: N[150],
+    borderWidth: 2, borderColor: N[300], borderRadius: 10, backgroundColor: N[100],
     paddingVertical: PAD, paddingHorizontal: PAD,
   },
-  /* A finished match is a step DIMMER inside (the site's n-50), so a round
-     reads as done / still-to-play at a glance: what is over recedes. The
-     border is left alone — a coloured edge read as a third signal beside
-     the pick colours in the boxes. */
-  outlineDone: { backgroundColor: '#131e1a' },
+  /* A finished match is a step LIGHTER inside (n-150), so a round reads as
+     done / still-to-play at a glance. Lighter, not dimmer: dimmed, the
+     finished ones sank into the page. The border is left alone. */
+  outlineDone: { backgroundColor: N[150] },
   /* .in-progress-badge: centred on the outline's top border. top is measured
      from inside the border, so -1 puts the pill's centre on the border's own
      centre line. */

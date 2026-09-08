@@ -287,11 +287,13 @@
   --atp-line-strong: #60a5fa;
   --atp-text-strong: var(--atp-700);
   --brand-line-strong: var(--green-800);
-  /* A finished match's fill on the draw: a step DIMMER than the outline's
-     usual fill, so what is over recedes and what is still to play stands
-     forward. The border stays the default — a coloured edge (green, then
-     teal) read as a third signal beside the pick colours inside. */
-  --match-done-fill: var(--n-200);
+  /* The draw's match outline fills. A match still to play sits a step
+     DARKER than a finished one — clear of the page background, but the
+     finished match is the one that is lit. The border stays the default:
+     a coloured edge (green, then teal) read as a third signal beside the
+     pick colours inside. */
+  --match-fill: var(--n-150);
+  --match-done-fill: var(--n-50);
   --gold-ink: #b8860b;
 
   --success-tint: #f0fdf4;
@@ -486,7 +488,8 @@
   --atp-line-strong: #5a86c9;
   --atp-text-strong: #a8c8ff;
   --brand-line-strong: #4a8f6c;
-  --match-done-fill: var(--n-50);
+  --match-fill: var(--n-100);
+  --match-done-fill: var(--n-150);
   --gold-ink: #e0b34a;
 
   --success-tint: #16301f;

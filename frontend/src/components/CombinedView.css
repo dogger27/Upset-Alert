@@ -87,7 +87,7 @@
   right: -8px;
   border: 2px solid var(--n-300);
   border-radius: 10px;
-  background: var(--n-150);
+  background: var(--match-fill);
   pointer-events: none;
   z-index: 0;
 }
@@ -95,12 +95,12 @@
   border-color: var(--danger);
   box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.15);
 }
-/* A finished match is a step DIMMER inside, so a round reads as done /
-   still-to-play at a glance: what is over recedes, what is coming stands
-   forward. The border is left alone — a coloured edge (green, then teal)
-   read as a third signal beside the pick colours in the boxes. Placed
-   after --missing so a decided match never keeps the red "needs a pick"
-   glow: there is nothing left to pick there. */
+/* A finished match is a step LIGHTER inside, so a round reads as done /
+   still-to-play at a glance. Lighter, not dimmer: dimmed, the finished
+   ones sank into the page and the whole column read as gaps. The border
+   is left alone — a coloured edge (green, then teal) read as a third
+   signal beside the pick colours in the boxes. Placed after --missing so a
+   decided match never keeps the red "needs a pick" glow. */
 .cv-match-outline--done {
   background: var(--match-done-fill);
   box-shadow: none;
