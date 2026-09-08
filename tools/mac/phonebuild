@@ -14,6 +14,9 @@ export PATH=/opt/homebrew/bin:/usr/local/bin:$PATH
 export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 PHONE_UDID="${PHONE_UDID:-00008140-000C0DC41A88801C}"
 cd ~/Projects/TennisFantasyLeague/mobile
+# prebuild rewrites package.json's ios/android scripts in place; left there, the
+# next pull that touches package.json (a new native module) refuses to run.
+git checkout -q -- package.json 2>/dev/null || true
 echo "▶ git pull"
 git pull
 if [ "$1" != "quick" ]; then
