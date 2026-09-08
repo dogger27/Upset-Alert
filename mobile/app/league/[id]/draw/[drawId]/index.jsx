@@ -174,7 +174,11 @@ const s = StyleSheet.create({
   /* The correct-picks column is wider than the score columns: its header is
      "✓ / 120", the widest label on the row, and the room came from the
      history button that used to end every row. */
-  right: { color: C.ink, width: 60, textAlign: 'right' },
+  /* Centred, not right-aligned, the site's own reasoning: the header
+     "✓ / 120" nearly fills the cell while a count is two digits, so
+     right-aligning both hung the numbers under the "120" instead of under
+     the label. Centring is what sits a narrow cell beneath a wide one. */
+  right: { color: C.ink, width: 60, textAlign: 'center' },
   num: { color: C.ink, width: 46, textAlign: 'right' },
   // Two `num` cells and the row's gap: the same width the cells below take.
   scoreHead: { width: 46 * 2 + 8, alignItems: 'center', gap: 2 },
