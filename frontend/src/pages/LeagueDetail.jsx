@@ -1597,7 +1597,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                 </span>
                 {/* The unit is in the heading, once, not on every row. */}
                 <span className={`lt-progress-total${colSort === 'total' ? ' lt-col-on' : ''}`}>{entry.total}</span>
-                <span className={`lt-progress-max${colSort === 'max' ? ' lt-col-on' : ''}`
+                <span className={`lt-progress-max${colSort === 'max' ? ' lt-col-on' : ''}`}
                       title={entry.max_points != null
                         ? `Could still finish on ${Math.round(entry.max_points)} pts` : undefined}>
                   {entry.max_points != null ? Math.round(entry.max_points) : '–'}
