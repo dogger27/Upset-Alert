@@ -1435,15 +1435,24 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                   title={`Correct picks, of ${effectiveScrubPos} match${effectiveScrubPos !== 1 ? 'es' : ''} counted`}>
               ✓<span className="lt-progress-correct-of"> / {effectiveScrubPos}</span>
             </span>
-            <span className="lt-progress-total lt-progress-col-header">Score</span>
-            {/* The best this bracket can still finish on: every pick that can
-                yet come true, paid out. It is what makes a gap readable —
-                20 behind with 30 still to play for is a race, 20 behind with
-                4 is not. Frozen while scrubbing, since a replay has no
-                future. */}
-            <span className="lt-progress-max lt-progress-col-header"
-                  title="Best possible final score, if every pick still alive comes true">
-              Max
+            {/* ONE HEADING OVER TWO COLUMNS: "Score", then "Curr." and "Max"
+                beneath it. The two numbers are one fact read two ways — where
+                a bracket stands and the best it can still finish on — so they
+                share a title rather than sitting as two unrelated columns.
+                A subgrid, so the sub-labels ride the SAME tracks as the cells
+                under them at every width tier without repeating the widths.
+                Max: every pick that can yet come true, paid out. It is what
+                makes a gap readable — 20 behind with 30 still to play for is
+                a race, 20 behind with 4 is not. Frozen while scrubbing, since
+                a replay has no future. */}
+            <span className="lt-score-head">
+              <span className="lt-score-head-title lt-progress-col-header">Score</span>
+              <span className="lt-progress-total lt-progress-col-header lt-score-head-sub"
+                    title="Points scored so far">Curr.</span>
+              <span className="lt-progress-max lt-progress-col-header lt-score-head-sub"
+                    title="Best possible final score, if every pick still alive comes true">
+                Max
+              </span>
             </span>
             {comparing ? (
               /* The same column, two lines: the round that owns a group, and
