@@ -312,11 +312,15 @@ function PlayerBox({ box, serving, picked, won, noteWon, drawRanks, B }) {
       </View>
       {/* Painted after the box so it sits on the border; its fill masks the
           border segment under the letters, as the site's does. */}
+      {/* A row, not one Text with a nested span: a leading space inside a
+          nested Text is at the platform's mercy, and the tick sat hard
+          against the name on the phone. The gap here is the same air the
+          box's own tick gets. */}
       {box.realName && (
-        <Text style={s.realWinner} numberOfLines={1}>
-          {box.realName.toUpperCase()}
-          {noteWon && <Text style={s.noteTick} accessibilityLabel="Won"> ✓</Text>}
-        </Text>
+        <View style={s.realWinner}>
+          <Text style={s.realWinnerText} numberOfLines={1}>{box.realName.toUpperCase()}</Text>
+          {noteWon && <Text style={[s.realWinnerText, s.noteTick]} accessibilityLabel="Won">✓</Text>}
+        </View>
       )}
     </View>
   )
@@ -529,9 +533,12 @@ const s = StyleSheet.create({
      behind it. */
   realWinner: {
     position: 'absolute', left: 7, top: -(leading(13) / 2),
-    height: leading(13), lineHeight: leading(13), paddingHorizontal: 2,
-    fontFamily: 'Archivo_700Bold', fontSize: 11, color: DANGER_STRONG,
+    height: leading(13), paddingHorizontal: 2, gap: 7,
+    flexDirection: 'row', alignItems: 'center',
     backgroundColor: PICK.wrong.bg, zIndex: 2,
+  },
+  realWinnerText: {
+    fontFamily: 'Archivo_700Bold', fontSize: 11, lineHeight: leading(13), color: DANGER_STRONG,
   },
 
   gap: { height: leading(GAP_H), justifyContent: 'center' },
