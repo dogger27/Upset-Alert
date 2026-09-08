@@ -15,9 +15,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams } from 'expo-router'
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Alert, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 import { getScheduleDates, getScheduleDay, listTournaments } from '../../api'
 import { useAuth } from '../../auth'
+import { ChampionFanfare, TierFx } from '../../fx'
+import { FX_MS, arrivalTier, scoreMarks, useScoreEvent } from '../../scoreFx'
 import { H2HSheet } from '../../h2h'
 import { PredictorsSheet } from '../../predictors'
 import { isAvailable as lockScreenAvailable } from '../../modules/live-activity'
@@ -206,6 +208,17 @@ export default function ScheduleScreen() {
   const refetch = () => { day.refetch(); dates.refetch() }
   const liveCount = all.filter(isLive).length
 
+  /* A champion is a whole-screen event, so the row reports up and the
+     fanfare covers the screen from here — the site's ChampionFanfare. It
+     lives as long as the row's own tier does. */
+  const [champion, setChampion] = useState(null)
+  useEffect(() => {
+    if (!champion) return
+    const t = setTimeout(() => setChampion(null), FX_MS.champion)
+    return () => clearTimeout(t)
+  }, [champion])
+  const { width: screenW } = useWindowDimensions()
+
   return (
     <>
       <Screen onRefresh={refetch}>
@@ -314,10 +327,11 @@ export default function ScheduleScreen() {
         {groups.map(([court, list]) => (
           <View key={court || 'all'} style={s.group}>
             {court ? <Eyebrow>{court}</Eyebrow> : null}
-            {list.map(e => <EntryRow venueMode={venueMode} venueTz={venueTzOf(e)} onH2H={setH2H} onHistory={setHist} onPredictors={setPredictors} key={e.id} e={e} inCourt={view === 'court'} />)}
+            {list.map(e => <EntryRow venueMode={venueMode} venueTz={venueTzOf(e)} onH2H={setH2H} onHistory={setHist} onPredictors={setPredictors} onChampion={setChampion} key={e.id} e={e} inCourt={view === 'court'} />)}
           </View>
         ))}
       </Screen>
+      {champion && <ChampionFanfare key={champion} width={screenW} />}
       <H2HSheet visible={!!h2h} onClose={() => setH2H(null)} a={h2h?.a} b={h2h?.b} />
       {/* drawId comes off the ROW, not the page: the schedule mixes the men's
           and women's draws on one day, so there is no single draw to pass. */}
@@ -370,7 +384,16 @@ function LockPill({ matchId, live }) {
   )
 }
 
-function EntryRow({ e, venueMode, venueTz, onH2H, onHistory, onPredictors, inCourt }) {
+function EntryRow({ e, venueMode, venueTz, onH2H, onHistory, onPredictors, onChampion, inCourt }) {
+  /* The biggest thing that just happened to this match, or null — the
+     site's escalating tiers, marking the CARD rather than a digit: a set
+     belongs to the match. The arrival argument covers a result already in
+     by the time this row first rendered, which is the normal phone case. */
+  const marks = scoreMarks(e)
+  const fx = useScoreEvent(marks, arrivalTier(e, marks))
+  useEffect(() => {
+    if (fx === 'champion') onChampion?.(e.id)
+  }, [fx, e.id, onChampion])
   const live = isLive(e)
   const suspended = isSuspended(e)
   const done = e.status === 'completed'
@@ -394,6 +417,7 @@ function EntryRow({ e, venueMode, venueTz, onH2H, onHistory, onPredictors, inCou
   const openable = onHistory && ['live', 'completed', 'postponed', 'to_be_completed'].includes(e.status)
   const Wrap = openable ? Pressable : View
   return (
+    <TierFx fx={fx} radius={14}>
     <Wrap style={[s.entry, live && s.entryLive]} onPress={openable ? () => onHistory(e) : undefined}>
       <View style={s.entryTop}>
         {/* The tour, named. A combined day lists the men's and women's US Open
@@ -471,6 +495,7 @@ function EntryRow({ e, venueMode, venueTz, onH2H, onHistory, onPredictors, inCou
         </View>
       )}
     </Wrap>
+    </TierFx>
   )
 }
 

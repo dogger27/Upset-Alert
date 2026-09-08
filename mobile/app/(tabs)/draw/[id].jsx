@@ -18,7 +18,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { FONT_SCALE, leading } from '../../../fontScale.js'
 import { Ionicons } from '@expo/vector-icons'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { getDraw, getPredictions } from '../../../api'
+import { getDraw, getMyStandouts, getPredictions } from '../../../api'
 import { useAuth } from '../../../auth'
 import { H2HSheet } from '../../../h2h'
 import { useLiveUpdates } from '../../../live'
@@ -47,6 +47,10 @@ export default function DrawScreen() {
   const viewing = user && Number(user) !== me?.id ? Number(user) : null
   const preds = useApi(`preds:${id}:${viewing ?? 'me'}`, () => getPredictions(id, viewing))
   useLiveUpdates(draw.data?.tournament?.id, [`draw:${id}`, 'hist:'])
+  /* The site's standout chips: matches where this bracket called a result
+     most of the field missed. Follows ?user= like the picks do. */
+  const standouts = useApi(`standouts:${id}:${viewing ?? 'me'}`, () => getMyStandouts(id, viewing))
+  const standoutIds = useMemo(() => new Set(standouts.data?.match_ids || []), [standouts.data])
   const [picked, setPicked] = useState(null)   // null = follow the live round
 
   const t = draw.data?.tournament
@@ -184,7 +188,8 @@ export default function DrawScreen() {
             renderRow={m => (
               <MatchGroup m={m} roundIdx={roundIdx.get(m.round_number) ?? 0} B={B}
                           drawRanks={drawRanks} zone={zone} onH2H={setH2H}
-                          onPredictors={setPredictors} onShowScore={setScoreMatch} />
+                          onPredictors={setPredictors} onShowScore={setScoreMatch}
+                          standout={standoutIds.has(m.id)} />
             )}
           />
         )}
