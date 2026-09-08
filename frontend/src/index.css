@@ -287,10 +287,11 @@
   --atp-line-strong: #60a5fa;
   --atp-text-strong: var(--atp-700);
   --brand-line-strong: var(--green-800);
-  /* A finished match's outline on the draw. Teal, not a green: the greens
-     around it already mean "your pick was right" and "live", and a done edge
-     that read as a third green said nothing at a glance. */
-  --match-done-line: #149c90;
+  /* A finished match's fill on the draw: a step DIMMER than the outline's
+     usual fill, so what is over recedes and what is still to play stands
+     forward. The border stays the default — a coloured edge (green, then
+     teal) read as a third signal beside the pick colours inside. */
+  --match-done-fill: var(--n-200);
   --gold-ink: #b8860b;
 
   --success-tint: #f0fdf4;
@@ -485,7 +486,7 @@
   --atp-line-strong: #5a86c9;
   --atp-text-strong: #a8c8ff;
   --brand-line-strong: #4a8f6c;
-  --match-done-line: #2ec4b6;
+  --match-done-fill: var(--n-50);
   --gold-ink: #e0b34a;
 
   --success-tint: #16301f;
