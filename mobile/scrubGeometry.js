@@ -73,6 +73,20 @@ export function rowShift(i, s, G, e) {
   return 0
 }
 
+/** Whether row i has any business being drawn: its group, where the scrub
+    has put it OR where it sits settled, overlaps [top, bottom] — the
+    viewport plus a margin. Both, because a row frozen at its settled place
+    while the scrub had really moved it off screen would be drawn where it is
+    not. A row that is neither returns its settled style, which costs nothing
+    once it is there: an animated style that does not change is not sent to
+    the native view, and sending is what a frame's budget goes on. */
+export function rowInWindow(i, s, P, H, G, e, top, bottom) {
+  'worklet'
+  const settled = P + i * G
+  const real = settled + rowShift(i, s, G, e)
+  return (real + H > top && real < bottom) || (settled + H > top && settled < bottom)
+}
+
 /** Where row i's centre is, for its column at offset s. */
 export function rowCentre(i, s, P, H, G, e) {
   'worklet'
