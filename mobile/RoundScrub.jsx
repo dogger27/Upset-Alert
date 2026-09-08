@@ -52,6 +52,7 @@ import Animated, {
   useAnimatedStyle, useScrollOffset, useSharedValue, withTiming,
 } from 'react-native-reanimated'
 import { scheduleOnRN, scheduleOnUI } from 'react-native-worklets'
+import { ScrubContext } from './scrubContext'
 import {
   anchorY, contentHeightAt, rowIndexAt, rowShift, scrollLimitAt, settleTarget,
 } from './scrubGeometry'
@@ -80,7 +81,10 @@ const SETTLE = { duration: SETTLE_MS, easing: Easing.bezier(0.22, 0.61, 0.36, 1)
 // painted, so opening a draw never waits on three columns.
 const WARM_MS = 250
 
-export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, padTop, padBottom }) {
+export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, padTop, padBottom, boxPitch = 0 }) {
+  // Half the distance between a settled group's two boxes: the offset a
+  // condensing row lands at either side of its successor's centre.
+  const e = boxPitch / 2
   const activeIdx = Math.max(0, rounds.findIndex(([n]) => n === active))
   const scrollRef = useAnimatedRef()
   const scrollY = useScrollOffset(scrollRef)
@@ -225,13 +229,13 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
     const a = anchor.value
     const g = geo.value
     const m = meta.value
-    const y = anchorY(a.idx, p - a.r0, g.P, g.H, g.G) - a.localY
+    const y = anchorY(a.idx, p - a.r0, g.P, g.H, g.G, e) - a.localY
     const lo = Math.max(0, Math.min(m.count - 1, Math.floor(p)))
     const hi = Math.max(0, Math.min(m.count - 1, Math.ceil(p)))
     const fallback = Math.max(estimate(m.rows[lo] ?? 0), estimate(m.rows[hi] ?? 0))
     const lim = scrollLimitAt(p, heights.value, fallback, viewportH.value)
     scrollTo(scrollRef, 0, y < 0 ? 0 : y > lim ? lim : y, false)
-  }, [estimate])
+  }, [estimate, e])
 
   /* The round the screen asks for, arriving from outside a gesture — a tap
      on the strip, the live round moving on, a different draw. A neighbour
@@ -303,9 +307,9 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
   }, [heights])
 
   const scrub = useMemo(() => ({
-    pos, r0, scrollRef, geo, heights, widthSV, activeIdx, width, warm, estimate,
+    pos, r0, scrollRef, geo, heights, widthSV, activeIdx, width, warm, estimate, e,
     onWrapLayout, onRowLayout, onColumnLayout,
-  }), [pos, r0, scrollRef, geo, heights, widthSV, activeIdx, width, warm, estimate,
+  }), [pos, r0, scrollRef, geo, heights, widthSV, activeIdx, width, warm, estimate, e,
        onWrapLayout, onRowLayout, onColumnLayout])
 
   return { pan, scrub }
@@ -315,10 +319,10 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
    off pos: condensing onto its successor as its column leaves to the left,
    spreading over its feeders as it waits on the right. */
 function Row({ ri, i, scrub, children }) {
-  const { pos, geo, onRowLayout } = scrub
+  const { pos, geo, e, onRowLayout } = scrub
   const style = useAnimatedStyle(() => ({
-    transform: [{ translateY: rowShift(i, pos.value - ri, geo.value.G) }],
-  }), [i, ri])
+    transform: [{ translateY: rowShift(i, pos.value - ri, geo.value.G, e) }],
+  }), [i, ri, e])
   return (
     <Animated.View style={style} collapsable={false}
                    onLayout={i < 2 ? e => onRowLayout(ri, i, e) : undefined}>
@@ -331,22 +335,26 @@ function Row({ ri, i, scrub, children }) {
    whatever pos is doing — which is why a commit moves nothing. The round a
    pull left from fades on its way out; the one arriving slides in whole. */
 function Column({ ri, num, matches, scrub, renderRow, columnStyle }) {
-  const { pos, r0, width, onColumnLayout } = scrub
+  const { pos, r0, geo, e, width, onColumnLayout } = scrub
   const style = useAnimatedStyle(() => {
     const s = Math.abs(pos.value - ri)
     return { opacity: r0.value === ri && s > 0 ? Math.max(0, 1 - s) : 1 }
   }, [ri])
+  // What every group in this column reads to stretch or condense itself.
+  const ctx = useMemo(() => ({ pos, ri, geo, e }), [pos, ri, geo, e])
   return (
     <Animated.View style={[s.column, { left: ri * width, width }, style]}>
-      <View style={columnStyle} onLayout={e => onColumnLayout(ri, e)}>
-        {matches.map((m, i) => (
-          /* A slot with no match — an unplayed half of the bracket — has no
-             id; the round and position make a key that exists for every row. */
-          <Row key={m.id ?? `slot-${num}-${i}`} ri={ri} i={i} scrub={scrub}>
-            {renderRow(m)}
-          </Row>
-        ))}
-      </View>
+      <ScrubContext.Provider value={ctx}>
+        <View style={columnStyle} onLayout={ev => onColumnLayout(ri, ev)}>
+          {matches.map((m, i) => (
+            /* A slot with no match — an unplayed half of the bracket — has no
+               id; the round and position make a key that exists for every row. */
+            <Row key={m.id ?? `slot-${num}-${i}`} ri={ri} i={i} scrub={scrub}>
+              {renderRow(m)}
+            </Row>
+          ))}
+        </View>
+      </ScrubContext.Provider>
     </Animated.View>
   )
 }

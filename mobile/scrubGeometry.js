@@ -49,13 +49,34 @@ export function clampOffset(s) {
   return s > 1 ? 1 : s < -1 ? -1 : s
 }
 
-/** A row's vertical shift, in points, for its column at offset s = pos - j. */
-export function rowShift(i, s, G) {
+/** Half the distance between a group's two player boxes, for its column
+    at offset s. Settled that is `e`; spread (s < 0) it opens to G/2, so the
+    two boxes sit exactly on the centres of the two groups feeding them;
+    condensing (s > 0) it closes to nothing, the boxes meeting as the group
+    shrinks toward the one box it becomes in the next round. */
+export function boxOffset(s, G, e) {
   'worklet'
   const c = clampOffset(s)
-  if (c > 0) return (Math.floor(i / 2) - i) * G * c
+  if (c < 0) return e + (G / 2 - e) * -c
+  return e * (1 - c)
+}
+
+/** A row's vertical shift, in points, for its column at offset s = pos - j.
+    Condensing, rows 2k and 2k+1 land on their successor's TOP and BOTTOM
+    box respectively — e either side of its centre — which is what keeps the
+    feed lines running into those boxes at every pos (see boxOffset). */
+export function rowShift(i, s, G, e) {
+  'worklet'
+  const c = clampOffset(s)
+  if (c > 0) return (Math.floor(i / 2) - i) * G * c + (i % 2 ? e : -e) * c
   if (c < 0) return (i + 0.5) * G * -c
   return 0
+}
+
+/** Where row i's centre is, for its column at offset s. */
+export function rowCentre(i, s, P, H, G, e) {
+  'worklet'
+  return P + H / 2 + i * G + rowShift(i, s, G, e)
 }
 
 /** The finger's fractional row index in a settled column: 0 on the first
@@ -69,25 +90,16 @@ export function rowIndexAt(contentY, P, H, G, n) {
 }
 
 /** Where the anchored row index of the starting column sits, in content
-    points, for the column at offset s. Linear interpolation between the
-    settled position and the condensed (s > 0) or spread (s < 0) one, so a
-    finger on a fractional index moves the way the two rows either side of it
+    points, for the column at offset s: between the centres of the two rows
+    either side of it, so a finger on a fractional index moves the way they
     do. */
-export function anchorY(idx, s, P, H, G) {
+export function anchorY(idx, s, P, H, G, e) {
   'worklet'
-  const c = clampOffset(s)
-  const base = P + H / 2
-  if (c === 0) return base + idx * G
   const i = Math.floor(idx)
   const f = idx - i
-  if (c > 0) {
-    // Condensing: rows i and i+1 land on their successors' settled rows.
-    const target = (1 - f) * Math.floor(i / 2) + f * Math.floor((i + 1) / 2)
-    return base + (idx + (target - idx) * c) * G
-  }
-  // Spreading: every row k opens onto the midpoint of the pair feeding it,
-  // which is affine in k, so it holds for a fractional index directly.
-  return base + (idx + ((2 * idx + 0.5) - idx) * -c) * G
+  const a = rowCentre(i, s, P, H, G, e)
+  if (f === 0) return a
+  return a + (rowCentre(i + 1, s, P, H, G, e) - a) * f
 }
 
 /** The height the scroll content needs at pos: the taller of the two columns

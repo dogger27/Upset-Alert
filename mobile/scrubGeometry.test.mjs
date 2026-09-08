@@ -2,26 +2,34 @@
 // bracket's own structure. Run by `npm test`.
 import assert from 'node:assert/strict'
 import {
-  anchorY, contentHeightAt, rowIndexAt, rowShift, scrollLimitAt, settleTarget,
+  anchorY, boxOffset, contentHeightAt, rowIndexAt, rowShift, scrollLimitAt, settleTarget,
   COMMIT_PX, FLICK_PX_PER_S,
 } from './scrubGeometry.js'
 
 const P = 12, H = 100, G = 114   // paddingTop, a group's height, group pitch
-const centre = (i, s) => P + H / 2 + i * G + rowShift(i, s, G)
+const E = 33                     // half the distance between a group's two boxes
+const centre = (i, s) => P + H / 2 + i * G + rowShift(i, s, G, E)
 const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-9, `${msg}: ${a} vs ${b}`)
 
 // At rest nothing moves; past a round either way the shift saturates.
 for (let i = 0; i < 8; i++) {
-  assert.equal(rowShift(i, 0, G), 0)
-  assert.equal(rowShift(i, 1, G), rowShift(i, 3, G))
-  assert.equal(rowShift(i, -1, G), rowShift(i, -2, G))
+  assert.equal(rowShift(i, 0, G, E), 0)
+  assert.equal(rowShift(i, 1, G, E), rowShift(i, 3, G, E))
+  assert.equal(rowShift(i, -1, G, E), rowShift(i, -2, G, E))
 }
 
-// Condensed: rows 2k and 2k+1 both land on row k's settled centre.
+// Condensed: rows 2k and 2k+1 land on row k's TOP and BOTTOM box.
 for (let k = 0; k < 4; k++) {
-  near(centre(2 * k, 1), centre(k, 0), `row ${2 * k} condenses onto ${k}`)
-  near(centre(2 * k + 1, 1), centre(k, 0), `row ${2 * k + 1} condenses onto ${k}`)
+  near(centre(2 * k, 1), centre(k, 0) - E, `row ${2 * k} condenses onto ${k}'s top box`)
+  near(centre(2 * k + 1, 1), centre(k, 0) + E, `row ${2 * k + 1} condenses onto ${k}'s bottom box`)
 }
+
+// The boxes: settled e apart from the centre; spread to G/2, so they sit on
+// the feeders' centres; condensed to nothing.
+assert.equal(boxOffset(0, G, E), E)
+near(boxOffset(-1, G, E), G / 2, 'spread boxes sit a full pitch apart')
+assert.equal(boxOffset(1, G, E), 0)
+assert.equal(boxOffset(-3, G, E), boxOffset(-1, G, E))
 
 // Spread: row k opens onto the midpoint of rows 2k and 2k+1.
 for (let k = 0; k < 4; k++) {
@@ -30,11 +38,16 @@ for (let k = 0; k < 4; k++) {
 
 // COHERENCE, the property that keeps the bracket true mid-gesture: at every
 // pos between two rounds, the incoming successor k sits exactly on the
-// midpoint of its two condensing feeders in the outgoing column.
+// midpoint of its two condensing feeders in the outgoing column — and more
+// than that, its TOP box sits on feeder 2k's centre and its BOTTOM box on
+// feeder 2k+1's, so the feed lines run straight into the boxes throughout.
 for (const t of [0, 0.1, 0.25, 0.5, 0.75, 0.9, 1]) {
   for (let k = 0; k < 4; k++) {
     const feeders = (centre(2 * k, t) + centre(2 * k + 1, t)) / 2
     near(centre(k, t - 1), feeders, `successor ${k} rides its feeders at t=${t}`)
+    const off = boxOffset(t - 1, G, E)
+    near(centre(k, t - 1) - off, centre(2 * k, t), `successor ${k}'s top box is on feeder ${2 * k} at t=${t}`)
+    near(centre(k, t - 1) + off, centre(2 * k + 1, t), `successor ${k}'s bottom box is on feeder ${2 * k + 1} at t=${t}`)
   }
 }
 
@@ -42,19 +55,19 @@ for (const t of [0, 0.1, 0.25, 0.5, 0.75, 0.9, 1]) {
 for (const idx of [0, 1, 2.5, 3, 3.4, 6, 7]) {
   for (const s of [-1, -0.6, -0.2, 0, 0.3, 0.7, 1]) {
     // For integer rows the anchor IS the row's moving centre.
-    if (Number.isInteger(idx)) near(anchorY(idx, s, P, H, G), centre(idx, s), `anchor holds row ${idx} at s=${s}`)
+    if (Number.isInteger(idx)) near(anchorY(idx, s, P, H, G, E), centre(idx, s), `anchor holds row ${idx} at s=${s}`)
     // For fractional ones it lies between the two rows either side, moving
     // linearly with them.
     else {
       const lo = Math.floor(idx), f = idx - lo
-      near(anchorY(idx, s, P, H, G), centre(lo, s) * (1 - f) + centre(lo + 1, s) * f,
+      near(anchorY(idx, s, P, H, G, E), centre(lo, s) * (1 - f) + centre(lo + 1, s) * f,
            `anchor ${idx} interpolates its neighbours at s=${s}`)
     }
   }
 }
 // The index round-trips: the finger's content y names an index whose anchor
 // at rest is that y, and it is clamped to the rows that exist.
-near(anchorY(rowIndexAt(P + H / 2 + 2.3 * G, P, H, G, 8), 0, P, H, G), P + H / 2 + 2.3 * G, 'index round-trips')
+near(anchorY(rowIndexAt(P + H / 2 + 2.3 * G, P, H, G, 8), 0, P, H, G, E), P + H / 2 + 2.3 * G, 'index round-trips')
 assert.equal(rowIndexAt(-500, P, H, G, 8), 0)
 assert.equal(rowIndexAt(1e6, P, H, G, 8), 7)
 assert.equal(rowIndexAt(300, P, H, G, 0), 0)

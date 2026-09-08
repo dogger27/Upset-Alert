@@ -31,7 +31,7 @@ import { currentRound } from '../../../rounds'
 import { C, R, S, T } from '../../../theme'
 import { TourBadge } from '../../../cards'
 import { Card, ErrorNote, Loading, Muted, Screen, Title } from '../../../ui'
-import { CHIP_OVERHANG, CONNECTOR_W, GROUP_H, MatchGroup, buildBracket } from '../../../bracket'
+import { BOX_PITCH, CHIP_OVERHANG, CONNECTOR_W, GROUP_H, MatchGroup, buildBracket } from '../../../bracket'
 import { RoundScrubView, useRoundScrub } from '../../../RoundScrub'
 import { RoundStrip } from '../../../RoundStrip'
 import { setCurrentDraw } from '../../../currentDraw'
@@ -128,6 +128,7 @@ export default function DrawScreen() {
   const { pan, scrub } = useRoundScrub({
     rounds, active, onCommit: setPicked,
     rowHeight: GROUP_H, rowGap: ROW_GAP, padTop: LIST_PAD_TOP, padBottom: LIST_PAD_BOTTOM,
+    boxPitch: BOX_PITCH,
   })
 
   const loading = (draw.loading && !draw.data) || (preds.loading && !preds.data)
