@@ -1588,13 +1588,16 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                     not the same fact: a round is worth more than the one
                     before it, so 8 correct in R1 and 4 in the quarters can
                     reach the same score by different routes. */}
-                <span className="lt-progress-correct"
+                {/* THE SORTED COLUMN IS THE LIT ONE. Whichever number the rows
+                    are ordered by is the one being read down the table, so
+                    it is white and bold and the other two step back. */}
+                <span className={`lt-progress-correct${colSort === 'correct' ? ' lt-col-on' : ''}`}
                       title={`${entry.correct_count ?? 0} correct pick${(entry.correct_count ?? 0) !== 1 ? 's' : ''}`}>
                   {entry.correct_count ?? 0}
                 </span>
                 {/* The unit is in the heading, once, not on every row. */}
-                <span className="lt-progress-total">{entry.total}</span>
-                <span className="lt-progress-max"
+                <span className={`lt-progress-total${colSort === 'total' ? ' lt-col-on' : ''}`}>{entry.total}</span>
+                <span className={`lt-progress-max${colSort === 'max' ? ' lt-col-on' : ''}`
                       title={entry.max_points != null
                         ? `Could still finish on ${Math.round(entry.max_points)} pts` : undefined}>
                   {entry.max_points != null ? Math.round(entry.max_points) : '–'}
