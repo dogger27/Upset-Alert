@@ -510,10 +510,12 @@ const s = StyleSheet.create({
     borderWidth: 2, borderColor: N[300], borderRadius: 10, backgroundColor: N[100],
     paddingVertical: PAD, paddingHorizontal: PAD,
   },
-  /* A finished match is a step LIGHTER inside (n-150), so a round reads as
-     done / still-to-play at a glance. Lighter, not dimmer: dimmed, the
-     finished ones sank into the page. The border is left alone. */
-  outlineDone: { backgroundColor: N[150] },
+  /* A finished match goes to a COOL SLATE inside — cooled off — while a
+     match to play keeps the warm green-grey. A hue shift, not a brightness
+     step: a step small enough to keep the grey player boxes distinct from
+     the fill was too small to see, and one big enough to see swallowed the
+     boxes. The site's --match-done-fill, dark. The border is left alone. */
+  outlineDone: { backgroundColor: '#1f2e37' },
   /* .in-progress-badge: centred on the outline's top border. top is measured
      from inside the border, so -1 puts the pill's centre on the border's own
      centre line. */
