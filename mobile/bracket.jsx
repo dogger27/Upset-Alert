@@ -592,16 +592,12 @@ const s = StyleSheet.create({
   /* THE FILL HUGS THE CAPITALS, not the line box. A Text paints its
      background over its whole line (12pt for 11pt Archivo), and that strip
      ran down over the seed badge. So the fill is the container's, sized to
-     the cap height plus a point each side, and the text is pulled up inside
-     it by a negative margin so its capitals land in the fill; the rest of
-     the line box hangs outside, invisibly.
-
-     NOTE_CAP_TOP IS CALIBRATED FROM THE PHONE (2026-09-08), not from the
-     metrics: with no lineHeight, iOS draws the caps 3.7pt below the top of
-     the text's box, where the font tables say 2.1 — and the harness draws
-     what the tables say. The box sits 4pt above the border line and 5.6pt
-     inside it, which is where the site's own note sits and clear of the
-     badge, whose top is 7pt in. */
+     the cap height plus a point each side and CENTRED ON THE BORDER LINE,
+     and the text is placed inside it by NOTE_TEXT_SHIFT — a number measured
+     off the phone, because iOS does not put the capitals where the font
+     tables say and the harness draws what the tables say. The border is
+     meant to pass through the middle of the letters. The fill's lower half
+     stops short of the seed badge, whose top is 5pt in. */
   realWinner: {
     position: 'absolute', left: 7, top: -NOTE_BOX_H / 2,
     height: NOTE_BOX_H, paddingHorizontal: 1.5 * FONT_SCALE, gap: 7,
