@@ -88,6 +88,12 @@ const CHIP_H = 24         // the on-screen WIDTH of the rotated pill; 24 at the 
    reclaims for it) until the glass cuts it. */
 const CONN_RUN = 24       // border → the vertical bar, clear of the pill
 const CONN_STUB = 120     // the bar → off the edge of the screen
+/* The line each box ARRIVED on: from the round before, in at the box's own
+   centre and off the left edge of the glass — the site's connector run into
+   a box (owner, 2026-09-08). Long enough to cross the column's left padding
+   and the screen's; the glass cuts it. Not on the first round, whose boxes
+   came from the draw, not from a match. */
+const CONN_IN = 64
 const BELL_CORNER = 42    // .cv-eta--bell / .cv-live-score--bell: right: 42px
 const NAME_FONT = 12      // the site's 0.8rem, a point down with the box
 const NAME_FAMILY = 'Archivo_700Bold'
@@ -417,6 +423,20 @@ function Connector() {
   )
 }
 
+/* The lines the two boxes arrived on, in from the left at each box's centre.
+   Behind the predictors chip, which sits on the border between them. */
+function Incoming() {
+  const y1 = PAD_TOP + leading(BOX_H) / 2
+  const y2 = PAD_TOP + leading(BOX_H) + leading(GAP_H) + leading(BOX_H) / 2
+  const w = 1.5
+  return (
+    <View style={s.connIn} pointerEvents="none">
+      <View style={[s.connLine, { left: 0, top: y1 - w / 2, width: CONN_IN, height: w }]} />
+      <View style={[s.connLine, { left: 0, top: y2 - w / 2, width: CONN_IN, height: w }]} />
+    </View>
+  )
+}
+
 /* The running score, the site's way: the snapshot's games when it is fresh
    (so the point beside them describes the same instant), else the feed's.
    Steps its type down as sets accumulate, since the gap has height to spare
@@ -558,6 +578,7 @@ export function MatchGroup({ m, roundIdx, B, drawRanks, zone, onH2H, onPredictor
         </Chip>
       )}
       <Connector />
+      {roundIdx > 0 && <Incoming />}
     </Wrap>
   )
 }
@@ -700,6 +721,8 @@ const s = StyleSheet.create({
      plus the border, whatever the column reserves for it. */
   conn: { position: 'absolute', top: 0, bottom: 0, right: -(2 + CONN_RUN + CONN_STUB), width: CONN_RUN + CONN_STUB, zIndex: 0 },
   connLine: { position: 'absolute', backgroundColor: CONNECTOR },
+  // Its mirror on the left: from the outline's outer edge, off the glass.
+  connIn: { position: 'absolute', top: 0, bottom: 0, left: -(2 + CONN_IN), width: CONN_IN, zIndex: 0 },
 
   // TennisBall: 16px, #7ba81f, rim #1b4332, white seams.
   ball: { width: BALL, height: BALL, borderRadius: BALL / 2, backgroundColor: '#7ba81f', overflow: 'hidden', marginLeft: 4 },
