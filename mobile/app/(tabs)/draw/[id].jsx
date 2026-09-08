@@ -230,9 +230,12 @@ const s = StyleSheet.create({
   headBody: {
     flex: 1, flexDirection: 'row', alignItems: 'center',
     justifyContent: 'space-between', gap: 10,
-    paddingHorizontal: S.md, paddingVertical: 2,
+    paddingHorizontal: S.md, paddingVertical: 0,
   },
-  headName: { ...T.h2, lineHeight: leading(21), color: C.ink, flexShrink: 1 },
+  /* The line box is the type's own height: 19pt Saira Condensed needs no
+     more than 19 of line, so the banner is exactly the name plus the
+     badge's own padding. */
+  headName: { ...T.h2, lineHeight: leading(19), color: C.ink, flexShrink: 1 },
 
 
   /* Screen's shared body padding frames every OTHER screen; this one is a
