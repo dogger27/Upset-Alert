@@ -30,8 +30,9 @@
  * because its compact column is 107pt wide; this one is three times that,
  * so the ETA and the live score take one line each.
  */
-import { useMemo, useState } from 'react'
+import { useContext, useMemo, useState } from 'react'
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native'
+import Reanimated, { useAnimatedStyle } from 'react-native-reanimated'
 import { Ionicons } from '@expo/vector-icons'
 import { Bump, NeonRing, useStandoutShake } from './fx'
 import { useFlashOnChange } from './scoreFx'
@@ -42,6 +43,8 @@ import { scoreLine, setCount } from './score'
 import { matchStarted } from './scoreHistory'
 import { EntryChip, PosBadge } from './cards'
 import { C, PICK, S } from './theme'
+import { ScrubContext } from './scrubContext'
+import { boxOffset } from './scrubGeometry'
 
 /* ── Tokens, from the site's DARK theme (frontend/src/index.css) ─────────── */
 const N = { 950: '#f2f6f4', 400: '#6f817a', 300: '#3f524b', 200: '#2b3a35', 150: '#212e29', 100: '#18241f' }
@@ -132,6 +135,38 @@ export const CHIP_OVERHANG = Math.ceil(leading(CHIP_H) / 2)
    not the previous round's column. Not on the first round, whose boxes came
    from the draw, not from a match. */
 const CONN_IN = CHIP_OVERHANG + S.lg + 4
+
+/* ── The group's box, in pieces, so a scrub can stretch it by TRANSFORM ──
+   As the next round is pulled in, each of its groups starts tall enough
+   that its two player boxes sit exactly on the centres of the two groups
+   feeding it — the feed lines run straight into the boxes — and contracts
+   to its settled height as it arrives; leaving to the left, a group's two
+   boxes close together as it condenses toward the one box it becomes
+   (owner, 2026-09-08). Changing a View's height every frame is a layout,
+   so the outline is three views instead: a TOP CAP (top border, corners,
+   sides) that slides up with the top box, a BOTTOM CAP that slides down with
+   the bottom box, and a short MIDDLE with only side borders that is scaled
+   in Y to bridge them — a scaled rectangle with no corners distorts nothing.
+   Each cap is half the settled height, so at rest they meet in the middle
+   over the bridge. The chips and the gap's content stay on the centre line. */
+const BW = 2                                   // the outline's border
+const BOX_PX = leading(BOX_H)
+const GAP_PX = leading(GAP_H)
+export const BOX_PITCH = BOX_PX + GAP_PX       // settled distance between the two boxes' centres
+const CAP_H = Math.ceil(GROUP_H / 2)
+const MID_H = 24
+const LINE_W = 1.5
+const Y_TOP = PAD_TOP + BOX_PX / 2             // the top box's centre, inside the cap's border
+const Y_BOT = PAD + BOX_PX / 2                 // the bottom box's centre, up from the bottom cap's border
+const BAR_LEN = BOX_PITCH + LINE_W
+
+/** How far each half of a group has moved from where it sits settled, read
+    off the scrub this group is riding (0 when there is none). */
+function halfShift(sc) {
+  'worklet'
+  if (!sc.pos) return 0
+  return boxOffset(sc.pos.value - sc.ri, sc.geo.value.G, sc.e) - sc.e
+}
 
 /* ── The model ───────────────────────────────────────────────────────────────
    Everything a group needs that is about the DRAW rather than the match:
@@ -394,13 +429,14 @@ function PlayerBox({ box, serving, picked, won, noteWon, drawRanks, B }) {
 
 /* A pill on the outline's border, rotated to read upwards. `side` picks the
    border. The layout box is the unrotated 34×18; the transform turns it in
-   place, so the centre stays where the layout put it — on the border line. */
+   place, so the centre stays where the layout put it — on the border line,
+   BW/2 in from the group's outer edge. */
 function Chip({ side, onPress, label, standout = false, children }) {
   // The site's .cv-group--standout: the shake around the whole rotated
   // pill, the neon ring inside it so it turns with it.
   const shake = useStandoutShake(standout)
   return (
-    <View style={[s.chipWrap, side === 'left' ? { left: -(leading(CHIP_W) / 2) - 1 } : { right: -(leading(CHIP_W) / 2) - 1 }]}
+    <View style={[s.chipWrap, side === 'left' ? { left: -(leading(CHIP_W) / 2) + BW / 2 } : { right: -(leading(CHIP_W) / 2) + BW / 2 }]}
           pointerEvents="box-none">
       <Animated.View style={standout ? { transform: shake, zIndex: 5 } : null}>
         <Pressable onPress={onPress} hitSlop={10} style={s.chip} accessibilityRole="button"
@@ -409,36 +445,6 @@ function Chip({ side, onPress, label, standout = false, children }) {
           <NeonRing on={standout} radius={4} />
         </Pressable>
       </Animated.View>
-    </View>
-  )
-}
-
-/* The elbow out of the pair: a run from each box's centre, the bar joining
-   them, and a stub towards the round these two feed. (Connectors) */
-function Connector() {
-  const y1 = PAD_TOP + leading(BOX_H) / 2
-  const y2 = PAD_TOP + leading(BOX_H) + leading(GAP_H) + leading(BOX_H) / 2
-  const w = 1.5
-  return (
-    <View style={s.conn} pointerEvents="none">
-      <View style={[s.connLine, { left: 0, top: y1 - w / 2, width: CONN_RUN + w / 2, height: w }]} />
-      <View style={[s.connLine, { left: 0, top: y2 - w / 2, width: CONN_RUN + w / 2, height: w }]} />
-      <View style={[s.connLine, { left: CONN_RUN - w / 2, top: y1 - w / 2, width: w, height: y2 - y1 + w }]} />
-      <View style={[s.connLine, { left: CONN_RUN, top: (y1 + y2) / 2 - w / 2, width: CONN_STUB, height: w }]} />
-    </View>
-  )
-}
-
-/* The lines the two boxes arrived on, in from the left at each box's centre.
-   Behind the predictors chip, which sits on the border between them. */
-function Incoming() {
-  const y1 = PAD_TOP + leading(BOX_H) / 2
-  const y2 = PAD_TOP + leading(BOX_H) + leading(GAP_H) + leading(BOX_H) / 2
-  const w = 1.5
-  return (
-    <View style={s.connIn} pointerEvents="none">
-      <View style={[s.connLine, { left: 0, top: y1 - w / 2, width: CONN_IN, height: w }]} />
-      <View style={[s.connLine, { left: 0, top: y2 - w / 2, width: CONN_IN, height: w }]} />
     </View>
   )
 }
@@ -540,33 +546,63 @@ export function MatchGroup({ m, roundIdx, B, drawRanks, zone, onH2H, onPredictor
   const openable = !!onShowScore && matchStarted(m)
   const Wrap = openable ? Pressable : View
 
+  /* The scrub's stretch, if any: the caps slide apart or together with the
+     boxes, the middle and the connector's bar scale to keep the outline and
+     the elbow continuous. Four transforms; nothing here lays out per frame. */
+  const sc = useContext(ScrubContext)
+  const capTopStyle = useAnimatedStyle(() => ({ transform: [{ translateY: -halfShift(sc) }] }), [sc])
+  const capBotStyle = useAnimatedStyle(() => ({ transform: [{ translateY: halfShift(sc) }] }), [sc])
+  const midStyle = useAnimatedStyle(() => ({
+    transform: [{ scaleY: Math.max(0.01, (MID_H + 2 * halfShift(sc)) / MID_H) }],
+  }), [sc])
+  const barStyle = useAnimatedStyle(() => ({
+    transform: [{ scaleY: Math.max(0.01, (BAR_LEN + 2 * halfShift(sc)) / BAR_LEN) }],
+  }), [sc])
+  const done = decided && !m.is_bye
+
   return (
-    <Wrap style={[s.outline, decided && !m.is_bye && s.outlineDone]}
-          onPress={openable ? () => onShowScore(m) : undefined}>
-      {pill && (
-        <View style={s.pillWrap} pointerEvents="none">
-          <View style={[s.pill, pillTone]}>
-            <Text style={[s.pillText, { color: pillTone.borderColor }]}>{pill}</Text>
+    <Wrap style={s.group} onPress={openable ? () => onShowScore(m) : undefined}>
+      <Reanimated.View style={[s.mid, done && s.capDone, midStyle]} pointerEvents="none" />
+      <Reanimated.View style={[s.cap, s.capTop, done && s.capDone, capTopStyle]}>
+        {pill && (
+          <View style={s.pillWrap} pointerEvents="none">
+            <View style={[s.pill, pillTone]}>
+              <Text style={[s.pillText, { color: pillTone.borderColor }]}>{pill}</Text>
+            </View>
           </View>
+        )}
+        <View style={s.boxTop}>
+          <PlayerBox box={top} B={B} drawRanks={drawRanks}
+                     serving={serving === 1} picked={pickId != null && pickId === top.playerId}
+                     won={wonBy(top)} noteWon={noteWonBy(top)} />
         </View>
-      )}
-      <PlayerBox box={top} B={B} drawRanks={drawRanks}
-                 serving={serving === 1} picked={pickId != null && pickId === top.playerId}
-                 won={wonBy(top)} noteWon={noteWonBy(top)} />
+        {/* The elbow's run out of this box, and the line it arrived on. */}
+        <View style={[s.line, s.runTop]} pointerEvents="none" />
+        {roundIdx > 0 && <View style={[s.line, s.inTop]} pointerEvents="none" />}
+      </Reanimated.View>
+      <Reanimated.View style={[s.cap, s.capBot, done && s.capDone, capBotStyle]}>
+        <View style={s.boxBot}>
+          <PlayerBox box={bot} B={B} drawRanks={drawRanks}
+                     serving={serving === 2} picked={pickId != null && pickId === bot.playerId}
+                     won={wonBy(bot)} noteWon={noteWonBy(bot)} />
+        </View>
+        <View style={[s.line, s.runBot]} pointerEvents="none" />
+        {roundIdx > 0 && <View style={[s.line, s.inBot]} pointerEvents="none" />}
+      </Reanimated.View>
       {/* THE NOTE TAKES ITS SHARE OF THE GAP. When the lower box carries a
           real-winner note, that note stands up into the gap, and anything
           centred on the gap's full height sat on top of it. The site's
           gapMid subtracts the note before centring; so does this — the
           content centres in what is left above the note, air included. */}
-      <View style={s.gap}>
+      <View style={s.gap} pointerEvents="none">
         <View style={[s.gapInner, bot.realName && { bottom: NOTE_RISE }]}>
           {gap}
           {bell && <Text style={s.bell} accessibilityLabel="Upset pick">🔔</Text>}
         </View>
       </View>
-      <PlayerBox box={bot} B={B} drawRanks={drawRanks}
-                 serving={serving === 2} picked={pickId != null && pickId === bot.playerId}
-                 won={wonBy(bot)} noteWon={noteWonBy(bot)} />
+      {/* The bar joining the two runs, and the stub towards the next round. */}
+      <Reanimated.View style={[s.line, s.bar, barStyle]} pointerEvents="none" />
+      <View style={[s.line, s.stub]} pointerEvents="none" />
       {/* The predictors chip on the LEFT border, on every real match —
           decided, it says who called it; not yet, whose pick still stands. */}
       {!m.is_bye && onPredictors && (
@@ -583,24 +619,34 @@ export function MatchGroup({ m, roundIdx, B, drawRanks, zone, onH2H, onPredictor
           <Text style={s.chipText}>H2H</Text>
         </Chip>
       )}
-      <Connector />
-      {roundIdx > 0 && <Incoming />}
     </Wrap>
   )
 }
 
 const s = StyleSheet.create({
-  /* .cv-match-outline: 2px n-300, radius 10. n-100 while the match is still
-     to play — a step above the page, and a step below a finished one. */
-  outline: {
-    borderWidth: 2, borderColor: N[300], borderRadius: 10, backgroundColor: N[100],
-    paddingTop: PAD_TOP, paddingBottom: PAD, paddingHorizontal: PAD,
+  /* .cv-match-outline: 2px n-300, radius 10, n-100 while the match is still
+     to play — drawn as the three pieces described at BW above. The group
+     itself is only the settled size; everything in it is placed absolutely. */
+  group: { height: GROUP_H },
+  cap: {
+    position: 'absolute', left: 0, right: 0, height: CAP_H,
+    borderLeftWidth: BW, borderRightWidth: BW, borderColor: N[300], backgroundColor: N[100],
+    zIndex: 1,
+  },
+  capTop: { top: 0, borderTopWidth: BW, borderTopLeftRadius: 10, borderTopRightRadius: 10 },
+  capBot: { bottom: 0, height: GROUP_H - CAP_H, borderBottomWidth: BW, borderBottomLeftRadius: 10, borderBottomRightRadius: 10 },
+  mid: {
+    position: 'absolute', left: 0, right: 0, top: CAP_H - MID_H / 2, height: MID_H,
+    borderLeftWidth: BW, borderRightWidth: BW, borderColor: N[300], backgroundColor: N[100],
   },
   /* A finished match: a cool slate inside, a step brighter than the warm
      fill of a match still to play, and a teal edge — back at a member's
      suggestion, as an accent now that the fill carries the difference. The
      site's --match-done-fill / --match-done-line, dark. */
-  outlineDone: { backgroundColor: '#263842', borderColor: '#2ec4b6' },
+  capDone: { backgroundColor: '#263842', borderColor: '#2ec4b6' },
+  // The boxes, inside their caps' borders, where the padding used to put them.
+  boxTop: { position: 'absolute', top: PAD_TOP, left: PAD, right: PAD },
+  boxBot: { position: 'absolute', bottom: PAD, left: PAD, right: PAD },
   /* .in-progress-badge: centred on the outline's top border. top is measured
      from inside the border, so -1 puts the pill's centre on the border's own
      centre line. */
@@ -677,7 +723,11 @@ const s = StyleSheet.create({
     marginTop: NOTE_TEXT_SHIFT * FONT_SCALE,
   },
 
-  gap: { height: leading(GAP_H) },
+  // Between the two boxes, on the centre line, above the caps.
+  gap: {
+    position: 'absolute', left: BW + PAD, right: BW + PAD, top: BW + PAD_TOP + BOX_PX, height: GAP_PX,
+    zIndex: 2,
+  },
   // The part of the gap the content centres in: all of it, less the note.
   gapInner: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, justifyContent: 'center' },
   gapLine: {
@@ -701,7 +751,7 @@ const s = StyleSheet.create({
 
   /* .cv-h2h / .cv-group: 34×18 turned -90°, 1px green-500 on the card fill,
      centred on the outline's border at the pair's midpoint. */
-  chipWrap: { position: 'absolute', top: PAD_TOP - PAD, bottom: 0, justifyContent: 'center', zIndex: 4 },
+  chipWrap: { position: 'absolute', top: BW + PAD_TOP - PAD, bottom: BW, justifyContent: 'center', zIndex: 4 },
   chip: {
     width: leading(CHIP_W), height: leading(CHIP_H), borderRadius: 4, borderWidth: 1,
     borderColor: CHIP.line, backgroundColor: C.card,
@@ -723,12 +773,19 @@ const s = StyleSheet.create({
   // Undo the pill's rotation so the glyph stands upright.
   chipIcon: { transform: [{ rotate: '90deg' }] },
 
-  /* Anchored at the outline's OUTER edge: its right offset is its own width
-     plus the border, whatever the column reserves for it. */
-  conn: { position: 'absolute', top: 0, bottom: 0, right: -(2 + CONN_RUN + CONN_STUB), width: CONN_RUN + CONN_STUB, zIndex: 0 },
-  connLine: { position: 'absolute', backgroundColor: CONNECTOR },
-  // Its mirror on the left: from the outline's outer edge, off the glass.
-  connIn: { position: 'absolute', top: 0, bottom: 0, left: -(2 + CONN_IN), width: CONN_IN, zIndex: 0 },
+  /* The connector, in pieces that travel with the caps: a run out of each
+     box (inside its cap, so it rides with the box), the bar between them
+     (scaled with the stretch), the stub off the right edge on the centre
+     line, and the lines the boxes arrived on, to the left. The runs and
+     arrival lines are placed inside a cap's border box; the bar and stub in
+     the group's. */
+  line: { position: 'absolute', backgroundColor: CONNECTOR },
+  runTop: { top: Y_TOP - LINE_W / 2, right: -(BW + CONN_RUN + LINE_W / 2), width: CONN_RUN + LINE_W / 2, height: LINE_W },
+  runBot: { bottom: Y_BOT - LINE_W / 2, right: -(BW + CONN_RUN + LINE_W / 2), width: CONN_RUN + LINE_W / 2, height: LINE_W },
+  inTop: { top: Y_TOP - LINE_W / 2, left: -(BW + CONN_IN), width: CONN_IN, height: LINE_W },
+  inBot: { bottom: Y_BOT - LINE_W / 2, left: -(BW + CONN_IN), width: CONN_IN, height: LINE_W },
+  bar: { top: BW + PAD_TOP + BOX_PX / 2 - LINE_W / 2, right: -(CONN_RUN + LINE_W / 2), width: LINE_W, height: BAR_LEN },
+  stub: { top: BW + PAD_TOP + BOX_PX + GAP_PX / 2 - LINE_W / 2, right: -(CONN_RUN + CONN_STUB), width: CONN_STUB, height: LINE_W },
 
   // TennisBall: 16px, #7ba81f, rim #1b4332, white seams.
   ball: { width: BALL, height: BALL, borderRadius: BALL / 2, backgroundColor: '#7ba81f', overflow: 'hidden', marginLeft: 4 },
