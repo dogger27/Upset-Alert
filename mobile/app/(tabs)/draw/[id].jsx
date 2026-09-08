@@ -192,10 +192,10 @@ export default function DrawScreen() {
         {rounds.length > 0 && (
           <RoundScrubView
             scrub={scrub}
-            /* The strip runs to the screen's right edge — into the body's
-               padding — so a group's connector stub can run off the glass
-               rather than stopping at the column. The column pads the same
-               amount back, so the groups themselves do not move. */
+            /* The strip runs edge to edge — into the body's padding both
+               sides — so a group's lines can run off the glass rather than
+               stopping at the column: the elbow's stub on the right, the
+               lines its boxes arrived on to the left. */
             style={s.scrub}
             rounds={rounds}
             columnStyle={s.list}
@@ -294,7 +294,11 @@ const s = StyleSheet.create({
      phone's larger text size (the point of the scale-down). */
   list: {
     gap: ROW_GAP, paddingTop: LIST_PAD_TOP, paddingBottom: LIST_PAD_BOTTOM,
-    paddingLeft: CHIP_OVERHANG, paddingRight: CONNECTOR_W + S.lg,
+    /* Both sides now reach the glass: the strip runs into the body's padding
+       on the left as well, so the lines a box arrived on can run off the
+       screen the way the elbow's stub does on the right. The column pads
+       the same amount back, so the groups themselves do not move. */
+    paddingLeft: CHIP_OVERHANG + S.lg, paddingRight: CONNECTOR_W + S.lg,
   },
-  scrub: { marginRight: -S.lg },
+  scrub: { marginLeft: -S.lg, marginRight: -S.lg },
 })
