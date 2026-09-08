@@ -2,7 +2,7 @@
 // bracket's own structure. Run by `npm test`.
 import assert from 'node:assert/strict'
 import {
-  anchorY, boxOffset, contentHeightAt, rowIndexAt, rowShift, scrollLimitAt, settleTarget,
+  anchorY, boxOffset, contentHeightAt, rowIndexAt, rowInWindow, rowShift, scrollLimitAt, settleTarget,
   COMMIT_PX, FLICK_PX_PER_S,
 } from './scrubGeometry.js'
 
@@ -84,6 +84,13 @@ near(scrollLimitAt(2, heights, 800, 600), 400, 'limit at an integer is that colu
 near(scrollLimitAt(3, heights, 800, 600), 0, 'a short column cannot scroll')
 near(scrollLimitAt(2.5, heights, 800, 600), 200, 'limit blends between neighbours')
 near(scrollLimitAt(2.999, heights, 800, 600), 0.4, 'limit is continuous into the landing')
+
+// Culling: a row is in the window when its real OR settled place overlaps it.
+assert.equal(rowInWindow(3, 0, P, H, G, E, 0, 500), true, 'settled row 3 is on screen')
+assert.equal(rowInWindow(9, 0, P, H, G, E, 0, 500), false, 'settled row 9 is not')
+assert.equal(rowInWindow(8, 1, P, H, G, E, 0, 500), true, 'condensed, row 8 has moved up on screen')
+assert.equal(rowInWindow(3, -1, P, H, G, E, 0, 500), true, 'spread off screen, row 3 still counts by its settled place')
+assert.equal(rowInWindow(2, -1, P, H, G, E, 1000, 1500), false, 'a row nowhere near the window in either place does not')
 
 // Release rules. pos in rounds, r0 the round the drag started on, lo/hi the
 // draw's first and last round index.

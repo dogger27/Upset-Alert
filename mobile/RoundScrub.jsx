@@ -54,8 +54,12 @@ import Animated, {
 import { scheduleOnRN, scheduleOnUI } from 'react-native-worklets'
 import { ScrubContext } from './scrubContext'
 import {
-  anchorY, contentHeightAt, rowIndexAt, rowShift, scrollLimitAt, settleTarget,
+  anchorY, contentHeightAt, rowIndexAt, rowInWindow, rowShift, scrollLimitAt, settleTarget,
 } from './scrubGeometry'
+
+/* Rows this far outside the viewport, in groups, still animate: room for a
+   frame of scroll and a row arriving at speed before it is seen. */
+const CULL_MARGIN = 2
 
 /* The finger's travel for one whole round, as a share of the screen: the
    bracket moves 1.35 times as far as the finger, which is the site's own
@@ -307,9 +311,9 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
   }, [heights])
 
   const scrub = useMemo(() => ({
-    pos, r0, scrollRef, geo, heights, widthSV, activeIdx, width, warm, estimate, e,
+    pos, r0, scrollRef, scrollY, viewportH, geo, heights, widthSV, activeIdx, width, warm, estimate, e,
     onWrapLayout, onRowLayout, onColumnLayout,
-  }), [pos, r0, scrollRef, geo, heights, widthSV, activeIdx, width, warm, estimate, e,
+  }), [pos, r0, scrollRef, scrollY, viewportH, geo, heights, widthSV, activeIdx, width, warm, estimate, e,
        onWrapLayout, onRowLayout, onColumnLayout])
 
   return { pan, scrub }
@@ -317,16 +321,33 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
 
 /* One match group's slot. Its whole part in the scrub is a translateY read
    off pos: condensing onto its successor as its column leaves to the left,
-   spreading over its feeders as it waits on the right. */
+   spreading over its feeders as it waits on the right.
+
+   ONLY WHILE IT COULD BE SEEN. A draw's early rounds mount a hundred groups
+   across three columns, and with every one of them updating its transforms
+   every frame the pull turned to jitter on the way to R128 while the final
+   stayed silky (owner, 2026-09-08). A row outside the viewport — by its
+   real place and its settled one — returns its settled style, and a style
+   that does not change is never sent to the native view. The dozen groups on
+   screen are the only ones that cost a frame anything. The group inside
+   makes the same call for its own pieces, from the context this provides. */
 function Row({ ri, i, scrub, children }) {
-  const { pos, geo, e, onRowLayout } = scrub
-  const style = useAnimatedStyle(() => ({
-    transform: [{ translateY: rowShift(i, pos.value - ri, geo.value.G, e) }],
-  }), [i, ri, e])
+  const { pos, geo, e, scrollY, viewportH, onRowLayout } = scrub
+  const style = useAnimatedStyle(() => {
+    const s = pos.value - ri
+    const g = geo.value
+    const top = scrollY.value - CULL_MARGIN * g.H
+    const bottom = scrollY.value + viewportH.value + CULL_MARGIN * g.H
+    const shown = rowInWindow(i, s, g.P, g.H, g.G, e, top, bottom)
+    return { transform: [{ translateY: shown ? rowShift(i, s, g.G, e) : 0 }] }
+  }, [i, ri, e])
+  // What the group inside reads to stretch or condense itself.
+  const ctx = useMemo(() => ({ pos, ri, i, geo, e, scrollY, viewportH, margin: CULL_MARGIN }),
+                      [pos, ri, i, geo, e, scrollY, viewportH])
   return (
     <Animated.View style={style} collapsable={false}
-                   onLayout={i < 2 ? e => onRowLayout(ri, i, e) : undefined}>
-      {children}
+                   onLayout={i < 2 ? ev => onRowLayout(ri, i, ev) : undefined}>
+      <ScrubContext.Provider value={ctx}>{children}</ScrubContext.Provider>
     </Animated.View>
   )
 }
@@ -335,26 +356,22 @@ function Row({ ri, i, scrub, children }) {
    whatever pos is doing — which is why a commit moves nothing. The round a
    pull left from fades on its way out; the one arriving slides in whole. */
 function Column({ ri, num, matches, scrub, renderRow, columnStyle }) {
-  const { pos, r0, geo, e, width, onColumnLayout } = scrub
+  const { pos, r0, width, onColumnLayout } = scrub
   const style = useAnimatedStyle(() => {
     const s = Math.abs(pos.value - ri)
     return { opacity: r0.value === ri && s > 0 ? Math.max(0, 1 - s) : 1 }
   }, [ri])
-  // What every group in this column reads to stretch or condense itself.
-  const ctx = useMemo(() => ({ pos, ri, geo, e }), [pos, ri, geo, e])
   return (
     <Animated.View style={[s.column, { left: ri * width, width }, style]}>
-      <ScrubContext.Provider value={ctx}>
-        <View style={columnStyle} onLayout={ev => onColumnLayout(ri, ev)}>
-          {matches.map((m, i) => (
-            /* A slot with no match — an unplayed half of the bracket — has no
-               id; the round and position make a key that exists for every row. */
-            <Row key={m.id ?? `slot-${num}-${i}`} ri={ri} i={i} scrub={scrub}>
-              {renderRow(m)}
-            </Row>
-          ))}
-        </View>
-      </ScrubContext.Provider>
+      <View style={columnStyle} onLayout={ev => onColumnLayout(ri, ev)}>
+        {matches.map((m, i) => (
+          /* A slot with no match — an unplayed half of the bracket — has no
+             id; the round and position make a key that exists for every row. */
+          <Row key={m.id ?? `slot-${num}-${i}`} ri={ri} i={i} scrub={scrub}>
+            {renderRow(m)}
+          </Row>
+        ))}
+      </View>
     </Animated.View>
   )
 }
