@@ -1329,7 +1329,15 @@ function TournamentDraw() {
   // device there is no pager button, so the bracket keeps the width.
   const leftNavInDraw = compactDraw
     || (hasPointer && !sidebarCollapsed && columnCount > w0.dw)
-  const drawInsetLeft = leftNavInDraw ? NAV_INSET : 0
+  /* ON A DESKTOP, THE GUTTER ALSO CLEARS THE GROUP CHIP. The chip is
+     centred on the first column's outline border and hangs 17px past it
+     (8px of overhang + half its rotated width), so with the pager's gutter
+     sized to the pager alone the chip's left edge sat inside the "R64"
+     button whenever the sidebar was open. A phone has no width to give and
+     keeps the tight gutter; a desktop does. Fed through computeWindow as
+     well, so the column count is decided against the width actually left. */
+  const CHIP_CLEAR = compactDraw ? 0 : 20
+  const drawInsetLeft = leftNavInDraw ? NAV_INSET + CHIP_CLEAR : 0
   let { dw: DRAW_WINDOW, maxStart: maxWindowStart, pos: windowPos, fit: windowFit } = computeWindow(drawInsetLeft)
   if (compactDraw) {
     DRAW_WINDOW = Math.min(2, columnCount)
