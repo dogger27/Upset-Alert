@@ -95,6 +95,15 @@
   border-color: var(--danger);
   box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.15);
 }
+/* A finished match wears a green edge, so a round reads as done/not-done at
+   a glance. --brand-line-strong: seen against the grey outline, and clearly
+   NOT the pick-correct green the boxes inside use, which says something
+   else. After --missing so it wins on a decided match — there is nothing
+   left to pick there, whatever the pick state says. */
+.cv-match-outline--done {
+  border-color: var(--brand-line-strong);
+  box-shadow: none;
+}
 
 /* Seed badge at the box's left edge, natural width, tight to the flag.
    Its child .pos-badge has a fixed min-width (see BracketView.css) so
