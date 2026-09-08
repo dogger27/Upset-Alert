@@ -95,14 +95,14 @@
   border-color: var(--danger);
   box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.15);
 }
-/* A finished match is a step LIGHTER inside, so a round reads as done /
-   still-to-play at a glance. Lighter, not dimmer: dimmed, the finished
-   ones sank into the page and the whole column read as gaps. The border
-   is left alone — a coloured edge (green, then teal) read as a third
-   signal beside the pick colours in the boxes. Placed after --missing so a
-   decided match never keeps the red "needs a pick" glow. */
+/* A finished match: a cool slate inside, a step brighter than the warm fill
+   of a match still to play, AND a teal edge — the border came back at a
+   member's suggestion, once the fill carried the difference on its own and
+   the edge could be an accent rather than the whole signal. Placed after
+   --missing so a decided match never keeps the red "needs a pick" glow. */
 .cv-match-outline--done {
   background: var(--match-done-fill);
+  border-color: var(--match-done-line);
   box-shadow: none;
 }
 

@@ -294,6 +294,7 @@
      enough to see swallowed the boxes. The border stays the default. */
   --match-fill: var(--n-150);
   --match-done-fill: #e7edf0;
+  --match-done-line: #149c90;   /* the teal edge, back by a member's suggestion */
   --gold-ink: #b8860b;
 
   --success-tint: #f0fdf4;
@@ -489,7 +490,8 @@
   --atp-text-strong: #a8c8ff;
   --brand-line-strong: #4a8f6c;
   --match-fill: var(--n-100);
-  --match-done-fill: #1e2d34;   /* the slate, pulled ~12% back toward --match-fill */
+  --match-done-fill: #263842;   /* the slate, a step brighter */
+  --match-done-line: #2ec4b6;   /* the teal edge, back by a member's suggestion */
   --gold-ink: #e0b34a;
 
   --success-tint: #16301f;
