@@ -860,6 +860,20 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 @container (max-width: 420px) {
   .lt-progress-date { display: none; } /* drop dates */
 }
+/* A phone. The row was at its limit here before the Max column — six pixels
+   to spare in the draw popup — so every column that is not the name gives a
+   little: the buttons a couple of pixels, the gap, and the correct column
+   loses its denominator ("✓" alone; the count still carries the tooltip).
+   The name column keeps its measured width: a truncated username is the one
+   thing this table must not show. */
+@container (max-width: 400px) {
+  .lt-progress-correct-of { display: none; }
+  .lt-progress-row--abs,
+  .lt-progress-header-row {
+    gap: 0.3rem;
+    grid-template-columns: 24px 22px 20px var(--name-col-width, 120px) 2rem 46px 2rem;
+  }
+}
 @container (max-width: 320px) {
   .lt-gender-badge { display: none; } /* drop category, leave only the name */
 }
