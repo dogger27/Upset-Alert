@@ -11,6 +11,7 @@ import { StatusBar } from 'expo-status-bar'
 import { useFonts } from 'expo-font'
 import { ActivityIndicator, View } from 'react-native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { AuthProvider, useAuth } from '../auth'
 import { FONTS } from '../fonts'
 import { C, T } from '../theme'
@@ -73,6 +74,11 @@ export default function RootLayout() {
   }
 
   return (
+    /* THE GESTURE ROOT. react-native-gesture-handler routes every touch on
+       iOS through this one view; a GestureDetector anywhere below it — the
+       draw's round scrub is the first — never activates without it. Outside
+       the providers so nothing it wraps can ever be re-mounted around it. */
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <SafeAreaProvider>
       <AuthProvider>
         <StatusBar style="light" />
@@ -105,5 +111,6 @@ export default function RootLayout() {
       </AuthProvider>
           <ToastHost />
     </SafeAreaProvider>
+    </GestureHandlerRootView>
   )
 }
