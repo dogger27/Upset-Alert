@@ -44,7 +44,11 @@ import { C, PICK } from './theme'
 /* ── Tokens, from the site's DARK theme (frontend/src/index.css) ─────────── */
 const N = { 950: '#f2f6f4', 400: '#6f817a', 300: '#3f524b', 200: '#2b3a35', 150: '#212e29', 100: '#18241f' }
 const ETA = { text: '#a5b4fc', bg: '#1e1b4b' }                 // --eta-text / --eta-bg
-const LIVE = { text: C.info, bg: '#14243d', line: C.atp }      // --info / --atp-tint / --atp-500
+/* The live pill's edge and word, and the running score in the gap, are ONE
+   blue — the site's --atp-text, light enough to read on the tint. The pill
+   used --atp-500 for its edge and word, a saturated mid blue that sat dark
+   on the dark fill and did not match the score under it. */
+const LIVE = { text: '#8fb6ff', bg: '#14243d', line: '#8fb6ff' }
 const STOP = { text: '#e0a340', bg: '#2a2010' }                // --warning / --warning-tint
 const DANGER_STRONG = '#ffb0a8'
 const CHIP = { line: '#40916c', text: '#5fbf8f' }              // --green-500 / --brand-text
