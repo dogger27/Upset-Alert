@@ -51,17 +51,27 @@ const s = StyleSheet.create({
      banner's own air. */
   bar: {
     marginTop: S.xs,
+    /* EDGE TO EDGE: the screen pads its body S.lg a side, and a ruled bar
+       that stopped short of the edges read as a box, not a bar. The row
+       inside keeps that padding so the labels do not touch the glass. */
+    marginHorizontal: -S.lg,
     backgroundColor: '#12262a',
     borderTopWidth: 1, borderBottomWidth: 1, borderColor: C.borderLit,
-    paddingVertical: 3,
   },
-  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
-  round: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 999, borderWidth: 1, borderColor: 'transparent' },
+  /* THIN: no padding of its own; the line box is the type's own height
+     and the pill adds a point each side, so the bar is about 20pt. The
+     labels may shrink together (flexShrink on each, the type shrinking to
+     fit inside) so seven rounds always fit the width, at any text size. */
+  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: S.lg },
+  round: {
+    paddingHorizontal: 5, paddingVertical: 1, borderRadius: 5, borderWidth: 1, borderColor: 'transparent',
+    flexShrink: 1, minWidth: 0,
+  },
   // The round you are on: a filled, edged pill, the only bright thing here.
   roundOn: { backgroundColor: C.greenDeep, borderColor: C.greenLit },
   // Dimmed but still READ — these are the control, not decoration.
-  roundText: { ...T.smallMed, color: C.muted },
+  roundText: { ...T.smallMed, lineHeight: undefined, color: C.muted },
   roundTextOn: { color: C.greenBright, fontFamily: 'Archivo_700Bold' },
   // Punctuation, so it sits below the labels it separates without vanishing.
-  dot: { ...T.smallMed, color: C.borderLit },
+  dot: { ...T.smallMed, lineHeight: undefined, color: C.borderLit },
 })
