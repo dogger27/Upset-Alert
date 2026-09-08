@@ -640,7 +640,7 @@ const s = StyleSheet.create({
     /* 0.7, down from 1.6: that moved the word past centre by about as much
        as it had been short — the shift lands at roughly twice its size
        on screen. Measured, not derived. */
-    transform: [{ translateY: 0.7 * FONT_SCALE }],
+    transform: [{ translateY: 0.4 * FONT_SCALE }],
   },
   // Undo the pill's rotation so the glyph stands upright.
   chipIcon: { transform: [{ rotate: '90deg' }] },
