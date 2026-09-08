@@ -145,7 +145,10 @@ const s = StyleSheet.create({
      right-aligning both hung the numbers under the "120" instead of under
      the label. Centring is what sits a narrow cell beneath a wide one. */
   right: { color: C.ink, width: 60, textAlign: 'center' },
-  num: { color: C.ink, width: 46, textAlign: 'right' },
+  /* Centred, like the ✓ column and the site: a label fills its cell and a
+     number does not, so right-aligning both parked the number under the
+     label's last letters instead of under the label. */
+  num: { color: C.ink, width: 46, textAlign: 'center' },
   // Two `num` cells and the row's gap: the same width the cells below take.
   scoreHead: { width: 46 * 2 + 8, alignItems: 'center', gap: 2 },
   scoreHeadTitle: { color: C.ink, textAlign: 'center' },
