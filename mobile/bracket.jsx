@@ -41,7 +41,7 @@ import { expectedStartLabel } from './dates'
 import { scoreLine, setCount } from './score'
 import { matchStarted } from './scoreHistory'
 import { EntryChip, PosBadge } from './cards'
-import { C, PICK } from './theme'
+import { C, PICK, S } from './theme'
 
 /* ── Tokens, from the site's DARK theme (frontend/src/index.css) ─────────── */
 const N = { 950: '#f2f6f4', 400: '#6f817a', 300: '#3f524b', 200: '#2b3a35', 150: '#212e29', 100: '#18241f' }
@@ -87,13 +87,12 @@ const CHIP_H = 24         // the on-screen WIDTH of the rotated pill; 24 at the 
    stub overflows into the strip's extra width (the screen padding the draw
    reclaims for it) until the glass cuts it. */
 const CONN_RUN = 24       // border → the vertical bar, clear of the pill
-const CONN_STUB = 120     // the bar → off the edge of the screen
-/* The line each box ARRIVED on: from the round before, in at the box's own
-   centre and off the left edge of the glass — the site's connector run into
-   a box (owner, 2026-09-08). Long enough to cross the column's left padding
-   and the screen's; the glass cuts it. Not on the first round, whose boxes
-   came from the draw, not from a match. */
-const CONN_IN = 64
+/* The bar → the edge of the glass, and NO FURTHER. The column's right
+   padding is CONNECTOR_W plus the screen's S.lg, so this is what remains
+   past the bar; a few points of slack for rounding. At 120 the stub ran on
+   into the NEXT round's column, under its predictors chip, and showed there
+   as a third line out of the middle of every match (owner, 2026-09-08). */
+const CONN_STUB = S.lg + 8
 const BELL_CORNER = 42    // .cv-eta--bell / .cv-live-score--bell: right: 42px
 const NAME_FONT = 12      // the site's 0.8rem, a point down with the box
 const NAME_FAMILY = 'Archivo_700Bold'
@@ -126,6 +125,13 @@ export const GROUP_H = 2 * 2 + PAD_TOP + PAD + 2 * leading(BOX_H) + leading(GAP_
    ~23pt across, and a fixed 8 here had RoundScrub's clip slicing its left
    third off. Rounded up, with the border's point of slack left in. */
 export const CHIP_OVERHANG = Math.ceil(leading(CHIP_H) / 2)
+/* The line each box ARRIVED on: from the round before, in at the box's own
+   centre and off the left edge of the glass — the site's connector run into
+   a box (owner, 2026-09-08). Exactly the column's left padding (CHIP_OVERHANG
+   plus the screen's S.lg) and a little slack, so it reaches the glass and
+   not the previous round's column. Not on the first round, whose boxes came
+   from the draw, not from a match. */
+const CONN_IN = CHIP_OVERHANG + S.lg + 4
 
 /* ── The model ───────────────────────────────────────────────────────────────
    Everything a group needs that is about the DRAW rather than the match:
