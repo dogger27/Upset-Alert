@@ -1433,7 +1433,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                 agrees with the rows under it at every position. */}
             <span className="lt-progress-correct lt-progress-col-header"
                   title={`Correct picks, of ${effectiveScrubPos} match${effectiveScrubPos !== 1 ? 'es' : ''} counted`}>
-              ✓ / {effectiveScrubPos}
+              ✓<span className="lt-progress-correct-of"> / {effectiveScrubPos}</span>
             </span>
             <span className="lt-progress-total lt-progress-col-header">Score</span>
             {/* The best this bracket can still finish on: every pick that can
