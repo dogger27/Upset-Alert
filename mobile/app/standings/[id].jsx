@@ -57,11 +57,20 @@ export default function GlobalStandings() {
               <Text style={[s.rank, s.headText]} numberOfLines={1}>#</Text>
               <Text style={[s.who, s.headText]} numberOfLines={1}>Player</Text>
               <Text style={[s.num, s.headText]} numberOfLines={1}>Right</Text>
-              <Text style={[s.num, s.headText]} numberOfLines={1}>Pts</Text>
-              {/* The best this bracket can still finish on — every pick
-                  that can yet come true, paid out. Quieter than the score:
+              {/* ONE HEADING OVER TWO COLUMNS: "Score", then "Curr." and
+                  "Max" beneath it — where a bracket stands and the best it
+                  can still finish on are one fact read two ways. The group
+                  is exactly two number cells and the gap between them wide,
+                  so the sub-labels sit over their columns. Max: every pick
+                  that can yet come true, paid out. Quieter than the score,
                   a possibility beside a fact. */}
-              <Text style={[s.num, s.headText]} numberOfLines={1}>Max</Text>
+              <View style={s.scoreHead}>
+                <Text style={[s.headText, s.scoreHeadTitle]} numberOfLines={1}>Score</Text>
+                <View style={s.scoreHeadRow}>
+                  <Text style={[s.num, s.headText]} numberOfLines={1}>Curr.</Text>
+                  <Text style={[s.num, s.headText]} numberOfLines={1}>Max</Text>
+                </View>
+              </View>
             </View>
             {entries.map((e, i) => {
               const mine = me && e.user_id === me.id
@@ -108,6 +117,10 @@ const s = StyleSheet.create({
   name: { color: C.ink, fontWeight: '600' },
   nameMine: { color: C.clay, fontWeight: '800' },
   num: { color: C.ink, width: 46, textAlign: 'right' },
+  // Two `num` cells and the row's gap: the same width the cells below take.
+  scoreHead: { width: 46 * 2 + 8, alignItems: 'center', gap: 2 },
+  scoreHeadTitle: { color: C.ink, textAlign: 'center' },
+  scoreHeadRow: { flexDirection: 'row', gap: 8 },
   total: { fontWeight: '800' },
   max: { color: C.muted, fontWeight: '600' },
   hist: { paddingLeft: 6, paddingVertical: 4 },

@@ -769,6 +769,27 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 }
 
 .lt-progress-total { font-size: 0.8rem; color: var(--ink, var(--n-950)); font-weight: 700; text-align: center; white-space: nowrap; }
+/* The score heading spans the two score columns and carries their two
+   sub-labels on a second line. Subgrid, so "Curr." and "Max" sit on exactly
+   the tracks their cells use — every width tier changes those tracks, and
+   nothing here has to know. The fixed-width fallback is for the rare engine
+   without subgrid; it matches the widest tier and is a hair off elsewhere. */
+.lt-score-head {
+  grid-column: span 2;
+  display: grid;
+  grid-template-columns: 52px 2.6rem;
+  grid-template-columns: subgrid;
+  grid-template-rows: auto auto;
+  row-gap: 2px;
+  align-items: center;
+}
+.lt-score-head-title {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  text-align: center;
+  color: var(--ink, var(--n-950));
+}
+.lt-score-head-sub { grid-row: 2; }
 /* The ceiling beside the score: quieter than the score, since it is a
    possibility and the score is a fact, and never dropped at any width — it
    is the one number that says whether the race is still on. */
