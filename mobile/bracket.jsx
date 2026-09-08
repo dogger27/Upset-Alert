@@ -549,7 +549,12 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: PICK.wrong.bg, zIndex: 2,
   },
-  realWinnerText: { fontFamily: 'Archivo_700Bold', fontSize: 11, color: DANGER_STRONG },
+  /* paddingBottom is a NUDGE, tuned from the phone (2026-09-08), not from
+     the metrics. With the font's own line the caps still sat ~1.5pt below
+     the strip's centre on iOS — twice the red above them as below — and the
+     harness shows them centred, so the number comes from a screenshot.
+     Padding under the glyphs lifts them by half of itself. */
+  realWinnerText: { fontFamily: 'Archivo_700Bold', fontSize: 11, color: DANGER_STRONG, paddingBottom: leading(3) },
 
   gap: { height: leading(GAP_H), justifyContent: 'center' },
   gapLine: {
