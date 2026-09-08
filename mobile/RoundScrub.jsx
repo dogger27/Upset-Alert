@@ -514,13 +514,18 @@ const Row = memo(function Row({ ri, i, m, renderRow, scrub }) {
 
 /* A round's column, at its own place on the strip: index times the width,
    whatever pos is doing — which is why a commit moves nothing. The round a
-   pull left from fades on its way out UNDER A VEIL: a flat view in the page's
-   colour whose opacity rises, which costs one layer, where opacity on the
-   column itself would render its whole tree offscreen every frame. */
+   pull left from, leaving to the left, fades on its way out UNDER A VEIL: a
+   flat view in the page's colour whose opacity rises, which costs one layer,
+   where opacity on the column itself would render its whole tree offscreen
+   every frame. */
 function Column({ ri, num, matches, window, scrub, renderRow, columnStyle }) {
   const { pos, r0, width, rowHeight, onColumnLayout } = scrub
+  /* Only a round leaving to the LEFT fades — its groups are condensing onto
+     one another, and the fade is what keeps that from reading as a pile-up.
+     A round leaving to the right spreads, overlaps nothing, and just goes
+     (owner, 2026-09-08). */
   const veil = useAnimatedStyle(() => {
-    const s = Math.abs(pos.value - ri)
+    const s = pos.value - ri
     return { opacity: r0.value === ri && s > 0 ? Math.min(1, s) : 0 }
   }, [ri])
   const [lo, hi] = window
