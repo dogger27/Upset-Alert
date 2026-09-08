@@ -1446,7 +1446,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                 a race, 20 behind with 4 is not. Frozen while scrubbing, since
                 a replay has no future. */}
             <span className="lt-score-head">
-              <span className="lt-score-head-title lt-progress-col-header">Score</span>
+              <span className="lt-score-head-title lt-progress-col-header">Score (pts)</span>
               <span className="lt-progress-total lt-progress-col-header lt-score-head-sub"
                     title="Points scored so far">Curr.</span>
               <span className="lt-progress-max lt-progress-col-header lt-score-head-sub"
@@ -1552,7 +1552,8 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                       title={`${entry.correct_count ?? 0} correct pick${(entry.correct_count ?? 0) !== 1 ? 's' : ''}`}>
                   {entry.correct_count ?? 0}
                 </span>
-                <span className="lt-progress-total">{entry.total} pts</span>
+                {/* The unit is in the heading, once, not on every row. */}
+                <span className="lt-progress-total">{entry.total}</span>
                 <span className="lt-progress-max"
                       title={entry.max_points != null
                         ? `Could still finish on ${Math.round(entry.max_points)} pts` : undefined}>
