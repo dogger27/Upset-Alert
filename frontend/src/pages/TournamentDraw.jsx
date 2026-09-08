@@ -29,7 +29,7 @@ import { useAuth } from '../store/auth'
    The rest of the machinery — viewMode state, picksOwner, the 'picks'-only
    mode inside BracketView — is untouched and still works. */
 // import BracketView, { COL_W as BV_COL_W, COL_W_SCORES as BV_COL_W_SCORES, COL_GAP as BV_COL_GAP } from '../components/BracketView'
-import CombinedView, { COL_W as CV_COL_W, COMPACT_COL_W as CV_COMPACT_COL_W, COL_GAP as CV_COL_GAP, H2H_X as CV_H2H_X } from '../components/CombinedView'
+import CombinedView, { COL_W as CV_COL_W, COMPACT_COL_W as CV_COMPACT_COL_W, COL_GAP as CV_COL_GAP, H2H_X as CV_H2H_X, SETTLE_MS as SCRUB_SETTLE_MS } from '../components/CombinedView'
 import DrawSidebar from '../components/DrawSidebar'
 import ScoreHistoryPopup from '../components/ScoreHistoryPopup'
 import { matchStarted } from '../utils/score'
