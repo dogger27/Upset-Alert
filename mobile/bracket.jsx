@@ -44,7 +44,6 @@ import { matchStarted } from './scoreHistory'
 import { EntryChip, PosBadge } from './cards'
 import { C, PICK, S } from './theme'
 import { ScrubContext } from './scrubContext'
-import { boxOffset, rowInWindow } from './scrubGeometry'
 
 /* ── Tokens, from the site's DARK theme (frontend/src/index.css) ─────────── */
 const N = { 950: '#f2f6f4', 400: '#6f817a', 300: '#3f524b', 200: '#2b3a35', 150: '#212e29', 100: '#18241f' }
@@ -160,19 +159,11 @@ const Y_TOP = PAD_TOP + BOX_PX / 2             // the top box's centre, inside t
 const Y_BOT = PAD + BOX_PX / 2                 // the bottom box's centre, up from the bottom cap's border
 const BAR_LEN = BOX_PITCH + LINE_W
 
-/** How far each half of a group has moved from where it sits settled, read
-    off the scrub this group is riding — 0 when there is none, and 0 when the
-    group is nowhere near the viewport, so an unseen group's pieces are never
-    updated (see RoundScrub's Row for why that is the frame budget). */
+/** How far each half of a group has moved from where it sits settled: the
+    one value the scrub writes for this group (0 when there is no scrub). */
 function halfShift(sc) {
   'worklet'
-  if (!sc.pos) return 0
-  const s = sc.pos.value - sc.ri
-  const g = sc.geo.value
-  const top = sc.scrollY.value - sc.margin * g.H
-  const bottom = sc.scrollY.value + sc.viewportH.value + sc.margin * g.H
-  if (!rowInWindow(sc.i, s, g.P, g.H, g.G, sc.e, top, bottom)) return 0
-  return boxOffset(s, g.G, sc.e) - sc.e
+  return sc.stretch ? sc.stretch.value : 0
 }
 
 /* ── The model ───────────────────────────────────────────────────────────────
