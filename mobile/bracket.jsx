@@ -78,6 +78,10 @@ const NOTE_CAP_H = 7.55
 const NOTE_CAP_TOP = 3.7
 const NOTE_PAD = 1
 const NOTE_BOX_H = (NOTE_CAP_H + 2 * NOTE_PAD) * FONT_SCALE
+/* How far the note stands up into the gap above the lower box (its top is
+   4pt above the box's edge), plus a little air — what the gap's content
+   gives up when there is a note. */
+const NOTE_RISE = 6 * FONT_SCALE
 const TICK_PX = 22        // and the winner's ✓, with its leading space
 export const CONNECTOR_W = 2 + CONN_RUN + CONN_STUB   // beyond the outline's outer edge
 /* How far the chips poke past the outline's outer edge — SCALED, because the
@@ -476,9 +480,16 @@ export function MatchGroup({ m, roundIdx, B, drawRanks, zone, onH2H, onPredictor
       <PlayerBox box={top} B={B} drawRanks={drawRanks}
                  serving={serving === 1} picked={pickId != null && pickId === top.playerId}
                  won={wonBy(top)} noteWon={noteWonBy(top)} />
+      {/* THE NOTE TAKES ITS SHARE OF THE GAP. When the lower box carries a
+          real-winner note, that note stands up into the gap, and anything
+          centred on the gap's full height sat on top of it. The site's
+          gapMid subtracts the note before centring; so does this — the
+          content centres in what is left above the note, air included. */}
       <View style={s.gap}>
-        {gap}
-        {bell && <Text style={s.bell} accessibilityLabel="Upset pick">🔔</Text>}
+        <View style={[s.gapInner, bot.realName && { bottom: NOTE_RISE }]}>
+          {gap}
+          {bell && <Text style={s.bell} accessibilityLabel="Upset pick">🔔</Text>}
+        </View>
       </View>
       <PlayerBox box={bot} B={B} drawRanks={drawRanks}
                  serving={serving === 2} picked={pickId != null && pickId === bot.playerId}
@@ -588,7 +599,9 @@ const s = StyleSheet.create({
     marginTop: -(NOTE_CAP_TOP - NOTE_PAD) * FONT_SCALE,
   },
 
-  gap: { height: leading(GAP_H), justifyContent: 'center' },
+  gap: { height: leading(GAP_H) },
+  // The part of the gap the content centres in: all of it, less the note.
+  gapInner: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, justifyContent: 'center' },
   gapLine: {
     position: 'absolute', left: 0, right: 0, top: 0, bottom: 0,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
