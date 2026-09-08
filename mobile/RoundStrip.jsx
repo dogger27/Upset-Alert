@@ -59,6 +59,7 @@ const s = StyleSheet.create({
     marginHorizontal: -S.lg,
     backgroundColor: '#12262a',
     borderTopWidth: 1, borderBottomWidth: 1, borderColor: C.borderLit,
+    paddingVertical: 3,
   },
   /* THIN: no padding of its own; the line box is the type's own height
      and the pill adds a point each side, so the bar is about 20pt. The
