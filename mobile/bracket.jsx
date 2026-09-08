@@ -68,7 +68,7 @@ const BELL_CORNER = 42    // .cv-eta--bell / .cv-live-score--bell: right: 42px
 const NAME_FONT = 13      // 0.8rem
 const NAME_FAMILY = 'Archivo_700Bold'
 const PICK_PX = 24        // room the 🤞 takes after a name
-const TICK_PX = 18        // and the winner's ✓
+const TICK_PX = 22        // and the winner's ✓, with its leading space
 export const CONNECTOR_W = 2 + CONN_RUN + CONN_STUB   // beyond the outline's outer edge
 export const CHIP_OVERHANG = CHIP_H / 2 - 1            // beyond the outline's outer edge
 
@@ -266,7 +266,7 @@ function BoxName({ player, B, won, picked }) {
             numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.3}>
         {text}
       </Text>
-      {won && <Text style={s.tick} accessibilityLabel="Won">✓</Text>}
+      {won && <Text style={s.tick} accessibilityLabel="Won"> ✓</Text>}
       {picked && (
         <Text style={s.pick} accessibilityLabel="You predicted this player to win">🤞</Text>
       )}
