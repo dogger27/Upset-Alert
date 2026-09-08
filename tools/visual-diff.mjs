@@ -68,6 +68,10 @@ const SCREENS = [
     drag: { app: { x: 300, y: 480, dx: -146 }, pwa: { x: 300, y: 480, dx: -83 } } },
   { name: 'draw-scrub-back', mobile: '/draw/77', pwa: '/tournaments/77', appClick: 'R16', pwaClick: 'R16',
     drag: { app: { x: 80, y: 480, dx: 146 }, pwa: { x: 80, y: 480, dx: 83 } } },
+  // The same pull from the BOTTOM of a long round: the anchor has to read the
+  // real scroll offset, and the rows there have to be mounted.
+  { name: 'draw-scrub-scrolled', mobile: '/draw/77', pwa: '/tournaments/77', appClick: 'R64', pwaClick: 'R64',
+    scrollEnd: true, drag: { app: { x: 300, y: 480, dx: -146 }, pwa: { x: 300, y: 480, dx: -83 } } },
   // Another member's picks on the bracket, reached from a standings row.
   { name: 'draw-other', mobile: '/draw/77?user=43&name=piotr_lotr86', pwa: '/tournaments/77?user=43' },
   // The league settings sheet (owner / league admin / site admin).
