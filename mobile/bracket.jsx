@@ -691,7 +691,9 @@ const s = StyleSheet.create({
   // Undo the pill's rotation so the glyph stands upright.
   chipIcon: { transform: [{ rotate: '90deg' }] },
 
-  conn: { position: 'absolute', top: 0, bottom: 0, right: -CONNECTOR_W, width: CONN_RUN + CONN_STUB, zIndex: 0 },
+  /* Anchored at the outline's OUTER edge: its right offset is its own width
+     plus the border, whatever the column reserves for it. */
+  conn: { position: 'absolute', top: 0, bottom: 0, right: -(2 + CONN_RUN + CONN_STUB), width: CONN_RUN + CONN_STUB, zIndex: 0 },
   connLine: { position: 'absolute', backgroundColor: CONNECTOR },
 
   // TennisBall: 16px, #7ba81f, rim #1b4332, white seams.
