@@ -58,6 +58,16 @@ const SCREENS = [
   { name: 'score-history', mobile: '/schedule?date=2026-09-01', pwa: '/schedule?date=2026-09-01', appClick: 'Madison Keys', pwaClick: 'KEYS' },
   // A finished match on the draw page tapped open: the same sheet from the bracket.
   { name: 'draw-score', mobile: '/draw/77', pwa: '/tournaments/77', appClick: 'Halys', pwaClick: 'Halys' },
+  // THE ROUND SCRUB, MID-GESTURE: a finger held half a round into a pull,
+  // forward and back, on both apps. The app pulls one round per width/1.35
+  // of travel (RoundScrub.jsx); the site one per 150px after an 8px axis
+  // lock (TournamentDraw.jsx). The finger stays down for the shot, so this
+  // is the telescoping itself, not the landing. The row under the finger
+  // (y=480) should be the row still under it on both.
+  { name: 'draw-scrub', mobile: '/draw/77', pwa: '/tournaments/77', appClick: 'R16', pwaClick: 'R16',
+    drag: { app: { x: 300, y: 480, dx: -146 }, pwa: { x: 300, y: 480, dx: -83 } } },
+  { name: 'draw-scrub-back', mobile: '/draw/77', pwa: '/tournaments/77', appClick: 'R16', pwaClick: 'R16',
+    drag: { app: { x: 80, y: 480, dx: 146 }, pwa: { x: 80, y: 480, dx: 83 } } },
   // Another member's picks on the bracket, reached from a standings row.
   { name: 'draw-other', mobile: '/draw/77?user=43&name=piotr_lotr86', pwa: '/tournaments/77?user=43' },
   // The league settings sheet (owner / league admin / site admin).
@@ -106,7 +116,7 @@ const browser = await chromium.launch({
   args: ['--disable-web-security', '--hide-scrollbars', '--force-color-profile=srgb'],
 })
 
-async function shoot(url, kind, name, click, noAuth, scrollEnd) {
+async function shoot(url, kind, name, click, noAuth, scrollEnd, drag) {
   const ctx = await browser.newContext({
     viewport: VIEW, deviceScaleFactor: DSF, isMobile: true, hasTouch: true,
     colorScheme: 'dark',
@@ -168,6 +178,27 @@ async function shoot(url, kind, name, click, noAuth, scrollEnd) {
     await page.waitForTimeout(1500)
   }
 
+  /* A finger, held. Playwright's mouse is not a touch on a touch-emulated
+     context, so the drag is dispatched through CDP as real touch events —
+     start, a run of moves, and NO end: the shot is taken with the finger
+     still down, which is the only way to see a gesture's middle. The moves
+     are spread over ~25 frames so the axis lock, the responder claim and
+     any per-frame coalescing all happen the way they do under a thumb. */
+  let touch = null
+  if (drag) {
+    touch = await ctx.newCDPSession(page)
+    const steps = 25
+    const pt = (x, y) => ({ x, y, radiusX: 4, radiusY: 4, force: 1, id: 1 })
+    await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [pt(drag.x, drag.y)] })
+    for (let i = 1; i <= steps; i++) {
+      await touch.send('Input.dispatchTouchEvent', {
+        type: 'touchMove', touchPoints: [pt(drag.x + (drag.dx * i) / steps, drag.y + (drag.dy || 0) * i / steps)],
+      })
+      await page.waitForTimeout(16)
+    }
+    await page.waitForTimeout(400)
+  }
+
   // EXPO'S RED BOX IS NOT A pageerror. A crash inside a screen is caught and
   // painted as an overlay, so the console hook above stays silent and the
   // screenshot shows an error page that reads, at a glance, like a dark
@@ -180,6 +211,10 @@ async function shoot(url, kind, name, click, noAuth, scrollEnd) {
 
   const file = join(OUT, `${name}${SUFFIX}.${kind}.png`)
   await page.screenshot({ path: file, fullPage: full })
+  if (touch) {
+    await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    await page.waitForTimeout(400)
+  }
   await ctx.close()
   return { file, errors }
 }
@@ -207,8 +242,8 @@ async function pair(name, a, b) {
 }
 
 for (const s of targets) {
-  const app = await shoot(MOBILE + s.mobile, 'app', s.name, s.appClick, s.noAuth, s.scrollEnd)
-  const pwa = await shoot(PWA + s.pwa, 'pwa', s.name, s.pwaClick, s.noAuth, s.scrollEnd)
+  const app = await shoot(MOBILE + s.mobile, 'app', s.name, s.appClick, s.noAuth, s.scrollEnd, s.drag?.app)
+  const pwa = await shoot(PWA + s.pwa, 'pwa', s.name, s.pwaClick, s.noAuth, s.scrollEnd, s.drag?.pwa)
   const cmp = await pair(s.name, app.file, pwa.file)
   console.log(`${s.name}: ${cmp}`)
   for (const e of app.errors.slice(0, 4)) console.log(`   app  ! ${e}`)

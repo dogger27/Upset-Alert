@@ -19,6 +19,15 @@ node visual-diff.mjs --full           # full-page instead of one viewport
 node visual-diff.mjs --scale=1.7      # the app at the phone's LARGER text size
 ```
 
+A screen may carry a `drag` — `{ app: { x, y, dx }, pwa: { ... } }` — and the
+shot is taken with a synthetic finger STILL DOWN at the end of that travel,
+dispatched through CDP as touch events (Playwright's mouse is not a touch).
+`draw-scrub` and `draw-scrub-back` show the round scrub mid-gesture on both
+apps; the finger's row is the one that should stay put. Gesture handling
+itself is only half-testable here: react-native-web has no native responder
+negotiation, so a pan that loses to the ScrollView on the phone can still
+drag perfectly in a shot.
+
 `--scale` renders the app side at a given text-size multiplier (the phone has
 larger text on; react-native-web always reports 1). Output goes to
 `<screen>@1.7.*.png` so the 1.0 set is kept. Every app capture also reads

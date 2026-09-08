@@ -87,6 +87,10 @@ leagueSettings.jsx  the site's LeagueSettings panel, as a sheet
 app/standings/[id].jsx   global standings for a draw
 app/schedule (tab)       order of play; ?tournament=&draw=&date=
 app/draw/[id].jsx        the bracket; ?user=&name= shows another member's picks
+RoundScrub.jsx   the round scrub: a sideways pull telescopes the bracket around the
+                 finger and lands on the next round — Reanimated + Gesture Handler,
+                 every frame on the UI thread; scrubGeometry.js is its arithmetic
+                 (with tests), RoundStrip.jsx the round bar whose pill glides with it
 scoring.js   the comparisons that decide what the screens say
 theme.js  ui.jsx
 ```
@@ -103,6 +107,15 @@ ends both metros (8081 phone, 8099 harness) — restart both.
 particular match. File-based routing makes that a URL (`upsetalert://…`) rather
 than hand-rolled navigation state, and the website already has `?user=` and
 `?league=` deep links to mirror.
+
+**Reanimated 4 + Gesture Handler 2 (native modules, 2026-09-08).** The round
+scrub was first built on PanResponder + Animated so it would ship over Metro
+without a native rebuild; every frame of it crossed the bridge twice and any
+JS work stalled the bracket under a moving finger. The scrub is now a native
+pan whose every frame is a UI-thread worklet (see RoundScrub.jsx). Adding a
+native module means the development client must be rebuilt (`/phonebuild`);
+the JS that follows loads over Metro as always. babel-preset-expo adds the
+worklets plugin by itself once `react-native-worklets` is installed.
 
 **No React Query.** `useApi.js` is the ~50 lines of it we use: keyed cache,
 in-flight dedupe, explicit invalidation. It does not refetch on focus, retry, or
