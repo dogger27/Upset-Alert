@@ -1311,7 +1311,7 @@ export default function CombinedView({ tournament, matches, players, picks, onPi
                     return (
                       <Fragment key={`mo${m.id}`}>
                         <div
-                          className={`cv-match-outline${isMissingPick ? ' cv-match-outline--missing' : ''}${scoreClick(m) ? ' cv-match-outline--openable' : ''}`}
+                          className={`cv-match-outline${isMissingPick ? ' cv-match-outline--missing' : ''}${m.winner ? ' cv-match-outline--done' : ''}${scoreClick(m) ? ' cv-match-outline--openable' : ''}`}
                           style={outlineTravel}
                           onClick={scoreClick(m) ?? undefined}
                         />
