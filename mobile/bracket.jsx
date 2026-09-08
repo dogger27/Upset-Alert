@@ -21,8 +21,10 @@
  * outline's top border; the expected start, the running score or the final
  * score sits centred in the gap, keeping clear of the bell's corner when
  * there is a bell. The site moves a finished score to the next round's box;
- * here it stays in the gap, which is why the loser's name dims — with no next
- * column on screen, something has to say who won.
+ * here it stays in the gap, so a green tick beside the winner's name says who
+ * won — with no next column on screen, something has to. The tick goes on
+ * whichever name IS the winner, including the real-winner note above a wrong
+ * pick, since the box under it holds someone who was never in the match.
  *
  * One column, full width. The site stacks its phone labels on two lines
  * because its compact column is 107pt wide; this one is three times that,
@@ -66,6 +68,7 @@ const BELL_CORNER = 42    // .cv-eta--bell / .cv-live-score--bell: right: 42px
 const NAME_FONT = 13      // 0.8rem
 const NAME_FAMILY = 'Archivo_700Bold'
 const PICK_PX = 24        // room the 🤞 takes after a name
+const TICK_PX = 18        // and the winner's ✓
 export const CONNECTOR_W = 2 + CONN_RUN + CONN_STUB   // beyond the outline's outer edge
 export const CHIP_OVERHANG = CHIP_H / 2 - 1            // beyond the outline's outer edge
 
@@ -197,7 +200,7 @@ function entrantBox(m, side, B) {
     ? (side === playerSlot ? m.player1?.id ?? null : null)
     : ((side === 0 ? m.player1?.id : m.player2?.id) ?? null)
   return {
-    player: pid != null ? B.playerById[pid] ?? null : null, playerId: pid,
+    player: pid != null ? B.playerById[pid] ?? null : null, playerId: pid, realId: pid,
     isBye: m.is_bye && side !== playerSlot, correct: false, wrong: false, realName: null,
   }
 }
@@ -205,7 +208,7 @@ function entrantBox(m, side, B) {
 /* R2+ (winnerBox): the feeder's winner as you predicted, graded. */
 function feederBox(m, side, B) {
   const f = B.byKey.get(`${m.round_number - 1}:${m.match_number * 2 - 1 + side}`)
-  if (!f) return { player: null, playerId: null, isBye: false, correct: false, wrong: false, realName: null }
+  if (!f) return { player: null, playerId: null, realId: null, isBye: false, correct: false, wrong: false, realName: null }
   const realId = f.winner?.id ?? (f.is_bye ? f.player1?.id ?? null : null)
   const pickId = B.picks?.get(f.id) ?? null
   const displayId = pickId ?? realId
@@ -215,7 +218,7 @@ function feederBox(m, side, B) {
   const realPlayer = realId != null ? B.playerById[realId] : null
   return {
     player: displayId != null ? B.playerById[displayId] ?? null : null, playerId: displayId,
-    isBye: false, correct, wrong,
+    realId, isBye: false, correct, wrong,
     realName: wrong && realPlayer ? abbrevName(realPlayer.name) : null,
   }
 }
@@ -225,7 +228,7 @@ function feederBox(m, side, B) {
    font's own metrics against the width the row actually gave it, exactly as
    PlayerName does; this differs from it only in where the ladder starts and
    in the collision rule. (slotName) */
-function BoxName({ player, B, dim, picked }) {
+function BoxName({ player, B, won, picked }) {
   const unnamedQ = player?.entry_type === 'Q' && !player?.name
   const forms = useMemo(() => {
     if (!player) return ['TBD']
@@ -248,7 +251,7 @@ function BoxName({ player, B, dim, picked }) {
   let text = forms[0]
   let fontSize = NAME_FONT
   if (avail != null) {
-    const room = avail - 1 - (picked ? PICK_PX : 0)
+    const room = avail - 1 - (picked ? PICK_PX : 0) - (won ? TICK_PX : 0)
     const fits = forms.find(f => textWidth(f, NAME_FAMILY, NAME_FONT) <= room)
     if (fits) text = fits
     else {
@@ -259,10 +262,11 @@ function BoxName({ player, B, dim, picked }) {
   const muted = unnamedQ
   return (
     <View style={s.nameSlot} onLayout={e => setAvail(e.nativeEvent.layout.width)}>
-      <Text style={[s.name, muted && s.nameMuted, dim && s.nameDim, fontSize !== NAME_FONT && { fontSize }]}
+      <Text style={[s.name, muted && s.nameMuted, fontSize !== NAME_FONT && { fontSize }]}
             numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.3}>
         {text}
       </Text>
+      {won && <Text style={s.tick} accessibilityLabel="Won">✓</Text>}
       {picked && (
         <Text style={s.pick} accessibilityLabel="You predicted this player to win">🤞</Text>
       )}
@@ -282,7 +286,7 @@ function TennisBall() {
   )
 }
 
-function PlayerBox({ box, serving, picked, dim, drawRanks, B }) {
+function PlayerBox({ box, serving, picked, won, noteWon, drawRanks, B }) {
   const p = box.player
   const tone = box.isBye ? s.boxBye
     : box.correct ? s.boxCorrect
@@ -300,7 +304,7 @@ function PlayerBox({ box, serving, picked, dim, drawRanks, B }) {
                 <PosBadge seed={p.seed} drawRank={drawRanks?.[p.id]} />
               </View>
             )}
-            <BoxName player={p} B={B} dim={dim} picked={picked} />
+            <BoxName player={p} B={B} won={won} picked={picked} />
             {serving && <TennisBall />}
             {p && <EntryChip entryType={p.entry_type} />}
           </>
@@ -309,7 +313,10 @@ function PlayerBox({ box, serving, picked, dim, drawRanks, B }) {
       {/* Painted after the box so it sits on the border; its fill masks the
           border segment under the letters, as the site's does. */}
       {box.realName && (
-        <Text style={s.realWinner} numberOfLines={1}>{box.realName.toUpperCase()}</Text>
+        <Text style={s.realWinner} numberOfLines={1}>
+          {box.realName.toUpperCase()}
+          {noteWon && <Text style={s.noteTick} accessibilityLabel="Won"> ✓</Text>}
+        </Text>
       )}
     </View>
   )
@@ -424,6 +431,15 @@ export function MatchGroup({ m, roundIdx, B, drawRanks, zone, onH2H, onPredictor
     )
   }
 
+  /* WHO WON, once decided: a tick beside the winner's name wherever that name
+     is. In the box when the box shows them; on the real-winner note when the
+     box holds a wrong pick and the person who actually won this match is the
+     one named above it. Both names stay white — a dimmed loser read as a
+     fault, and dimmed BOTH of them whenever neither box held the winner. */
+  const wonBy = box => decided && box.playerId != null && box.playerId === winnerId
+  const noteWonBy = box => decided && !!box.realName && box.realId === winnerId
+    && box.playerId !== winnerId
+
   // A started match answers a tap with its score and history — its pick is
   // locked by then, so the tap is free to mean "show me".
   const openable = !!onShowScore && matchStarted(m)
@@ -440,14 +456,14 @@ export function MatchGroup({ m, roundIdx, B, drawRanks, zone, onH2H, onPredictor
       )}
       <PlayerBox box={top} B={B} drawRanks={drawRanks}
                  serving={serving === 1} picked={pickId != null && pickId === top.playerId}
-                 dim={decided && top.playerId != null && top.playerId !== winnerId} />
+                 won={wonBy(top)} noteWon={noteWonBy(top)} />
       <View style={s.gap}>
         {gap}
         {bell && <Text style={s.bell} accessibilityLabel="Upset pick">🔔</Text>}
       </View>
       <PlayerBox box={bot} B={B} drawRanks={drawRanks}
                  serving={serving === 2} picked={pickId != null && pickId === bot.playerId}
-                 dim={decided && bot.playerId != null && bot.playerId !== winnerId} />
+                 won={wonBy(bot)} noteWon={noteWonBy(bot)} />
       {/* The predictors chip on the LEFT border, on every real match —
           decided, it says who called it; not yet, whose pick still stands. */}
       {!m.is_bye && onPredictors && (
@@ -505,8 +521,10 @@ const s = StyleSheet.create({
   nameSlot: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 4 },
   name: { fontFamily: NAME_FAMILY, fontSize: NAME_FONT, lineHeight: leading(17), color: N[950], flexShrink: 1 },
   nameMuted: { fontFamily: 'Archivo_500Medium', fontStyle: 'italic', color: C.muted },
-  nameDim: { color: C.muted },
   pick: { fontSize: 14, lineHeight: leading(18) },
+  // The winner's tick, in the pick-correct green the box already uses.
+  tick: { fontFamily: 'Archivo_700Bold', fontSize: 14, lineHeight: leading(18), color: PICK.correct.border },
+  noteTick: { color: PICK.correct.border },
   /* .cv-real-winner: 11px, centred on the box's top border, the wrong fill
      behind it. */
   realWinner: {
