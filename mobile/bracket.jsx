@@ -33,7 +33,7 @@
 import { useMemo, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { leading } from './fontScale.js'
+import { FONT_SCALE, leading } from './fontScale.js'
 import { textWidth } from './measure.js'
 import { expectedStartLabel } from './dates'
 import { scoreLine, setCount } from './score'
@@ -68,6 +68,13 @@ const BELL_CORNER = 42    // .cv-eta--bell / .cv-live-score--bell: right: 42px
 const NAME_FONT = 13      // 0.8rem
 const NAME_FAMILY = 'Archivo_700Bold'
 const PICK_PX = 24        // room the 🤞 takes after a name
+/* The real-winner note's fill, in unscaled points (see realWinner below).
+   Cap height is Archivo's 686/1000 at 11pt; where the caps start is the
+   phone's, not the table's. */
+const NOTE_CAP_H = 7.55
+const NOTE_CAP_TOP = 3.7
+const NOTE_PAD = 1
+const NOTE_BOX_H = (NOTE_CAP_H + 2 * NOTE_PAD) * FONT_SCALE
 const TICK_PX = 22        // and the winner's ✓, with its leading space
 export const CONNECTOR_W = 2 + CONN_RUN + CONN_STUB   // beyond the outline's outer edge
 export const CHIP_OVERHANG = CHIP_H / 2 - 1            // beyond the outline's outer edge
@@ -543,22 +550,29 @@ const s = StyleSheet.create({
      on its own. The strip is a hair taller than that line and the row's
      alignItems does the rest. It still straddles the border: top is half
      its own height. */
-  /* Sits a little INSIDE the box rather than centred on its border: 4.5pt
-     above the line, 10.5pt below — the site's own note leans in the same
-     way (5px out, 6px in), and dead-centred it looked as if it were
-     floating off the box. */
+  /* THE FILL HUGS THE CAPITALS, not the line box. A Text paints its
+     background over its whole line (12pt for 11pt Archivo), and that strip
+     ran down over the seed badge. So the fill is the container's, sized to
+     the cap height plus a point each side, and the text is pulled up inside
+     it by a negative margin so its capitals land in the fill; the rest of
+     the line box hangs outside, invisibly.
+
+     NOTE_CAP_TOP IS CALIBRATED FROM THE PHONE (2026-09-08), not from the
+     metrics: with no lineHeight, iOS draws the caps 3.7pt below the top of
+     the text's box, where the font tables say 2.1 — and the harness draws
+     what the tables say. The box sits 4pt above the border line and 5.6pt
+     inside it, which is where the site's own note sits and clear of the
+     badge, whose top is 7pt in. */
   realWinner: {
-    position: 'absolute', left: 7, top: -(leading(15) / 2) + leading(3),
-    height: leading(15), paddingHorizontal: 2, gap: 7,
-    flexDirection: 'row', alignItems: 'center',
+    position: 'absolute', left: 7, top: -4 * FONT_SCALE,
+    height: NOTE_BOX_H, paddingHorizontal: 1.5 * FONT_SCALE, gap: 7,
+    flexDirection: 'row', alignItems: 'flex-start',
     backgroundColor: PICK.wrong.bg, zIndex: 2,
   },
-  /* paddingBottom is a NUDGE, tuned from the phone (2026-09-08), not from
-     the metrics. With the font's own line the caps still sat ~1.5pt below
-     the strip's centre on iOS — twice the red above them as below — and the
-     harness shows them centred, so the number comes from a screenshot.
-     Padding under the glyphs lifts them by half of itself. */
-  realWinnerText: { fontFamily: 'Archivo_700Bold', fontSize: 11, color: DANGER_STRONG, paddingBottom: leading(3) },
+  realWinnerText: {
+    fontFamily: 'Archivo_700Bold', fontSize: 11, color: DANGER_STRONG,
+    marginTop: -(NOTE_CAP_TOP - NOTE_PAD) * FONT_SCALE,
+  },
 
   gap: { height: leading(GAP_H), justifyContent: 'center' },
   gapLine: {
