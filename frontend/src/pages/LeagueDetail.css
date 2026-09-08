@@ -2122,3 +2122,16 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 @media (prefers-reduced-motion: reduce) {
   .lt-spinner { animation-duration: 2.2s; }
 }
+
+/* ── Sortable number headers ─────────────────────────────────────────────
+   Last in the file on purpose: --on has to beat .lt-progress-max's muted
+   colour at equal specificity, and source order is what decides that. */
+.lt-col-sort { cursor: pointer; user-select: none; border-radius: 4px; }
+.lt-col-sort:hover { color: var(--text-strong, var(--text)); }
+.lt-col-sort:focus-visible { outline: 2px solid var(--brand-line); outline-offset: 2px; }
+.lt-col-sort--on {
+  color: var(--brand-text-strong);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}

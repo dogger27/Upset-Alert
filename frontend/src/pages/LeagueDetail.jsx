@@ -1104,6 +1104,11 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
      defined by total points, so it must never inherit an ordering chosen on
      the other tab. */
   const [cmpSort, setCmpSort] = useState(null)
+  /* WHICH NUMBER THE ROWS ARE SORTED BY: the score (the standings, and the
+     default), the correct count, or the ceiling. A person's RANK never
+     changes with it — see `ranked` below — so sorting by Max reads as "who
+     can still win this", with everyone's real standing still on the row. */
+  const [colSort, setColSort] = useState('total')
   /* How deep the compare view reaches. 'finals' is the default because it is
      the whole back end of the draw in seven columns; 'quarters' trades that
      for the eight names a round earlier. */
@@ -1220,7 +1225,14 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
      other. Anyone with no pick in that slot sorts last: nothing to agree
      with. */
   const dispEntries = (() => {
-    if (!comparing || !activeSort) return ranked
+    if (!comparing || !activeSort) {
+      if (colSort === 'total') return ranked
+      const key = colSort === 'correct' ? 'correct_count' : 'max_points'
+      // Ties keep the standings order, so a sort is a stable re-reading of
+      // the same table rather than a shuffle.
+      return [...ranked].sort((a, b) =>
+        ((b[key] ?? 0) - (a[key] ?? 0)) || (a.standingsRank - b.standingsRank))
+    }
     const { round, slot } = activeSort
     const nameAt = e => cmpByUser[e.user_id]?.[round]?.[slot]?.name ?? null
     const counts = new Map()
@@ -1447,8 +1459,13 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                 matches on the board right now, which the scrubber changes.
                 effectiveScrubPos, not the timeline length, so the header
                 agrees with the rows under it at every position. */}
-            <span className="lt-progress-correct lt-progress-col-header"
-                  title={`Correct picks, of ${effectiveScrubPos} match${effectiveScrubPos !== 1 ? 'es' : ''} counted`}>
+            {/* The three number headers sort the rows; the one in charge is
+                lit. Buttons in all but tag, so the grid cells stay spans. */}
+            <span className={`lt-progress-correct lt-progress-col-header lt-col-sort${colSort === 'correct' ? ' lt-col-sort--on' : ''}`}
+                  role="button" tabIndex={0}
+                  title={`Correct picks, of ${effectiveScrubPos} match${effectiveScrubPos !== 1 ? 'es' : ''} counted — click to sort`}
+                  onClick={() => setColSort('correct')}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setColSort('correct') } }}>
               ✓<span className="lt-progress-correct-of"> / {effectiveScrubPos}</span>
             </span>
             {/* ONE HEADING OVER TWO COLUMNS: "Score", then "Curr." and "Max"
@@ -1463,10 +1480,17 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                 a replay has no future. */}
             <span className="lt-score-head">
               <span className="lt-score-head-title lt-progress-col-header">Score (pts)</span>
-              <span className="lt-progress-total lt-progress-col-header lt-score-head-sub"
-                    title="Points scored so far">Curr.</span>
-              <span className="lt-progress-max lt-progress-col-header lt-score-head-sub"
-                    title="Best possible final score, if every pick still alive comes true">
+              <span className={`lt-progress-total lt-progress-col-header lt-score-head-sub lt-col-sort${colSort === 'total' ? ' lt-col-sort--on' : ''}`}
+                    role="button" tabIndex={0} title="Points scored so far — the standings order"
+                    onClick={() => setColSort('total')}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setColSort('total') } }}>
+                Curr.
+              </span>
+              <span className={`lt-progress-max lt-progress-col-header lt-score-head-sub lt-col-sort${colSort === 'max' ? ' lt-col-sort--on' : ''}`}
+                    role="button" tabIndex={0}
+                    title="Best possible final score, if every pick still alive comes true — click to sort"
+                    onClick={() => setColSort('max')}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setColSort('max') } }}>
                 Max
               </span>
             </span>
