@@ -19,6 +19,12 @@ cd ~/Projects/TennisFantasyLeague/mobile
 git checkout -q -- package.json 2>/dev/null || true
 echo "▶ git pull"
 git pull
+# node_modules must match the lockfile BEFORE the pods are resolved: autolinking
+# reads the packages on disk, and a native module that is in package.json but
+# not in node_modules is silently left out of the binary — the app then dies at
+# launch with "'RNGestureHandlerModule' could not be found" (2026-09-08).
+echo "▶ npm ci"
+npm ci --no-audit --no-fund
 if [ "$1" != "quick" ]; then
   echo "▶ npx expo prebuild --platform ios --clean   (~3 min; needed for app.json / widget target changes)"
   npx expo prebuild --platform ios --clean
