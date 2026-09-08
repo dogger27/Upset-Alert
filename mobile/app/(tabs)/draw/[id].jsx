@@ -273,7 +273,7 @@ const s = StyleSheet.create({
      above it, which with the scaled-down group fits four on a screen at the
      phone's larger text size (the point of the scale-down). */
   list: {
-    gap: 14, paddingTop: S.sm, paddingBottom: S.xxl,
+    gap: 14, paddingTop: S.md, paddingBottom: S.xxl,
     paddingLeft: CHIP_OVERHANG, paddingRight: CONNECTOR_W,
   },
 })
