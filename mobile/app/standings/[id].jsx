@@ -106,9 +106,11 @@ export default function GlobalStandings() {
                     <View style={s.who}>
                       <PlayerName name={e.username} shrinkOnly style={[s.name, mine && s.nameMine]} />
                     </View>
-                    <Text style={s.right}>{e.correct_count}</Text>
-                    <Text style={[s.num, s.total]}>{Math.round(e.total)}</Text>
-                    <Text style={[s.num, s.max]}>{e.max_points != null ? Math.round(e.max_points) : '–'}</Text>
+                    {/* The sorted column is the lit one: white and bold, the
+                      other two muted. */}
+                  <Text style={[s.right, sortKey === 'correct_count' && s.on]}>{e.correct_count}</Text>
+                    <Text style={[s.num, sortKey === 'total' && s.on]}>{Math.round(e.total)}</Text>
+                    <Text style={[s.num, sortKey === 'max_points' && s.on]}>{e.max_points != null ? Math.round(e.max_points) : '–'}</Text>
                   </Body>
                 </View>
               )
@@ -144,15 +146,15 @@ const s = StyleSheet.create({
   /* Centred, like the site: a label fills its cell and a number does not.
      The header is a bare tick now, so the column is the score columns'
      width and the name gets the rest. */
-  right: { color: C.ink, width: 46, textAlign: 'center' },
+  right: { color: C.muted, width: 46, textAlign: 'center' },
   /* Centred, like the ✓ column and the site: a label fills its cell and a
      number does not, so right-aligning both parked the number under the
      label's last letters instead of under the label. */
-  num: { color: C.ink, width: 46, textAlign: 'center' },
+  num: { color: C.muted, width: 46, textAlign: 'center' },
+  // The column the rows are sorted by.
+  on: { color: C.ink, fontWeight: '800' },
   // Two `num` cells and the row's gap: the same width the cells below take.
   scoreHead: { width: 46 * 2 + 8, alignItems: 'center', gap: 2 },
   scoreHeadTitle: { color: C.ink, textAlign: 'center' },
   scoreHeadRow: { flexDirection: 'row', gap: 8 },
-  total: { fontWeight: '800' },
-  max: { color: C.muted, fontWeight: '600' },
 })

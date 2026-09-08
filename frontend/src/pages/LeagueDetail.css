@@ -768,7 +768,9 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   white-space: nowrap;
 }
 
-.lt-progress-total { font-size: 0.8rem; color: var(--ink, var(--n-950)); font-weight: 700; text-align: center; white-space: nowrap; }
+/* Muted at rest like the other two numbers; .lt-col-on (end of file) lights
+   whichever column the rows are sorted by. */
+.lt-progress-total { font-size: 0.8rem; color: var(--text-muted); font-weight: 600; text-align: center; white-space: nowrap; font-variant-numeric: tabular-nums; }
 /* The score heading spans the two score columns and carries their two
    sub-labels on a second line. Subgrid, so "Curr." and "Max" sit on exactly
    the tracks their cells use — every width tier changes those tracks, and
@@ -2135,3 +2137,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   text-decoration-thickness: 2px;
   text-underline-offset: 3px;
 }
+/* The column the rows are sorted by: white and bold, the others muted. The
+   header keeps its own underline. Last, so it wins over the three base
+   rules at equal specificity. */
+.lt-col-on { color: var(--ink, var(--n-950)); font-weight: 700; }
