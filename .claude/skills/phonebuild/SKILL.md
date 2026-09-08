@@ -57,6 +57,23 @@ taps the Jupiter server in the recent list once.
   if a build ever says "No profiles for 'ca.upsetalert.app'", see memory
   `local-ios-build-on-mac` for that one-off.
 
+## Two failures that are not the code (2026-09-08)
+
+- **`pod install` dies with "Unicode Normalization not appropriate for ASCII-8BIT"**
+  (and Expo says "Couldn't install Pods"): CocoaPods under Ruby 4 needs a UTF-8
+  locale and a LaunchAgent has none — the crash is in CocoaPods' own error
+  reporter, so the log never shows the real reason. `~/bin/phonebuild` and the
+  agent now export `LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8`; any manual `pod
+  install` over ssh needs the same.
+- **"The developer disk image could not be mounted on this device" / "Timed out
+  waiting for all destinations"**: the phone is reachable but LOCKED (or, rarely,
+  its iOS is newer than Xcode's). The pods and the plan succeeded; unlock the
+  phone and run `quick` again. To make that rerun short, a compile can be warmed
+  without the phone or the keychain: from `mobile/ios`,
+  `xcodebuild -workspace UpsetAlert.xcworkspace -scheme UpsetAlert -configuration
+  Debug -destination generic/platform=iOS CODE_SIGNING_ALLOWED=NO
+  CODE_SIGNING_REQUIRED=NO build` (over plain ssh, ~6 min).
+
 ## Fallbacks, in order
 
 1. Agent not loaded (log never appears): run the bootstrap line above, retry.

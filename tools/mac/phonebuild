@@ -7,6 +7,11 @@
 # the phone loads its JavaScript from Jupiter's Metro, not this Mac's.
 set -e
 export PATH=/opt/homebrew/bin:/usr/local/bin:$PATH
+# UTF-8, or CocoaPods dies twice: once normalising a path under Ruby 4
+# ("Unicode Normalization not appropriate for ASCII-8BIT") and again inside
+# its own error reporter, so the log shows the crash and never the cause.
+# A LaunchAgent has no locale unless it is given one (found 2026-09-08).
+export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 PHONE_UDID="${PHONE_UDID:-00008140-000C0DC41A88801C}"
 cd ~/Projects/TennisFantasyLeague/mobile
 echo "▶ git pull"

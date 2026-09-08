@@ -110,6 +110,11 @@ const NOTE_BOX_H = (NOTE_CAP_H + 2 * NOTE_PAD) * FONT_SCALE
 const NOTE_RISE = 3 * FONT_SCALE     // 6 sat the text hard under the upper box (owner, 2026-09-08)
 const TICK_PX = 22        // and the winner's ✓, with its leading space
 export const CONNECTOR_W = 2 + CONN_RUN + 3   // room reserved beyond the outline: up to the bar
+/* A group's height, borders included, for anyone laying groups out before
+   they have measured one — the round scrub's first frame. Every group is
+   this tall: the pill and the real-winner note are absolute, the gap is a
+   fixed line, and a bye fills the same box. Measured groups override it. */
+export const GROUP_H = 2 * 2 + PAD_TOP + PAD + 2 * leading(BOX_H) + leading(GAP_H)
 /* How far the chips poke past the outline's outer edge — SCALED, because the
    chip's short side is leading(18): on a phone with larger text the pill is
    ~23pt across, and a fixed 8 here had RoundScrub's clip slicing its left

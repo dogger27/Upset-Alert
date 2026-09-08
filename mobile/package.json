@@ -19,10 +19,13 @@
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.5",
+    "react-native-gesture-handler": "~2.28.0",
+    "react-native-reanimated": "~4.1.1",
     "react-native-safe-area-context": "~5.6.0",
     "react-native-screens": "~4.16.0",
     "react-native-sse": "^1.2.1",
-    "react-native-web": "^0.21.0"
+    "react-native-web": "^0.21.0",
+    "react-native-worklets": "0.5.1"
   },
   "scripts": {
     "start": "expo start",
@@ -33,7 +36,8 @@
     "test:theme": "node theme.test.mjs",
     "test:scoring": "node scoring.test.mjs",
     "test:wire": "node liveactivity.test.mjs",
-    "test": "node theme.test.mjs && node scoring.test.mjs && node liveactivity.test.mjs && node names.test.mjs && node measure.test.mjs",
+    "test": "node theme.test.mjs && node scoring.test.mjs && node liveactivity.test.mjs && node names.test.mjs && node measure.test.mjs && node scrubGeometry.test.mjs",
+    "test:scrub": "node scrubGeometry.test.mjs",
     "test:names": "node names.test.mjs",
     "test:measure": "node measure.test.mjs"
   },

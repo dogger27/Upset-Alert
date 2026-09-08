@@ -18,6 +18,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { FONT_SCALE, leading } from '../../../fontScale.js'
 import { Ionicons } from '@expo/vector-icons'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { GestureDetector } from 'react-native-gesture-handler'
 import { getDraw, getMyStandouts, getPredictions } from '../../../api'
 import { useAuth } from '../../../auth'
 import { H2HSheet } from '../../../h2h'
@@ -30,11 +31,17 @@ import { currentRound } from '../../../rounds'
 import { C, R, S, T } from '../../../theme'
 import { TourBadge } from '../../../cards'
 import { Card, ErrorNote, Loading, Muted, Screen, Title } from '../../../ui'
-import { CHIP_OVERHANG, CONNECTOR_W, MatchGroup, buildBracket } from '../../../bracket'
-import { RoundScrub } from '../../../RoundScrub'
+import { CHIP_OVERHANG, CONNECTOR_W, GROUP_H, MatchGroup, buildBracket } from '../../../bracket'
+import { RoundScrubView, useRoundScrub } from '../../../RoundScrub'
 import { RoundStrip } from '../../../RoundStrip'
-import { useRoundSwipe } from '../../../roundSwipe'
 import { setCurrentDraw } from '../../../currentDraw'
+
+/* The list's vertical rhythm, named because the round scrub lays a round
+   out from these before it has measured one (RoundScrub.jsx); the list
+   style below reads the same three. */
+const ROW_GAP = 14
+const LIST_PAD_TOP = S.md
+const LIST_PAD_BOTTOM = S.xxl
 
 export default function DrawScreen() {
   const { id, user, name } = useLocalSearchParams()
@@ -114,11 +121,14 @@ export default function DrawScreen() {
   }, [id])
 
   const active = picked ?? currentRound(rounds)
-  /* ONE swipe gesture for the whole screen — header, strip and the draw
-     itself — and one swipe moves one round. RoundScrub's own gesture is
-     switched off below; two capture responders over the same pixels fight. */
-  const roundPan = useRoundSwipe({ rounds, active, onPick: setPicked })
-  const shown = rounds.find(([n]) => n === active) || rounds[0]
+  /* ONE gesture for the whole screen — header, strip and the draw itself:
+     a sideways pull scrubs to the next round, telescoping the bracket
+     around the finger, and lands on release (RoundScrub.jsx). One swipe
+     moves one round. The vertical axis stays the list's. */
+  const { pan, scrub } = useRoundScrub({
+    rounds, active, onCommit: setPicked,
+    rowHeight: GROUP_H, rowGap: ROW_GAP, padTop: LIST_PAD_TOP, padBottom: LIST_PAD_BOTTOM,
+  })
 
   const loading = (draw.loading && !draw.data) || (preds.loading && !preds.data)
   const refetch = () => { draw.refetch(); preds.refetch() }
@@ -126,7 +136,8 @@ export default function DrawScreen() {
   return (
     <>
       <Screen onRefresh={refetch} scroll={false} style={s.body}>
-        <View style={s.sheet} {...roundPan}>
+        <GestureDetector gesture={pan} touchAction="pan-y">
+        <View style={s.sheet}>
         {loading ? <Loading /> : null}
         <ErrorNote error={draw.error} onRetry={refetch} />
 
@@ -173,22 +184,20 @@ export default function DrawScreen() {
             them. RoundScrub below is the same journey at fine resolution;
             this is the coarse one. */}
         {rounds.length > 1 && (
-          <RoundStrip rounds={rounds} active={active} onPick={setPicked} />
+          <RoundStrip rounds={rounds} active={active} onPick={setPicked} scrub={scrub} />
         )}
 
         {/* Swipe sideways to pull the next round in; the row under the
-            finger stays under the finger. The strip above still jumps. */}
+            finger stays under the finger, and the strip's pill glides. */}
         {rounds.length > 0 && (
-          <RoundScrub
-            gestures={false}
+          <RoundScrubView
+            scrub={scrub}
             /* The strip runs to the screen's right edge — into the body's
                padding — so a group's connector stub can run off the glass
                rather than stopping at the column. The column pads the same
                amount back, so the groups themselves do not move. */
             style={s.scrub}
             rounds={rounds}
-            active={shown ? shown[0] : active}
-            onCommit={setPicked}
             columnStyle={s.list}
             renderRow={m => (
               <MatchGroup m={m} roundIdx={roundIdx.get(m.round_number) ?? 0} B={B}
@@ -202,6 +211,7 @@ export default function DrawScreen() {
           <Card><Title>No matches yet</Title><Muted>This draw hasn’t been released.</Muted></Card>
         )}
         </View>
+        </GestureDetector>
       </Screen>
 
       {/* One sheet for the whole screen, not one per match: 64 mounted Modals
@@ -283,7 +293,7 @@ const s = StyleSheet.create({
      above it, which with the scaled-down group fits four on a screen at the
      phone's larger text size (the point of the scale-down). */
   list: {
-    gap: 14, paddingTop: S.md, paddingBottom: S.xxl,
+    gap: ROW_GAP, paddingTop: LIST_PAD_TOP, paddingBottom: LIST_PAD_BOTTOM,
     paddingLeft: CHIP_OVERHANG, paddingRight: CONNECTOR_W + S.lg,
   },
   scrub: { marginRight: -S.lg },
