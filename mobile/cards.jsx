@@ -152,11 +152,14 @@ const u = StyleSheet.create({
      size the digits grow and 28pt stopped holding three of them, so a rank of
      108 came out as "1…" — which is not a smaller number, it is a different
      one. The box scales with the type it contains. */
+  /* 26×17 — a step down from the site's 26×17-at-desktop equivalent the
+     app had grown to (28×18), at the owner's ask. The entry chip below
+     takes the SAME height rule, so the two never differ by a point. */
   badge: {
-    width: leading(28), height: leading(18), borderRadius: 3, borderWidth: 1,
-    alignItems: 'center', justifyContent: 'center',
+    width: leading(26), height: leading(17), borderRadius: 3, borderWidth: 1,
+    paddingVertical: 0, alignItems: 'center', justifyContent: 'center',
   },
-  badgeGap: { width: leading(28) },
+  badgeGap: { width: leading(26) },
   flagSlot: { flexDirection: 'row', alignItems: 'center', gap: leading(3) },
   nameSlot: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 4 },
   flagGlyph: { fontSize: 13, lineHeight: leading(16) },
@@ -184,8 +187,8 @@ const u = StyleSheet.create({
      wider crowds its own letters. Width stays content-driven, which is the
      one difference from `badge` and the reason this style exists. */
   entryChip: {
-    height: leading(18), borderRadius: 3, borderWidth: 1,
-    paddingHorizontal: leading(5),
+    height: leading(17), borderRadius: 3, borderWidth: 1,
+    paddingHorizontal: leading(5), paddingVertical: 0,
     alignItems: 'center', justifyContent: 'center', marginLeft: leading(6),
   },
   badgeText: { fontFamily: 'Archivo_700Bold', fontSize: 11, lineHeight: leading(13) },
