@@ -64,7 +64,7 @@ const PILL_H = 16
    is a size up and SCALES with the type — at a fixed 34 the text filled it
    end to end on a phone with larger text. */
 const CHIP_W = 40
-const CHIP_H = 20
+const CHIP_H = 24         // the on-screen WIDTH of the rotated pill; 24 at the owner's ask
 const CONN_RUN = 12       // border → the vertical bar
 const CONN_STUB = 10      // the bar → off to the next round
 const BELL_CORNER = 42    // .cv-eta--bell / .cv-live-score--bell: right: 42px
@@ -637,7 +637,10 @@ const s = StyleSheet.create({
      rotation turns into screen right. */
   chipText: {
     fontFamily: 'Archivo_700Bold', fontSize: 12, letterSpacing: 0.25, color: CHIP.text,
-    transform: [{ translateY: 1.6 * FONT_SCALE }],
+    /* 0.7, down from 1.6: that moved the word past centre by about as much
+       as it had been short — the shift lands at roughly twice its size
+       on screen. Measured, not derived. */
+    transform: [{ translateY: 0.7 * FONT_SCALE }],
   },
   // Undo the pill's rotation so the glyph stands upright.
   chipIcon: { transform: [{ rotate: '90deg' }] },
