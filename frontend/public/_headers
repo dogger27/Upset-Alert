@@ -6,8 +6,14 @@
   Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
   Content-Security-Policy: default-src 'self'; connect-src 'self' https://upsetalert-api.upsetalert.ca; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; script-src 'self' https://static.cloudflareinsights.com; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests;
 
+# ONE HOUR, not a day. A hashed asset never changes, so any TTL is safe for
+# the file itself; the TTL only decides how long an edge keeps a POISONED
+# entry — the SPA fallback (index.html, 200) it caches when a client asks for
+# a chunk before the deploy has reached that edge. At a day, one such request
+# broke the site for everyone behind that edge until the next deploy
+# (2026-08-19, and again 2026-09-08). At an hour it heals itself.
 /assets/*
-  Cache-Control: public, max-age=86400
+  Cache-Control: public, max-age=3600
 
 /
   Cache-Control: public, max-age=0, must-revalidate
