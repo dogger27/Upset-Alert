@@ -53,7 +53,13 @@ export function Screen({
           />
         ) : undefined,
       }
-    : { style: [u.body, style] }
+    /* A body that does not scroll FILLS the safe area and no more: flex 1
+       with a basis of 0 and shrink allowed. flexGrow alone let the web grow
+       the body to its content (a percentage basis resolves to content there,
+       where Yoga's resolves to zero), so a list inside it was as tall as the
+       column, the viewport it reported was the whole column, and a pull
+       anchored on that clamped to the top. */
+    : { style: [u.body, u.bodyFill, style] }
   return (
     <SafeAreaView style={u.safe} edges={resolvedEdges}>
       <Body {...extra}>{children}</Body>
@@ -153,6 +159,7 @@ export function ErrorNote({ error, onRetry }) {
 const u = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
   body: { padding: S.lg, gap: S.md, flexGrow: 1, paddingBottom: S.xxl },
+  bodyFill: { flex: 1, minHeight: 0 },
   centre: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
   card: {
     backgroundColor: C.card, borderRadius: R.lg, padding: S.lg,

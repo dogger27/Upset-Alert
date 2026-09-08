@@ -49,7 +49,7 @@ import { StyleSheet, View } from 'react-native'
 import { Gesture } from 'react-native-gesture-handler'
 import Animated, {
   Easing, cancelAnimation, measure, scrollTo, useAnimatedReaction, useAnimatedRef,
-  useAnimatedStyle, useScrollOffset, useSharedValue, withTiming,
+  useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, withTiming,
 } from 'react-native-reanimated'
 import { scheduleOnRN, scheduleOnUI } from 'react-native-worklets'
 import { ScrubContext } from './scrubContext'
@@ -85,13 +85,62 @@ const SETTLE = { duration: SETTLE_MS, easing: Easing.bezier(0.22, 0.61, 0.36, 1)
 // painted, so opening a draw never waits on three columns.
 const WARM_MS = 250
 
+/* ONLY THE ROWS NEAR THE VIEWPORT ARE MOUNTED; the rest of a column is
+   placeholders of the group's height, so the column keeps its size and the
+   scroll its range. A draw's early rounds are a hundred groups across three
+   columns, a few thousand native views, and every one of them was in the
+   scroll view's tree whether it could be seen or not: scrolling R128 lagged
+   and a pull there shook (owner, 2026-09-08). Mounted now: the rows in view
+   plus REST_MARGIN either side; in the neighbouring rounds, the rows those
+   feed or are fed by, since a pull shows exactly those; and once a pull has
+   begun, PULL_MARGIN rows either side of the finger's row and their
+   counterparts — enough for the whole pull, decided once at its start. The
+   window follows the scroll from a throttled report; a row it has not
+   reached yet is a blank of the right size for a beat, never a wrong one. */
+const REST_MARGIN = 6
+const PULL_MARGIN = 16
+// The window follows the scroll once it has moved this many rows since the
+// last report — by distance, not by counting events, so a single programmatic
+// jump or a short flick moves it too.
+const SCROLL_REPORT_ROWS = 0.75
+
+function windowsFor({ y, anchor }, vh, geo, rounds, activeIdx, warm) {
+  const out = {}
+  const add = (ri, lo, hi) => {
+    const r = rounds[ri]
+    if (!r) return
+    const c = [Math.max(0, lo), Math.min(r[1].length - 1, hi)]
+    const cur = out[ri]
+    out[ri] = cur ? [Math.min(cur[0], c[0]), Math.max(cur[1], c[1])] : c
+  }
+  const vis0 = Math.floor((y - geo.P) / geo.G)
+  const vis1 = Math.ceil((y + vh - geo.P) / geo.G)
+  add(activeIdx, vis0 - REST_MARGIN, vis1 + REST_MARGIN)
+  if (warm) {
+    add(activeIdx + 1, Math.floor(vis0 / 2) - REST_MARGIN, Math.ceil(vis1 / 2) + REST_MARGIN)
+    add(activeIdx - 1, 2 * vis0 - REST_MARGIN, 2 * vis1 + 1 + REST_MARGIN)
+  }
+  if (anchor) {
+    const c = Math.round(anchor.idx)
+    add(anchor.ri, c - PULL_MARGIN, c + PULL_MARGIN)
+    add(anchor.ri + 1, Math.floor(c / 2) - PULL_MARGIN, Math.ceil(c / 2) + PULL_MARGIN)
+    add(anchor.ri - 1, 2 * c - PULL_MARGIN, 2 * c + 1 + PULL_MARGIN)
+  }
+  return out
+}
+
 export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, padTop, padBottom, boxPitch = 0 }) {
   // Half the distance between a settled group's two boxes: the offset a
   // condensing row lands at either side of its successor's centre.
   const e = boxPitch / 2
   const activeIdx = Math.max(0, rounds.findIndex(([n]) => n === active))
   const scrollRef = useAnimatedRef()
-  const scrollY = useScrollOffset(scrollRef)
+  /* The scroll offset, taken straight off the scroll events on the UI thread.
+     (useScrollOffset binds to the ref, and this ref attaches after the first
+     render; a hook that missed it would read 0 for ever — and an anchor that
+     reads 0 puts the finger's row wherever the top of the list is.) */
+  const scrollY = useSharedValue(0)
+  const reportedY = useSharedValue(0)
 
   const pos = useSharedValue(activeIdx)
   // The round the current gesture (or glide) left from: the one that fades.
@@ -111,7 +160,12 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
   const widthSV = useSharedValue(0)
   const viewportH = useSharedValue(0)
   const [width, setWidth] = useState(0)
+  const [vh, setVh] = useState(0)
   const [warm, setWarm] = useState(false)
+  // What the row windows are computed from on the JS side: the last reported
+  // scroll offset, and the finger's row while a pull is in flight.
+  const [view, setView] = useState({ y: 0, anchor: null })
+  const geoRef = useRef({ P: padTop, H: rowHeight, G: rowHeight + rowGap })
 
   /* EVERY ROW'S SHIFT AND STRETCH ARE WRITTEN BY ONE WORKLET A FRAME, not read
      by a hundred. The first version gave each row a worklet reading pos, and
@@ -155,12 +209,31 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
 
   /* Plain JS, reached from the UI thread by scheduleOnRN. Stable, and reads
      the live props through refs: the gesture is created once. */
-  const commit = useCallback((idx) => {
+  const commit = useCallback((idx, y) => {
     setWarm(true)
+    setView({ y, anchor: null })
     const r = roundsRef.current[idx]
     if (r) onCommitRef.current?.(r[0])
   }, [])
-  const warmUp = useCallback(() => setWarm(true), [])
+  const beginPull = useCallback((ri, idx) => {
+    setWarm(true)
+    setView(v => ({ ...v, anchor: { ri, idx } }))
+  }, [])
+  const reportScroll = useCallback((y) => {
+    setView(v => (v.y === y ? v : { ...v, y }))
+  }, [])
+  const onScroll = useAnimatedScrollHandler({
+    onScroll: (ev) => {
+      const y = ev.contentOffset.y
+      scrollY.value = y
+      if (Math.abs(y - reportedY.value) >= SCROLL_REPORT_ROWS * geo.value.G) {
+        reportedY.value = y
+        scheduleOnRN(reportScroll, y)
+      }
+    },
+    onMomentumEnd: (ev) => { reportedY.value = ev.contentOffset.y; scheduleOnRN(reportScroll, ev.contentOffset.y) },
+    onEndDrag: (ev) => { reportedY.value = ev.contentOffset.y; scheduleOnRN(reportScroll, ev.contentOffset.y) },
+  }, [reportScroll])
 
   // A column's estimated height, for the frame before it is measured.
   const estimate = useCallback((n) => {
@@ -174,9 +247,10 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
     pos.value = withTiming(target, SETTLE, (finished) => {
       if (!finished) return
       scrubbing.value = false
-      scheduleOnRN(commit, target)
+      reportedY.value = scrollY.value
+      scheduleOnRN(commit, target, scrollY.value)
     })
-  }, [pos, scrubbing, commit])
+  }, [pos, scrubbing, commit, scrollY, reportedY])
 
   const pan = useMemo(() => Gesture.Pan()
     .activeOffsetX([-AXIS_ACTIVE_X, AXIS_ACTIVE_X])
@@ -193,7 +267,7 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
       cancelAnimation(pos)
       const cur = Math.round(pos.value)
       pos.value = cur
-      scheduleOnRN(commit, cur)
+      scheduleOnRN(commit, cur, scrollY.value)
       /* THE ANCHOR. The finger's height within the list becomes a fractional
          group index in the round it is on; that index is what is held.
          measure() gives the list's place on screen on the UI thread, so the
@@ -214,7 +288,7 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
       dragPx.value = 0
       scrubbing.value = true
       dragging.value = true
-      scheduleOnRN(warmUp)
+      scheduleOnRN(beginPull, cur, anchor.value.idx)
     })
     .onUpdate((e) => {
       'worklet'
@@ -245,7 +319,7 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
       dragging.value = false
       const m = meta.value
       land(settleTarget(pos.value, anchor.value.r0, 0, dragPx.value, 0, m.count - 1))
-    }), [meta, widthSV, pos, commit, scrollRef, viewportH, geo, anchor, scrollY, r0, originX, dragPx, scrubbing, dragging, warmUp, land])
+    }), [meta, widthSV, pos, commit, scrollRef, viewportH, geo, anchor, scrollY, r0, originX, dragPx, scrubbing, dragging, beginPull, land])
 
   useAnimatedReaction(() => pos.value, (p) => {
     const g = geo.value
@@ -327,22 +401,20 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
     widthSV.value = w
     viewportH.value = h
     setWidth(w)
+    setVh(h)
   }, [widthSV, viewportH])
 
-  const measured = useCallback((ri, i, y, h) => {
-    'worklet'
-    const g = geo.value
-    if (i === 0) {
-      if (Math.abs(g.P - y) > 0.5 || Math.abs(g.H - h) > 0.5) geo.value = { P: y, H: h, G: g.G }
-    } else if (i === 1) {
-      const G = y - g.P
-      if (G > 0 && Math.abs(g.G - G) > 0.5) geo.value = { P: g.P, H: g.H, G }
-    }
-  }, [geo])
+  /* Any mounted row measures the column: its height is every group's, its
+     pitch is that plus the gap, and its top is P + i × pitch. */
   const onRowLayout = useCallback((ri, i, e) => {
     const { y, height } = e.nativeEvent.layout
-    scheduleOnUI(() => { 'worklet'; measured(ri, i, y, height) })
-  }, [measured])
+    const G = height + rowGap
+    const P = y - i * G
+    const g = geoRef.current
+    if (Math.abs(g.P - P) < 0.5 && Math.abs(g.H - height) < 0.5 && Math.abs(g.G - G) < 0.5) return
+    geoRef.current = { P, H: height, G }
+    scheduleOnUI(() => { 'worklet'; geo.value = { P, H: height, G } })
+  }, [geo, rowGap])
   const onColumnLayout = useCallback((ri, e) => {
     const h = e.nativeEvent.layout.height
     scheduleOnUI(() => {
@@ -354,10 +426,17 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
     })
   }, [heights])
 
+  const windows = useMemo(
+    () => windowsFor(view, vh, geoRef.current, rounds, activeIdx, warm),
+    [view, vh, rounds, activeIdx, warm],
+  )
+
   const scrub = useMemo(() => ({
     pos, r0, scrollRef, geo, heights, widthSV, activeIdx, width, warm, estimate, e,
+    windows, rowHeight, onScroll,
     onWrapLayout, onRowLayout, onColumnLayout, registerRow, unregisterRow,
   }), [pos, r0, scrollRef, geo, heights, widthSV, activeIdx, width, warm, estimate, e,
+       windows, rowHeight, onScroll,
        onWrapLayout, onRowLayout, onColumnLayout, registerRow, unregisterRow])
 
   return { pan, scrub }
@@ -382,8 +461,7 @@ function Row({ ri, i, scrub, children }) {
   // What the group inside reads to stretch or condense itself.
   const ctx = useMemo(() => ({ stretch }), [stretch])
   return (
-    <Animated.View style={style} collapsable={false}
-                   onLayout={i < 2 ? ev => onRowLayout(ri, i, ev) : undefined}>
+    <Animated.View style={style} collapsable={false} onLayout={ev => onRowLayout(ri, i, ev)}>
       <ScrubContext.Provider value={ctx}>{children}</ScrubContext.Provider>
     </Animated.View>
   )
@@ -392,29 +470,36 @@ function Row({ ri, i, scrub, children }) {
 /* A round's column, at its own place on the strip: index times the width,
    whatever pos is doing — which is why a commit moves nothing. The round a
    pull left from fades on its way out; the one arriving slides in whole. */
-function Column({ ri, num, matches, scrub, renderRow, columnStyle }) {
-  const { pos, r0, width, onColumnLayout } = scrub
+function Column({ ri, num, matches, window, scrub, renderRow, columnStyle }) {
+  const { pos, r0, width, rowHeight, onColumnLayout } = scrub
   const style = useAnimatedStyle(() => {
     const s = Math.abs(pos.value - ri)
     return { opacity: r0.value === ri && s > 0 ? Math.max(0, 1 - s) : 1 }
   }, [ri])
+  const [lo, hi] = window
   return (
     <Animated.View style={[s.column, { left: ri * width, width }, style]}>
       <View style={columnStyle} onLayout={ev => onColumnLayout(ri, ev)}>
-        {matches.map((m, i) => (
+        {matches.map((m, i) => {
           /* A slot with no match — an unplayed half of the bracket — has no
              id; the round and position make a key that exists for every row. */
-          <Row key={m.id ?? `slot-${num}-${i}`} ri={ri} i={i} scrub={scrub}>
-            {renderRow(m)}
-          </Row>
-        ))}
+          const key = m.id ?? `slot-${num}-${i}`
+          // Outside the window: a blank of the group's height, keeping the
+          // column's size and every other row's place.
+          if (i < lo || i > hi) return <View key={key} style={{ height: rowHeight }} />
+          return (
+            <Row key={key} ri={ri} i={i} scrub={scrub}>
+              {renderRow(m)}
+            </Row>
+          )
+        })}
       </View>
     </Animated.View>
   )
 }
 
 export function RoundScrubView({ scrub, rounds, renderRow, columnStyle, style = null }) {
-  const { pos, scrollRef, heights, widthSV, activeIdx, width, warm, estimate, onWrapLayout } = scrub
+  const { pos, scrollRef, heights, widthSV, activeIdx, width, warm, estimate, windows, onScroll, onWrapLayout } = scrub
   /* The strip's height is the content height: the round on screen's column
      at rest, the taller of the two while a pull is between rounds — every
      column is absolutely placed, so nothing else would give it one. A layout
@@ -445,10 +530,12 @@ export function RoundScrubView({ scrub, rounds, renderRow, columnStyle, style = 
           style={s.scroller}
           showsVerticalScrollIndicator={false}
           scrollEventThrottle={16}
+          onScroll={onScroll}
         >
           <Animated.View style={[s.strip, stripStyle]}>
             {mounted.map(ri => (
               <Column key={rounds[ri][0]} ri={ri} num={rounds[ri][0]} matches={rounds[ri][1]}
+                      window={windows[ri] ?? [0, -1]}
                       scrub={scrub} renderRow={renderRow} columnStyle={columnStyle} />
             ))}
           </Animated.View>
@@ -459,7 +546,11 @@ export function RoundScrubView({ scrub, rounds, renderRow, columnStyle, style = 
 }
 
 const s = StyleSheet.create({
-  wrap: { flex: 1, overflow: 'hidden' },
+  /* minHeight 0 is the web's: a flex item there will not shrink below its
+     content unless told, and this one's content is the whole column — the
+     wrapper grew to it, reported that as the viewport, and the anchor's
+     scroll limit clamped every pull to the top. Yoga never does this. */
+  wrap: { flex: 1, minHeight: 0, overflow: 'hidden' },
   /* touchAction is the web's, and it has to be ON THE SCROLLER: a browser
      resolves a touch's touch-action from the element touched up to the
      nearest scroll container, so a value set above the ScrollView never
@@ -468,7 +559,7 @@ const s = StyleSheet.create({
      the pan activated, got two empty updates and was cancelled. pan-y keeps
      vertical drags the browser's and hands sideways ones to the gesture.
      iOS ignores the style. */
-  scroller: { touchAction: 'pan-y' },
+  scroller: { minHeight: 0, touchAction: 'pan-y' },
   strip: { width: '100%' },
   column: { position: 'absolute', top: 0 },
 })
