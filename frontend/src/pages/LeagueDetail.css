@@ -2099,3 +2099,26 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   .dc-pool-knob { width: 16px; height: 16px; }
   .dc-pool--on .dc-pool-knob { left: 18px; }
 }
+
+/* ── Loading, where an empty state used to flash ──────────────────────────
+   The H2H panel's spinner, for the draws list and the standings table while
+   their first response is in flight. Sized to hold the space a short list
+   takes, so the page does not collapse and re-expand around it. */
+.lt-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+}
+.lt-spinner {
+  width: 26px;
+  height: 26px;
+  border: 2.5px solid var(--border-strong);
+  border-top-color: var(--brand-line-strong);
+  border-radius: 50%;
+  animation: lt-spin 0.7s linear infinite;
+}
+@keyframes lt-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .lt-spinner { animation-duration: 2.2s; }
+}
