@@ -2,6 +2,7 @@
  * TournamentDraw — shows the bracket for one tournament.
  * Logged-in users can make / update predictions until the lock time.
  */
+import { createPortal } from 'react-dom'
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react'
 import { shortRound } from '../utils/rounds'
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
@@ -245,6 +246,12 @@ function TournamentDraw() {
   const [scoreMatch, setScoreMatch] = useState(null)
   const initialModeSet = useRef(false)
   const [showUnlockConfirm, setShowUnlockConfirm] = useState(false)
+  /* The confirm is PORTALLED to the body and pinned to the pill's rect: the
+     header it lives in is overflow:hidden for its collapse-on-scroll, so a
+     box hanging below the pill was cut off at the header's edge and looked
+     as if it had slipped behind the draw. */
+  const lockPillRef = useRef(null)
+  const [unlockRect, setUnlockRect] = useState(null)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
   const [resetToast, setResetToast] = useState(null)
   const [showDefaultPicksBanner, setShowDefaultPicksBanner] = useState(false)
@@ -1717,14 +1724,23 @@ function TournamentDraw() {
             <div style={{ position: 'relative' }}>
               <span
                 key={lockNudge}
+                ref={lockPillRef}
                 className={`lock-badge${user?.is_admin ? ' lock-badge--admin' : ''}`
                   + (lockNudge ? ' lock-badge--nudge' : '')}
-                onClick={user?.is_admin ? () => setShowUnlockConfirm(v => !v) : undefined}
+                onClick={user?.is_admin ? () => {
+                  setUnlockRect(lockPillRef.current?.getBoundingClientRect() ?? null)
+                  setShowUnlockConfirm(v => !v)
+                } : undefined}
               >
                 🔒 Predictions locked
               </span>
-              {showUnlockConfirm && (
-                <div className="unlock-confirm">
+              {showUnlockConfirm && createPortal(
+                <div className="unlock-confirm"
+                     style={unlockRect ? {
+                       position: 'fixed',
+                       top: unlockRect.bottom + 8,
+                       right: Math.max(8, window.innerWidth - unlockRect.right),
+                     } : undefined}>
                   <p>Unlock predictions for this tournament?<br /><span className="unlock-confirm-sub">Players will be able to make picks.</span></p>
                   <div className="unlock-confirm-actions">
                     <button className="btn-primary" onClick={() => unlockMutation.mutate()} disabled={unlockMutation.isPending}>
@@ -1732,7 +1748,8 @@ function TournamentDraw() {
                     </button>
                     <button className="btn-secondary" onClick={() => setShowUnlockConfirm(false)}>Cancel</button>
                   </div>
-                </div>
+                </div>,
+                document.body,
               )}
             </div>
           ) : (
