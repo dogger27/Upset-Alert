@@ -15,6 +15,8 @@
  */
 import { StyleSheet, Text, View } from 'react-native'
 import { FlagSlot, PlayerName, PosBadge } from './cards'
+import { Bump } from './fx'
+import { useFlashOnChange } from './scoreFx'
 import { leading } from './fontScale.js'
 import { endedWith, parseSet, scoreSets, setCount, setWon, winnerSideOf } from './score'
 import { isLive, isSuspended, pointOf, servingSide, sideDrawRank, sideFlags, sideName, sideSeed } from './schedule'
@@ -27,6 +29,9 @@ export function MatchCard({ e }) {
   const sets = scoreSets(e)
   const n = setCount(sets)
   const point = live ? pointOf(e) : null
+  // The site's bump on the number that moves — both sides together, since a
+  // point won is one event, not two cells changing.
+  const flash = useFlashOnChange(point ? `${point[0] ?? '0'}-${point[1] ?? '0'}` : '')
   const serving = (live || stopped) ? servingSide(e) : null
   const winner = winnerSideOf(e)
   const doubles = e.discipline !== 'singles'
@@ -99,7 +104,9 @@ export function MatchCard({ e }) {
                 )
               })}
               {point ? (
-                <Text style={[s.point, dense?.point, lp?.tiebreak && s.pointTb]}>{point[idx] ?? '0'}</Text>
+                <Bump on={flash && !!point}>
+                  <Text style={[s.point, dense?.point, lp?.tiebreak && s.pointTb]}>{point[idx] ?? '0'}</Text>
+                </Bump>
               ) : live && !stopped ? (
                 <Text style={[s.point, dense?.point, { color: C.faint }]}>–</Text>
               ) : null}

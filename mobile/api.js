@@ -163,6 +163,10 @@ export const getDraw = (tournamentId) => request(`/tournaments/${tournamentId}/d
    honours once picking has closed — the site's sidebar rule. */
 export const getPredictions = (tournamentId, userId) =>
   request(`/predictions/${tournamentId}${userId != null ? `?user_id=${userId}` : ''}`)
+/* Match ids where that bracket called a result most of the field missed —
+   the site's standout chips. Mine by default; another member's with user_id. */
+export const getMyStandouts = (tournamentId, userId) =>
+  request(`/tournaments/${tournamentId}/my-standouts${userId != null ? `?user_id=${userId}` : ''}`)
 
 /* Device registration. install_id is the identity, not device_token — see
    install.js for why keying on the token duplicates rows. */

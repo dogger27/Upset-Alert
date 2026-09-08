@@ -31,8 +31,10 @@
  * so the ETA and the live score take one line each.
  */
 import { useMemo, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { Bump, NeonRing, useStandoutShake } from './fx'
+import { useFlashOnChange } from './scoreFx'
 import { FONT_SCALE, leading } from './fontScale.js'
 import { textWidth } from './measure.js'
 import { expectedStartLabel } from './dates'
@@ -370,14 +372,20 @@ function PlayerBox({ box, serving, picked, won, noteWon, drawRanks, B }) {
 /* A pill on the outline's border, rotated to read upwards. `side` picks the
    border. The layout box is the unrotated 34×18; the transform turns it in
    place, so the centre stays where the layout put it — on the border line. */
-function Chip({ side, onPress, label, children }) {
+function Chip({ side, onPress, label, standout = false, children }) {
+  // The site's .cv-group--standout: the shake around the whole rotated
+  // pill, the neon ring inside it so it turns with it.
+  const shake = useStandoutShake(standout)
   return (
     <View style={[s.chipWrap, side === 'left' ? { left: -(leading(CHIP_W) / 2) - 1 } : { right: -(leading(CHIP_W) / 2) - 1 }]}
           pointerEvents="box-none">
-      <Pressable onPress={onPress} hitSlop={10} style={s.chip} accessibilityRole="button"
-                 accessibilityLabel={label}>
-        {children}
-      </Pressable>
+      <Animated.View style={standout ? { transform: shake, zIndex: 5 } : null}>
+        <Pressable onPress={onPress} hitSlop={10} style={s.chip} accessibilityRole="button"
+                   accessibilityLabel={label}>
+          {children}
+          <NeonRing on={standout} radius={4} />
+        </Pressable>
+      </Animated.View>
     </View>
   )
 }
@@ -406,25 +414,30 @@ function LiveScore({ m, suspended, bell }) {
   const games = m.live_point?.games ?? null
   const sets = games ? [games[0], games[1]] : m.live_scores
   const line = scoreLine(sets, ', ')
+  const pts = m.live_point?.point ?? null
+  const showPts = !!pts && pts.some(v => v != null)
+  const label = showPts ? `${pts[0] ?? '0'}-${pts[1] ?? '0'}` : ''
+  // The site's bump on the number that moves: hooks before any early return.
+  const flash = useFlashOnChange(label)
   if (!line) return null
   const n = setCount(sets)
   const fontSize = n >= 5 ? 12 : n === 4 ? 13 : 15
-  const pts = m.live_point?.point ?? null
-  const showPts = !!pts && pts.some(v => v != null)
   const tb = !!m.live_point?.tiebreak
   return (
     <View style={[s.gapLine, bell && s.gapLineBell]} pointerEvents="none">
       <Text style={[s.live, suspended && s.liveStopped, { fontSize }]} numberOfLines={1}>{line}</Text>
       {showPts && (
-        <View style={[s.point, tb && s.pointTb, suspended && { opacity: 0.55 }]}>
-          <Text style={[s.pointText, tb && s.pointTbText]}>{`${pts[0] ?? '0'}-${pts[1] ?? '0'}`}</Text>
-        </View>
+        <Bump on={flash && label !== ''}>
+          <View style={[s.point, tb && s.pointTb, suspended && { opacity: 0.55 }]}>
+            <Text style={[s.pointText, tb && s.pointTbText]}>{label}</Text>
+          </View>
+        </Bump>
       )}
     </View>
   )
 }
 
-export function MatchGroup({ m, roundIdx, B, drawRanks, zone, onH2H, onPredictors, onShowScore }) {
+export function MatchGroup({ m, roundIdx, B, drawRanks, zone, onH2H, onPredictors, onShowScore, standout = false }) {
   const top = roundIdx === 0 ? entrantBox(m, 0, B) : feederBox(m, 0, B)
   const bot = roundIdx === 0 ? entrantBox(m, 1, B) : feederBox(m, 1, B)
 
@@ -520,8 +533,9 @@ export function MatchGroup({ m, roundIdx, B, drawRanks, zone, onH2H, onPredictor
       {/* The predictors chip on the LEFT border, on every real match —
           decided, it says who called it; not yet, whose pick still stands. */}
       {!m.is_bye && onPredictors && (
-        <Chip side="left" onPress={() => onPredictors(m)}
-              label={decided ? 'Who called it' : 'Who’s still in it'}>
+        <Chip side="left" onPress={() => onPredictors(m)} standout={decided && standout}
+              label={decided && standout ? `Standout pick: you called ${m.winner?.name}, which most of the field missed`
+                     : decided ? 'Who called it' : 'Who’s still in it'}>
           <Ionicons name="people" size={16} color={CHIP.text} style={s.chipIcon} />
         </Chip>
       )}
