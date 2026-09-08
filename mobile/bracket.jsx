@@ -311,16 +311,21 @@ function BoxName({ player, B, won, picked }) {
 }
 
 /* The site's ball, in Views: a green disc with a dark rim and two white
-   seams — arcs of larger circles clipped to the disc. */
+   seams. The site's SVG draws each seam as an arc of RADIUS HALF THE BALL
+   centred on a corner — top-left and bottom-right — so each curves through
+   its own quadrant. Here each seam is a circle of that radius, centred on
+   the corner and clipped by the disc; the first cut used far bigger
+   circles and the arcs came out as one straight stripe. */
 function TennisBall() {
   return (
     <View style={s.ball}>
-      <View style={[s.seam, { left: -13, top: -13 }]} />
-      <View style={[s.seam, { left: 3, top: 3 }]} />
+      <View style={[s.seam, { left: -BALL / 2, top: -BALL / 2 }]} />
+      <View style={[s.seam, { left: BALL / 2, top: BALL / 2 }]} />
       <View style={s.ballRim} />
     </View>
   )
 }
+const BALL = 16
 
 function PlayerBox({ box, serving, picked, won, noteWon, drawRanks, B }) {
   const p = box.player
@@ -670,7 +675,7 @@ const s = StyleSheet.create({
   connLine: { position: 'absolute', backgroundColor: CONNECTOR },
 
   // TennisBall: 16px, #7ba81f, rim #1b4332, white seams.
-  ball: { width: 16, height: 16, borderRadius: 8, backgroundColor: '#7ba81f', overflow: 'hidden', marginLeft: 4 },
-  seam: { position: 'absolute', width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: '#fff' },
-  ballRim: { position: 'absolute', left: 0, top: 0, width: 16, height: 16, borderRadius: 8, borderWidth: 2, borderColor: '#1b4332' },
+  ball: { width: BALL, height: BALL, borderRadius: BALL / 2, backgroundColor: '#7ba81f', overflow: 'hidden', marginLeft: 4 },
+  seam: { position: 'absolute', width: BALL, height: BALL, borderRadius: BALL / 2, borderWidth: 1.5, borderColor: '#fff' },
+  ballRim: { position: 'absolute', left: 0, top: 0, width: BALL, height: BALL, borderRadius: BALL / 2, borderWidth: 1.5, borderColor: '#1b4332' },
 })
