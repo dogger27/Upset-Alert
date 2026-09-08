@@ -43,9 +43,10 @@ export default function GlobalStandings() {
   const order = new Map(entries.map((e, i) => [e.user_id, i]))
   const rows = sortKey === 'total' ? entries : [...entries].sort((a, b) =>
     ((b[sortKey] ?? 0) - (a[sortKey] ?? 0)) || (order.get(a.user_id) - order.get(b.user_id)))
-  const sortHead = (key, label, style, extra) => (
+  const sortHead = (key, label, style, extra, a11y) => (
     <Pressable onPress={() => setSortKey(key)} hitSlop={8} accessibilityRole="button"
-               accessibilityState={{ selected: sortKey === key }} accessibilityLabel={`Sort by ${label}`}>
+               accessibilityState={{ selected: sortKey === key }}
+               accessibilityLabel={a11y ?? `Sort by ${label}`}>
       <Text style={[style, s.headText, sortKey === key && s.headOn]} numberOfLines={1} {...extra}>{label}</Text>
     </Pressable>
   )
@@ -75,7 +76,7 @@ export default function GlobalStandings() {
               <Text style={[s.who, s.headText]} numberOfLines={1}>Player</Text>
               {/* The site's header. This endpoint carries no matches-played
                   count, so the tick stands alone here. */}
-              {sortHead('correct_count', '✓', s.right)}
+              {sortHead('correct_count', '✓', s.right, null, 'Correct picks — sort by this')}
               {/* ONE HEADING OVER TWO COLUMNS: "Score", then "Curr." and
                   "Max" beneath it — where a bracket stands and the best it
                   can still finish on are one fact read two ways. The group
@@ -140,11 +141,10 @@ const s = StyleSheet.create({
   who: { flex: 1, minWidth: 0 },
   name: { color: C.ink, fontWeight: '600' },
   nameMine: { color: C.clay, fontWeight: '800' },
-  /* Centred, not right-aligned, the site's own reasoning: the header
-     "✓ / 120" nearly fills the cell while a count is two digits, so
-     right-aligning both hung the numbers under the "120" instead of under
-     the label. Centring is what sits a narrow cell beneath a wide one. */
-  right: { color: C.ink, width: 60, textAlign: 'center' },
+  /* Centred, like the site: a label fills its cell and a number does not.
+     The header is a bare tick now, so the column is the score columns'
+     width and the name gets the rest. */
+  right: { color: C.ink, width: 46, textAlign: 'center' },
   /* Centred, like the ✓ column and the site: a label fills its cell and a
      number does not, so right-aligning both parked the number under the
      label's last letters instead of under the label. */

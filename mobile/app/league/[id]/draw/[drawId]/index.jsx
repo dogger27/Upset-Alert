@@ -48,9 +48,10 @@ export default function Standings() {
   const order = new Map(entries.map((e, i) => [e.user_id, i]))
   const rows = sortKey === 'total' ? entries : [...entries].sort((a, b) =>
     ((b[sortKey] ?? 0) - (a[sortKey] ?? 0)) || (order.get(a.user_id) - order.get(b.user_id)))
-  const sortHead = (key, label, style, extra) => (
+  const sortHead = (key, label, style, extra, a11y) => (
     <Pressable onPress={() => setSortKey(key)} hitSlop={8} accessibilityRole="button"
-               accessibilityState={{ selected: sortKey === key }} accessibilityLabel={`Sort by ${label}`}>
+               accessibilityState={{ selected: sortKey === key }}
+               accessibilityLabel={a11y ?? `Sort by ${label}`}>
       <Text style={[style, s.headText, sortKey === key && s.headOn]} numberOfLines={1} {...extra}>{label}</Text>
     </Pressable>
   )
@@ -99,8 +100,10 @@ export default function Standings() {
                   denominator. Shrinks to fit rather than cutting to "RIG…",
                   which is what a fixed column did to "Right" at a larger
                   text size. */}
-              {sortHead('correct_count', `✓ / ${scores.data?.completed_matches_count ?? '–'}`, s.right,
-                        { adjustsFontSizeToFit: true, minimumFontScale: 0.6 })}
+              {/* The tick alone; the denominator is what a screen reader
+                  hears, and what the line above the table already says. */}
+              {sortHead('correct_count', '✓', s.right, null,
+                        `Correct picks, of ${scores.data?.completed_matches_count ?? 0} matches played — sort by this`)}
               {/* ONE HEADING OVER TWO COLUMNS: "Score", then "Curr." and
                   "Max" beneath it — where a bracket stands and the best it
                   can still finish on are one fact read two ways. The group
@@ -192,14 +195,10 @@ const s = StyleSheet.create({
   name: { color: C.ink, fontWeight: '600' },
   nameMine: { color: C.clay, fontWeight: '800' },
   real: { color: C.muted, fontSize: 12 },
-  /* The correct-picks column is wider than the score columns: its header is
-     "✓ / 120", the widest label on the row, and the room came from the
-     history button that used to end every row. */
-  /* Centred, not right-aligned, the site's own reasoning: the header
-     "✓ / 120" nearly fills the cell while a count is two digits, so
-     right-aligning both hung the numbers under the "120" instead of under
-     the label. Centring is what sits a narrow cell beneath a wide one. */
-  right: { color: C.ink, width: 60, textAlign: 'center' },
+  /* Centred, like the site: a label fills its cell and a number does not.
+     The header is a bare tick now, so the column is the score columns'
+     width and the name gets the rest. */
+  right: { color: C.ink, width: 46, textAlign: 'center' },
   /* Centred, like the ✓ column and the site: a label fills its cell and a
      number does not, so right-aligning both parked the number under the
      label's last letters instead of under the label. */
