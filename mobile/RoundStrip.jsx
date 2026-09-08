@@ -50,7 +50,9 @@ const s = StyleSheet.create({
      this teal-black — so it is found at a glance. marginTop matches the
      banner's own air. */
   bar: {
-    marginTop: S.xs,
+    // Black above and below, so the bar is a band between the banner and
+    // the draw rather than glued to either.
+    marginTop: S.sm, marginBottom: S.sm,
     /* EDGE TO EDGE: the screen pads its body S.lg a side, and a ruled bar
        that stopped short of the edges read as a box, not a bar. The row
        inside keeps that padding so the labels do not touch the glass. */
