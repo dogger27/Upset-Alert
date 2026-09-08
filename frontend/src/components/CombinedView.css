@@ -95,14 +95,14 @@
   border-color: var(--danger);
   box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.15);
 }
-/* A finished match wears a TEAL edge, so a round reads as done/not-done at
-   a glance. Not a green: the boxes inside are already green for a right
-   pick, and a done edge in a third green disappeared among them (the first
-   cut used --brand-line-strong and the owner could not see it). After
-   --missing so it wins on a decided match — there is nothing left to pick
-   there, whatever the pick state says. */
+/* A finished match is a step DIMMER inside, so a round reads as done /
+   still-to-play at a glance: what is over recedes, what is coming stands
+   forward. The border is left alone — a coloured edge (green, then teal)
+   read as a third signal beside the pick colours in the boxes. Placed
+   after --missing so a decided match never keeps the red "needs a pick"
+   glow: there is nothing left to pick there. */
 .cv-match-outline--done {
-  border-color: var(--match-done-line);
+  background: var(--match-done-fill);
   box-shadow: none;
 }
 
