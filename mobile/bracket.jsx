@@ -67,7 +67,11 @@ const POINT_TB = { bg: 'rgba(234,88,12,0.28)', fg: '#f0b478' }
    around it. */
 const BOX_H = 28
 const GAP_H = 24          // one line of ETA or score, and the bell's height
-const PAD = 8             // inside the outline, every side
+const PAD = 8             // inside the outline, sides and bottom
+/* More at the top than the bottom: the status pill straddles the top
+   border and its lower half reaches ~11pt inside at the phone's text size,
+   which at 8 ran over the top box's own border. */
+const PAD_TOP = 12
 const PILL_H = 15
 /* The pill BEFORE rotation. The site's is 34×18 around 12.5px type; this one
    is a size up and SCALES with the type — at a fixed 34 the text filled it
@@ -376,8 +380,8 @@ function Chip({ side, onPress, label, children }) {
 /* The elbow out of the pair: a run from each box's centre, the bar joining
    them, and a stub towards the round these two feed. (Connectors) */
 function Connector() {
-  const y1 = PAD + leading(BOX_H) / 2
-  const y2 = PAD + leading(BOX_H) + leading(GAP_H) + leading(BOX_H) / 2
+  const y1 = PAD_TOP + leading(BOX_H) / 2
+  const y2 = PAD_TOP + leading(BOX_H) + leading(GAP_H) + leading(BOX_H) / 2
   const w = 1.5
   return (
     <View style={s.conn} pointerEvents="none">
@@ -533,7 +537,7 @@ const s = StyleSheet.create({
      to play — a step above the page, and a step below a finished one. */
   outline: {
     borderWidth: 2, borderColor: N[300], borderRadius: 10, backgroundColor: N[100],
-    paddingVertical: PAD, paddingHorizontal: PAD,
+    paddingTop: PAD_TOP, paddingBottom: PAD, paddingHorizontal: PAD,
   },
   /* A finished match: a cool slate inside, a step brighter than the warm
      fill of a match still to play, and a teal edge — back at a member's
@@ -602,7 +606,8 @@ const s = StyleSheet.create({
     position: 'absolute', left: 7, top: -NOTE_BOX_H / 2,
     height: NOTE_BOX_H, paddingHorizontal: 1.5 * FONT_SCALE, gap: 7,
     flexDirection: 'row', alignItems: 'flex-start',
-    backgroundColor: PICK.wrong.bg, zIndex: 2,
+    // Above the status pill (3): where the two meet, the name wins.
+    backgroundColor: PICK.wrong.bg, zIndex: 4,
   },
   /* AN EXPLICIT HEIGHT, TALLER THAN THE FILL. Without it Yoga measures the
      text against the fill's own height (cap height plus two points), the
@@ -639,7 +644,7 @@ const s = StyleSheet.create({
 
   /* .cv-h2h / .cv-group: 34×18 turned -90°, 1px green-500 on the card fill,
      centred on the outline's border at the pair's midpoint. */
-  chipWrap: { position: 'absolute', top: 0, bottom: 0, justifyContent: 'center', zIndex: 4 },
+  chipWrap: { position: 'absolute', top: PAD_TOP - PAD, bottom: 0, justifyContent: 'center', zIndex: 4 },
   chip: {
     width: leading(CHIP_W), height: leading(CHIP_H), borderRadius: 4, borderWidth: 1,
     borderColor: CHIP.line, backgroundColor: C.card,
