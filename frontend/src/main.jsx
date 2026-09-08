@@ -29,6 +29,17 @@ export const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
 })
 
+/* THE BUILD TIME LIVES IN THE ENTRY CHUNK, so every deploy mints a new hash
+   for it. Vite hashes by content, and a deploy that changes nothing the entry
+   imports — a _headers edit, a public file — used to ship the SAME
+   index-*.js URL. That mattered on 2026-09-08: an edge had cached the SPA
+   fallback under that URL (a chunk requested before the deploy reached it),
+   every client behind it got "text/html is not a module", and the redeploy
+   meant to cure it could not, because it minted the same URL. Now a redeploy
+   is always a new URL, which no poisoned entry can shadow. Exposed on window
+   as a bonus: `__UA_BUILD__` in the console says which build a tab runs. */
+window.__UA_BUILD__ = __BUILD_TIME__
+
 // Reload a tab whose bundle the server has already replaced. The detection is
 // fiddlier than it looks — see utils/chunk.js for why the obvious hooks all
 // miss it.
