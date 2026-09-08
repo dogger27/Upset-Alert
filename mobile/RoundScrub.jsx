@@ -54,11 +54,11 @@ import Animated, {
 import { scheduleOnRN, scheduleOnUI } from 'react-native-worklets'
 import { ScrubContext } from './scrubContext'
 import {
-  anchorY, contentHeightAt, rowIndexAt, rowInWindow, rowShift, scrollLimitAt, settleTarget,
+  anchorY, boxOffset, contentHeightAt, rowIndexAt, rowInWindow, rowShift, scrollLimitAt, settleTarget,
 } from './scrubGeometry'
 
-/* Rows this far outside the viewport, in groups, still animate: room for a
-   frame of scroll and a row arriving at speed before it is seen. */
+/* Rows this far outside the viewport, in groups, are still driven: room for
+   a frame of scroll and a row arriving at speed before it is seen. */
 const CULL_MARGIN = 2
 
 /* The finger's travel for one whole round, as a share of the screen: the
@@ -112,6 +112,30 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
   const viewportH = useSharedValue(0)
   const [width, setWidth] = useState(0)
   const [warm, setWarm] = useState(false)
+
+  /* EVERY ROW'S SHIFT AND STRETCH ARE WRITTEN BY ONE WORKLET A FRAME, not read
+     by a hundred. The first version gave each row a worklet reading pos, and
+     each group four more: a hundred and twelve groups on the way to R128 was
+     five hundred worklets evaluated every frame of a pull, which shook, and
+     gating them on the scroll offset made a plain scroll evaluate all five
+     hundred too. Now a row registers two shared values — its translateY and
+     its stretch — and a single reaction on pos walks the registry, writes the
+     rows inside the viewport (plus a margin) their true values and every
+     other row its settled ones. A row's own style reads only its own value,
+     so a row nothing was written to costs nothing, scrolling touches nothing,
+     and the dozen groups on screen are the whole per-frame bill. */
+  const rowsRef = useRef(new Map())
+  const [rowsVersion, setRowsVersion] = useState(0)
+  const registerRow = useCallback((key, entry) => {
+    rowsRef.current.set(key, entry)
+    setRowsVersion(v => v + 1)
+  }, [])
+  const unregisterRow = useCallback((key) => {
+    rowsRef.current.delete(key)
+    setRowsVersion(v => v + 1)
+  }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const rowList = useMemo(() => [...rowsRef.current.values()], [rowsVersion])
 
   const roundsRef = useRef(rounds)
   const onCommitRef = useRef(onCommit)
@@ -223,6 +247,26 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
       land(settleTarget(pos.value, anchor.value.r0, 0, dragPx.value, 0, m.count - 1))
     }), [meta, widthSV, pos, commit, scrollRef, viewportH, geo, anchor, scrollY, r0, originX, dragPx, scrubbing, dragging, warmUp, land])
 
+  useAnimatedReaction(() => pos.value, (p) => {
+    const g = geo.value
+    const top = scrollY.value - CULL_MARGIN * g.H
+    const bottom = scrollY.value + viewportH.value + CULL_MARGIN * g.H
+    for (let k = 0; k < rowList.length; k++) {
+      const r = rowList[k]
+      const s = p - r.ri
+      let sh = 0, st = 0
+      // In the window by where the scrub has put it OR where it sits settled:
+      // a row frozen settled while really moved off screen would be drawn
+      // where it is not.
+      if (rowInWindow(r.i, s, g.P, g.H, g.G, e, top, bottom)) {
+        sh = rowShift(r.i, s, g.G, e)
+        st = boxOffset(s, g.G, e) - e
+      }
+      if (r.shift.value !== sh) r.shift.value = sh
+      if (r.stretch.value !== st) r.stretch.value = st
+    }
+  }, [rowList, e])
+
   /* THE SCROLL FOLLOWS pos, on the UI thread, for as long as a pull owns it:
      the anchored index's position at this pos, less where the finger is in
      the viewport. Bounded by a limit that is the landed column's own at
@@ -311,39 +355,32 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
   }, [heights])
 
   const scrub = useMemo(() => ({
-    pos, r0, scrollRef, scrollY, viewportH, geo, heights, widthSV, activeIdx, width, warm, estimate, e,
-    onWrapLayout, onRowLayout, onColumnLayout,
-  }), [pos, r0, scrollRef, scrollY, viewportH, geo, heights, widthSV, activeIdx, width, warm, estimate, e,
-       onWrapLayout, onRowLayout, onColumnLayout])
+    pos, r0, scrollRef, geo, heights, widthSV, activeIdx, width, warm, estimate, e,
+    onWrapLayout, onRowLayout, onColumnLayout, registerRow, unregisterRow,
+  }), [pos, r0, scrollRef, geo, heights, widthSV, activeIdx, width, warm, estimate, e,
+       onWrapLayout, onRowLayout, onColumnLayout, registerRow, unregisterRow])
 
   return { pan, scrub }
 }
 
-/* One match group's slot. Its whole part in the scrub is a translateY read
-   off pos: condensing onto its successor as its column leaves to the left,
-   spreading over its feeders as it waits on the right.
-
-   ONLY WHILE IT COULD BE SEEN. A draw's early rounds mount a hundred groups
-   across three columns, and with every one of them updating its transforms
-   every frame the pull turned to jitter on the way to R128 while the final
-   stayed silky (owner, 2026-09-08). A row outside the viewport — by its
-   real place and its settled one — returns its settled style, and a style
-   that does not change is never sent to the native view. The dozen groups on
-   screen are the only ones that cost a frame anything. The group inside
-   makes the same call for its own pieces, from the context this provides. */
+/* One match group's slot. Its whole part in the scrub is a translateY —
+   condensing onto its successor as its column leaves to the left, spreading
+   over its feeders as it waits on the right — and a stretch for the group
+   inside. Both are shared values WRITTEN by the scrub's one reaction (see
+   the registry in useRoundScrub); this reads its own and nothing else, so a
+   row the reaction did not touch this frame costs the frame nothing. */
 function Row({ ri, i, scrub, children }) {
-  const { pos, geo, e, scrollY, viewportH, onRowLayout } = scrub
-  const style = useAnimatedStyle(() => {
-    const s = pos.value - ri
-    const g = geo.value
-    const top = scrollY.value - CULL_MARGIN * g.H
-    const bottom = scrollY.value + viewportH.value + CULL_MARGIN * g.H
-    const shown = rowInWindow(i, s, g.P, g.H, g.G, e, top, bottom)
-    return { transform: [{ translateY: shown ? rowShift(i, s, g.G, e) : 0 }] }
-  }, [i, ri, e])
+  const { onRowLayout, registerRow, unregisterRow } = scrub
+  const shift = useSharedValue(0)
+  const stretch = useSharedValue(0)
+  useEffect(() => {
+    const key = `${ri}:${i}`
+    registerRow(key, { ri, i, shift, stretch })
+    return () => unregisterRow(key)
+  }, [ri, i, shift, stretch, registerRow, unregisterRow])
+  const style = useAnimatedStyle(() => ({ transform: [{ translateY: shift.value }] }))
   // What the group inside reads to stretch or condense itself.
-  const ctx = useMemo(() => ({ pos, ri, i, geo, e, scrollY, viewportH, margin: CULL_MARGIN }),
-                      [pos, ri, i, geo, e, scrollY, viewportH])
+  const ctx = useMemo(() => ({ stretch }), [stretch])
   return (
     <Animated.View style={style} collapsable={false}
                    onLayout={i < 2 ? ev => onRowLayout(ri, i, ev) : undefined}>
