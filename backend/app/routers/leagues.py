@@ -1,6 +1,6 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -25,6 +25,7 @@ from app.schemas.league import (
 )
 from app.schemas.tournament import TournamentOut
 from app.services.scoring import rank_users, score_user
+from app.services.scoring import potential_points, _points_table as _pts_table_for
 from app.services.upsets import has_upset_pick
 
 router = APIRouter(prefix="/leagues", tags=["leagues"])
@@ -464,7 +465,6 @@ async def league_tournaments(
 
     # Sort: active first, then open, upcoming, completed; within group by start_date desc
     _status_order = {"active": 0, "open": 1, "upcoming": 2, "completed": 3}
-    from datetime import date as _date
     out.sort(key=lambda x: (
         _status_order.get(x.tournament.status, 9),
         -(x.tournament.start_date.toordinal() if x.tournament.start_date else 0),
@@ -547,8 +547,11 @@ async def leaderboard(
     # upsets (has_upset_pick below). Members with zero picks are excluded.
     # So is anyone outside the draw's cash pool, when the league runs one.
     visible = await _pool_visible(db, league.id, tournament_id)
+    position_by_entry = {e.id: e.bracket_position for e in all_entries}
+    pts_table = _pts_table_for(tournament)
     scores = []
     has_upset_map: dict[int, bool] = {}
+    max_map: dict[int, float] = {}
     for member in league.members:
         if visible is not None and member.user_id not in visible:
             continue
@@ -562,8 +565,11 @@ async def leaderboard(
         preds = preds_result.scalars().all()
         if len(preds) == 0:
             continue
-        scores.append((member.user, score_user(member.user_id, preds, completed_matches, tournament, league)))
+        score = score_user(member.user_id, preds, completed_matches, tournament, league)
+        scores.append((member.user, score))
         has_upset_map[member.user_id] = has_upset_pick(preds, all_matches, all_entries)
+        max_map[member.user_id] = score.total_points + potential_points(
+            {p.match_id: p.predicted_winner_id for p in preds}, all_matches, position_by_entry, pts_table)
 
     ranked = rank_users([s for _, s in scores], tournament.num_rounds)
     user_map = {u.id: u for u, _ in scores}
@@ -574,6 +580,7 @@ async def leaderboard(
             user=user_map[score.user_id],
             total_points=score.total_points,
             correct_count=score.correct_count,
+            max_points=max_map[score.user_id],
             has_upset_pick=has_upset_map[score.user_id],
         )
         for rank_idx, score in enumerate(ranked, start=1)
@@ -723,6 +730,15 @@ async def round_scores(
     )
     completed_matches = completed_matches_result.scalars().all()
 
+    # Every match and every line, for the best case still open to each
+    # bracket (potential_points): who is out, and which half each pick is in.
+    all_matches = (await db.execute(
+        select(Match).where(Match.draw_id == tournament_id))).scalars().all()
+    position_by_entry = {
+        e.id: e.bracket_position for e in
+        (await db.execute(select(DrawEntry).where(DrawEntry.draw_id == tournament_id))).scalars().all()
+    }
+
     timeline_ids = {m.id for m in completed_matches}
     user_predictions: dict = {}
     entries = []
@@ -763,6 +779,8 @@ async def round_scores(
             "round_points": pts_list,
             "total": sum(pts_list),
             "correct_count": correct_count,
+            "max_points": sum(pts_list) + potential_points(
+                pred_by_match, all_matches, position_by_entry, pts_table),
         })
 
     # Primary: total points desc. Tiebreaker: points in latest rounds first (Final → SF → QF → …)

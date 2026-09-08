@@ -1436,6 +1436,15 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
               ✓ / {effectiveScrubPos}
             </span>
             <span className="lt-progress-total lt-progress-col-header">Score</span>
+            {/* The best this bracket can still finish on: every pick that can
+                yet come true, paid out. It is what makes a gap readable —
+                20 behind with 30 still to play for is a race, 20 behind with
+                4 is not. Frozen while scrubbing, since a replay has no
+                future. */}
+            <span className="lt-progress-max lt-progress-col-header"
+                  title="Best possible final score, if every pick still alive comes true">
+              Max
+            </span>
             {comparing ? (
               /* The same column, two lines: the round that owns a group, and
                  the bracket position of each slot inside it. Both are grids of
@@ -1535,6 +1544,11 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                   {entry.correct_count ?? 0}
                 </span>
                 <span className="lt-progress-total">{entry.total} pts</span>
+                <span className="lt-progress-max"
+                      title={entry.max_points != null
+                        ? `Could still finish on ${Math.round(entry.max_points)} pts` : undefined}>
+                  {entry.max_points != null ? Math.round(entry.max_points) : '–'}
+                </span>
                 {comparing ? (
                   /* THE TRACK, WITH NAMES IN IT. Same cell, same column count
                      as the header above — an unfilled slot still renders, so a

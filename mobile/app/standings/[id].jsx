@@ -29,7 +29,7 @@ export default function GlobalStandings() {
   // The league screen's shape, so competitionRanks reads the same field.
   const entries = (standings.data || []).map(r => ({
     user_id: r.user?.id, username: r.user?.username, full_name: r.user?.full_name,
-    correct_count: r.correct_count, total: r.total_points,
+    correct_count: r.correct_count, total: r.total_points, max_points: r.max_points,
   }))
   const ranks = competitionRanks(entries)
   const opens = t?.status === 'active' || t?.status === 'completed'
@@ -58,6 +58,10 @@ export default function GlobalStandings() {
               <Text style={[s.who, s.headText]} numberOfLines={1}>Player</Text>
               <Text style={[s.num, s.headText]} numberOfLines={1}>Right</Text>
               <Text style={[s.num, s.headText]} numberOfLines={1}>Pts</Text>
+              {/* The best this bracket can still finish on — every pick
+                  that can yet come true, paid out. Quieter than the score:
+                  a possibility beside a fact. */}
+              <Text style={[s.num, s.headText]} numberOfLines={1}>Max</Text>
             </View>
             {entries.map((e, i) => {
               const mine = me && e.user_id === me.id
@@ -74,6 +78,7 @@ export default function GlobalStandings() {
                     </View>
                     <Text style={s.num}>{e.correct_count}</Text>
                     <Text style={[s.num, s.total]}>{Math.round(e.total)}</Text>
+                    <Text style={[s.num, s.max]}>{e.max_points != null ? Math.round(e.max_points) : '–'}</Text>
                   </Body>
                   <CardLink href={{ pathname: '/history', params: { user: e.user_id } }} style={s.hist} pressedOpacity={0.6}>
                     <Ionicons name="time-outline" size={16} color={C.muted} />
@@ -102,7 +107,8 @@ const s = StyleSheet.create({
   who: { flex: 1, minWidth: 0 },
   name: { color: C.ink, fontWeight: '600' },
   nameMine: { color: C.clay, fontWeight: '800' },
-  num: { color: C.ink, width: 62, textAlign: 'right' },
+  num: { color: C.ink, width: 46, textAlign: 'right' },
   total: { fontWeight: '800' },
+  max: { color: C.muted, fontWeight: '600' },
   hist: { paddingLeft: 6, paddingVertical: 4 },
 })

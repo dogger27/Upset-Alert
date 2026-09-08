@@ -21,7 +21,7 @@ from typing import Optional
 
 from app.models.league import League
 from app.models.prediction import UserPrediction
-from app.models.tournament import DrawEntry, Match, Draw
+from app.models.tournament import Match, Draw
 
 
 # ---------------------------------------------------------------------------
@@ -107,6 +107,50 @@ def score_user(
         correct_count=correct_count,
         correct_by_round=correct_by_round,
     )
+
+
+def potential_points(
+    pred_by_match: dict[int, Optional[int]],
+    all_matches: list[Match],
+    position_by_entry: dict[int, Optional[int]],
+    pts_table: dict[int, int],
+) -> float:
+    """Points still on the table for these picks, in the best case.
+
+    The best case is simple: every undecided match the pick can still be
+    right about pays out. A pick can still be right when the player it names
+    has not lost a match yet AND that player belongs in this match's half of
+    the draw — which is a question of bracket position, not of the other
+    picks. Line `pos` reaches round-r match number ceil(pos / 2^r), whatever
+    was picked on the way; a pick that reaches the final from line 3 pays out
+    even if the same bracket had someone else winning line 3's second round,
+    because the final's pick is scored on its own.
+
+    Undecided means no winner and not completed. A bye is never a contest.
+    Add the user's current total for the "Max" the standings show.
+    """
+    eliminated: set[int] = set()
+    for m in all_matches:
+        if m.is_bye or m.winner_id is None:
+            continue
+        loser = m.player2_id if m.winner_id == m.player1_id else m.player1_id
+        if loser is not None:
+            eliminated.add(loser)
+
+    out = 0.0
+    for m in all_matches:
+        if m.is_bye or m.winner_id is not None or m.status == "completed":
+            continue
+        pick = pred_by_match.get(m.id)
+        if pick is None or pick in eliminated:
+            continue
+        pos = position_by_entry.get(pick)
+        if pos is None:
+            continue
+        if -(-pos // (1 << m.round_number)) != m.match_number:
+            continue
+        out += pts_table.get(m.round_number, 0)
+    return out
 
 
 def rank_users(scores: list[UserScore], num_rounds: int) -> list[UserScore]:
