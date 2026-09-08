@@ -120,7 +120,12 @@ export default function GlobalStandings() {
 }
 
 const s = StyleSheet.create({
-  body: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  /* THE SAME GAP AS THE HEADER ROW. The header's cells are direct children
+     of the row and sit 8pt apart; the data cells live inside this link,
+     which had no gap, so every column right of the name landed 8pt per
+     column further left than its header — the ✓ count sat under the "120"
+     however it was aligned. One number, in both places. */
+  body: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 8 },
   table: { borderWidth: 1, borderColor: C.border, borderRadius: 14, overflow: 'hidden', backgroundColor: C.card },
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 12, gap: 8 },
   head: { backgroundColor: C.raised, paddingVertical: 8 },
