@@ -15,6 +15,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useLocalSearchParams, useRouter } from 'expo-router'
+import { leading } from '../../../fontScale.js'
 import { Ionicons } from '@expo/vector-icons'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { getDraw, getPredictions } from '../../../api'
@@ -223,14 +224,15 @@ const s = StyleSheet.create({
   },
   tint: { width: 4 },
   /* One row of one line, so it is padded like a header bar rather than a
-     card: S.md across, S.xs down. The full S.md all round was sized for the
-     four stacked rows this box used to hold. */
+     card: S.md across and 2pt down — S.xs was still a touch generous for a
+     single line (owner, 2026-09-08), and the title's line box is trimmed
+     to match, so the banner is as tall as its name and no more. */
   headBody: {
     flex: 1, flexDirection: 'row', alignItems: 'center',
     justifyContent: 'space-between', gap: 10,
-    paddingHorizontal: S.md, paddingVertical: S.xs,
+    paddingHorizontal: S.md, paddingVertical: 2,
   },
-  headName: { ...T.h2, color: C.ink, flexShrink: 1 },
+  headName: { ...T.h2, lineHeight: leading(21), color: C.ink, flexShrink: 1 },
 
 
   /* Screen's shared body padding frames every OTHER screen; this one is a
