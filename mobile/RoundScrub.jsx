@@ -629,5 +629,10 @@ const s = StyleSheet.create({
   scroller: { minHeight: 0, touchAction: 'pan-y' },
   strip: { width: '100%' },
   column: { position: 'absolute', top: 0 },
-  veil: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: C.bg },
+  /* TWICE THE COLUMN'S HEIGHT. A round leaving to the right spreads to twice
+     its settled span, and rows below the finger slide out from under a veil
+     the size of the column at rest — its bottom edge crossed the boxes as a
+     dark band travelling up the screen (owner, 2026-09-08). A flat colour
+     costs nothing however tall. */
+  veil: { position: 'absolute', left: 0, right: 0, top: 0, bottom: '-100%', backgroundColor: C.bg },
 })
