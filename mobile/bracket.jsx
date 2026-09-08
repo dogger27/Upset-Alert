@@ -77,7 +77,11 @@ const NOTE_PAD = 1
 const NOTE_BOX_H = (NOTE_CAP_H + 2 * NOTE_PAD) * FONT_SCALE
 const TICK_PX = 22        // and the winner's ✓, with its leading space
 export const CONNECTOR_W = 2 + CONN_RUN + CONN_STUB   // beyond the outline's outer edge
-export const CHIP_OVERHANG = CHIP_H / 2 - 1            // beyond the outline's outer edge
+/* How far the chips poke past the outline's outer edge — SCALED, because the
+   chip's short side is leading(18): on a phone with larger text the pill is
+   ~23pt across, and a fixed 8 here had RoundScrub's clip slicing its left
+   third off. Rounded up, with the border's point of slack left in. */
+export const CHIP_OVERHANG = Math.ceil(leading(CHIP_H) / 2)
 
 /* ── The model ───────────────────────────────────────────────────────────────
    Everything a group needs that is about the DRAW rather than the match:
