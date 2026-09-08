@@ -60,8 +60,11 @@ const BOX_H = 32
 const GAP_H = 30          // one line of ETA or score, and the bell's height
 const PAD = 12            // outline overhang 8 + slot inset 4, on every side
 const PILL_H = 16
-const CHIP_W = 34         // the pill BEFORE rotation: 34 long, 18 tall
-const CHIP_H = 18
+/* The pill BEFORE rotation. The site's is 34×18 around 12.5px type; this one
+   is a size up and SCALES with the type — at a fixed 34 the text filled it
+   end to end on a phone with larger text. */
+const CHIP_W = 40
+const CHIP_H = 20
 const CONN_RUN = 12       // border → the vertical bar
 const CONN_STUB = 10      // the bar → off to the next round
 const BELL_CORNER = 42    // .cv-eta--bell / .cv-live-score--bell: right: 42px
@@ -342,7 +345,7 @@ function PlayerBox({ box, serving, picked, won, noteWon, drawRanks, B }) {
    place, so the centre stays where the layout put it — on the border line. */
 function Chip({ side, onPress, label, children }) {
   return (
-    <View style={[s.chipWrap, side === 'left' ? { left: -(CHIP_W / 2) - 1 } : { right: -(CHIP_W / 2) - 1 }]}
+    <View style={[s.chipWrap, side === 'left' ? { left: -(leading(CHIP_W) / 2) - 1 } : { right: -(leading(CHIP_W) / 2) - 1 }]}
           pointerEvents="box-none">
       <Pressable onPress={onPress} hitSlop={10} style={s.chip} accessibilityRole="button"
                  accessibilityLabel={label}>
@@ -484,7 +487,7 @@ export function MatchGroup({ m, roundIdx, B, drawRanks, zone, onH2H, onPredictor
       {!m.is_bye && onPredictors && (
         <Chip side="left" onPress={() => onPredictors(m)}
               label={decided ? 'Who called it' : 'Who’s still in it'}>
-          <Ionicons name="people" size={15} color={CHIP.text} style={s.chipIcon} />
+          <Ionicons name="people" size={16} color={CHIP.text} style={s.chipIcon} />
         </Chip>
       )}
       {canH2H && onH2H && (
@@ -602,11 +605,18 @@ const s = StyleSheet.create({
      centred on the outline's border at the pair's midpoint. */
   chipWrap: { position: 'absolute', top: 0, bottom: 0, justifyContent: 'center', zIndex: 4 },
   chip: {
-    width: CHIP_W, height: leading(CHIP_H), borderRadius: 4, borderWidth: 1,
+    width: leading(CHIP_W), height: leading(CHIP_H), borderRadius: 4, borderWidth: 1,
     borderColor: CHIP.line, backgroundColor: C.card,
     alignItems: 'center', justifyContent: 'center', transform: [{ rotate: '-90deg' }],
   },
-  chipText: { fontFamily: 'Archivo_700Bold', fontSize: 12, letterSpacing: 0.25, color: CHIP.text },
+  /* The same nudge the real-winner note needed: iOS sets these caps ~1.6pt
+     below the centre of their line, which after the rotation reads as the
+     word crowding one END of the pill. Padding under the glyphs lifts them
+     by half of itself. */
+  chipText: {
+    fontFamily: 'Archivo_700Bold', fontSize: 12, letterSpacing: 0.25, color: CHIP.text,
+    paddingBottom: 3.3 * FONT_SCALE,
+  },
   // Undo the pill's rotation so the glyph stands upright.
   chipIcon: { transform: [{ rotate: '90deg' }] },
 
