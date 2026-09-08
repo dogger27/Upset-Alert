@@ -15,7 +15,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { leading } from '../../../fontScale.js'
+import { FONT_SCALE, leading } from '../../../fontScale.js'
 import { Ionicons } from '@expo/vector-icons'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { getDraw, getPredictions } from '../../../api'
@@ -235,7 +235,14 @@ const s = StyleSheet.create({
   /* The line box is the type's own height: 19pt Saira Condensed needs no
      more than 19 of line, so the banner is exactly the name plus the
      badge's own padding. */
-  headName: { ...T.h2, lineHeight: leading(19), color: C.ink, flexShrink: 1 },
+  /* Nudged DOWN, measured off the phone: with the line box at the type's
+     own height iOS sets the caps ~1.5pt above the centre of it, and in a
+     banner this short that reads as the name floating. A transform, so
+     the banner's height is untouched. */
+  headName: {
+    ...T.h2, lineHeight: leading(19), color: C.ink, flexShrink: 1,
+    transform: [{ translateY: 1.5 * FONT_SCALE }],
+  },
 
 
   /* Screen's shared body padding frames every OTHER screen; this one is a
