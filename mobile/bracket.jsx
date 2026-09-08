@@ -95,7 +95,7 @@ const NOTE_BOX_H = (NOTE_CAP_H + 2 * NOTE_PAD) * FONT_SCALE
 /* How far the note stands up into the gap above the lower box (its top is
    4pt above the box's edge), plus a little air — what the gap's content
    gives up when there is a note. */
-const NOTE_RISE = 6 * FONT_SCALE
+const NOTE_RISE = 3 * FONT_SCALE     // 6 sat the text hard under the upper box (owner, 2026-09-08)
 const TICK_PX = 22        // and the winner's ✓, with its leading space
 export const CONNECTOR_W = 2 + CONN_RUN + CONN_STUB   // beyond the outline's outer edge
 /* How far the chips poke past the outline's outer edge — SCALED, because the
