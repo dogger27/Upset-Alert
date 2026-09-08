@@ -509,11 +509,11 @@ const s = StyleSheet.create({
     borderWidth: 2, borderColor: N[300], borderRadius: 10, backgroundColor: N[150],
     paddingVertical: PAD, paddingHorizontal: PAD,
   },
-  /* A finished match wears a green edge, so a round reads as done/not-done
-     at a glance. The site's --brand-line-strong: green enough to be seen
-     against the grey outline, and clearly NOT the pick-correct green the
-     boxes inside use, which says something else. */
-  outlineDone: { borderColor: '#4a8f6c' },
+  /* A finished match wears a TEAL edge, so a round reads as done/not-done
+     at a glance. Not a green: the boxes inside are already green for a
+     right pick, and a done edge in a third green vanished among them. The
+     site's --match-done-line, dark. */
+  outlineDone: { borderColor: '#2ec4b6' },
   /* .in-progress-badge: centred on the outline's top border. top is measured
      from inside the border, so -1 puts the pill's centre on the border's own
      centre line. */
