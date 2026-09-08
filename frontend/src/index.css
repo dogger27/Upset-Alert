@@ -287,13 +287,13 @@
   --atp-line-strong: #60a5fa;
   --atp-text-strong: var(--atp-700);
   --brand-line-strong: var(--green-800);
-  /* The draw's match outline fills. A match still to play sits a step
-     DARKER than a finished one — clear of the page background, but the
-     finished match is the one that is lit. The border stays the default:
-     a coloured edge (green, then teal) read as a third signal beside the
-     pick colours inside. */
+  /* The draw's match outline fills. A match still to play keeps the warm
+     green-grey; a finished one goes to a COOL SLATE — cooled off. A hue
+     shift, not a brightness step: a step small enough to keep the grey
+     player boxes distinct from the fill was too small to see, and one big
+     enough to see swallowed the boxes. The border stays the default. */
   --match-fill: var(--n-150);
-  --match-done-fill: var(--n-50);
+  --match-done-fill: #e6edf2;
   --gold-ink: #b8860b;
 
   --success-tint: #f0fdf4;
@@ -489,7 +489,7 @@
   --atp-text-strong: #a8c8ff;
   --brand-line-strong: #4a8f6c;
   --match-fill: var(--n-100);
-  --match-done-fill: var(--n-150);
+  --match-done-fill: #1f2e37;
   --gold-ink: #e0b34a;
 
   --success-tint: #16301f;
