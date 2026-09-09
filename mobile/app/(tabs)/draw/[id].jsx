@@ -13,7 +13,7 @@
  * same ones, so reaching a draw should not require choosing a league first.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { FONT_SCALE, leading } from '../../../fontScale.js'
 import { Ionicons } from '@expo/vector-icons'
@@ -102,6 +102,19 @@ export default function DrawScreen() {
   )
   const rounds = B.rounds
   const roundIdx = useMemo(() => new Map(rounds.map(([n], i) => [n, i])), [rounds])
+  /* ONE renderRow PER DATA CHANGE, not per render. The scrub memoises each
+     row on its match and on this function; an inline arrow here made every
+     mounted match group re-render on every render of this screen — a live
+     refetch, a sheet opening, and the landing's own commit, right when the
+     scrub had just come to rest (owner: "some lag", 2026-09-09). Everything
+     it closes over is memoised on the data or a state setter. */
+  const renderRow = useCallback(m => (m.champion
+    ? <ChampionGroup m={m} B={B} drawRanks={drawRanks} />
+    : <MatchGroup m={m} roundIdx={roundIdx.get(m.round_number) ?? 0} B={B}
+                  drawRanks={drawRanks} zone={zone} onH2H={setH2H}
+                  onPredictors={setPredictors} onShowScore={setScoreMatch}
+                  standout={standoutIds.has(m.id)} />
+  ), [B, drawRanks, roundIdx, zone, standoutIds])
 
   // Follows the live round until the user picks one, then stays put — moving
   // the screen under someone because a match finished elsewhere is worse than
@@ -200,13 +213,7 @@ export default function DrawScreen() {
             style={s.scrub}
             rounds={rounds}
             columnStyle={s.list}
-            renderRow={m => (m.champion
-              ? <ChampionGroup m={m} B={B} drawRanks={drawRanks} />
-              : <MatchGroup m={m} roundIdx={roundIdx.get(m.round_number) ?? 0} B={B}
-                            drawRanks={drawRanks} zone={zone} onH2H={setH2H}
-                            onPredictors={setPredictors} onShowScore={setScoreMatch}
-                            standout={standoutIds.has(m.id)} />
-            )}
+            renderRow={renderRow}
           />
         )}
         {draw.data && !rounds.length && (
