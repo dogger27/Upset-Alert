@@ -484,10 +484,10 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
   }, [heights])
 
   const scrub = useMemo(() => ({
-    pos, r0, shiftY, scrollRef, geo, heights, widthSV, activeIdx, width, warm, estimate, e,
+    pos, r0, shiftY, scrubbing, scrollRef, geo, heights, widthSV, activeIdx, width, warm, estimate, e,
     rowHeight, rounds, onScroll, subscribe, geoRef,
     onWrapLayout, onRowLayout, onColumnLayout, registerRow, unregisterRow,
-  }), [pos, r0, shiftY, scrollRef, geo, heights, widthSV, activeIdx, width, warm, estimate, e,
+  }), [pos, r0, shiftY, scrubbing, scrollRef, geo, heights, widthSV, activeIdx, width, warm, estimate, e,
        rowHeight, rounds, onScroll, subscribe,
        onWrapLayout, onRowLayout, onColumnLayout, registerRow, unregisterRow])
 
@@ -547,21 +547,34 @@ function Column({ ri, num, matches, window, scrub, renderRow, columnStyle }) {
 }
 
 export function RoundScrubView({ scrub, rounds, renderRow, columnStyle, style = null }) {
-  const { pos, shiftY, scrollRef, heights, widthSV, activeIdx, width, warm, estimate, onScroll,
-          subscribe, geoRef, onWrapLayout } = scrub
+  const { pos, r0, shiftY, scrubbing, scrollRef, heights, widthSV, activeIdx, width, warm, estimate,
+          onScroll, subscribe, geoRef, onWrapLayout } = scrub
   /* The strip's height is the content height: the round on screen's column
      at rest, the taller of the two while a pull is between rounds — every
      column is absolutely placed, so nothing else would give it one. A layout
      prop, but one that changes twice per gesture, not per frame. The
-     translateY is the pull holding its anchor without a scroll. */
+     translateY is the pull holding its anchor without a scroll.
+
+     AND NEVER SHORTER THAN THE ROUND THE PULL LEFT FROM, until it lands.
+     The real scroll offset stays where the pull began while the content is
+     only translated; the moment pos reached the destination exactly, the
+     height snapped to that round alone, and where it was the shorter one iOS
+     clamped the offset underneath — the list jumped, then jumped back on
+     release when the landing scrolled it (owner, 2026-09-09). */
   const stripStyle = useAnimatedStyle(() => {
     const p = pos.value
     const n = rounds.length
     const lo = Math.max(0, Math.min(n - 1, Math.floor(p)))
     const hi = Math.max(0, Math.min(n - 1, Math.ceil(p)))
     const fallback = Math.max(estimate(rounds[lo]?.[1].length ?? 0), estimate(rounds[hi]?.[1].length ?? 0))
+    let height = contentHeightAt(p, heights.value, fallback)
+    if (scrubbing.value) {
+      const from = r0.value
+      const origin = heights.value[from] > 0 ? heights.value[from] : estimate(rounds[from]?.[1].length ?? 0)
+      if (origin > height) height = origin
+    }
     return {
-      height: contentHeightAt(p, heights.value, fallback),
+      height,
       transform: [{ translateX: -p * widthSV.value }, { translateY: -shiftY.value }],
     }
   }, [rounds, estimate])
