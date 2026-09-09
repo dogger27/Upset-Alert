@@ -156,6 +156,12 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
      looking at, for the culling. */
   const shiftY = useSharedValue(0)
   const viewY = useSharedValue(0)
+  /* The landing, in flight: the real scroll has been asked for landingY,
+     and until the scroll view reports it is there, the translation makes up
+     the difference frame by frame — so it does not matter in which order
+     iOS applies the scroll, the transform and the height. */
+  const landing = useSharedValue(false)
+  const landingY = useSharedValue(0)
 
   const pos = useSharedValue(activeIdx)
   // The round the current gesture (or glide) left from: the one that fades.
@@ -245,7 +251,11 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
     onScroll: (ev) => {
       const y = ev.contentOffset.y
       scrollY.value = y
-      if (!scrubbing.value) viewY.value = y
+      if (landing.value) {
+        shiftY.value = landingY.value - y
+        if (Math.abs(landingY.value - y) < 1) { shiftY.value = 0; landing.value = false }
+      }
+      if (!scrubbing.value && !landing.value) viewY.value = y
       if (Math.abs(y - reportedY.value) >= SCROLL_REPORT_ROWS * geo.value.G) {
         reportedY.value = y
         scheduleOnRN(reportScroll, y)
@@ -291,13 +301,17 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
   const settle = useCallback((target) => {
     'worklet'
     const y = scrollFor(target)
-    scrollTo(scrollRef, 0, y, false)
-    shiftY.value = 0
+    landingY.value = y
+    landing.value = true
     viewY.value = y
-    scrollY.value = y
     reportedY.value = y
     scrubbing.value = false
-  }, [scrollFor, viewY, scrollRef, shiftY, scrollY, reportedY, scrubbing])
+    scrollTo(scrollRef, 0, y, false)
+    // Applied at once, the scroll has already reported y and this is 0;
+    // applied later, the translation holds the picture until it does.
+    shiftY.value = y - scrollY.value
+    if (Math.abs(shiftY.value) < 1) { shiftY.value = 0; landing.value = false }
+  }, [scrollFor, landingY, landing, viewY, reportedY, scrubbing, scrollRef, shiftY, scrollY])
 
   const land = useCallback((target) => {
     'worklet'
@@ -329,6 +343,8 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
       } else {
         pos.value = cur
       }
+      // A landing still waiting on its scroll: take the picture as it is.
+      landing.value = false
       /* THE ANCHOR. The finger's height within the list becomes a fractional
          group index in the round it is on; that index is what is held.
          measure() gives the list's place on screen on the UI thread, so the
@@ -336,10 +352,12 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
       const vp = measure(scrollRef)
       const localY = vp ? ev.absoluteY - vp.pageY : viewportH.value / 2
       const g = geo.value
-      const y0 = scrollY.value
+      // Where the content IS on screen: the scroll less any translation
+      // still holding a landing's picture.
+      const y0 = scrollY.value + shiftY.value
       anchor.value = {
         idx: rowIndexAt(y0 + localY, g.P, g.H, g.G, m.rows[cur] ?? 0),
-        localY, r0: cur, y0,
+        localY, r0: cur, y0: scrollY.value,
       }
       r0.value = cur
       /* The origin is where the finger is NOW, at recognition, not where it
@@ -382,7 +400,7 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
       const m = meta.value
       land(settleTarget(pos.value, anchor.value.r0, 0, dragPx.value, 0, m.count - 1))
     }), [meta, widthSV, pos, scrubbing, viewY, settle, commit, scrollRef, viewportH, geo,
-         scrollY, anchor, r0, originX, dragPx, dragging, beginPull, land])
+         scrollY, shiftY, landing, anchor, r0, originX, dragPx, dragging, beginPull, land])
 
   /* pos moved: hold the anchor by translation, then drive the rows on
      screen. One reaction, in this order, every frame of a pull. */
@@ -484,10 +502,10 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
   }, [heights])
 
   const scrub = useMemo(() => ({
-    pos, r0, shiftY, scrubbing, scrollRef, geo, heights, widthSV, activeIdx, width, warm, estimate, e,
+    pos, r0, shiftY, scrubbing, landing, scrollRef, geo, heights, widthSV, activeIdx, width, warm, estimate, e,
     rowHeight, rounds, onScroll, subscribe, geoRef,
     onWrapLayout, onRowLayout, onColumnLayout, registerRow, unregisterRow,
-  }), [pos, r0, shiftY, scrubbing, scrollRef, geo, heights, widthSV, activeIdx, width, warm, estimate, e,
+  }), [pos, r0, shiftY, scrubbing, landing, scrollRef, geo, heights, widthSV, activeIdx, width, warm, estimate, e,
        rowHeight, rounds, onScroll, subscribe,
        onWrapLayout, onRowLayout, onColumnLayout, registerRow, unregisterRow])
 
@@ -547,7 +565,7 @@ function Column({ ri, num, matches, window, scrub, renderRow, columnStyle }) {
 }
 
 export function RoundScrubView({ scrub, rounds, renderRow, columnStyle, style = null }) {
-  const { pos, r0, shiftY, scrubbing, scrollRef, heights, widthSV, activeIdx, width, warm, estimate,
+  const { pos, r0, shiftY, scrubbing, landing, scrollRef, heights, widthSV, activeIdx, width, warm, estimate,
           onScroll, subscribe, geoRef, onWrapLayout } = scrub
   /* The strip's height is the content height: the round on screen's column
      at rest, the taller of the two while a pull is between rounds — every
@@ -568,7 +586,7 @@ export function RoundScrubView({ scrub, rounds, renderRow, columnStyle, style = 
     const hi = Math.max(0, Math.min(n - 1, Math.ceil(p)))
     const fallback = Math.max(estimate(rounds[lo]?.[1].length ?? 0), estimate(rounds[hi]?.[1].length ?? 0))
     let height = contentHeightAt(p, heights.value, fallback)
-    if (scrubbing.value) {
+    if (scrubbing.value || landing.value) {
       const from = r0.value
       const origin = heights.value[from] > 0 ? heights.value[from] : estimate(rounds[from]?.[1].length ?? 0)
       if (origin > height) height = origin
