@@ -72,9 +72,7 @@ export function RoundStrip({ rounds, active, onPick, scrub }) {
   return (
     <View style={s.bar}>
       <View style={s.row}>
-        <Animated.View style={[s.pill,
-                               { opacity: pillOpacity.value, transform: [{ translateX: pillX.value }, { scaleX: pillScale.value }] },
-                               { opacity: pillOpacity, transform: [{ translateX: pillX }, { scaleX: pillScale }] }]}
+        <Animated.View style={[s.pill, { opacity: pillOpacity, transform: [{ translateX: pillX }, { scaleX: pillScale }] }]}
                        pointerEvents="none" />
         {rounds.map(([num, matches], i) => {
           const on = num === active
@@ -96,7 +94,7 @@ export function RoundStrip({ rounds, active, onPick, scrub }) {
 function Label({ i, pos, on, children }) {
   const color = useDerivedValue(() => (Math.abs(pos.value - i) < 0.5 ? C.greenBright : C.muted), [i])
   return (
-    <Animated.Text style={[s.roundText, on && s.roundTextOn, { color: color.value }, { color }]} numberOfLines={1}>
+    <Animated.Text style={[s.roundText, on && s.roundTextOn, { color }]} numberOfLines={1}>
       {children}
     </Animated.Text>
   )

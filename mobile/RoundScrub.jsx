@@ -149,12 +149,19 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
      reads 0 puts the finger's row wherever the top of the list is.) */
   const scrollY = useSharedValue(0)
   const reportedY = useSharedValue(0)
-  /* THE PULL SCROLLS NOTHING. The anchor is held by translating the strip
-     by shiftY — where the scroll would be, less where it was when the pull
-     began — and one real scrollTo happens on landing, in the same frame the
-     translation is dropped. viewY is the offset the reader is effectively
-     looking at, for the culling. */
-  const shiftY = useSharedValue(0)
+  /* THE PULL SCROLLS NOTHING; the anchor is held by TRANSLATING the strip,
+     and one real scrollTo happens on landing. `wantY` is the content offset
+     the reader should be looking at while a pull or its landing is in flight.
+     The strip's translateY is a DERIVED value, scrollY − wantY, recomputed on
+     the UI thread every time the scroll offset changes (stripY below): that
+     is the whole defence against the landing pop. Whatever moves the real
+     scroll — the landing's own scrollTo, or a React commit resetting the
+     offset to the top, which fires the scroll handler just the same — the
+     translation is recomputed from that very offset in the same frame, so the
+     picture never moves. There is no stored translation for a commit to ship
+     a stale copy of. viewY is the offset the reader is effectively looking
+     at, for the culling. */
+  const wantY = useSharedValue(0)
   const viewY = useSharedValue(0)
   /* The landing, in flight: the real scroll has been asked for landingY,
      and until the scroll view reports it is there, the translation makes up
@@ -251,10 +258,10 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
     onScroll: (ev) => {
       const y = ev.contentOffset.y
       scrollY.value = y
-      if (landing.value) {
-        shiftY.value = landingY.value - y
-        if (Math.abs(landingY.value - y) < 1) { shiftY.value = 0; landing.value = false }
-      }
+      // Landing ends the moment the real offset reaches the target; until
+      // then stripY (derived from scrollY) holds the picture, whatever the
+      // offset does on the way.
+      if (landing.value && Math.abs(landingY.value - y) < 1) landing.value = false
       if (!scrubbing.value && !landing.value) viewY.value = y
       if (Math.abs(y - reportedY.value) >= SCROLL_REPORT_ROWS * geo.value.G) {
         reportedY.value = y
@@ -301,17 +308,18 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
   const settle = useCallback((target) => {
     'worklet'
     const y = scrollFor(target)
+    wantY.value = y
     landingY.value = y
     landing.value = true
     viewY.value = y
     reportedY.value = y
     scrubbing.value = false
+    // Ask for the real scroll. However the offset gets there — at once, a
+    // frame later, or bounced through the top by a commit — stripY reads the
+    // live offset and keeps `y` at the top until they agree.
     scrollTo(scrollRef, 0, y, false)
-    // Applied at once, the scroll has already reported y and this is 0;
-    // applied later, the translation holds the picture until it does.
-    shiftY.value = y - scrollY.value
-    if (Math.abs(shiftY.value) < 1) { shiftY.value = 0; landing.value = false }
-  }, [scrollFor, landingY, landing, viewY, reportedY, scrubbing, scrollRef, shiftY, scrollY])
+    if (Math.abs(y - scrollY.value) < 1) landing.value = false
+  }, [scrollFor, wantY, landingY, landing, viewY, reportedY, scrubbing, scrollRef, scrollY])
 
   const land = useCallback((target) => {
     'worklet'
@@ -352,11 +360,11 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
       const vp = measure(scrollRef)
       const localY = vp ? ev.absoluteY - vp.pageY : viewportH.value / 2
       const g = geo.value
-      // Where the content IS on screen: the scroll less any translation
-      // still holding a landing's picture.
-      const y0 = scrollY.value + shiftY.value
+      // Where the content IS on screen right now: wantY while a pull or its
+      // landing still owns the picture, otherwise the real scroll offset.
+      const shownTop = (scrubbing.value || landing.value) ? wantY.value : scrollY.value
       anchor.value = {
-        idx: rowIndexAt(y0 + localY, g.P, g.H, g.G, m.rows[cur] ?? 0),
+        idx: rowIndexAt(shownTop + localY, g.P, g.H, g.G, m.rows[cur] ?? 0),
         localY, r0: cur, y0: scrollY.value,
       }
       r0.value = cur
@@ -400,7 +408,7 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
       const m = meta.value
       land(settleTarget(pos.value, anchor.value.r0, 0, dragPx.value, 0, m.count - 1))
     }), [meta, widthSV, pos, scrubbing, viewY, settle, commit, scrollRef, viewportH, geo,
-         scrollY, shiftY, landing, anchor, r0, originX, dragPx, dragging, beginPull, land])
+         scrollY, wantY, landing, anchor, r0, originX, dragPx, dragging, beginPull, land])
 
   /* pos moved: hold the anchor by translation, then drive the rows on
      screen. One reaction, in this order, every frame of a pull. */
@@ -408,7 +416,7 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
     if (scrubbing.value) {
       const y = scrollFor(p)
       viewY.value = y
-      shiftY.value = y - anchor.value.y0
+      wantY.value = y
     }
     const g = geo.value
     const top = viewY.value - CULL_MARGIN * g.H
@@ -502,10 +510,10 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
   }, [heights])
 
   const scrub = useMemo(() => ({
-    pos, r0, shiftY, scrubbing, landing, scrollY, viewportH, scrollRef, geo, heights, widthSV, activeIdx, width, warm, estimate, e,
+    pos, r0, wantY, scrubbing, landing, scrollY, viewportH, scrollRef, geo, heights, widthSV, activeIdx, width, warm, estimate, e,
     rowHeight, rounds, onScroll, subscribe, geoRef,
     onWrapLayout, onRowLayout, onColumnLayout, registerRow, unregisterRow,
-  }), [pos, r0, shiftY, scrubbing, landing, scrollY, viewportH, scrollRef, geo, heights, widthSV, activeIdx, width, warm, estimate, e,
+  }), [pos, r0, wantY, scrubbing, landing, scrollY, viewportH, scrollRef, geo, heights, widthSV, activeIdx, width, warm, estimate, e,
        rowHeight, rounds, onScroll, subscribe,
        onWrapLayout, onRowLayout, onColumnLayout, registerRow, unregisterRow])
 
@@ -530,8 +538,8 @@ const Row = memo(function Row({ ri, i, m, renderRow, scrub }) {
   // What the group inside reads to stretch or condense itself.
   const ctx = useMemo(() => ({ stretch }), [stretch])
   return (
-    <Animated.View style={[{ transform: [{ translateY: shift.value }] }, { transform: [{ translateY: shift }] }]}
-                   collapsable={false} onLayout={ev => onRowLayout(ri, i, ev)}>
+    <Animated.View style={{ transform: [{ translateY: shift }] }} collapsable={false}
+                   onLayout={ev => onRowLayout(ri, i, ev)}>
       <ScrubContext.Provider value={ctx}>{renderRow(m)}</ScrubContext.Provider>
     </Animated.View>
   )
@@ -565,7 +573,7 @@ function Column({ ri, num, matches, window, scrub, renderRow, columnStyle }) {
 }
 
 export function RoundScrubView({ scrub, rounds, renderRow, columnStyle, style = null }) {
-  const { pos, r0, shiftY, scrubbing, landing, scrollY, viewportH, scrollRef, heights, widthSV, activeIdx, width, warm, estimate,
+  const { pos, r0, wantY, scrubbing, landing, scrollY, viewportH, scrollRef, heights, widthSV, activeIdx, width, warm, estimate,
           onScroll, subscribe, geoRef, onWrapLayout } = scrub
   /* The strip's height is the content height: the round on screen's column
      at rest, the taller of the two while a pull is between rounds — every
@@ -622,7 +630,14 @@ export function RoundScrubView({ scrub, rounds, renderRow, columnStyle, style = 
     return height
   }, [rounds, estimate])
   const stripX = useDerivedValue(() => -pos.value * widthSV.value)
-  const stripY = useDerivedValue(() => -shiftY.value)
+  /* The anchor-holding translate, a pure function of the LIVE scroll offset:
+     while a pull or its landing owns the picture, translate the strip so the
+     content at wantY sits at the top, whatever the real offset is doing this
+     frame; idle, none. Because it reads scrollY, any change to the offset —
+     including a commit bouncing it to the top — recomputes this in the same
+     frame, so the picture never moves. */
+  const stripY = useDerivedValue(() =>
+    (scrubbing.value || landing.value) ? scrollY.value - wantY.value : 0)
 
   /* The row window's inputs live HERE, not in the hook the screen owns: a
      scroll report re-renders this view and its memoised rows, never the
@@ -661,9 +676,7 @@ export function RoundScrubView({ scrub, rounds, renderRow, columnStyle, style = 
           scrollEventThrottle={16}
           onScroll={onScroll}
         >
-          <Animated.View style={[s.strip,
-                                  { height: stripH.value, transform: [{ translateX: stripX.value }, { translateY: stripY.value }] },
-                                  { height: stripH, transform: [{ translateX: stripX }, { translateY: stripY }] }]}>
+          <Animated.View style={[s.strip, { height: stripH, transform: [{ translateX: stripX }, { translateY: stripY }] }]}>
             {mounted.map(ri => (
               <Column key={rounds[ri][0]} ri={ri} num={rounds[ri][0]} matches={rounds[ri][1]}
                       window={windows[ri] ?? [0, -1]}
