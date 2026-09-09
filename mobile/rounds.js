@@ -14,6 +14,8 @@ const SHORT = [
   [/third place|3rd place/i, () => '3rd'],
   [/qualifying round (\d+)/i, m => `Q${m[1]}`],
   [/qualifying/i, () => 'Q'],
+  // The column past the final: the champion, as the trophy (owner, 2026-09-09).
+  [/champion/i, () => '🏆'],
 ]
 
 export function shortRound(name, roundNumber) {

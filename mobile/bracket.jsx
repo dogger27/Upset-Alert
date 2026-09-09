@@ -90,12 +90,13 @@ const CHIP_H = 24         // the on-screen WIDTH of the rotated pill; 24 at the 
    stub overflows into the strip's extra width (the screen padding the draw
    reclaims for it) until the glass cuts it. */
 const CONN_RUN = 24       // border → the vertical bar, clear of the pill
-/* The bar → the edge of the glass, and NO FURTHER. The column's right
-   padding is CONNECTOR_W plus the screen's S.lg, so this is what remains
-   past the bar; a few points of slack for rounding. At 120 the stub ran on
-   into the NEXT round's column, under its predictors chip, and showed there
-   as a third line out of the middle of every match (owner, 2026-09-08). */
-const CONN_STUB = S.lg + 8
+/* The bar → the edge of the glass, EXACTLY. The column's right padding is
+   CONNECTOR_W plus the screen's S.lg, so this is what remains past the bar.
+   At 120 the stub ran on into the NEXT round's column, under its predictors
+   chip, and showed there as a third line out of the middle of every match
+   (owner, 2026-09-08); at S.lg + 8 it still poked three points into that
+   column, a green tick at the glass's left edge beside every group. */
+const CONN_STUB = S.lg + 5
 const BELL_CORNER = 42    // .cv-eta--bell / .cv-live-score--bell: right: 42px
 const NAME_FONT = 12      // the site's 0.8rem, a point down with the box
 const NAME_FAMILY = 'Archivo_700Bold'
@@ -221,6 +222,19 @@ export function buildBracket(matches, entries, picks) {
   }
 
   const resolved = resolveCombinedPlayers(matches, picks, byKey)
+
+  /* THE CHAMPION, one column past the final (owner, 2026-09-09) — the site's
+     last column, the winner of the final as you predicted, graded once the
+     final is played. A pseudo-match in a round of its own, numbered one past
+     the final and shaped like any other match (round, match number 1) so
+     feederBox finds the final through the same key every other box uses;
+     `champion` marks it for the screen, which draws it as ChampionGroup. */
+  if (rounds.length && rounds[rounds.length - 1][1].length === 1) {
+    const finalNum = rounds[rounds.length - 1][0]
+    rounds.push([finalNum + 1, [{
+      id: 'champion', round_number: finalNum + 1, match_number: 1, round_name: 'Champion', champion: true,
+    }]])
+  }
   return { rounds, byKey, playerById, picks, resolved, lossRound, qualifierNums, nameCounts }
 }
 
@@ -501,6 +515,34 @@ function LiveScore({ m, suspended, bell }) {
   )
 }
 
+/* The champion's box: the winner of the final as you predicted, graded like
+   any feeder box once the final is played, the real champion's name across
+   the top border of a wrong one. One box at the TOP box's place in a row of
+   the usual height, so the final's group condenses onto it and its line
+   arrives at it exactly as for any other successor; no outline, no gap, no
+   chips, nothing goes out of it. It rides the scrub's stretch as a top cap
+   does. */
+export function ChampionGroup({ m, B, drawRanks }) {
+  const box = feederBox(m, 0, B)
+  const sc = useContext(ScrubContext)
+  const capStyle = useAnimatedStyle(() => ({ transform: [{ translateY: -halfShift(sc) }] }), [sc])
+  const finalKey = `${m.round_number - 1}:${m.match_number * 2 - 1}`
+  const pickId = B.picks?.get(B.byKey.get(finalKey)?.id) ?? null
+  const won = box.realId != null && box.playerId === box.realId
+  return (
+    <View style={s.group} accessible accessibilityLabel="Champion">
+      <Reanimated.View style={[s.champCap, capStyle]}>
+        <View style={s.boxTop}>
+          <PlayerBox box={box} B={B} drawRanks={drawRanks} serving={false}
+                     picked={pickId != null && pickId === box.playerId}
+                     won={won} noteWon={!!box.realName} />
+        </View>
+        <View style={[s.line, s.inTop]} pointerEvents="none" />
+      </Reanimated.View>
+    </View>
+  )
+}
+
 export function MatchGroup({ m, roundIdx, B, drawRanks, zone, onH2H, onPredictors, onShowScore, standout = false }) {
   const top = roundIdx === 0 ? entrantBox(m, 0, B) : feederBox(m, 0, B)
   const bot = roundIdx === 0 ? entrantBox(m, 1, B) : feederBox(m, 1, B)
@@ -659,6 +701,9 @@ const s = StyleSheet.create({
     zIndex: 1,
   },
   capTop: { top: 0, borderTopWidth: BW, borderTopLeftRadius: 10, borderTopRightRadius: 10 },
+  // The champion's cap: the top cap's box, without the outline — a border of
+  // nothing keeps the box exactly where every other top box sits.
+  champCap: { position: 'absolute', left: 0, right: 0, top: 0, height: CAP_H, borderWidth: BW, borderColor: 'transparent' },
   capBot: { bottom: 0, height: GROUP_H - CAP_H, borderBottomWidth: BW, borderBottomLeftRadius: 10, borderBottomRightRadius: 10 },
   mid: {
     position: 'absolute', left: 0, right: 0, top: CAP_H - MID_H / 2, height: MID_H,
