@@ -531,7 +531,7 @@ export function ChampionGroup({ m, B, drawRanks }) {
   const won = box.realId != null && box.playerId === box.realId
   return (
     <View style={s.group} accessible accessibilityLabel="Champion">
-      <Reanimated.View style={[s.champCap, { transform: [{ translateY: capUp }] }]}>
+      <Reanimated.View style={[s.champCap, { transform: [{ translateY: capUp.value }] }, { transform: [{ translateY: capUp }] }]}>
         <View style={s.boxTop}>
           <PlayerBox box={box} B={B} drawRanks={drawRanks} serving={false}
                      picked={pickId != null && pickId === box.playerId}
@@ -612,10 +612,10 @@ export function MatchGroup({ m, roundIdx, B, drawRanks, zone, onH2H, onPredictor
   /* The scrub's stretch, if any: the caps slide apart or together with the
      boxes, the middle and the connector's bar scale to keep the outline and
      the elbow continuous. Four transforms; nothing here lays out per frame.
-     INLINE shared values rather than animated styles: an animated style
-     re-sends its first render's value on every render after, and a
-     re-render mid-pull (or at the landing) would snap the pieces back for a
-     frame (see RoundScrub.jsx). */
+     Each piece gets its CURRENT value as a plain style at every render,
+     beside the shared value that drives it: an animated style re-sends its
+     first render's value on every render after, and a re-render mid-pull or
+     at the landing snapped the pieces back for a frame (see RoundScrub.jsx). */
   const sc = useContext(ScrubContext)
   const capUp = useDerivedValue(() => -halfShift(sc), [sc])
   const capDown = useDerivedValue(() => halfShift(sc), [sc])
@@ -628,8 +628,9 @@ export function MatchGroup({ m, roundIdx, B, drawRanks, zone, onH2H, onPredictor
   const body = (
     <View style={s.group} accessible={openable}
           accessibilityLabel={openable ? 'Show the score and its history' : undefined}>
-      <Reanimated.View style={[s.mid, done && s.capDone, { transform: [{ scaleY: midScale }] }]} pointerEvents="none" />
-      <Reanimated.View style={[s.cap, s.capTop, done && s.capDone, { transform: [{ translateY: capUp }] }]}>
+      <Reanimated.View style={[s.mid, done && s.capDone, { transform: [{ scaleY: midScale.value }] }, { transform: [{ scaleY: midScale }] }]}
+                       pointerEvents="none" />
+      <Reanimated.View style={[s.cap, s.capTop, done && s.capDone, { transform: [{ translateY: capUp.value }] }, { transform: [{ translateY: capUp }] }]}>
         {pill && (
           <View style={s.pillWrap} pointerEvents="none">
             <View style={[s.pill, pillTone]}>
@@ -646,7 +647,7 @@ export function MatchGroup({ m, roundIdx, B, drawRanks, zone, onH2H, onPredictor
         <View style={[s.line, s.runTop]} pointerEvents="none" />
         {roundIdx > 0 && <View style={[s.line, s.inTop]} pointerEvents="none" />}
       </Reanimated.View>
-      <Reanimated.View style={[s.cap, s.capBot, done && s.capDone, { transform: [{ translateY: capDown }] }]}>
+      <Reanimated.View style={[s.cap, s.capBot, done && s.capDone, { transform: [{ translateY: capDown.value }] }, { transform: [{ translateY: capDown }] }]}>
         <View style={s.boxBot}>
           <PlayerBox box={bot} B={B} drawRanks={drawRanks}
                      serving={serving === 2} picked={pickId != null && pickId === bot.playerId}
@@ -667,7 +668,7 @@ export function MatchGroup({ m, roundIdx, B, drawRanks, zone, onH2H, onPredictor
         </View>
       </View>
       {/* The bar joining the two runs, and the stub towards the next round. */}
-      <Reanimated.View style={[s.line, s.bar, { transform: [{ scaleY: barScale }] }]} pointerEvents="none" />
+      <Reanimated.View style={[s.line, s.bar, { transform: [{ scaleY: barScale.value }] }, { transform: [{ scaleY: barScale }] }]} pointerEvents="none" />
       <View style={[s.line, s.stub]} pointerEvents="none" />
       {/* The predictors chip on the LEFT border, on every real match —
           decided, it says who called it; not yet, whose pick still stands. */}
