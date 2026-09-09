@@ -40,6 +40,8 @@ const SCREENS = [
   { name: 'draw-r1',   mobile: '/draw/77', pwa: '/tournaments/77', appClick: 'R128' },
   { name: 'draw-r32',  mobile: '/draw/77', pwa: '/tournaments/77', appClick: 'R32' },
   { name: 'draw-qf',   mobile: '/draw/77', pwa: '/tournaments/77', appClick: 'QF' },
+  // The column past the final: the champion as picked, graded once played.
+  { name: 'draw-champion', mobile: '/draw/77', pwa: '/tournaments/77', appClick: '🏆' },
   // The women's draw's R32 was scheduled top-first in the DB snapshot, so its
   // first groups carry the SCHEDULED pill and an expected start.
   { name: 'draw-eta',  mobile: '/draw/78', pwa: '/tournaments/78', appClick: 'R32' },

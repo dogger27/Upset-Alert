@@ -31,7 +31,7 @@ import { currentRound } from '../../../rounds'
 import { C, R, S, T } from '../../../theme'
 import { TourBadge } from '../../../cards'
 import { Card, ErrorNote, Loading, Muted, Screen, Title } from '../../../ui'
-import { BOX_PITCH, CHIP_OVERHANG, CONNECTOR_W, GROUP_H, MatchGroup, buildBracket } from '../../../bracket'
+import { BOX_PITCH, CHIP_OVERHANG, CONNECTOR_W, ChampionGroup, GROUP_H, MatchGroup, buildBracket } from '../../../bracket'
 import { RoundScrubView, useRoundScrub } from '../../../RoundScrub'
 import { RoundStrip } from '../../../RoundStrip'
 import { setCurrentDraw } from '../../../currentDraw'
@@ -200,11 +200,12 @@ export default function DrawScreen() {
             style={s.scrub}
             rounds={rounds}
             columnStyle={s.list}
-            renderRow={m => (
-              <MatchGroup m={m} roundIdx={roundIdx.get(m.round_number) ?? 0} B={B}
-                          drawRanks={drawRanks} zone={zone} onH2H={setH2H}
-                          onPredictors={setPredictors} onShowScore={setScoreMatch}
-                          standout={standoutIds.has(m.id)} />
+            renderRow={m => (m.champion
+              ? <ChampionGroup m={m} B={B} drawRanks={drawRanks} />
+              : <MatchGroup m={m} roundIdx={roundIdx.get(m.round_number) ?? 0} B={B}
+                            drawRanks={drawRanks} zone={zone} onH2H={setH2H}
+                            onPredictors={setPredictors} onShowScore={setScoreMatch}
+                            standout={standoutIds.has(m.id)} />
             )}
           />
         )}
