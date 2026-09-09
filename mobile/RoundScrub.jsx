@@ -97,10 +97,11 @@ const TRAVEL_RATIO = 1.35
    sideways fails it. */
 const AXIS_ACTIVE_X = 12
 const AXIS_FAIL_Y = 8
-/* Past the first or last round the pull gives a little and stops: the
-   column slides and shrinks a touch, enough to say "nothing there". */
-const OVERPULL = 0.2
-const OVERPULL_MAX = 0.3
+/* PAST THE FIRST OR LAST ROUND NOTHING MOVES. The pull once gave a little
+   there — the column slid a third of the way, to say "nothing there" — but
+   the anchor kept holding the finger's row through that give, so the list
+   scrolled down and snapped back on release (owner, 2026-09-09). A hard
+   stop at either end instead. */
 /* Past the top or bottom of a round the list gives this share of the
    finger's travel, then springs back on release — a scroll view's rubber
    band, by hand. */
@@ -371,10 +372,10 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
       dragPx.value = dx
       // Dragging LEFT pulls later rounds in.
       let p = a.r0 - dx / (widthSV.value / TRAVEL_RATIO)
-      // One round per swipe, and the draw's ends give a little, then hold.
+      // One round per swipe, and the draw's ends hold: nothing moves past them.
       const lo = Math.max(0, a.r0 - 1), hi = Math.min(m.count - 1, a.r0 + 1)
-      if (p < lo) p = lo - Math.min(OVERPULL_MAX, (lo - p) * OVERPULL)
-      else if (p > hi) p = hi + Math.min(OVERPULL_MAX, (p - hi) * OVERPULL)
+      if (p < lo) p = lo
+      else if (p > hi) p = hi
       pos.value = p
     })
     .onEnd((ev) => {
