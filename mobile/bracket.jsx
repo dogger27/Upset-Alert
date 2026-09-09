@@ -129,13 +129,6 @@ export const GROUP_H = 2 * 2 + PAD_TOP + PAD + 2 * leading(BOX_H) + leading(GAP_
    ~23pt across, and a fixed 8 here had RoundScrub's clip slicing its left
    third off. Rounded up, with the border's point of slack left in. */
 export const CHIP_OVERHANG = Math.ceil(leading(CHIP_H) / 2)
-/* The line each box ARRIVED on: from the round before, in at the box's own
-   centre and off the left edge of the glass — the site's connector run into
-   a box (owner, 2026-09-08). Exactly the column's left padding (CHIP_OVERHANG
-   plus the screen's S.lg) and a little slack, so it reaches the glass and
-   not the previous round's column. Not on the first round, whose boxes came
-   from the draw, not from a match. */
-const CONN_IN = CHIP_OVERHANG + S.lg + 4
 
 /* ── The group's box, in pieces, so a scrub can stretch it by TRANSFORM ──
    As the next round is pulled in, each of its groups starts tall enough
@@ -151,6 +144,16 @@ const CONN_IN = CHIP_OVERHANG + S.lg + 4
    Each cap is half the settled height, so at rest they meet in the middle
    over the bridge. The chips and the gap's content stay on the centre line. */
 const BW = 2                                   // the outline's border
+/* The line each box ARRIVED on: from the round before, in at the box's own
+   centre and off the left edge of the glass — the site's connector run into
+   a box (owner, 2026-09-08). EXACTLY to the column's left edge: the column's
+   left padding (CHIP_OVERHANG plus the screen's S.lg), less the border the
+   line is placed outside of. The columns end at the glass, so anything past
+   the edge is drawn INSIDE THE PREVIOUS ROUND'S COLUMN — the "slack" this
+   once carried showed as two green ticks at the right edge of the screen at
+   every match, the next round's lines poking in (owner, 2026-09-09). Not on
+   the first round, whose boxes came from the draw, not from a match. */
+const CONN_IN = CHIP_OVERHANG + S.lg - BW
 const BOX_PX = leading(BOX_H)
 const GAP_PX = leading(GAP_H)
 export const BOX_PITCH = BOX_PX + GAP_PX       // settled distance between the two boxes' centres
