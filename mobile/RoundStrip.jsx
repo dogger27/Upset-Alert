@@ -20,7 +20,7 @@
  */
 import { useCallback, useRef } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
-import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated'
+import Animated, { useDerivedValue, useSharedValue } from 'react-native-reanimated'
 import { scheduleOnUI } from 'react-native-worklets'
 import { shortRound } from './rounds'
 import { C, S, T } from './theme'
@@ -50,22 +50,30 @@ export function RoundStrip({ rounds, active, onPick, scrub }) {
      draw laid out again to move one pill. The pill is a fixed PILL_W wide
      and scaled in X to the label under it; its border grows a hair with it,
      which is invisible at these widths. */
-  const pillStyle = useAnimatedStyle(() => {
+  /* Inline shared values, not an animated style: this bar re-renders on
+     every landing (the bold label moves), and an animated style would send
+     its first render's pill position again each time — a frame of the pill
+     back on the round the draw opened on (see RoundScrub.jsx). */
+  const pillAt = useDerivedValue(() => {
     const f = frames.value
     const p = pos.value
     const lo = Math.floor(p), hi = Math.ceil(p)
     const a = f[lo], b = f[hi]
-    if (!a) return { opacity: 0 }
+    if (!a) return { x: 0, w: PILL_W, on: 0 }
     const t = b ? p - lo : 0
     const x = b ? a.x + (b.x - a.x) * t : a.x
     const w = b ? a.w + (b.w - a.w) * t : a.w
-    return { opacity: 1, transform: [{ translateX: x + (w - PILL_W) / 2 }, { scaleX: w / PILL_W }] }
+    return { x: x + (w - PILL_W) / 2, w, on: 1 }
   })
+  const pillOpacity = useDerivedValue(() => pillAt.value.on)
+  const pillX = useDerivedValue(() => pillAt.value.x)
+  const pillScale = useDerivedValue(() => pillAt.value.w / PILL_W)
 
   return (
     <View style={s.bar}>
       <View style={s.row}>
-        <Animated.View style={[s.pill, pillStyle]} pointerEvents="none" />
+        <Animated.View style={[s.pill, { opacity: pillOpacity, transform: [{ translateX: pillX }, { scaleX: pillScale }] }]}
+                       pointerEvents="none" />
         {rounds.map(([num, matches], i) => {
           const on = num === active
           return (
@@ -84,11 +92,9 @@ export function RoundStrip({ rounds, active, onPick, scrub }) {
 }
 
 function Label({ i, pos, on, children }) {
-  const style = useAnimatedStyle(() => ({
-    color: Math.abs(pos.value - i) < 0.5 ? C.greenBright : C.muted,
-  }), [i])
+  const color = useDerivedValue(() => (Math.abs(pos.value - i) < 0.5 ? C.greenBright : C.muted), [i])
   return (
-    <Animated.Text style={[s.roundText, on && s.roundTextOn, style]} numberOfLines={1}>
+    <Animated.Text style={[s.roundText, on && s.roundTextOn, { color }]} numberOfLines={1}>
       {children}
     </Animated.Text>
   )

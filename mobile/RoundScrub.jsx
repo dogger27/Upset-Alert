@@ -60,7 +60,7 @@ import { StyleSheet, View } from 'react-native'
 import { Gesture } from 'react-native-gesture-handler'
 import Animated, {
   Easing, cancelAnimation, measure, scrollTo, useAnimatedReaction, useAnimatedRef,
-  useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, withTiming,
+  useAnimatedScrollHandler, useDerivedValue, useSharedValue, withTiming,
 } from 'react-native-reanimated'
 import { scheduleOnRN, scheduleOnUI } from 'react-native-worklets'
 import { ScrubContext } from './scrubContext'
@@ -527,11 +527,11 @@ const Row = memo(function Row({ ri, i, m, renderRow, scrub }) {
     registerRow(key, { ri, i, shift, stretch })
     return () => unregisterRow(key)
   }, [ri, i, shift, stretch, registerRow, unregisterRow])
-  const style = useAnimatedStyle(() => ({ transform: [{ translateY: shift.value }] }))
   // What the group inside reads to stretch or condense itself.
   const ctx = useMemo(() => ({ stretch }), [stretch])
   return (
-    <Animated.View style={style} collapsable={false} onLayout={ev => onRowLayout(ri, i, ev)}>
+    <Animated.View style={{ transform: [{ translateY: shift }] }} collapsable={false}
+                   onLayout={ev => onRowLayout(ri, i, ev)}>
       <ScrubContext.Provider value={ctx}>{renderRow(m)}</ScrubContext.Provider>
     </Animated.View>
   )
@@ -578,8 +578,18 @@ export function RoundScrubView({ scrub, rounds, renderRow, columnStyle, style = 
      only translated; the moment pos reached the destination exactly, the
      height snapped to that round alone, and where it was the shorter one iOS
      clamped the offset underneath — the list jumped, then jumped back on
-     release when the landing scrolled it (owner, 2026-09-09). */
-  const stripStyle = useAnimatedStyle(() => {
+     release when the landing scrolled it (owner, 2026-09-09).
+
+     INLINE SHARED VALUES, NOT useAnimatedStyle — here and on every piece the
+     scrub moves. An animated style's initial value is computed on the
+     component's FIRST render and sent again as the React props on every
+     render after, however far the shared values have moved since: the
+     landing's commit set this strip back to the first round at the top for
+     a frame, until the next worklet update put it right (found on the phone
+     with the log, 2026-09-09). Inline shared values are left OUT of the
+     props on a re-render, so the value on the UI thread is never
+     overwritten by a stale one from React. */
+  const stripH = useDerivedValue(() => {
     const p = pos.value
     const n = rounds.length
     const lo = Math.max(0, Math.min(n - 1, Math.floor(p)))
@@ -591,11 +601,10 @@ export function RoundScrubView({ scrub, rounds, renderRow, columnStyle, style = 
       const origin = heights.value[from] > 0 ? heights.value[from] : estimate(rounds[from]?.[1].length ?? 0)
       if (origin > height) height = origin
     }
-    return {
-      height,
-      transform: [{ translateX: -p * widthSV.value }, { translateY: -shiftY.value }],
-    }
+    return height
   }, [rounds, estimate])
+  const stripX = useDerivedValue(() => -pos.value * widthSV.value)
+  const stripY = useDerivedValue(() => -shiftY.value)
 
   /* The row window's inputs live HERE, not in the hook the screen owns: a
      scroll report re-renders this view and its memoised rows, never the
@@ -634,7 +643,7 @@ export function RoundScrubView({ scrub, rounds, renderRow, columnStyle, style = 
           scrollEventThrottle={16}
           onScroll={onScroll}
         >
-          <Animated.View style={[s.strip, stripStyle]}>
+          <Animated.View style={[s.strip, { height: stripH, transform: [{ translateX: stripX }, { translateY: stripY }] }]}>
             {mounted.map(ri => (
               <Column key={rounds[ri][0]} ri={ri} num={rounds[ri][0]} matches={rounds[ri][1]}
                       window={windows[ri] ?? [0, -1]}
