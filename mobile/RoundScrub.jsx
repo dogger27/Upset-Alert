@@ -242,12 +242,25 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
   const emit = useCallback((ev) => { for (const fn of listeners.current) fn(ev) }, [])
 
   /* Plain JS, reached from the UI thread by scheduleOnRN. Stable, and reads
-     the live props through refs: the gesture is created once. */
+     the live props through refs: the gesture is created once.
+
+     DEFERRED TWO FRAMES PAST THE LANDING. This is the React commit — it moves
+     `active` (the round the app is on), the mounted row window, and the round
+     bar's bold label. On the UI thread the landing is already exact (the
+     scroll is at the target, the translate is zero: proven with a frame log,
+     2026-09-09), but running this commit in the same breath re-renders the
+     whole scroll subtree while iOS is still settling the landing, and that is
+     the flash to the top and back. The landing needs no help from React —
+     the target round's rows are already mounted, being a neighbour — so the
+     commit waits until the settle has painted. Two rAFs: one to clear the
+     frame the landing lands on, one more to be sure it has painted. */
   const commit = useCallback((idx, y) => {
-    setWarm(true)
-    emit({ type: 'land', y })
-    const r = roundsRef.current[idx]
-    if (r) onCommitRef.current?.(r[0])
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      setWarm(true)
+      emit({ type: 'land', y })
+      const r = roundsRef.current[idx]
+      if (r) onCommitRef.current?.(r[0])
+    }))
   }, [emit])
   const beginPull = useCallback((ri, idx) => {
     setWarm(true)
