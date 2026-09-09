@@ -73,7 +73,8 @@ const SCREENS = [
   // The same pull from the BOTTOM of a long round: the anchor has to read the
   // real scroll offset, and the rows there have to be mounted.
   { name: 'draw-scrub-scrolled', mobile: '/draw/77', pwa: '/tournaments/77', appClick: 'R64', pwaClick: 'R64',
-    scrollEnd: true, drag: { app: { x: 300, y: 480, dx: -146 }, pwa: { x: 300, y: 480, dx: -83 } } },
+    scrollEnd: true, pre: { app: { x: 300, y: 760, dy: -560, times: 8 } },
+    drag: { app: { x: 300, y: 480, dx: -146 }, pwa: { x: 300, y: 480, dx: -83 } } },
   // Another member's picks on the bracket, reached from a standings row.
   { name: 'draw-other', mobile: '/draw/77?user=43&name=piotr_lotr86', pwa: '/tournaments/77?user=43' },
   // The league settings sheet (owner / league admin / site admin).
@@ -122,7 +123,7 @@ const browser = await chromium.launch({
   args: ['--disable-web-security', '--hide-scrollbars', '--force-color-profile=srgb'],
 })
 
-async function shoot(url, kind, name, click, noAuth, scrollEnd, drag) {
+async function shoot(url, kind, name, click, noAuth, scrollEnd, drag, pre) {
   const ctx = await browser.newContext({
     viewport: VIEW, deviceScaleFactor: DSF, isMobile: true, hasTouch: true,
     colorScheme: 'dark',
@@ -194,6 +195,26 @@ async function shoot(url, kind, name, click, noAuth, scrollEnd, drag) {
     await page.waitForTimeout(1500)
   }
 
+  /* THE APP'S DRAW HAS NO SCROLL VIEW (RoundScrub.jsx): its list is a
+     Reanimated translate under a vertical pan, so scrollTop moves nothing
+     there. A screen that needs the list scrolled asks for `pre` — a run of
+     vertical touch drags, each ENDED, a beat apart for the decay — before
+     the held drag below. */
+  if (pre) {
+    const cdp = await ctx.newCDPSession(page)
+    const pt = (x, y) => ({ x, y, radiusX: 4, radiusY: 4, force: 1, id: 1 })
+    for (let t = 0; t < (pre.times || 1); t++) {
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [pt(pre.x, pre.y)] })
+      for (let i = 1; i <= 12; i++) {
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [pt(pre.x, pre.y + (pre.dy * i) / 12)] })
+        await page.waitForTimeout(16)
+      }
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+      await page.waitForTimeout(700)
+    }
+    await cdp.detach()
+  }
+
   /* A finger, held. Playwright's mouse is not a touch on a touch-emulated
      context, so the drag is dispatched through CDP as real touch events —
      start, a run of moves, and NO end: the shot is taken with the finger
@@ -258,8 +279,8 @@ async function pair(name, a, b) {
 }
 
 for (const s of targets) {
-  const app = await shoot(MOBILE + s.mobile, 'app', s.name, s.appClick, s.noAuth, s.scrollEnd, s.drag?.app)
-  const pwa = await shoot(PWA + s.pwa, 'pwa', s.name, s.pwaClick, s.noAuth, s.scrollEnd, s.drag?.pwa)
+  const app = await shoot(MOBILE + s.mobile, 'app', s.name, s.appClick, s.noAuth, s.scrollEnd, s.drag?.app, s.pre?.app)
+  const pwa = await shoot(PWA + s.pwa, 'pwa', s.name, s.pwaClick, s.noAuth, s.scrollEnd, s.drag?.pwa, s.pre?.pwa)
   const cmp = await pair(s.name, app.file, pwa.file)
   console.log(`${s.name}: ${cmp}`)
   for (const e of app.errors.slice(0, 4)) console.log(`   app  ! ${e}`)
