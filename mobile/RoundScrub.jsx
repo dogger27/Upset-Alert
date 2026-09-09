@@ -278,23 +278,32 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
     return y < 0 ? 0 : y > lim ? lim : y
   }, [anchor, geo, meta, heights, viewportH, estimate, e])
 
-  /* Landing: the one real scroll, to where the translation had the content,
-     and the translation dropped in the same frame — the same pixels. */
-  const settle = useCallback(() => {
+  /* Landing: the one real scroll, to where the translation has the content,
+     and the translation dropped in the same frame — the same pixels.
+     THE OFFSET IS COMPUTED FOR THE TARGET, not read back: a timing's callback
+     runs before the reaction sees its final value, so the last offset on
+     record is the frame before's, and that frame's limit was still a blend of
+     the two columns' — up to a few dozen points past the landed column's own
+     where the columns differ in height. Land there and the height snaps to
+     the landed column a frame later and iOS clamps the offset: the jump on
+     release in the early rounds, never at the quarters, which fit the screen
+     (owner, 2026-09-09). At the integer the limit is exact. */
+  const settle = useCallback((target) => {
     'worklet'
-    const y = viewY.value
+    const y = scrollFor(target)
     scrollTo(scrollRef, 0, y, false)
     shiftY.value = 0
+    viewY.value = y
     scrollY.value = y
     reportedY.value = y
     scrubbing.value = false
-  }, [viewY, scrollRef, shiftY, scrollY, reportedY, scrubbing])
+  }, [scrollFor, viewY, scrollRef, shiftY, scrollY, reportedY, scrubbing])
 
   const land = useCallback((target) => {
     'worklet'
     pos.value = withTiming(target, SETTLE, (finished) => {
       if (!finished) return
-      settle()
+      settle(target)
       scheduleOnRN(commit, target, viewY.value)
     })
   }, [pos, settle, commit, viewY])
@@ -315,8 +324,7 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
       const cur = Math.round(pos.value)
       if (scrubbing.value) {
         pos.value = cur
-        viewY.value = scrollFor(cur)
-        settle()
+        settle(cur)
         scheduleOnRN(commit, cur, viewY.value)
       } else {
         pos.value = cur
@@ -373,7 +381,7 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
       dragging.value = false
       const m = meta.value
       land(settleTarget(pos.value, anchor.value.r0, 0, dragPx.value, 0, m.count - 1))
-    }), [meta, widthSV, pos, scrubbing, viewY, scrollFor, settle, commit, scrollRef, viewportH, geo,
+    }), [meta, widthSV, pos, scrubbing, viewY, settle, commit, scrollRef, viewportH, geo,
          scrollY, anchor, r0, originX, dragPx, dragging, beginPull, land])
 
   /* pos moved: hold the anchor by translation, then drive the rows on
@@ -422,7 +430,7 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
       const from = Math.round(cur)
       if (changedDraw || cur !== from || Math.abs(idx - from) !== 1) {
         cancelAnimation(pos)
-        if (scrubbing.value) settle()
+        if (scrubbing.value) settle(Math.round(pos.value))
         pos.value = idx
         r0.value = idx
         return
@@ -438,7 +446,7 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
       scrubbing.value = true
       pos.value = withTiming(idx, SETTLE, (finished) => {
         if (!finished) return
-        settle()
+        settle(idx)
         scheduleOnRN(reportScroll, viewY.value)
       })
     })
