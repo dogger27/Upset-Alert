@@ -524,10 +524,10 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
 
   const scrub = useMemo(() => ({
     pos, r0, wantY, scrubbing, landing, scrollY, viewportH, scrollRef, geo, heights, widthSV, activeIdx, width, warm, estimate, e,
-    rowHeight, rounds, onScroll, subscribe, geoRef,
+    rowHeight, rowGap, rounds, onScroll, subscribe, geoRef,
     onWrapLayout, onRowLayout, onColumnLayout, registerRow, unregisterRow,
   }), [pos, r0, wantY, scrubbing, landing, scrollY, viewportH, scrollRef, geo, heights, widthSV, activeIdx, width, warm, estimate, e,
-       rowHeight, rounds, onScroll, subscribe,
+       rowHeight, rowGap, rounds, onScroll, subscribe,
        onWrapLayout, onRowLayout, onColumnLayout, registerRow, unregisterRow])
 
   return { pan, scrub }
@@ -565,22 +565,35 @@ const Row = memo(function Row({ ri, i, m, renderRow, scrub }) {
    fades its leaving column; the phone did, first by the column's opacity —
    an offscreen render of the whole tree every frame — then under a flat
    veil, and then not at all. */
+/* A column of one round. Only the rows in the window are mounted; the rest is
+   ONE SPACER above and ONE below, not a blank per row. That is the whole cure
+   for the landing pop, and it explains its gradient perfectly: a landing
+   mounts the next round's neighbour, and the neighbour rendered a blank View
+   for every one of its matches — 128 of them arriving in a single commit for
+   R128 — so the mount hitched the scroll view (silky at the final, worse
+   toward R128, exactly in proportion to that count; owner, 2026-09-09). With
+   spacers a column mounts about a dozen views whatever its size, and the
+   hitch is gone. The column's laid-out height is unchanged — each spacer
+   stands in for its run of rows, pitch (a group plus the row gap) apiece,
+   less the one gap the flex row adds beside it — so onColumnLayout still
+   measures the true height and every row keeps its place. */
 function Column({ ri, num, matches, window, scrub, renderRow, columnStyle }) {
-  const { width, rowHeight, onColumnLayout } = scrub
+  const { width, rowHeight, rowGap, onColumnLayout } = scrub
   const [lo, hi] = window
+  const count = matches.length
+  const pitch = rowHeight + rowGap
+  const children = []
+  if (lo > 0) children.push(<View key="sp-top" style={{ height: lo * pitch - rowGap }} />)
+  for (let i = lo; i <= hi && i < count; i++) {
+    const m = matches[i]
+    /* A slot with no match — an unplayed half of the bracket — has no id;
+       the round and position make a key that exists for every row. */
+    children.push(<Row key={m.id ?? `slot-${num}-${i}`} ri={ri} i={i} m={m} renderRow={renderRow} scrub={scrub} />)
+  }
+  if (hi < count - 1) children.push(<View key="sp-bot" style={{ height: (count - 1 - hi) * pitch - rowGap }} />)
   return (
     <View style={[s.column, { left: ri * width, width }]}>
-      <View style={columnStyle} onLayout={ev => onColumnLayout(ri, ev)}>
-        {matches.map((m, i) => {
-          /* A slot with no match — an unplayed half of the bracket — has no
-             id; the round and position make a key that exists for every row. */
-          const key = m.id ?? `slot-${num}-${i}`
-          // Outside the window: a blank of the group's height, keeping the
-          // column's size and every other row's place.
-          if (i < lo || i > hi) return <View key={key} style={{ height: rowHeight }} />
-          return <Row key={key} ri={ri} i={i} m={m} renderRow={renderRow} scrub={scrub} />
-        })}
-      </View>
+      <View style={columnStyle} onLayout={ev => onColumnLayout(ri, ev)}>{children}</View>
     </View>
   )
 }
