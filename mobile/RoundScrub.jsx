@@ -530,8 +530,8 @@ const Row = memo(function Row({ ri, i, m, renderRow, scrub }) {
   // What the group inside reads to stretch or condense itself.
   const ctx = useMemo(() => ({ stretch }), [stretch])
   return (
-    <Animated.View style={{ transform: [{ translateY: shift }] }} collapsable={false}
-                   onLayout={ev => onRowLayout(ri, i, ev)}>
+    <Animated.View style={[{ transform: [{ translateY: shift.value }] }, { transform: [{ translateY: shift }] }]}
+                   collapsable={false} onLayout={ev => onRowLayout(ri, i, ev)}>
       <ScrubContext.Provider value={ctx}>{renderRow(m)}</ScrubContext.Provider>
     </Animated.View>
   )
@@ -580,15 +580,17 @@ export function RoundScrubView({ scrub, rounds, renderRow, columnStyle, style = 
      clamped the offset underneath — the list jumped, then jumped back on
      release when the landing scrolled it (owner, 2026-09-09).
 
-     INLINE SHARED VALUES, NOT useAnimatedStyle — here and on every piece the
-     scrub moves. An animated style's initial value is computed on the
+     THE CURRENT VALUE GOES IN AS A PLAIN STYLE ON EVERY RENDER, beside the
+     shared value that drives it on the UI thread — here and on every piece
+     the scrub moves. An animated style's initial value is computed on the
      component's FIRST render and sent again as the React props on every
      render after, however far the shared values have moved since: the
      landing's commit set this strip back to the first round at the top for
-     a frame, until the next worklet update put it right (found on the phone
-     with the log, 2026-09-09). Inline shared values are left OUT of the
-     props on a re-render, so the value on the UI thread is never
-     overwritten by a stale one from React. */
+     a frame (found on the phone with a log, 2026-09-09). Inline shared
+     values are left out of the props on a re-render instead, which leaves
+     the key to be reset. Neither can be trusted to hold the picture through
+     a commit; a plain style read off the shared value at render time can,
+     because it IS the picture. */
   const stripH = useDerivedValue(() => {
     const p = pos.value
     const n = rounds.length
@@ -643,7 +645,9 @@ export function RoundScrubView({ scrub, rounds, renderRow, columnStyle, style = 
           scrollEventThrottle={16}
           onScroll={onScroll}
         >
-          <Animated.View style={[s.strip, { height: stripH, transform: [{ translateX: stripX }, { translateY: stripY }] }]}>
+          <Animated.View style={[s.strip,
+                                  { height: stripH.value, transform: [{ translateX: stripX.value }, { translateY: stripY.value }] },
+                                  { height: stripH, transform: [{ translateX: stripX }, { translateY: stripY }] }]}>
             {mounted.map(ri => (
               <Column key={rounds[ri][0]} ri={ri} num={rounds[ri][0]} matches={rounds[ri][1]}
                       window={windows[ri] ?? [0, -1]}
