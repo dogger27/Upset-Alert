@@ -66,9 +66,9 @@ export function RoundStrip({ rounds, active, onPick, scrub }) {
     <View style={s.bar}>
       <View style={s.row}>
         <Animated.View style={[s.pill, pillStyle]} pointerEvents="none" />
-        {rounds.flatMap(([num, matches], i) => {
+        {rounds.map(([num, matches], i) => {
           const on = num === active
-          const label = (
+          return (
             <Pressable key={num} onPress={() => onPick(num)} hitSlop={6}
                        accessibilityRole="button" accessibilityState={{ selected: on }}
                        style={s.round} onLayout={e => onLabelLayout(i, e)}>
@@ -77,11 +77,6 @@ export function RoundStrip({ rounds, active, onPick, scrub }) {
               </Label>
             </Pressable>
           )
-          if (i === 0) return [label]
-          // A dot between every pair of labels, hidden while the pill is
-          // on either of them — so "R32 • [R16] • QF" reads "R32 [R16] QF"
-          // and the labels never move.
-          return [<Dot key={`dot${num}`} i={i} pos={pos} />, label]
         })}
       </View>
     </View>
@@ -93,19 +88,10 @@ function Label({ i, pos, on, children }) {
     color: Math.abs(pos.value - i) < 0.5 ? C.greenBright : C.muted,
   }), [i])
   return (
-    <Animated.Text style={[s.roundText, on && s.roundTextOn, style]} numberOfLines={1}
-                   adjustsFontSizeToFit minimumFontScale={0.6}>
+    <Animated.Text style={[s.roundText, on && s.roundTextOn, style]} numberOfLines={1}>
       {children}
     </Animated.Text>
   )
-}
-
-function Dot({ i, pos }) {
-  const style = useAnimatedStyle(() => {
-    const p = pos.value
-    return { opacity: Math.abs(p - i) < 0.5 || Math.abs(p - (i - 1)) < 0.5 ? 0 : 1 }
-  }, [i])
-  return <Animated.Text style={[s.dot, style]}>•</Animated.Text>
 }
 
 const s = StyleSheet.create({
@@ -127,13 +113,16 @@ const s = StyleSheet.create({
     paddingVertical: 3,
   },
   /* THIN: no padding of its own; the line box is the type's own height
-     and the pill adds a point each side, so the bar is about 20pt. The
-     labels may shrink together (flexShrink on each, the type shrinking to
-     fit inside) so seven rounds always fit the width, at any text size. */
-  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: S.lg },
+     and the pill adds a point each side, so the bar is about 20pt. EVERY
+     LABEL AT ONE SIZE, spread across the bar with the space shared out
+     between them: nothing shrinks, nothing is cut. The labels used to give
+     way to fit (flexShrink, the type scaling down), and with eight of them
+     the F came out half the size and the trophy lost its edge (owner,
+     2026-09-09). No dots between them either. */
+  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: S.md },
   round: {
     paddingHorizontal: 5, paddingVertical: 1, borderRadius: 5, borderWidth: 1, borderColor: 'transparent',
-    flexShrink: 1, minWidth: 0,
+    flexShrink: 0,
     zIndex: 1,   // above the pill, whatever a renderer makes of sibling order
   },
   // The pill: a filled, edged rounded rectangle the size of a label's frame,
@@ -146,6 +135,4 @@ const s = StyleSheet.create({
   // Dimmed but still READ — these are the control, not decoration.
   roundText: { ...T.smallMed, lineHeight: undefined, color: C.muted },
   roundTextOn: { fontFamily: 'Archivo_700Bold' },
-  // Punctuation, so it sits below the labels it separates without vanishing.
-  dot: { ...T.smallMed, lineHeight: undefined, color: C.borderLit },
 })
