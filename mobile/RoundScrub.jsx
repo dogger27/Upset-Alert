@@ -18,54 +18,65 @@
  * and any JS work — a live-score refetch re-rendering sixty match groups —
  * showed up as the bracket stalling under a moving finger. Here the pan is
  * recognised natively, every frame is a worklet on the UI thread (the
- * position `pos`, the anchored scrollTo, one transform per row, one per
- * column), and React renders exactly twice per gesture: once if the incoming
- * round's column is not mounted yet, once to commit the landing.
+ * position `pos`, the anchored offset `viewY`, one transform per row, one
+ * for the strip), and React renders exactly twice per gesture: once if the
+ * incoming round's column is not mounted yet, once to commit the landing.
  *
- * ONE NUMBER DRIVES EVERYTHING: `pos`, the round index as a real. A column
- * derives its whole state from pos - its own index, and a commit changes none
- * of those inputs — which is what makes the landed frame and the committed
- * frame the same pixels. The site's history has three commits of "the frame
- * that flashes on release"; none of them can recur when there is nothing to
- * reset. Direction is not decided up front either: a finger that wanders back
- * through where it started just carries pos past the integer and the other
- * neighbour's formulas take over.
+ * THERE IS NO SCROLL VIEW. Vertical position is `viewY`, a shared value: a
+ * vertical pan drags it, a decay flings it, a pull sets it to hold the
+ * anchor, and the strip is translated by minus it. One mechanism, so a
+ * landing has nothing to hand over. The first build put the columns in a
+ * ScrollView and scrolled it once, on landing, to where the pull's
+ * translation had the content — the same pixels, by every number the UI
+ * thread could log — and the screen still flashed to the top of the round
+ * for a frame on every release in the early rounds (owner, 2026-09-09).
+ * Nine reorderings of the scroll, the translate and the commit later, a
+ * landing with the scrollTo simply left out did not flash: React Native's
+ * scroll view draws a stale frame on a programmatic jump under the new
+ * architecture, and nothing on this side of it can reach that frame. So the
+ * scroll view went. What it gave up: the system scroll indicator and the
+ * exact feel of UIScrollView's deceleration; Reanimated's decay with a
+ * rubber band stands in for the latter.
  *
- * NOTHING COMMITS PER FRAME, AND NOTHING RE-RENDERS PER SCROLL. React Native
- * updates a scroll view's shadow-tree state on EVERY scroll event, its own
- * scrollTo included, so a pull that scrolled the list each frame to hold the
- * anchor was committing the whole tree each frame — silky at the final, a
- * shake by R128 (owner, 2026-09-08). The pull now holds the anchor by
- * TRANSLATING the content and scrolls once, on landing. The leaving round
- * does not fade (a fade by the column's own opacity would render it
- * offscreen every frame). And the row window follows the scroll inside
- * RoundScrubView alone, with memoised rows, so a scroll report re-renders
- * nothing that was already there; the row registry the reaction walks is a
- * shared value, never React state.
+ * ONE NUMBER DRIVES EVERYTHING SIDEWAYS: `pos`, the round index as a real. A
+ * column derives its whole state from pos - its own index, and a commit
+ * changes none of those inputs — which is what makes the landed frame and
+ * the committed frame the same pixels. Direction is not decided up front
+ * either: a finger that wanders back through where it started just carries
+ * pos past the integer and the other neighbour's formulas take over.
+ *
+ * NOTHING COMMITS PER FRAME, AND NOTHING RE-RENDERS PER SCROLL. The row
+ * window follows viewY from a report sent every SCROLL_REPORT_ROWS of
+ * travel, inside RoundScrubView alone, with memoised rows, so a report
+ * re-renders nothing that was already there; the row registry the reaction
+ * walks is a shared value, never React state. The leaving round does not
+ * fade (a fade by the column's own opacity would render it offscreen every
+ * frame).
  *
  * MEMORY. What is mounted is the round on screen and its two neighbours, the
  * neighbours a beat after first paint (or at once when a gesture needs them),
- * and within each only the rows near the viewport (see windowsFor). No
- * texture is pinned for the strip — the site's "will-change" on the whole
- * bracket is what killed a phone renderer — and nothing rasterises
- * off-screen; the transforms composite.
+ * and within each only the rows near the viewport, the rest two spacers (see
+ * windowsFor and Column). No texture is pinned for the strip — the site's
+ * "will-change" on the whole bracket is what killed a phone renderer — and
+ * nothing rasterises off-screen; the transforms composite.
  *
- * Two pieces: useRoundScrub() owns the gesture and the shared values; the
+ * Two pieces: useRoundScrub() owns the gestures and the shared values; the
  * screen attaches its `pan` to the whole sheet (a scrub you have to find is
  * one nobody uses) and hands `scrub` to RoundScrubView, which renders the
- * columns, and to RoundStrip, which glides its pill along with pos.
+ * columns under the vertical pan, and to RoundStrip, which glides its pill
+ * along with pos.
  */
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
-import { Gesture } from 'react-native-gesture-handler'
+import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, {
-  Easing, cancelAnimation, measure, scrollTo, useAnimatedReaction, useAnimatedRef,
-  useAnimatedScrollHandler, useDerivedValue, useSharedValue, withTiming,
+  Easing, cancelAnimation, measure, useAnimatedReaction, useAnimatedRef,
+  useDerivedValue, useSharedValue, withDecay, withTiming,
 } from 'react-native-reanimated'
 import { scheduleOnRN, scheduleOnUI } from 'react-native-worklets'
 import { ScrubContext } from './scrubContext'
 import {
-  anchorY, boxOffset, contentHeightAt, rowIndexAt, rowInWindow, rowShift, scrollLimitAt, settleTarget,
+  anchorY, boxOffset, rowIndexAt, rowInWindow, rowShift, scrollLimitAt, settleTarget,
 } from './scrubGeometry'
 
 /* Rows this far outside the viewport, in groups, are still driven: room for
@@ -77,17 +88,24 @@ const CULL_MARGIN = 2
    ratio (150px of travel to a 202px column step). Release rounds to the
    nearest, or lands on a flick or a slow drag past 40px — scrubGeometry. */
 const TRAVEL_RATIO = 1.35
-/* The axis lock: ours once the finger has gone 12pt sideways without 8pt
-   of drift — the site's 1.5:1 cone at its 8px lock — and the list's the
+/* The axis lock: the scrub's once the finger has gone 12pt sideways without
+   8pt of drift — the site's 1.5:1 cone at its 8px lock — and the list's the
    moment it goes 8pt up or down first. Gesture Handler decides this
    natively, so neither the scrub nor the scroll ever starts by mistake and
-   snaps back, which is what every PanResponder version did on the web. */
+   snaps back, which is what every PanResponder version did on the web. The
+   vertical pan is the mirror image: 8pt of vertical travel claims it, 12pt
+   sideways fails it. */
 const AXIS_ACTIVE_X = 12
 const AXIS_FAIL_Y = 8
 /* Past the first or last round the pull gives a little and stops: the
    column slides and shrinks a touch, enough to say "nothing there". */
 const OVERPULL = 0.2
 const OVERPULL_MAX = 0.3
+/* Past the top or bottom of a round the list gives this share of the
+   finger's travel, then springs back on release — a scroll view's rubber
+   band, by hand. */
+const RUBBER = 0.35
+const RUBBER_FACTOR = 0.6
 // The site's landing: long enough to read as deceleration, short enough that
 // a decisive flick still feels immediate. Same curve.
 export const SETTLE_MS = 220
@@ -96,18 +114,17 @@ const SETTLE = { duration: SETTLE_MS, easing: Easing.bezier(0.22, 0.61, 0.36, 1)
 // painted, so opening a draw never waits on three columns.
 const WARM_MS = 250
 
-/* ONLY THE ROWS NEAR THE VIEWPORT ARE MOUNTED; the rest of a column is
-   placeholders of the group's height, so the column keeps its size and the
-   scroll its range. A draw's early rounds are a hundred groups across three
+/* ONLY THE ROWS NEAR THE VIEWPORT ARE MOUNTED; the rest of a column is two
+   spacers of the right size, so the column keeps its height and every row
+   its place. A draw's early rounds are a hundred groups across three
    columns, a few thousand native views, and every one of them was in the
-   scroll view's tree whether it could be seen or not. Mounted now: the rows
-   in view plus REST_MARGIN either side; in the neighbouring rounds, the rows
-   those feed or are fed by, since a pull shows exactly those; and once a pull
-   has begun, PULL_MARGIN rows either side of the finger's row and their
+   tree whether it could be seen or not. Mounted now: the rows in view plus
+   REST_MARGIN either side; in the neighbouring rounds, the rows those feed
+   or are fed by, since a pull shows exactly those; and once a pull has
+   begun, PULL_MARGIN rows either side of the finger's row and their
    counterparts — enough for the whole pull, decided once at its start. The
-   window follows the scroll from a report sent every SCROLL_REPORT_ROWS of
-   travel; a row it has not reached yet is a blank of the right size for a
-   beat, never a wrong one. */
+   window follows viewY from a report sent every SCROLL_REPORT_ROWS of
+   travel; a row it has not reached yet is blank for a beat, never wrong. */
 const REST_MARGIN = 6
 const PULL_MARGIN = 16
 const SCROLL_REPORT_ROWS = 0.75
@@ -142,43 +159,26 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
   // condensing row lands at either side of its successor's centre.
   const e = boxPitch / 2
   const activeIdx = Math.max(0, rounds.findIndex(([n]) => n === active))
-  const scrollRef = useAnimatedRef()
-  /* The scroll offset, taken straight off the scroll events on the UI thread.
-     (useScrollOffset binds to the ref, and this ref attaches after the first
-     render; a hook that missed it would read 0 for ever — and an anchor that
-     reads 0 puts the finger's row wherever the top of the list is.) */
-  const scrollY = useSharedValue(0)
-  const reportedY = useSharedValue(0)
-  /* THE PULL SCROLLS NOTHING; the anchor is held by TRANSLATING the strip,
-     and one real scrollTo happens on landing. `wantY` is the content offset
-     the reader should be looking at while a pull or its landing is in flight.
-     The strip's translateY is a DERIVED value, scrollY − wantY, recomputed on
-     the UI thread every time the scroll offset changes (stripY below): that
-     is the whole defence against the landing pop. Whatever moves the real
-     scroll — the landing's own scrollTo, or a React commit resetting the
-     offset to the top, which fires the scroll handler just the same — the
-     translation is recomputed from that very offset in the same frame, so the
-     picture never moves. There is no stored translation for a commit to ship
-     a stale copy of. viewY is the offset the reader is effectively looking
-     at, for the culling. */
-  const wantY = useSharedValue(0)
+  // The viewport, for measure(): where a finger is within the list.
+  const wrapRef = useAnimatedRef()
+  /* THE VERTICAL POSITION: the content offset at the top of the viewport.
+     The vertical pan writes it, a fling decays it, a pull sets it each frame
+     to hold the anchor, and the strip is translated by minus it. Nothing
+     else moves the list up or down. */
   const viewY = useSharedValue(0)
-  /* The landing, in flight: the real scroll has been asked for landingY,
-     and until the scroll view reports it is there, the translation makes up
-     the difference frame by frame — so it does not matter in which order
-     iOS applies the scroll, the transform and the height. */
-  const landing = useSharedValue(false)
-  const landingY = useSharedValue(0)
+  const reportedY = useSharedValue(0)
+  const vStart = useSharedValue(0)
+  const vDragging = useSharedValue(false)
 
   const pos = useSharedValue(activeIdx)
-  // The round the current gesture (or glide) left from: the one that fades.
+  // The round the current gesture (or glide) left from.
   const r0 = useSharedValue(activeIdx)
   // True from the first frame of a pull until it has landed.
   const scrubbing = useSharedValue(false)
   const dragging = useSharedValue(false)
   const originX = useSharedValue(0)
   const dragPx = useSharedValue(0)
-  const anchor = useSharedValue({ idx: 0, localY: 0, r0: activeIdx, y0: 0 })
+  const anchor = useSharedValue({ idx: 0, localY: 0, r0: activeIdx })
   // The draw's shape: how many rounds, how many groups in each.
   const meta = useSharedValue({ count: rounds.length, rows: rounds.map(([, ms]) => ms.length) })
   // Measured as the columns lay out; the constants stand in until then.
@@ -242,48 +242,22 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
   const emit = useCallback((ev) => { for (const fn of listeners.current) fn(ev) }, [])
 
   /* Plain JS, reached from the UI thread by scheduleOnRN. Stable, and reads
-     the live props through refs: the gesture is created once.
-
-     DEFERRED TWO FRAMES PAST THE LANDING. This is the React commit — it moves
-     `active` (the round the app is on), the mounted row window, and the round
-     bar's bold label. On the UI thread the landing is already exact (the
-     scroll is at the target, the translate is zero: proven with a frame log,
-     2026-09-09), but running this commit in the same breath re-renders the
-     whole scroll subtree while iOS is still settling the landing, and that is
-     the flash to the top and back. The landing needs no help from React —
-     the target round's rows are already mounted, being a neighbour — so the
-     commit waits until the settle has painted. Two rAFs: one to clear the
-     frame the landing lands on, one more to be sure it has painted. */
+     the live props through refs: the gesture is created once. This is the
+     React commit — it moves `active` (the round the app is on), the mounted
+     row window, and the round bar's bold label. None of it changes a pixel:
+     the landed round is a neighbour and already mounted, and pos and viewY
+     are where they were. */
   const commit = useCallback((idx, y) => {
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      setWarm(true)
-      emit({ type: 'land', y })
-      const r = roundsRef.current[idx]
-      if (r) onCommitRef.current?.(r[0])
-    }))
+    setWarm(true)
+    emit({ type: 'land', y })
+    const r = roundsRef.current[idx]
+    if (r) onCommitRef.current?.(r[0])
   }, [emit])
   const beginPull = useCallback((ri, idx) => {
     setWarm(true)
     emit({ type: 'pull', ri, idx })
   }, [emit])
   const reportScroll = useCallback((y) => { emit({ type: 'scroll', y }) }, [emit])
-  const onScroll = useAnimatedScrollHandler({
-    onScroll: (ev) => {
-      const y = ev.contentOffset.y
-      scrollY.value = y
-      // Landing ends the moment the real offset reaches the target; until
-      // then stripY (derived from scrollY) holds the picture, whatever the
-      // offset does on the way.
-      if (landing.value && Math.abs(landingY.value - y) < 1) landing.value = false
-      if (!scrubbing.value && !landing.value) viewY.value = y
-      if (Math.abs(y - reportedY.value) >= SCROLL_REPORT_ROWS * geo.value.G) {
-        reportedY.value = y
-        scheduleOnRN(reportScroll, y)
-      }
-    },
-    onMomentumEnd: (ev) => { reportedY.value = ev.contentOffset.y; scheduleOnRN(reportScroll, ev.contentOffset.y) },
-    onEndDrag: (ev) => { reportedY.value = ev.contentOffset.y; scheduleOnRN(reportScroll, ev.contentOffset.y) },
-  }, [reportScroll])
 
   // A column's estimated height, for the frame before it is measured.
   const estimate = useCallback((n) => {
@@ -292,55 +266,37 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
     return g.P + Math.max(0, n - 1) * g.G + g.H + padBottom
   }, [geo, padBottom])
 
-  /* Where the scroll would be for this pos: the anchored row's place, less
-     the finger's place in the viewport, inside a limit that is the landed
-     column's own at either integer. */
+  // How far the list can go at this pos: the landed column's own at either
+  // integer, a blend of the two between.
+  const limitAt = useCallback((p) => {
+    'worklet'
+    const m = meta.value
+    const lo = Math.max(0, Math.min(m.count - 1, Math.floor(p)))
+    const hi = Math.max(0, Math.min(m.count - 1, Math.ceil(p)))
+    const fallback = Math.max(estimate(m.rows[lo] ?? 0), estimate(m.rows[hi] ?? 0))
+    return scrollLimitAt(p, heights.value, fallback, viewportH.value)
+  }, [meta, heights, viewportH, estimate])
+
+  /* Where the list should be for this pos: the anchored row's place, less
+     the finger's place in the viewport, inside the limit. */
   const scrollFor = useCallback((p) => {
     'worklet'
     const a = anchor.value
     const g = geo.value
-    const m = meta.value
     const y = anchorY(a.idx, p - a.r0, g.P, g.H, g.G, e) - a.localY
-    const lo = Math.max(0, Math.min(m.count - 1, Math.floor(p)))
-    const hi = Math.max(0, Math.min(m.count - 1, Math.ceil(p)))
-    const fallback = Math.max(estimate(m.rows[lo] ?? 0), estimate(m.rows[hi] ?? 0))
-    const lim = scrollLimitAt(p, heights.value, fallback, viewportH.value)
+    const lim = limitAt(p)
     return y < 0 ? 0 : y > lim ? lim : y
-  }, [anchor, geo, meta, heights, viewportH, estimate, e])
+  }, [anchor, geo, limitAt, e])
 
-  /* Landing: the one real scroll, to where the translation has the content,
-     and the translation dropped in the same frame — the same pixels.
-     THE OFFSET IS COMPUTED FOR THE TARGET, not read back: a timing's callback
-     runs before the reaction sees its final value, so the last offset on
-     record is the frame before's, and that frame's limit was still a blend of
-     the two columns' — up to a few dozen points past the landed column's own
-     where the columns differ in height. Land there and the height snaps to
-     the landed column a frame later and iOS clamps the offset: the jump on
-     release in the early rounds, never at the quarters, which fit the screen
-     (owner, 2026-09-09). At the integer the limit is exact. */
+  /* Landing. viewY is already where the pull left it; it is set once more
+     for the integer, whose limit is exact (a frame earlier it was still a
+     blend of two columns'), and the pull is over. Nothing scrolls. */
   const settle = useCallback((target) => {
     'worklet'
-    const y = scrollFor(target)
-    wantY.value = y
-    landingY.value = y
-    landing.value = true
-    viewY.value = y
-    reportedY.value = y
+    viewY.value = scrollFor(target)
+    reportedY.value = viewY.value
     scrubbing.value = false
-    /* THE ONE REAL SCROLL, AND THE OFFSET ASSUMED THERE AT ONCE. The native
-       scroll applies immediately; the scroll EVENT that reports it reaches
-       this runtime a frame later. stripY is derived from scrollY, so if
-       scrollY waits for that event, one frame is drawn with the new offset
-       and the old translate still on it — content from above the top of the
-       list, then the right frame: the flash on release (owner, 2026-09-09;
-       invisible at QF and later only because the landed offset there is 0).
-       So scrollY is set to y here, in the same frame as the scroll itself,
-       and stripY is 0 the moment the offset moves. The event, when it comes,
-       says the same thing. */
-    scrollTo(scrollRef, 0, y, false)
-    scrollY.value = y
-    landing.value = false
-  }, [scrollFor, wantY, landingY, landing, viewY, reportedY, scrubbing, scrollRef, scrollY])
+  }, [scrollFor, viewY, reportedY, scrubbing])
 
   const land = useCallback((target) => {
     'worklet'
@@ -351,6 +307,22 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
     })
   }, [pos, settle, commit, viewY])
 
+  /* A gesture may begin while the last pull is still landing. Its landing
+     is FLUSHED, not raced: pos goes straight to where it was headed, the
+     list settles there, and the commit is sent now, because the previous
+     scrub earned its round and dropping it loses one. (The site's 734dd31.) */
+  const flushLanding = useCallback(() => {
+    'worklet'
+    cancelAnimation(pos)
+    const cur = Math.round(pos.value)
+    pos.value = cur
+    if (scrubbing.value) {
+      settle(cur)
+      scheduleOnRN(commit, cur, viewY.value)
+    }
+    return cur
+  }, [pos, scrubbing, settle, commit, viewY])
+
   const pan = useMemo(() => Gesture.Pan()
     .activeOffsetX([-AXIS_ACTIVE_X, AXIS_ACTIVE_X])
     .failOffsetY([-AXIS_FAIL_Y, AXIS_FAIL_Y])
@@ -358,35 +330,18 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
       'worklet'
       const m = meta.value
       if (m.count < 2 || widthSV.value <= 0) return
-      /* A gesture may begin while the last one is still landing. Its landing
-         is FLUSHED, not raced: pos goes straight to where it was headed, the
-         scroll lands there, and the commit is sent now, because the previous
-         scrub earned its round and dropping it loses one. (The site's
-         734dd31.) */
-      cancelAnimation(pos)
-      const cur = Math.round(pos.value)
-      if (scrubbing.value) {
-        pos.value = cur
-        settle(cur)
-        scheduleOnRN(commit, cur, viewY.value)
-      } else {
-        pos.value = cur
-      }
-      // A landing still waiting on its scroll: take the picture as it is.
-      landing.value = false
+      cancelAnimation(viewY)
+      const cur = flushLanding()
       /* THE ANCHOR. The finger's height within the list becomes a fractional
          group index in the round it is on; that index is what is held.
          measure() gives the list's place on screen on the UI thread, so the
          first frame already has it. */
-      const vp = measure(scrollRef)
+      const vp = measure(wrapRef)
       const localY = vp ? ev.absoluteY - vp.pageY : viewportH.value / 2
       const g = geo.value
-      // Where the content IS on screen right now: wantY while a pull or its
-      // landing still owns the picture, otherwise the real scroll offset.
-      const shownTop = (scrubbing.value || landing.value) ? wantY.value : scrollY.value
       anchor.value = {
-        idx: rowIndexAt(shownTop + localY, g.P, g.H, g.G, m.rows[cur] ?? 0),
-        localY, r0: cur, y0: scrollY.value,
+        idx: rowIndexAt(viewY.value + localY, g.P, g.H, g.G, m.rows[cur] ?? 0),
+        localY, r0: cur,
       }
       r0.value = cur
       /* The origin is where the finger is NOW, at recognition, not where it
@@ -428,17 +383,77 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
       dragging.value = false
       const m = meta.value
       land(settleTarget(pos.value, anchor.value.r0, 0, dragPx.value, 0, m.count - 1))
-    }), [meta, widthSV, pos, scrubbing, viewY, settle, commit, scrollRef, viewportH, geo,
-         scrollY, wantY, landing, anchor, r0, originX, dragPx, dragging, beginPull, land])
+    }), [meta, widthSV, pos, viewY, flushLanding, wrapRef, viewportH, geo,
+         anchor, r0, originX, dragPx, dragging, scrubbing, beginPull, land])
 
-  /* pos moved: hold the anchor by translation, then drive the rows on
-     screen. One reaction, in this order, every frame of a pull. */
-  useAnimatedReaction(() => pos.value, (p) => {
-    if (scrubbing.value) {
-      const y = scrollFor(p)
+  /* THE LIST'S OWN SCROLL: a vertical pan on viewY, with a rubber band past
+     either end and a decay on release. A touch anywhere stops a fling, as it
+     would a scroll view's. Only the round on screen scrolls; a pull that
+     has not landed is flushed first, as the scrub does. */
+  const vpan = useMemo(() => Gesture.Pan()
+    .activeOffsetY([-AXIS_FAIL_Y, AXIS_FAIL_Y])
+    .failOffsetX([-AXIS_ACTIVE_X, AXIS_ACTIVE_X])
+    .onTouchesDown(() => {
+      'worklet'
+      cancelAnimation(viewY)
+    })
+    .onStart(() => {
+      'worklet'
+      cancelAnimation(viewY)
+      flushLanding()
+      vStart.value = viewY.value
+      vDragging.value = true
+    })
+    .onUpdate((ev) => {
+      'worklet'
+      if (!vDragging.value) return
+      let y = vStart.value - ev.translationY
+      const lim = limitAt(pos.value)
+      if (y < 0) y *= RUBBER
+      else if (y > lim) y = lim + (y - lim) * RUBBER
       viewY.value = y
-      wantY.value = y
+    })
+    .onEnd((ev) => {
+      'worklet'
+      if (!vDragging.value) return
+      vDragging.value = false
+      const lim = limitAt(pos.value)
+      viewY.value = withDecay({
+        velocity: -ev.velocityY, clamp: [0, lim], rubberBandEffect: true, rubberBandFactor: RUBBER_FACTOR,
+      })
+    })
+    .onFinalize(() => {
+      'worklet'
+      if (!vDragging.value) return
+      vDragging.value = false
+      const lim = limitAt(pos.value)
+      viewY.value = withDecay({ velocity: 0, clamp: [0, lim], rubberBandEffect: true, rubberBandFactor: RUBBER_FACTOR })
+    }), [viewY, vStart, vDragging, flushLanding, limitAt, pos])
+
+  /* viewY moved: tell the view every SCROLL_REPORT_ROWS of travel, so the
+     row window follows. Not during a pull — the pull widened the window
+     around the finger when it began — and the landing reports itself. */
+  useAnimatedReaction(() => viewY.value, (y) => {
+    if (scrubbing.value) return
+    if (Math.abs(y - reportedY.value) >= SCROLL_REPORT_ROWS * geo.value.G) {
+      reportedY.value = y
+      scheduleOnRN(reportScroll, y)
     }
+  }, [reportScroll])
+
+  /* A column measured shorter than the list has scrolled (a different
+     draw's, or the first estimate too tall): back inside the limit, at
+     rest only — a pull clamps itself and a drag has its rubber band. */
+  useAnimatedReaction(() => [heights.value, viewportH.value], () => {
+    if (scrubbing.value || vDragging.value) return
+    const lim = limitAt(Math.round(pos.value))
+    if (viewY.value > lim) viewY.value = lim
+  }, [limitAt])
+
+  /* pos moved: hold the anchor, then drive the rows on screen. One reaction,
+     in this order, every frame of a pull. */
+  useAnimatedReaction(() => pos.value, (p) => {
+    if (scrubbing.value) viewY.value = scrollFor(p)
     const g = geo.value
     const top = viewY.value - CULL_MARGIN * g.H
     const bottom = viewY.value + viewportH.value + CULL_MARGIN * g.H
@@ -480,14 +495,15 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
         if (scrubbing.value) settle(Math.round(pos.value))
         pos.value = idx
         r0.value = idx
+        if (changedDraw) viewY.value = 0
         return
       }
+      cancelAnimation(viewY)
       const g = geo.value
       const localY = viewportH.value / 2
-      const y0 = scrollY.value
       anchor.value = {
-        idx: rowIndexAt(y0 + localY, g.P, g.H, g.G, meta.value.rows[from] ?? 0),
-        localY, r0: from, y0,
+        idx: rowIndexAt(viewY.value + localY, g.P, g.H, g.G, meta.value.rows[from] ?? 0),
+        localY, r0: from,
       }
       r0.value = from
       scrubbing.value = true
@@ -497,7 +513,7 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
         scheduleOnRN(reportScroll, viewY.value)
       })
     })
-  }, [activeIdx, drawKey, pos, dragging, scrubbing, settle, r0, geo, viewportH, anchor, scrollY, meta, viewY, reportScroll])
+  }, [activeIdx, drawKey, pos, dragging, scrubbing, settle, r0, geo, viewportH, anchor, viewY, meta, reportScroll])
 
   const onWrapLayout = useCallback((ev) => {
     const { width: w, height: h } = ev.nativeEvent.layout
@@ -531,11 +547,11 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
   }, [heights])
 
   const scrub = useMemo(() => ({
-    pos, r0, wantY, scrubbing, landing, scrollY, viewportH, scrollRef, geo, heights, widthSV, activeIdx, width, warm, estimate, e,
-    rowHeight, rowGap, rounds, onScroll, subscribe, geoRef,
+    pos, r0, viewY, vpan, wrapRef, widthSV, activeIdx, width, warm,
+    rowHeight, rowGap, rounds, subscribe, geoRef,
     onWrapLayout, onRowLayout, onColumnLayout, registerRow, unregisterRow,
-  }), [pos, r0, wantY, scrubbing, landing, scrollY, viewportH, scrollRef, geo, heights, widthSV, activeIdx, width, warm, estimate, e,
-       rowHeight, rowGap, rounds, onScroll, subscribe,
+  }), [pos, r0, viewY, vpan, wrapRef, widthSV, activeIdx, width, warm,
+       rowHeight, rowGap, rounds, subscribe,
        onWrapLayout, onRowLayout, onColumnLayout, registerRow, unregisterRow])
 
   return { pan, scrub }
@@ -569,22 +585,14 @@ const Row = memo(function Row({ ri, i, m, renderRow, scrub }) {
 /* A round's column, at its own place on the strip: index times the width,
    whatever pos is doing — which is why a commit moves nothing. NO FADE on
    the way out, either way: a leaving round just goes, and its groups piling
-   onto one another as they condense is fine (owner, 2026-09-08). The site
-   fades its leaving column; the phone did, first by the column's opacity —
-   an offscreen render of the whole tree every frame — then under a flat
-   veil, and then not at all. */
-/* A column of one round. Only the rows in the window are mounted; the rest is
-   ONE SPACER above and ONE below, not a blank per row. That is the whole cure
-   for the landing pop, and it explains its gradient perfectly: a landing
-   mounts the next round's neighbour, and the neighbour rendered a blank View
-   for every one of its matches — 128 of them arriving in a single commit for
-   R128 — so the mount hitched the scroll view (silky at the final, worse
-   toward R128, exactly in proportion to that count; owner, 2026-09-09). With
-   spacers a column mounts about a dozen views whatever its size, and the
-   hitch is gone. The column's laid-out height is unchanged — each spacer
-   stands in for its run of rows, pitch (a group plus the row gap) apiece,
-   less the one gap the flex row adds beside it — so onColumnLayout still
-   measures the true height and every row keeps its place. */
+   onto one another as they condense is fine (owner, 2026-09-08).
+
+   Only the rows in the window are mounted; the rest is ONE SPACER above and
+   ONE below, not a blank per row, so a column mounts about a dozen views
+   whatever the round's size. Each spacer stands in for its run of rows,
+   pitch (a group plus the row gap) apiece, less the one gap the flex row
+   adds beside it — so onColumnLayout measures the true height and every
+   row keeps its place. */
 function Column({ ri, num, matches, window, scrub, renderRow, columnStyle }) {
   const { width, rowHeight, rowGap, onColumnLayout } = scrub
   const [lo, hi] = window
@@ -607,55 +615,12 @@ function Column({ ri, num, matches, window, scrub, renderRow, columnStyle }) {
 }
 
 export function RoundScrubView({ scrub, rounds, renderRow, columnStyle, style = null }) {
-  const { pos, r0, wantY, scrubbing, landing, scrollY, scrollRef, heights, widthSV, activeIdx, width, warm, estimate,
-          onScroll, subscribe, geoRef, onWrapLayout } = scrub
-  /* The strip's height is the content height: the round on screen's column
-     at rest, the taller of the two while a pull is between rounds — every
-     column is absolutely placed, so nothing else would give it one. A layout
-     prop, but one that changes twice per gesture, not per frame. The
-     translateY is the pull holding its anchor without a scroll.
-
-     AND NEVER SHORTER THAN THE ROUND THE PULL LEFT FROM, until it lands.
-     The real scroll offset stays where the pull began while the content is
-     only translated; the moment pos reached the destination exactly, the
-     height snapped to that round alone, and where it was the shorter one iOS
-     clamped the offset underneath — the list jumped, then jumped back on
-     release when the landing scrolled it (owner, 2026-09-09).
-
-     THE CURRENT VALUE GOES IN AS A PLAIN STYLE ON EVERY RENDER, beside the
-     shared value that drives it on the UI thread — here and on every piece
-     the scrub moves. An animated style's initial value is computed on the
-     component's FIRST render and sent again as the React props on every
-     render after, however far the shared values have moved since: the
-     landing's commit set this strip back to the first round at the top for
-     a frame (found on the phone with a log, 2026-09-09). Inline shared
-     values are left out of the props on a re-render instead, which leaves
-     the key to be reset. Neither can be trusted to hold the picture through
-     a commit; a plain style read off the shared value at render time can,
-     because it IS the picture. */
-  const stripH = useDerivedValue(() => {
-    const p = pos.value
-    const n = rounds.length
-    const lo = Math.max(0, Math.min(n - 1, Math.floor(p)))
-    const hi = Math.max(0, Math.min(n - 1, Math.ceil(p)))
-    const fallback = Math.max(estimate(rounds[lo]?.[1].length ?? 0), estimate(rounds[hi]?.[1].length ?? 0))
-    let height = contentHeightAt(p, heights.value, fallback)
-    if (scrubbing.value || landing.value) {
-      const from = r0.value
-      const origin = heights.value[from] > 0 ? heights.value[from] : estimate(rounds[from]?.[1].length ?? 0)
-      if (origin > height) height = origin
-    }
-    return height
-  }, [rounds, estimate])
+  const { pos, viewY, vpan, wrapRef, widthSV, activeIdx, width, warm, subscribe, geoRef, onWrapLayout } = scrub
+  /* The strip carries every column, absolutely placed, and is translated:
+     sideways by pos, up by viewY. It has no height of its own and needs
+     none — nothing scrolls it; the wrapper clips it. */
   const stripX = useDerivedValue(() => -pos.value * widthSV.value)
-  /* The anchor-holding translate, a pure function of the LIVE scroll offset:
-     while a pull or its landing owns the picture, translate the strip so the
-     content at wantY sits at the top, whatever the real offset is doing this
-     frame; idle, none. Because it reads scrollY, any change to the offset —
-     including a commit bouncing it to the top — recomputes this in the same
-     frame, so the picture never moves. */
-  const stripY = useDerivedValue(() =>
-    (scrubbing.value || landing.value) ? scrollY.value - wantY.value : 0)
+  const stripY = useDerivedValue(() => -viewY.value)
 
   /* The row window's inputs live HERE, not in the hook the screen owns: a
      scroll report re-renders this view and its memoised rows, never the
@@ -684,26 +649,25 @@ export function RoundScrubView({ scrub, rounds, renderRow, columnStyle, style = 
     if (rounds[ri]) mounted.push(ri)
   }
 
+  /* The detector's own child carries no ref: Gesture Handler reads its
+     child's ref, which React 19 logs on every render. The measured viewport
+     is the view inside, which fills it. */
   return (
-    <View style={[s.wrap, style]} onLayout={onWrapLayout}>
-      {width > 0 && (
-        <Animated.ScrollView
-          ref={scrollRef}
-          style={s.scroller}
-          showsVerticalScrollIndicator={false}
-          scrollEventThrottle={16}
-          onScroll={onScroll}
-        >
-          <Animated.View style={[s.strip, { height: stripH, transform: [{ translateX: stripX }, { translateY: stripY }] }]}>
-            {mounted.map(ri => (
-              <Column key={rounds[ri][0]} ri={ri} num={rounds[ri][0]} matches={rounds[ri][1]}
-                      window={windows[ri] ?? [0, -1]}
-                      scrub={scrub} renderRow={renderRow} columnStyle={columnStyle} />
-            ))}
-          </Animated.View>
-        </Animated.ScrollView>
-      )}
-    </View>
+    <GestureDetector gesture={vpan}>
+      <View style={[s.wrap, style]}>
+        <Animated.View ref={wrapRef} style={s.fill} onLayout={onWrapLayout} collapsable={false}>
+          {width > 0 && (
+            <Animated.View style={[s.strip, { transform: [{ translateX: stripX }, { translateY: stripY }] }]}>
+              {mounted.map(ri => (
+                <Column key={rounds[ri][0]} ri={ri} num={rounds[ri][0]} matches={rounds[ri][1]}
+                        window={windows[ri] ?? [0, -1]}
+                        scrub={scrub} renderRow={renderRow} columnStyle={columnStyle} />
+              ))}
+            </Animated.View>
+          )}
+        </Animated.View>
+      </View>
+    </GestureDetector>
   )
 }
 
@@ -711,17 +675,13 @@ const s = StyleSheet.create({
   /* minHeight 0 is the web's: a flex item there will not shrink below its
      content unless told, and this one's content is the whole column — the
      wrapper grew to it, reported that as the viewport, and the anchor's
-     scroll limit clamped every pull to the top. Yoga never does this. */
-  wrap: { flex: 1, minHeight: 0, overflow: 'hidden' },
-  /* touchAction is the web's, and it has to be ON THE SCROLLER: a browser
-     resolves a touch's touch-action from the element touched up to the
-     nearest scroll container, so a value set above the ScrollView never
-     reaches a touch inside it. Left at `auto` there, Chromium reserves every
-     drag for scrolling and fires pointercancel on the first sideways move —
-     the pan activated, got two empty updates and was cancelled. pan-y keeps
-     vertical drags the browser's and hands sideways ones to the gesture.
-     iOS ignores the style. */
-  scroller: { minHeight: 0, touchAction: 'pan-y' },
-  strip: { width: '100%' },
+     limit clamped every pull to the top. Yoga never does this.
+     touchAction none is the web's too: both axes are the gestures' now, so
+     the browser must reserve neither — left at its default it claims every
+     vertical drag for a scroll that no longer exists and cancels the pan on
+     the first move. iOS ignores the style. */
+  wrap: { flex: 1, minHeight: 0, overflow: 'hidden', touchAction: 'none' },
+  fill: { flex: 1, minHeight: 0 },
+  strip: { position: 'absolute', top: 0, left: 0, right: 0 },
   column: { position: 'absolute', top: 0 },
 })
