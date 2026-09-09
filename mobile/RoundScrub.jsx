@@ -124,10 +124,16 @@ const WARM_MS = 250
    begun, PULL_MARGIN rows either side of the finger's row and their
    counterparts — enough for the whole pull, decided once at its start. The
    window follows viewY from a report sent every SCROLL_REPORT_ROWS of
-   travel; a row it has not reached yet is blank for a beat, never wrong. */
-const REST_MARGIN = 6
+   travel; a row it has not reached yet is blank for a beat, never wrong.
+   REST_MARGIN is twelve rows — about two screens — so a fling stays inside
+   what is already mounted and rows are not mounting on the JS thread under
+   a moving list, which shows as blanks arriving late (owner: "a little
+   laggy", 2026-09-09, once the pop was gone). A row per report, not
+   three-quarters: half the re-renders per fling, nothing visible at that
+   margin. */
+const REST_MARGIN = 12
 const PULL_MARGIN = 16
-const SCROLL_REPORT_ROWS = 0.75
+const SCROLL_REPORT_ROWS = 1
 
 function windowsFor({ y, anchor }, vh, geo, rounds, activeIdx, warm) {
   const out = {}
