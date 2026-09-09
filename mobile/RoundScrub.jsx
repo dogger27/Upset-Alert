@@ -502,10 +502,10 @@ export function useRoundScrub({ rounds, active, onCommit, rowHeight, rowGap, pad
   }, [heights])
 
   const scrub = useMemo(() => ({
-    pos, r0, shiftY, scrubbing, landing, scrollRef, geo, heights, widthSV, activeIdx, width, warm, estimate, e,
+    pos, r0, shiftY, scrubbing, landing, scrollY, viewportH, scrollRef, geo, heights, widthSV, activeIdx, width, warm, estimate, e,
     rowHeight, rounds, onScroll, subscribe, geoRef,
     onWrapLayout, onRowLayout, onColumnLayout, registerRow, unregisterRow,
-  }), [pos, r0, shiftY, scrubbing, landing, scrollRef, geo, heights, widthSV, activeIdx, width, warm, estimate, e,
+  }), [pos, r0, shiftY, scrubbing, landing, scrollY, viewportH, scrollRef, geo, heights, widthSV, activeIdx, width, warm, estimate, e,
        rowHeight, rounds, onScroll, subscribe,
        onWrapLayout, onRowLayout, onColumnLayout, registerRow, unregisterRow])
 
@@ -565,7 +565,7 @@ function Column({ ri, num, matches, window, scrub, renderRow, columnStyle }) {
 }
 
 export function RoundScrubView({ scrub, rounds, renderRow, columnStyle, style = null }) {
-  const { pos, r0, shiftY, scrubbing, landing, scrollRef, heights, widthSV, activeIdx, width, warm, estimate,
+  const { pos, r0, shiftY, scrubbing, landing, scrollY, viewportH, scrollRef, heights, widthSV, activeIdx, width, warm, estimate,
           onScroll, subscribe, geoRef, onWrapLayout } = scrub
   /* The strip's height is the content height: the round on screen's column
      at rest, the taller of the two while a pull is between rounds — every
@@ -603,6 +603,22 @@ export function RoundScrubView({ scrub, rounds, renderRow, columnStyle, style = 
       const origin = heights.value[from] > 0 ? heights.value[from] : estimate(rounds[from]?.[1].length ?? 0)
       if (origin > height) height = origin
     }
+    /* NEVER SHORTER THAN THE CURRENT SCROLL PLUS THE VIEWPORT. This is what
+       finally kills the pop on release (owner, 2026-09-09). The landing
+       clears `landing` on the UI thread the instant its scroll reports back,
+       which is before the React commit that follows it renders — so the
+       commit shipped the target round's height as a plain style prop while
+       the scroll was, for that one frame, still higher than that short round
+       is tall. iOS does not preserve a scroll offset when the content shrinks
+       under it and no user touch is in progress (RCTScrollView:
+       _preserveContentOffsetIfNeededWithBlock), so it clamped to the top,
+       then the next frame put it right: the flash to the top and back. Held
+       at least tall enough to contain where the scroll actually is, the
+       content can never shrink under the offset, so there is nothing to
+       clamp. Settled, the offset sits inside the real content and this is
+       just the real height. */
+    const floor = scrollY.value + viewportH.value
+    if (floor > height) height = floor
     return height
   }, [rounds, estimate])
   const stripX = useDerivedValue(() => -pos.value * widthSV.value)
