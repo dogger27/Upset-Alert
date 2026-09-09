@@ -96,7 +96,13 @@ const CONN_RUN = 24       // border → the vertical bar, clear of the pill
    chip, and showed there as a third line out of the middle of every match
    (owner, 2026-09-08); at S.lg + 8 it still poked three points into that
    column, a green tick at the glass's left edge beside every group. */
-const CONN_STUB = S.lg + 5
+const BW = 2                                   // the outline's border
+/* … and the outline's border past it: the stub is inside its own column and
+   just runs off the glass at rest, but mid-pull it has to MEET the next
+   round's incoming line at the column boundary, and each ended a point
+   short of it — a hairline break at the join (measured in the harness,
+   2026-09-09). */
+const CONN_STUB = S.lg + 5 + BW
 const BELL_CORNER = 42    // .cv-eta--bell / .cv-live-score--bell: right: 42px
 const NAME_FONT = 12      // the site's 0.8rem, a point down with the box
 const NAME_FAMILY = 'Archivo_700Bold'
@@ -143,7 +149,6 @@ export const CHIP_OVERHANG = Math.ceil(leading(CHIP_H) / 2)
    in Y to bridge them — a scaled rectangle with no corners distorts nothing.
    Each cap is half the settled height, so at rest they meet in the middle
    over the bridge. The chips and the gap's content stay on the centre line. */
-const BW = 2                                   // the outline's border
 /* The line each box ARRIVED on: from the round before, in at the box's own
    centre and off the left edge of the glass — the site's connector run into
    a box (owner, 2026-09-08). EXACTLY to the column's left edge: the column's
@@ -340,6 +345,7 @@ function feederBox(m, side, B) {
    font's own metrics against the width the row actually gave it, exactly as
    PlayerName does; this differs from it only in where the ladder starts and
    in the collision rule. (slotName) */
+let lastAvail = null
 function BoxName({ player, B, won, picked }) {
   const unnamedQ = player?.entry_type === 'Q' && !player?.name
   const forms = useMemo(() => {
@@ -358,7 +364,12 @@ function BoxName({ player, B, won, picked }) {
     }
     return chain.map(f => f.toUpperCase())
   }, [player, unnamedQ, B])
-  const [avail, setAvail] = useState(null)
+  /* THE SLOT'S WIDTH IS THE SAME IN EVERY BOX — the column's layout gives
+     each the same room — so the last one measured seeds the next: the first
+     render is already the fitted name and the layout pass only confirms it.
+     Without this every box rendered twice on mount, full size and then
+     fitted, and the rows a scroll mounts are where the frames go. */
+  const [avail, setAvail] = useState(lastAvail)
 
   let text = forms[0]
   let fontSize = NAME_FONT
@@ -373,7 +384,10 @@ function BoxName({ player, B, won, picked }) {
   }
   const muted = unnamedQ
   return (
-    <View style={s.nameSlot} onLayout={e => setAvail(e.nativeEvent.layout.width)}>
+    <View style={s.nameSlot} onLayout={e => {
+      const w = e.nativeEvent.layout.width
+      if (w !== avail) { lastAvail = w; setAvail(w) }
+    }}>
       <Text style={[s.name, muted && s.nameMuted, fontSize !== NAME_FONT && { fontSize }]}
             numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.3}>
         {text}

@@ -66,7 +66,7 @@
  * columns under the vertical pan, and to RoundStrip, which glides its pill
  * along with pos.
  */
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, {
@@ -135,7 +135,7 @@ const REST_MARGIN = 12
 const PULL_MARGIN = 16
 const SCROLL_REPORT_ROWS = 1
 
-function windowsFor({ y, anchor }, vh, geo, rounds, activeIdx, warm) {
+function windowsFor({ y, anchor }, vh, geo, rounds, activeIdx, neighbourIdx, warm) {
   const out = {}
   const add = (ri, lo, hi) => {
     const r = rounds[ri]
@@ -148,8 +148,10 @@ function windowsFor({ y, anchor }, vh, geo, rounds, activeIdx, warm) {
   const vis1 = Math.ceil((y + vh - geo.P) / geo.G)
   add(activeIdx, vis0 - REST_MARGIN, vis1 + REST_MARGIN)
   if (warm) {
-    add(activeIdx + 1, Math.floor(vis0 / 2) - REST_MARGIN, Math.ceil(vis1 / 2) + REST_MARGIN)
-    add(activeIdx - 1, 2 * vis0 - REST_MARGIN, 2 * vis1 + 1 + REST_MARGIN)
+    // Around the (deferred) neighbour centre — see RoundScrubView.
+    add(neighbourIdx, vis0 - REST_MARGIN, vis1 + REST_MARGIN)
+    add(neighbourIdx + 1, Math.floor(vis0 / 2) - REST_MARGIN, Math.ceil(vis1 / 2) + REST_MARGIN)
+    add(neighbourIdx - 1, 2 * vis0 - REST_MARGIN, 2 * vis1 + 1 + REST_MARGIN)
   }
   if (anchor) {
     const c = Math.round(anchor.idx)
@@ -644,15 +646,27 @@ export function RoundScrubView({ scrub, rounds, renderRow, columnStyle, style = 
       }
     })
   }), [subscribe])
+  /* THE NEIGHBOURS FOLLOW A BEAT BEHIND. A landing changes activeIdx, and
+     with it which rounds are neighbours: one column leaves and a new one —
+     some thirty match groups — mounts. Done in the same render as the round
+     change, that mount sat in the landing's commit, right as the scrub came
+     to rest. The neighbours are computed from a DEFERRED copy of activeIdx,
+     so React commits the round change first and mounts the new neighbour in
+     a follow-up render it may interrupt. In between, the neighbour set is
+     the old one, which already holds the landed round. */
+  const neighbourIdx = useDeferredValue(activeIdx)
   const windows = useMemo(
-    () => windowsFor(view, view.vh, view.geo, rounds, activeIdx, warm),
-    [view, rounds, activeIdx, warm],
+    () => windowsFor(view, view.vh, view.geo, rounds, activeIdx, neighbourIdx, warm),
+    [view, rounds, activeIdx, neighbourIdx, warm],
   )
 
-  // The round on screen and, once warm, its neighbours.
-  const mounted = []
-  for (let ri = warm ? activeIdx - 1 : activeIdx; ri <= (warm ? activeIdx + 1 : activeIdx); ri++) {
-    if (rounds[ri]) mounted.push(ri)
+  // The round on screen and, once warm, the (deferred) neighbours.
+  const mounted = [activeIdx]
+  if (warm) {
+    for (const ri of [neighbourIdx - 1, neighbourIdx, neighbourIdx + 1]) {
+      if (rounds[ri] && !mounted.includes(ri)) mounted.push(ri)
+    }
+    mounted.sort((a, b) => a - b)
   }
 
   /* The detector's own child carries no ref: Gesture Handler reads its
