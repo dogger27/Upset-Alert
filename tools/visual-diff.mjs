@@ -163,9 +163,19 @@ async function shoot(url, kind, name, click, noAuth, scrollEnd, drag) {
   // Optional: put the page into the state being compared (a tab, a filter).
   if (click) {
     // Text first; then the accessible name, for icon buttons (the hamburger).
-    const byText = page.getByText(click, { exact: false }).first()
-    if (await byText.count()) await byText.click({ timeout: 8000 }).catch(() => {})
-    else await page.getByLabel(click, { exact: false }).first().click({ timeout: 8000 }).catch(() => {})
+    // THE FIRST VISIBLE ONE: the draw mounts its neighbouring rounds off
+    // screen, so the first match of a name may sit a screen to the left.
+    const inView = async (loc) => {
+      const n = await loc.count()
+      for (let i = 0; i < n; i++) {
+        const b = await loc.nth(i).boundingBox()
+        if (b && b.x >= 0 && b.y >= 0 && b.x + b.width <= VIEW.width && b.y + b.height <= VIEW.height) return loc.nth(i)
+      }
+      return null
+    }
+    const target = (await inView(page.getByText(click, { exact: false })))
+      ?? (await inView(page.getByLabel(click, { exact: false })))
+    if (target) await target.click({ timeout: 8000 }).catch(() => {})
     await page.waitForTimeout(2000)
   }
 

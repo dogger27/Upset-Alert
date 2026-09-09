@@ -30,8 +30,9 @@
  * because its compact column is 107pt wide; this one is three times that,
  * so the ETA and the live score take one line each.
  */
-import { useContext, useMemo, useState } from 'react'
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native'
+import { useContext, useMemo, useRef, useState } from 'react'
+import { Animated, StyleSheet, Text, View } from 'react-native'
+import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Reanimated, { useAnimatedStyle } from 'react-native-reanimated'
 import { Ionicons } from '@expo/vector-icons'
 import { Bump, NeonRing, useStandoutShake } from './fx'
@@ -429,19 +430,41 @@ function PlayerBox({ box, serving, picked, won, noteWon, drawRanks, B }) {
    border. The layout box is the unrotated 34×18; the transform turns it in
    place, so the centre stays where the layout put it — on the border line,
    BW/2 in from the group's outer edge. */
+/* A TAP IS A GESTURE HANDLER TAP, NOT A PRESSABLE. The round scrub is a
+   native pan over the whole screen, and a JS Pressable never hears that a
+   native gesture took the touch: every drag to the next round that started
+   on a match ended by opening its score (owner, 2026-09-08). A Tap here
+   fails on its own the moment the finger moves TAP_DISTANCE or holds past
+   TAP_MS, and the pan cancels it outright when it activates — so a sheet
+   opens only on a quick press released where it landed. The callback is read
+   through a ref so the gesture is built once per view. */
+const TAP_MS = 300
+const TAP_DISTANCE = 8
+function useTap(onTap, hitSlop) {
+  const ref = useRef(onTap)
+  ref.current = onTap
+  return useMemo(() => {
+    const g = Gesture.Tap().maxDuration(TAP_MS).maxDistance(TAP_DISTANCE).runOnJS(true)
+      .onStart(() => { ref.current?.() })
+    return hitSlop ? g.hitSlop(hitSlop) : g
+  }, [hitSlop])
+}
+
 function Chip({ side, onPress, label, standout = false, children }) {
   // The site's .cv-group--standout: the shake around the whole rotated
   // pill, the neon ring inside it so it turns with it.
   const shake = useStandoutShake(standout)
+  const tap = useTap(onPress, 10)
   return (
     <View style={[s.chipWrap, side === 'left' ? { left: -(leading(CHIP_W) / 2) + BW / 2 } : { right: -(leading(CHIP_W) / 2) + BW / 2 }]}
           pointerEvents="box-none">
       <Animated.View style={standout ? { transform: shake, zIndex: 5 } : null}>
-        <Pressable onPress={onPress} hitSlop={10} style={s.chip} accessibilityRole="button"
-                   accessibilityLabel={label}>
-          {children}
-          <NeonRing on={standout} radius={4} />
-        </Pressable>
+        <GestureDetector gesture={tap}>
+          <View style={s.chip} accessible accessibilityRole="button" accessibilityLabel={label}>
+            {children}
+            <NeonRing on={standout} radius={4} />
+          </View>
+        </GestureDetector>
       </Animated.View>
     </View>
   )
@@ -539,10 +562,10 @@ export function MatchGroup({ m, roundIdx, B, drawRanks, zone, onH2H, onPredictor
   const noteWonBy = box => decided && !!box.realName && box.realId === winnerId
     && box.playerId !== winnerId
 
-  // A started match answers a tap with its score and history — its pick is
-  // locked by then, so the tap is free to mean "show me".
+  // A started match answers a quick tap with its score and history — its
+  // pick is locked by then, so the tap is free to mean "show me".
   const openable = !!onShowScore && matchStarted(m)
-  const Wrap = openable ? Pressable : View
+  const tap = useTap(openable ? () => onShowScore(m) : null)
 
   /* The scrub's stretch, if any: the caps slide apart or together with the
      boxes, the middle and the connector's bar scale to keep the outline and
@@ -558,8 +581,11 @@ export function MatchGroup({ m, roundIdx, B, drawRanks, zone, onH2H, onPredictor
   }), [sc])
   const done = decided && !m.is_bye
 
-  return (
-    <Wrap style={s.group} onPress={openable ? () => onShowScore(m) : undefined}>
+  // No button role on the group: it holds two buttons of its own (the
+  // chips), and a button inside a button is not a thing on the web.
+  const body = (
+    <View style={s.group} accessible={openable}
+          accessibilityLabel={openable ? 'Show the score and its history' : undefined}>
       <Reanimated.View style={[s.mid, done && s.capDone, midStyle]} pointerEvents="none" />
       <Reanimated.View style={[s.cap, s.capTop, done && s.capDone, capTopStyle]}>
         {pill && (
@@ -617,8 +643,9 @@ export function MatchGroup({ m, roundIdx, B, drawRanks, zone, onH2H, onPredictor
           <Text style={s.chipText}>H2H</Text>
         </Chip>
       )}
-    </Wrap>
+    </View>
   )
+  return openable ? <GestureDetector gesture={tap}>{body}</GestureDetector> : body
 }
 
 const s = StyleSheet.create({
