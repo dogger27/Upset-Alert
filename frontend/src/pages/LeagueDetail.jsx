@@ -1506,7 +1506,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                 a race, 20 behind with 4 is not. Frozen while scrubbing, since
                 a replay has no future. */}
             <span className="lt-score-head">
-              <span className="lt-score-head-title lt-progress-col-header">Score (pts)</span>
+              <span className="lt-score-head-title lt-progress-col-header">Score<span className="lt-score-head-unit"> (pts)</span></span>
               <span className={`lt-progress-total lt-progress-col-header lt-score-head-sub lt-col-sort${colSort === 'total' ? ' lt-col-sort--on' : ''}`}
                     role="button" tabIndex={0} title="Points scored so far — the standings order"
                     onClick={() => setColSort('total')}
