@@ -18,7 +18,7 @@ from app.schemas.user import UserPublicOut
 from app.services.draw_changes import classify_change
 from app.services.rankings import assign_rankings
 from app.services.scraper import scrape_tournament, snap_to_monday
-from app.services.scoring import UserScore, _points_table, finish_range_async, podium_locked, rank_users
+from app.services.scoring import UserScore, _points_table, enumerate_worlds, finish_range_async, podium_locked, rank_users
 from app.services.scoring import potential_points
 from app.services.upsets import has_upset_pick
 
@@ -1157,10 +1157,9 @@ async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get
     # bracket (potential_points): who is out, and which half each pick is in.
     all_matches = (await db.execute(
         select(Match).where(Match.draw_id == tournament_id))).scalars().all()
-    position_by_entry = {
-        e.id: e.bracket_position for e in
-        (await db.execute(select(DrawEntry).where(DrawEntry.draw_id == tournament_id))).scalars().all()
-    }
+    all_entries = (await db.execute(
+        select(DrawEntry).where(DrawEntry.draw_id == tournament_id))).scalars().all()
+    position_by_entry = {e.id: e.bracket_position for e in all_entries}
 
     # Anyone with at least one pick is competing — a partial bracket simply
     # scores nothing on the matches it left unpicked.
@@ -1222,6 +1221,16 @@ async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get
         rng = (ranges or {}).get(e["user_id"])
         e["best_rank"], e["worst_rank"] = (rng[0], rng[1]) if rng else (None, None)
         e["podium_locked"] = podium_locked(rng)
+    # WHAT-IF WORLDS, from the semis on: every way the last matches can go,
+    # each labelled by its final, with everyone's picks on those matches so
+    # the table can be re-scored under any of them in the browser.
+    names_by_entry = {e.id: e.name for e in all_entries}
+    worlds = enumerate_worlds(all_matches, pts_table, names_by_entry)
+    world_ids = {r["match_id"] for w in (worlds or []) for r in w["results"]}
+    world_predictions = {
+        str(uid): {str(k): v for k, v in picks.items() if k in world_ids}
+        for uid, picks in picks_map.items()
+    } if worlds else {}
 
     entries.sort(key=lambda x: (-x["total"],) + tuple(-rp for rp in reversed(x["round_points"])))
     rounds_with_matches = sorted({m.round_number for m in completed_matches})
@@ -1268,6 +1277,8 @@ async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get
         "entries": entries,
         "finish_range_available": ranges is not None,
         "cash_pool": False,
+        "worlds": worlds,
+        "world_predictions": world_predictions if picks_visible else {},
         "completed_matches_count": len(completed_matches),
         "rounds_with_matches": rounds_with_matches,
         "completed_round_nums": completed_round_nums,

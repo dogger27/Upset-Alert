@@ -24,7 +24,7 @@ from app.schemas.league import (
     CashPoolIn, CashPoolOut,
 )
 from app.schemas.tournament import TournamentOut
-from app.services.scoring import UserScore, finish_range_async, podium_locked, rank_users, score_user
+from app.services.scoring import UserScore, enumerate_worlds, finish_range_async, podium_locked, rank_users, score_user
 from app.services.scoring import potential_points, _points_table as _pts_table_for
 from app.services.upsets import has_upset_pick
 
@@ -743,10 +743,9 @@ async def round_scores(
     # bracket (potential_points): who is out, and which half each pick is in.
     all_matches = (await db.execute(
         select(Match).where(Match.draw_id == tournament_id))).scalars().all()
-    position_by_entry = {
-        e.id: e.bracket_position for e in
-        (await db.execute(select(DrawEntry).where(DrawEntry.draw_id == tournament_id))).scalars().all()
-    }
+    all_entries = (await db.execute(
+        select(DrawEntry).where(DrawEntry.draw_id == tournament_id))).scalars().all()
+    position_by_entry = {e.id: e.bracket_position for e in all_entries}
 
     timeline_ids = {m.id for m in completed_matches}
     user_predictions: dict = {}
@@ -806,6 +805,16 @@ async def round_scores(
         rng = (ranges or {}).get(e["user_id"])
         e["best_rank"], e["worst_rank"] = (rng[0], rng[1]) if rng else (None, None)
         e["podium_locked"] = podium_locked(rng)
+    # WHAT-IF WORLDS, from the semis on: every way the last matches can go,
+    # each labelled by its final, with everyone's picks on those matches so
+    # the table can be re-scored under any of them in the browser.
+    names_by_entry = {e.id: e.name for e in all_entries}
+    worlds = enumerate_worlds(all_matches, pts_table, names_by_entry)
+    world_ids = {r["match_id"] for w in (worlds or []) for r in w["results"]}
+    world_predictions = {
+        str(uid): {str(k): v for k, v in picks.items() if k in world_ids}
+        for uid, picks in picks_map.items()
+    } if worlds else {}
 
     # Primary: total points desc. Tiebreaker: points in latest rounds first (Final → SF → QF → …)
     entries.sort(key=lambda x: (-x["total"],) + tuple(-rp for rp in reversed(x["round_points"])))
@@ -848,6 +857,8 @@ async def round_scores(
         # A cash pool on this draw: the standings mark a locked podium as
         # money as well as a medal.
         "cash_pool": visible is not None,
+        "worlds": worlds,
+        "world_predictions": world_predictions,
         "completed_matches_count": len(completed_matches),
         "rounds_with_matches": rounds_with_matches,
         "completed_round_nums": completed_round_nums,
