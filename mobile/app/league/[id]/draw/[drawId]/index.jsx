@@ -20,7 +20,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '../../../../../auth'
 import { getLeague, getLeagueTournaments, getRoundScores } from '../../../../../api'
 import { useApi } from '../../../../../useApi'
-import { competitionRanks } from '../../../../../scoring'
+import { byFinish, competitionRanks, finishText } from '../../../../../scoring'
 import { othersPicksNote } from '../../../../../lock'
 import { C } from '../../../../../theme'
 import { PlayerName } from '../../../../../cards'
@@ -46,8 +46,16 @@ export default function Standings() {
   const [sortKey, setSortKey] = useState('total')
   const rankOf = new Map(entries.map((e, i) => [e.user_id, ranks[i]]))
   const order = new Map(entries.map((e, i) => [e.user_id, i]))
-  const rows = sortKey === 'total' ? entries : [...entries].sort((a, b) =>
-    ((b[sortKey] ?? 0) - (a[sortKey] ?? 0)) || (order.get(a.user_id) - order.get(b.user_id)))
+  const rows = sortKey === 'total' ? entries
+    : sortKey === 'finish' ? [...entries].sort(byFinish(order))
+    : [...entries].sort((a, b) =>
+      ((b[sortKey] ?? 0) - (a[sortKey] ?? 0)) || (order.get(a.user_id) - order.get(b.user_id)))
+  /* WHERE EACH BRACKET CAN STILL FINISH, from R16 on: the server enumerates
+     every future of the last fifteen matches and sends the best and worst
+     place. Before that there are too many futures and the column is not
+     drawn — the site does the same. */
+  const finishAvail = !!scores.data?.finish_range_available
+
   const sortHead = (key, label, style, extra, a11y) => (
     <Pressable onPress={() => setSortKey(key)} hitSlop={8} accessibilityRole="button"
                accessibilityState={{ selected: sortKey === key }}
@@ -102,7 +110,10 @@ export default function Standings() {
                   text size. */}
               {/* The tick alone; the denominator is what a screen reader
                   hears, and what the line above the table already says. */}
-              {sortHead('correct_count', '✓', s.right, null,
+              {/* The tick gives its track to the finish range from R16 on — the
+                  site does the same at phone width; the count is a second
+                  reading of the score, the range is news. */}
+              {finishAvail ? null : sortHead('correct_count', '✓', s.right, null,
                         `Correct picks, of ${scores.data?.completed_matches_count ?? 0} matches played — sort by this`)}
               {/* ONE HEADING OVER TWO COLUMNS: "Score", then "Curr." and
                   "Max" beneath it — where a bracket stands and the best it
@@ -119,6 +130,8 @@ export default function Standings() {
                   {sortHead('max_points', 'Max', s.num, { adjustsFontSizeToFit: true, minimumFontScale: 0.6 })}
                 </View>
               </View>
+              {finishAvail ? sortHead('finish', 'Finish', s.fin, { adjustsFontSizeToFit: true, minimumFontScale: 0.6 },
+                                      'Best and worst place this bracket can still finish on — sort by this') : null}
             </View>
             {rows.map((e, i) => {
               const mine = me && e.user_id === me.id
@@ -153,9 +166,19 @@ export default function Standings() {
                   </View>
                   {/* The sorted column is the lit one: white and bold, the
                       other two muted. */}
-                  <Text style={[s.right, sortKey === 'correct_count' && s.on]}>{e.correct_count}</Text>
+                  {finishAvail ? null : <Text style={[s.right, sortKey === 'correct_count' && s.on]}>{e.correct_count}</Text>}
                   <Text style={[s.num, sortKey === 'total' && s.on]}>{e.total}</Text>
                   <Text style={[s.num, sortKey === 'max_points' && s.on]}>{e.max_points != null ? Math.round(e.max_points) : '–'}</Text>
+                  {/* A place clinched is the one certainty in the column, so
+                      it reads in ink like the sorted column does. */}
+                  {finishAvail ? (
+                    <Text style={[s.fin, (sortKey === 'finish' || (e.best_rank != null && e.best_rank === e.worst_rank)) && s.on]}
+                          accessibilityLabel={e.best_rank == null ? undefined
+                            : e.best_rank === e.worst_rank ? `Finishes ${e.best_rank} whatever happens`
+                            : `Can still finish anywhere from ${e.best_rank} to ${e.worst_rank}`}>
+                      {finishText(e)}
+                    </Text>
+                  ) : null}
                 </Body>
                 </View>
               )
@@ -205,6 +228,9 @@ const s = StyleSheet.create({
      number does not, so right-aligning both parked the number under the
      label's last letters instead of under the label. */
   num: { color: C.muted, width: 46, textAlign: 'center' },
+  /* "FINISH" in the header at 12pt bold, "12–29" below; the name column
+     gives up the difference. */
+  fin: { color: C.muted, width: 52, textAlign: 'center', fontVariant: ['tabular-nums'] },
   // The column the rows are sorted by.
   on: { color: C.ink, fontWeight: '800' },
   // Two `num` cells and the row's gap: the same width the cells below take.

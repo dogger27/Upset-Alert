@@ -45,3 +45,21 @@ export function slotLabel(entry, match) {
   if (!entry) return 'TBD'
   return entry.entry_type === 'Q' ? 'Qualifier' : 'TBD'
 }
+
+/* The finish column: where a bracket can still end up, over every result
+ * left to play. "3" is a place clinched; "3–7" a range still open. The
+ * server sends it from R16 on (see scoring.FINISH_RANGE_MAX_UNDECIDED) and
+ * nothing before, so a missing value is "not yet", not "unknown". */
+export function finishText(e) {
+  if (e?.best_rank == null) return '–'
+  return e.best_rank === e.worst_rank ? String(e.best_rank) : `${e.best_rank}–${e.worst_rank}`
+}
+
+/* Sort by best possible finish, then by least to lose, then the standings
+ * order — the same tiebreak the site uses for its Finish header. */
+export function byFinish(order) {
+  return (a, b) =>
+    ((a.best_rank ?? Infinity) - (b.best_rank ?? Infinity))
+    || ((a.worst_rank ?? Infinity) - (b.worst_rank ?? Infinity))
+    || (order.get(a.user_id) - order.get(b.user_id))
+}

@@ -12,6 +12,20 @@ import { computeCohortInfo, getDisplayStatus, DISPLAY_STATUS_LABELS } from '../u
 import { rootFontPx, textWidth } from '../utils/text'
 import './LeagueDetail.css'
 
+/* The finish column's text and tooltip: "3" for a place clinched, "3–7" for
+   a range still open. Ordinals in the tooltip only — the cell is numbers,
+   like the rank beside the name. */
+const ordinal = n => {
+  const r = n % 100
+  const suf = (r >= 11 && r <= 13) ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] ?? 'th')
+  return `${n}${suf}`
+}
+const finishText = e => e.best_rank == null ? '–'
+  : e.best_rank === e.worst_rank ? String(e.best_rank) : `${e.best_rank}–${e.worst_rank}`
+const finishTitle = e => e.best_rank == null ? undefined
+  : e.best_rank === e.worst_rank ? `Finishes ${ordinal(e.best_rank)} whatever happens`
+  : `Can still finish anywhere from ${ordinal(e.best_rank)} to ${ordinal(e.worst_rank)}`
+
 const SCORING_LABELS = {
   classic: 'Classic Bracket',
   atp_wta: 'ATP/WTA Points Mirror',
@@ -1201,6 +1215,10 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
   }, [isScrubbing, effectiveScrubPos, matchesTimeline, entries, roundsWithMatches, userPredictions])
 
   const pointsOrder = displayData.entries
+  /* The finish column exists only once the server can enumerate the draw's
+     futures (R32 complete). Its values ride on each entry from the server
+     and survive the scrub, like Max: a replay has no future to range over. */
+  const finishAvail = !!rawData?.finish_range_available
 
   /* A PERSON'S RANK IS THEIR RANK, whatever the rows are sorted by.
      Stamped here, off the points order, so re-grouping the table by a pick
@@ -1227,9 +1245,17 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
   const dispEntries = (() => {
     if (!comparing || !activeSort) {
       if (colSort === 'total') return ranked
-      const key = colSort === 'correct' ? 'correct_count' : 'max_points'
       // Ties keep the standings order, so a sort is a stable re-reading of
       // the same table rather than a shuffle.
+      if (colSort === 'finish') {
+        // Best possible finish first; between two who can both still win,
+        // the one with less to lose.
+        return [...ranked].sort((a, b) =>
+          ((a.best_rank ?? Infinity) - (b.best_rank ?? Infinity))
+          || ((a.worst_rank ?? Infinity) - (b.worst_rank ?? Infinity))
+          || (a.standingsRank - b.standingsRank))
+      }
+      const key = colSort === 'correct' ? 'correct_count' : 'max_points'
       return [...ranked].sort((a, b) =>
         ((b[key] ?? 0) - (a[key] ?? 0)) || (a.standingsRank - b.standingsRank))
     }
@@ -1439,7 +1465,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
         </>
       ) : (
         <>
-          <div className="lt-progress-row lt-progress-header-row" style={{ '--name-col-width': `${nameColWidth}px` }}>
+          <div className={`lt-progress-row lt-progress-header-row${finishAvail ? ' lt-progress-row--finish' : ''}`} style={{ '--name-col-width': `${nameColWidth}px` }}>
             {/* Both buttons first, then the rank, then the name — the two
                 controls belong together as one group of tools rather than
                 being split by a number. These spacers only hold the columns
@@ -1494,6 +1520,20 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                 Max
               </span>
             </span>
+            {/* WHERE A BRACKET CAN STILL FINISH: its best and worst place over
+                every result left to play, from R16 on (the server enumerates
+                every future of the last fifteen matches; before that there
+                are too many, and the column is not drawn). A range of one is
+                a place clinched. Like Max, frozen while scrubbing. */}
+            {finishAvail && (
+              <span className={`lt-progress-finish lt-progress-col-header lt-col-sort${colSort === 'finish' ? ' lt-col-sort--on' : ''}`}
+                    role="button" tabIndex={0}
+                    title="Best and worst place this bracket can still finish on, over every result left to play — click to sort"
+                    onClick={() => setColSort('finish')}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setColSort('finish') } }}>
+                Finish
+              </span>
+            )}
             {comparing ? (
               /* The same column, two lines: the round that owns a group, and
                  the bracket position of each slot inside it. Both are grids of
@@ -1549,7 +1589,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
             {dispEntries.map((entry, rank) => (
               <div
                 key={entry.user_id}
-                className={`lt-progress-row lt-progress-row--abs${entry.user_id === user?.id ? ' lt-progress-row--me' : ''}`}
+                className={`lt-progress-row lt-progress-row--abs${entry.user_id === user?.id ? ' lt-progress-row--me' : ''}${finishAvail ? ' lt-progress-row--finish' : ''}`}
                 style={{ transform: `translateY(${rank * ROW_SLOT}px)` }}
               >
                 <button
@@ -1602,6 +1642,12 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                         ? `Could still finish on ${Math.round(entry.max_points)} pts` : undefined}>
                   {entry.max_points != null ? Math.round(entry.max_points) : '–'}
                 </span>
+                {finishAvail && (
+                  <span className={`lt-progress-finish${colSort === 'finish' ? ' lt-col-on' : ''}${entry.best_rank != null && entry.best_rank === entry.worst_rank ? ' lt-progress-finish--locked' : ''}`}
+                        title={finishTitle(entry)}>
+                    {finishText(entry)}
+                  </span>
+                )}
                 {comparing ? (
                   /* THE TRACK, WITH NAMES IN IT. Same cell, same column count
                      as the header above — an unfilled slot still renders, so a

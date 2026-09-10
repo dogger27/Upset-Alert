@@ -57,6 +57,12 @@ class LeaderboardEntry(BaseModel):
     # Picking zero upsets is the only thing that disqualifies an entry; an
     # unfinished bracket still competes.
     has_upset_pick: bool = True
+    # The best and worst place this bracket can still finish on, over every
+    # future of the matches left — competition-ranked, so the printed rank
+    # always lies inside. None until the draw is down to its last fifteen
+    # matches (R32 complete): see scoring.FINISH_RANGE_MAX_UNDECIDED.
+    best_rank: Optional[int] = None
+    worst_rank: Optional[int] = None
 
 
 class LeaderboardOut(BaseModel):
