@@ -250,17 +250,18 @@ const s = StyleSheet.create({
   hintStrong: { color: C.ink, fontFamily: 'Archivo_700Bold' },
   rail2: { flexDirection: 'row', alignItems: 'center', gap: 10, marginLeft: 'auto' },
   dots: { flexDirection: 'row', gap: 5, alignItems: 'center' },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.border },
+  /* On the raised strip the hairline border vanishes; the lit one reads. */
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.borderLit },
   dotOn: { backgroundColor: C.greenBright },
   count: { fontFamily: 'Archivo_700Bold', fontSize: 12, color: C.muted, fontVariant: ['tabular-nums'] },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   name: { flex: 1, textAlign: 'center', fontFamily: 'Archivo_700Bold', fontSize: 18, color: C.greenBright, letterSpacing: -0.2 },
   arrow: {
-    width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: C.border,
+    width: 46, height: 46, borderRadius: 23, borderWidth: 1.5, borderColor: C.borderLit,
     alignItems: 'center', justifyContent: 'center',
   },
   arrowDown: { borderColor: C.greenBright },
-  arrowGlyph: { color: C.muted, fontSize: 22, lineHeight: 24, fontFamily: 'Archivo_700Bold', marginTop: -2 },
+  arrowGlyph: { color: C.ink, fontSize: 28, lineHeight: 30, fontFamily: 'Archivo_700Bold', marginTop: -3 },
 
   /* Mini bracket */
   mini: { alignSelf: 'center' },
@@ -274,14 +275,16 @@ const s = StyleSheet.create({
   colW: { width: PILL, height: COL_H, justifyContent: 'center' },
   braces: { width: BRACE, gap: 12 },
   bracesF: { height: COL_H, justifyContent: 'center' },
+  /* The feeder lines: the site's --border-strong, which on this darker
+     strip needs the lifted green-grey to be seen at all. */
   brace: {
-    width: 10, borderWidth: 1, borderLeftWidth: 0, borderColor: C.border,
+    width: 10, borderWidth: 1.5, borderLeftWidth: 0, borderColor: C.borderLit,
     borderTopRightRadius: 6, borderBottomRightRadius: 6,
   },
-  braceStub: { position: 'absolute', right: -8, top: '50%', width: 8, borderTopWidth: 1, borderColor: C.border },
+  braceStub: { position: 'absolute', right: -8, top: '50%', width: 8, borderTopWidth: 1.5, borderColor: C.borderLit },
   pill: {
     width: PILL, height: PILL_H, borderRadius: PILL_H / 2, paddingHorizontal: 6,
-    borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: C.borderOn, alignItems: 'center', justifyContent: 'center',
   },
   pillOn: { backgroundColor: C.green, borderColor: 'transparent' },
   pillChamp: { backgroundColor: '#2a2415', borderWidth: 1.5, borderColor: C.gold },
