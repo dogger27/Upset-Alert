@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react'
+import { useState, useMemo, useRef, useEffect, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useParams, useNavigate, useOutletContext } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -35,22 +35,27 @@ const worldLine = w => `${surname(w.final.winner)} def. ${surname(w.final.loser)
 
 /* One line of text that shrinks to its box rather than losing its tail:
    "Khachanov def. Shelton" beside two arrows on a phone has no room for an
-   ellipsis to mean anything. Measures the box, then the text, and sets the
-   size that fits, down to a floor. */
+   ellipsis to mean anything. It measures ITS OWN box — a grid cell on the
+   phone, a flex item on the desktop — and always at full size first, so a
+   flex item that has already shrunk to a smaller text cannot talk it down
+   further on the next pass. Layout effect: measured and set before paint. */
 function FitText({ text, className, maxPx, weight = 700, minPx = 11 }) {
   const ref = useRef(null)
   const [px, setPx] = useState(maxPx)
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = ref.current
     if (!el) return
     const fit = () => {
-      const avail = el.parentElement?.clientWidth ?? 0
+      el.style.fontSize = `${maxPx}px`
+      const avail = el.clientWidth
       const need = textWidth(text, maxPx, weight)
-      setPx(need > 0 && avail > 0 && need > avail ? Math.max(minPx, Math.floor(maxPx * avail / need * 100) / 100) : maxPx)
+      const next = need > 0 && avail > 0 && need > avail ? Math.max(minPx, Math.floor(maxPx * avail / need * 100) / 100) : maxPx
+      el.style.fontSize = `${next}px`
+      setPx(next)
     }
     fit()
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(fit) : null
-    ro?.observe(el.parentElement)
+    ro?.observe(el)
     return () => ro?.disconnect()
   }, [text, maxPx, weight, minPx])
   return <span ref={ref} className={className} style={{ fontSize: `${px}px` }}>{text}</span>

@@ -572,6 +572,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 .lt-whatif-hint { font-size: 0.9rem; color: var(--text-muted); }
 .lt-whatif-hint b { color: var(--text); font-weight: 700; }
 .lt-whatif-label {
+  display: block; min-width: 0; overflow: hidden;
   font-weight: 800; font-size: 1.15rem; letter-spacing: -0.01em; line-height: 1.15;
   color: var(--brand-text-strong); white-space: nowrap;
 }
@@ -655,12 +656,15 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   .lt-whatif {
     display: grid; align-items: center; column-gap: 0.5rem; row-gap: 0.55rem;
     grid-template-columns: auto minmax(0, 1fr) auto;
-    grid-template-areas: "switch switch rail" "prev label next" "bracket bracket bracket";
+    /* The rail spans the two right-hand columns: in a column of its own it
+       set that column's width, and the "next" arrow beneath it sat mid-row
+       with the rail's width of dead space beside it. */
+    grid-template-areas: "switch rail rail" "prev label next" "bracket bracket bracket";
     padding: 0.7rem;
   }
   .lt-whatif-head, .lt-whatif-world { display: contents; }
   .lt-switch { grid-area: switch; justify-self: start; }
-  .lt-whatif-rail { grid-area: rail; margin: 0; }
+  .lt-whatif-rail { grid-area: rail; margin: 0; justify-self: end; }
   .lt-whatif-btn--prev { grid-area: prev; }
   .lt-whatif-btn--next { grid-area: next; }
   .lt-whatif-btn { width: 40px; height: 40px; }
