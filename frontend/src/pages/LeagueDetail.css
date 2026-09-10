@@ -556,21 +556,27 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 }
 
 /* Scrubber */
-/* WHAT IF — the strip at the foot of the panel. A switch with, beside it,
-   the invitation or the chosen world's name; then the world as a bracket
-   the size of a caption between two arrows, and a dot rail for the cycle.
-   Desktop is one row; a phone stacks the two halves, the arrows hugging the
-   bracket and the rail beneath. Every pill in the bracket is the same width
-   with its name centred, so the three columns read as columns. */
+/* WHAT IF — the strip at the foot of the panel. Five grid tracks: the
+   switch and the world's name on the left, the bracket between its arrows
+   in the middle, the dot rail on the right. The outer tracks are equal, so
+   the bracket sits on the panel's centre line and stays there whatever the
+   name beside the switch measures — stepping worlds changes the name, not
+   where the bracket is. A phone re-seats the same parts on rows. */
 .lt-whatif {
-  display: flex; align-items: center; gap: 1.25rem;
+  display: grid; align-items: center; column-gap: 0.85rem;
+  grid-template-columns: 1fr auto auto auto 1fr;
   margin-top: 0.75rem; padding: 0.7rem 0.9rem;
   border: 1px solid var(--border); border-radius: 12px;
   background: color-mix(in srgb, var(--surface) 70%, var(--bg));
 }
-.lt-whatif-head { display: flex; align-items: center; gap: 0.6rem; flex-shrink: 0; min-width: 0; }
+.lt-whatif-head { grid-column: 1; display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
+.lt-whatif-world { display: contents; }
+.lt-whatif-btn--prev { grid-column: 2; }
+.lt-whatif-bracket { grid-column: 3; display: flex; }
+.lt-whatif-btn--next { grid-column: 4; }
+.lt-whatif-rail { grid-column: 5; justify-self: end; display: flex; align-items: center; gap: 10px; }
 .lt-whatif-hint { font-size: 0.9rem; color: var(--text-muted); }
-.lt-whatif-hint b { color: var(--text); font-weight: 700; }
+.lt-whatif-hint b, .lt-whatif-tag { color: var(--text); font-weight: 700; font-size: 0.9rem; white-space: nowrap; }
 .lt-whatif-label {
   display: block; min-width: 0; overflow: hidden;
   font-weight: 800; font-size: 1.15rem; letter-spacing: -0.01em; line-height: 1.15;
@@ -590,8 +596,6 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 .lt-switch--on { background: var(--brand-active); border-color: transparent; }
 .lt-switch--on .lt-switch-knob { transform: translateX(16px); background: var(--on-brand); }
 .lt-switch:focus-visible { outline: 2px solid var(--brand-line); outline-offset: 2px; }
-.lt-whatif-world { display: flex; align-items: center; gap: 0.6rem; flex: 1; min-width: 0; }
-.lt-whatif-bracket { display: flex; }
 .lt-whatif-btn {
   display: inline-flex; align-items: center; justify-content: center;
   width: 30px; height: 30px; flex-shrink: 0; padding: 0;
@@ -600,7 +604,6 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 }
 .lt-whatif-btn:hover { color: var(--brand-text-strong); border-color: var(--brand-text-strong); }
 .lt-whatif-btn:focus-visible { outline: 2px solid var(--brand-line); outline-offset: 2px; }
-.lt-whatif-rail { display: flex; align-items: center; gap: 10px; margin-left: auto; }
 .lt-whatif-dots { display: flex; gap: 5px; align-items: center; }
 .lt-whatif-dots i { display: block; width: 6px; height: 6px; border-radius: 999px; background: var(--border-strong); }
 .lt-whatif-dots i.lt-whatif-dot--on { background: var(--brand-text-strong); }
@@ -647,37 +650,35 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 }
 
 @media (max-width: 640px) {
-  /* A PHONE RE-SEATS THE PARTS ON A GRID: the switch with the dot rail at
-     the far end of its row; then the arrows either side of the world's name,
-     which shrinks to fit rather than losing its tail; then the bracket on
-     its own full-width row. The two desktop groups dissolve (display:
-     contents) so their children can take grid areas directly; off, only
-     the first row exists. Arrows are 40px: a thumb target, not a mouse one. */
+  /* A PHONE RE-SEATS THE PARTS ON ROWS: the switch, its tag and the dot
+     rail; then the arrows either side of the world's name, which shrinks to
+     fit rather than losing its tail; then the bracket on its own full-width
+     row. The desktop groups dissolve (display: contents) so their children
+     can take grid areas directly. Arrows are 40px: a thumb target. */
   .lt-whatif {
-    display: grid; align-items: center; column-gap: 0.5rem; row-gap: 0.55rem;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    /* The rail spans the two right-hand columns: in a column of its own it
-       set that column's width, and the "next" arrow beneath it sat mid-row
-       with the rail's width of dead space beside it. */
-    grid-template-areas: "switch rail rail" "prev label next" "bracket bracket bracket";
+    column-gap: 0.5rem; row-gap: 0.55rem;
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
+    grid-template-areas: "switch tag rail rail" "prev label label next" "bracket bracket bracket bracket";
     padding: 0.7rem;
   }
-  .lt-whatif-head, .lt-whatif-world { display: contents; }
+  .lt-whatif-head { display: contents; }
   .lt-switch { grid-area: switch; justify-self: start; }
-  .lt-whatif-rail { grid-area: rail; margin: 0; justify-self: end; }
+  .lt-whatif-tag { grid-area: tag; }
+  .lt-whatif-rail { grid-area: rail; justify-self: end; margin: 0; }
   .lt-whatif-btn--prev { grid-area: prev; }
   .lt-whatif-btn--next { grid-area: next; }
   .lt-whatif-btn { width: 40px; height: 40px; }
   .lt-whatif-label { grid-area: label; text-align: center; min-width: 0; }
+  .lt-whatif-bracket { grid-area: bracket; justify-content: center; }
   /* Off: one short row, the switch and its line side by side. */
   .lt-whatif:not(.lt-whatif--on) {
     grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "switch label"; padding: 0.5rem 0.7rem;
   }
   .lt-whatif-hint { grid-area: label; text-align: left; margin: 0; }
-  .lt-whatif-bracket { grid-area: bracket; justify-content: center; }
   /* Measured at the phone's 11.2px, never scaled from the desktop figure. */
   .lt-mini { --pill: max(72px, var(--pill-fit-sm, 0px)); }
   .lt-mini-pill { font-size: 0.7rem; padding: 0 6px; }
+}
 }
 }
 }

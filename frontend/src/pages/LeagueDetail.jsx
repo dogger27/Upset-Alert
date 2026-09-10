@@ -1935,10 +1935,13 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                     <span className="lt-switch-knob" />
                   </button>
                   {world ? (
-                    <FitText className="lt-whatif-label" text={worldLine(world)} maxPx={rootFontPx() * 1.15} weight={800} />
+                    <>
+                      <span className="lt-whatif-tag">What if</span>
+                      <FitText className="lt-whatif-label" text={worldLine(world)} maxPx={rootFontPx() * 1.15} weight={800} />
+                    </>
                   ) : (
                     <span className="lt-whatif-hint">
-                      <b>What if</b> · {(WORDS[n] ?? String(n)).toLowerCase()} ways it can end
+                      <b>What if</b> · {WORDS[n] ?? String(n)} ways it can end
                     </span>
                   )}
                 </div>
