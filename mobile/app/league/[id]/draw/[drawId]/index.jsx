@@ -14,7 +14,7 @@
  *    the person behind them is fourth.
  */
 
-import { Link, Stack, useLocalSearchParams } from 'expo-router'
+import { Link, Stack, useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useState } from 'react'
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '../../../../../auth'
@@ -24,18 +24,24 @@ import { byFinish, competitionRanks, finishText } from '../../../../../scoring'
 import { StandingsFoot, useStandingsView } from '../../../../../standingsTools'
 import { othersPicksNote } from '../../../../../lock'
 import { C } from '../../../../../theme'
-import { PlayerName, TourBadge } from '../../../../../cards'
+import { PlayerName, TourSwitch } from '../../../../../cards'
 import { Card, CardLink, ErrorNote, Loading, Muted, Screen, Title } from '../../../../../ui'
 
 export default function Standings() {
   const { id, drawId } = useLocalSearchParams()
   const { me } = useAuth()
+  const router = useRouter()
 
   const league = useApi(`league:${id}`, () => getLeague(id))
   const draws = useApi(`league:${id}:tournaments`, () => getLeagueTournaments(id))
   const scores = useApi(`scores:${id}:${drawId}`, () => getRoundScores(id, drawId))
 
   const t = draws.data?.find(x => String(x.tournament?.id) === String(drawId))?.tournament
+  /* The two halves of one event, as on the site: a shared tournament_id, or
+     name and year where the API has none. */
+  const siblings = (draws.data || []).map(x => x.tournament).filter(x => x && t && (
+    t.tournament_id != null ? x.tournament_id === t.tournament_id
+      : x.name === t.name && x.year === t.year))
   const view = useStandingsView(scores.data, t)
   const entries = view.entries
   const ranks = competitionRanks(entries)
@@ -78,8 +84,12 @@ export default function Standings() {
     <>
       {/* The tour pill beside the title, as the site's popup puts ATP / WTA
           beside the draw name: which draw this is, at a glance. */}
+      {/* THE PAIR, AS A SWITCH — see the global standings screen. */}
       <Stack.Screen options={{ title: t?.name || 'Standings',
-                               headerRight: () => <TourBadge gender={t?.gender} /> }} />
+                               headerRight: () => (
+                                 <TourSwitch draws={siblings} currentId={t?.id}
+                                             onPick={d => router.replace(`/league/${id}/draw/${d.id}`)} />
+                               ) }} />
       {/* THE FOOT IS PINNED. The table scrolls in a bounded box and the
           timeline and What if sit beneath it, always on screen — a control
           for the table should not be somewhere past the table's end. The

@@ -8,7 +8,7 @@
  * order is kept (its tiebreak is lexicographic over the round vector), and
  * ties share a rank with the next rank skipped.
  */
-import { Stack, useLocalSearchParams } from 'expo-router'
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useState } from 'react'
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '../../auth'
@@ -18,17 +18,23 @@ import { byFinish, competitionRanks, finishText } from '../../scoring'
 import { StandingsFoot, useStandingsView } from '../../standingsTools'
 import { othersPicksNote } from '../../lock'
 import { C } from '../../theme'
-import { PlayerName, TourBadge } from '../../cards'
+import { PlayerName, TourSwitch } from '../../cards'
 import { Card, CardLink, ErrorNote, Loading, Muted, Screen, Title } from '../../ui'
 
 export default function GlobalStandings() {
   const { id } = useLocalSearchParams()
   const { me } = useAuth()
+  const router = useRouter()
   const all = useApi('tournaments', listTournaments)
   /* The round-scores payload, not /standings: same rows, plus the match
      timeline and the what-if worlds the foot of the screen needs. */
   const standings = useApi(`gscores:${id}`, () => getGlobalRoundScores(id))
   const t = (all.data || []).find(x => String(x.id) === String(id))
+  /* The two halves of one event: the draws sharing a tournament_id, or the
+     name and year where the API has none — the site's own rule. */
+  const siblings = (all.data || []).filter(x => t && (
+    t.tournament_id != null ? x.tournament_id === t.tournament_id
+      : x.name === t.name && x.year === t.year))
   const view = useStandingsView(standings.data, t)
   const entries = view.entries
   const ranks = competitionRanks(entries)
@@ -71,8 +77,14 @@ export default function GlobalStandings() {
     <>
       {/* The tour pill beside the title, as the site's popup puts ATP / WTA
           beside the draw name: which draw this is, at a glance. */}
+      {/* THE PAIR, AS A SWITCH: a Slam is two draws under one name, and the
+          reader looking at one usually wants the other next. Replace, not
+          push, so flipping tours does not stack history. */}
       <Stack.Screen options={{ title: t?.name ? `${t.name} · Global` : 'Global standings',
-                               headerRight: () => <TourBadge gender={t?.gender} /> }} />
+                               headerRight: () => (
+                                 <TourSwitch draws={siblings} currentId={t?.id}
+                                             onPick={d => router.replace(`/standings/${d.id}`)} />
+                               ) }} />
       {/* THE FOOT IS PINNED. The table scrolls in a bounded box and the
           timeline and What if sit beneath it, always on screen — a control
           for the table should not be somewhere past the table's end. The
