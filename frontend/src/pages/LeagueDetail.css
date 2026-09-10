@@ -994,7 +994,14 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   --hdr-track-h: 40px;   /* 37.7px of two-line header, plus headroom */
   min-height: calc(var(--hdr-track-h) + 0.6rem);
   margin-bottom: 0.2rem;
-  padding: 0.3rem 0;
+  /* THE ROWS' SCROLLBAR, RESERVED, on the right. The rows scroll in their
+     own box and this header sits outside it, so where a scrollbar takes real
+     width the header laid out wider than every row and the round labels
+     drifted right of their bars (owner, 2026-09-10). --sbw is measured off
+     the scrolling element in JS — it is 0 where scrollbars overlay — and it
+     lives in this shorthand rather than a rule of its own, which the
+     shorthand would only have reset. */
+  padding: 0.3rem var(--sbw, 0px) 0.3rem 0;
   border-top: 1px solid var(--border-strong);
   border-bottom: 1px solid var(--border-strong);
 }
