@@ -341,10 +341,11 @@ function CompactRow({ t, done }) {
      a reader can act on before it does — the date range says nothing they
      need yet. Last week: the order of play still matters (results), so it
      keeps its link; the row itself opens the draw. */
-  const rel = !done ? [
-    t.draw_release_direct && `Draw ${fmtShort(t.draw_release_direct)}`,
-    t.draw_release_qualifiers && `Qual ${fmtShort(t.draw_release_qualifiers)}`,
-  ].filter(Boolean).join(' · ') : ''
+  /* One date, in the reader's terms: when picks OPEN, which is the main
+     draw's release. The qualifying draw's date stands in only when the main
+     draw has none yet. "Draw · Qual" was two facts where one is wanted. */
+  const opens = !done ? (t.draw_release_direct || t.draw_release_qualifiers) : null
+  const rel = opens ? `Opens ${fmtShort(opens)}` : ''
   const oop = done ? oopHref(t) : null
   const body = (
     <>
