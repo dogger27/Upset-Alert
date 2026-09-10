@@ -15,8 +15,8 @@
  */
 
 import { Link, Stack, useLocalSearchParams } from 'expo-router'
-import { useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { useCallback, useState } from 'react'
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '../../../../../auth'
 import { getLeague, getLeagueTournaments, getRoundScores } from '../../../../../api'
 import { useApi } from '../../../../../useApi'
@@ -46,6 +46,12 @@ export default function Standings() {
      this" with everyone's real standing still beside their name. Ties keep
      the standings order. */
   const [sortKey, setSortKey] = useState('total')
+  /* The spinner is the user's pull, nothing else (Screen's rule). */
+  const [pulling, setPulling] = useState(false)
+  const pull = useCallback(async () => {
+    setPulling(true)
+    try { await scores.refetch?.() } finally { setPulling(false) }
+  }, [scores])
   const rankOf = new Map(entries.map((e, i) => [e.user_id, ranks[i]]))
   const order = new Map(entries.map((e, i) => [e.user_id, i]))
   const rows = sortKey === 'total' ? entries
@@ -74,7 +80,11 @@ export default function Standings() {
           beside the draw name: which draw this is, at a glance. */}
       <Stack.Screen options={{ title: t?.name || 'Standings',
                                headerRight: () => <TourBadge gender={t?.gender} /> }} />
-      <Screen onRefresh={scores.refetch}>
+      {/* THE FOOT IS PINNED. The table scrolls in a bounded box and the
+          timeline and What if sit beneath it, always on screen — a control
+          for the table should not be somewhere past the table's end. The
+          pull-to-refresh moves into the box, since that is what scrolls. */}
+      <Screen scroll={false}>
         {scores.loading && !scores.data ? <Loading /> : null}
         <ErrorNote error={scores.error} onRetry={scores.refetch} />
 
@@ -100,6 +110,8 @@ export default function Standings() {
         {/* The site's sidebar toast, as a line: why a row does not open yet. */}
         {entries.length > 0 && othersPicksNote(t) ? <Muted>{othersPicksNote(t)}</Muted> : null}
         {entries.length > 0 && (
+          <ScrollView style={s.scroller} contentContainerStyle={s.scrollerBody} showsVerticalScrollIndicator={false}
+                      refreshControl={<RefreshControl refreshing={pulling} onRefresh={pull} tintColor={C.muted} colors={[C.clay]} />}>
           <View style={s.table}>
             <View style={[s.row, s.head]}>
               {/* numberOfLines on every header cell, without exception: these
@@ -179,7 +191,7 @@ export default function Standings() {
                   {/* A place clinched is the one certainty in the column, so
                       it reads in ink like the sorted column does. */}
                   {finishAvail ? (
-                    <Text style={[s.fin, (sortKey === 'finish' || (e.best_rank != null && e.best_rank === e.worst_rank)) && s.on]}
+                    <Text style={[s.fin, (sortKey === 'finish' || (e.best_rank != null && e.best_rank === e.worst_rank)) && s.on]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}
                           accessibilityLabel={e.best_rank == null ? undefined
                             : e.best_rank === e.worst_rank ? `Finishes ${e.best_rank} whatever happens`
                             : `Can still finish anywhere from ${e.best_rank} to ${e.worst_rank}`}>
@@ -191,6 +203,7 @@ export default function Standings() {
               )
             })}
           </View>
+          </ScrollView>
         )}
         {entries.length > 0 ? <StandingsFoot view={view} /> : null}
       </Screen>
@@ -207,6 +220,9 @@ const s = StyleSheet.create({
   body: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 8 },
   bar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
   link: { color: C.clay, fontWeight: '700', paddingVertical: 6 },
+  /* The bounded box the table scrolls in; the foot sits under it. */
+  scroller: { flex: 1, minHeight: 0 },
+  scrollerBody: { paddingBottom: 4 },
   table: {
     borderWidth: 1, borderColor: C.border, borderRadius: 14,
     overflow: 'hidden', backgroundColor: C.card,

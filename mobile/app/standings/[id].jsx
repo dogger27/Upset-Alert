@@ -9,8 +9,8 @@
  * ties share a rank with the next rank skipped.
  */
 import { Stack, useLocalSearchParams } from 'expo-router'
-import { useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { useCallback, useState } from 'react'
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '../../auth'
 import { getGlobalRoundScores, listTournaments } from '../../api'
 import { useApi } from '../../useApi'
@@ -39,6 +39,12 @@ export default function GlobalStandings() {
      this" with everyone's real standing still beside their name. Ties keep
      the standings order. */
   const [sortKey, setSortKey] = useState('total')
+  /* The spinner is the user's pull, nothing else (Screen's rule). */
+  const [pulling, setPulling] = useState(false)
+  const pull = useCallback(async () => {
+    setPulling(true)
+    try { await standings.refetch?.() } finally { setPulling(false) }
+  }, [standings]) // eslint: the hook object is stable per screen
   const rankOf = new Map(entries.map((e, i) => [e.user_id, ranks[i]]))
   const order = new Map(entries.map((e, i) => [e.user_id, i]))
   const rows = sortKey === 'total' ? entries
@@ -67,7 +73,11 @@ export default function GlobalStandings() {
           beside the draw name: which draw this is, at a glance. */}
       <Stack.Screen options={{ title: t?.name ? `${t.name} · Global` : 'Global standings',
                                headerRight: () => <TourBadge gender={t?.gender} /> }} />
-      <Screen onRefresh={standings.refetch}>
+      {/* THE FOOT IS PINNED. The table scrolls in a bounded box and the
+          timeline and What if sit beneath it, always on screen — a control
+          for the table should not be somewhere past the table's end. The
+          pull-to-refresh moves into the box, since that is what scrolls. */}
+      <Screen scroll={false}>
         {standings.loading && !standings.data ? <Loading /> : null}
         <ErrorNote error={standings.error} onRetry={standings.refetch} />
         {standings.data && (
@@ -82,6 +92,8 @@ export default function GlobalStandings() {
         {/* The site's sidebar toast, as a line: why a row does not open yet. */}
         {entries.length > 0 && othersPicksNote(t) ? <Muted>{othersPicksNote(t)}</Muted> : null}
         {entries.length > 0 && (
+          <ScrollView style={s.scroller} contentContainerStyle={s.scrollerBody} showsVerticalScrollIndicator={false}
+                      refreshControl={<RefreshControl refreshing={pulling} onRefresh={pull} tintColor={C.muted} colors={[C.clay]} />}>
           <View style={s.table}>
             <View style={[s.row, s.head]}>
               <Text style={[s.rank, s.headText]} numberOfLines={1}>#</Text>
@@ -132,7 +144,7 @@ export default function GlobalStandings() {
                     {/* A place clinched is the one certainty in the column,
                         so it reads in ink like the sorted column does. */}
                     {finishAvail ? (
-                      <Text style={[s.fin, (sortKey === 'finish' || (e.best_rank != null && e.best_rank === e.worst_rank)) && s.on]}
+                      <Text style={[s.fin, (sortKey === 'finish' || (e.best_rank != null && e.best_rank === e.worst_rank)) && s.on]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}
                             accessibilityLabel={e.best_rank == null ? undefined
                               : e.best_rank === e.worst_rank ? `Finishes ${e.best_rank} whatever happens`
                               : `Can still finish anywhere from ${e.best_rank} to ${e.worst_rank}`}>
@@ -144,6 +156,7 @@ export default function GlobalStandings() {
               )
             })}
           </View>
+          </ScrollView>
         )}
         {entries.length > 0 ? <StandingsFoot view={view} /> : null}
       </Screen>
@@ -158,6 +171,9 @@ const s = StyleSheet.create({
      column further left than its header — the ✓ count sat under the "120"
      however it was aligned. One number, in both places. */
   body: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 8 },
+  /* The bounded box the table scrolls in; the foot sits under it. */
+  scroller: { flex: 1, minHeight: 0 },
+  scrollerBody: { paddingBottom: 4 },
   table: { borderWidth: 1, borderColor: C.border, borderRadius: 14, overflow: 'hidden', backgroundColor: C.card },
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 12, gap: 8 },
   head: { backgroundColor: C.raised, paddingVertical: 8 },
