@@ -17,7 +17,7 @@
 import { useMemo, useState } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { getPredictors } from './api'
+import { getLeagues, getPredictors } from './api'
 import { nameForms } from './names'
 import { shortRound } from './rounds'
 import { useApi } from './useApi'
@@ -25,10 +25,22 @@ import { C, R, S, T } from './theme'
 import { leading } from './fontScale'
 import { Loading } from './ui'
 
-export function PredictorsSheet({ visible, onClose, drawId, match, meId }) {
-  const key = visible && match ? `predictors:${drawId}:${match.id}` : null
-  const q = useApi(key, () => getPredictors(drawId, match.id))
+export function PredictorsSheet({ visible, onClose, drawId, match, meId, leagueId: initialLeagueId = null }) {
+  /* WHOSE PICKS: everyone in the draw (Global) or one of the reader's own
+     leagues. The site scopes this to the league its draw page has selected;
+     here the sheet carries a scope pill of its own, and the reader can move
+     it. null is Global. */
+  const [leagueId, setLeagueId] = useState(initialLeagueId)
+  const [choosing, setChoosing] = useState(false)
+  const key = visible && match ? `predictors:${drawId}:${match.id}:${leagueId ?? 'global'}` : null
+  const q = useApi(key, () => getPredictors(drawId, match.id, leagueId))
   const d = q.data
+  /* The reader's leagues, for the chooser: only the ones they belong to.
+     getLeagues lists public leagues too, and a stranger's league is not a
+     group of theirs. */
+  const leagues = useApi(visible ? 'leagues' : null, getLeagues)
+  const mine = useMemo(() => (leagues.data || []).filter(l => (l.members || []).some(m => m.id === meId)), [leagues.data, meId])
+  const scopeName = leagueId == null ? 'Global' : (d?.league_name ?? mine.find(l => l.id === leagueId)?.name ?? '…')
 
   const winner = match?.winner?.name
   const pending = !match?.winner
@@ -98,6 +110,32 @@ export function PredictorsSheet({ visible, onClose, drawId, match, meId }) {
               </>
             )}
           </Text>
+        ) : null}
+
+        {/* THE SCOPE PILL: which group these picks are from. Square-cornered,
+            unlike the round/status pills above, so it reads as a control and
+            not a label; a tap opens the reader's leagues beneath it. */}
+        <View style={s.scopeRow}>
+          <Pressable onPress={() => setChoosing(c => !c)} style={({ pressed }) => [s.scope, pressed && s.scopeDown]}
+                     accessibilityRole="button" accessibilityLabel={`Picks from ${scopeName}. Change group`}>
+            <Text style={s.scopeText} numberOfLines={1}>{scopeName}</Text>
+            <Ionicons name={choosing ? 'chevron-up' : 'chevron-down'} size={14} color={C.muted} />
+          </Pressable>
+        </View>
+        {choosing ? (
+          <View style={s.chooser}>
+            {[{ id: null, name: 'Global' }, ...mine].map(l => {
+              const on = (l.id ?? null) === (leagueId ?? null)
+              return (
+                <Pressable key={l.id ?? 'global'} onPress={() => { setLeagueId(l.id ?? null); setChoosing(false) }}
+                           style={({ pressed }) => [s.choice, on && s.choiceOn, pressed && s.scopeDown]}
+                           accessibilityRole="button" accessibilityState={{ selected: on }}>
+                  <Text style={[s.choiceText, on && s.choiceTextOn]} numberOfLines={1}>{l.name}</Text>
+                  {on ? <Ionicons name="checkmark" size={16} color={C.greenBright} /> : null}
+                </Pressable>
+              )
+            })}
+          </View>
         ) : null}
 
         {q.loading && !d ? <Loading /> : null}
@@ -348,6 +386,25 @@ const s = StyleSheet.create({
   },
   chipText: { ...T.tiny, color: C.inkBody },
   err: { ...T.small, color: C.bad, textAlign: 'center', paddingVertical: S.md },
+  scopeRow: { flexDirection: 'row', marginTop: S.sm, marginBottom: S.xs },
+  scope: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingVertical: 4, paddingHorizontal: 10, borderRadius: 3,
+    borderWidth: 1, borderColor: C.borderLit, backgroundColor: C.raised,
+  },
+  scopeDown: { borderColor: C.greenBright },
+  scopeText: { ...T.smallMed, color: C.ink },
+  chooser: {
+    borderWidth: 1, borderColor: C.borderOn, borderRadius: 3, backgroundColor: C.raised,
+    marginBottom: S.sm, overflow: 'hidden',
+  },
+  choice: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 10, paddingHorizontal: 12, borderTopWidth: 1, borderColor: C.border,
+  },
+  choiceOn: { backgroundColor: C.card },
+  choiceText: { ...T.body, color: C.ink },
+  choiceTextOn: { fontFamily: 'Archivo_700Bold', color: C.greenBright },
   /* A ruled footer: a hairline across the sheet above "Close", and less
      height than the button used to take on its own. */
   close: {
