@@ -68,7 +68,9 @@ export function Scrubber({ timeline, pos, onChange, numRounds }) {
   const at = pos ?? max
   const scrubbing = at < max
   const [width, setWidth] = useState(0)
-  const flash = scrubbing ? timeline[at - 1] : null
+  /* At 0 there is no last match: the board before a ball was struck. */
+  const last = at > 0 ? timeline[at - 1] : null
+  const flash = scrubbing ? last : null
   const fromX = x => {
     const usable = Math.max(1, width - THUMB)
     const v = Math.round(Math.max(0, Math.min(1, (x - THUMB / 2) / usable)) * max)
@@ -83,7 +85,7 @@ export function Scrubber({ timeline, pos, onChange, numRounds }) {
   const left = width ? (at / Math.max(1, max)) * (width - THUMB) : 0
   const label = !scrubbing
     ? `All ${max} match${max !== 1 ? 'es' : ''}`
-    : `${at} / ${max} matches (through ${roundTag(timeline[at - 1].round_number, numRounds)})`
+    : `${at} / ${max} matches${last ? ` (through ${roundTag(last.round_number, numRounds)})` : ''}`
   return (
     <View style={s.scrub}>
       {/* The answer to "what happened here" sits ABOVE the slider, so the
