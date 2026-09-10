@@ -71,7 +71,6 @@ def _oracle(ms, pts, num_rounds, picks_by_user):
     by = {(m.round_number, m.match_number): m for m in ms}
     best = {u: 10 ** 9 for u in picks_by_user}
     worst = {u: 0 for u in picks_by_user}
-    worst_place = {u: 0 for u in picks_by_user}
     for coin in itertools.product((0, 1), repeat=len(undecided)):
         winner = {m.id: m.winner_id for m in ms}
         for m, c in zip(undecided, coin):
@@ -85,13 +84,12 @@ def _oracle(ms, pts, num_rounds, picks_by_user):
             scores.append(UserScore(user_id=u, total_points=t, correct_count=sum(br.values()), correct_by_round=br))
         ranked = rank_users(scores, num_rounds)
         keys = {s.user_id: s.tiebreak_key(num_rounds) for s in ranked}
+        # The place the standings print: one plus the brackets strictly ahead.
         for u in picks_by_user:
             ahead = sum(1 for v in keys.values() if v < keys[u])
-            level = sum(1 for v in keys.values() if v <= keys[u])
             best[u] = min(best[u], 1 + ahead)
-            worst[u] = max(worst[u], level)
-            worst_place[u] = max(worst_place[u], 1 + ahead)
-    return {u: (best[u], worst[u], worst_place[u]) for u in picks_by_user}
+            worst[u] = max(worst[u], 1 + ahead)
+    return {u: (best[u], worst[u]) for u in picks_by_user}
 
 
 def _banked(ms, pts, picks_by_user):
@@ -132,7 +130,8 @@ def test_decided_draw_is_the_standings():
     pts = {1: 1, 2: 2}
     picks = {1: {m.id: m.winner_id for m in ms}, 2: {}, 3: {}}
     got = finish_range(ms, pts, 2, _banked(ms, pts, picks), picks)
-    assert got == {1: (1, 1, 1), 2: (2, 3, 2), 3: (2, 3, 2)}
+    # Two brackets level in second are both second, in every future.
+    assert got == {1: (1, 1), 2: (2, 2), 3: (2, 2)}
 
 
 def test_bye_and_walkover_sides():
@@ -145,10 +144,20 @@ def test_bye_and_walkover_sides():
     assert got == _oracle(ms, pts, 2, picks)
 
 
-def test_podium_locks_on_place_not_on_worst():
+def test_podium_locks_at_third():
     from app.services.scoring import podium_locked
-    # Tied third in the worst case: worst is 4 (three ahead or level) but the
-    # place held is still third, so the podium is locked.
-    assert podium_locked((2, 4, 3)) is True
-    assert podium_locked((2, 4, 4)) is False
+    assert podium_locked((2, 3)) is True
+    assert podium_locked((2, 4)) is False
     assert podium_locked(None) is None
+
+
+def test_tie_for_third_is_third():
+    # Three brackets, two of them identical: level in every future, and the
+    # standings print both as the same place — so the range says so too.
+    ms = _bracket(4, decided_r1=2, rng=random.Random(3))
+    pts = {1: 1, 2: 2}
+    same = _random_picks(ms, 4, random.Random(5))
+    picks = {1: same, 2: dict(same), 3: {m.id: m.winner_id for m in ms if m.winner_id}}
+    got = finish_range(ms, pts, 2, _banked(ms, pts, picks), picks)
+    assert got[1] == got[2]
+    assert got == _oracle(ms, pts, 2, picks)
