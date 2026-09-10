@@ -1176,6 +1176,15 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
   const [cmpDepth, setCmpDepth] = useState('finals')
   const [flashMatch, setFlashMatch] = useState(null)
   const flashKey = useRef(0)
+  /* THE HEADER HAS TO RESERVE THE ROWS' SCROLLBAR. The rows scroll in their
+     own box and the header sits outside it, so on any platform with a
+     classic scrollbar the header laid out 15px wider than every row and the
+     round columns drifted right of their bars (owner, 2026-09-10). The
+     width is not a constant — it is 0 where scrollbars overlay — so it is
+     measured off the real element, the way this view already measures the
+     name column. */
+  const rowsRef = useRef(null)
+  const [gutter, setGutter] = useState(0)
 
 
   /* scoresLoading: `entries` below is derived from rawData, so before the
@@ -1461,6 +1470,16 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
       : `Round Winner: ${names[0]}`
   })
 
+  useEffect(() => {
+    const el = rowsRef.current
+    if (!el) return
+    const measure = () => setGutter(el.offsetWidth - el.clientWidth)
+    measure()
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null
+    ro?.observe(el)
+    return () => ro?.disconnect()
+  }, [dispEntries.length, comparing])
+
   const lastMatch = effectiveScrubPos > 0 ? matchesTimeline[effectiveScrubPos - 1] : null
   const scrubLabel = effectiveScrubPos === 0
     ? 'Before first match'
@@ -1584,7 +1603,8 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
         </>
       ) : (
         <>
-          <div className={`lt-progress-row lt-progress-header-row${finishAvail ? ' lt-progress-row--finish' : ''}`} style={{ '--name-col-width': `${nameColWidth}px` }}>
+          <div className={`lt-progress-row lt-progress-header-row${finishAvail ? ' lt-progress-row--finish' : ''}`}
+               style={{ '--name-col-width': `${nameColWidth}px`, '--sbw': `${gutter}px` }}>
             {/* Both buttons first, then the rank, then the name — the two
                 controls belong together as one group of tools rather than
                 being split by a number. These spacers only hold the columns
@@ -1702,6 +1722,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
             )}
           </div>
           <div
+            ref={rowsRef}
             className="lt-progress-rows lt-progress-rows--race"
             style={{ height: `${Math.max(dispEntries.length * ROW_SLOT - 7, 0)}px`, '--name-col-width': `${nameColWidth}px` }}
           >
