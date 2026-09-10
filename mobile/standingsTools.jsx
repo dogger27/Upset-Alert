@@ -130,6 +130,9 @@ export function WhatIf({ worlds, tailMatches, numRounds, worldIdx, onChange }) {
                 trackColor={{ false: C.border, true: C.green }} thumbColor="#ffffff"
                 ios_backgroundColor={C.border} accessibilityLabel="What if" />
         {world ? (
+          <Text style={s.hintStrong}>What if</Text>
+        ) : null}
+        {world ? (
           <View style={s.rail2}>
             <View style={s.dots} accessibilityElementsHidden>
               {worlds.map((_, i) => <View key={i} style={[s.dot, i === worldIdx && s.dotOn]} />)}
@@ -250,7 +253,7 @@ const s = StyleSheet.create({
   whatifOn: {},
   head: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   hint: { ...T.small, color: C.muted, flex: 1 },
-  hintStrong: { color: C.ink, fontFamily: 'Archivo_700Bold' },
+  hintStrong: { ...T.small, color: C.ink, fontFamily: 'Archivo_700Bold' },
   rail2: { flexDirection: 'row', alignItems: 'center', gap: 10, marginLeft: 'auto' },
   dots: { flexDirection: 'row', gap: 5, alignItems: 'center' },
   /* On the raised strip the hairline border vanishes; the lit one reads. */
