@@ -578,16 +578,24 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
    holds it vertically centred against the taller bracket beside it. */
 .lt-whatif-head {
   grid-column: 1; display: grid; align-items: center; min-width: 0;
-  grid-template-columns: auto auto minmax(0, 1fr);
+  /* The name's track is sized to the NAME, not stretched to the panel's
+     third: a 1fr track here made "centred in the column" mean "adrift to
+     the right of the text", which is what it looked like (owner,
+     2026-09-10). max-content takes the widest of the three things stacked
+     in it — counter, name, stepper — so all three share one centre line,
+     and the minmax lets it give way rather than overflow when the strip is
+     tight. */
+  grid-template-columns: auto auto minmax(0, max-content);
   column-gap: 0.6rem; row-gap: 0.4rem;
+  justify-items: center;
 }
-.lt-whatif-rail { grid-column: 3; grid-row: 1; justify-self: center; }
+.lt-whatif-rail { grid-column: 3; grid-row: 1; }
 .lt-whatif-tag { grid-column: 2; grid-row: 2; }
-.lt-whatif-label { grid-column: 3; grid-row: 2; }
+.lt-whatif-label { grid-column: 3; grid-row: 2; text-align: center; }
 .lt-switch { grid-column: 1; grid-row: 2; }
-.lt-whatif-hint { grid-column: 2 / -1; grid-row: 2; }
+.lt-whatif-hint { grid-column: 2 / -1; grid-row: 2; justify-self: start; }
 .lt-whatif-steps {
-  grid-column: 3; grid-row: 3; justify-self: center;
+  grid-column: 3; grid-row: 3;
   display: flex; align-items: center; gap: 0.5rem;
 }
 .lt-whatif-world { display: contents; }
@@ -683,7 +691,8 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
     padding: 0.7rem;
   }
   .lt-whatif-head, .lt-whatif-steps { display: contents; }
-  /* grid-area wins over the desktop stack's grid-column/grid-row. */
+  /* grid-area wins over the desktop stack's grid-column/grid-row; the
+     phone's own justify-self rules follow below. */
   .lt-switch { grid-area: switch; justify-self: start; }
   .lt-whatif-tag { grid-area: tag; }
   .lt-whatif-rail { grid-area: rail; justify-self: end; margin: 0; }
