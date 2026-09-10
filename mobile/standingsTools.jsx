@@ -34,12 +34,16 @@ export function useStandingsView(data, t) {
   const entries = useMemo(() => {
     const base = data?.entries ?? []
     if (world) return worldEntries(base, world, data?.world_predictions ?? {})
-    if (scrubbing) return scrubEntries(base, timeline, pos, data?.user_predictions ?? {})
+    if (scrubbing) return scrubEntries(base, timeline, pos, data?.user_predictions ?? {}, data?.finish_history ?? {})
     return base
   }, [data, world, scrubbing, timeline, pos])
+  const finishFrom = data?.finish_from ?? null
   return {
-    entries, world, scrubbing, finalPlayed: !!world,
+    entries, world, scrubbing, finalPlayed: !!world, finishFrom,
     pos, setPos: p => { setPosRaw(p); setWorldIdxRaw(null) },
+    /* Sorted by Finish, the slider stops where the column begins: a table
+       ordered by the range cannot sit at a position where it is dashes. */
+    clampToFinish: () => { if (pos != null && finishFrom != null && pos < finishFrom) setPosRaw(finishFrom >= timeline.length ? null : finishFrom) },
     worldIdx, setWorldIdx: i => { setWorldIdxRaw(i); setPosRaw(null) },
     timeline, worlds, tailMatches: data?.tail_matches ?? [], numRounds,
   }
@@ -47,11 +51,11 @@ export function useStandingsView(data, t) {
 
 /* The instruments under the table. The slider goes while a world is chosen:
    it rewinds the past, and a chosen future has none. */
-export function StandingsFoot({ view }) {
+export function StandingsFoot({ view, minPos = 0 }) {
   return (
     <>
       {!view.world && view.timeline.length > 0 ? (
-        <Scrubber timeline={view.timeline} pos={view.pos} onChange={view.setPos} numRounds={view.numRounds} />
+        <Scrubber timeline={view.timeline} pos={view.pos} onChange={view.setPos} numRounds={view.numRounds} min={minPos} />
       ) : null}
       {view.worlds && view.worlds.length > 0 ? (
         <WhatIf worlds={view.worlds} tailMatches={view.tailMatches} numRounds={view.numRounds}
@@ -63,8 +67,9 @@ export function StandingsFoot({ view }) {
 
 /* ── The match timeline ─────────────────────────────────────────────────── */
 
-export function Scrubber({ timeline, pos, onChange, numRounds }) {
+export function Scrubber({ timeline, pos, onChange, numRounds, min = 0 }) {
   const max = timeline.length
+  const lo = Math.min(min, max)
   const at = pos ?? max
   const scrubbing = at < max
   const [width, setWidth] = useState(0)
@@ -73,7 +78,7 @@ export function Scrubber({ timeline, pos, onChange, numRounds }) {
   const flash = scrubbing ? last : null
   const fromX = x => {
     const usable = Math.max(1, width - THUMB)
-    const v = Math.round(Math.max(0, Math.min(1, (x - THUMB / 2) / usable)) * max)
+    const v = lo + Math.round(Math.max(0, Math.min(1, (x - THUMB / 2) / usable)) * (max - lo))
     onChange(v >= max ? null : v)
   }
   /* A horizontal pan inside a vertical scroller: claim sideways moves early
@@ -82,7 +87,7 @@ export function Scrubber({ timeline, pos, onChange, numRounds }) {
   const pan = Gesture.Pan().runOnJS(true)
     .activeOffsetX([-4, 4]).failOffsetY([-10, 10])
     .onBegin(e => fromX(e.x)).onUpdate(e => fromX(e.x))
-  const left = width ? (at / Math.max(1, max)) * (width - THUMB) : 0
+  const left = width ? ((at - lo) / Math.max(1, max - lo)) * (width - THUMB) : 0
   const label = !scrubbing
     ? `All ${max} match${max !== 1 ? 'es' : ''}`
     : `${at} / ${max} matches${last ? ` (through ${roundTag(last.round_number, numRounds)})` : ''}`
@@ -99,7 +104,7 @@ export function Scrubber({ timeline, pos, onChange, numRounds }) {
       <GestureDetector gesture={pan}>
         <View style={s.track} onLayout={e => setWidth(e.nativeEvent.layout.width)} hitSlop={{ top: 10, bottom: 10 }}
               accessibilityRole="adjustable" accessibilityLabel="Match timeline"
-              accessibilityValue={{ min: 0, max, now: at }}>
+              accessibilityValue={{ min: lo, max, now: at }}>
           <View style={s.rail} />
           <View style={[s.fill, { width: left + THUMB / 2 }]} />
           <View style={[s.thumb, { left }]} />

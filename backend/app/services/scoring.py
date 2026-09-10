@@ -288,7 +288,7 @@ def finish_range(
 # range depends on, so a pick edited by an admin or a result reverted is a
 # miss, not a stale hit.
 _FINISH_CACHE: dict[tuple, Optional[dict[int, tuple[int, int]]]] = {}
-_FINISH_CACHE_MAX = 64
+_FINISH_CACHE_MAX = 512   # a history is a dozen entries per draw per result
 
 
 def finish_range_cached(draw_id: int, all_matches: list, pts_table: dict[int, int], num_rounds: int,
@@ -388,3 +388,75 @@ def enumerate_worlds(all_matches: list, pts_table: dict[int, int],
                       "loser": names_by_entry.get(last["loser_id"])},
         })
     return worlds
+
+
+# ---------------------------------------------------------------------------
+# Finish history — the range as it stood at every point of the timeline
+# ---------------------------------------------------------------------------
+
+def _snapshot(all_matches: list, decided: set) -> list:
+    """The draw as it stood when only `decided` (match ids) had results: every
+    other match loses its winner, and its players too unless they came from
+    a decided feeder — a later round's slots were blank at the time."""
+    from types import SimpleNamespace
+    by_slot = {(m.round_number, m.match_number): m for m in all_matches}
+    out = []
+    for m in all_matches:
+        if m.id in decided:
+            out.append(SimpleNamespace(id=m.id, round_number=m.round_number, match_number=m.match_number,
+                                       player1_id=m.player1_id, player2_id=m.player2_id,
+                                       winner_id=m.winner_id, is_bye=bool(m.is_bye)))
+            continue
+        def _side(pid, feeder_no):
+            if m.round_number == 1:
+                return pid
+            f = by_slot.get((m.round_number - 1, feeder_no))
+            return f.winner_id if (f is not None and f.id in decided) else None
+        out.append(SimpleNamespace(id=m.id, round_number=m.round_number, match_number=m.match_number,
+                                   player1_id=_side(m.player1_id, 2 * m.match_number - 1),
+                                   player2_id=_side(m.player2_id, 2 * m.match_number),
+                                   winner_id=None, is_bye=bool(m.is_bye)))
+    return out
+
+
+def finish_history(draw_id: int, all_matches: list, timeline_ids: list[int], pts_table: dict[int, int],
+                   num_rounds: int, picks: dict[int, dict[int, Optional[int]]]) -> tuple[Optional[int], dict]:
+    """{position: {user_id: (best, worst)}} for every timeline position from
+    the first at which the range is computable (FINISH_RANGE_MAX_UNDECIDED
+    matches left) through the present, and that first position. The slider
+    shows a snapshot; this is the Finish column of each snapshot. A dozen
+    enumerations at most, halving in size as the draw closes — about twice
+    the cost of the live one, and each cached like it."""
+    byes = {m.id for m in all_matches if m.is_bye}
+    contests = sum(1 for m in all_matches if not m.is_bye)
+    first = max(1, contests - FINISH_RANGE_MAX_UNDECIDED)
+    if len(timeline_ids) < first or not picks:
+        return None, {}
+    by_id = {m.id: m for m in all_matches}
+    out: dict = {}
+    for p in range(first, len(timeline_ids) + 1):
+        decided = byes | set(timeline_ids[:p])
+        snap = _snapshot(all_matches, decided)
+        banked = {}
+        for uid, pk in picks.items():
+            total, by_round = 0.0, {}
+            for mid in timeline_ids[:p]:
+                m = by_id.get(mid)
+                if m is not None and pk.get(mid) == m.winner_id:
+                    total += pts_table.get(m.round_number, 0)
+                    by_round[m.round_number] = by_round.get(m.round_number, 0) + 1
+            banked[uid] = UserScore(user_id=uid, total_points=total, correct_count=sum(by_round.values()),
+                                    correct_by_round=by_round)
+        rng = finish_range_cached(draw_id, snap, pts_table, num_rounds, banked, picks)
+        if rng:
+            out[p] = rng
+    return first, out
+
+
+async def finish_history_async(draw_id, all_matches, timeline_ids, pts_table, num_rounds, picks):
+    import asyncio
+    from types import SimpleNamespace
+    plain = [SimpleNamespace(id=m.id, round_number=m.round_number, match_number=m.match_number,
+                             player1_id=m.player1_id, player2_id=m.player2_id,
+                             winner_id=m.winner_id, is_bye=bool(m.is_bye)) for m in all_matches]
+    return await asyncio.to_thread(finish_history, draw_id, plain, list(timeline_ids), pts_table, num_rounds, picks)

@@ -24,7 +24,7 @@ from app.schemas.league import (
     CashPoolIn, CashPoolOut,
 )
 from app.schemas.tournament import TournamentOut
-from app.services.scoring import UserScore, enumerate_worlds, finish_range_async, podium_locked, rank_users, score_user
+from app.services.scoring import UserScore, enumerate_worlds, finish_history_async, finish_range_async, podium_locked, rank_users, score_user
 from app.services.scoring import potential_points, _points_table as _pts_table_for
 from app.services.upsets import has_upset_pick
 
@@ -861,9 +861,18 @@ async def round_scores(
          for m in completed_matches],
         key=lambda x: (x["completed_at"] is not None, x["completed_at"] or "", x["id"])
     )
+    # THE FINISH COLUMN OF EVERY SNAPSHOT the slider can show, from the first
+    # position it is computable at. Keyed by position; the client reads the
+    # one under the thumb, and prints a dash before `finish_from`.
+    finish_from, finish_hist = await finish_history_async(
+        tournament_id, all_matches, [m["id"] for m in timeline], pts_table, tournament.num_rounds or 7, picks_map)
+    finish_history = {str(p): {str(u): [b, w] for u, (b, w) in r.items()} for p, r in finish_hist.items()}
+
     return {
         "entries": entries,
         "finish_range_available": ranges is not None,
+        "finish_from": finish_from,
+        "finish_history": finish_history,
         # A cash pool on this draw: the standings mark a locked podium as
         # money as well as a medal.
         "cash_pool": visible is not None,
