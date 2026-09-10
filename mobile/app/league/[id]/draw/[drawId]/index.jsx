@@ -23,7 +23,7 @@ import { useApi } from '../../../../../useApi'
 import { byFinish, competitionRanks, finishText } from '../../../../../scoring'
 import { othersPicksNote } from '../../../../../lock'
 import { C } from '../../../../../theme'
-import { PlayerName } from '../../../../../cards'
+import { PlayerName, TourBadge } from '../../../../../cards'
 import { Card, CardLink, ErrorNote, Loading, Muted, Screen, Title } from '../../../../../ui'
 
 export default function Standings() {
@@ -68,7 +68,10 @@ export default function Standings() {
 
   return (
     <>
-      <Stack.Screen options={{ title: t?.name || 'Standings' }} />
+      {/* The tour pill beside the title, as the site's popup puts ATP / WTA
+          beside the draw name: which draw this is, at a glance. */}
+      <Stack.Screen options={{ title: t?.name || 'Standings',
+                               headerRight: () => <TourBadge gender={t?.gender} /> }} />
       <Screen onRefresh={scores.refetch}>
         {scores.loading && !scores.data ? <Loading /> : null}
         <ErrorNote error={scores.error} onRetry={scores.refetch} />
