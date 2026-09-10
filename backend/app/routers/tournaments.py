@@ -1231,6 +1231,16 @@ async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get
         str(uid): {str(k): v for k, v in picks.items() if k in world_ids}
         for uid, picks in picks_map.items()
     } if worlds else {}
+    # The last two rounds as they stand — who is in each semi, who has won —
+    # for the mini bracket beside the world stepper.
+    nr = tournament.num_rounds or 7
+    tail_matches = sorted(
+        ({"match_id": m.id, "round_number": m.round_number, "match_number": m.match_number,
+          "player1_id": m.player1_id, "player1": names_by_entry.get(m.player1_id),
+          "player2_id": m.player2_id, "player2": names_by_entry.get(m.player2_id),
+          "winner_id": m.winner_id}
+         for m in all_matches if m.round_number >= nr - 1 and not m.is_bye),
+        key=lambda x: (x["round_number"], x["match_number"])) if worlds else None
 
     entries.sort(key=lambda x: (-x["total"],) + tuple(-rp for rp in reversed(x["round_points"])))
     rounds_with_matches = sorted({m.round_number for m in completed_matches})
@@ -1278,6 +1288,7 @@ async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get
         "finish_range_available": ranges is not None,
         "cash_pool": False,
         "worlds": worlds,
+        "tail_matches": tail_matches,
         "world_predictions": world_predictions if picks_visible else {},
         "completed_matches_count": len(completed_matches),
         "rounds_with_matches": rounds_with_matches,
