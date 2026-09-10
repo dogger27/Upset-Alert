@@ -556,72 +556,73 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 }
 
 /* Scrubber */
-/* WHAT IF — the strip at the foot of the panel. One bordered row a step
-   darker than the panel: the switch (the panel's own tab pills), a hairline,
-   then the chosen world drawn as a bracket the size of a caption between
-   two arrows, and its name on the right with a dot rail for the cycle. On a
-   phone the same parts stack: switch, bracket, then the arrows flanking the
-   name — so a thumb never has to reach for a 30px arrow beside a bracket. */
+/* WHAT IF — the strip at the foot of the panel. A switch with, beside it,
+   the invitation or the chosen world's name; then the world as a bracket
+   the size of a caption between two arrows, and a dot rail for the cycle.
+   Desktop is one row; a phone stacks the two halves, the arrows hugging the
+   bracket and the rail beneath. Every pill in the bracket is the same width
+   with its name centred, so the three columns read as columns. */
 .lt-whatif {
   display: flex; align-items: center; gap: 1.25rem;
-  margin-top: 0.85rem; padding: 0.85rem 1rem;
+  margin-top: 0.75rem; padding: 0.7rem 0.9rem;
   border: 1px solid var(--border); border-radius: 12px;
   background: color-mix(in srgb, var(--surface) 70%, var(--bg));
 }
-.lt-whatif-switch { display: flex; gap: 6px; flex-shrink: 0; }
-.lt-whatif-rule { width: 1px; align-self: stretch; background: var(--border); flex-shrink: 0; }
+.lt-whatif-head { display: flex; align-items: center; gap: 0.6rem; flex-shrink: 0; min-width: 0; }
 .lt-whatif-hint { font-size: 0.9rem; color: var(--text-muted); }
-.lt-whatif-world {
-  display: grid; flex: 1; min-width: 0; align-items: center;
-  grid-template-columns: auto auto auto 1fr; column-gap: 0.85rem;
-  grid-template-areas: "prev bracket next name";
+.lt-whatif-hint b { color: var(--text); font-weight: 700; }
+.lt-whatif-label {
+  font-weight: 800; font-size: 1.15rem; letter-spacing: -0.01em; line-height: 1.15;
+  color: var(--brand-text-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.lt-whatif-prev { grid-area: prev; display: flex; }
-.lt-whatif-next { grid-area: next; display: flex; }
-.lt-whatif-bracket { grid-area: bracket; display: flex; justify-content: center; }
-.lt-whatif-name { grid-area: name; display: flex; flex-direction: column; align-items: flex-end; gap: 5px; min-width: 0; }
+/* The switch: a 38×22 track, a 16px knob that slides 16px. Same green as the
+   active tab, so on/off reads with the rest of the panel's controls. */
+.lt-switch {
+  position: relative; width: 38px; height: 22px; flex-shrink: 0; padding: 0;
+  border-radius: 999px; border: 1px solid var(--border-strong); background: transparent;
+  cursor: pointer; transition: background 0.15s, border-color 0.15s;
+}
+.lt-switch-knob {
+  position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--text-muted); transition: transform 0.15s, background 0.15s;
+}
+.lt-switch--on { background: var(--brand-active); border-color: transparent; }
+.lt-switch--on .lt-switch-knob { transform: translateX(16px); background: var(--on-brand); }
+.lt-switch:focus-visible { outline: 2px solid var(--brand-line); outline-offset: 2px; }
+.lt-whatif-world { display: flex; align-items: center; gap: 0.6rem; flex: 1; min-width: 0; }
+.lt-whatif-bracket { display: flex; }
 .lt-whatif-btn {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 34px; height: 34px; flex-shrink: 0; padding: 0;
+  width: 30px; height: 30px; flex-shrink: 0; padding: 0;
   background: transparent; border: 1px solid var(--border-strong); border-radius: 999px;
-  color: var(--text-muted); cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
+  color: var(--text-muted); cursor: pointer; transition: color 0.15s, border-color 0.15s;
 }
 .lt-whatif-btn:hover { color: var(--brand-text-strong); border-color: var(--brand-text-strong); }
 .lt-whatif-btn:focus-visible { outline: 2px solid var(--brand-line); outline-offset: 2px; }
-.lt-whatif-eyebrow {
-  font-family: var(--font-display); font-weight: 700; font-size: 0.75rem;
-  letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted);
-}
-.lt-whatif-label {
-  font-weight: 800; font-size: 1.25rem; letter-spacing: -0.01em; line-height: 1.15;
-  color: var(--brand-text-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
-}
-.lt-whatif-rail { display: flex; align-items: center; gap: 10px; }
+.lt-whatif-rail { display: flex; align-items: center; gap: 10px; margin-left: auto; }
 .lt-whatif-dots { display: flex; gap: 5px; align-items: center; }
 .lt-whatif-dots i { display: block; width: 6px; height: 6px; border-radius: 999px; background: var(--border-strong); }
 .lt-whatif-dots i.lt-whatif-dot--on { background: var(--brand-text-strong); }
 .lt-whatif-count { font-family: var(--font-mono); font-weight: 600; font-size: 0.75rem; color: var(--text-muted); }
 
-/* THE MINI BRACKET. Semis, final, winner in three columns of surname
-   pills, joined by braces — a right-opening bracket shape with a stub to
-   the next column — so it reads as a draw, not a list. 22px pills, 4px
-   inside a pair, 12px between pairs; the braces are sized to those. The
-   winner of each match is the lit pill; the champion wears the podium's
-   gold, the same gold as a locked name in the table above. */
-.lt-mini { display: flex; flex-direction: column; }
+/* THE MINI BRACKET. Semis, final, winner: three columns of equal-width
+   surname pills joined by braces — a right-opening bracket with a stub to
+   the next column — so it reads as a draw. 22px pills, 4px inside a pair,
+   12px between pairs; the braces are sized to those. The winner of each
+   match is the lit pill; the champion wears the podium's gold. */
+.lt-mini { --pill: max(88px, var(--pill-fit, 0px)); display: flex; flex-direction: column; }
 .lt-mini-heads {
-  display: grid; grid-template-columns: 96px 18px 84px 18px 72px; margin-bottom: 6px;
+  display: grid; grid-template-columns: var(--pill) 18px var(--pill) 18px var(--pill); margin-bottom: 4px;
   font-family: var(--font-display); font-weight: 700; font-size: 0.7rem; letter-spacing: 0.12em; color: var(--text-muted);
+  text-align: center;
 }
-.lt-mini-heads > span:first-child { text-align: right; padding-right: 8px; }
 .lt-mini-head--w { color: var(--gold-ink); }
 .lt-mini-rows { display: flex; align-items: center; }
-.lt-mini-col { display: flex; flex-direction: column; }
-.lt-mini-col--sf { width: 96px; align-items: flex-end; gap: 12px; padding-right: 8px; box-sizing: border-box; }
-.lt-mini-pair { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
-.lt-mini-col--f { width: 84px; height: 108px; justify-content: space-between; padding: 13px 0; box-sizing: border-box; align-items: flex-start; }
-.lt-mini-col--w { width: 72px; height: 108px; justify-content: center; }
+.lt-mini-col { display: flex; flex-direction: column; width: var(--pill); }
+.lt-mini-col--sf { gap: 12px; }
+.lt-mini-pair { display: flex; flex-direction: column; gap: 4px; }
+.lt-mini-col--f { height: 108px; justify-content: space-between; padding: 13px 0; box-sizing: border-box; }
+.lt-mini-col--w { height: 108px; justify-content: center; }
 .lt-mini-braces { display: flex; flex-direction: column; width: 18px; gap: 12px; }
 .lt-mini-braces--f { height: 108px; justify-content: center; }
 .lt-mini-brace {
@@ -634,28 +635,41 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   border-top: 1px solid var(--border-strong);
 }
 .lt-mini-pill {
-  display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 999px;
-  font-size: 0.75rem; line-height: 1; white-space: nowrap; font-weight: 600;
-  border: 1px solid var(--border-strong); color: var(--text-muted);
+  display: block; width: var(--pill); height: 22px; box-sizing: border-box; padding: 0 8px; border-radius: 999px;
+  font-size: 0.75rem; line-height: 20px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-weight: 600; border: 1px solid var(--border-strong); color: var(--text-muted);
 }
 .lt-mini-pill--on { background: var(--brand-active); border-color: transparent; color: var(--on-brand); font-weight: 700; }
 .lt-mini-pill--champ {
   background: color-mix(in srgb, var(--gold-ink) 14%, transparent);
-  border: 1.5px solid var(--gold-ink); color: var(--gold-ink); font-weight: 800;
+  border: 1.5px solid var(--gold-ink); color: var(--gold-ink); font-weight: 800; line-height: 19px;
 }
 
 @media (max-width: 640px) {
-  .lt-whatif { flex-direction: column; align-items: stretch; gap: 0.85rem; padding: 0.85rem; }
-  .lt-whatif-switch { justify-content: center; }
-  .lt-whatif-rule { display: none; }
-  .lt-whatif-hint { text-align: center; }
-  /* The bracket alone on its row; the arrows move down to flank the name. */
-  .lt-whatif-world {
-    grid-template-columns: auto 1fr auto; column-gap: 0.6rem; row-gap: 0.85rem;
-    grid-template-areas: "bracket bracket bracket" "prev name next";
+  /* A PHONE RE-SEATS THE PARTS ON A GRID: the switch, then the arrows
+     either side of the world's name on one row, the bracket on its own
+     full-width row (as wide as the longest surname needs), the dot rail
+     beneath. The two desktop groups dissolve (display: contents) so their
+     children can take grid areas directly; off, only the first row exists. */
+  .lt-whatif {
+    display: grid; align-items: center; column-gap: 0.5rem; row-gap: 0.55rem;
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
+    grid-template-areas: "switch prev label next" "bracket bracket bracket bracket" "rail rail rail rail";
+    padding: 0.7rem;
   }
-  .lt-whatif-name { align-items: center; }
-  .lt-whatif-label { font-size: 1.15rem; }
+  .lt-whatif-head, .lt-whatif-world { display: contents; }
+  .lt-switch { grid-area: switch; }
+  .lt-whatif-btn--prev { grid-area: prev; }
+  .lt-whatif-btn--next { grid-area: next; }
+  .lt-whatif-btn { width: 28px; height: 28px; }
+  .lt-whatif-label, .lt-whatif-hint { grid-area: label; text-align: center; }
+  .lt-whatif-label { font-size: 1.05rem; }
+  .lt-whatif-bracket { grid-area: bracket; justify-content: center; }
+  .lt-whatif-rail { grid-area: rail; justify-content: center; margin: 0; }
+  /* The measured fit was taken at 12px; the phone's pills are 11px. */
+  .lt-mini { --pill: max(72px, calc(var(--pill-fit, 0px) * 0.92)); }
+  .lt-mini-pill { font-size: 0.7rem; padding: 0 6px; }
+}
 }
 .lt-scrubber {
   display: flex; flex-direction: column; align-items: stretch; gap: 2px;

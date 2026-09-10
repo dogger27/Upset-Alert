@@ -1760,7 +1760,9 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
               matches that produced it; a bracket of predicted names has no
               such history to walk, so on this tab there is nothing for it to
               do and it goes. */}
-          {!comparing && effectiveMax > 0 && (
+          {/* NO SLIDER IN A WORLD: it rewinds the past, and a chosen future
+              has none to walk. It comes back with "as it stands". */}
+          {!comparing && effectiveMax > 0 && !world && (
             <div className="lt-scrubber">
               {/* THE ANSWER TO "WHAT HAPPENED HERE" SITS ABOVE THE SLIDER, not
                   below it. The scrubber is pinned to the foot of the panel, so
@@ -1824,12 +1826,11 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
               and named by its final. The dot rail is the cycle at a glance. */}
           {!comparing && worlds && worlds.length > 0 && (() => {
             const n = worlds.length
-            const left = worlds[0].results.length
             const WORDS = { 1: 'One', 2: 'Two', 3: 'Three', 4: 'Four', 8: 'Eight' }
             const step = d => setWorldIdx(i => ((i ?? 0) + d + n) % n)
             const enter = () => { setScrubPos(null); setFlashMatch(null); setWorldIdx(i => i ?? 0) }
             const Arrow = ({ d }) => (
-              <button type="button" className="lt-whatif-btn" onClick={() => step(d)} aria-label={d < 0 ? 'Previous world' : 'Next world'}>
+              <button type="button" className={`lt-whatif-btn lt-whatif-btn--${d < 0 ? 'prev' : 'next'}`} onClick={() => step(d)} aria-label={d < 0 ? 'Previous world' : 'Next world'}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points={d < 0 ? '15 18 9 12 15 6' : '9 18 15 12 9 6'} />
                 </svg>
@@ -1850,8 +1851,13 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
               const Pill = ({ id, state }) => (
                 <span className={`lt-mini-pill${state ? ` lt-mini-pill--${state}` : ''}`}>{surname(names[id])}</span>
               )
+              /* EVERY PILL THE SAME WIDTH, AND NO NAME EVER CUT: the width is
+                 the longest surname in the bracket, measured, with the
+                 column width as a floor — so "Auger-Aliassime" widens all
+                 three columns rather than losing its tail to an ellipsis. */
+              const fitPx = Math.ceil(Math.max(0, ...Object.values(names).map(nm => textWidth(surname(nm), 12, 700)))) + 18
               bracket = semis.length === 2 && (
-                <div className="lt-mini" aria-label="The bracket in this world">
+                <div className="lt-mini" aria-label="The bracket in this world" style={{ '--pill-fit': `${fitPx}px` }}>
                   <div className="lt-mini-heads"><span>SF</span><span /><span>F</span><span /><span className="lt-mini-head--w">W</span></div>
                   <div className="lt-mini-rows">
                     <div className="lt-mini-col lt-mini-col--sf">
@@ -1874,35 +1880,36 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
             }
             return (
               <div className={`lt-whatif${world ? ' lt-whatif--on' : ''}`}>
-                <div className="lt-whatif-switch" role="tablist" aria-label="Standings as they stand, or what if">
-                  <button type="button" role="tab" aria-selected={!world}
-                    className={`lt-tab${!world ? ' lt-tab--active' : ''}`}
-                    onClick={() => setWorldIdx(null)}>As it stands</button>
-                  <button type="button" role="tab" aria-selected={!!world}
-                    className={`lt-tab${world ? ' lt-tab--active' : ''}`}
-                    onClick={enter}>What if</button>
+                {/* ONE ROW SAYS WHICH TABLE THIS IS: a switch, and beside it
+                    either the invitation or the chosen world's name — the
+                    switch being on is what says "what if", so the name needs
+                    no eyebrow. */}
+                <div className="lt-whatif-head">
+                  <button type="button" role="switch" aria-checked={!!world} aria-label="What if"
+                    className={`lt-switch${world ? ' lt-switch--on' : ''}`}
+                    onClick={() => world ? setWorldIdx(null) : enter()}>
+                    <span className="lt-switch-knob" />
+                  </button>
+                  {world ? (
+                    <span className="lt-whatif-label">{worldLine(world)}</span>
+                  ) : (
+                    <span className="lt-whatif-hint">
+                      <b>What if</b> · {(WORDS[n] ?? String(n)).toLowerCase()} ways it can end
+                    </span>
+                  )}
                 </div>
-                <span className="lt-whatif-rule" aria-hidden="true" />
-                {world ? (
+                {world && (
                   <div className="lt-whatif-world">
-                    <span className="lt-whatif-prev"><Arrow d={-1} /></span>
+                    <Arrow d={-1} />
                     <div className="lt-whatif-bracket">{bracket}</div>
-                    <span className="lt-whatif-next"><Arrow d={1} /></span>
-                    <div className="lt-whatif-name">
-                      <span className="lt-whatif-eyebrow">If the final goes</span>
-                      <span className="lt-whatif-label">{worldLine(world)}</span>
-                      <span className="lt-whatif-rail">
-                        <span className="lt-whatif-dots" aria-hidden="true">
-                          {worlds.map((_, i) => <i key={i} className={i === worldIdx ? 'lt-whatif-dot--on' : undefined} />)}
-                        </span>
-                        <span className="lt-whatif-count">{worldIdx + 1} / {n}</span>
+                    <Arrow d={1} />
+                    <span className="lt-whatif-rail">
+                      <span className="lt-whatif-dots" aria-hidden="true">
+                        {worlds.map((_, i) => <i key={i} className={i === worldIdx ? 'lt-whatif-dot--on' : undefined} />)}
                       </span>
-                    </div>
+                      <span className="lt-whatif-count">{worldIdx + 1} / {n}</span>
+                    </span>
                   </div>
-                ) : (
-                  <span className="lt-whatif-hint">
-                    {WORDS[left] ?? left} match{left === 1 ? '' : 'es'} to play. {WORDS[n] ?? n} ways it can end.
-                  </span>
                 )}
               </div>
             )
