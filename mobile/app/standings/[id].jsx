@@ -12,9 +12,10 @@ import { Stack, useLocalSearchParams } from 'expo-router'
 import { useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '../../auth'
-import { getDrawStandings, listTournaments } from '../../api'
+import { getGlobalRoundScores, listTournaments } from '../../api'
 import { useApi } from '../../useApi'
 import { byFinish, competitionRanks, finishText } from '../../scoring'
+import { StandingsFoot, useStandingsView } from '../../standingsTools'
 import { othersPicksNote } from '../../lock'
 import { C } from '../../theme'
 import { PlayerName, TourBadge } from '../../cards'
@@ -24,14 +25,12 @@ export default function GlobalStandings() {
   const { id } = useLocalSearchParams()
   const { me } = useAuth()
   const all = useApi('tournaments', listTournaments)
-  const standings = useApi(`standings:${id}`, () => getDrawStandings(id))
+  /* The round-scores payload, not /standings: same rows, plus the match
+     timeline and the what-if worlds the foot of the screen needs. */
+  const standings = useApi(`gscores:${id}`, () => getGlobalRoundScores(id))
   const t = (all.data || []).find(x => String(x.id) === String(id))
-  // The league screen's shape, so competitionRanks reads the same field.
-  const entries = (standings.data || []).map(r => ({
-    user_id: r.user?.id, username: r.user?.username, full_name: r.user?.full_name,
-    correct_count: r.correct_count, total: r.total_points, max_points: r.max_points,
-    best_rank: r.best_rank ?? null, worst_rank: r.worst_rank ?? null, podium_locked: !!r.podium_locked,
-  }))
+  const view = useStandingsView(standings.data, t)
+  const entries = view.entries
   const ranks = competitionRanks(entries)
   /* WHICH NUMBER THE ROWS ARE SORTED BY: the score (the standings, and the
      default), the correct count, or the ceiling. A person's RANK never
@@ -119,7 +118,7 @@ export default function GlobalStandings() {
                   <Body href={opens ? { pathname: `/draw/${id}`, params: { user: e.user_id, name: e.username } } : undefined}
                         grow style={s.body}>
                     <Text style={s.rank}>
-                      {t?.status === 'completed' && rankOf.get(e.user_id) <= 3 ? ['🏆', '🥈', '🥉'][rankOf.get(e.user_id) - 1] : rankOf.get(e.user_id)}
+                      {(t?.status === 'completed' || view.finalPlayed) && rankOf.get(e.user_id) <= 3 ? ['🏆', '🥈', '🥉'][rankOf.get(e.user_id) - 1] : rankOf.get(e.user_id)}
                     </Text>
                     <View style={s.who}>
                       <PlayerName name={e.podium_locked && cashPool ? `${e.username} 💰` : e.username} shrinkOnly
@@ -146,6 +145,7 @@ export default function GlobalStandings() {
             })}
           </View>
         )}
+        {entries.length > 0 ? <StandingsFoot view={view} /> : null}
       </Screen>
     </>
   )

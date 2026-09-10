@@ -152,6 +152,12 @@ export const shareLeagueByEmail = (leagueId, emails) =>
 export const getUserDrawHistory = (userId) => request(`/auth/users/${userId}/draw-history`)
 export const getRoundScores = (leagueId, tournamentId) =>
   request(`/leagues/${leagueId}/round-scores?tournament_id=${tournamentId}`)
+/* The same payload for the Global "league": every entrant, classic scoring,
+   plus the match timeline, the what-if worlds and the picks they need. The
+   global standings screen reads this now rather than /standings, so it can
+   scrub and play worlds like the league screen. */
+export const getGlobalRoundScores = (tournamentId) =>
+  request(`/tournaments/${tournamentId}/global-round-scores`)
 
 /* One draw's bracket, and this user's picks in it.
    DrawOut is { tournament, draw_entries[], matches[], lock_mode, draw_locked,
