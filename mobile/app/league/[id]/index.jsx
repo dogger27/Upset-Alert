@@ -38,7 +38,25 @@ export default function LeagueDraws() {
     }
     const byStart = (a, b) => (b.tournament?.start_date || '').localeCompare(a.tournament?.start_date || '')
     cur.sort(byStart); prev.sort(byStart)
-    return { current: cur, previous: prev }
+    /* ONE CARD PER EVENT, as the site does it: the two draws of a combined
+       tournament are its men's and women's halves, not two tournaments —
+       grouped on their shared tournament_id, or on name and year where the
+       API has none. Men first, so a pair always opens on the same side and
+       the badges never swap order between events. */
+    const events = list => {
+      const out = [], by = new Map()
+      for (const it of list) {
+        const t = it.tournament
+        const key = t.tournament_id ?? `${t.name}|${t.year}`
+        if (!by.has(key)) { const g = { key, items: [] }; by.set(key, g); out.push(g) }
+        by.get(key).items.push(it)
+      }
+      for (const g of out) {
+        g.items.sort((x, y) => (x.tournament.gender === 'M' ? 0 : 1) - (y.tournament.gender === 'M' ? 0 : 1))
+      }
+      return out
+    }
+    return { current: events(cur), previous: events(prev) }
   }, [draws.data])
   const [prevShown, setPrevShown] = useState(5)
   const [invite, setInvite] = useState(false)
@@ -116,19 +134,13 @@ export default function LeagueDraws() {
         {current.length > 0 && (
           <>
             <Eyebrow>Open / Active</Eyebrow>
-            {current.map(it => (
-              <DrawRow key={it.tournament.id} t={it.tournament}
-                       pickers={it.picker_count} leagueId={id} />
-            ))}
+            {current.map(g => <DrawRow key={g.key} items={g.items} leagueId={id} />)}
           </>
         )}
         {previous.length > 0 && (
           <>
             <Eyebrow>Previous ({previous.length})</Eyebrow>
-            {previous.slice(0, prevShown).map(it => (
-              <DrawRow key={it.tournament.id} t={it.tournament}
-                       pickers={it.picker_count} leagueId={id} />
-            ))}
+            {previous.slice(0, prevShown).map(g => <DrawRow key={g.key} items={g.items} leagueId={id} />)}
             {prevShown < previous.length && (
               <Pressable onPress={() => setPrevShown(n => n + 5)} style={s.more} hitSlop={8}>
                 <Text style={[T.smallMed, { color: C.greenLit }]}>
@@ -189,32 +201,64 @@ export default function LeagueDraws() {
   )
 }
 
-function DrawRow({ t, pickers, leagueId }) {
-  // Gender drives the accent because it is the fastest way to tell two halves
-  // of the same combined event apart, which is exactly the case the web app's
-  // combined cards exist for.
-  // 'F', not 'W' — the API's genders are 'M' and 'F'. This tested 'W', which is
-  // never true, so every stripe in the list rendered ATP blue including the WTA
-  // draws. The TourBadge beside it keys on the same field correctly, which is
-  // what made the disagreement visible at all.
-  const tint = t.gender === 'F' ? C.wta : C.atp
+/* The tier WITHOUT its tour, for a card that covers both: the men's draw
+   is "ATP 1000" and the women's "WTA 1000", and the shared fact is 1000.
+   The site's own rule, verbatim. */
+function tierLabel(category) {
+  const c = (category || '').toUpperCase()
+  if (c.includes('SLAM') || c.includes('GRAND')) return 'Grand Slam'
+  if (c.includes('1000')) return '1000'
+  if (c.includes('500')) return '500'
+  return '250'
+}
+
+function DrawRow({ items, leagueId }) {
+  const a = items[0].tournament
+  const b = items[1]?.tournament
+  const paired = !!b
+  /* Gender drives the accent because it is the fastest way to tell two halves
+     of the same combined event apart. A COMBINED card is both halves at once,
+     so its stripe is too — blue over pink, in the badges' own order.
+     'F', not 'W' — the API's genders are 'M' and 'F'. This tested 'W', which
+     is never true, so every stripe in the list rendered ATP blue including
+     the WTA draws. */
+  const tint = a.gender === 'F' ? C.wta : C.atp
+  const sizes = paired && b.draw_size !== a.draw_size
+    ? `${a.draw_size} / ${b.draw_size} draw` : `${a.draw_size} draw`
+  /* Pickers stay PER TOUR on a combined card: the same person often picks
+     both draws, so a sum would be a count of entries pretending to be a
+     count of people. */
+  const pickers = paired
+    ? `ATP ${items.find(x => x.tournament.gender === 'M')?.picker_count ?? 0} · WTA ${items.find(x => x.tournament.gender === 'F')?.picker_count ?? 0}`
+    : `${items[0].picker_count} ${items[0].picker_count === 1 ? 'picker' : 'pickers'}`
   return (
-    <CardLink href={`/league/${leagueId}/draw/${t.id}`} style={s.card}>
-      <View style={[s.stripe, { backgroundColor: tint }]} />
+    <CardLink href={`/league/${leagueId}/draw/${a.id}`} style={s.card}>
+      {paired ? (
+        <View style={s.stripe}>
+          <View style={[s.stripeHalf, { backgroundColor: C.atp }]} />
+          <View style={[s.stripeHalf, { backgroundColor: C.wta }]} />
+        </View>
+      ) : (
+        <View style={[s.stripe, { backgroundColor: tint }]} />
+      )}
       <View style={s.inner}>
         <View style={s.nameRow}>
-          <Text style={s.name} numberOfLines={2}>{t.name}</Text>
-          {/* Same reason as the dashboard: a combined event lists two draws
-              under one name, and the accent stripe alone does not say which
-              is which. */}
-          <TourBadge gender={t.gender} />
+          <Text style={s.name} numberOfLines={2}>{a.name}</Text>
+          {/* Both tours named on a combined card — the split stripe alone
+              does not say the event has two draws you can open. */}
+          {paired ? (
+            <View style={s.badges}>
+              <TourBadge gender="M" />
+              <TourBadge gender="F" />
+            </View>
+          ) : (
+            <TourBadge gender={a.gender} />
+          )}
         </View>
         <Text style={s.meta}>
-          {[t.category, t.surface, t.year].filter(Boolean).join(' · ')}
+          {[paired ? tierLabel(a.category) : a.category, a.surface, a.year].filter(Boolean).join(' · ')}
         </Text>
-        <Text style={s.meta}>
-          {t.draw_size} draw · {pickers} {pickers === 1 ? 'picker' : 'pickers'}
-        </Text>
+        <Text style={s.meta}>{sizes} · {pickers}</Text>
       </View>
       <Text style={s.chev}>›</Text>
     </CardLink>
@@ -222,6 +266,8 @@ function DrawRow({ t, pickers, leagueId }) {
 }
 
 const s = StyleSheet.create({
+  stripeHalf: { flex: 1 },
+  badges: { flexDirection: 'row', gap: 4 },
   tally: { backgroundColor: C.card, borderRadius: 14, borderWidth: 1, borderColor: C.border, overflow: 'hidden' },
   tRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, gap: 4 },
   tHead: { borderBottomWidth: 1, borderColor: C.border },

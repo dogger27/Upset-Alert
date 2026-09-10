@@ -9,7 +9,7 @@
  */
 
 import { useMemo, useState } from 'react'
-import { Image, StyleSheet, Text, View } from 'react-native'
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native'
 import { leading } from './fontScale.js'
 import { tierStamp } from './logos'
 import { flagEmoji } from './flags'
@@ -171,6 +171,11 @@ const u = StyleSheet.create({
   },
   // .dh-category: 0.65rem/700/uppercase, 0.06em tracking, radius 4, 2px 6px.
   tourBadge: { borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, alignSelf: 'flex-start' },
+  /* The pair, as one control: segments butted together in a rounded shell,
+     the live one filled with its tour's tint and the other outlined. */
+  tourSwitch: { flexDirection: 'row', borderRadius: R.pill, overflow: 'hidden', borderWidth: 1, borderColor: C.borderOn },
+  tourSeg: { paddingHorizontal: 8, paddingVertical: 3, alignItems: 'center', justifyContent: 'center' },
+  tourSegOff: { backgroundColor: 'transparent' },
   tourText: { fontFamily: 'Archivo_700Bold', fontSize: 10, lineHeight: leading(14), letterSpacing: 0.6 },
   /* The entry chip is CONTENT-WIDTH and therefore does NOT reuse `badge`.
      It was composed as [badge, entryChip] with width:undefined to cancel the
@@ -266,6 +271,43 @@ export function TourBadge({ gender, style }) {
   )
 }
 
+
+/* THE TWO HALVES OF ONE EVENT, as a switch.
+ *
+ * A Grand Slam is two draws under one name, and a reader looking at the men's
+ * standings usually wants the women's next. Where TourBadge states which
+ * draw this is, this offers the other one: the current tour reads as the
+ * badge does, the other as an outline waiting to be pressed.
+ *
+ * `draws` is the pair (either order); the switch sorts men first so it never
+ * swaps sides between events. With fewer than two it renders the plain badge,
+ * because there is nothing to switch to.
+ */
+export function TourSwitch({ draws, currentId, onPick }) {
+  const pair = [...(draws || [])]
+    .filter(d => d && TOUR[d.gender])
+    .sort((a, b) => (a.gender === 'M' ? 0 : 1) - (b.gender === 'M' ? 0 : 1))
+  if (pair.length < 2) {
+    const only = pair[0] ?? (draws || [])[0]
+    return <TourBadge gender={only?.gender} />
+  }
+  return (
+    <View style={u.tourSwitch}>
+      {pair.map(d => {
+        const t = TOUR[d.gender]
+        const on = d.id === currentId
+        return (
+          <Pressable key={d.id} onPress={on ? undefined : () => onPick?.(d)} hitSlop={6}
+                     accessibilityRole="button" accessibilityState={{ selected: on }}
+                     accessibilityLabel={`${t.label} draw`}
+                     style={[u.tourSeg, on ? { backgroundColor: t.bg } : u.tourSegOff]}>
+            <Text style={[u.tourText, { color: on ? t.fg : C.muted }]}>{t.label}</Text>
+          </Pressable>
+        )
+      })}
+    </View>
+  )
+}
 
 /* A country flag in a FIXED slot — or an empty box when there isn't one.
  *
