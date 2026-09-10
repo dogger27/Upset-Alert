@@ -1219,6 +1219,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
      futures (R32 complete). Its values ride on each entry from the server
      and survive the scrub, like Max: a replay has no future to range over. */
   const finishAvail = !!rawData?.finish_range_available
+  const cashPool = !!rawData?.cash_pool
 
   /* A PERSON'S RANK IS THEIR RANK, whatever the rows are sorted by.
      Stamped here, off the points order, so re-grouping the table by a pick
@@ -1620,9 +1621,17 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                   </svg>
                 </a>
                 <span className="lt-pos-num">{entry.standingsRank ?? rank + 1}.</span>
-                <span className={`lt-progress-name${entry.user_id === user?.id ? ' lt-progress-name--me' : ''}`}>
+                {/* A PODIUM LOCKED — third or better in every future, ties
+                    sharing a place — reads in gold, and carries the money
+                    when the draw runs a cash pool: that is what the place is
+                    worth. Never while scrubbing; a replay has no future. */}
+                <span className={`lt-progress-name${entry.user_id === user?.id ? ' lt-progress-name--me' : ''}${entry.podium_locked && !isScrubbing ? ' lt-progress-name--podium' : ''}`}
+                      title={entry.podium_locked && !isScrubbing ? 'Finishes on the podium whatever happens' : undefined}>
                   {finalPlayed && rank < 3 && <span className="lt-place-icon">{PLACE_ICONS[rank]}</span>}
                   <UserName className="lt-progress-name-text" user={{ username: entry.username, full_name: showRealName ? entry.full_name : null }} />
+                  {entry.podium_locked && !isScrubbing && cashPool && (
+                    <span className="lt-cash-lock" role="img" aria-label="in the money">💰</span>
+                  )}
                 </span>
                 {/* Correct picks, beside the points they earned. The two are
                     not the same fact: a round is worth more than the one

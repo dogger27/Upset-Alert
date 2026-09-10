@@ -63,6 +63,9 @@ class LeaderboardEntry(BaseModel):
     # matches (R32 complete): see scoring.FINISH_RANGE_MAX_UNDECIDED.
     best_rank: Optional[int] = None
     worst_rank: Optional[int] = None
+    # Third or better in every future, ties sharing a place. None before the
+    # finish range exists.
+    podium_locked: Optional[bool] = None
 
 
 class LeaderboardOut(BaseModel):

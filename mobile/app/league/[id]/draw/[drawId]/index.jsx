@@ -55,6 +55,7 @@ export default function Standings() {
      place. Before that there are too many futures and the column is not
      drawn — the site does the same. */
   const finishAvail = !!scores.data?.finish_range_available
+  const cashPool = !!scores.data?.cash_pool
 
   const sortHead = (key, label, style, extra, a11y) => (
     <Pressable onPress={() => setSortKey(key)} hitSlop={8} accessibilityRole="button"
@@ -159,7 +160,8 @@ export default function Standings() {
                       : rankOf.get(e.user_id)}
                   </Text>
                   <View style={s.who}>
-                    <PlayerName name={e.username} shrinkOnly style={[s.name, mine && s.nameMine]} />
+                    <PlayerName name={e.podium_locked && cashPool ? `${e.username} 💰` : e.username} shrinkOnly
+                                style={[s.name, mine && s.nameMine, e.podium_locked && s.namePodium]} />
                     {showReal && e.full_name ? (
                       <PlayerName name={e.full_name} style={s.real} />
                     ) : null}
@@ -219,6 +221,10 @@ const s = StyleSheet.create({
   who: { flex: 1, minWidth: 0 },
   name: { color: C.ink, fontWeight: '600' },
   nameMine: { color: C.clay, fontWeight: '800' },
+  /* A podium place locked — third or better in every future — in gold, and
+     with the money when the draw runs a cash pool. Beats the clay of "me":
+     the certainty is the news. */
+  namePodium: { color: C.gold, fontWeight: '800' },
   real: { color: C.muted, fontSize: 12 },
   /* Centred, like the site: a label fills its cell and a number does not.
      The header is a bare tick now, so the column is the score columns'

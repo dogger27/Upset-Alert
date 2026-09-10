@@ -18,7 +18,7 @@ from app.schemas.user import UserPublicOut
 from app.services.draw_changes import classify_change
 from app.services.rankings import assign_rankings
 from app.services.scraper import scrape_tournament, snap_to_monday
-from app.services.scoring import UserScore, _points_table, finish_range_async, rank_users
+from app.services.scoring import UserScore, _points_table, finish_range_async, podium_locked, rank_users
 from app.services.scoring import potential_points
 from app.services.upsets import has_upset_pick
 
@@ -1124,7 +1124,8 @@ async def global_standings(tournament_id: int, db: AsyncSession = Depends(get_db
                          correct_count=s.correct_count, max_points=max_map[s.user_id],
                          has_upset_pick=has_upset_map[s.user_id],
                          best_rank=ranges.get(s.user_id, (None, None))[0],
-                         worst_rank=ranges.get(s.user_id, (None, None))[1])
+                         worst_rank=ranges.get(s.user_id, (None, None))[1],
+                         podium_locked=podium_locked(ranges.get(s.user_id)))
         for i, s in enumerate(ranked)
     ]
 
@@ -1218,7 +1219,9 @@ async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get
     ranges = await finish_range_async(
         tournament_id, all_matches, pts_table, tournament.num_rounds or 7, banked, picks_map)
     for e in entries:
-        e["best_rank"], e["worst_rank"] = (ranges or {}).get(e["user_id"], (None, None))
+        rng = (ranges or {}).get(e["user_id"])
+        e["best_rank"], e["worst_rank"] = (rng[0], rng[1]) if rng else (None, None)
+        e["podium_locked"] = podium_locked(rng)
 
     entries.sort(key=lambda x: (-x["total"],) + tuple(-rp for rp in reversed(x["round_points"])))
     rounds_with_matches = sorted({m.round_number for m in completed_matches})
@@ -1264,6 +1267,7 @@ async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get
     return {
         "entries": entries,
         "finish_range_available": ranges is not None,
+        "cash_pool": False,
         "completed_matches_count": len(completed_matches),
         "rounds_with_matches": rounds_with_matches,
         "completed_round_nums": completed_round_nums,

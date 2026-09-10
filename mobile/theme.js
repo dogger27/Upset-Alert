@@ -39,6 +39,8 @@ export const C = {
   // The site's --brand-text-strong in DARK: its lightest legible green, for
   // something that has to read first. Lighter than greenLit on purpose.
   greenBright: '#7fd4a6',
+  // The site's dark --gold-ink: a name whose podium place is locked.
+  gold:        '#e0b34a',
   greenDeep: '#14342a',
 
   // The "ALERT!" clay. The brand's one warm note; spend it, do not spread it.

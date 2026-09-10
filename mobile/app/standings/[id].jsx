@@ -30,7 +30,7 @@ export default function GlobalStandings() {
   const entries = (standings.data || []).map(r => ({
     user_id: r.user?.id, username: r.user?.username, full_name: r.user?.full_name,
     correct_count: r.correct_count, total: r.total_points, max_points: r.max_points,
-    best_rank: r.best_rank ?? null, worst_rank: r.worst_rank ?? null,
+    best_rank: r.best_rank ?? null, worst_rank: r.worst_rank ?? null, podium_locked: !!r.podium_locked,
   }))
   const ranks = competitionRanks(entries)
   /* WHICH NUMBER THE ROWS ARE SORTED BY: the score (the standings, and the
@@ -51,6 +51,7 @@ export default function GlobalStandings() {
      place. Before that there are too many futures and the column is not
      drawn — the site does the same. */
   const finishAvail = entries.some(e => e.best_rank != null)
+  const cashPool = false
 
   const sortHead = (key, label, style, extra, a11y) => (
     <Pressable onPress={() => setSortKey(key)} hitSlop={8} accessibilityRole="button"
@@ -118,7 +119,8 @@ export default function GlobalStandings() {
                       {t?.status === 'completed' && rankOf.get(e.user_id) <= 3 ? ['🏆', '🥈', '🥉'][rankOf.get(e.user_id) - 1] : rankOf.get(e.user_id)}
                     </Text>
                     <View style={s.who}>
-                      <PlayerName name={e.username} shrinkOnly style={[s.name, mine && s.nameMine]} />
+                      <PlayerName name={e.podium_locked && cashPool ? `${e.username} 💰` : e.username} shrinkOnly
+                                style={[s.name, mine && s.nameMine, e.podium_locked && s.namePodium]} />
                     </View>
                     {/* The sorted column is the lit one: white and bold, the
                       other two muted. */}
@@ -167,6 +169,10 @@ const s = StyleSheet.create({
   who: { flex: 1, minWidth: 0 },
   name: { color: C.ink, fontWeight: '600' },
   nameMine: { color: C.clay, fontWeight: '800' },
+  /* A podium place locked — third or better in every future — in gold, and
+     with the money when the draw runs a cash pool. Beats the clay of "me":
+     the certainty is the news. */
+  namePodium: { color: C.gold, fontWeight: '800' },
   /* Centred, like the site: a label fills its cell and a number does not.
      The header is a bare tick now, so the column is the score columns'
      width and the name gets the rest. */
