@@ -10,6 +10,7 @@ import { useAuth } from '../store/auth'
 import UserName from '../components/UserName'
 import { computeCohortInfo, getDisplayStatus, DISPLAY_STATUS_LABELS } from '../utils/drawStatus.js'
 import { rootFontPx, textWidth } from '../utils/text'
+import { useBackdropClose } from '../hooks/useBackdropClose'
 import './LeagueDetail.css'
 
 /* The finish column's text and tooltip: "3" for a place clinched, "3–7" for
@@ -823,8 +824,9 @@ function CashPoolModal({ league, items, cashPools, onClose }) {
   const all = () => setPaid(new Set(members.map(m => m.id)))
   const none = () => setPaid(new Set())
 
+  const backdrop = useBackdropClose(onClose)
   return (
-    <div className="dm-backdrop" onClick={onClose} role="presentation">
+    <div className="dm-backdrop" {...backdrop} role="presentation">
       <div className="dm-panel cp-panel" role="dialog" aria-modal="true" aria-label="Cash pool"
            onClick={e => e.stopPropagation()}>
         <button type="button" className="dm-close" onClick={onClose} aria-label="Close">×</button>
@@ -1086,8 +1088,9 @@ function DrawModal({ items, leagueId, leagueMemberCount,
     }
   }, [onClose])
 
+  const backdrop = useBackdropClose(onClose)
   return (
-    <div className="dm-backdrop" onClick={onClose} role="presentation">
+    <div className="dm-backdrop" {...backdrop} role="presentation">
       <div className="dm-panel" role="dialog" aria-modal="true"
            aria-label={`${tournament.name} standings`}
            onClick={e => e.stopPropagation()}>
@@ -2008,8 +2011,9 @@ function InviteModal({ league, onClose }) {
     onSuccess: (data) => setSendResults(data.results),
   })
 
+  const backdrop = useBackdropClose(onClose)
   return (
-    <div className="invite-modal-overlay" onClick={onClose}>
+    <div className="invite-modal-overlay" {...backdrop}>
       <div className="invite-modal" onClick={e => e.stopPropagation()}>
         <div className="invite-modal-header">
           <h3>Share League</h3>

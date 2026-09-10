@@ -14,6 +14,7 @@
  * chip near the edge of the draw doesn't push the popup off screen.
  */
 import { useEffect } from 'react'
+import { useBackdropClose } from '../hooks/useBackdropClose'
 import { shortRound } from '../utils/rounds'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -90,8 +91,9 @@ export default function PredictorsPopup({ drawId, match, leagueId, onClose }) {
     </li>
   )
 
+  const backdrop = useBackdropClose(onClose)
   return createPortal(
-    <div className="pp-backdrop" onClick={onClose}>
+    <div className="pp-backdrop" {...backdrop}>
       <div className="pp-popup" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
         <div className="pp-header">
           <div className="pp-head-main">

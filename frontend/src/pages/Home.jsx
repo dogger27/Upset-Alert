@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { useBackdropClose } from '../hooks/useBackdropClose'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { listTournaments, getGlobalGSTotals } from '../api/tournaments'
@@ -157,8 +158,9 @@ function Section({ title, description, accent, live, items, section, pickStatus,
 }
 
 function Modal({ title, onClose, children }) {
+  const backdrop = useBackdropClose(onClose)
   return (
-    <div className="home-modal-overlay" onClick={onClose}>
+    <div className="home-modal-overlay" {...backdrop}>
       <div className="home-modal" onClick={e => e.stopPropagation()}
         style={{ animation: 'ua-rise 0.22s var(--ease-out)' }}>
         <div className="home-modal-header">
