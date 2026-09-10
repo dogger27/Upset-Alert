@@ -262,7 +262,7 @@ const s = StyleSheet.create({
   sheet: {
     backgroundColor: C.card, borderTopLeftRadius: 18, borderTopRightRadius: 18,
     borderTopWidth: 1, borderColor: C.border,
-    paddingHorizontal: S.md, paddingTop: S.sm, paddingBottom: S.lg,
+    paddingHorizontal: S.md, paddingTop: S.sm, paddingBottom: S.md,
     maxHeight: '72%',
   },
   grabber: {
@@ -348,6 +348,11 @@ const s = StyleSheet.create({
   },
   chipText: { ...T.tiny, color: C.inkBody },
   err: { ...T.small, color: C.bad, textAlign: 'center', paddingVertical: S.md },
-  close: { alignSelf: 'center', paddingVertical: S.sm, paddingHorizontal: S.lg },
+  /* A ruled footer: a hairline across the sheet above "Close", and less
+     height than the button used to take on its own. */
+  close: {
+    alignSelf: 'stretch', alignItems: 'center', marginHorizontal: -S.md, marginTop: S.sm,
+    paddingVertical: S.xs, borderTopWidth: 1, borderColor: C.borderOn,
+  },
   closeText: { ...T.smallMed, color: C.clay },
 })
