@@ -1947,12 +1947,19 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                       <b>What if</b> · {WORDS[n] ?? String(n)} ways it can end
                     </span>
                   )}
+                  {/* THE STEPPER SITS UNDER THE NAME IT STEPS, not either
+                      side of the bracket: the pair reads as one control, and
+                      the bracket keeps the panel's centre to itself. */}
+                  {world && (
+                    <div className="lt-whatif-steps">
+                      <Arrow d={-1} />
+                      <Arrow d={1} />
+                    </div>
+                  )}
                 </div>
                 {world && (
                   <div className="lt-whatif-world">
-                    <Arrow d={-1} />
                     <div className="lt-whatif-bracket">{bracket}</div>
-                    <Arrow d={1} />
                     <span className="lt-whatif-rail">
                       <span className="lt-whatif-dots" aria-hidden="true">
                         {worlds.map((_, i) => <i key={i} className={i === worldIdx ? 'lt-whatif-dot--on' : undefined} />)}
