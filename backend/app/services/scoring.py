@@ -328,3 +328,63 @@ PODIUM_PLACES = 3
 
 def podium_locked(rng: Optional[tuple]) -> Optional[bool]:
     return None if rng is None else rng[1] <= PODIUM_PLACES
+
+
+# ---------------------------------------------------------------------------
+# What-if worlds — every way the last matches can go, one label each
+# ---------------------------------------------------------------------------
+
+# From the semis on: 3 undecided matches make 8 worlds, the final alone 2.
+# Each is labelled by its final ("Zverev def. Shelton"), which is unique
+# from the semis on — four possible finals, two ways each.
+WORLDS_MAX_UNDECIDED = 3
+
+
+def enumerate_worlds(all_matches: list, pts_table: dict[int, int],
+                     names_by_entry: dict[int, str]) -> Optional[list[dict]]:
+    """Every future of the undecided matches, walked forward through the
+    bracket, as plain results. None when there is nothing left to play or too
+    much (see WORLDS_MAX_UNDECIDED). Each world: {"results": [{match_id,
+    round_number, points, winner_id, loser_id}...], "final": {winner_id,
+    loser_id, winner, loser}} — the final is the last undecided match, and
+    its names are what the world is called."""
+    import itertools
+    undecided = _undecided(all_matches)
+    n = len(undecided)
+    if n == 0 or n > WORLDS_MAX_UNDECIDED:
+        return None
+    by_slot = {(m.round_number, m.match_number): m for m in all_matches}
+    worlds: list[dict] = []
+    seen: set[tuple] = set()
+    for coin in itertools.product((0, 1), repeat=n):
+        winner = {m.id: m.winner_id for m in all_matches}
+        results = []
+        for m, c in zip(undecided, coin):
+            def _side(pid, feeder_no):
+                if pid is not None:
+                    return pid
+                feeder = by_slot.get((m.round_number - 1, feeder_no))
+                return winner.get(feeder.id) if feeder is not None else None
+            s1 = _side(m.player1_id, 2 * m.match_number - 1)
+            s2 = _side(m.player2_id, 2 * m.match_number)
+            # A side nobody can fill loses by walkover, whatever the coin says.
+            w = (s1, s2)[c]
+            if w is None:
+                w = s2 if s1 is None else s1
+            lo = s2 if w == s1 else s1
+            winner[m.id] = w
+            results.append({"match_id": m.id, "round_number": m.round_number,
+                            "points": pts_table.get(m.round_number, 0),
+                            "winner_id": w, "loser_id": lo})
+        key = tuple(r["winner_id"] for r in results)
+        if key in seen:      # a walkover makes two coins the same world
+            continue
+        seen.add(key)
+        last = results[-1]
+        worlds.append({
+            "results": results,
+            "final": {"winner_id": last["winner_id"], "loser_id": last["loser_id"],
+                      "winner": names_by_entry.get(last["winner_id"]),
+                      "loser": names_by_entry.get(last["loser_id"])},
+        })
+    return worlds

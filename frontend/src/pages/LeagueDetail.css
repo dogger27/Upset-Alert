@@ -556,6 +556,34 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 }
 
 /* Scrubber */
+/* WHAT IF: the world strip above the scrubber. Two arrows, the world's
+   name between them in the brand's strong text once one is chosen, and a
+   way back. It sits with the scrubber because they are the same kind of
+   control — one walks the past, the other the futures. */
+.lt-worlds {
+  display: flex; align-items: center; gap: 0.5rem;
+  margin-top: 0.65rem; padding: 0.4rem 0.5rem;
+  border: 1px solid var(--border); border-radius: 8px;
+}
+.lt-worlds--on { border-color: var(--brand-line); background: var(--atp-tint); }
+.lt-worlds-btn {
+  background: none; border: 1.5px solid currentColor; border-radius: 6px;
+  color: var(--text-muted); cursor: pointer;
+  width: 30px; height: 30px; line-height: 1; font-size: 1.2rem; font-weight: 700;
+  flex-shrink: 0;
+}
+.lt-worlds-btn:hover { color: var(--brand-text-strong); }
+.lt-worlds-body { display: flex; flex-direction: column; min-width: 0; flex: 1; gap: 1px; }
+.lt-worlds-count { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+.lt-worlds-label { font-size: 0.95rem; font-weight: 700; color: var(--brand-text-strong); }
+.lt-worlds:not(.lt-worlds--on) .lt-worlds-label { color: var(--text-muted); font-weight: 600; }
+.lt-worlds-semis { font-size: 0.8rem; color: var(--text-muted); }
+.lt-worlds-reset {
+  background: none; border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text-muted); cursor: pointer; font-size: 0.75rem; font-weight: 600;
+  padding: 0.3rem 0.5rem; white-space: nowrap; flex-shrink: 0;
+}
+.lt-worlds-reset:hover { color: var(--brand-text-strong); border-color: var(--brand-line); }
 .lt-scrubber {
   display: flex; flex-direction: column; align-items: stretch; gap: 2px;
   margin-top: 0.65rem;

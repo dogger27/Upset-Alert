@@ -161,3 +161,32 @@ def test_tie_for_third_is_third():
     got = finish_range(ms, pts, 2, _banked(ms, pts, picks), picks)
     assert got[1] == got[2]
     assert got == _oracle(ms, pts, 2, picks)
+
+
+def test_worlds_from_the_semis():
+    from app.services.scoring import enumerate_worlds
+    # An 8-draw with the quarters done: two semis and a final = 8 worlds.
+    ms = _bracket(8, decided_r1=4, rng=random.Random(2))
+    pts = {1: 1, 2: 2, 3: 4}
+    names = {i: f"P{i}" for i in range(1, 9)}
+    worlds = enumerate_worlds(ms, pts, names)
+    assert len(worlds) == 8
+    finals = {(w["final"]["winner"], w["final"]["loser"]) for w in worlds}
+    assert len(finals) == 8                       # every label is unique
+    for w in worlds:
+        assert [r["round_number"] for r in w["results"]] == [2, 2, 3]
+        assert w["results"][-1]["points"] == 4
+        # The final is contested by the two semi winners of that world.
+        semi_winners = {w["results"][0]["winner_id"], w["results"][1]["winner_id"]}
+        assert {w["final"]["winner_id"], w["final"]["loser_id"]} == semi_winners
+
+
+def test_worlds_off_before_the_semis_and_after_the_final():
+    from app.services.scoring import enumerate_worlds
+    assert enumerate_worlds(_bracket(16, decided_r1=8), {1: 1, 2: 2, 3: 4, 4: 8}, {}) is None
+    ms = _bracket(4, decided_r1=2, rng=random.Random(1))
+    by = {(m.round_number, m.match_number): m for m in ms}
+    f = by[(2, 1)]; f.player1_id, f.player2_id = by[(1, 1)].winner_id, by[(1, 2)].winner_id
+    assert len(enumerate_worlds(ms, {1: 1, 2: 2}, {})) == 2
+    f.winner_id = f.player1_id
+    assert enumerate_worlds(ms, {1: 1, 2: 2}, {}) is None

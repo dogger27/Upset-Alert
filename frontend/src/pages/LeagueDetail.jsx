@@ -22,6 +22,24 @@ const ordinal = n => {
 }
 const finishText = e => e.best_rank == null ? '–'
   : e.best_rank === e.worst_rank ? String(e.best_rank) : `${e.best_rank}–${e.worst_rank}`
+/* A world's name: the final, by surname — "Zverev def. Shelton". Particles
+   stay with the surname ("del Potro"), the way the draw prints them. */
+const PARTICLES = new Set(['de', 'del', 'della', 'di', 'da', 'van', 'von', 'der', 'den', 'le', 'la', 'du', 'dos', 'das'])
+const surname = full => {
+  const parts = String(full ?? '').trim().split(/\s+/)
+  let i = parts.length - 1
+  while (i > 0 && PARTICLES.has(parts[i - 1].toLowerCase())) i -= 1
+  return parts.slice(i).join(' ') || '?'
+}
+const worldLine = w => `${surname(w.final.winner)} def. ${surname(w.final.loser)}`
+/* Every semi-finalist reaches some world's final, so the finals name them all. */
+const worldNames = (worlds, id) => {
+  for (const w of worlds) {
+    if (w.final.winner_id === id) return w.final.winner
+    if (w.final.loser_id === id) return w.final.loser
+  }
+  return null
+}
 const finishTitle = e => e.best_rank == null ? undefined
   : e.best_rank === e.worst_rank ? `Finishes ${ordinal(e.best_rank)} whatever happens`
   : `Can still finish anywhere from ${ordinal(e.best_rank)} to ${ordinal(e.worst_rank)}`
@@ -1123,6 +1141,12 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
      changes with it — see `ranked` below — so sorting by Max reads as "who
      can still win this", with everyone's real standing still on the row. */
   const [colSort, setColSort] = useState('total')
+  /* WHICH WORLD THE TABLE IS SCORED UNDER, or null for what has actually
+     happened. From the semis on the server sends every way the last matches
+     can go, each named by its final; picking one plays those results into
+     the table. Exclusive with the scrubber: one is a past, the other a
+     future, and a table cannot show both. */
+  const [worldIdx, setWorldIdx] = useState(null)
   /* How deep the compare view reaches. 'finals' is the default because it is
      the whole back end of the draw in seven columns; 'quarters' trades that
      for the eight names a round earlier. */
@@ -1172,13 +1196,53 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
   const completedRoundNumsFromServer = rawData?.completed_round_nums ?? null
   const matchesTimeline = rawData?.matches_timeline ?? []
   const userPredictions = rawData?.user_predictions ?? {}
+  const worlds = rawData?.worlds ?? null
+  const worldPredictions = rawData?.world_predictions ?? {}
+  const world = worlds && worldIdx != null && worldIdx < worlds.length ? worlds[worldIdx] : null
 
   const effectiveMax = matchesTimeline.length
   const effectiveScrubPos = scrubPos ?? effectiveMax
   const isScrubbing = effectiveScrubPos < effectiveMax
+  /* How many matches the ✓ column counts: the board so far, or in a world
+     that plus the matches the world decides. */
+  const countedMatches = world && !isScrubbing ? effectiveMax + world.results.length : effectiveScrubPos
 
   // Recompute entries/rounds at the current scrub position
   const displayData = useMemo(() => {
+    if (world && !isScrubbing) {
+      /* THE WORLD'S RESULTS, PLAYED INTO THE TABLE. Each pick that names the
+         world's winner pays that match's points; then the same order and
+         tiebreak as the real standings. Nothing is left to play in a chosen
+         world, so Max is the score and the finish is a single place. */
+      const scored = entries.map(e => {
+        const preds = worldPredictions[String(e.user_id)] ?? {}
+        const round_points = [...e.round_points]
+        let total = e.total, correct_count = e.correct_count ?? 0
+        for (const r of world.results) {
+          if (String(preds[String(r.match_id)]) === String(r.winner_id)) {
+            round_points[r.round_number - 1] = (round_points[r.round_number - 1] ?? 0) + r.points
+            total += r.points
+            correct_count += 1
+          }
+        }
+        return { ...e, round_points, total, correct_count, max_points: total }
+      })
+      scored.sort((a, b) => {
+        if (b.total !== a.total) return b.total - a.total
+        for (let i = a.round_points.length - 1; i >= 0; i--) {
+          const diff = (b.round_points[i] ?? 0) - (a.round_points[i] ?? 0)
+          if (diff !== 0) return diff
+        }
+        return 0
+      })
+      let place = 1
+      const placed = scored.map((e, i) => {
+        if (i > 0 && !sameStanding(scored[i - 1], e)) place = i + 1
+        return { ...e, best_rank: place, worst_rank: place, podium_locked: place <= 3 }
+      })
+      const rounds = [...new Set([...roundsWithMatches, ...world.results.map(r => r.round_number)])].sort((a, b) => a - b)
+      return { entries: placed, roundsWithMatches: rounds }
+    }
     if (!isScrubbing || matchesTimeline.length === 0) {
       return { entries, roundsWithMatches }
     }
@@ -1212,7 +1276,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
       return 0
     })
     return { entries: currentEntries, roundsWithMatches: sliceRounds }
-  }, [isScrubbing, effectiveScrubPos, matchesTimeline, entries, roundsWithMatches, userPredictions])
+  }, [isScrubbing, effectiveScrubPos, matchesTimeline, entries, roundsWithMatches, userPredictions, world, worldPredictions])
 
   const pointsOrder = displayData.entries
   /* The finish column exists only once the server can enumerate the draw's
@@ -1280,7 +1344,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
 
   const numRounds = entries.length > 0 ? entries[0].round_points.length : (t.num_rounds ?? ROUND_COLORS.length)
   // Scale and column structure always reflect the full (server) state so bars grow as you scrub right
-  const finalPlayed = roundsWithMatches.includes(numRounds)
+  const finalPlayed = roundsWithMatches.includes(numRounds) || (world != null && !isScrubbing)
 
   // Fixed name column width based on longest username — shared across all absolute-positioned rows.
   // When the top 3 get a place icon (🏆/🥈/🥉) it shares this same cell, so reserve extra room for
@@ -1490,10 +1554,10 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                 lit. Buttons in all but tag, so the grid cells stay spans. */}
             <span className={`lt-progress-correct lt-progress-col-header lt-col-sort${colSort === 'correct' ? ' lt-col-sort--on' : ''}`}
                   role="button" tabIndex={0}
-                  title={`Correct picks, of ${effectiveScrubPos} match${effectiveScrubPos !== 1 ? 'es' : ''} counted — click to sort`}
+                  title={`Correct picks, of ${countedMatches} match${countedMatches !== 1 ? 'es' : ''} counted — click to sort`}
                   onClick={() => setColSort('correct')}
                   onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setColSort('correct') } }}>
-              ✓<span className="lt-progress-correct-of"> / {effectiveScrubPos}</span>
+              ✓<span className="lt-progress-correct-of"> / {countedMatches}</span>
             </span>
             {/* ONE HEADING OVER TWO COLUMNS: "Score", then "Curr." and "Max"
                 beneath it. The two numbers are one fact read two ways — where
@@ -1703,6 +1767,44 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
               matches that produced it; a bracket of predicted names has no
               such history to walk, so on this tab there is nothing for it to
               do and it goes. */}
+          {/* WHAT IF. From the semis on, every way the rest of the draw can
+              go, one label each — the final, by surname — and the table
+              re-scored under the one chosen. Eight worlds at the semis, two
+              at the final; the cycle passes through "as it stands" between
+              the last and the first. */}
+          {!comparing && worlds && worlds.length > 0 && (() => {
+            const n = worlds.length
+            const step = d => {
+              setScrubPos(null); setFlashMatch(null)
+              setWorldIdx(i => {
+                const next = i == null ? (d > 0 ? 0 : n - 1) : i + d
+                return next < 0 || next >= n ? null : next
+              })
+            }
+            const semis = world && world.results.length > 1
+              ? world.results.slice(0, -1).map(r => `${surname(worldNames(worlds, r.winner_id))} def. ${surname(worldNames(worlds, r.loser_id))}`)
+              : []
+            return (
+              <div className={`lt-worlds${world ? ' lt-worlds--on' : ''}`} role="group" aria-label="What if">
+                <button type="button" className="lt-worlds-btn" onClick={() => step(-1)} aria-label="Previous world">‹</button>
+                <div className="lt-worlds-body">
+                  <span className="lt-worlds-count">
+                    {world ? `What if · world ${worldIdx + 1} of ${n}` : `What if · ${n} ways the final can go`}
+                  </span>
+                  <span className="lt-worlds-label">
+                    {world ? worldLine(world) : 'As it stands'}
+                  </span>
+                  {semis.length > 0 && (
+                    <span className="lt-worlds-semis">SF: {semis.join(' · ')}</span>
+                  )}
+                </div>
+                <button type="button" className="lt-worlds-btn" onClick={() => step(1)} aria-label="Next world">›</button>
+                {world && (
+                  <button type="button" className="lt-worlds-reset" onClick={() => setWorldIdx(null)}>As it stands</button>
+                )}
+              </div>
+            )
+          })()}
           {!comparing && effectiveMax > 0 && (
             <div className="lt-scrubber">
               <input
@@ -1713,6 +1815,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                 onChange={e => {
                   const v = Number(e.target.value)
                   setScrubPos(v >= effectiveMax ? null : v)
+                  setWorldIdx(null)
                   const m = matchesTimeline[Math.min(v, effectiveMax) - 1]
                   if (m) {
                     /* IT STAYS. This is the answer to "what happened at
