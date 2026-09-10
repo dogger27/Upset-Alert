@@ -160,7 +160,10 @@ function Arrow({ d, onPress }) {
   return (
     <Pressable onPress={onPress} hitSlop={6} style={({ pressed }) => [s.arrow, pressed && s.arrowDown]}
                accessibilityRole="button" accessibilityLabel={d < 0 ? 'Previous world' : 'Next world'}>
-      <Text style={s.arrowGlyph}>{d < 0 ? '‹' : '›'}</Text>
+      {/* A drawn chevron, not a glyph: text sits on a baseline and a "‹" rode
+          high in the ring however the line height was set. Two borders of a
+          square, turned — dead centre by construction. */}
+      <View style={[s.chevron, d < 0 ? s.chevronLeft : s.chevronRight]} />
     </Pressable>
   )
 }
@@ -261,7 +264,9 @@ const s = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   arrowDown: { borderColor: C.greenBright },
-  arrowGlyph: { color: C.ink, fontSize: 28, lineHeight: 30, fontFamily: 'Archivo_700Bold', marginTop: -3 },
+  chevron: { width: 12, height: 12, borderTopWidth: 2.5, borderRightWidth: 2.5, borderColor: C.ink },
+  chevronLeft: { transform: [{ translateX: 3 }, { rotate: '-135deg' }] },
+  chevronRight: { transform: [{ translateX: -3 }, { rotate: '45deg' }] },
 
   /* Mini bracket */
   mini: { alignSelf: 'center' },
@@ -284,7 +289,7 @@ const s = StyleSheet.create({
   braceStub: { position: 'absolute', right: -8, top: '50%', width: 8, borderTopWidth: 1.5, borderColor: C.borderLit },
   pill: {
     width: PILL, height: PILL_H, borderRadius: PILL_H / 2, paddingHorizontal: 6,
-    borderWidth: 1, borderColor: C.borderOn, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1.5, borderColor: C.borderLit, alignItems: 'center', justifyContent: 'center',
   },
   pillOn: { backgroundColor: C.green, borderColor: 'transparent' },
   pillChamp: { backgroundColor: '#2a2415', borderWidth: 1.5, borderColor: C.gold },
