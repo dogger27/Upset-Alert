@@ -10,21 +10,28 @@
  *
  * Everything here is display-only. Nothing infers a result.
  */
-import { properName } from './names.js'
+import { properName, sheetName } from './names.js'
 
 export function sideName(players, side) {
   const ps = (players || []).filter(p => p.side === side)
   if (!ps.length) return 'TBD'
-  // entry_name is proper case; `name` is the sheet's SURNAME IN CAPS. Doubles
-  // has two per side, joined the way a scoreboard does.
-  return ps.map(p => p.entry_name || properName(p.name) || 'TBD').join(' / ')
+  // entry_name is proper case; `name` is the sheet's string — a seed in
+  // brackets, the surname shouting, the IOC code last — so it is stripped of
+  // that furniture before the name ladder ever sees it. Doubles has two per
+  // side, joined the way a scoreboard does.
+  return ps.map(p => p.entry_name || properName(sheetName(p.name).name) || 'TBD').join(' / ')
 }
 
 /* The flag codes for a side, in the order the names are joined — so doubles
    shows both. Deliberately parallel to sideName: if one shows two names, the
    other must offer two flags or they cannot be lined up. */
 export function sideFlags(players, side) {
-  return (players || []).filter(p => p.side === side).map(p => p.nationality || null)
+  /* The sheet's own IOC code stands in where the server has no nationality:
+     it is null on every doubles row (no draw entry to read one off), and the
+     printed name carried it all along. An empty box still means "no country
+     here" — it just no longer means "we threw it away". */
+  return (players || []).filter(p => p.side === side)
+    .map(p => p.nationality || sheetName(p.name).nat || null)
 }
 
 export function sideSeed(players, side) {
