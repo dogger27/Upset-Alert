@@ -1371,7 +1371,6 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
       return a.standingsRank - b.standingsRank
     })
   })()
-  const dispRoundsWithMatches = displayData.roundsWithMatches
 
   const numRounds = entries.length > 0 ? entries[0].round_points.length : (t.num_rounds ?? ROUND_COLORS.length)
   // Scale and column structure always reflect the full (server) state so bars grow as you scrub right
@@ -1407,27 +1406,43 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
   ) + 6 + (finalPlayed ? 24 : 0)
   const PLACE_ICONS = ['🏆', '🥈', '🥉']
 
-  const activeRounds = roundsWithMatches.length > 0
-    ? roundsWithMatches.map(r => r - 1)
-    : Array.from({ length: numRounds }, (_, i) => i).filter(i => entries.some(e => e.round_points[i] > 0))
-  const perRoundMax = activeRounds.map(i => {
-    const vals = entries.map(e => e.round_points[i] ?? 0)
-    return Math.max(...vals.map(v => v ?? 0), 1)
-  })
+  /* THE BARS SPAN THE SERVER'S STATE AND THE CHOSEN WORLD'S, TOGETHER.
+     Columns and scale come from the union, which serves both instruments:
+     scrubbing keeps the full extent, so bars grow as you drag right within
+     a scale that does not move under the cursor (the reason this read the
+     server's rows in the first place); and a world, which pays out matches
+     the server has not seen, gets the columns for them. Without the union a
+     world's semi-final and final points landed in columns that were never
+     drawn, so the graph sat at the reader's real points while the totals
+     beside it changed (owner, 2026-09-10). */
+  const worldRounds = world && !isScrubbing ? world.results.map(r => r.round_number) : []
+  const columnRounds = [...new Set([...roundsWithMatches, ...worldRounds])].sort((a, b) => a - b)
+  const activeRounds = columnRounds.length > 0
+    ? columnRounds.map(r => r - 1)
+    : Array.from({ length: numRounds }, (_, i) => i).filter(i => dispEntries.some(e => e.round_points[i] > 0))
+  const perRoundMax = activeRounds.map(i => Math.max(
+    ...entries.map(e => e.round_points[i] ?? 0),
+    ...dispEntries.map(e => e.round_points[i] ?? 0),
+    1))
   // Columns are sized proportionally to points scored (flex-grow), which
   // squashes a round where nobody scored down to a sliver next to a round
   // with real points. Give those all-zero columns a fixed minimum width
   // instead, just enough to fit the round label and the "0".
   const colFlex = activeRounds.map((i, col) => {
     const hasPoints = entries.some(e => (e.round_points[i] ?? 0) > 0)
+      || dispEntries.some(e => (e.round_points[i] ?? 0) > 0)
     return hasPoints ? perRoundMax[col] : '0 0 42px'
   })
 
   // Prefer the server's authoritative "every non-bye match in this round is done"
   // list; fall back to the old "not the latest round" heuristic if it's missing
   // (e.g. briefly during a frontend/backend deploy gap).
+  /* A chosen world plays every match out, so every round in it is complete
+     and the round-winner mark applies to its semis and final too. */
   const completedRoundNums = new Set(
-    completedRoundNumsFromServer ?? roundsWithMatches.filter((r, i) => i < roundsWithMatches.length - 1 || finalPlayed)
+    world && !isScrubbing
+      ? Array.from({ length: numRounds }, (_, i) => i + 1)
+      : completedRoundNumsFromServer ?? roundsWithMatches.filter((r, i) => i < roundsWithMatches.length - 1 || finalPlayed)
   )
   const roundWinnerSets = activeRounds.map((roundIdx) => {
     if (!completedRoundNums.has(roundIdx + 1)) return null
@@ -1791,7 +1806,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                 ) : (
                 <div className="lt-bar-track">
                   {activeRounds.map((i, col) => {
-                    const pts = entry.round_points[i]
+                    const pts = entry.round_points[i] ?? 0
                     const fillPct = (pts / perRoundMax[col]) * 100
                     const isWinner = roundWinnerSets[col]?.has(entry.user_id) ?? false
                     return (
