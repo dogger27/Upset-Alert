@@ -58,6 +58,10 @@ const SCREENS = [
   { name: 'washout-court',  mobile: '/schedule?date=2026-09-01', pwa: '/schedule?date=2026-09-01', appClick: 'Court', pwaClick: 'Court', scrollEnd: true },
   // A finished row tapped open: the score-history sheet beside the site's popup.
   { name: 'score-history', mobile: '/schedule?date=2026-09-01', pwa: '/schedule?date=2026-09-01', appClick: 'Madison Keys', pwaClick: 'KEYS' },
+  // The same sheet scrubbed back to the match's opening points, where Sofascore
+  // labelled three in a row (aces / double faults): the "Prev Point" line.
+  { name: 'score-history-prev', mobile: '/schedule?date=2026-09-01', pwa: '/schedule?date=2026-09-01', appClick: 'Madison Keys', pwaClick: 'KEYS',
+    drag: { app: { x: 368, y: 327, dx: -299 }, pwa: { x: 750, y: 232, dx: -278 } } },
   // A finished match on the draw page tapped open: the same sheet from the bracket.
   { name: 'draw-score', mobile: '/draw/77', pwa: '/tournaments/77', appClick: 'Halys', pwaClick: 'Halys' },
   // THE ROUND SCRUB, MID-GESTURE: a finger held half a round into a pull,

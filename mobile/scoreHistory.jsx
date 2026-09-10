@@ -109,6 +109,11 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
   })()
   const markers = useMemo(() => timelineMarkers(snapshots, { completed, winnerSide }),
     [snapshots, completed, winnerSide])
+  /* The point the scrub is sitting ON. A snapshot records the score AFTER a
+     point, so the snapshot at this position IS the point just played — hence
+     "Prev Point", as the site says it. Sofascore names only aces and double
+     faults, so the line is blank most of the time by nature. */
+  const prevPoint = (atEnd ? snapshots[snapshots.length - 1] : snapshots[pos])?.point_label ?? null
   const stats = useMemo(() => pointStats(snapshots), [snapshots])
   const statsUsable = stats.counted >= 20 && stats.counted / Math.max(1, stats.transitions) >= 0.7
 
@@ -207,13 +212,24 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
             <Scrub max={max} pos={atEnd ? max : pos} onChange={v => setPos(v >= max ? null : v)}
                    onHold={setHolding} markers={markers} topIsP1={topIsP1}
                    top={initialsOf(a[0]?.name)} bottom={initialsOf(b[0]?.name)} />
-            {markers.length > 0 && (
-              <View style={s.legend}>
-                <Legend color={TICK.break} label="break" />
-                <Legend color={TICK.set} label="set" />
-                {markers.some(m => m.kind === 'match') && <Legend color={TICK.match} label="match" />}
-              </View>
-            )}
+            {/* Legend on the left, the last point's name on the right — the
+                site's row. It is drawn even when both are empty so the tabs
+                below never jump as the thumb crosses an ace. */}
+            <View style={s.underline}>
+              {markers.length > 0 && (
+                <View style={s.legend}>
+                  <Legend color={TICK.break} label="break" />
+                  <Legend color={TICK.set} label="set" />
+                  {markers.some(m => m.kind === 'match') && <Legend color={TICK.match} label="match" />}
+                </View>
+              )}
+              {prevPoint ? (
+                <View style={s.prevPoint} accessibilityLiveRegion="polite">
+                  <Text style={s.legendText}>Prev Point:</Text>
+                  <Text style={s.prevPointValue}>{prevPoint}</Text>
+                </View>
+              ) : null}
+            </View>
             {/* Tabs only when there IS a second panel — a match with no
                 Sofascore event id keeps the single panel it always had. */}
             {/* The tab bar used to require statsUsable — the POINTS panel
@@ -232,8 +248,7 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
             )}
             {shownTab === 'points' && (statsUsable ? (
               <Stats stats={stats} pos={Math.min(atEnd ? stats.at.length - 1 : pos, stats.at.length - 1)}
-                     topIsP1={topIsP1} left={cleanName(a[0])} right={cleanName(b[0])}
-                     durationMin={data?.duration_min} />
+                     topIsP1={topIsP1} left={cleanName(a[0])} right={cleanName(b[0])} />
             ) : (
               <Text style={s.err}>Not enough point-by-point history for this match.</Text>
             ))}
@@ -344,7 +359,7 @@ function prettyDuration(mins) {
   return h ? `${h}h ${m}m` : `${m}m`
 }
 
-function Stats({ stats, pos, topIsP1, left, right, durationMin }) {
+function Stats({ stats, pos, topIsP1, left, right }) {
   const snap = stats.at[pos]
   const top = snap[topIsP1 ? 0 : 1], bot = snap[topIsP1 ? 1 : 0]
   const pct = (w, t) => (t ? Math.round((100 * w) / t) : 0)
@@ -362,9 +377,6 @@ function Stats({ stats, pos, topIsP1, left, right, durationMin }) {
         <Text style={[s.statName, { color: C.h2hP1 }]} numberOfLines={1}>{left}</Text>
         <Text style={[s.statName, { color: C.h2hP2, textAlign: 'right' }]} numberOfLines={1}>{right}</Text>
       </View>
-      {prettyDuration(durationMin) ? (
-        <Text style={s.duration}>{prettyDuration(durationMin)} played</Text>
-      ) : null}
       {/* ONE LINE PER STATISTIC, the site's grid: number, bar, label, bar,
           number. The bars grow from the label outward, in each player's own
           colour, so name, bar and column read as one. */}
@@ -473,7 +485,11 @@ const s = StyleSheet.create({
     position: 'absolute', width: THUMB, height: THUMB, borderRadius: THUMB / 2,
     backgroundColor: C.ink, borderWidth: 2, borderColor: C.card,
   },
-  legend: { flexDirection: 'row', justifyContent: 'center', gap: S.md },
+  /* One row, fixed height: legend at the left, prev point at the right. */
+  underline: { flexDirection: 'row', alignItems: 'center', minHeight: 16 },
+  legend: { flexDirection: 'row', gap: S.md },
+  prevPoint: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 'auto' },
+  prevPointValue: { ...T.tiny, color: C.ink, fontFamily: 'Archivo_700Bold' },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   legendBox: { width: 8, height: 8, borderRadius: 2 },
   legendText: { ...T.tiny, color: C.faint },
@@ -486,7 +502,6 @@ const s = StyleSheet.create({
          paddingVertical: 5, paddingHorizontal: 10, marginBottom: -StyleSheet.hairlineWidth,
          borderBottomWidth: 2, borderBottomColor: 'transparent' },
   tabOn: { color: C.ink, borderBottomColor: C.greenLit },
-  duration: { ...T.tiny, color: C.faint, textAlign: 'center', marginTop: -2 },
   statSection: { ...T.tiny, color: C.faint, fontFamily: 'Archivo_700Bold',
                  letterSpacing: 0.6, textTransform: 'uppercase', marginTop: 6, marginBottom: 1 },
   stats: { gap: 8, marginTop: S.xs },
