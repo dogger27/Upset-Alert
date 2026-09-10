@@ -21,6 +21,7 @@ import { useAuth } from '../../../../../auth'
 import { getLeague, getLeagueTournaments, getRoundScores } from '../../../../../api'
 import { useApi } from '../../../../../useApi'
 import { byFinish, competitionRanks, finishText } from '../../../../../scoring'
+import { StandingsFoot, useStandingsView } from '../../../../../standingsTools'
 import { othersPicksNote } from '../../../../../lock'
 import { C } from '../../../../../theme'
 import { PlayerName, TourBadge } from '../../../../../cards'
@@ -35,7 +36,8 @@ export default function Standings() {
   const scores = useApi(`scores:${id}:${drawId}`, () => getRoundScores(id, drawId))
 
   const t = draws.data?.find(x => String(x.tournament?.id) === String(drawId))?.tournament
-  const entries = scores.data?.entries || []
+  const view = useStandingsView(scores.data, t)
+  const entries = view.entries
   const ranks = competitionRanks(entries)
   /* WHICH NUMBER THE ROWS ARE SORTED BY: the score (the standings, and the
      default), the correct count, or the ceiling. A person's RANK never
@@ -158,7 +160,7 @@ export default function Standings() {
                       podium mid-tournament would be a prediction. Ties share
                       a place, so two 1sts both get the trophy. */}
                   <Text style={s.rank}>
-                    {t?.status === 'completed' && rankOf.get(e.user_id) <= 3
+                    {(t?.status === 'completed' || view.finalPlayed) && rankOf.get(e.user_id) <= 3
                       ? ['🏆', '🥈', '🥉'][rankOf.get(e.user_id) - 1]
                       : rankOf.get(e.user_id)}
                   </Text>
@@ -190,6 +192,7 @@ export default function Standings() {
             })}
           </View>
         )}
+        {entries.length > 0 ? <StandingsFoot view={view} /> : null}
       </Screen>
     </>
   )

@@ -63,3 +63,80 @@ export function byFinish(order) {
     || ((a.worst_rank ?? Infinity) - (b.worst_rank ?? Infinity))
     || (order.get(a.user_id) - order.get(b.user_id))
 }
+
+/* The round a match belongs to, as a chip: F, SF, QF, then R16, R32 … by
+ * how far it sits from the final. The timeline carries round numbers only. */
+export function roundTag(roundNumber, numRounds) {
+  const fromEnd = numRounds - roundNumber
+  if (fromEnd === 0) return 'F'
+  if (fromEnd === 1) return 'SF'
+  if (fromEnd === 2) return 'QF'
+  return `R${2 ** (fromEnd + 1)}`
+}
+
+/* A surname, particles kept ("del Potro"), the way the draw prints them. */
+const PARTICLES = new Set(['de', 'del', 'della', 'di', 'da', 'van', 'von', 'der', 'den', 'le', 'la', 'du', 'dos', 'das'])
+export function surname(full) {
+  const parts = String(full ?? '').trim().split(/\s+/)
+  let i = parts.length - 1
+  while (i > 0 && PARTICLES.has(parts[i - 1].toLowerCase())) i -= 1
+  return parts.slice(i).join(' ') || '?'
+}
+export const worldLine = w => `${surname(w.final.winner)} def. ${surname(w.final.loser)}`
+
+/* The standings order: points, then the later rounds first — the site's
+ * sort and the server's, for rows re-scored on the phone. */
+export function sortStandings(rows) {
+  return [...rows].sort((a, b) => {
+    if (b.total !== a.total) return b.total - a.total
+    for (let i = a.round_points.length - 1; i >= 0; i--) {
+      const d = (b.round_points[i] ?? 0) - (a.round_points[i] ?? 0)
+      if (d !== 0) return d
+    }
+    return 0
+  })
+}
+
+/* THE TABLE REWOUND to the first `pos` matches of the timeline: every row
+ * re-scored from its picks on those matches alone, then re-sorted. A replay
+ * has no future, so the finish range and the podium go quiet. */
+export function scrubEntries(entries, timeline, pos, userPredictions) {
+  const slice = timeline.slice(0, pos)
+  const rows = entries.map(e => {
+    const preds = userPredictions[String(e.user_id)] ?? {}
+    let total = 0, correct_count = 0
+    const byRound = {}
+    for (const m of slice) {
+      if (String(preds[String(m.id)]) === String(m.winner_id)) {
+        byRound[m.round_number] = (byRound[m.round_number] ?? 0) + m.points
+        total += m.points
+        correct_count += 1
+      }
+    }
+    const round_points = Array.from({ length: e.round_points.length }, (_, i) => byRound[i + 1] ?? 0)
+    return { ...e, round_points, total, correct_count, podium_locked: false }
+  })
+  return sortStandings(rows)
+}
+
+/* THE TABLE UNDER A WORLD: each pick that names the world's winner pays that
+ * match's points; then the usual order. Nothing is left to play in a chosen
+ * world, so Max is the score and the finish is a single place. */
+export function worldEntries(entries, world, worldPredictions) {
+  const rows = entries.map(e => {
+    const preds = worldPredictions[String(e.user_id)] ?? {}
+    const round_points = [...e.round_points]
+    let total = e.total, correct_count = e.correct_count ?? 0
+    for (const r of world.results) {
+      if (String(preds[String(r.match_id)]) === String(r.winner_id)) {
+        round_points[r.round_number - 1] = (round_points[r.round_number - 1] ?? 0) + r.points
+        total += r.points
+        correct_count += 1
+      }
+    }
+    return { ...e, round_points, total, correct_count, max_points: total }
+  })
+  const sorted = sortStandings(rows)
+  const ranks = competitionRanks(sorted)
+  return sorted.map((e, i) => ({ ...e, best_rank: ranks[i], worst_rank: ranks[i], podium_locked: ranks[i] <= 3 }))
+}

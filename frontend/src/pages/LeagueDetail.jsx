@@ -32,6 +32,29 @@ const surname = full => {
   return parts.slice(i).join(' ') || '?'
 }
 const worldLine = w => `${surname(w.final.winner)} def. ${surname(w.final.loser)}`
+
+/* One line of text that shrinks to its box rather than losing its tail:
+   "Khachanov def. Shelton" beside two arrows on a phone has no room for an
+   ellipsis to mean anything. Measures the box, then the text, and sets the
+   size that fits, down to a floor. */
+function FitText({ text, className, maxPx, weight = 700, minPx = 11 }) {
+  const ref = useRef(null)
+  const [px, setPx] = useState(maxPx)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const fit = () => {
+      const avail = el.parentElement?.clientWidth ?? 0
+      const need = textWidth(text, maxPx, weight)
+      setPx(need > 0 && avail > 0 && need > avail ? Math.max(minPx, Math.floor(maxPx * avail / need * 100) / 100) : maxPx)
+    }
+    fit()
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(fit) : null
+    ro?.observe(el.parentElement)
+    return () => ro?.disconnect()
+  }, [text, maxPx, weight, minPx])
+  return <span ref={ref} className={className} style={{ fontSize: `${px}px` }}>{text}</span>
+}
 const finishTitle = e => e.best_rank == null ? undefined
   : e.best_rank === e.worst_rank ? `Finishes ${ordinal(e.best_rank)} whatever happens`
   : `Can still finish anywhere from ${ordinal(e.best_rank)} to ${ordinal(e.worst_rank)}`
@@ -1855,9 +1878,10 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                  the longest surname in the bracket, measured, with the
                  column width as a floor — so "Auger-Aliassime" widens all
                  three columns rather than losing its tail to an ellipsis. */
-              const fitPx = Math.ceil(Math.max(0, ...Object.values(names).map(nm => textWidth(surname(nm), 12, 700)))) + 18
+              const widest = px => Math.ceil(Math.max(0, ...Object.values(names).map(nm => textWidth(surname(nm), px, 800)))) + 20
               bracket = semis.length === 2 && (
-                <div className="lt-mini" aria-label="The bracket in this world" style={{ '--pill-fit': `${fitPx}px` }}>
+                <div className="lt-mini" aria-label="The bracket in this world"
+                     style={{ '--pill-fit': `${widest(12)}px`, '--pill-fit-sm': `${widest(11.2)}px` }}>
                   <div className="lt-mini-heads"><span>SF</span><span /><span>F</span><span /><span className="lt-mini-head--w">W</span></div>
                   <div className="lt-mini-rows">
                     <div className="lt-mini-col lt-mini-col--sf">
@@ -1891,7 +1915,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                     <span className="lt-switch-knob" />
                   </button>
                   {world ? (
-                    <span className="lt-whatif-label">{worldLine(world)}</span>
+                    <FitText className="lt-whatif-label" text={worldLine(world)} maxPx={rootFontPx() * 1.15} weight={800} />
                   ) : (
                     <span className="lt-whatif-hint">
                       <b>What if</b> · {(WORDS[n] ?? String(n)).toLowerCase()} ways it can end
