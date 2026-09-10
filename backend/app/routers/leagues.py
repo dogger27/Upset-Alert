@@ -24,7 +24,7 @@ from app.schemas.league import (
     CashPoolIn, CashPoolOut,
 )
 from app.schemas.tournament import TournamentOut
-from app.services.scoring import rank_users, score_user
+from app.services.scoring import UserScore, finish_range_async, rank_users, score_user
 from app.services.scoring import potential_points, _points_table as _pts_table_for
 from app.services.upsets import has_upset_pick
 
@@ -552,6 +552,7 @@ async def leaderboard(
     scores = []
     has_upset_map: dict[int, bool] = {}
     max_map: dict[int, float] = {}
+    picks_map: dict[int, dict] = {}
     for member in league.members:
         if visible is not None and member.user_id not in visible:
             continue
@@ -568,11 +569,16 @@ async def leaderboard(
         score = score_user(member.user_id, preds, completed_matches, tournament, league)
         scores.append((member.user, score))
         has_upset_map[member.user_id] = has_upset_pick(preds, all_matches, all_entries)
+        picks_map[member.user_id] = {p.match_id: p.predicted_winner_id for p in preds}
         max_map[member.user_id] = score.total_points + potential_points(
-            {p.match_id: p.predicted_winner_id for p in preds}, all_matches, position_by_entry, pts_table)
+            picks_map[member.user_id], all_matches, position_by_entry, pts_table)
 
     ranked = rank_users([s for _, s in scores], tournament.num_rounds)
     user_map = {u.id: u for u, _ in scores}
+    # Where each bracket can still finish, once the draw is down to R16.
+    ranges = await finish_range_async(
+        tournament_id, all_matches, pts_table, tournament.num_rounds,
+        {s.user_id: s for _, s in scores}, picks_map) or {}
 
     entries = [
         LeaderboardEntry(
@@ -582,6 +588,8 @@ async def leaderboard(
             correct_count=score.correct_count,
             max_points=max_map[score.user_id],
             has_upset_pick=has_upset_map[score.user_id],
+            best_rank=ranges.get(score.user_id, (None, None))[0],
+            worst_rank=ranges.get(score.user_id, (None, None))[1],
         )
         for rank_idx, score in enumerate(ranked, start=1)
     ]
@@ -742,6 +750,8 @@ async def round_scores(
     timeline_ids = {m.id for m in completed_matches}
     user_predictions: dict = {}
     entries = []
+    banked: dict[int, UserScore] = {}
+    picks_map: dict[int, dict] = {}
     # A cash pool on this draw hides everyone who did not pay in.
     visible = await _pool_visible(db, league.id, tournament_id)
     for member in league.members:
@@ -759,8 +769,10 @@ async def round_scores(
             continue
 
         pred_by_match = {p.match_id: p.predicted_winner_id for p in preds}
+        picks_map[member.user_id] = pred_by_match
         user_predictions[str(member.user_id)] = {str(k): v for k, v in pred_by_match.items() if k in timeline_ids}
         by_round: dict = defaultdict(float)
+        correct_by_round: dict[int, int] = {}
         correct_count = 0
 
         for match in completed_matches:
@@ -769,9 +781,12 @@ async def round_scores(
             if pred_by_match.get(match.id) != match.winner_id:
                 continue
             by_round[match.round_number] += pts_table.get(match.round_number, 0)
+            correct_by_round[match.round_number] = correct_by_round.get(match.round_number, 0) + 1
             correct_count += 1
 
         pts_list = [by_round.get(r, 0) for r in range(1, (tournament.num_rounds or 7) + 1)]
+        banked[member.user_id] = UserScore(user_id=member.user_id, total_points=sum(pts_list),
+                                           correct_count=correct_count, correct_by_round=correct_by_round)
         entries.append({
             "user_id": member.user_id,
             "username": member.user.username,
@@ -782,6 +797,12 @@ async def round_scores(
             "max_points": sum(pts_list) + potential_points(
                 pred_by_match, all_matches, position_by_entry, pts_table),
         })
+
+    # Where each bracket can still finish, once the draw is down to R16.
+    ranges = await finish_range_async(
+        tournament_id, all_matches, pts_table, tournament.num_rounds or 7, banked, picks_map)
+    for e in entries:
+        e["best_rank"], e["worst_rank"] = (ranges or {}).get(e["user_id"], (None, None))
 
     # Primary: total points desc. Tiebreaker: points in latest rounds first (Final → SF → QF → …)
     entries.sort(key=lambda x: (-x["total"],) + tuple(-rp for rp in reversed(x["round_points"])))
@@ -820,6 +841,7 @@ async def round_scores(
     )
     return {
         "entries": entries,
+        "finish_range_available": ranges is not None,
         "completed_matches_count": len(completed_matches),
         "rounds_with_matches": rounds_with_matches,
         "completed_round_nums": completed_round_nums,

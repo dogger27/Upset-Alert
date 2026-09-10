@@ -644,6 +644,13 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 .lt-progress-header-row {
   grid-template-columns: 28px 22px 22px var(--name-col-width, 120px) 3rem 52px 2.6rem 1fr;
 }
+/* WITH THE FINISH COLUMN, from R16 on: one more track after Max, wide enough
+   for "12–29". Every width tier below repeats this pairing — the modifier is
+   two classes deep, so it would otherwise beat a narrower tier's grid. */
+.lt-progress-row--abs.lt-progress-row--finish,
+.lt-progress-header-row.lt-progress-row--finish {
+  grid-template-columns: 28px 22px 22px var(--name-col-width, 120px) 3rem 52px 2.6rem 3.2rem 1fr;
+}
 .lt-progress-row--abs {
   position: absolute; width: 100%;
   transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
@@ -799,6 +806,14 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   font-size: 0.8rem; font-weight: 600; color: var(--text-muted);
   text-align: center; white-space: nowrap; font-variant-numeric: tabular-nums;
 }
+/* Where a bracket can still finish: "3" or "3–7". Muted like Max, since it is
+   a possibility — except a place clinched, the one certainty in the column,
+   which reads in ink. */
+.lt-progress-finish {
+  font-size: 0.8rem; font-weight: 600; color: var(--text-muted);
+  text-align: center; white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.lt-progress-finish--locked { color: var(--ink, var(--n-950)); }
 .lt-progress-col-header { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
 /* Ruled above and below, so the header reads as a band rather than as a first
    row that happens to hold labels. Both lines, not just the one underneath:
@@ -871,6 +886,10 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   .lt-progress-header-row {
     grid-template-columns: 28px 22px 22px var(--name-col-width, 120px) 3rem 52px 2.6rem;
   }
+  .lt-progress-row--abs.lt-progress-row--finish,
+  .lt-progress-header-row.lt-progress-row--finish {
+    grid-template-columns: 28px 22px 22px var(--name-col-width, 120px) 3rem 52px 2.6rem 3.2rem;
+  }
 }
 @container (max-width: 530px) {
   /* Drop surface; right-justify the draw name.
@@ -896,6 +915,15 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
     gap: 0.3rem;
     grid-template-columns: 24px 22px 20px var(--name-col-width, 120px) 2rem 46px 2rem;
   }
+  /* WITH THE FINISH COLUMN the phone row is over its limit by about the
+     width of the correct count, and the correct count is the number the
+     300 tier already drops first: a second reading of the score. From R16
+     on, where a bracket can still finish is the better use of the track. */
+  .lt-progress-row--finish .lt-progress-correct { display: none; }
+  .lt-progress-row--abs.lt-progress-row--finish,
+  .lt-progress-header-row.lt-progress-row--finish {
+    grid-template-columns: 24px 22px 20px var(--name-col-width, 120px) 46px 2rem 2.6rem;
+  }
 }
 @container (max-width: 320px) {
   .lt-gender-badge { display: none; } /* drop category, leave only the name */
@@ -917,6 +945,10 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   .lt-progress-header-row {
     grid-template-columns: 22px 22px 20px var(--name-col-width, 92px) 3rem 52px 2.6rem;
   }
+  .lt-progress-row--abs.lt-progress-row--finish,
+  .lt-progress-header-row.lt-progress-row--finish {
+    grid-template-columns: 22px 22px 20px var(--name-col-width, 92px) 52px 2.6rem 2.6rem;
+  }
 }
 @container (max-width: 300px) {
   .lt-bracket-btn, .lt-hcol-bracket, .lt-history-btn, .lt-hcol-history { display: none; }
@@ -926,6 +958,13 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   .lt-progress-correct { display: none; }
   .lt-progress-row--abs,
   .lt-progress-header-row {
+    grid-template-columns: var(--name-col-width, 92px) 52px 2.6rem;
+  }
+  /* The finish range goes with the correct count: the score and the name are
+     the last two things standing. */
+  .lt-progress-finish { display: none; }
+  .lt-progress-row--abs.lt-progress-row--finish,
+  .lt-progress-header-row.lt-progress-row--finish {
     grid-template-columns: var(--name-col-width, 92px) 52px 2.6rem;
   }
 }

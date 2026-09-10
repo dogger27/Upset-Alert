@@ -18,7 +18,7 @@ from app.schemas.user import UserPublicOut
 from app.services.draw_changes import classify_change
 from app.services.rankings import assign_rankings
 from app.services.scraper import scrape_tournament, snap_to_monday
-from app.services.scoring import UserScore, _points_table, rank_users
+from app.services.scoring import UserScore, _points_table, finish_range_async, rank_users
 from app.services.scoring import potential_points
 from app.services.upsets import has_upset_pick
 
@@ -1083,6 +1083,7 @@ async def global_standings(tournament_id: int, db: AsyncSession = Depends(get_db
     scores: list[UserScore] = []
     has_upset_map: dict[int, bool] = {}
     max_map: dict[int, float] = {}
+    picks_map: dict[int, dict] = {}
     position_by_entry = {e.id: e.bracket_position for e in all_entries}
     for user in users:
         preds_result = await db.execute(
@@ -1094,6 +1095,7 @@ async def global_standings(tournament_id: int, db: AsyncSession = Depends(get_db
         )
         preds = preds_result.scalars().all()
         pred_by_match = {p.match_id: p.predicted_winner_id for p in preds}
+        picks_map[user.id] = pred_by_match
         has_upset_map[user.id] = has_upset_pick(preds, all_matches, all_entries)
 
         total_pts = 0.0
@@ -1113,10 +1115,16 @@ async def global_standings(tournament_id: int, db: AsyncSession = Depends(get_db
 
     ranked = rank_users(scores, tournament.num_rounds)
     user_map = {u.id: u for u in users}
+    # Where each bracket can still finish, once the draw is down to R16.
+    ranges = await finish_range_async(
+        tournament_id, all_matches, pts_table, tournament.num_rounds,
+        {s.user_id: s for s in scores}, picks_map) or {}
     return [
         LeaderboardEntry(rank=i + 1, user=user_map[s.user_id], total_points=s.total_points,
                          correct_count=s.correct_count, max_points=max_map[s.user_id],
-                         has_upset_pick=has_upset_map[s.user_id])
+                         has_upset_pick=has_upset_map[s.user_id],
+                         best_rank=ranges.get(s.user_id, (None, None))[0],
+                         worst_rank=ranges.get(s.user_id, (None, None))[1])
         for i, s in enumerate(ranked)
     ]
 
@@ -1166,6 +1174,8 @@ async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get
     timeline_ids = {m.id for m in completed_matches}
     user_predictions: dict = {}
     entries = []
+    banked: dict[int, UserScore] = {}
+    picks_map: dict[int, dict] = {}
     for user in users:
         preds_result = await db.execute(
             select(UserPrediction).where(
@@ -1176,8 +1186,10 @@ async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get
         )
         preds = preds_result.scalars().all()
         pred_by_match = {p.match_id: p.predicted_winner_id for p in preds}
+        picks_map[user.id] = pred_by_match
         user_predictions[str(user.id)] = {str(k): v for k, v in pred_by_match.items() if k in timeline_ids}
         by_round: defaultdict = defaultdict(float)
+        correct_by_round: dict[int, int] = {}
         correct_count = 0
         for match in completed_matches:
             if match.winner_id is None:
@@ -1185,9 +1197,12 @@ async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get
             if pred_by_match.get(match.id) != match.winner_id:
                 continue
             by_round[match.round_number] += pts_table.get(match.round_number, 0)
+            correct_by_round[match.round_number] = correct_by_round.get(match.round_number, 0) + 1
             correct_count += 1
 
         pts_list = [by_round.get(r, 0) for r in range(1, (tournament.num_rounds or 7) + 1)]
+        banked[user.id] = UserScore(user_id=user.id, total_points=sum(pts_list),
+                                    correct_count=correct_count, correct_by_round=correct_by_round)
         entries.append({
             "user_id": user.id,
             "username": user.username,
@@ -1198,6 +1213,12 @@ async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get
             "max_points": sum(pts_list) + potential_points(
                 pred_by_match, all_matches, position_by_entry, pts_table),
         })
+
+    # Where each bracket can still finish, once the draw is down to R16.
+    ranges = await finish_range_async(
+        tournament_id, all_matches, pts_table, tournament.num_rounds or 7, banked, picks_map)
+    for e in entries:
+        e["best_rank"], e["worst_rank"] = (ranges or {}).get(e["user_id"], (None, None))
 
     entries.sort(key=lambda x: (-x["total"],) + tuple(-rp for rp in reversed(x["round_points"])))
     rounds_with_matches = sorted({m.round_number for m in completed_matches})
@@ -1242,6 +1263,7 @@ async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get
 
     return {
         "entries": entries,
+        "finish_range_available": ranges is not None,
         "completed_matches_count": len(completed_matches),
         "rounds_with_matches": rounds_with_matches,
         "completed_round_nums": completed_round_nums,

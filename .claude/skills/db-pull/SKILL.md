@@ -27,10 +27,22 @@ Paths:
 
 ## Steps
 
-1. **Snapshot prod** (read-only; `.backup` is safe on a live DB, unlike `cp`,
-   which can catch a torn write and misses the WAL):
+1. **Snapshot prod through the CONTAINER** (read-only; `.backup` is safe on a
+   live DB, unlike `cp`, which can catch a torn write and misses the WAL).
+   Not the host's `sqlite3` CLI: the container writes the DB as root, so its
+   `-wal`/`-shm` files are root-owned and the host CLI cannot open them — it
+   copies the main file alone and the result is corrupt (`malformed database
+   schema ... invalid rootpage` on open; 2026-09-10). The container's Python
+   sees the WAL, and writes the snapshot into the mounted data dir, which is
+   outside the repo:
 ```
-sqlite3 /home/paulwiens/upsetalert/data/tennis_fantasy.db ".backup /tmp/tfl_snapshot.db"
+cd /home/paulwiens/upsetalert/app && docker compose exec -T backend python -c "
+import sqlite3
+src = sqlite3.connect('file:/data/tennis_fantasy.db?mode=ro', uri=True)
+dst = sqlite3.connect('/data/_devpull_snapshot.db'); src.backup(dst); dst.close()
+print(sqlite3.connect('file:/data/_devpull_snapshot.db?mode=ro', uri=True).execute('pragma quick_check').fetchone())"
+cp /home/paulwiens/upsetalert/data/_devpull_snapshot.db /tmp/tfl_snapshot.db
+docker compose -f /home/paulwiens/upsetalert/app/docker-compose.yml exec -T backend rm /data/_devpull_snapshot.db
 ```
 
 2. There is **no download step** — this session runs on the production host, so
@@ -41,7 +53,7 @@ sqlite3 /home/paulwiens/upsetalert/data/tennis_fantasy.db ".backup /tmp/tfl_snap
 
 3. **Sanity-check** the snapshot before using it (must be a valid, non-trivial DB):
 ```
-test -s /tmp/tfl_snapshot.db && sqlite3 /tmp/tfl_snapshot.db "select count(*) from users;"
+test -s /tmp/tfl_snapshot.db && sqlite3 /tmp/tfl_snapshot.db "pragma quick_check; select count(*) from users;"
 ```
 If this errors or returns 0, STOP — do not overwrite the local DB.
 
@@ -59,6 +71,9 @@ cp /tmp/tfl_snapshot.db backend/tennis_fantasy.db
 
 6. If the local backend is running, **restart it** (re-run `/run`) so it opens the
    new file. SQLite is opened at startup; an already-running server keeps the old data.
+   Killing it by pattern: `pkill -f -- "--port 8010$"` — a pattern that also
+   appears in your own command line (e.g. the relaunch in the same command)
+   matches the shell running it, and the whole command dies with exit 144.
 
 7. **Remove the snapshot** now that it has been copied:
 ```
