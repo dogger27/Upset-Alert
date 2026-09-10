@@ -1730,7 +1730,19 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                     worth. Never while scrubbing; a replay has no future. */}
                 <span className={`lt-progress-name${entry.user_id === user?.id ? ' lt-progress-name--me' : ''}${entry.podium_locked ? ' lt-progress-name--podium' : ''}`}
                       title={entry.podium_locked ? 'Finishes on the podium whatever happens' : undefined}>
-                  {finalPlayed && rank < 3 && <span className="lt-place-icon">{PLACE_ICONS[rank]}</span>}
+                  {/* THE MEDAL FOLLOWS THE STANDING, NOT THE ROW. Keyed on the
+                      row's index it did two wrong things: two players
+                      genuinely level in third shared the place but not the
+                      bronze, because the second of them was the fourth ROW
+                      (owner, 2026-09-10); and sorting the table by Max or
+                      Finish moved the trophy to whoever happened to be
+                      first in that order. standingsRank is the competition
+                      rank — ties share it — so a shared place shares its
+                      medal, and a tie for first is two trophies and no
+                      silver, which is what a tie means. */}
+                  {finalPlayed && entry.standingsRank <= 3 && (
+                    <span className="lt-place-icon">{PLACE_ICONS[entry.standingsRank - 1]}</span>
+                  )}
                   <UserName className="lt-progress-name-text" user={{ username: entry.username, full_name: showRealName ? entry.full_name : null }} />
                   {entry.podium_locked && cashPool && (
                     <span className="lt-cash-lock" role="img" aria-label="in the money">💰</span>
