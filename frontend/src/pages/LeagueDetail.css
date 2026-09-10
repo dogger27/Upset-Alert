@@ -891,9 +891,16 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   .lt-progress-header-row {
     grid-template-columns: 28px 22px 22px var(--name-col-width, 120px) 3rem 52px 2.6rem;
   }
+  /* WITH THE FINISH COLUMN, MAX GOES. On a phone the two cannot share the
+     row, and from R16 on the range says more than the ceiling: "2–4" is
+     the ceiling read as a place. The score heading shrinks to one track
+     and loses its unit, which no longer fits over one column. */
+  .lt-progress-row--finish .lt-progress-max { display: none; }
+  .lt-progress-row--finish .lt-score-head { grid-column: span 1; }
+  .lt-progress-row--finish .lt-score-head-unit { display: none; }
   .lt-progress-row--abs.lt-progress-row--finish,
   .lt-progress-header-row.lt-progress-row--finish {
-    grid-template-columns: 28px 22px 22px var(--name-col-width, 120px) 3rem 52px 2.6rem 3.2rem;
+    grid-template-columns: 28px 22px 22px var(--name-col-width, 120px) 3rem 52px 3.2rem;
   }
 }
 @container (max-width: 530px) {
@@ -927,7 +934,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   .lt-progress-row--finish .lt-progress-correct { display: none; }
   .lt-progress-row--abs.lt-progress-row--finish,
   .lt-progress-header-row.lt-progress-row--finish {
-    grid-template-columns: 24px 22px 20px var(--name-col-width, 120px) 46px 2rem 2.6rem;
+    grid-template-columns: 24px 22px 20px var(--name-col-width, 120px) 46px 2.8rem;
   }
 }
 @container (max-width: 320px) {
@@ -952,7 +959,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   }
   .lt-progress-row--abs.lt-progress-row--finish,
   .lt-progress-header-row.lt-progress-row--finish {
-    grid-template-columns: 22px 22px 20px var(--name-col-width, 92px) 52px 2.6rem 2.6rem;
+    grid-template-columns: 22px 22px 20px var(--name-col-width, 92px) 52px 2.8rem;
   }
 }
 @container (max-width: 300px) {
@@ -965,12 +972,11 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   .lt-progress-header-row {
     grid-template-columns: var(--name-col-width, 92px) 52px 2.6rem;
   }
-  /* The finish range goes with the correct count: the score and the name are
-     the last two things standing. */
-  .lt-progress-finish { display: none; }
+  /* Max is already gone when the range shows, so the range keeps its
+     track: the name, the score, and where it can still finish. */
   .lt-progress-row--abs.lt-progress-row--finish,
   .lt-progress-header-row.lt-progress-row--finish {
-    grid-template-columns: var(--name-col-width, 92px) 52px 2.6rem;
+    grid-template-columns: var(--name-col-width, 92px) 52px 2.8rem;
   }
 }
 
