@@ -1762,6 +1762,26 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
               do and it goes. */}
           {!comparing && effectiveMax > 0 && (
             <div className="lt-scrubber">
+              {/* THE ANSWER TO "WHAT HAPPENED HERE" SITS ABOVE THE SLIDER, not
+                  below it. The scrubber is pinned to the foot of the panel, so
+                  anything that grows beneath the slider pushes it up under the
+                  finger; above it, the table gives up the two lines instead
+                  and the slider stays put. Rendered only while there is one,
+                  so an idle scrubber reserves nothing. Cleared when the drag
+                  returns to the end: at "all matches" there is no single
+                  point to answer for. */}
+              {flashMatch && (
+                <span key={flashMatch._key} className="lt-scrubber-flash">
+                  {getRoundLabel(flashMatch.round_number - 1, numRounds)}
+                  {': '}
+                  {flashMatch.winner_name ?? '?'} def. {flashMatch.loser_name ?? '?'}
+                  {flashMatch.completed_at && (
+                    <span className="lt-scrubber-when">
+                      {new Date(flashMatch.completed_at).toLocaleString('en-US', { month: 'short', day: '2-digit', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })}
+                    </span>
+                  )}
+                </span>
+              )}
               <input
                 type="range"
                 min={0}
@@ -1771,7 +1791,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                   const v = Number(e.target.value)
                   setScrubPos(v >= effectiveMax ? null : v)
                   setWorldIdx(null)
-                  const m = matchesTimeline[Math.min(v, effectiveMax) - 1]
+                  const m = v < effectiveMax ? matchesTimeline[v - 1] : null
                   if (m) {
                     /* IT STAYS. This is the answer to "what happened at
                        this point", and it was deleting itself 2.5 seconds
@@ -1791,23 +1811,6 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
               <div className="lt-scrubber-bottom">
                 <span className={`lt-scrubber-label${isScrubbing ? ' lt-scrubber-label--active' : ''}`}>
                   {scrubLabel}
-                </span>
-                {/* ALWAYS RENDERED, empty or not. The scrubber is pinned to
-                    the bottom of the panel, so anything that grows inside it
-                    pushes the slider up — and a slider that moves when you let
-                    go of it is a slider you have to re-find. The row holds its
-                    two lines of space whether or not there is a match in it. */}
-                <span key={flashMatch?._key ?? 'idle'} className="lt-scrubber-flash">
-                  {flashMatch && <>
-                    {getRoundLabel(flashMatch.round_number - 1, numRounds)}
-                    {': '}
-                    {flashMatch.winner_name ?? '?'} def. {flashMatch.loser_name ?? '?'}
-                    {flashMatch.completed_at && (
-                      <span className="lt-scrubber-when">
-                        {new Date(flashMatch.completed_at).toLocaleString('en-US', { month: 'short', day: '2-digit', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })}
-                      </span>
-                    )}
-                  </>}
                 </span>
               </div>
             </div>
