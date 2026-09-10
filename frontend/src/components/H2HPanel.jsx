@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useBackdropClose } from '../hooks/useBackdropClose'
 import { shortRound } from '../utils/rounds'
 import { createPortal } from 'react-dom'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
@@ -320,8 +321,9 @@ function FormRow({ matches, side, openKey, onOpen }) {
 }
 
 function EloInfoPopup({ onClose }) {
+  const backdrop = useBackdropClose(onClose)
   return (
-    <div className="h2h-elo-popup-backdrop" onClick={onClose}>
+    <div className="h2h-elo-popup-backdrop" {...backdrop}>
       <div className="h2h-elo-popup" onClick={e => e.stopPropagation()}>
         <div className="h2h-elo-popup-header">
           <span className="h2h-elo-popup-title">About Elo Rating</span>
@@ -576,8 +578,9 @@ export default function H2HPanel({
   const showElo = elo_rank_p1 != null || elo_rank_p2 != null
   const showAge = age_p1 != null || age_p2 != null
 
+  const backdrop = useBackdropClose(onClose)
   return createPortal(
-    <div className="h2h-backdrop" onClick={onClose}>
+    <div className="h2h-backdrop" {...backdrop}>
       {showEloInfo && <EloInfoPopup onClose={() => setShowEloInfo(false)} />}
       <div className="h2h-panel" onClick={e => e.stopPropagation()}>
         {/* Arrows paired at the left with the title to their right, matching

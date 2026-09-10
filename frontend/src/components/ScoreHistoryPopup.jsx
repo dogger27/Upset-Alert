@@ -18,6 +18,7 @@
  * timeline scrubber, including its "fully right = null = live" convention.
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useBackdropClose } from '../hooks/useBackdropClose'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getMatchScoreHistory, getMatchStatistics } from '../api/tournaments'
@@ -309,8 +310,9 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
         ? new Date(snap.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
         : `${pos + 1} / ${max}`)
 
+  const backdrop = useBackdropClose(onClose)
   return createPortal(
-    <div className="shp-backdrop" onClick={onClose}>
+    <div className="shp-backdrop" {...backdrop}>
       <div className="shp-popup" ref={popupRef}
            style={scale != null ? { '--shp-scale': scale } : undefined}
            onClick={e2 => e2.stopPropagation()} role="dialog" aria-modal="true">
