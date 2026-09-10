@@ -137,6 +137,10 @@ export default function LeagueDetail() {
   // observer attaches the instant the sentinel div mounts, regardless of
   // whether previousVisibleCount itself changed.
   const [previousVisibleCount, setPreviousVisibleCount] = useState(5)
+  /* SHOW ONLY THE DRAWS THIS LEAGUE PLAYED FOR MONEY. Most useful down the
+     Previous list, which is where a season's worth of draws piles up and the
+     question becomes "how did I do in the ones that counted". */
+  const [poolOnly, setPoolOnly] = useState(false)
 
   const { data: league, isLoading: leagueLoading } = useQuery({
     queryKey: ['league', id],
@@ -163,6 +167,13 @@ export default function LeagueDetail() {
     queryFn: () => getCashPools(Number(id)),
     enabled: !isGlobal,
   })
+  /* The draws with a pool switched on. A pool that exists but is off is not
+     a cash draw — the switch is what makes it one. */
+  const pooledDrawIds = useMemo(() => {
+    const out = new Set()
+    for (const p of cashPoolList) if (p.enabled) out.add(p.draw_id)
+    return out
+  }, [cashPoolList])
   const cashPools = useMemo(() => {
     const m = new Map()
     for (const p of cashPoolList) m.set(p.draw_id, p)
@@ -382,8 +393,15 @@ export default function LeagueDetail() {
                 {visibleGroups.map(g => {
                   // "Previous" lazy-loads 5 at a time; Open/Active always render in full.
                   const isPrevious = g.key === 'previous'
-                  const visibleItems = isPrevious ? g.items.slice(0, previousVisibleCount) : g.items
-                  const hasMore = isPrevious && previousVisibleCount < g.items.length
+                  /* The pool filter narrows the LIST, and the lazy count and
+                     the "show more" tally then run off the narrowed list —
+                     counting the unfiltered one would promise rows that the
+                     filter is holding back. */
+                  const poolFiltered = isPrevious && poolOnly
+                    ? g.items.filter(it => pooledDrawIds.has(it.tournament.id))
+                    : g.items
+                  const visibleItems = isPrevious ? poolFiltered.slice(0, previousVisibleCount) : poolFiltered
+                  const hasMore = isPrevious && previousVisibleCount < poolFiltered.length
                   return (
                     <div key={g.key}
                          className="card league-tournaments-section lt-section--fit">
@@ -405,11 +423,32 @@ export default function LeagueDetail() {
                            different place on every tile. Rows put every finish
                            in one column, which is what comparing them needs. */
                         if (isPrevious) {
+                          /* Offered only when a FINISHED draw actually ran a
+                             pool. Keyed on every pool in the league it would
+                             appear over a list it cannot narrow — a league
+                             whose only cash draw is still being played would
+                             show a filter that empties the table. */
+                          const showPool = g.items.some(it => pooledDrawIds.has(it.tournament.id))
                           return (
+                            <>
+                            {showPool && (
+                              <div className="dt-filter">
+                                <button type="button"
+                                        className={`dt-filter-btn${poolOnly ? ' dt-filter-btn--on' : ''}`}
+                                        aria-pressed={poolOnly}
+                                        onClick={() => { setPoolOnly(v => !v); setPreviousVisibleCount(5) }}>
+                                  <span aria-hidden="true">💰</span> Cash pool only
+                                </button>
+                              </div>
+                            )}
+                            {visibleItems.length === 0 ? (
+                              <p className="muted">No cash-pool draws in this league yet.</p>
+                            ) : (
                             <div className="dt-wrap">
                               <table className="dt-table">
                                 <thead>
                                   <tr>
+                                    {showPool && <th className="dt-h-pool" aria-label="Cash pool" />}
                                     <th className="dt-h-draw">Draw</th>
                                     <th className="dt-h-dates">Dates</th>
                                     <th className="dt-h-surface">Surface</th>
@@ -423,6 +462,8 @@ export default function LeagueDetail() {
                                     <DrawRow
                                       key={item.tournament.id}
                                       tournament={item.tournament}
+                                      showPool={showPool}
+                                      pool={pooledDrawIds.has(item.tournament.id)}
                                       leagueId={isGlobal ? null : Number(id)}
                                       showGenderLabel={gendersByName.get(item.tournament.name)?.size > 1}
                                       onOpen={() => setOpenDraw({
@@ -434,6 +475,8 @@ export default function LeagueDetail() {
                                 </tbody>
                               </table>
                             </div>
+                            )}
+                            </>
                           )
                         }
                         /* ONE CARD PER EVENT. Two draws of the same
@@ -491,7 +534,7 @@ export default function LeagueDetail() {
                            are finished draws being browsed, not a feed. */
                         <button type="button" className="lt-load-more"
                                 onClick={() => setPreviousVisibleCount(c => c + 20)}>
-                          Show more ({g.items.length - visibleItems.length} left)
+                          Show more ({poolFiltered.length - visibleItems.length} left)
                         </button>
                       )}
                     </div>
@@ -1001,7 +1044,7 @@ function DrawCard({ items, leagueId, showGenderLabel, onOpen,
 
    No progress bar: every draw in this table played to a final, so a bar that is
    always full says nothing. The finish and the score are what differ. */
-function DrawRow({ tournament: t, leagueId, showGenderLabel, onOpen }) {
+function DrawRow({ tournament: t, leagueId, showGenderLabel, onOpen, showPool = false, pool = false }) {
   const { user } = useAuth()
   const { data } = useQuery({
     queryKey: leagueId != null ? ['round-scores', leagueId, t.id] : ['global-round-scores', t.id],
@@ -1022,6 +1065,16 @@ function DrawRow({ tournament: t, leagueId, showGenderLabel, onOpen }) {
           // table is reachable by keyboard and then does nothing.
           if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen() }
         }}>
+      {/* THE MONEY, FAR LEFT. A column of its own rather than a mark inside
+          the draw cell: down a season's list the eye finds the cash draws by
+          scanning one edge, which is the whole point of asking. The cell is
+          always rendered while the league has any pool, so the names below
+          it stay in one column. */}
+      {showPool && (
+        <td className="dt-pool">
+          {pool ? <span title="This draw ran a cash pool" role="img" aria-label="Cash pool">💰</span> : null}
+        </td>
+      )}
       <td className="dt-draw">
         <span className={`lt-gender-badge lt-gender-badge--${t.gender === 'M' ? 'm' : 'f'}`}>
           {t.gender === 'M' ? 'ATP' : 'WTA'} {tierLabel(t.category)}
