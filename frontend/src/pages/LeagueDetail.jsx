@@ -1956,16 +1956,18 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                       <Arrow d={1} />
                     </div>
                   )}
-                </div>
-                {world && (
-                  <div className="lt-whatif-world">
-                    <div className="lt-whatif-bracket">{bracket}</div>
+                  {world && (
                     <span className="lt-whatif-rail">
                       <span className="lt-whatif-dots" aria-hidden="true">
                         {worlds.map((_, i) => <i key={i} className={i === worldIdx ? 'lt-whatif-dot--on' : undefined} />)}
                       </span>
                       <span className="lt-whatif-count">{worldIdx + 1} / {n}</span>
                     </span>
+                  )}
+                </div>
+                {world && (
+                  <div className="lt-whatif-world">
+                    <div className="lt-whatif-bracket">{bracket}</div>
                   </div>
                 )}
               </div>

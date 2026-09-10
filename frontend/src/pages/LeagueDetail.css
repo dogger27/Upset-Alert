@@ -570,21 +570,31 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   border: 1px solid var(--border); border-radius: 12px;
   background: color-mix(in srgb, var(--surface) 70%, var(--bg));
 }
-/* The left group is its own little grid — switch, tag, name — so the
-   stepper can take the NAME's column on a second row and sit directly
-   under the world it steps, not under the switch. */
+/* The left group is its own little grid — switch, tag, name — stacked in
+   three rows around the name it is about: the counter above it, the switch
+   and the name itself, the stepper below. All three centre on the NAME's
+   column, so the thing being counted and stepped is the thing they line up
+   with. The stack is a grid item in a centre-aligned row, which is what
+   holds it vertically centred against the taller bracket beside it. */
 .lt-whatif-head {
   grid-column: 1; display: grid; align-items: center; min-width: 0;
   grid-template-columns: auto auto minmax(0, 1fr);
   column-gap: 0.6rem; row-gap: 0.4rem;
 }
-.lt-whatif-tag { grid-column: 2; }
-.lt-whatif-label { grid-column: 3; }
-.lt-whatif-hint { grid-column: 2 / -1; }
-.lt-whatif-steps { grid-column: 3; display: flex; align-items: center; gap: 0.5rem; }
+.lt-whatif-rail { grid-column: 3; grid-row: 1; justify-self: center; }
+.lt-whatif-tag { grid-column: 2; grid-row: 2; }
+.lt-whatif-label { grid-column: 3; grid-row: 2; }
+.lt-switch { grid-column: 1; grid-row: 2; }
+.lt-whatif-hint { grid-column: 2 / -1; grid-row: 2; }
+.lt-whatif-steps {
+  grid-column: 3; grid-row: 3; justify-self: center;
+  display: flex; align-items: center; gap: 0.5rem;
+}
 .lt-whatif-world { display: contents; }
 .lt-whatif-bracket { grid-column: 2; display: flex; }
-.lt-whatif-rail { grid-column: 3; justify-self: end; display: flex; align-items: center; gap: 10px; }
+/* The third track is deliberately empty: equal outer tracks are what keep
+   the bracket on the panel's centre line whatever the left stack measures. */
+.lt-whatif-rail { display: flex; align-items: center; gap: 10px; }
 .lt-whatif-hint { font-size: 0.9rem; color: var(--text-muted); }
 .lt-whatif-hint b, .lt-whatif-tag { color: var(--text); font-weight: 700; font-size: 0.9rem; white-space: nowrap; }
 .lt-whatif-label {
@@ -596,6 +606,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
    active tab, so on/off reads with the rest of the panel's controls. */
 .lt-switch {
   position: relative; width: 38px; height: 22px; flex-shrink: 0; padding: 0;
+  justify-self: start;
   border-radius: 999px; border: 1px solid var(--border-strong); background: transparent;
   cursor: pointer; transition: background 0.15s, border-color 0.15s;
 }
@@ -672,6 +683,7 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
     padding: 0.7rem;
   }
   .lt-whatif-head, .lt-whatif-steps { display: contents; }
+  /* grid-area wins over the desktop stack's grid-column/grid-row. */
   .lt-switch { grid-area: switch; justify-self: start; }
   .lt-whatif-tag { grid-area: tag; }
   .lt-whatif-rail { grid-area: rail; justify-self: end; margin: 0; }
