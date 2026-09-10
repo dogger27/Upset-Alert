@@ -685,6 +685,11 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   min-width: 0; display: flex; align-items: center; gap: 4px;
 }
 .lt-progress-name--me .lt-progress-name-text { font-weight: 800; }
+/* A podium place locked: gold, bold, whoever it is — after --me so the
+   certainty outranks the tint. The money rides beside the name when the
+   draw runs a cash pool, and never shrinks into the ellipsis. */
+.lt-progress-name--podium .lt-progress-name-text { color: var(--gold-ink); font-weight: 800; }
+.lt-cash-lock { font-size: 0.9rem; line-height: 1; flex-shrink: 0; }
 .lt-place-icon { font-size: 0.95rem; flex-shrink: 0; line-height: 1; }
 .lt-progress-name-text {
   display: block;

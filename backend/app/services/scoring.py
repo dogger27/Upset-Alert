@@ -200,10 +200,14 @@ def finish_range(
     Enumerates every combination of winners for the undecided matches, walking
     the bracket forward so a later match is contested by whoever this future
     advanced into it, scores every bracket in every future, and ranks them
-    with the same tiebreak as rank_users. Returns {user_id: (best, worst)},
-    competition-ranked: best is one plus the brackets strictly ahead, worst is
-    the count of brackets ahead or level — so a tie is a range of one wide,
-    and the place the standings print always lies inside it.
+    with the same tiebreak as rank_users. Returns
+    {user_id: (best, worst, worst_place)}, competition-ranked: best is one
+    plus the brackets strictly ahead, worst is the count of brackets ahead or
+    level — so a tie is a range of one wide, and the place the standings
+    print always lies inside it. worst_place is the worst PLACE the bracket
+    can hold, one plus the brackets strictly ahead in its worst future: two
+    brackets tied third both hold third, so a podium is locked when
+    worst_place <= 3, not when worst <= 3.
 
     `banked` is each user's score on the decided matches (score_user); `picks`
     is each user's predicted winner by match id. None when the draw has more
@@ -261,6 +265,7 @@ def finish_range(
     chunk = max(1, min(4096, 4_000_000 // max(1, u_count * u_count)))
     best = np.full(u_count, u_count + 1, dtype=np.int64)
     worst = np.zeros(u_count, dtype=np.int64)
+    worst_place = np.zeros(u_count, dtype=np.int64)
     for start in range(0, worlds, chunk):
         idx = np.arange(start, min(start + chunk, worlds), dtype=np.int64)
         bits = (idx[:, None] >> np.arange(n, dtype=np.int64)) & 1 if n else np.zeros((len(idx), 0), dtype=np.int64)
@@ -278,15 +283,17 @@ def finish_range(
         key = base[None, :] + correct @ weight                       # worlds × users
         ahead = key[:, None, :] > key[:, :, None]                    # [w, me, other]
         level = key[:, None, :] >= key[:, :, None]
-        best = np.minimum(best, 1 + ahead.sum(2).min(0))
+        n_ahead = ahead.sum(2)
+        best = np.minimum(best, 1 + n_ahead.min(0))
         worst = np.maximum(worst, level.sum(2).max(0))
-    return {u: (int(best[i]), int(worst[i])) for i, u in enumerate(users)}
+        worst_place = np.maximum(worst_place, 1 + n_ahead.max(0))
+    return {u: (int(best[i]), int(worst[i]), int(worst_place[i])) for i, u in enumerate(users)}
 
 
 # Same draw, same brackets, same results: same answer. Keyed on everything the
 # range depends on, so a pick edited by an admin or a result reverted is a
 # miss, not a stale hit.
-_FINISH_CACHE: dict[tuple, Optional[dict[int, tuple[int, int]]]] = {}
+_FINISH_CACHE: dict[tuple, Optional[dict[int, tuple[int, int, int]]]] = {}
 _FINISH_CACHE_MAX = 64
 
 
@@ -317,3 +324,13 @@ async def finish_range_async(draw_id: int, all_matches: list, pts_table: dict[in
                              player1_id=m.player1_id, player2_id=m.player2_id,
                              winner_id=m.winner_id, is_bye=bool(m.is_bye)) for m in all_matches]
     return await asyncio.to_thread(finish_range_cached, draw_id, plain, pts_table, num_rounds, banked, picks)
+
+
+# A podium is locked when the worst place a bracket can hold is third or
+# better — with ties sharing a place, since two brackets level in third both
+# take the bronze.
+PODIUM_PLACES = 3
+
+
+def podium_locked(rng: Optional[tuple]) -> Optional[bool]:
+    return None if rng is None else rng[2] <= PODIUM_PLACES

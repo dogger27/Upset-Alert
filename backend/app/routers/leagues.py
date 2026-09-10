@@ -24,7 +24,7 @@ from app.schemas.league import (
     CashPoolIn, CashPoolOut,
 )
 from app.schemas.tournament import TournamentOut
-from app.services.scoring import UserScore, finish_range_async, rank_users, score_user
+from app.services.scoring import UserScore, finish_range_async, podium_locked, rank_users, score_user
 from app.services.scoring import potential_points, _points_table as _pts_table_for
 from app.services.upsets import has_upset_pick
 
@@ -590,6 +590,7 @@ async def leaderboard(
             has_upset_pick=has_upset_map[score.user_id],
             best_rank=ranges.get(score.user_id, (None, None))[0],
             worst_rank=ranges.get(score.user_id, (None, None))[1],
+            podium_locked=podium_locked(ranges.get(score.user_id)),
         )
         for rank_idx, score in enumerate(ranked, start=1)
     ]
@@ -802,7 +803,9 @@ async def round_scores(
     ranges = await finish_range_async(
         tournament_id, all_matches, pts_table, tournament.num_rounds or 7, banked, picks_map)
     for e in entries:
-        e["best_rank"], e["worst_rank"] = (ranges or {}).get(e["user_id"], (None, None))
+        rng = (ranges or {}).get(e["user_id"])
+        e["best_rank"], e["worst_rank"] = (rng[0], rng[1]) if rng else (None, None)
+        e["podium_locked"] = podium_locked(rng)
 
     # Primary: total points desc. Tiebreaker: points in latest rounds first (Final → SF → QF → …)
     entries.sort(key=lambda x: (-x["total"],) + tuple(-rp for rp in reversed(x["round_points"])))
@@ -842,6 +845,9 @@ async def round_scores(
     return {
         "entries": entries,
         "finish_range_available": ranges is not None,
+        # A cash pool on this draw: the standings mark a locked podium as
+        # money as well as a medal.
+        "cash_pool": visible is not None,
         "completed_matches_count": len(completed_matches),
         "rounds_with_matches": rounds_with_matches,
         "completed_round_nums": completed_round_nums,
