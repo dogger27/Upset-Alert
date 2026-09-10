@@ -1561,6 +1561,23 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
    frame ran to the edge of the page with the table centred in a field of
    nothing. An explicit fit-content here hands that measurement back, and
    max-width keeps the scrolling behaviour on a narrow screen. */
+/* The cash-pool filter, above the list it narrows. */
+.dt-filter { display: flex; justify-content: flex-end; margin-bottom: 0.5rem; }
+.dt-filter-btn {
+  background: none; border: 1px solid var(--text-muted); border-radius: 999px;
+  padding: 3px 12px; cursor: pointer;
+  font-family: var(--font-display); font-weight: 700; font-size: 0.78rem;
+  letter-spacing: 0.03em; color: var(--text-muted);
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.dt-filter-btn:hover { color: var(--text-strong, var(--text)); border-color: var(--text-strong, var(--text)); }
+.dt-filter-btn--on { background: var(--green, #2d6a4f); border-color: transparent; color: #fff; }
+.dt-filter-btn:focus-visible { outline: 2px solid var(--brand-line); outline-offset: 2px; }
+/* The money column: narrow, centred, and it holds its width whether or not
+   this particular row ran a pool. */
+.dt-h-pool, .dt-pool { width: 1.5rem; text-align: center; padding-right: 0; }
+.dt-pool { font-size: 0.95rem; line-height: 1; }
+
 .dt-wrap {
   overflow-x: auto;
   width: fit-content;
