@@ -18,7 +18,7 @@ from app.schemas.user import UserPublicOut
 from app.services.draw_changes import classify_change
 from app.services.rankings import assign_rankings
 from app.services.scraper import scrape_tournament, snap_to_monday
-from app.services.scoring import UserScore, _points_table, enumerate_worlds, finish_range_async, podium_locked, rank_users
+from app.services.scoring import UserScore, _points_table, enumerate_worlds, finish_history_async, finish_range_async, podium_locked, rank_users
 from app.services.scoring import potential_points
 from app.services.upsets import has_upset_pick
 
@@ -1283,9 +1283,18 @@ async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get
     from app.services.locking import predictions_visible
     picks_visible = await predictions_visible(db, tournament)
 
+    # THE FINISH COLUMN OF EVERY SNAPSHOT the slider can show, from the first
+    # position it is computable at. Keyed by position; the client reads the
+    # one under the thumb, and prints a dash before `finish_from`.
+    finish_from, finish_hist = await finish_history_async(
+        tournament_id, all_matches, [m["id"] for m in timeline], pts_table, tournament.num_rounds or 7, picks_map)
+    finish_history = {str(p): {str(u): [b, w] for u, (b, w) in r.items()} for p, r in finish_hist.items()}
+
     return {
         "entries": entries,
         "finish_range_available": ranges is not None,
+        "finish_from": finish_from,
+        "finish_history": finish_history,
         "cash_pool": False,
         "worlds": worlds,
         "tail_matches": tail_matches,

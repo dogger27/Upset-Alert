@@ -98,10 +98,11 @@ export function sortStandings(rows) {
 }
 
 /* THE TABLE REWOUND to the first `pos` matches of the timeline: every row
- * re-scored from its picks on those matches alone, then re-sorted. A replay
- * has no future, so the finish range and the podium go quiet. */
-export function scrubEntries(entries, timeline, pos, userPredictions) {
+ * re-scored from its picks on those matches alone, then re-sorted, with the
+ * finish range and podium as they stood at that point. */
+export function scrubEntries(entries, timeline, pos, userPredictions, finishHistory = {}) {
   const slice = timeline.slice(0, pos)
+  const hist = finishHistory[String(pos)] ?? null
   const rows = entries.map(e => {
     const preds = userPredictions[String(e.user_id)] ?? {}
     let total = 0, correct_count = 0
@@ -114,7 +115,11 @@ export function scrubEntries(entries, timeline, pos, userPredictions) {
       }
     }
     const round_points = Array.from({ length: e.round_points.length }, (_, i) => byRound[i + 1] ?? 0)
-    return { ...e, round_points, total, correct_count, podium_locked: false }
+    // The Finish column of THIS snapshot: the range as it stood at this
+    // position, a dash before the first position it exists at.
+    const r = hist?.[String(e.user_id)] ?? null
+    return { ...e, round_points, total, correct_count,
+             best_rank: r ? r[0] : null, worst_rank: r ? r[1] : null, podium_locked: !!r && r[1] <= 3 }
   })
   return sortStandings(rows)
 }

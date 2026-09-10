@@ -1219,6 +1219,11 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
   const worlds = rawData?.worlds ?? null
   const worldPredictions = rawData?.world_predictions ?? {}
   const tailMatches = rawData?.tail_matches ?? []
+  /* THE FINISH COLUMN OF EVERY SNAPSHOT: keyed by slider position, from the
+     first position it is computable at. A rewound table shows the range as
+     it stood then — and a dash before that. */
+  const finishHistory = rawData?.finish_history ?? {}
+  const finishFrom = rawData?.finish_from ?? null
   const world = worlds && worldIdx != null && worldIdx < worlds.length ? worlds[worldIdx] : null
 
   const effectiveMax = matchesTimeline.length
@@ -1286,7 +1291,9 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
         }
       }
       const round_points = Array.from({ length: e.round_points.length }, (_, i) => byRound[i + 1] ?? 0)
-      return { ...e, round_points, total, correct_count }
+      const r = finishHistory[String(effectiveScrubPos)]?.[String(e.user_id)]
+      return { ...e, round_points, total, correct_count,
+               best_rank: r ? r[0] : null, worst_rank: r ? r[1] : null, podium_locked: !!r && r[1] <= 3 }
     })
     currentEntries.sort((a, b) => {
       if (b.total !== a.total) return b.total - a.total
@@ -1297,7 +1304,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
       return 0
     })
     return { entries: currentEntries, roundsWithMatches: sliceRounds }
-  }, [isScrubbing, effectiveScrubPos, matchesTimeline, entries, roundsWithMatches, userPredictions, world, worldPredictions])
+  }, [isScrubbing, effectiveScrubPos, matchesTimeline, entries, roundsWithMatches, userPredictions, world, worldPredictions, finishHistory])
 
   const pointsOrder = displayData.entries
   /* The finish column exists only once the server can enumerate the draw's
@@ -1366,6 +1373,14 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
   const numRounds = entries.length > 0 ? entries[0].round_points.length : (t.num_rounds ?? ROUND_COLORS.length)
   // Scale and column structure always reflect the full (server) state so bars grow as you scrub right
   const finalPlayed = roundsWithMatches.includes(numRounds) || (world != null && !isScrubbing)
+  /* SORTED BY FINISH, THE SLIDER STOPS WHERE THE COLUMN BEGINS. The range
+     exists from the end of R32; a table ordered by it cannot be rewound
+     into positions where it is a column of dashes. */
+  const scrubMin = colSort === 'finish' && finishFrom != null ? Math.min(finishFrom, effectiveMax) : 0
+  const sortByFinish = () => {
+    setColSort('finish')
+    if (scrubPos != null && finishFrom != null && scrubPos < finishFrom) setScrubPos(finishFrom >= effectiveMax ? null : finishFrom)
+  }
 
   // Fixed name column width based on longest username — shared across all absolute-positioned rows.
   // When the top 3 get a place icon (🏆/🥈/🥉) it shares this same cell, so reserve extra room for
@@ -1615,8 +1630,8 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
               <span className={`lt-progress-finish lt-progress-col-header lt-col-sort${colSort === 'finish' ? ' lt-col-sort--on' : ''}`}
                     role="button" tabIndex={0}
                     title="Best and worst place this bracket can still finish on, over every result left to play — click to sort"
-                    onClick={() => setColSort('finish')}
-                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setColSort('finish') } }}>
+                    onClick={sortByFinish}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sortByFinish() } }}>
                 Finish
               </span>
             )}
@@ -1710,11 +1725,11 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                     sharing a place — reads in gold, and carries the money
                     when the draw runs a cash pool: that is what the place is
                     worth. Never while scrubbing; a replay has no future. */}
-                <span className={`lt-progress-name${entry.user_id === user?.id ? ' lt-progress-name--me' : ''}${entry.podium_locked && !isScrubbing ? ' lt-progress-name--podium' : ''}`}
-                      title={entry.podium_locked && !isScrubbing ? 'Finishes on the podium whatever happens' : undefined}>
+                <span className={`lt-progress-name${entry.user_id === user?.id ? ' lt-progress-name--me' : ''}${entry.podium_locked ? ' lt-progress-name--podium' : ''}`}
+                      title={entry.podium_locked ? 'Finishes on the podium whatever happens' : undefined}>
                   {finalPlayed && rank < 3 && <span className="lt-place-icon">{PLACE_ICONS[rank]}</span>}
                   <UserName className="lt-progress-name-text" user={{ username: entry.username, full_name: showRealName ? entry.full_name : null }} />
-                  {entry.podium_locked && !isScrubbing && cashPool && (
+                  {entry.podium_locked && cashPool && (
                     <span className="lt-cash-lock" role="img" aria-label="in the money">💰</span>
                   )}
                 </span>
@@ -1814,7 +1829,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
               )}
               <input
                 type="range"
-                min={0}
+                min={scrubMin}
                 max={effectiveMax}
                 value={effectiveScrubPos}
                 onChange={e => {
@@ -1836,7 +1851,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                   }
                 }}
                 className="lt-scrubber-range"
-                style={{ '--fill-pct': `${(effectiveScrubPos / effectiveMax) * 100}%` }}
+                style={{ '--fill-pct': `${((effectiveScrubPos - scrubMin) / Math.max(1, effectiveMax - scrubMin)) * 100}%` }}
               />
               <div className="lt-scrubber-bottom">
                 <span className={`lt-scrubber-label${isScrubbing ? ' lt-scrubber-label--active' : ''}`}>

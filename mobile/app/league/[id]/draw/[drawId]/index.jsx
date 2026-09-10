@@ -66,7 +66,7 @@ export default function Standings() {
   const cashPool = !!scores.data?.cash_pool
 
   const sortHead = (key, label, style, extra, a11y) => (
-    <Pressable onPress={() => setSortKey(key)} hitSlop={8} accessibilityRole="button"
+    <Pressable onPress={() => { setSortKey(key); if (key === 'finish') view.clampToFinish() }} hitSlop={8} accessibilityRole="button"
                accessibilityState={{ selected: sortKey === key }}
                accessibilityLabel={a11y ?? `Sort by ${label}`}>
       <Text style={[style, s.headText, sortKey === key && s.headOn]} numberOfLines={1} {...extra}>{label}</Text>
@@ -205,7 +205,7 @@ export default function Standings() {
           </View>
           </ScrollView>
         )}
-        {entries.length > 0 ? <StandingsFoot view={view} /> : null}
+        {entries.length > 0 ? <StandingsFoot view={view} minPos={sortKey === 'finish' ? (view.finishFrom ?? 0) : 0} /> : null}
       </Screen>
     </>
   )

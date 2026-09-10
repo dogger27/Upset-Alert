@@ -190,3 +190,29 @@ def test_worlds_off_before_the_semis_and_after_the_final():
     assert len(enumerate_worlds(ms, {1: 1, 2: 2}, {})) == 2
     f.winner_id = f.player1_id
     assert enumerate_worlds(ms, {1: 1, 2: 2}, {}) is None
+
+
+def test_history_ends_on_the_live_range():
+    from app.services.scoring import finish_history, finish_range
+    rng = random.Random(11)
+    ms = _bracket(16, decided_r1=8, rng=rng)
+    # decide the quarters too, in a timeline order: R1 then R2
+    by = {(m.round_number, m.match_number): m for m in ms}
+    for k in range(1, 5):
+        q = by[(2, k)]
+        q.winner_id = rng.choice([q.player1_id, q.player2_id])
+    for k in range(1, 3):
+        sf = by[(3, k)]
+        sf.player1_id, sf.player2_id = by[(2, 2 * k - 1)].winner_id, by[(2, 2 * k)].winner_id
+    timeline = [by[(1, k)].id for k in range(1, 9)] + [by[(2, k)].id for k in range(1, 5)]
+    picks = {u: _random_picks(ms, 16, rng) for u in range(1, 6)}
+    first, hist = finish_history(99, ms, timeline, PTS16, 4, picks)
+    assert first == 1                      # a 16-draw has 15 contests: computable from the first ball
+    assert set(hist) == set(range(1, 13))
+    # the last snapshot IS the live draw
+    assert hist[12] == finish_range(ms, PTS16, 4, _banked(ms, PTS16, picks), picks)
+    # and earlier snapshots hide the future: at position 8 no R2 slot is known,
+    # so ranges are at least as wide as at 12
+    for u in picks:
+        b8, w8 = hist[8][u]; b12, w12 = hist[12][u]
+        assert b8 <= b12 and w8 >= w12
