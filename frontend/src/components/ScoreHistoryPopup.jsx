@@ -488,7 +488,6 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
                   {/* How long the tennis took. Sofascore's PLAYING time where
                       we have it — the sum of its set clocks — so a match
                       suspended for rain does not count the delay as play. */}
-                  {playedFor && <p className="shp-duration">{playedFor} played</p>}
                   {rows.map(([label, lw, lt, rw, rt]) => (
                     <div className="shp-stat-row" key={label}>
                       <span className="shp-stat-num">{lt ? `${pct(lw, lt)}%` : '—'}
