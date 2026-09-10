@@ -32,14 +32,6 @@ const surname = full => {
   return parts.slice(i).join(' ') || '?'
 }
 const worldLine = w => `${surname(w.final.winner)} def. ${surname(w.final.loser)}`
-/* Every semi-finalist reaches some world's final, so the finals name them all. */
-const worldNames = (worlds, id) => {
-  for (const w of worlds) {
-    if (w.final.winner_id === id) return w.final.winner
-    if (w.final.loser_id === id) return w.final.loser
-  }
-  return null
-}
 const finishTitle = e => e.best_rank == null ? undefined
   : e.best_rank === e.worst_rank ? `Finishes ${ordinal(e.best_rank)} whatever happens`
   : `Can still finish anywhere from ${ordinal(e.best_rank)} to ${ordinal(e.worst_rank)}`
@@ -1198,6 +1190,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
   const userPredictions = rawData?.user_predictions ?? {}
   const worlds = rawData?.worlds ?? null
   const worldPredictions = rawData?.world_predictions ?? {}
+  const tailMatches = rawData?.tail_matches ?? []
   const world = worlds && worldIdx != null && worldIdx < worlds.length ? worlds[worldIdx] : null
 
   const effectiveMax = matchesTimeline.length
@@ -1767,44 +1760,6 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
               matches that produced it; a bracket of predicted names has no
               such history to walk, so on this tab there is nothing for it to
               do and it goes. */}
-          {/* WHAT IF. From the semis on, every way the rest of the draw can
-              go, one label each — the final, by surname — and the table
-              re-scored under the one chosen. Eight worlds at the semis, two
-              at the final; the cycle passes through "as it stands" between
-              the last and the first. */}
-          {!comparing && worlds && worlds.length > 0 && (() => {
-            const n = worlds.length
-            const step = d => {
-              setScrubPos(null); setFlashMatch(null)
-              setWorldIdx(i => {
-                const next = i == null ? (d > 0 ? 0 : n - 1) : i + d
-                return next < 0 || next >= n ? null : next
-              })
-            }
-            const semis = world && world.results.length > 1
-              ? world.results.slice(0, -1).map(r => `${surname(worldNames(worlds, r.winner_id))} def. ${surname(worldNames(worlds, r.loser_id))}`)
-              : []
-            return (
-              <div className={`lt-worlds${world ? ' lt-worlds--on' : ''}`} role="group" aria-label="What if">
-                <button type="button" className="lt-worlds-btn" onClick={() => step(-1)} aria-label="Previous world">‹</button>
-                <div className="lt-worlds-body">
-                  <span className="lt-worlds-count">
-                    {world ? `What if · world ${worldIdx + 1} of ${n}` : `What if · ${n} ways the final can go`}
-                  </span>
-                  <span className="lt-worlds-label">
-                    {world ? worldLine(world) : 'As it stands'}
-                  </span>
-                  {semis.length > 0 && (
-                    <span className="lt-worlds-semis">SF: {semis.join(' · ')}</span>
-                  )}
-                </div>
-                <button type="button" className="lt-worlds-btn" onClick={() => step(1)} aria-label="Next world">›</button>
-                {world && (
-                  <button type="button" className="lt-worlds-reset" onClick={() => setWorldIdx(null)}>As it stands</button>
-                )}
-              </div>
-            )
-          })()}
           {!comparing && effectiveMax > 0 && (
             <div className="lt-scrubber">
               <input
@@ -1857,6 +1812,98 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
               </div>
             </div>
           )}
+          {/* WHAT IF. From the semis on, a strip at the foot of the panel:
+              the table as it stands, or re-scored under one of the ways the
+              draw can still end — eight worlds at the semis, two at the
+              final. A chosen world is drawn as a bracket the size of a
+              caption (semis, final, winner; the winner of each match lit,
+              the champion in the podium's gold), stepped with two arrows,
+              and named by its final. The dot rail is the cycle at a glance. */}
+          {!comparing && worlds && worlds.length > 0 && (() => {
+            const n = worlds.length
+            const left = worlds[0].results.length
+            const WORDS = { 1: 'One', 2: 'Two', 3: 'Three', 4: 'Four', 8: 'Eight' }
+            const step = d => setWorldIdx(i => ((i ?? 0) + d + n) % n)
+            const enter = () => { setScrubPos(null); setFlashMatch(null); setWorldIdx(i => i ?? 0) }
+            const Arrow = ({ d }) => (
+              <button type="button" className="lt-whatif-btn" onClick={() => step(d)} aria-label={d < 0 ? 'Previous world' : 'Next world'}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points={d < 0 ? '15 18 9 12 15 6' : '9 18 15 12 9 6'} />
+                </svg>
+              </button>
+            )
+            let bracket = null
+            if (world) {
+              const won = Object.fromEntries(world.results.map(r => [r.match_id, r.winner_id]))
+              const winnerOf = m => won[m.match_id] ?? m.winner_id
+              const names = {}
+              for (const m of tailMatches) { names[m.player1_id] = m.player1; names[m.player2_id] = m.player2 }
+              names[world.final.winner_id] ??= world.final.winner
+              names[world.final.loser_id] ??= world.final.loser
+              const semis = tailMatches.filter(m => m.round_number === numRounds - 1)
+              const fin = tailMatches.find(m => m.round_number === numRounds)
+              const finalists = semis.map(winnerOf)
+              const champion = fin ? winnerOf(fin) : world.final.winner_id
+              const Pill = ({ id, state }) => (
+                <span className={`lt-mini-pill${state ? ` lt-mini-pill--${state}` : ''}`}>{surname(names[id])}</span>
+              )
+              bracket = semis.length === 2 && (
+                <div className="lt-mini" aria-label="The bracket in this world">
+                  <div className="lt-mini-heads"><span>SF</span><span /><span>F</span><span /><span className="lt-mini-head--w">W</span></div>
+                  <div className="lt-mini-rows">
+                    <div className="lt-mini-col lt-mini-col--sf">
+                      {semis.map(m => (
+                        <div className="lt-mini-pair" key={m.match_id}>
+                          <Pill id={m.player1_id} state={winnerOf(m) === m.player1_id ? 'on' : ''} />
+                          <Pill id={m.player2_id} state={winnerOf(m) === m.player2_id ? 'on' : ''} />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="lt-mini-braces"><span className="lt-mini-brace" /><span className="lt-mini-brace" /></div>
+                    <div className="lt-mini-col lt-mini-col--f">
+                      {finalists.map((id, i) => <Pill key={i} id={id} state={champion === id ? 'on' : ''} />)}
+                    </div>
+                    <div className="lt-mini-braces lt-mini-braces--f"><span className="lt-mini-brace lt-mini-brace--tall" /></div>
+                    <div className="lt-mini-col lt-mini-col--w"><Pill id={champion} state="champ" /></div>
+                  </div>
+                </div>
+              )
+            }
+            return (
+              <div className={`lt-whatif${world ? ' lt-whatif--on' : ''}`}>
+                <div className="lt-whatif-switch" role="tablist" aria-label="Standings as they stand, or what if">
+                  <button type="button" role="tab" aria-selected={!world}
+                    className={`lt-tab${!world ? ' lt-tab--active' : ''}`}
+                    onClick={() => setWorldIdx(null)}>As it stands</button>
+                  <button type="button" role="tab" aria-selected={!!world}
+                    className={`lt-tab${world ? ' lt-tab--active' : ''}`}
+                    onClick={enter}>What if</button>
+                </div>
+                <span className="lt-whatif-rule" aria-hidden="true" />
+                {world ? (
+                  <div className="lt-whatif-world">
+                    <span className="lt-whatif-prev"><Arrow d={-1} /></span>
+                    <div className="lt-whatif-bracket">{bracket}</div>
+                    <span className="lt-whatif-next"><Arrow d={1} /></span>
+                    <div className="lt-whatif-name">
+                      <span className="lt-whatif-eyebrow">If the final goes</span>
+                      <span className="lt-whatif-label">{worldLine(world)}</span>
+                      <span className="lt-whatif-rail">
+                        <span className="lt-whatif-dots" aria-hidden="true">
+                          {worlds.map((_, i) => <i key={i} className={i === worldIdx ? 'lt-whatif-dot--on' : undefined} />)}
+                        </span>
+                        <span className="lt-whatif-count">{worldIdx + 1} / {n}</span>
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <span className="lt-whatif-hint">
+                    {WORDS[left] ?? left} match{left === 1 ? '' : 'es'} to play. {WORDS[n] ?? n} ways it can end.
+                  </span>
+                )}
+              </div>
+            )
+          })()}
         </>
       )}
     </div>
