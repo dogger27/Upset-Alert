@@ -273,13 +273,24 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   font-size: 1.75rem;
   margin: 0 0 0.75rem;
 }
+/* ONE LINE: the row's controls on the left, the tabs on the true centre.
+   Three tracks with equal outer ones, so the tabs sit at the midpoint of the
+   band whether or not this reader may invite or manage — flex could only
+   have pushed the edges apart. Narrowed to the same band as the page header
+   so the controls come in toward the content instead of hugging a 1224px
+   edge (owner, 2026-09-10). */
 .lt-controls-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: center;
   gap: 1rem;
-  margin-bottom: 1rem;
-  flex-wrap: wrap;
+  margin: 0 auto 1rem;
+  max-width: var(--leagues-band, 100%);
+}
+.lt-controls-actions { grid-column: 1; display: flex; gap: 0.5rem; justify-self: start; }
+.lt-controls-tabs {
+  grid-column: 2; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+  justify-content: center;
 }
 .lt-members-btn {
   padding: 0.45rem 1.15rem;

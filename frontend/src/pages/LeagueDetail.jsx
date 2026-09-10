@@ -118,7 +118,7 @@ export default function LeagueDetail() {
   const qc = useQueryClient()
   // Settings/Invite buttons live in the parent Leagues.jsx top bar now (next to
   // the league selector arrow); this page just owns the modals they open.
-  const { editing, setEditing, showInvite, setShowInvite } = useOutletContext()
+  const { editing, setEditing, showInvite, setShowInvite, actions } = useOutletContext()
 
   // The draw whose standings are open, or null. Held HERE rather than in the
   // card: the modal must not live inside the scrolling list it was opened
@@ -262,12 +262,16 @@ export default function LeagueDetail() {
         return (
           <>
             <div className="lt-controls-row">
-              <button
-                className={['lt-members-btn', showMembers && 'lt-members-btn--active'].filter(Boolean).join(' ')}
-                onClick={() => setShowMembers(true)}
-              >
-                Members
-              </button>
+              {/* Invite and Settings, handed over by the page so they share
+                  this line rather than owning one above it. */}
+              <div className="lt-controls-actions">{actions}</div>
+              <div className="lt-controls-tabs">
+                <button
+                  className={['lt-members-btn', showMembers && 'lt-members-btn--active'].filter(Boolean).join(' ')}
+                  onClick={() => setShowMembers(true)}
+                >
+                  Members
+                </button>
               {categoryGroups.length > 0 && (
                 <div className="lt-status-tabs">
                   {STATUS_TABS.map(t => {
@@ -286,6 +290,7 @@ export default function LeagueDetail() {
                   })}
                 </div>
               )}
+              </div>
             </div>
 
             {showMembers ? (
