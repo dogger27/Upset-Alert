@@ -25,6 +25,8 @@
  * shrinking the type or cutting the name in half.
  */
 
+import { IOC_TO_ISO2 } from './flags.js'
+
 const PARTICLES = new Set([
   'van', 'von', 'de', 'del', 'della', 'der', 'den', 'di', 'da', 'dos', 'das',
   'du', 'la', 'le', 'el', 'al', 'bin', 'ibn', 'ter', 'ten', 'op', 'auf', "'t",
@@ -101,4 +103,33 @@ export function properName(raw) {
     out = out.replace(/^Mc([a-zà-öø-ÿ])/, (m, c) => 'Mc' + c.toUpperCase())
     return out
   }).join('')
+}
+
+/* THE SHEET'S FURNITURE IS NOT PART OF THE NAME. An order of play prints
+ * "[4] Austin KRAJICEK USA": a seed in brackets, the surname shouting, and
+ * the IOC nationality last. Singles never showed any of it because
+ * entry_name (proper case, from the draw) took precedence — but a DOUBLES
+ * pair has no draw entry, so the raw sheet string reached the name ladder,
+ * whose last rung is "the final token": the app printed "Usa / Cro" for the
+ * Winston-Salem doubles final (owner, 2026-09-10).
+ *
+ * Returns { name, nat }: the name with the furniture removed, and the
+ * nationality it carried, which is the only place that fact exists for a
+ * doubles row (the server sends nationality: null there).
+ *
+ * A TRAILING THREE-LETTER TOKEN IS NOT AUTOMATICALLY A COUNTRY. Sheets
+ * shout surnames, and plenty are three letters — LEE, KIM, HAN. So the token
+ * is only read as a nationality when it is a REAL IOC code (the flag map is
+ * the authority) and something is left standing in front of it. "MEKTIC CRO"
+ * loses CRO; a lone "CHI" keeps it, because a name is not furniture.
+ */
+export function sheetName(raw) {
+  const cleaned = String(raw || '').replace(/\s*\[[^\]]*\]\s*/g, ' ').trim()
+  const parts = cleaned.split(/\s+/).filter(Boolean)
+  if (parts.length < 2) return { name: cleaned, nat: null }
+  const last = parts[parts.length - 1]
+  if (/^[A-Za-z]{3}$/.test(last) && IOC_TO_ISO2[last.toUpperCase()]) {
+    return { name: parts.slice(0, -1).join(' '), nat: last.toUpperCase() }
+  }
+  return { name: cleaned, nat: null }
 }
