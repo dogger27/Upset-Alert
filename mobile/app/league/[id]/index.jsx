@@ -33,6 +33,14 @@ export default function LeagueDraws() {
     for (const it of draws.data || []) {
       const t = it.tournament
       if (!t) continue
+      /* A DRAW ONE MEMBER PICKED IS NOT A COMPETITION. picker_count is
+         already scoped to this league's members, so one means the reader was
+         alone in it and there is nothing to have finished ahead of or behind.
+         The site has hidden these from a real league's lists all along; the
+         app never got the rule, which is why a phone listed draws only the
+         reader had entered (owner, 2026-09-11). This page is only ever a real
+         league — Global, where solo picks DO belong, is a different screen. */
+      if ((it.picker_count ?? 0) <= 1) continue
       const sec = getHomeSection(t, cohort)
       ;(sec === 'open' || sec === 'active' || sec === 'upcoming' ? cur : prev).push(it)
     }
@@ -223,6 +231,17 @@ function DrawRow({ items, leagueId }) {
      is never true, so every stripe in the list rendered ATP blue including
      the WTA draws. */
   const tint = a.gender === 'F' ? C.wta : C.atp
+  /* THE TWO HALVES ARE NOT ALWAYS THE SAME TIER. Twenty 2026 events pair
+     draws whose categories differ, and eight differ in the NUMBER, not just
+     the tour: Stuttgart is WTA 500 beside ATP 250, Dubai WTA 1000 beside ATP
+     500. One tier taken from the men's draw would have mislabelled the
+     women's half — and they score differently, since the points table keys
+     off each draw's own category. So: the shared tier when they agree, both
+     categories when they do not, men first, each naming its tour. */
+  const tiers = paired ? [tierLabel(a.category), tierLabel(b.category)] : null
+  const tierText = !paired ? a.category
+    : tiers[0] === tiers[1] ? tiers[0]
+      : items.map(x => x.tournament.category).filter(Boolean).join(' · ')
   const sizes = paired && b.draw_size !== a.draw_size
     ? `${a.draw_size} / ${b.draw_size} draw` : `${a.draw_size} draw`
   /* Pickers stay PER TOUR on a combined card: the same person often picks
@@ -256,7 +275,7 @@ function DrawRow({ items, leagueId }) {
           )}
         </View>
         <Text style={s.meta}>
-          {[paired ? tierLabel(a.category) : a.category, a.surface, a.year].filter(Boolean).join(' · ')}
+          {[tierText, a.surface, a.year].filter(Boolean).join(' · ')}
         </Text>
         <Text style={s.meta}>{sizes} · {pickers}</Text>
       </View>

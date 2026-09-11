@@ -966,13 +966,25 @@ function DrawCard({ items, leagueId, showGenderLabel, onOpen,
             onClick={() => onOpen(items)}>
       <div className="dc-top">
         {paired ? (
-          /* Both tours named, then the tier once — it is the same tier for
-             both halves, and repeating it would be the loudest thing on the
-             card. */
+          /* Both tours named, then the tier once — repeating a tier the two
+             halves share would be the loudest thing on the card. But they do
+             NOT always share one: twenty 2026 events pair draws of different
+             categories and eight differ in the NUMBER (Stuttgart is WTA 500
+             beside ATP 250), which also score differently. When they differ
+             each badge carries its own tier, exactly as a single draw's does. */
           <span className="dc-badges">
-            <span className="lt-gender-badge lt-gender-badge--m">ATP</span>
-            <span className="lt-gender-badge lt-gender-badge--f">WTA</span>
-            <span className="dc-tier">{tierLabel(a.category)}</span>
+            {tierLabel(a.category) === tierLabel(b.category) ? (
+              <>
+                <span className="lt-gender-badge lt-gender-badge--m">ATP</span>
+                <span className="lt-gender-badge lt-gender-badge--f">WTA</span>
+                <span className="dc-tier">{tierLabel(a.category)}</span>
+              </>
+            ) : (
+              <>
+                <span className="lt-gender-badge lt-gender-badge--m">ATP {tierLabel(a.category)}</span>
+                <span className="lt-gender-badge lt-gender-badge--f">WTA {tierLabel(b.category)}</span>
+              </>
+            )}
           </span>
         ) : (
           <span className={`lt-gender-badge lt-gender-badge--${a.gender === 'M' ? 'm' : 'f'}`}>
