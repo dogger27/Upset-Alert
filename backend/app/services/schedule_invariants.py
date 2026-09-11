@@ -828,6 +828,18 @@ if __name__ == "__main__":  # pragma: no cover
         from app.database import AsyncSessionLocal
         from app.models.tournament import Tournament
 
+        # The registry main.py builds, rebuilt for a process that never
+        # imported main. `name_te_shortlist_missed` runs the SERVE path's
+        # resolver, which touches the TePlayer mapper — and configuring one
+        # mapper configures them all, so a half-registered registry raises
+        # "expression 'League' failed to locate a name" and takes the whole
+        # CLI down with it. The verifier's first move and the runner's gate
+        # are both this CLI; it cannot depend on who imported what.
+        import importlib
+        for _m in ("user", "passkey", "prediction", "league", "tournament",
+                   "rankings", "h2h", "system_log"):
+            importlib.import_module(f"app.models.{_m}")
+
         async with AsyncSessionLocal() as db:
             if len(sys.argv) >= 3:
                 t = await db.get(Tournament, int(sys.argv[1]))
