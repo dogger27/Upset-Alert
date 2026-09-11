@@ -17,6 +17,7 @@ from sqlalchemy.exc import OperationalError
 
 from app.database import AsyncSessionLocal
 from app.models.tournament import Draw, DrawEntry, Match
+from app.services.draw_dates import release_deadline
 from app.services.espn_monitor import ESPNMonitor
 from app.services.eventstream import EventStreamListener
 from app.services.http_errors import describe_exception, is_transient_http_error
@@ -1404,10 +1405,7 @@ async def _check_draw_health() -> None:
         # the day after it passes would therefore fire on draws that are simply
         # arriving on their normal schedule. Use the LATER of that date and the
         # day before play, by which point a draw genuinely is always out.
-        deadline = t.start_date - timedelta(days=1) if t.start_date else None
-        if t.draw_release_direct is not None:
-            predicted_deadline = t.draw_release_direct + timedelta(days=1)
-            deadline = max(deadline, predicted_deadline) if deadline else predicted_deadline
+        deadline = release_deadline(t.start_date, t.draw_release_direct)
         release_overdue = deadline is not None and today >= deadline
         if t.wiki_page_id is None and release_overdue:
             await app_log(

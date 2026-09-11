@@ -197,3 +197,24 @@ async def calculate_draw_release_dates(
     if "Grand Slam" in (category or ""):
         return da_date, da_date
     return da_date, start_date - timedelta(days=qual_days)
+
+
+def release_deadline(start_date: Optional[date], draw_release_direct: Optional[date]) -> Optional[date]:
+    """The day by which a main draw genuinely must be out.
+
+    Health checks must not report a missing bracket while it is still expected
+    to be missing — an error for an expected state trains the reader to ignore
+    the log. `draw_release_direct` is deliberately a FLOOR, not a best guess:
+    it can only land on or before the real release, so escalating the day
+    after it passes would fire on draws arriving on their normal schedule.
+    So take the LATER of that date plus a grace day and the day before play,
+    by which point a draw is always out.
+
+    None when neither date is known, which callers should read as "no deadline
+    to be past" and fall back to their own evidence.
+    """
+    deadline = start_date - timedelta(days=1) if start_date else None
+    if draw_release_direct is not None:
+        predicted = draw_release_direct + timedelta(days=1)
+        deadline = max(deadline, predicted) if deadline else predicted
+    return deadline

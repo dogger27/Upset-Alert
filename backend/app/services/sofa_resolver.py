@@ -37,6 +37,7 @@ from app.core.config import settings
 from app.database import AsyncSessionLocal
 from app.models.schedule import ScheduleEntry
 from app.models.tournament import Draw, DrawEntry, Match
+from app.services.draw_dates import release_deadline
 from app.services.sofascore import (RESOLVE_RETRY_HOURS, SofascoreBlocked,
                                     resolve_pending_draws)
 from app.services.system_log import app_log
@@ -156,8 +157,17 @@ async def _coverage_check(db) -> None:
         problem = None
 
         if not (d.sofa_tournament_id and d.sofa_season_id):
-            problem = ("no Sofascore tournament id, so nothing can score it — "
-                       "usually a bracket Sofascore has not published yet")
+            # NOT WHILE THE BRACKET IS STILL DUE. This branch says Sofascore
+            # has not published the draw — which is exactly the expected state
+            # before our own release date, so saying it then is noise. Guadalajara
+            # 2026 warned two days before a draw that was not due out until the
+            # next day (owner, 2026-09-11). The other branches below still fire
+            # in advance on purpose: they need an id to exist, which means the
+            # bracket IS published, so a problem then is real.
+            deadline = release_deadline(d.start_date, d.draw_release_direct)
+            if deadline is None or today >= deadline:
+                problem = ("no Sofascore tournament id, so nothing can score it — "
+                           "usually a bracket Sofascore has not published yet")
         else:
             stamped = (await db.execute(
                 select(func.count()).select_from(DrawEntry).where(
