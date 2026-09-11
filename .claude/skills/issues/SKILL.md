@@ -55,6 +55,31 @@ A row present in system_logs but absent from a recent email usually means the
 24h gate, the 3/day cap, or the 6h quiet cutoff held it — that is the digest
 working, not a delivery failure.
 
+## Two suppressions, and only one of them survives a deploy
+
+Do not read one as the other; they answer different questions.
+
+| | Where it lives | Survives a restart? | What it gates |
+|---|---|---|---|
+| `app_log(dedup_key=…, dedup_hours=…)` | `_dedup_cache`, a plain dict in `services/system_log.py` — **no table** | **No** | whether a repeat reaches `system_logs` at all |
+| `alert_signatures` | a table | Yes | whether a problem is emailed again |
+
+Consequences when triaging:
+
+- **A count in `system_logs` is occurrences since the last restart**, not the
+  problem getting worse. `deploy.sh` runs on a 2-minute timer, so a busy
+  afternoon of pushes re-arms every dedup key. The 65 rows for one broken
+  Wikipedia title that prompted `AlertSignature` were one problem times many
+  process generations.
+- **A deploy is what makes "did it go quiet?" answerable.** Restarting clears
+  the cache, so nothing suppresses the next check — if the fault is still
+  there, the very next pass logs it. Wait for one full cycle of the job you
+  fixed (the Sofascore resolver is hourly, `POLL_INTERVAL`, after a 120s
+  `STARTUP_DELAY`), then query for rows newer than the container's
+  `StartedAt`. Silence then is real evidence.
+- Conversely, **24h of silence with no restart proves less** — the key may
+  simply still be held.
+
 ## Fallback: what actually reached the inbox (Resend MCP)
 
 Use `mcp__plugin_resend_resend__list-emails` (limit ~10) and look for subjects
