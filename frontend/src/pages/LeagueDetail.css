@@ -603,13 +603,13 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
      phrase: switch, "What if", the world. The bracket is centred by the
      outer grid, so the gap between them is what is left over — which is
      where it belongs. */
-  grid-template-columns: auto auto minmax(0, max-content);
+  grid-template-columns: auto auto minmax(0, var(--world-w, max-content));
   column-gap: 0.6rem; row-gap: 0.4rem;
   justify-self: start;
 }
 .lt-whatif-rail { grid-column: 3; grid-row: 1; justify-self: center; }
 .lt-whatif-tag { grid-column: 2; grid-row: 2; }
-.lt-whatif-label { grid-column: 3; grid-row: 2; text-align: center; }
+.lt-whatif-label { grid-column: 3; grid-row: 2; text-align: center; width: 100%; }
 .lt-switch { grid-column: 1; grid-row: 2; }
 .lt-whatif-hint { grid-column: 2 / -1; grid-row: 2; justify-self: start; }
 .lt-whatif-steps {
