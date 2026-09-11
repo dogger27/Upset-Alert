@@ -1979,6 +1979,17 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
           {!comparing && worlds && worlds.length > 0 && (() => {
             const n = worlds.length
             const WORDS = { 1: 'One', 2: 'Two', 3: 'Three', 4: 'Four', 8: 'Eight' }
+            /* THE NAME'S BOX IS AS WIDE AS THE WIDEST WORLD, ALWAYS. The
+               counter and the stepper centre on that box, so sizing it to
+               the CURRENT name moved them every time a longer or shorter
+               final came up — the arrows jumped under the cursor mid-cycle
+               (owner, 2026-09-11). Measured once over all eight lines at the
+               label's own size and weight: every name then fits at full size
+               and nothing below it ever moves. The slack falls after "What
+               if", which is where a gap costs nothing. */
+            const labelPx = rootFontPx() * 1.15
+            const worldBox = Math.ceil(Math.max(
+              ...worlds.map(w => textWidth(worldLine(w), labelPx, 800)))) + 2
             const step = d => setWorldIdx(i => ((i ?? 0) + d + n) % n)
             const enter = () => { setScrubPos(null); setFlashMatch(null); setWorldIdx(i => i ?? 0) }
             const Arrow = ({ d }) => (
@@ -2037,7 +2048,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                     either the invitation or the chosen world's name — the
                     switch being on is what says "what if", so the name needs
                     no eyebrow. */}
-                <div className="lt-whatif-head">
+                <div className="lt-whatif-head" style={{ '--world-w': `${worldBox}px` }}>
                   <button type="button" role="switch" aria-checked={!!world} aria-label="What if"
                     className={`lt-switch${world ? ' lt-switch--on' : ''}`}
                     onClick={() => world ? setWorldIdx(null) : enter()}>
@@ -2046,7 +2057,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                   {world ? (
                     <>
                       <span className="lt-whatif-tag">What if</span>
-                      <FitText className="lt-whatif-label" text={worldLine(world)} maxPx={rootFontPx() * 1.15} weight={800} />
+                      <FitText className="lt-whatif-label" text={worldLine(world)} maxPx={labelPx} weight={800} />
                     </>
                   ) : (
                     <span className="lt-whatif-hint">
