@@ -12,8 +12,14 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+# SUPPRESSION LIVES HERE, IN MEMORY — there is no dedup table. So it is
+# cleared by every restart, which with a two-minute auto-deploy timer is
+# often: the same problem can therefore appear in system_logs many times
+# inside its own dedup window, once per process generation. That is why the
+# EMAIL gate is a table instead (see models/alert.py AlertSignature), and why
+# a repeat count in system_logs counts occurrences-since-last-restart rather
+# than the problem worsening.
 _dedup_cache: dict[str, datetime] = {}
-_DEDUP_TTL = timedelta(hours=1)
 
 
 async def app_log(
