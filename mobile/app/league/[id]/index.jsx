@@ -11,7 +11,7 @@ import { LeagueSettingsSheet, canManageLeague } from '../../../leagueSettings'
 import { useApi } from '../../../useApi'
 import { TourBadge } from '../../../cards'
 import { computeCohortInfo, getHomeSection } from '../../../drawStatus'
-import { C, T } from '../../../theme'
+import { C, R, T } from '../../../theme'
 import { Button, Card, CardLink, ErrorNote, Eyebrow, Loading, Muted, Screen, Title } from '../../../ui'
 
 export default function LeagueDraws() {
@@ -67,6 +67,15 @@ export default function LeagueDraws() {
     return { current: events(cur), previous: events(prev) }
   }, [draws.data])
   const [prevShown, setPrevShown] = useState(5)
+  /* SHOW ONLY THE EVENTS THIS LEAGUE PLAYED FOR MONEY — the site's Previous
+     filter. Most useful here, where a season's draws pile up and the question
+     becomes "how did I do in the ones that counted". */
+  const [poolOnly, setPoolOnly] = useState(false)
+  /* An event is a cash event when EITHER half ran a pool: a combined card is
+     one row and hiding it would hide the half that did. */
+  const isPooled = g => g.items.some(x => x.cash_pool_enabled)
+  const prevPooled = previous.some(isPooled)
+  const prevList = poolOnly ? previous.filter(isPooled) : previous
   const [invite, setInvite] = useState(false)
   const [settings, setSettings] = useState(false)
   /* The site's Members tab: this year's Grand Slam point tally, ATP / WTA /
@@ -147,12 +156,25 @@ export default function LeagueDraws() {
         )}
         {previous.length > 0 && (
           <>
-            <Eyebrow>Previous ({previous.length})</Eyebrow>
-            {previous.slice(0, prevShown).map(g => <DrawRow key={g.key} items={g.items} leagueId={id} />)}
-            {prevShown < previous.length && (
+            {/* The count and the filter share a line: a chip of its own would
+                cost a row of a list that is meant to be scanned. */}
+            <View style={s.prevHead}>
+              <Eyebrow>Previous ({prevList.length})</Eyebrow>
+              {prevPooled ? (
+                <Pressable onPress={() => { setPoolOnly(v => !v); setPrevShown(5) }} hitSlop={6}
+                           accessibilityRole="button" accessibilityState={{ selected: poolOnly }}
+                           style={({ pressed }) => [s.poolChip, poolOnly && s.poolChipOn, pressed && { opacity: 0.7 }]}>
+                  <Text style={[s.poolChipText, poolOnly && s.poolChipTextOn]}>💰 Cash pool</Text>
+                </Pressable>
+              ) : null}
+            </View>
+            {prevList.slice(0, prevShown).map(g => (
+              <DrawRow key={g.key} items={g.items} leagueId={id} compact />
+            ))}
+            {prevShown < prevList.length && (
               <Pressable onPress={() => setPrevShown(n => n + 5)} style={s.more} hitSlop={8}>
                 <Text style={[T.smallMed, { color: C.greenLit }]}>
-                  Show {Math.min(5, previous.length - prevShown)} more
+                  Show {Math.min(5, prevList.length - prevShown)} more
                 </Text>
               </Pressable>
             )}
@@ -220,7 +242,7 @@ function tierLabel(category) {
   return '250'
 }
 
-function DrawRow({ items, leagueId }) {
+function DrawRow({ items, leagueId, compact = false }) {
   const a = items[0].tournament
   const b = items[1]?.tournament
   const paired = !!b
@@ -250,6 +272,42 @@ function DrawRow({ items, leagueId }) {
   const pickers = paired
     ? `ATP ${items.find(x => x.tournament.gender === 'M')?.picker_count ?? 0} · WTA ${items.find(x => x.tournament.gender === 'F')?.picker_count ?? 0}`
     : `${items[0].picker_count} ${items[0].picker_count === 1 ? 'picker' : 'pickers'}`
+  const pooled = items.some(x => x.cash_pool_enabled)
+  /* A FINISHED DRAW ASKS A SMALLER QUESTION. Open and active want the tier,
+     the surface, the size and who is in — a card you read. Previous is a
+     season's history being scanned, so it keeps the name, the tours, the
+     money and the one line that separates two editions of the same event:
+     which tier it was and when. Surface and draw size go; they are the same
+     every year and nobody scans a history for them. */
+  if (compact) {
+    return (
+      <CardLink href={`/league/${leagueId}/draw/${a.id}`} style={s.card}>
+        {paired ? (
+          <View style={s.stripe}>
+            <View style={[s.stripeHalf, { backgroundColor: C.atp }]} />
+            <View style={[s.stripeHalf, { backgroundColor: C.wta }]} />
+          </View>
+        ) : (
+          <View style={[s.stripe, { backgroundColor: tint }]} />
+        )}
+        <View style={[s.inner, s.innerCompact]}>
+          <View style={s.nameRow}>
+            <Text style={[s.name, s.nameCompact]} numberOfLines={1}>{a.name}</Text>
+            {pooled ? <Text style={s.bag} accessibilityLabel="Cash pool">💰</Text> : null}
+            {paired ? (
+              <View style={s.badges}><TourBadge gender="M" /><TourBadge gender="F" /></View>
+            ) : (
+              <TourBadge gender={a.gender} />
+            )}
+          </View>
+          <Text style={s.meta} numberOfLines={1}>
+            {[tierText, a.year].filter(Boolean).join(' · ')}
+          </Text>
+        </View>
+        <Text style={s.chev}>›</Text>
+      </CardLink>
+    )
+  }
   return (
     <CardLink href={`/league/${leagueId}/draw/${a.id}`} style={s.card}>
       {paired ? (
@@ -263,6 +321,7 @@ function DrawRow({ items, leagueId }) {
       <View style={s.inner}>
         <View style={s.nameRow}>
           <Text style={s.name} numberOfLines={2}>{a.name}</Text>
+          {pooled ? <Text style={s.bag} accessibilityLabel="Cash pool">💰</Text> : null}
           {/* Both tours named on a combined card — the split stripe alone
               does not say the event has two draws you can open. */}
           {paired ? (
@@ -286,6 +345,20 @@ function DrawRow({ items, leagueId }) {
 
 const s = StyleSheet.create({
   stripeHalf: { flex: 1 },
+  /* Previous: one line of name, one of meta, and less air than a card being
+     read rather than scanned. The height comes from the INNER padding, not
+     the card's — trimming the card did nothing at all. */
+  innerCompact: { paddingVertical: 8 },
+  nameCompact: { fontSize: 15 },
+  bag: { fontSize: 13 },
+  prevHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  poolChip: {
+    paddingHorizontal: 10, paddingVertical: 3, borderRadius: R.pill,
+    borderWidth: 1, borderColor: C.borderOn,
+  },
+  poolChipOn: { backgroundColor: C.green, borderColor: 'transparent' },
+  poolChipText: { ...T.tiny, color: C.muted },
+  poolChipTextOn: { color: '#ffffff', fontFamily: 'Archivo_700Bold' },
   badges: { flexDirection: 'row', gap: 4 },
   tally: { backgroundColor: C.card, borderRadius: 14, borderWidth: 1, borderColor: C.border, overflow: 'hidden' },
   tRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, gap: 4 },
