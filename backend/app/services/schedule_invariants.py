@@ -625,6 +625,50 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                      f"{hit[0]}/{hit[1]} and no player on the other — one slot, "
                      f"two rows")
 
+    # 2026-09-12, SP Open qualifying: "Antonia VERGARA RIVERA" and "Martina
+    # CAPURRO TABORDA" were served with no ranking, no Elo, no age and no
+    # head-to-head link while the fourteen other names on the same sheet had
+    # all four. Both women are in te_players under exactly the name the sheet
+    # prints. What lost them was the SHORTLIST in routers/schedule — it asked
+    # for `lower(last_name) IN {the key's last token}`, so every Tennis
+    # Explorer surname of more than one word was unreachable before the
+    # whole-name comparison ever ran. 45 of the 887 names ever stored here
+    # were uniquely resolvable and silently unresolved.
+    #
+    # Stated as the law can state it: the fast path the API runs must resolve
+    # every name an EXHAUSTIVE scan of te_players resolves. The check does the
+    # expensive, obviously-correct thing (read every row, compare the whole
+    # normalised name) and the request path does the fast thing; divergence is
+    # the bug, whatever narrowing causes it next time. Qualifying and doubles
+    # are where this bites, because those rows have no draw_entries row to
+    # carry the link instead.
+    from app.models.rankings import TePlayer as _TePlayer
+    from app.routers.schedule import _name_key as _te_key, _slugs_by_name
+    from app.services.rankings import _norm as _te_norm
+
+    raws = [p.raw_name for e in rows for p in (e.players or []) if p.raw_name]
+    if raws:
+        served = await _slugs_by_name(db, raws)
+        truth: dict = {}
+        for slug, display in (await db.execute(
+                select(_TePlayer.te_slug, _TePlayer.name_display)
+                .where(_TePlayer.te_slug.isnot(None)))).all():
+            k = _te_norm(display or "")
+            if not k:
+                continue
+            # One name, two people, is a walk-away for the serve path too —
+            # so it must not count as something the shortlist "missed".
+            truth[k] = None if k in truth else slug
+        for e in rows:
+            for p in (e.players or []):
+                k = _te_key(p.raw_name or "")
+                want = truth.get(k) if k else None
+                if want and not served.get(k):
+                    flag("name_te_shortlist_missed", e,
+                         f"side {p.side}: {p.raw_name!r} is te_players "
+                         f"{want} by whole name, and the serve path's "
+                         f"shortlist did not offer it")
+
     return v
 
 

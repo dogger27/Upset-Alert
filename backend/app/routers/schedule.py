@@ -201,6 +201,37 @@ def _name_key(raw: str) -> str:
     return _norm(" ".join(toks))
 
 
+def _te_shortlist(keys: set):
+    """SQL shortlist of Tennis Explorer rows that could be one of `keys`.
+
+    The comparison that decides a match is the WHOLE normalised name, below;
+    this only narrows what the database hands back. It used to narrow on
+    `lower(last_name) IN {the key's LAST token}` — and that re-derives where
+    the surname begins, which is the one thing a printed name cannot tell you.
+    Every Tennis Explorer surname of more than one word was therefore invisible
+    to it: 2026-09-12, SP Open qualifying, "Antonia VERGARA RIVERA" and
+    "Martina CAPURRO TABORDA" sat on the order of play with no ranking, no Elo,
+    no age and no head-to-head link while the fourteen single-word surnames
+    beside them had all four. 45 of the 887 names this table has ever stored
+    were uniquely resolvable and silently unresolved — De Minaur, Auger
+    Aliassime, Carreno Busta, Sorribes Tormo, Bouzas Maneiro among them.
+
+    `name_norm` is `_norm`-ed by the same function that builds the key —
+    accents folded, hyphens spaced, apostrophes dropped — so its FIRST token is
+    a token of the key whenever the two names are the same person, and no
+    surname guess is needed at all. Every token of the key is offered because
+    `name_norm` is written in TE's "Surname Firstname" order from the ranking
+    pages (rankings.py) and in our own "Firstname Surname" order when a player
+    row seeds it, so which end the surname sits at is not knowable here either.
+    Widening is safe: anything extra still has to survive the whole-name test.
+    """
+    toks = {t for k in keys for t in k.split() if t}
+    if not toks:
+        return None
+    return or_(*[or_(TePlayer.name_norm == t, TePlayer.name_norm.like(f"{t} %"))
+                 for t in sorted(toks)])
+
+
 async def _profiles_by_name(db, raws: list) -> dict:
     """Rank, Elo rank and date of birth for players the bracket does not know.
 
@@ -220,10 +251,12 @@ async def _profiles_by_name(db, raws: list) -> dict:
     keys = {k for k in (_name_key(r) for r in raws) if k}
     if not keys:
         return {}
-    surnames = {k.split()[-1] for k in keys if k.split()}
+    shortlist = _te_shortlist(keys)
+    if shortlist is None:
+        return {}
     rows = (await db.execute(
         select(TePlayer.id, TePlayer.name_display, TePlayer.date_of_birth)
-        .where(func.lower(TePlayer.last_name).in_(surnames)))).all()
+        .where(shortlist))).all()
     by_key: dict = {}
     for te_id, display, dob in rows:
         k = _norm(display or "")
@@ -267,11 +300,12 @@ async def _slugs_by_name(db, raws: list) -> dict:
     keys = {k for k in (_name_key(r) for r in raws) if k}
     if not keys:
         return {}
-    surnames = {k.split()[-1] for k in keys if k.split()}
+    shortlist = _te_shortlist(keys)
+    if shortlist is None:
+        return {}
     rows = (await db.execute(
         select(TePlayer.te_slug, TePlayer.name_display).where(
-            func.lower(TePlayer.last_name).in_(surnames),
-            TePlayer.te_slug.isnot(None)))).all()
+            shortlist, TePlayer.te_slug.isnot(None)))).all()
     hits: dict = {}
     for slug, display in rows:
         k = _norm(display or "")
