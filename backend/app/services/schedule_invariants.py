@@ -14,6 +14,7 @@ checklist.
 """
 
 import re
+import unicodedata as _ud
 from datetime import timezone as _tz
 
 from sqlalchemy import select
@@ -43,6 +44,9 @@ _QUALI_ROUND_RE = re.compile(r'^(?:Q\d?|FQ)$', re.I)
 # A leading entry-status marker, "[LL] " / "[WC] " — the mirror of
 # _TRAILING_SEED_RE, which only strips the ones printed after the name.
 _LEADING_SEED_RE = re.compile(r'^(?:\[[^\]]*\]\s*)+')
+# Everything that is not a letter, for counting the letters a token carries —
+# "H." is an initial wearing a capital, not a shouted surname.
+_ALPHA_RE = re.compile(r'[^A-Za-z]')
 # Lone letters standing on their own where a name's letters belong. A name may
 # hold ONE ("Alex de Minaur" does not, but an initial-only rendering might);
 # three is not a name any tour prints. Measured over all 705 stored player
@@ -668,6 +672,85 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                          f"side {p.side}: {p.raw_name!r} is te_players "
                          f"{want} by whole name, and the serve path's "
                          f"shortlist did not offer it")
+
+    # 2026-09-13, Guadalajara: Sunday's Q2 slot "[ALT] Nadiia KICHENOK UKR vs
+    # [5] Nao HIBINO JPN" was served COMPLETED with a final score of 6-4 6-1,
+    # on a sheet released that same afternoon, for a match nobody had played.
+    # The serve path carries a rained-off match's score from the day it
+    # stopped onto the day it resumes, and it decides "the same match" from a
+    # set of surnames read off the printed names — except it read the LAST
+    # TOKEN, and the last token of an order-of-play name is the COUNTRY. Every
+    # row's cross-day signature was therefore a set of NATIONALITIES, and
+    # Saturday's "BIELINSKA UKR vs HIBINO JPN" signed {ukr, jpn} exactly as
+    # Sunday's slot did. 18 of the 62 cross-day sibling pairs in the stored
+    # corpus were wrong the same way, one of them a singles row inheriting a
+    # DOUBLES score — four nationalities collapse to two inside a set.
+    #
+    # Stated over the serve path's OWN function, because the data is innocent:
+    # two different matches sharing a pair of nationalities is ordinary, and
+    # nothing about the stored rows is wrong. What must hold is that a
+    # signature which MERGES two rows names the same people on both of them —
+    # true of whatever the signature is computed from next time.
+    #
+    # The law reads the sheet's country its own way, by MEMBERSHIP of
+    # COUNTRY_CODES; the serve path reads it by SHAPE, with a guard for the
+    # surnames that share the shape (LUZ, POW, GUO). That disagreement is the
+    # axis the bug lived on, so sharing the reading is exactly how this check
+    # would go blind. See _printed_instant for the same principle.
+    from app.routers.schedule import _pairing_surname
+
+    def _law_fold(tok: str) -> str:
+        nfd = _ud.normalize("NFD", tok)
+        return "".join(c for c in nfd
+                       if _ud.category(c) != "Mn").lower().replace("-", " ")
+
+    def _law_surnames(entry) -> frozenset:
+        """Surnames as the LAW reads them: strip the entry tags, strip every
+        trailing token that IS a country, and keep the capitalised ones —
+        the sheets shout the surname. A sheet that capitalises nothing (some
+        smaller events) leaves the last token, which is then a name because
+        the country is already gone."""
+        out = set()
+        for p in (entry.players or []):
+            raw = _LEADING_SEED_RE.sub(
+                "", _TRAILING_SEED_RE.sub("", (p.raw_name or "").strip()))
+            toks = raw.split()
+            while len(toks) >= 2 and toks[-1] in COUNTRY_CODES:
+                toks = toks[:-1]
+            caps = [t for t in toks
+                    if t.isupper() and len(_ALPHA_RE.sub("", t)) >= 2]
+            pick = caps or toks[-1:]
+            if pick:
+                out.add(_law_fold(" ".join(pick)))
+        return frozenset(out)
+
+    def _carry_sig(entry) -> frozenset:
+        return frozenset(_pairing_surname(p.raw_name or "")
+                         for p in (entry.players or [])
+                         if (p.raw_name or "").strip())
+
+    neighbours = (await db.execute(
+        select(ScheduleEntry).where(
+            ScheduleEntry.tournament_id == tournament_id,
+            ScheduleEntry.play_date >= _pd - _td(days=1),
+            ScheduleEntry.play_date <= _pd + _td(days=1),
+            ScheduleEntry.play_date != _pd,
+        ).execution_options(populate_existing=True))).scalars().all()
+    if neighbours:
+        n_sig = [(o, _carry_sig(o), _law_surnames(o)) for o in neighbours]
+        for e in rows:
+            if not (e.players or []):
+                continue
+            sig, mine = _carry_sig(e), _law_surnames(e)
+            for other, o_sig, theirs in n_sig:
+                if sig == o_sig and mine != theirs:
+                    flag("carry_signature_collides", e,
+                         f"the cross-day carry signs this row the same as "
+                         f"entry {other.id} on {other.play_date} "
+                         f"({sorted(sig)}), but they name different people: "
+                         f"{sorted(mine)} vs {sorted(theirs)} — one match's "
+                         f"score can be published on the other's slot")
+                    break
 
     return v
 
