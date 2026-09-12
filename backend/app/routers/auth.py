@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 
 from app.core.auth import get_current_user
-from app.services.notification_keys import ALL_KEYS
+from app.services.notification_keys import ALL_KEYS, DEFAULT_ON_KEYS
 from app.core.security import (
     create_access_token,
     create_email_verification_token,
@@ -547,7 +547,12 @@ async def update_me(
 # unions the two audiences (end_only subtracts the overlap) and push collects
 # them into a set, so nobody is mailed or pushed twice, and holding only
 # round_standings used to mean no push at all for the Final.
-_DEFAULT_NOTIF_PREFS = list(ALL_KEYS)
+# What a new account starts with. NOT ALL_KEYS: round-completion and
+# draw-completion EMAIL are offered but not enrolled — see
+# notification_keys.DEFAULT_OFF_EMAIL_KEYS. `declined` below still measures
+# against ALL_KEYS, because a user saving their settings is deciding about
+# every key they were shown.
+_DEFAULT_NOTIF_PREFS = list(DEFAULT_ON_KEYS)
 
 
 async def _mark_verified(user: User, db: AsyncSession) -> bool:
