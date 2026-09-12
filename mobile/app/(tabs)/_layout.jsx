@@ -10,7 +10,7 @@
  * used a few times a day that trade is not worth making.
  */
 
-import { router, Tabs } from 'expo-router'
+import { router, Tabs, usePathname } from 'expo-router'
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -22,6 +22,7 @@ import { useAuth } from '../../auth'
 import { useApi } from '../../useApi'
 import { computeCohortInfo, getHomeSection } from '../../drawStatus'
 import { useCurrentDraw } from '../../currentDraw'
+import { useLastLeague } from '../../lastLeague'
 import { C, T } from '../../theme'
 
 /* Openable means the draw actually exists to look at — the dashboard's own
@@ -75,6 +76,8 @@ export default function TabLayout() {
   const tabBottom = Math.min(insets.bottom, TAB_BOTTOM_MAX)
   const [picking, setPicking] = useState(false)
   const showing = useCurrentDraw()
+  const lastLeague = useLastLeague()
+  const pathname = usePathname()
   /* Gated on a real session, exactly as the dashboard gates it: the tabs can
      render for a beat while signed out, and an unauthenticated call here
      would 401 — which this app treats as "sign out". */
@@ -152,8 +155,30 @@ export default function TabLayout() {
           href: drawId != null ? `/draw/${drawId}` : null,
         }}
       />
+      {/* STRAIGHT TO THE LEAGUE LAST READ, not to a list of them. For most
+          accounts that list is one or two rows standing in front of the thing
+          the tab is for; the league's own name at the top is the way to
+          another (leaguePicker). Same shape as the Draw tab above: prevent
+          the default, go somewhere real, and keep an href so the tab is still
+          a tab.
+          Until the keychain answers (`loaded`), and for anyone with no
+          remembered league — a new account, a fresh install — the press falls
+          through to the list, which is also where creating and joining
+          live. */}
       <Tabs.Screen
         name="leagues"
+        listeners={{
+          tabPress: e => {
+            if (lastLeague.loaded && lastLeague.id != null) {
+              e.preventDefault()
+              // Already reading it: a second press must not stack a second
+              // copy of the same screen behind the first.
+              if (pathname !== `/league/${lastLeague.id}`) {
+                router.push(`/league/${lastLeague.id}`)
+              }
+            }
+          },
+        }}
         options={{ title: 'Leagues', tabBarIcon: icon('trophy') }}
       />
       {/* OFF THE BAR, NOT GONE. Status is the account screen — preferences,

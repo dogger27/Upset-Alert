@@ -1,13 +1,15 @@
 /* The draws a league has played, newest first. Tap one for its standings. */
 
 import { Stack, useLocalSearchParams } from 'expo-router'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { getGrandSlamTotals, getLeague, getLeagueTournaments, shareLeagueByEmail } from '../../../api'
 import { useAuth } from '../../../auth'
 import { Sheet } from '../../../sheet'
 import { LeagueSettingsSheet, canManageLeague } from '../../../leagueSettings'
+import { LeaguePicker, LeagueTitle } from '../../../leaguePicker'
+import { setLastLeague } from '../../../lastLeague'
 import { useApi } from '../../../useApi'
 import { TourBadge } from '../../../cards'
 import { computeCohortInfo, getHomeSection } from '../../../drawStatus'
@@ -77,6 +79,11 @@ export default function LeagueDraws() {
   const prevPooled = previous.some(isPooled)
   const prevList = poolOnly ? previous.filter(isPooled) : previous
   const [invite, setInvite] = useState(false)
+  const [picking, setPicking] = useState(false)
+  /* WHICH LEAGUE THE TAB REOPENS. Reported from the screen that is showing it,
+     exactly as the draw screen reports its draw — so the tab follows the
+     reader rather than a guess. */
+  useEffect(() => { if (id != null) setLastLeague(id) }, [id])
   const [settings, setSettings] = useState(false)
   /* The site's Members tab: this year's Grand Slam point tally, ATP / WTA /
      combined, sortable by any column. Combined, descending, to start — the
@@ -107,7 +114,17 @@ export default function LeagueDraws() {
 
   return (
     <>
-      <Stack.Screen options={{ title: league.data?.name || 'League' }} />
+      {/* THE NAME IS THE CONTROL. The Leagues tab opens the league last
+          read rather than a list (lastLeague), so changing league happens
+          here — a larger name with a chevron, the same gesture as the draw
+          chooser on the tab bar. headerTitle rather than `title`, because a
+          string cannot be pressed. */}
+      <Stack.Screen options={{
+        headerTitle: () => (
+          <LeagueTitle name={league.data?.name} onPress={() => setPicking(true)} />
+        ),
+      }} />
+      <LeaguePicker visible={picking} onClose={() => setPicking(false)} currentId={id} />
       <Screen onRefresh={draws.refetch}>
         {draws.loading && !draws.data ? <Loading /> : null}
         <ErrorNote error={draws.error} onRetry={draws.refetch} />
