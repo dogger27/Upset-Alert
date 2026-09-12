@@ -23,7 +23,8 @@ from app.core.auth import get_optional_user
 from app.database import get_db
 from app.models.schedule import ScheduleEntry, ScheduleEntryPlayer
 from app.models.rankings import TePlayer, TeRankingsSnapshot
-from app.services.schedule import settle_from_result_rows, settled_sides_index
+from app.services.schedule import (carry_surname, settle_from_result_rows,
+                                   settled_sides_index)
 from app.services.rankings import _norm
 from app.models.tournament import Draw, DrawEntry, Match, Tournament
 from app.models.prediction import UserPrediction
@@ -193,10 +194,16 @@ def _name_key(raw: str) -> str:
     precedes it — the same rule the order-of-play parser and the frontend use,
     and for the same reason: strip every one of them and "Luca POW GBR" loses
     the player, along with LUZ, GUO, RAM and LEE.
+
+    Stripped in a LOOP, the copy of this rule in `sofascore_doubles` having
+    been burned by "Dhakshineswar SURESH IND ANY": one pass gives up ANY and
+    leaves the player named "suresh ind". Looping is safe for the same reason
+    one pass was — the guard needs another capitalised token in FRONT, so
+    "Luca POW GBR" gives up GBR and then stops.
     """
     toks = [t for t in _NAME_TAGS.sub(" ", raw or "").split() if len(t) >= 2]
-    if (len(toks) >= 2 and _TRAILING_CAPS.match(toks[-1])
-            and any(t.isupper() for t in toks[:-1])):
+    while (len(toks) >= 2 and _TRAILING_CAPS.match(toks[-1])
+           and any(t.isupper() for t in toks[:-1])):
         toks = toks[:-1]
     return _norm(" ".join(toks))
 
@@ -485,8 +492,15 @@ def _carried_point(src: dict):
 
 def _pairing_surname(raw_name: str) -> str:
     """The surname as both sheets spell it, so one day's row and the next
-    day's row for the same match produce the same signature."""
-    return _norm(raw_name or "").split()[-1] if (raw_name or "").strip() else ""
+    day's row for the same match produce the same signature.
+
+    This used to be `_norm(raw).split()[-1]` — the LAST TOKEN, which on an
+    order-of-play sheet is the country code, so the signature identified a
+    pair of NATIONALITIES rather than a pair of people. See
+    `schedule.carry_surname`, which owns the reading now; the law tests the
+    same function (`carry_signature_collides`), so it cannot drift back.
+    """
+    return carry_surname(raw_name)
 
 
 def _aware_dt(dt):

@@ -46,6 +46,19 @@ const TAB_CONTENT_H = 49
    labels off a 5pt line. */
 const TAB_BOTTOM_MAX = 12
 
+/* THE BAR'S TOP EDGE, in green. It was a hairline in C.border — a grey barely
+   separable from the page it sits on — so on a dark screen the navigation had
+   no top at all (owner, 2026-09-12). greenLit rather than greenBright:
+   brightest green is reserved for something that has to read FIRST, and this
+   is structure, not text.
+
+   ADDED TO THE HEIGHT, not taken out of it. Yoga counts the border inside an
+   explicit height, so thickening the edge would otherwise have shaved a point
+   off the 49pt icon-and-label box that is deliberately left alone — the one
+   thing in this file's arithmetic that must not shrink, or a label clips at
+   the phone's larger text sizes. */
+const TAB_BORDER_H = 2
+
 /* LIVE ONLY. The chooser was listing every draw that had ever been released,
    so a season of finished tournaments buried the two being played. These are
    the dashboard's own top two sections: picks still open, or play under way.
@@ -112,11 +125,12 @@ export default function TabLayout() {
         tabBarInactiveTintColor: C.faint,
         tabBarStyle: {
           backgroundColor: C.card,
-          borderTopColor: C.border,
-          borderTopWidth: 1,
+          borderTopColor: C.greenLit,
+          borderTopWidth: TAB_BORDER_H,
           // BOTH, or neither works: height is what the bar measures itself by,
-          // paddingBottom is where that height goes.
-          height: TAB_CONTENT_H + tabBottom,
+          // paddingBottom is where that height goes. The border is inside that
+          // height, so it is added on — see TAB_BORDER_H.
+          height: TAB_CONTENT_H + tabBottom + TAB_BORDER_H,
           paddingBottom: tabBottom,
         },
         // Archivo rather than the system face, so the bar belongs to the app.

@@ -160,6 +160,51 @@ def _clean_name(raw: str) -> str:
     return ' / '.join(p for p in parts if p).strip()
 
 
+# A trailing three-letter capital, and a token that carries real letters —
+# the two shapes the reader below has to tell apart. Stated structurally
+# rather than against _COUNTRY_CODES on purpose: a surname spelled like a code
+# (LUZ, GUO, POW) must survive, and the guard that saves it is what stands in
+# FRONT of the token, not the token itself.
+_THREE_CAPS_RE = re.compile(r'^[A-Z]{3}$')
+_ALPHA_ONLY_RE = re.compile(r'[^A-Za-z]')
+
+
+def carry_surname(raw_name: str) -> str:
+    """The surname(s) in a printed sheet name, as both days' sheets spell it.
+
+    Used to decide that a row on one day and a row on the next are the SAME
+    match — a rained-off match picked up the following afternoon — so it has
+    to name a PERSON and nothing else.
+
+    THE LAST TOKEN OF A SHEET NAME IS THE COUNTRY, NOT THE SURNAME. The
+    serve path read it as `_norm(raw).split()[-1]`, so "[ALT] Nadiia KICHENOK
+    UKR" reduced to "ukr" and a row's cross-day signature was a set of
+    NATIONALITIES. Guadalajara 2026-09-13: Sunday's Q2 slot KICHENOK UKR vs
+    HIBINO JPN signed as {ukr, jpn}, exactly as Saturday's Q1 BIELINSKA UKR
+    vs HIBINO JPN had, so the carry decided Sunday's match had already been
+    played and published it COMPLETED, 6-4 6-1, on a sheet released that
+    afternoon. 18 of the 62 cross-day sibling pairs in the stored corpus were
+    wrong the same way — among them a singles row inheriting a DOUBLES score,
+    because a frozenset of four nationalities collapses to two.
+
+    The reading is `sofascore_doubles._sheet_surnames`', which paid for all
+    three of its exceptions: the sheets print the surname in CAPITALS and
+    given names normally; a trailing three-letter capital is a country only
+    when another capitalised token precedes it ("Luca POW GBR" is a player
+    called Pow); and the strip LOOPS, because "Dhakshineswar SURESH IND ANY"
+    is a real printed name and one pass leaves the surname as "ind". The
+    fallback to the last token is for the smaller events that do not
+    capitalise at all, and an initial ("H. Nys") is uppercase without being
+    a surname.
+    """
+    toks = [t for t in _SEED_RE.sub(' ', raw_name or '').split() if len(t) >= 2]
+    while (len(toks) >= 2 and _THREE_CAPS_RE.match(toks[-1])
+           and any(t.isupper() for t in toks[:-1])):
+        toks = toks[:-1]
+    caps = [t for t in toks if t.isupper() and len(_ALPHA_ONLY_RE.sub('', t)) >= 2]
+    return _norm(' '.join(caps or toks[-1:]))
+
+
 def _played(scores) -> bool:
     """Did this result take court time?
 
