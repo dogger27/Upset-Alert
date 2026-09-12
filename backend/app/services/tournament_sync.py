@@ -27,7 +27,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tournament import Draw, DrawCategory, DrawCategoryVariant
 from app.services.discovery import DiscoveredTournament
-from app.services.draw_dates import calculate_draw_release_dates, compute_entry_ranking_week, compute_seed_ranking_week
+from app.services.draw_dates import (calculate_draw_release_dates, compute_entry_ranking_week,
+                                      compute_seed_ranking_week, tournament_monday)
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,12 @@ def tennis_week(d: date, season_year: int) -> int:
     jan1 = date(season_year, 1, 1)
     days_to_monday = (7 - jan1.weekday()) % 7
     first_monday = jan1 + timedelta(days=days_to_monday)
-    return max(1, (d - first_monday).days // 7 + 1)
+    # FROM THE TOURNAMENT'S OWN MONDAY, not from the start date. A Sunday start
+    # is six days into the PREVIOUS week by arithmetic and in the NEXT week by
+    # the tour's calendar — which put Guadalajara (Sun 13 Sep) in week 36 and
+    # SP Open (Mon 14 Sep) in week 37, so the draw-release batcher treated one
+    # tour week as two and sent an email for each (owner, 2026-09-12).
+    return max(1, (tournament_monday(d) - first_monday).days // 7 + 1)
 
 
 async def _resolve_variant_id(
