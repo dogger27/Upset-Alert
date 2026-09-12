@@ -16,6 +16,7 @@ import { Pressable, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { BracketIcon } from '../../BracketIcon'
+import { TourBadge } from '../../cards'
 import { Sheet } from '../../sheet'
 import { listTournaments } from '../../api'
 import { useAuth } from '../../auth'
@@ -196,9 +197,20 @@ export default function TabLayout() {
               themselves apart everywhere else in the app; a list of draws is
               exactly where that matters most. */}
           <View style={[s.tint, { backgroundColor: t.gender === 'F' ? C.wta : C.atp }]} />
-          <Text style={s.name} numberOfLines={1}>{t.name}</Text>
-          <Text style={s.tour}>{t.gender === 'F' ? 'WTA' : 'ATP'}</Text>
-          {t.id === showing ? <Ionicons name="checkmark" size={16} color={C.greenBright} /> : null}
+          {/* THE TICK BELONGS TO THE NAME, not to the row. Pushed out to the
+              far edge it read as a column of its own, a long way from the
+              thing it marks; beside the name it says "this one" (owner,
+              2026-09-12). The group takes the slack so the badge still sits
+              right, and the name shrinks before the tick does. */}
+          <View style={s.nameWrap}>
+            <Text style={s.name} numberOfLines={1}>{t.name}</Text>
+            {t.id === showing
+              ? <Ionicons name="checkmark" size={16} color={C.greenBright} />
+              : null}
+          </View>
+          {/* The app's own badge, not a second one: same pill, same two
+              colours as every draw card and bracket header. */}
+          <TourBadge gender={t.gender} />
         </Pressable>
       )) : (
         <Text style={s.none}>No draws are being played right now.</Text>
@@ -214,7 +226,10 @@ const s = {
     paddingVertical: 12, borderTopWidth: 1, borderTopColor: C.border,
   },
   tint: { width: 3, height: 20, borderRadius: 2 },
-  name: { ...T.bodyMed, color: C.ink, flex: 1 },
-  tour: { ...T.tiny, color: C.muted },
+  /* The name and its tick, as one group: flex so it takes the row's slack,
+     shrink on the TEXT so a long tournament name gives way before the tick
+     does. */
+  nameWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  name: { ...T.bodyMed, color: C.ink, flexShrink: 1 },
   none: { ...T.smallMed, color: C.muted, textAlign: 'center', paddingVertical: 12 },
 }
