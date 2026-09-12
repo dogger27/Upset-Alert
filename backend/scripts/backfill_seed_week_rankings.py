@@ -21,10 +21,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sqlalchemy import select                                    # noqa: E402
 
-from app.database import AsyncSessionLocal                       # noqa: E402
-import app.models.user, app.models.league, app.models.cash_pool  # noqa: E402,F401
+from app.database import AsyncSessionLocal, register_models     # noqa: E402
 from app.models.tournament import Draw, DrawEntry                # noqa: E402
 from app.services.rankings import assign_seed_week_rankings      # noqa: E402
+
+# Every model, or the first relationship SQLAlchemy cannot resolve raises
+# "expression 'User' failed to locate a name" — an incomplete import wearing
+# the costume of a broken model.
+register_models()
 
 
 async def main(write: bool) -> int:

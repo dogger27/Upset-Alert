@@ -50,26 +50,29 @@ async def get_db():
         yield session
 
 
-async def init_db():
-    # Ensure all model modules are imported so their tables are registered with
-    # Base.metadata before create_all runs.
-    # EVERY model module, not just the ones without a home elsewhere. The list
-    # used to name five, and worked only because main.py imports the routers
-    # first, which drag in the rest — so create_all was resolving foreign keys
-    # against a registry this function had not actually populated. Anything
-    # calling init_db on its own (a migration script, a test) hit
-    # NoReferencedTableError instead, and each newly cross-referenced table made
-    # that trap a little worse.
+def register_models() -> None:
+    """Import every model module, so the mapper registry is complete.
+
+    EVERY module, not just the ones without a home elsewhere. The list in
+    init_db used to name five and worked only because main.py imports the
+    routers first, which drag in the rest — so create_all was resolving
+    foreign keys against a registry it had not actually populated.
+
+    Its own function because scripts and one-off checks need it too, and
+    without it SQLAlchemy fails at the first relationship it cannot resolve
+    ("expression 'User' failed to locate a name") — which looks like a broken
+    model and is really an incomplete import. Every ad-hoc script that touches
+    a League or a UserPrediction hits this; calling one function is better
+    than each of them guessing which five modules to name.
+    """
     import app.models.alert  # noqa: F401
     import app.models.app_device  # noqa: F401
     import app.models.cash_pool  # noqa: F401
-
     import app.models.draw_history  # noqa: F401
     import app.models.duration_sample  # noqa: F401
     import app.models.h2h  # noqa: F401
     import app.models.league  # noqa: F401
     import app.models.live_activity  # noqa: F401
-
     import app.models.notification  # noqa: F401
     import app.models.prediction  # noqa: F401
     import app.models.push  # noqa: F401
@@ -80,6 +83,10 @@ async def init_db():
     import app.models.system_log  # noqa: F401
     import app.models.tournament  # noqa: F401
     import app.models.user  # noqa: F401
+
+
+async def init_db():
+    register_models()
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
