@@ -168,6 +168,35 @@ def rank_users(scores: list[UserScore], num_rounds: int) -> list[UserScore]:
 # two billion futures and hours of CPU. The owner chose R16 as the line.
 FINISH_RANGE_MAX_UNDECIDED = 15
 
+# ── THE CHANCES GO BACK FURTHER THAN THE RANGE, BY SAMPLING ─────────────────
+# The two columns are different kinds of quantity and that is what decides
+# how each may be computed.
+#
+#   The Finish RANGE is an EXTREME — the best and worst place over EVERY
+#   future. A sample can only ever miss the most extreme one, so it would
+#   report a range narrower than the truth and quietly claim a place was safe
+#   when it is not. It stays exact, and therefore stays gated at 15.
+#
+#   Win and Top 3 are EXPECTATIONS. A sample estimates those honestly, with
+#   an error of sqrt(p(1-p)/N): at 100,000 draws that is 0.16 points at worst
+#   and 0.05 at a tenth, which a column printing whole percentages cannot
+#   show. So they are drawn instead of enumerated as soon as enumeration
+#   becomes impossible, and the reader gets them from the first round rather
+#   than the last weekend.
+#
+# And the early rounds are where the range is useless anyway: with 63 matches
+# left everyone can still finish first and last, so "1-19" tells nobody
+# anything while "12%" tells them plenty.
+CHANCES_SAMPLES = 100_000
+# Fixed, so the same draw in the same state always produces the same number.
+# A column that moved while nothing had happened would read as broken, which
+# is the whole reason the exact path was built first.
+CHANCES_SEED = 20260912
+# 127 is a full 128 draw with nothing played. The cost is samples x matches,
+# not 2^matches, so the ceiling is about arithmetic time rather than
+# combinatorics — measured at well under a second for the worst case.
+CHANCES_MAX_UNDECIDED = 127
+
 # Per-round correct counts are packed into one integer key beneath the points,
 # so a whole leaderboard ranks with vector compares. 128 > 64, the most matches
 # any round has (R128).
@@ -188,6 +217,17 @@ def finish_range_available(all_matches: list) -> bool:
     return len(_undecided(all_matches)) <= FINISH_RANGE_MAX_UNDECIDED
 
 
+def chances_available(all_matches: list) -> bool:
+    """Win and Top 3 can be had — exactly, or by sampling."""
+    return len(_undecided(all_matches)) <= CHANCES_MAX_UNDECIDED
+
+
+def chances_sampled(all_matches: list) -> bool:
+    """...and whether this draw is past the point where they are exact."""
+    n = len(_undecided(all_matches))
+    return FINISH_RANGE_MAX_UNDECIDED < n <= CHANCES_MAX_UNDECIDED
+
+
 def finish_range(
     all_matches: list,
     pts_table: dict[int, int],
@@ -195,6 +235,7 @@ def finish_range(
     banked: dict[int, UserScore],
     picks: dict[int, dict[int, Optional[int]]],
     odds=None,
+    sample: bool = False,
 ) -> Optional[dict[int, tuple]]:
     """Best and worst finishing place for every bracket, over every future.
 
@@ -211,6 +252,17 @@ def finish_range(
     is each user's predicted winner by match id. None when the draw has more
     undecided matches than FINISH_RANGE_MAX_UNDECIDED, or nobody to rank.
 
+    WITH `sample` the futures are DRAWN instead of enumerated —
+    CHANCES_SAMPLES of them, from a fixed seed, each already distributed by
+    the odds so every draw carries the same weight. That lifts the 15-match
+    ceiling (the cost becomes samples x matches rather than 2^matches) and is
+    the only way the chances can exist in the first week of a draw. The range
+    then comes back as (None, None, p_win, p_podium): best and worst are
+    EXTREMES over every future, a sample can only miss the most extreme one,
+    and a range narrower than the truth would claim a place is safe when it
+    is not. `sample` requires `odds`; without them there is nothing to draw
+    from and the call returns None.
+
     WITH `odds` every future is also WEIGHTED, and the answer becomes
     (best, worst, p_win, p_podium) — the chance the bracket finishes first and
     the chance it finishes in the top three. The futures are already being
@@ -226,7 +278,9 @@ def finish_range(
         return None
     undecided = _undecided(all_matches)
     n = len(undecided)
-    if n > FINISH_RANGE_MAX_UNDECIDED:
+    if sample and odds is None:
+        return None                      # nothing to draw the futures from
+    if n > (CHANCES_MAX_UNDECIDED if sample else FINISH_RANGE_MAX_UNDECIDED):
         return None
 
     import numpy as np
@@ -274,22 +328,35 @@ def finish_range(
     # sides are in the same list. Sixteen of them at fifteen matches, so the
     # whole pairwise table is a couple of hundred cells — built once here and
     # indexed per future, rather than one model call per future per match.
-    cand = pair_p = live_over = None
+    pair_p = live_over = lookup = None
+    any_empty_side = any(pid == _NO_PLAYER for pair in sides for kind, pid in pair if kind == "const")
     if odds is not None:
         cand_ids = sorted({pid for pair in sides for kind, pid in pair if kind == "const"})
         at = {pid: i for i, pid in enumerate(cand_ids)}
-        cand = np.array(cand_ids, dtype=np.int64)
-        pair_p = np.full((len(cand_ids), len(cand_ids)), 0.5)
+        # A DENSE LOOKUP, NOT A BINARY SEARCH. Two searchsorted calls per
+        # match per chunk was the single biggest cost in the walk — 127
+        # matches over a full draw, and each call is O(samples log players).
+        # Player ids are small integers, so one array indexed by id answers
+        # it in one step. Offset by one so the empty-slot sentinel (-1) has
+        # somewhere to live.
+        # max() of nothing: a fully decided draw has no undecided match and so
+        # no candidates, and the loop below never runs anyway.
+        lookup = np.zeros((max(cand_ids) if cand_ids else 0) + 2, dtype=np.int64)
+        for i, pid in enumerate(cand_ids):
+            lookup[pid + 1] = i
+        pair_p = np.full((max(1, len(cand_ids)), max(1, len(cand_ids))), 0.5)
+        # HALF THE PAIRS: the model is antisymmetric, so p(y beats x) is one
+        # minus p(x beats y) and asking for both doubles the work for nothing.
         for i, x in enumerate(cand_ids):
-            for j, y in enumerate(cand_ids):
-                if x == y:
-                    continue                      # never contested; 0.5 is inert
-                elif x == _NO_PLAYER:
-                    pair_p[i, j] = 0.0            # an empty slot loses by walkover
+            for j in range(i + 1, len(cand_ids)):
+                y = cand_ids[j]
+                if x == _NO_PLAYER:
+                    q = 0.0                       # an empty slot loses by walkover
                 elif y == _NO_PLAYER:
-                    pair_p[i, j] = 1.0
+                    q = 1.0
                 else:
-                    pair_p[i, j] = odds.pair_prob(x, y)
+                    q = odds.pair_prob(x, y)
+                pair_p[i, j], pair_p[j, i] = q, 1.0 - q
         # A MATCH IN PROGRESS is not at its pre-match odds any more. Only the
         # pair actually on court is overridden: the same two players meeting in
         # a later round of some other future are back to level terms.
@@ -299,51 +366,114 @@ def finish_range(
             if ov and ov[0] in at and ov[1] in at:
                 live_over[ci] = (at[ov[0]], at[ov[1]], ov[2])
 
-    worlds = 1 << n
+    worlds = CHANCES_SAMPLES if sample else 1 << n
     # The rank step compares every bracket with every other, per future; keep
     # that cube to a few million cells whatever the user count.
-    chunk = max(1, min(4096, 4_000_000 // max(1, u_count * u_count)))
+    chunk = (max(1, min(20_000, 2_000_000 // max(1, u_count)))
+             if sample else max(1, min(4096, 4_000_000 // max(1, u_count * u_count))))
     best = np.full(u_count, u_count + 1, dtype=np.int64)
     worst = np.zeros(u_count, dtype=np.int64)
     p_win = np.zeros(u_count)
     p_pod = np.zeros(u_count)
     p_total = 0.0
+    rng = np.random.default_rng(CHANCES_SEED) if sample else None
     for start in range(0, worlds, chunk):
-        idx = np.arange(start, min(start + chunk, worlds), dtype=np.int64)
-        bits = (idx[:, None] >> np.arange(n, dtype=np.int64)) & 1 if n else np.zeros((len(idx), 0), dtype=np.int64)
-        win = np.empty((len(idx), n), dtype=np.int64)
-        weight_of = np.ones(len(idx)) if odds is not None else None
+        size = min(chunk, worlds - start)
+        if sample:
+            # ONE UNIFORM PER MATCH PER SAMPLE, compared against that match's
+            # probability. The future is therefore drawn FROM the distribution,
+            # so every sample weighs the same and the weighting that the exact
+            # path does by multiplication is done here by the draw itself.
+            bits = None
+            coin = rng.random((size, n))
+        else:
+            idx = np.arange(start, start + size, dtype=np.int64)
+            bits = (idx[:, None] >> np.arange(n, dtype=np.int64)) & 1 if n else np.zeros((size, 0), dtype=np.int64)
+            coin = None
+        win = np.empty((size, n), dtype=np.int64)
+        weight_of = None if sample else (np.ones(size) if odds is not None else None)
         for ci in range(n):
             s1, s2 = sides[ci]
-            a = win[:, s1[1]] if s1[0] == "col" else np.full(len(idx), s1[1], dtype=np.int64)
-            b = win[:, s2[1]] if s2[0] == "col" else np.full(len(idx), s2[1], dtype=np.int64)
-            # A side nobody can fill loses by walkover, whatever the coin says.
-            w = np.where(bits[:, ci] == 0, a, b)
-            w = np.where(a == _NO_PLAYER, b, w)
-            w = np.where(b == _NO_PLAYER, a, w)
-            win[:, ci] = w
+            # A FIXED SIDE STAYS A SCALAR. It used to be broadcast into a
+            # full-length array for every match, which over a 127-match draw
+            # allocated a quarter of a million values nothing read twice.
+            a = win[:, s1[1]] if s1[0] == "col" else s1[1]
+            b = win[:, s2[1]] if s2[0] == "col" else s2[1]
             if odds is not None:
-                ia, ib = np.searchsorted(cand, a), np.searchsorted(cand, b)
+                ia, ib = lookup[np.add(a, 1)], lookup[np.add(b, 1)]
                 p = pair_p[ia, ib]
                 ov = live_over.get(ci)
                 if ov is not None:
                     i0, j0, pl = ov
                     p = np.where((ia == i0) & (ib == j0), pl,
                                  np.where((ia == j0) & (ib == i0), 1.0 - pl, p))
+            # `take_a` is the coin: the first side wins this future or not.
+            take_a = (coin[:, ci] < p) if sample else (bits[:, ci] == 0)
+            w = np.where(take_a, a, b)
+            if any_empty_side:
+                # A side nobody can fill loses by walkover, whatever the coin
+                # says. Only checked where a draw actually has an empty slot:
+                # a power-of-two bracket has none, and these two comparisons
+                # ran 127 times a chunk for nothing.
+                w = np.where(np.equal(a, _NO_PLAYER), b, w)
+                w = np.where(np.equal(b, _NO_PLAYER), a, w)
+            win[:, ci] = w
+            if weight_of is not None:
                 # A walkover leaves two coins describing the same future; the
                 # losing coin gets probability zero, so the duplicate carries
                 # no weight rather than being counted twice.
-                weight_of *= np.where(bits[:, ci] == 0, p, 1.0 - p)
-        correct = pick_mat[None, :, :] == win[:, None, :]            # worlds × users × matches
-        key = base[None, :] + correct @ weight                       # worlds × users
-        ahead = key[:, None, :] > key[:, :, None]                    # [w, me, other]
-        place = 1 + ahead.sum(2)                                     # worlds × users
-        best = np.minimum(best, place.min(0))
-        worst = np.maximum(worst, place.max(0))
-        if odds is not None:
-            p_win += ((place == 1) * weight_of[:, None]).sum(0)
-            p_pod += ((place <= PODIUM_PLACES) * weight_of[:, None]).sum(0)
-            p_total += float(weight_of.sum())
+                weight_of *= np.where(take_a, p, 1.0 - p)
+        if sample:
+            # ACCUMULATED, NOT MATERIALISED. The exact path builds a
+            # worlds x users x matches boolean and contracts it with one
+            # matmul, which is the right shape when there are thirty-two
+            # thousand worlds. At a hundred thousand samples and a hundred
+            # and twenty-seven matches that tensor is a hundred and fifty
+            # million values per chunk, and building it costs more than the
+            # arithmetic it feeds. Adding each match's points straight into
+            # the running score touches the same number of elements with no
+            # temporary and no second pass.
+            key = np.repeat(base[None, :].astype(np.int64), size, axis=0)
+            for ci in range(n):
+                key += weight[ci] * (win[:, ci:ci + 1] == pick_mat[None, :, ci])
+        else:
+            correct = pick_mat[None, :, :] == win[:, None, :]        # worlds × users × matches
+            key = base[None, :] + correct @ weight                   # worlds × users
+        if sample:
+            # NO PLACE CUBE WHEN SAMPLING. The exact path needs each
+            # bracket's PLACE in every future, to take the min and max of it,
+            # and that costs a users x users comparison per future. The
+            # chances need only two questions, and both have an O(users)
+            # answer:
+            #
+            #   first?   its key equals the best key in that future — and a
+            #            tie is a win for everyone level, which is exactly
+            #            the semantics the standings print.
+            #   top 3?   its key is at least the third-best key. That is the
+            #            same statement as "at most two brackets strictly
+            #            ahead", ties included: with keys 10,9,8,8,8 the
+            #            third-best is 8 and all five are inside the podium,
+            #            which is right, because the three level on 8 all
+            #            hold third.
+            #
+            # Dropping the cube took a full 128 draw from four seconds to
+            # well under one, which is what makes the column affordable in
+            # the first week rather than only the last weekend.
+            top1 = key.max(1)
+            kth = (np.partition(key, -PODIUM_PLACES, axis=1)[:, -PODIUM_PLACES]
+                   if u_count > PODIUM_PLACES else key.min(1))
+            p_win += (key == top1[:, None]).sum(0)
+            p_pod += (key >= kth[:, None]).sum(0)
+            p_total += float(size)
+        else:
+            ahead = key[:, None, :] > key[:, :, None]                # [w, me, other]
+            place = 1 + ahead.sum(2)                                 # worlds × users
+            best = np.minimum(best, place.min(0))
+            worst = np.maximum(worst, place.max(0))
+            if odds is not None:
+                p_win += ((place == 1) * weight_of[:, None]).sum(0)
+                p_pod += ((place <= PODIUM_PLACES) * weight_of[:, None]).sum(0)
+                p_total += float(weight_of.sum())
     if odds is None:
         return {u: (int(best[i]), int(worst[i])) for i, u in enumerate(users)}
     # Normalised, not assumed: the weights sum to one by construction, and
@@ -351,6 +481,12 @@ def finish_range(
     # or a degenerate walkover from showing up as 101%.
     scale = 1.0 / p_total if p_total > 0 else 0.0
     out = {}
+    if sample:
+        # NO RANGE FROM A SAMPLE. best/worst are extremes and a sample misses
+        # the extreme ones; the callers read None and print a dash, which is
+        # what the column already does before the range is computable.
+        return {u: (None, None, float(p_win[i] * scale), float(p_pod[i] * scale))
+                for i, u in enumerate(users)}
     for i, u in enumerate(users):
         lo, hi = int(best[i]), int(worst[i])
         pw, pp = float(p_win[i] * scale), float(p_pod[i] * scale)
@@ -381,7 +517,7 @@ _FINISH_CACHE_MAX = 512   # a history is a dozen entries per draw per result
 
 def finish_range_cached(draw_id: int, all_matches: list, pts_table: dict[int, int], num_rounds: int,
                         banked: dict[int, UserScore], picks: dict[int, dict[int, Optional[int]]],
-                        odds=None):
+                        odds=None, sample: bool = False):
     key = (
         draw_id, num_rounds,
         tuple(sorted((m.id, m.winner_id, bool(m.is_bye), m.player1_id, m.player2_id) for m in all_matches)),
@@ -391,10 +527,13 @@ def finish_range_cached(draw_id: int, all_matches: list, pts_table: dict[int, in
         # progress, or a coefficient change all make this a different answer
         # for the same bracket and the same results.
         getattr(odds, "cache_key", None),
+        # Sampled and enumerated are different answers to the same question,
+        # and one of them has no range in it.
+        sample,
     )
     if key in _FINISH_CACHE:
         return _FINISH_CACHE[key]
-    out = finish_range(all_matches, pts_table, num_rounds, banked, picks, odds)
+    out = finish_range(all_matches, pts_table, num_rounds, banked, picks, odds, sample)
     if len(_FINISH_CACHE) >= _FINISH_CACHE_MAX:
         _FINISH_CACHE.pop(next(iter(_FINISH_CACHE)))
     _FINISH_CACHE[key] = out
@@ -403,7 +542,7 @@ def finish_range_cached(draw_id: int, all_matches: list, pts_table: dict[int, in
 
 async def finish_range_async(draw_id: int, all_matches: list, pts_table: dict[int, int], num_rounds: int,
                              banked: dict[int, UserScore], picks: dict[int, dict[int, Optional[int]]],
-                             odds=None):
+                             odds=None, sample: bool = False):
     """finish_range_cached off the event loop. The matches are copied to plain
     records first, so no ORM object is touched from the worker thread — and
     neither does `odds`, which is built on the loop and is pure data after."""
@@ -413,7 +552,7 @@ async def finish_range_async(draw_id: int, all_matches: list, pts_table: dict[in
                              player1_id=m.player1_id, player2_id=m.player2_id,
                              winner_id=m.winner_id, is_bye=bool(m.is_bye)) for m in all_matches]
     return await asyncio.to_thread(finish_range_cached, draw_id, plain, pts_table, num_rounds,
-                                   banked, picks, odds)
+                                   banked, picks, odds, sample)
 
 
 # A podium is locked when the worst place a bracket can hold is third or

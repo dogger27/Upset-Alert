@@ -32,7 +32,7 @@ import { Card, CardLink, ErrorNote, Loading, Muted, Screen, Title } from '../../
    a tap opens the same explanation the site's tooltip and info sheet carry.
    The credit line is not decoration: Tennis Abstract's Elo is CC BY-NC-SA,
    and attribution is the licence's one condition. */
-function explainChances(attribution) {
+function explainChances(attribution, sampled) {
   Alert.alert(
     'Win and Top 3',
     'Every way the rest of the draw can still go is played out, and each of ' +
@@ -41,6 +41,12 @@ function explainChances(attribution) {
     'rankings, and a match in progress counts its score. Win is the share of ' +
     'those futures this bracket finishes first in; Top 3 the share it finishes ' +
     'on the podium in. A tie for first counts as a win for everyone level.\n\n' +
+    (sampled
+      ? 'This early there are more futures than can be counted, so a hundred thousand of ' +
+        'them are played out instead — accurate to a fraction of a point, and the same every ' +
+        'time you look. Once the draw is down to sixteen matches every future is counted ' +
+        'exactly and the Finish column appears.\n\n'
+      : '') +
     (attribution || 'Elo ratings from Tennis Abstract (CC BY-NC-SA 4.0)') + '.',
   )
 }
@@ -92,6 +98,7 @@ export default function Standings() {
      draw whose range is perfectly computable. */
   const oddsAvail = !!scores.data?.odds_available
   const oddsNote = scores.data?.odds_attribution
+  const chancesSampled = !!scores.data?.chances_sampled
   /* TOP 3 NEEDS A WIDER PHONE. Five numbers plus a username is more
      than a 393pt row holds, and the name is the column that must not
      give way — the site drops this same column below 400px for the
@@ -213,7 +220,7 @@ export default function Standings() {
                   says what is possible; these say how likely. */}
               {podiumCol ? (
                 <View style={s.chanceHead}>
-                  <Pressable onPress={() => explainChances(oddsNote)} hitSlop={8} accessibilityRole="button"
+                  <Pressable onPress={() => explainChances(oddsNote, chancesSampled)} hitSlop={8} accessibilityRole="button"
                              accessibilityLabel="What the chances mean">
                     <Text style={[s.headText, s.scoreHeadTitle]} numberOfLines={1}
                           adjustsFontSizeToFit minimumFontScale={0.6}>Chances ⓘ</Text>

@@ -19,7 +19,7 @@ from app.services.draw_changes import classify_change
 from app.services.rankings import assign_rankings
 from app.services.scraper import scrape_tournament, snap_to_monday
 from app.services.scoring import (UserScore, _points_table, enumerate_worlds, finish_history_async,
-                                  finish_range_async, finish_range_available, podium_locked, rank_users)
+                                  finish_range_async, chances_available, chances_sampled, podium_locked, rank_users)
 from app.services.win_chances import ATTRIBUTION as ODDS_ATTRIBUTION, draw_odds
 from app.services.scoring import potential_points
 from app.services.upsets import has_upset_pick
@@ -1221,15 +1221,23 @@ async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get
     # the chance it finishes first and the chance it finishes on the podium.
     # The odds are built only when the range is (the same R16 line), because
     # they ride along with that enumeration and cost two queries otherwise.
+    # THE CHANCES REACH BACK FURTHER THAN THE RANGE. Up to fifteen undecided
+    # matches both are exact, from the same enumeration. Beyond that the
+    # futures are sampled (scoring.CHANCES_SAMPLES, fixed seed) so Win and
+    # Top 3 exist from the first round — and the range comes back empty,
+    # because it is an extreme and a sample would understate it. No loss: with
+    # sixty matches left every bracket can still finish first and last, so the
+    # range says nothing there while the chances say plenty.
+    sampled = chances_sampled(all_matches)
     odds = (await draw_odds(db, tournament, all_matches)
-            if finish_range_available(all_matches) else None)
+            if chances_available(all_matches) else None)
     ranges = await finish_range_async(
         tournament_id, all_matches, pts_table, tournament.num_rounds or 7, banked, picks_map,
-        odds=odds)
+        odds=odds, sample=sampled)
     for e in entries:
         rng = (ranges or {}).get(e["user_id"])
         e["best_rank"], e["worst_rank"] = (rng[0], rng[1]) if rng else (None, None)
-        e["podium_locked"] = podium_locked(rng)
+        e["podium_locked"] = podium_locked(rng) if rng and rng[1] is not None else None
         e["p_win"], e["p_podium"] = (rng[2], rng[3]) if rng and len(rng) > 3 else (None, None)
     # WHAT-IF WORLDS, from the semis on: every way the last matches can go,
     # each labelled by its final, with everyone's picks on those matches so
@@ -1307,8 +1315,9 @@ async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get
 
     return {
         "entries": entries,
-        "finish_range_available": ranges is not None,
+        "finish_range_available": ranges is not None and not sampled,
         "odds_available": odds is not None and ranges is not None,
+        "chances_sampled": bool(sampled and ranges),
         "odds_attribution": getattr(odds, "attribution", ODDS_ATTRIBUTION),
         "finish_from": finish_from,
         "finish_history": finish_history,

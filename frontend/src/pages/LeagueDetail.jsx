@@ -66,7 +66,7 @@ function FitText({ text, className, maxPx, weight = 700, minPx = 11 }) {
    bundled), so the two explanations read as one voice. The credit line is
    not decoration: Tennis Abstract's Elo is CC BY-NC-SA, and attribution is
    the licence's one condition. */
-function ChancesInfoPopup({ attribution, onClose }) {
+function ChancesInfoPopup({ attribution, sampled, onClose }) {
   const backdrop = useBackdropClose(onClose)
   return (
     <div className="h2h-elo-popup-backdrop" {...backdrop}>
@@ -86,8 +86,22 @@ function ChancesInfoPopup({ attribution, onClose }) {
         </p>
         <p className="h2h-elo-popup-body">
           Finish says what is still <em>possible</em>; these say how <em>likely</em> each
-          possibility is. Both follow the timeline slider.
+          possibility is.
         </p>
+        {sampled ? (
+          /* EARLY IN A DRAW THERE ARE TOO MANY FUTURES TO COUNT — 2^63 of
+             them at the start of a Slam's third round — so they are sampled
+             rather than enumerated. Worth saying: the number is then
+             accurate to a fraction of a point rather than exact, and the
+             Finish range is absent because a sample would understate it. */
+          <p className="h2h-elo-popup-body">
+            This early there are more futures than can be counted, so a hundred
+            thousand of them are played out instead — enough that the figure is
+            accurate to a fraction of a point, and the same every time you look.
+            Once the draw is down to sixteen matches, every future is counted
+            exactly and the Finish column appears.
+          </p>
+        ) : null}
         <p className="h2h-elo-popup-source">{attribution || 'Elo ratings from Tennis Abstract (CC BY-NC-SA 4.0)'} · Updated weekly</p>
       </div>
     </div>
@@ -1459,6 +1473,9 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
      is still perfectly computable. */
   const oddsAvail = !!rawData?.odds_available
   const oddsNote = rawData?.odds_attribution
+  /* Past fifteen undecided matches the futures are sampled rather than
+     enumerated, which is what lets the columns exist this early. */
+  const chancesSampled = !!rawData?.chances_sampled
   const [showChancesInfo, setShowChancesInfo] = useState(false)
   const cashPool = !!rawData?.cash_pool
 
@@ -1746,7 +1763,8 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
         </>
       ) : (
         <>
-          {showChancesInfo && <ChancesInfoPopup attribution={oddsNote} onClose={() => setShowChancesInfo(false)} />}
+          {showChancesInfo && <ChancesInfoPopup attribution={oddsNote} sampled={chancesSampled}
+                                                onClose={() => setShowChancesInfo(false)} />}
           <div className={`lt-progress-row lt-progress-header-row${finishAvail ? ' lt-progress-row--finish' : ''}${oddsAvail ? ' lt-progress-row--odds' : ''}`}
                style={{ '--name-col-width': `${nameColWidth}px`, '--sbw': `${gutter}px` }}>
             {/* Both buttons first, then the rank, then the name — the two
