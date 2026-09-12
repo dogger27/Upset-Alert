@@ -187,7 +187,7 @@ def carry_surname(raw_name: str) -> str:
     wrong the same way — among them a singles row inheriting a DOUBLES score,
     because a frozenset of four nationalities collapses to two.
 
-    The reading is `sofascore_doubles._sheet_surnames`', which paid for all
+    The reading is `sofascore_doubles._sheet_surnames`, which paid for all
     three of its exceptions: the sheets print the surname in CAPITALS and
     given names normally; a trailing three-letter capital is a country only
     when another capitalised token precedes it ("Luca POW GBR" is a player
