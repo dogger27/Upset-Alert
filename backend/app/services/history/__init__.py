@@ -8,6 +8,10 @@ Three layers, each a module:
                 possible, and our own finished matches exported beside theirs
     ratings.py  a chronological Elo over the whole record — overall and per
                 surface — and the current rating of every player in a draw
+    odds.py     the betting market, stored purely as a YARDSTICK: no
+                published model beats the closing price, so our accuracy
+                means little until it is quoted beside one. Nothing in here
+                feeds predict().
 
 The principle the owner set (2026-09-12): use our own data wherever possible,
 keep collecting it, and treat name matching as the backup, not the method.

@@ -500,11 +500,21 @@ async def _history_sync(full: bool = False) -> None:
     tournaments and players paired with their ids, our finished matches
     exported beside theirs, and every rating recomputed from 1967. Each step
     is its own try, so a TML outage still lets tonight's results rate."""
-    from app.services.history import link, ratings, tml
+    from app.services.history import link, odds, ratings, tml
     try:
         await tml.sync_async(only_current=not full)
     except Exception:
         logger.warning("history: TML sync failed; linking and rating what we have", exc_info=True)
+    try:
+        # The market, as a yardstick only — nothing here feeds a prediction.
+        # The spreadsheet is republished weekly and the load is idempotent,
+        # so a nightly fetch of the current season is enough; a full run also
+        # picks up the two seasons the model is fitted and validated on.
+        from datetime import date as _date
+        year = _date.today().year
+        await odds.sync_async([year - 2, year - 1, year] if full else [year])
+    except Exception:
+        logger.warning("history: market odds unavailable", exc_info=True)
     try:
         await link.link_all_async()
     except Exception:

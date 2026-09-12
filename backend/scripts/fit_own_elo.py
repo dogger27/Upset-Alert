@@ -53,7 +53,7 @@ TOUR_LEVELS = {"G", "M", "A", "500", "250", "1000", "F", "D"}
 def collect(rows, cfg, judge_levels=TOUR_LEVELS, tour=None, h2h_shrink=2.0, h2h_surface=False):
     """Walk once; return arrays for every played tour-level main-draw match:
     date, overall/surface Elo of both sides, counts, ranks, bo5, result."""
-    dates, ow, sw, ol, sl, nw, nl, bo5, rw, rl, h2h, met = [], [], [], [], [], [], [], [], [], [], [], []
+    dates, ow, sw, ol, sl, nw, nl, bo5, rw, rl, h2h, met, ident = [], [], [], [], [], [], [], [], [], [], [], [], []
     # PRIOR MEETINGS, counted as the walk passes them — every match in the
     # record, not just tour level, because a Challenger meeting is a meeting.
     # Keyed on the pair, and on the surface too with --h2h-surface.
@@ -66,7 +66,7 @@ def collect(rows, cfg, judge_levels=TOUR_LEVELS, tour=None, h2h_shrink=2.0, h2h_
         if r[4] in judge_levels and r[10] in (3, 5) and not (tour and tour_ != tour):
             w_won, l_won = (prior[0], prior[1]) if w_id == lo else (prior[1], prior[0])
             dates.append(r[2]); ow.append(pre_w[0]); sw.append(pre_w[1]); ol.append(pre_l[0]); sl.append(pre_l[1])
-            nw.append(pre_w[2]); nl.append(pre_l[2]); bo5.append(r[10] == 5)
+            nw.append(pre_w[2]); nl.append(pre_l[2]); bo5.append(r[10] == 5); ident.append((tour_, w_id, l_id))
             rw.append(min(r[12], RANK_CAP) if r[12] else RANK_CAP); rl.append(min(r[13], RANK_CAP) if r[13] else RANK_CAP)
             # Shrunk toward nothing, so one meeting is not a verdict and
             # twenty do not swamp the rating: (w - l) / (w + l + shrink).
@@ -77,7 +77,7 @@ def collect(rows, cfg, judge_levels=TOUR_LEVELS, tour=None, h2h_shrink=2.0, h2h_
     return dict(date=np.array(dates), ow=np.array(ow), sw=np.array(sw), ol=np.array(ol), sl=np.array(sl),
                 nw=np.array(nw), nl=np.array(nl), bo5=np.array(bo5),
                 d_rank=np.log2(np.array(rl, float) / np.array(rw, float)),
-                h2h=np.array(h2h), met=np.array(met))
+                h2h=np.array(h2h), met=np.array(met), ident=ident)
 
 
 def probs(theta, names, data, mask):
@@ -121,6 +121,8 @@ def main():
     ap.add_argument("--h2h", action="store_true", help="fit a head-to-head term beside the rating")
     ap.add_argument("--h2h-shrink", type=float, default=2.0, help="(w-l)/(w+l+shrink); bigger = one meeting counts less")
     ap.add_argument("--h2h-surface", action="store_true", help="count only prior meetings on the same surface")
+    ap.add_argument("--market", action="store_true",
+                    help="also report the betting market on exactly the judged matches it priced")
     a = ap.parse_args()
     level_k = json.loads(a.level_k)
     init = not a.no_surface_init
@@ -160,6 +162,64 @@ def main():
           "  pooled figure misleads because the two judged sets carry different tour mixes:\n"
           "    atp: TA blend 0.632, TA Elo 0.641, rank model 0.638   wta: TA blend 0.579, TA Elo 0.577, rank 0.596\n"
           "  Compare per tour with --tour; parity per tour is the bar for switching `fitted` on.")
+
+    # ── THE MARKET, ON EXACTLY THE MATCHES IT PRICED ────────────────────────
+    # The subset matters more than the number: quoting our log loss over the
+    # whole judged window against the market's over the half of it that has
+    # odds would compare two different sets of matches and mean nothing.
+    if a.market:
+        from app.services.history.odds import market_probabilities
+        cfg_m = {"k0": k0, "k_decay": dec, "k_offset": a.k_offset, "level_k": level_k,
+                 "surface_from_overall": init, "k_floor": a.k_floor}
+        dm = collect(rows, cfg_m, tour=a.tour, h2h_shrink=a.h2h_shrink, h2h_surface=a.h2h_surface)
+        rated_m = (dm["nw"] >= a.min_matches) & (dm["nl"] >= a.min_matches)
+        jm = rated_m & (dm["date"] >= a.judge_from)
+        mkt = market_probabilities(hdb.connect(), since=a.judge_from, tour=a.tour)
+        have = np.array([k in mkt for k in dm["ident"]])
+        both = jm & have
+        if both.sum() < 30:
+            print(f"\nmarket: only {int(both.sum())} judged matches carry a price - too few to compare")
+        else:
+            p_us = probs(theta, names, dm, both)
+            p_mkt = np.array([mkt[k] for k, m in zip(dm["ident"], both) if m])
+            y = np.ones_like(p_us)
+            print(f"\n=== THE MARKET, on the {int(both.sum())} judged matches it priced "
+                  f"({100 * float(both.sum()) / max(1, int(jm.sum())):.0f}% of the judged window) ===")
+            print(f"  ours   ll={log_loss(p_us, y):.4f}  brier={brier(p_us, y):.4f}  acc={np.mean(p_us >= 0.5):.3f}")
+            print(f"  market ll={log_loss(p_mkt, y):.4f}  brier={brier(p_mkt, y):.4f}  acc={np.mean(p_mkt >= 0.5):.3f}")
+            gap = log_loss(p_us, y) - log_loss(p_mkt, y)
+            print(f"  gap    {gap:+.4f} log loss  ({'we are behind' if gap > 0 else 'we are ahead'})")
+            # IS THE GAP REAL? A paired bootstrap over matches. Log loss on a
+            # few hundred matches moves by more than a hundredth on noise
+            # alone, so a gap without an interval is not a finding.
+            per_us = -np.log(p_us)
+            per_mkt = -np.log(p_mkt)
+            diff = per_us - per_mkt
+            rng = np.random.default_rng(7)
+            boot = np.array([diff[rng.integers(0, len(diff), len(diff))].mean() for _ in range(4000)])
+            lo_ci, hi_ci = np.percentile(boot, [2.5, 97.5])
+            verdict = ("we are genuinely behind" if lo_ci > 0 else
+                       "we are genuinely ahead" if hi_ci < 0 else
+                       "INSIDE NOISE — no difference demonstrated")
+            print(f"  95% CI on the gap: {lo_ci:+.4f} .. {hi_ci:+.4f}   -> {verdict}")
+            agree = (p_us >= 0.5) == (p_mkt >= 0.5)
+            if (~agree).sum() > 5:
+                print(f"  same favourite on {100 * agree.mean():.0f}%; on the {int((~agree).sum())} we disagree about, "
+                      f"ours ll={log_loss(p_us[~agree], y[~agree]):.3f} vs market {log_loss(p_mkt[~agree], y[~agree]):.3f}")
+            # BAND ON THE FAVOURITE'S PRICE, not the winner's. p is P(the
+            # actual winner wins), so banding it from 0.5 up quietly drops
+            # every upset — a third of the sample, and the third a model is
+            # most likely to differ on.
+            fav_mkt = np.where(p_mkt >= 0.5, p_mkt, 1 - p_mkt)
+            upset = p_mkt < 0.5
+            print(f"  the market's favourite lost {int(upset.sum())} of {len(p_mkt)} ({100*upset.mean():.0f}%); "
+                  f"there ours ll={log_loss(p_us[upset], y[upset]):.3f} vs market {log_loss(p_mkt[upset], y[upset]):.3f}; "
+                  f"elsewhere ours ll={log_loss(p_us[~upset], y[~upset]):.3f} vs market {log_loss(p_mkt[~upset], y[~upset]):.3f}")
+            for lo, hi in ((0.5, 0.65), (0.65, 0.8), (0.8, 1.01)):
+                m = (fav_mkt >= lo) & (fav_mkt < hi)
+                if m.sum() > 20:
+                    print(f"  market's favourite priced {lo:.0%}-{min(hi,1):.0%} (n={int(m.sum()):4}): "
+                          f"ours ll={log_loss(p_us[m], y[m]):.4f}  market ll={log_loss(p_mkt[m], y[m]):.4f}")
 
     # Calibration on the judged window for the chosen model.
     cfg = {"k0": k0, "k_decay": dec, "k_offset": a.k_offset, "level_k": level_k, "surface_from_overall": init,
