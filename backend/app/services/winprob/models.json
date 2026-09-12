@@ -24,18 +24,46 @@
     "k_rank_surface": 0.138
   },
   "own": {
-    "_note": "Our own Elo (services/history/ratings.py) over TennisMyLife's record (1967-) and our own results. K = k0/(n+k_offset)^k_decay per player (n = matches played), never below k_floor; surface ratings start at 1500 (seeding them from the overall rating tested worse); surface_w blends the surface rating with the overall one for prediction; k_logit is the slope; k_rank the ranking term. scripts/fit_own_elo.py: fitted on 1991-2023, chosen on 2024-25, judged on 2026-06-22 onward with pre-match ratings.",
-    "_status": "IN USE since 2026-09-12. Judged per tour against Tennis Abstract's Elo on the same season (fit_winprob.py, honest): atp 0.629 vs TA 0.632, wta 0.578 vs TA 0.579 \u2014 parity on day one, on our own data. Re-run the script as the record grows; the switch is `fitted`.",
-    "k0": 250.0,
-    "k_decay": 0.4,
+    "_note": "Our own Elo (services/history/ratings.py) over TennisMyLife's record (1967-) and our own results. K = k0/(n+k_offset)^k_decay per player; surface ratings start at 1500; surface_w blends the surface rating with the overall for prediction; k_logit is the slope; k_rank the ranking term; shrink_n0 pulls a thin rating toward 1500 (r <- 1500+(r-1500)*n/(n+n0)); layoff_tau decays a rating after time off (exp(-(days-layoff_grace)/tau)). scripts/fit_own_elo.py: fitted on 1991-2023, chosen on 2024-25, judged on 2026-06-22 on with pre-match ratings, and quoted against the betting market on the matches it priced.",
+    "_status": "IN USE. Judged per tour against the market (services/history/odds.py), on the matches it priced: atp ours 0.6029 vs market 0.6062 (95% CI -0.023..+0.015 \u2014 parity); wta ours 0.5693 vs market 0.5540 (CI -0.008..+0.040 \u2014 inside noise). The women's side came from 0.5764 to 0.5704 on the judged window via per-tour fitting, thin-rating shrinkage and layoff decay, halving a gap that had been statistically significant. NEVER compare the two tours pooled.",
     "k_offset": 5,
     "k_floor": 0.0,
     "level_k": {},
     "surface_from_overall": false,
-    "surface_w": 0.49,
-    "k_logit": 0.745,
-    "k_rank": 0.063,
     "fitted": true,
-    "_h2h": "NOT A TERM, and tested: a shrunk prior-meetings differential fits in sample (k~0.14) and loses out of sample everywhere \u2014 all judged 0.6139 -> 0.6140, pairs having met 3+ times 0.6380 -> 0.6406. Worst where it should help most: the rating already carries it. See scripts/fit_own_elo.py --h2h."
+    "_h2h": "NOT A TERM, and tested: a shrunk prior-meetings differential fits in sample (k~0.14) and loses out of sample everywhere \u2014 all judged 0.6139 -> 0.6140, pairs having met 3+ times 0.6380 -> 0.6406. Worst where it should help most: the rating already carries it. See scripts/fit_own_elo.py --h2h.",
+    "_by_tour_note": "THE TWO TOURS ARE FITTED SEPARATELY, and by more than a nudge. The men's record runs five times deeper (median 260 matches behind a player in our 2026 draws against the women's 54, because it carries ATP Challenger and qualifying and no WTA equivalent exists). So the women's fit shrinks thin ratings, discounts time off, and leans far harder on the surface figure and the world ranking. k0 and k_decay are PASS-level, so ratings.recompute runs one walk per tour.",
+    "_rejected": "Measured and NOT adopted, all with numbers in memory: head-to-head (worse everywhere, worst where it should help most); Weighted Elo by scoreline (+/-0.001, sign flips between judged subsets); shrinking the SURFACE rating by its own count (monotonically worse - surface_w already discounts it); a 50/50 ensemble with Tennis Abstract's Elo (the two logits correlate 0.937, so an average adds nothing); seeding surface ratings from the overall; K floors; level multipliers; a larger k_offset.",
+    "welo": false,
+    "welo_retired": false,
+    "layoff_grace": 60,
+    "k0": 250.0,
+    "k_decay": 0.4,
+    "surface_w": 0.5,
+    "k_logit": 0.7,
+    "k_rank": 0.1,
+    "shrink_n0": 0.0,
+    "layoff_tau": 0.0,
+    "by_tour": {
+      "atp": {
+        "k0": 250.0,
+        "k_decay": 0.4,
+        "surface_w": 0.497,
+        "k_logit": 0.747,
+        "k_rank": 0.053,
+        "shrink_n0": 0.0,
+        "layoff_tau": 0.0
+      },
+      "wta": {
+        "k0": 300.0,
+        "k_decay": 0.5,
+        "surface_w": 0.834,
+        "k_logit": 0.584,
+        "k_rank": 0.25,
+        "shrink_n0": 100.0,
+        "layoff_tau": 365.0
+      }
+    },
+    "_layoff_note": "layoff_tau 365, not the 90 that fitted marginally best: 90/180/365 were equivalent on the judged window (0.5705/0.5707/0.5708), and where settings tie the one with the milder failure mode wins. At tau=90 a player back from ten months out keeps 7% of their rating edge, so a returning champion would be priced an underdog to a journeyman in their first match \u2014 visibly wrong on a page, for no measured gain. At 365 she keeps just over half of it."
   }
 }

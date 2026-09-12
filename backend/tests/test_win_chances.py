@@ -271,3 +271,92 @@ def test_own_rating_leads_only_once_fitted(monkeypatch):
     # One side without an own rating: the pair is answered in the scale both share.
     mixed = DrawOdds({1: (2000, 2000, 1, None), 2: (1900, 1900, 2, (1900.0, 1900.0))}, "Hard", 3, {}, ("w",))
     assert mixed.pair_prob(1, 2) == p_ta
+
+
+def test_thin_ratings_are_shrunk_toward_the_mean(monkeypatch):
+    """A rating with little behind it is pulled toward 1500; a deep one is not."""
+    from app.services.winprob.elo import shrink_rating, own_params
+    # No shrinkage configured: the rating is untouched whatever its depth.
+    assert shrink_rating(1800.0, 20, 0) == 1800.0
+    # With n0 = 100, a player with 100 matches keeps half their distance.
+    assert shrink_rating(1800.0, 100, 100) == pytest.approx(1650.0)
+    # A deep record barely moves; a thin one moves a lot.
+    assert shrink_rating(1800.0, 900, 100) == pytest.approx(1770.0)
+    assert shrink_rating(1800.0, 10, 100) == pytest.approx(1527.3, abs=0.1)
+    # It pulls from both directions, and an unknown depth is left alone.
+    assert shrink_rating(1200.0, 100, 100) == pytest.approx(1350.0)
+    assert shrink_rating(1800.0, None, 100) == 1800.0
+
+
+def test_each_tour_gets_its_own_fitted_parameters(monkeypatch):
+    """The two records differ fivefold in depth, so the two fits differ too."""
+    from app.services.winprob import _params
+    from app.services.winprob.elo import own_params
+    base = dict(_params._PARAMS["own"])
+    base["by_tour"] = {"atp": {"k_rank": 0.05, "shrink_n0": 0}, "wta": {"k_rank": 0.14, "shrink_n0": 100}}
+    monkeypatch.setitem(_params._PARAMS, "own", base)
+    assert own_params("atp")["shrink_n0"] == 0
+    assert own_params("wta")["shrink_n0"] == 100
+    assert own_params("wta")["k_rank"] > own_params("atp")["k_rank"]
+    # An unknown tour falls back to the shared defaults rather than failing.
+    assert own_params(None)["k_logit"] == base["k_logit"]
+
+
+def test_shrinkage_moves_a_thin_players_probability_toward_a_coin_toss(monkeypatch):
+    from app.services.winprob import _params
+    base = dict(_params._PARAMS["own"])
+    base.update({"fitted": True, "surface_w": 0.5, "k_logit": 0.75, "k_rank": 0.0})
+    base["by_tour"] = {"wta": {"shrink_n0": 100}, "atp": {"shrink_n0": 0}}
+    monkeypatch.setitem(_params._PARAMS, "own", base)
+    # The same two ratings, one pair deep and one pair thin.
+    deep = {1: (None, None, None, (1900.0, 1900.0, 800)), 2: (None, None, None, (1600.0, 1600.0, 800))}
+    thin = {1: (None, None, None, (1900.0, 1900.0, 15)), 2: (None, None, None, (1600.0, 1600.0, 15))}
+    p_deep = DrawOdds(deep, "Hard", 3, {}, ("d",)); p_deep.tour = "wta"
+    p_thin = DrawOdds(thin, "Hard", 3, {}, ("t",)); p_thin.tour = "wta"
+    assert p_deep.pair_prob(1, 2) > p_thin.pair_prob(1, 2) > 0.5
+    # On the men's side nothing is shrunk, so depth changes nothing.
+    a = DrawOdds(deep, "Hard", 3, {}, ("a",)); a.tour = "atp"
+    b = DrawOdds(thin, "Hard", 3, {}, ("b",)); b.tour = "atp"
+    assert a.pair_prob(1, 2) == pytest.approx(b.pair_prob(1, 2))
+
+
+def test_time_off_decays_a_rating_toward_the_mean():
+    from app.services.winprob.elo import layoff_factor
+    # Inside the grace period an absence costs nothing: an off-season is not an injury.
+    assert layoff_factor(30, 90, 60) == 1.0
+    assert layoff_factor(60, 90, 60) == 1.0
+    # Beyond it the rating decays, and by tau days past grace it keeps 1/e.
+    assert layoff_factor(150, 90, 60) == pytest.approx(1 / 2.71828, abs=1e-4)
+    assert layoff_factor(400, 90, 60) == pytest.approx(0.0229, abs=1e-3)
+    # Switched off, or unknown, changes nothing.
+    assert layoff_factor(400, 0, 60) == 1.0
+    assert layoff_factor(None, 90, 60) == 1.0
+
+
+def test_a_returning_player_is_rated_more_cautiously(monkeypatch):
+    from app.services.winprob import _params
+    base = dict(_params._PARAMS["own"])
+    base.update({"fitted": True, "layoff_grace": 60})
+    base["by_tour"] = {"wta": {"surface_w": 0.5, "k_logit": 0.75, "k_rank": 0.0,
+                               "shrink_n0": 0.0, "layoff_tau": 365.0}}
+    monkeypatch.setitem(_params._PARAMS, "own", base)
+    # (overall, surface, matches, days since last played)
+    fresh = {1: (None, None, None, (1900.0, 1900.0, 500, 7)), 2: (None, None, None, (1600.0, 1600.0, 500, 7))}
+    rusty = {1: (None, None, None, (1900.0, 1900.0, 500, 300)), 2: (None, None, None, (1600.0, 1600.0, 500, 7))}
+    a = DrawOdds(fresh, "Hard", 3, {}, ("f",)); a.tour = "wta"
+    b = DrawOdds(rusty, "Hard", 3, {}, ("r",)); b.tour = "wta"
+    # The favourite has been away ten months: less of their rating survives,
+    # but she is still the favourite — the decay doubts a rating, it does not
+    # throw it away. That is why tau is 365 and not the 90 that fitted the
+    # same: at 90 she would come back an underdog to a journeyman.
+    assert 0.5 < b.pair_prob(1, 2) < a.pair_prob(1, 2)
+
+
+def test_one_rating_pass_per_tour_with_its_own_k_schedule():
+    from app.services.history.ratings import pass_config
+    atp, wta = pass_config("atp"), pass_config("wta")
+    assert atp["k0"] != wta["k0"] or atp["k_decay"] != wta["k_decay"]
+    # An explicit cfg still wins, which is what the fitting script relies on.
+    assert pass_config("atp", {"k0": 1.0})["k0"] == 1.0
+    # An unknown tour gets the shared defaults rather than a KeyError.
+    assert pass_config("doubles")["k0"] > 0

@@ -49,11 +49,17 @@ from fit_winprob import _bo5, log_loss, nelder_mead, brier, LN10_400, RANK_CAP  
 
 TOUR_LEVELS = {"G", "M", "A", "500", "250", "1000", "F", "D"}
 
+# Set once from the command line; probs() is called by the optimiser through a
+# closure and threading another argument through every call site earns nothing.
+SHRINK = [0.0, 0.0]
+LAYOFF = [0.0, 60.0]
+
 
 def collect(rows, cfg, judge_levels=TOUR_LEVELS, tour=None, h2h_shrink=2.0, h2h_surface=False):
     """Walk once; return arrays for every played tour-level main-draw match:
     date, overall/surface Elo of both sides, counts, ranks, bo5, result."""
-    dates, ow, sw, ol, sl, nw, nl, bo5, rw, rl, h2h, met, ident = [], [], [], [], [], [], [], [], [], [], [], [], []
+    dates, ow, sw, ol, sl, nw, nl, bo5, rw, rl, h2h, met, ident, surf = [], [], [], [], [], [], [], [], [], [], [], [], [], []
+    nsw, nsl, gapw, gapl = [], [], [], []
     # PRIOR MEETINGS, counted as the walk passes them — every match in the
     # record, not just tour level, because a Challenger meeting is a meeting.
     # Keyed on the pair, and on the surface too with --h2h-surface.
@@ -67,17 +73,28 @@ def collect(rows, cfg, judge_levels=TOUR_LEVELS, tour=None, h2h_shrink=2.0, h2h_
             w_won, l_won = (prior[0], prior[1]) if w_id == lo else (prior[1], prior[0])
             dates.append(r[2]); ow.append(pre_w[0]); sw.append(pre_w[1]); ol.append(pre_l[0]); sl.append(pre_l[1])
             nw.append(pre_w[2]); nl.append(pre_l[2]); bo5.append(r[10] == 5); ident.append((tour_, w_id, l_id))
+            nsw.append(pre_w[3]); nsl.append(pre_l[3])
+            gapw.append(pre_w[4] if pre_w[4] is not None else 0)
+            gapl.append(pre_l[4] if pre_l[4] is not None else 0)
             rw.append(min(r[12], RANK_CAP) if r[12] else RANK_CAP); rl.append(min(r[13], RANK_CAP) if r[13] else RANK_CAP)
             # Shrunk toward nothing, so one meeting is not a verdict and
             # twenty do not swamp the rating: (w - l) / (w + l + shrink).
             denom = w_won + l_won + h2h_shrink
             h2h.append((w_won - l_won) / denom if denom else 0.0)
-            met.append(w_won + l_won)
+            met.append(w_won + l_won); surf.append(surface)
         seen[key] = (prior[0] + (1 if w_id == lo else 0), prior[1] + (0 if w_id == lo else 1))
     return dict(date=np.array(dates), ow=np.array(ow), sw=np.array(sw), ol=np.array(ol), sl=np.array(sl),
                 nw=np.array(nw), nl=np.array(nl), bo5=np.array(bo5),
                 d_rank=np.log2(np.array(rl, float) / np.array(rw, float)),
-                h2h=np.array(h2h), met=np.array(met), ident=ident)
+                h2h=np.array(h2h), met=np.array(met), ident=ident, surf=surf,
+                nsw=np.array(nsw), nsl=np.array(nsl),
+                gapw=np.array(gapw), gapl=np.array(gapl))
+
+
+def _surface_of(rows, data, i):
+    """The surface of judged row i. collect() keeps the surface out of its
+    arrays, so it is recovered from the walk's own normalisation."""
+    return data.get("surf", ["Hard"] * (i + 1))[i] if "surf" in data else "Hard"
 
 
 def probs(theta, names, data, mask):
@@ -88,6 +105,36 @@ def probs(theta, names, data, mask):
     w = min(max(t["surface_w"], 0.0), 1.0)
     rw = w * data["sw"][mask] + (1 - w) * data["ow"][mask]
     rl = w * data["sl"][mask] + (1 - w) * data["ol"][mask]
+    # EVIDENCE-WEIGHTED SHRINKAGE. A rating built on twenty matches is a
+    # guess wearing a number's clothes; one built on four hundred is not.
+    # Pulling the thin ones toward the tour mean in proportion to how little
+    # is behind them (James-Stein, as Gollub 2021 applies it to serve data)
+    # lets the ranking term carry those players instead. This matters far
+    # more for the women: the median player in our 2026 women's draws has 54
+    # recorded matches against the men's 260, because the record has no WTA
+    # Challenger or qualifying in it.
+    if SHRINK[0] > 0 or SHRINK[1] > 0:
+        # EACH COMPONENT BY ITS OWN EVIDENCE. The overall rating and the
+        # surface rating are not equally supported: a player with four
+        # hundred matches behind their overall figure may have nine behind
+        # their grass one. Shrinking the blended number by the overall count
+        # alone lets a grass rating built on a handful of matches through at
+        # full strength, which is exactly the number most likely to be noise.
+        n0, ns0 = SHRINK
+        def _sh(r, n, k):
+            return 1500.0 + (r - 1500.0) * (n / (n + k)) if k > 0 else r
+        ow_ = _sh(data["ow"][mask], data["nw"][mask], n0)
+        ol_ = _sh(data["ol"][mask], data["nl"][mask], n0)
+        sw_ = _sh(data["sw"][mask], data["nsw"][mask], ns0)
+        sl_ = _sh(data["sl"][mask], data["nsl"][mask], ns0)
+        rw = w * sw_ + (1 - w) * ow_
+        rl = w * sl_ + (1 - w) * ol_
+    if LAYOFF[0] > 0:
+        tau, grace = LAYOFF
+        fw = np.exp(-np.maximum(0.0, data["gapw"][mask] - grace) / tau)
+        fl = np.exp(-np.maximum(0.0, data["gapl"][mask] - grace) / tau)
+        rw = 1500.0 + (rw - 1500.0) * fw
+        rl = 1500.0 + (rl - 1500.0) * fl
     z = t["slope"] * LN10_400 * (rw - rl)
     if "k_rank" in t:
         z = z + t["k_rank"] * data["d_rank"][mask]
@@ -112,6 +159,9 @@ def main():
     ap.add_argument("--judge-from", default="2026-06-22")
     ap.add_argument("--min-matches", type=int, default=10, help="both players need this many prior matches to be judged")
     ap.add_argument("--grid", default="full", choices=["full", "quick"], help="quick: two K schedules, for a variant check")
+    ap.add_argument("--pin", default=None, metavar="K0,DECAY",
+                    help="fit only this K schedule — for reading off the exact coefficients "
+                         "of a configuration the grid already chose")
     ap.add_argument("--no-surface-init", action="store_true", help="surface ratings start at 1500, not the overall rating")
     ap.add_argument("--rank", action="store_true", help="fit a ranking term beside the rating")
     ap.add_argument("--tour", default=None, choices=["atp", "wta"], help="judge one tour only")
@@ -121,24 +171,50 @@ def main():
     ap.add_argument("--h2h", action="store_true", help="fit a head-to-head term beside the rating")
     ap.add_argument("--h2h-shrink", type=float, default=2.0, help="(w-l)/(w+l+shrink); bigger = one meeting counts less")
     ap.add_argument("--h2h-surface", action="store_true", help="count only prior meetings on the same surface")
+    ap.add_argument("--shrink", type=float, default=0.0,
+                    help="pull a thin OVERALL rating toward the tour mean: r <- 1500 + (r-1500)*n/(n+N). "
+                         "A player with N matches keeps half their distance from the mean. 0 disables.")
+    ap.add_argument("--shrink-surface", type=float, default=0.0,
+                    help="the same for the SURFACE rating, against its own much thinner match count")
+    ap.add_argument("--layoff", type=float, default=0.0,
+                    help="decay a rating toward the mean after time off: factor exp(-(days-grace)/TAU). "
+                         "0 disables. FiveThirtyEight's documented treatment of injury layoffs.")
+    ap.add_argument("--layoff-grace", type=float, default=60.0,
+                    help="days off that cost nothing (an off-season is not an injury)")
+    ap.add_argument("--welo", action="store_true",
+                    help="weight each update by the winner's share of games (Angelini et al. 2022)")
+    ap.add_argument("--welo-retired", action="store_true",
+                    help="believe a retirement's lopsided scoreline instead of treating it as neutral")
+    ap.add_argument("--ensemble", action="store_true",
+                    help="also report a 50/50 logit average with Tennis Abstract's independent Elo")
     ap.add_argument("--market", action="store_true",
                     help="also report the betting market on exactly the judged matches it priced")
     a = ap.parse_args()
     level_k = json.loads(a.level_k)
+    SHRINK[0], SHRINK[1] = a.shrink, a.shrink_surface
+    LAYOFF[0], LAYOFF[1] = a.layoff, a.layoff_grace
     init = not a.no_surface_init
 
     conn = hdb.connect()
     rows = load_rows(conn)
     print(f"{len(rows)} matches in the record; walking one pass per K schedule …")
 
-    grid = ([(150.0, 0.3), (250.0, 0.4)] if a.grid == "quick"
-            else [(k0, dec) for k0 in (150.0, 200.0, 250.0, 300.0, 350.0) for dec in (0.3, 0.4, 0.5)])
+    # WElo scales every update by the winner's share of games, which averages
+    # about 0.63 — so the same effective K needs a larger k0, and the grid has
+    # to reach further up or the comparison is rigged against it.
+    k0s = (150.0, 200.0, 250.0, 300.0, 350.0, 450.0, 550.0) if a.welo else (150.0, 200.0, 250.0, 300.0, 350.0)
+    if a.pin:
+        grid = [tuple(float(x) for x in a.pin.split(","))]
+    else:
+        grid = ([(250.0, 0.4), (450.0, 0.4)] if (a.grid == "quick" and a.welo)
+                else [(150.0, 0.3), (250.0, 0.4)] if a.grid == "quick"
+                else [(k0, dec) for k0 in k0s for dec in (0.3, 0.4, 0.5)])
     names = ["slope", "surface_w"] + (["k_rank"] if a.rank else []) + (["k_h2h"] if a.h2h else [])
     x0 = [1.0, 0.5] + ([0.1] if a.rank else []) + ([0.2] if a.h2h else [])
     results = []
     for k0, dec in grid:
         cfg = {"k0": k0, "k_decay": dec, "k_offset": a.k_offset, "level_k": level_k, "surface_from_overall": init,
-               "k_floor": a.k_floor}
+               "k_floor": a.k_floor, "welo": a.welo, "welo_retired": a.welo_retired}
         data = collect(rows, cfg, tour=a.tour, h2h_shrink=a.h2h_shrink, h2h_surface=a.h2h_surface)
         rated = (data["nw"] >= a.min_matches) & (data["nl"] >= a.min_matches)
         fit_m = rated & (data["date"] < a.fit_before)
@@ -163,6 +239,86 @@ def main():
           "    atp: TA blend 0.632, TA Elo 0.641, rank model 0.638   wta: TA blend 0.579, TA Elo 0.577, rank 0.596\n"
           "  Compare per tour with --tour; parity per tour is the bar for switching `fitted` on.")
 
+    # ── AN ENSEMBLE WITH AN INDEPENDENT RATING ──────────────────────────────
+    # The one repeated finding in the recent literature is that two models of
+    # similar strength but different construction beat either alone: the 2026
+    # graph-network paper could not beat Weighted Elo (0.214 vs 0.217 Brier)
+    # yet the AVERAGE of the two reached 0.211, p<0.001. Our own Elo and
+    # Tennis Abstract's are exactly that pair — same idea, different code,
+    # different data pipeline, different K schedule.
+    #
+    # DELIBERATELY UNFITTED: a flat 50/50 in logit space. We hold only a few
+    # months of archived Tennis Abstract snapshots, so there is nothing to fit
+    # a weight on without leaking; an unweighted average has no parameters to
+    # overfit and is the honest test of whether the information is
+    # complementary at all.
+    if a.ensemble:
+        import sqlite3
+        conn = hdb.connect()
+        cfg_e = {"k0": k0, "k_decay": dec, "k_offset": a.k_offset, "level_k": level_k,
+                 "surface_from_overall": init, "k_floor": a.k_floor,
+                 "welo": a.welo, "welo_retired": a.welo_retired}
+        de = collect(rows, cfg_e, tour=a.tour, h2h_shrink=a.h2h_shrink, h2h_surface=a.h2h_surface)
+        rated_e = (de["nw"] >= a.min_matches) & (de["nl"] >= a.min_matches)
+        je = rated_e & (de["date"] >= a.judge_from)
+
+        # Tennis Abstract's figures as of each tournament's first Monday, via
+        # the TennisMyLife -> Tennis Explorer id bridge the linkage built.
+        app_db = sqlite3.connect(str(Path(__file__).resolve().parent.parent / "tennis_fantasy.db"))
+        bridge = {t: e for e, t in app_db.execute(
+            "SELECT id, tml_player_id FROM te_players WHERE tml_player_id IS NOT NULL")}
+        weeks = sorted({w for (w,) in app_db.execute(
+            "SELECT DISTINCT week_date FROM te_rankings_snapshots WHERE elo IS NOT NULL")})
+        snaps = {}
+        for pid, wk, elo, eh, ec, eg, rk in app_db.execute(
+                "SELECT player_id, week_date, elo, elo_hard, elo_clay, elo_grass, rank "
+                "FROM te_rankings_snapshots WHERE elo IS NOT NULL"):
+            snaps[(pid, wk)] = (elo, eh, ec, eg, rk)
+
+        from app.services.winprob.elo import blend_win_prob
+        ta_p, have_ta = [], []
+        surf_col = {"Hard": 1, "Clay": 2, "Grass": 3}
+        for i, ok in enumerate(je):
+            if not ok:
+                continue
+            tour_, wid, lid = de["ident"][i]
+            d = de["date"][i]
+            wk = max((x for x in weeks if x <= d), default=None)
+            tw, tl = bridge.get(wid), bridge.get(lid)
+            sw_ = snaps.get((tw, wk)) if (tw and wk) else None
+            sl_ = snaps.get((tl, wk)) if (tl and wk) else None
+            if not sw_ or not sl_ or not sw_[0] or not sl_[0]:
+                have_ta.append(False); ta_p.append(0.5); continue
+            j = surf_col.get(_surface_of(rows, de, i), 1)
+            selo_w, selo_l = sw_[j], sl_[j]
+            bo5 = bool(de["bo5"][i])
+            if selo_w and selo_l:
+                p_ta = blend_win_prob(selo_w, selo_l, sw_[4], sl_[4], 5 if bo5 else 3, surface_elo=True)
+            else:
+                p_ta = blend_win_prob(sw_[0], sl_[0], sw_[4], sl_[4], 5 if bo5 else 3)
+            have_ta.append(True); ta_p.append(p_ta)
+        have_ta = np.array(have_ta); ta_p = np.array(ta_p)
+        p_ours = probs(theta, names, de, je)
+        both_m = have_ta
+        if both_m.sum() < 50:
+            print(f"\nensemble: only {int(both_m.sum())} judged matches carry a Tennis Abstract rating - too few")
+        else:
+            y = np.ones(int(both_m.sum()))
+            o, t_ = p_ours[both_m], ta_p[both_m]
+            lg = lambda q: np.log(np.clip(q, 1e-9, 1 - 1e-9) / (1 - np.clip(q, 1e-9, 1 - 1e-9)))
+            ens = 1 / (1 + np.exp(-(0.5 * lg(o) + 0.5 * lg(t_))))
+            print(f"\n=== ENSEMBLE with Tennis Abstract, on the {int(both_m.sum())} judged matches both rate ===")
+            for label, q in (("ours alone", o), ("Tennis Abstract alone", t_), ("50/50 average", ens)):
+                print(f"  {label:22} ll={log_loss(q, y):.4f}  brier={brier(q, y):.4f}  acc={np.mean(q >= 0.5):.3f}")
+            d_us = -np.log(ens) - (-np.log(o))
+            rng2 = np.random.default_rng(11)
+            bt = np.array([d_us[rng2.integers(0, len(d_us), len(d_us))].mean() for _ in range(4000)])
+            lo2, hi2 = np.percentile(bt, [2.5, 97.5])
+            print(f"  ensemble vs ours: {d_us.mean():+.4f} log loss, 95% CI {lo2:+.4f}..{hi2:+.4f} -> "
+                  f"{'ensemble wins' if hi2 < 0 else 'ours wins' if lo2 > 0 else 'inside noise'}")
+            print(f"  correlation of the two logits: {np.corrcoef(lg(o), lg(t_))[0,1]:.3f} "
+                  f"(the lower it is, the more an average can help)")
+
     # ── THE MARKET, ON EXACTLY THE MATCHES IT PRICED ────────────────────────
     # The subset matters more than the number: quoting our log loss over the
     # whole judged window against the market's over the half of it that has
@@ -170,7 +326,8 @@ def main():
     if a.market:
         from app.services.history.odds import market_probabilities
         cfg_m = {"k0": k0, "k_decay": dec, "k_offset": a.k_offset, "level_k": level_k,
-                 "surface_from_overall": init, "k_floor": a.k_floor}
+                 "surface_from_overall": init, "k_floor": a.k_floor,
+                 "welo": a.welo, "welo_retired": a.welo_retired}
         dm = collect(rows, cfg_m, tour=a.tour, h2h_shrink=a.h2h_shrink, h2h_surface=a.h2h_surface)
         rated_m = (dm["nw"] >= a.min_matches) & (dm["nl"] >= a.min_matches)
         jm = rated_m & (dm["date"] >= a.judge_from)
@@ -223,7 +380,7 @@ def main():
 
     # Calibration on the judged window for the chosen model.
     cfg = {"k0": k0, "k_decay": dec, "k_offset": a.k_offset, "level_k": level_k, "surface_from_overall": init,
-           "k_floor": a.k_floor}
+           "k_floor": a.k_floor, "welo": a.welo, "welo_retired": a.welo_retired}
     data = collect(rows, cfg, tour=a.tour, h2h_shrink=a.h2h_shrink, h2h_surface=a.h2h_surface)
     rated = (data["nw"] >= a.min_matches) & (data["nl"] >= a.min_matches)
     judge_m = rated & (data["date"] >= a.judge_from)
@@ -237,7 +394,8 @@ def main():
 
     t = dict(zip(names, theta))
     own = {"k0": k0, "k_decay": dec, "k_offset": a.k_offset, "k_floor": a.k_floor, "level_k": level_k,
-           "surface_from_overall": init,
+           "welo": a.welo, "welo_retired": a.welo_retired, "shrink_n0": a.shrink,
+           "shrink_surface_n0": a.shrink_surface, "surface_from_overall": init,
            "surface_w": round(float(t["surface_w"]), 3), "k_logit": round(float(t["slope"]), 3),
            "k_rank": round(float(t.get("k_rank", 0.0)), 3),
            "k_h2h": round(float(t.get("k_h2h", 0.0)), 3), "h2h_shrink": a.h2h_shrink,
