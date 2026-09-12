@@ -125,17 +125,54 @@ def level_code(category: Optional[str]) -> Optional[str]:
     return _LEVEL.get((category or "").strip().lower())
 
 
+def _initials_agree(a_: set, b_: set) -> bool:
+    """"J.J. Wolf" and "Jeffrey John Wolf".
+
+    A draw sheet initialises a given name where Tennis Explorer spells it out,
+    and the two share no given-name token at all — so the checks below called
+    it a broken link and reported it every night, twice, for the same player
+    under two spacings (owner's /issues run, 2026-09-12).
+
+    Strict about what it accepts: the SURNAME must be shared, every unshared
+    token on the initialled side must be a single letter, and each must be the
+    first letter of an unshared token on the other side, one for one. So
+    "J. Smith" matches "John Smith" — which is as much as an initial can ever
+    say, and this decides whether an EXISTING link is plausible rather than
+    proposing a new one.
+    """
+    for short, long in ((a_, b_), (b_, a_)):
+        extra_s, extra_l = short - long, long - short
+        if not extra_s or len(extra_s) > len(extra_l):
+            continue
+        if not all(len(t) == 1 for t in extra_s):
+            continue
+        pool = list(extra_l)
+        ok = True
+        for t in extra_s:
+            hit = next((w for w in pool if w[:1] == t), None)
+            if hit is None:
+                ok = False
+                break
+            pool.remove(hit)
+        if ok:
+            return True
+    return False
+
+
 def names_agree(entry_name: str, te_name: str) -> bool:
     """Is this the same person's name in two forms? "Sorana Cîrstea" and
-    "Sorana-Mihaela Cirstea" are; "Luciano Darderi" and "Alexander Bublik"
-    are not. One set of tokens inside the other, or two tokens shared
-    including the last (the surname), or simply near-identical."""
+    "Sorana-Mihaela Cirstea" are, and so are "J.J. Wolf" and "Jeffrey John
+    Wolf"; "Luciano Darderi" and "Alexander Bublik" are not. One set of tokens
+    inside the other, or two tokens shared including the last (the surname), or
+    initials against the names they stand for, or simply near-identical."""
     a_, b_ = set(name_key(entry_name).split()), set(name_key(te_name).split())
     if not a_ or not b_:
         return False
     if a_ <= b_ or b_ <= a_:
         return True
     la, lb = name_key(entry_name).split()[-1], name_key(te_name).split()[-1]
+    if (la in b_ or lb in a_) and _initials_agree(a_, b_):
+        return True
     if len(a_ & b_) >= 2 and (la in b_ or lb in a_):
         return True
     return SequenceMatcher(None, " ".join(sorted(a_)), " ".join(sorted(b_))).ratio() >= 0.8
@@ -247,6 +284,46 @@ def pair_tournament(draw: Draw, tournament: Tournament, candidates: list[dict], 
     return None, "none"
 
 
+# HOW CLOSE IS THE SAME PERSON SPELLED DIFFERENTLY. Measured on the real
+# corpus rather than chosen:
+#
+#   same person   Shelbayh/Abedallah 0.914, hyphen variants 1.000
+#   NOT the same  Mirra/Erika Andreeva 0.786  <- sisters, same surname
+#                 Daniel Evans/Daniel Elahi Galan 0.667,
+#                 Alexander/Mischa Zverev 0.552, Taylor Fritz/Townsend 0.444
+#
+# 0.85 sits in the gap. Do not raise it to "tidy" it: the Andreeva sisters are
+# 0.06 below and Shelbayh 0.06 above, and the point of the number is that one
+# pair of real players with one surname must not become the other.
+_REPAIR_MIN_RATIO = 0.85
+
+
+def _close_name(entry_name: str, gender: str, te_rows: list) -> list:
+    """Tennis Explorer players of this gender whose name is nearly this one's
+    — at least one token in common and a high whole-name ratio.
+
+    No attempt to identify the surname: `name_key` sorts the tokens, and
+    "abdullah" and "shelbayh" are both eight letters, so every rule for
+    picking one out is a guess that gets it wrong half the time. A shared token
+    plus the ratio says the same thing without needing to know which token it
+    was.
+    """
+    key = name_key(entry_name)
+    if not key:
+        return []
+    tokens = set(key.split())
+    out = []
+    for p in te_rows:
+        if p.gender != gender:
+            continue
+        pkey = name_key(p.name_display or p.name_raw or "")
+        if not (tokens & set(pkey.split())):
+            continue
+        if SequenceMatcher(None, key, pkey).ratio() >= _REPAIR_MIN_RATIO:
+            out.append(p)
+    return out
+
+
 async def repair_te_links(db: AsyncSession) -> dict:
     """Entries whose name is not their Tennis Explorer player's name — the
     broken links the linkage refuses to use — re-pointed at the one player
@@ -257,7 +334,7 @@ async def repair_te_links(db: AsyncSession) -> dict:
     by_key: dict = {}
     for p in te_rows:
         by_key.setdefault((p.gender, name_key(p.name_display or p.name_raw or "")), []).append(p)
-    fixed, left = [], []
+    fixed, left, cleared = [], [], []
     rows = (await db.execute(select(DrawEntry, Draw.gender).join(Draw, Draw.id == DrawEntry.draw_id)
                              .where(DrawEntry.te_player_id.isnot(None)))).all()
     for e, gender in rows:
@@ -265,16 +342,33 @@ async def repair_te_links(db: AsyncSession) -> dict:
         if te is None or names_agree(e.name, te.name_display or te.name_raw or ""):
             continue
         cands = by_key.get((gender, name_key(e.name)), [])
+        # THE SAME NAME SPELLED ANOTHER WAY. Exact keys miss a
+        # transliteration: our "Abdullah Shelbayh" against Tennis Explorer's
+        # "Abedallah Shelbayh", which left the entry pointing at Marton
+        # Fucsovics and was reported every night with nothing able to fix it
+        # (owner's /issues run, 2026-09-12). Same surname, one candidate, and
+        # a close full name — all three, or it is a guess.
+        if len(cands) != 1:
+            cands = _close_name(e.name, gender, te_rows)
         if len(cands) == 1:
             fixed.append({"draw_entry_id": e.id, "entry": e.name, "was": te.name_display or te.name_raw,
                           "now": cands[0].name_display or cands[0].name_raw})
             e.te_player_id = cands[0].id
             e.te_slug = cands[0].te_slug
         else:
-            left.append({"draw_entry_id": e.id, "draw_id": e.draw_id, "entry": e.name, "te_name": te.name_display or te.name_raw})
-    if fixed:
+            # A WRONG ID IS WORSE THAN NONE. draw_odds reads te_player_id
+            # straight off the entry with no name check, so a link to someone
+            # else hands that person's Elo, form and head-to-head to this
+            # player. Cleared, and reported as cleared: null means "unknown",
+            # which every reader already handles, while a name nothing matches
+            # is a data problem for a human rather than a rating to keep using.
+            cleared.append({"draw_entry_id": e.id, "draw_id": e.draw_id, "entry": e.name,
+                            "was": te.name_display or te.name_raw})
+            e.te_player_id = None
+            e.te_slug = None
+    if fixed or cleared:
         await db.commit()
-    return {"fixed": fixed, "left": left}
+    return {"fixed": fixed, "left": left, "cleared": cleared}
 
 
 async def link_draws(db: AsyncSession, draw_ids: Optional[list[int]] = None) -> dict:
