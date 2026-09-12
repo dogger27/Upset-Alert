@@ -24,7 +24,8 @@ const THUMB = 28
    chosen world — one of the three, never two: moving the slider leaves the
    world and choosing a world drops the slider. `finalPlayed` is what the
    medals key on: a chosen world has played its final. */
-export function useStandingsView(data, t, chancesAt = null, chancesScope = 'g') {
+export function useStandingsView(data, t, chancesAt = null, chancesScope = 'g',
+                                 chancesHistoryAt = null) {
   const [pos, setPosRaw] = useState(null)
   const [worldIdx, setWorldIdxRaw] = useState(null)
   const timeline = useMemo(() => data?.matches_timeline ?? [], [data])
@@ -74,8 +75,29 @@ export function useStandingsView(data, t, chancesAt = null, chancesScope = 'g') 
      finish_from: null and no history, and that is the very case the sampled
      chances exist for. */
   const hist = data?.finish_history ?? null
+  /* THE WHOLE HISTORY, HELD HERE. One request per draw, so a scrub is a
+     lookup rather than a question put to the server — which is what it was
+     when the history only ran back to R16 and came with the payload. Keyed by
+     the timeline length, so a new result fetches the map again. */
+  const mapQ = useApi(
+    chancesHistoryAt && drawId && timeline.length && data?.odds_available
+      ? `chancehist:${chancesScope}:${drawId}:${timeline.length}` : null,
+    () => chancesHistoryAt(),
+    { enabled: !!(chancesHistoryAt && drawId && timeline.length && data?.odds_available) })
+  const posMap = useMemo(() => {
+    const raw = mapQ.data?.positions
+    if (!raw) return null
+    const scale = mapQ.data.scale || 1000
+    const out = {}
+    for (const [pos, rows] of Object.entries(raw)) {
+      const one = {}
+      for (const [uid, v] of Object.entries(rows)) one[uid] = [v[0] / scale, v[1] / scale]
+      out[pos] = one
+    }
+    return out
+  }, [mapQ.data])
   const needsChances = !!(chancesAt && !world && scrubbing && data?.odds_available
-                          && !hist?.[String(pos)])
+                          && !hist?.[String(pos)] && !posMap?.[String(pos)])
   const [chancePos, setChancePos] = useState(null)
   useEffect(() => {
     if (!needsChances) { setChancePos(null); return }
@@ -90,7 +112,10 @@ export function useStandingsView(data, t, chancesAt = null, chancesScope = 'g') 
     () => chancesAt(chancePos),
     { enabled: needsChances && chancePos != null })
   useEffect(() => { if (chances.data?.chances) held.current = chances.data.chances }, [chances.data])
-  const posChances = needsChances ? (chances.data?.chances ?? held.current) : null
+  /* The map first — it is already here — then the single-position request for
+     anything it does not carry (a draw nobody has warmed yet). */
+  const posChances = posMap?.[String(pos)]
+    ?? (needsChances ? (chances.data?.chances ?? held.current) : null)
   const entries = useMemo(() => {
     const base = data?.entries ?? []
     if (world) return worldEntries(base, world, data?.world_predictions ?? {})
@@ -102,7 +127,7 @@ export function useStandingsView(data, t, chancesAt = null, chancesScope = 'g') 
     entries, world, scrubbing, finalPlayed: !!world, finishFrom,
     /* Sampled describes the numbers ON SCREEN: a finished draw rewound to its
        first round is showing sampled figures whatever its present state. */
-    chancesSampled: !!data?.chances_sampled || (needsChances && !!chances.data?.sampled),
+    chancesSampled: !!data?.chances_sampled || (scrubbing && !hist?.[String(pos)]),
     pos, setPos: p => { setPosRaw(p); setWorldIdxRaw(null) },
     /* Sorted by Finish, the slider stops where the column begins: a table
        ordered by the range cannot sit at a position where it is dashes. */

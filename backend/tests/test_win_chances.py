@@ -578,3 +578,39 @@ def test_a_past_moment_is_not_priced_off_a_live_score():
     quiet = DrawOdds({}, "Hard", 3, {}, base + ((),))
     assert quiet.without_live() is quiet
     assert _key_without_live(base + ((),)) == base + ((),)
+
+
+def test_the_assembled_history_is_handed_over_whole_and_validated():
+    """One request per draw, then the slider needs no network.
+
+    Positions live in the walk cache keyed by their snapshot, which is 3.5ms
+    to rebuild each — half a second for a Slam, too much for a request that
+    only wants to hand over a map. So the assembled answers are kept too, and
+    each carries the id of the last match in its slice: that is what catches a
+    result landing in the MIDDLE of the timeline, where every later position
+    starts describing a different moment."""
+    import random
+    from app.services.scoring import (chances_at, chances_history_held,
+                                      chances_history_key)
+    rng = random.Random(23)
+    ms = _bracket(32, decided_r1=12, rng=rng)
+    tl = [m.id for m in sorted([m for m in ms if m.winner_id and not m.is_bye],
+                               key=lambda m: (m.round_number, m.match_number))]
+    picks = {u: _random_picks(ms, 32, rng) for u in range(1, 5)}
+    pts = {1: 1, 2: 2, 3: 4, 4: 8, 5: 12}
+    odds = _odds(range(1, 33))
+    key = chances_history_key(7, 5, picks, odds.without_live()
+                              if hasattr(odds, "without_live") else odds)
+
+    assert chances_history_held(key, tl) == {}
+    for pos in (3, 7, 11):
+        chances_at(7, ms, tl, pos, pts, 5, picks, odds=odds)
+    held = chances_history_held(key, tl)
+    assert sorted(held) == [3, 7, 11]
+    assert set(held[7]) == set(picks)
+
+    # A RESULT LANDING MID-TIMELINE shifts every position after it, and the
+    # stored answers for those positions must not be handed over.
+    shifted = tl[:5] + [max(m.id for m in ms) + 1] + tl[5:]
+    still = chances_history_held(key, shifted)
+    assert sorted(still) == [3], "positions after the insertion must be dropped"

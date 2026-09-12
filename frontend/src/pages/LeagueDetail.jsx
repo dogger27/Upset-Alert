@@ -2,8 +2,8 @@ import { useState, useMemo, useRef, useEffect, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useParams, useNavigate, useOutletContext } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getLeague, getLeagueTournaments, getRoundScores, updateLeague, setMemberAdmin, removeMember, deleteLeague, shareLeagueByEmail, getGrandSlamTotals, getCashPools, setCashPool, getPositionChances } from '../api/leagues'
-import { getGlobalRoundScores, getGlobalDraws, getGlobalGSTotals, listTournaments, getGlobalPositionChances } from '../api/tournaments'
+import { getLeague, getLeagueTournaments, getRoundScores, updateLeague, setMemberAdmin, removeMember, deleteLeague, shareLeagueByEmail, getGrandSlamTotals, getCashPools, setCashPool, getPositionChances, getChancesHistory } from '../api/leagues'
+import { getGlobalRoundScores, getGlobalDraws, getGlobalGSTotals, listTournaments, getGlobalPositionChances, getGlobalChancesHistory } from '../api/tournaments'
 import { PickChip, ROUND_SLOTS, ROUND_TITLES, DEPTH_ROUNDS } from '../components/ComparePicksTable'
 import { getComparePicks } from '../api/tournaments'
 import { useAuth } from '../store/auth'
@@ -1378,6 +1378,34 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
   const effectiveMax = matchesTimeline.length
   const effectiveScrubPos = scrubPos ?? effectiveMax
   const isScrubbing = effectiveScrubPos < effectiveMax
+  /* THE WHOLE HISTORY, ON THE CLIENT. One request per draw, so a scrub is a
+     lookup in a map rather than a question put to the server — which is what
+     it always was while the history only ran back to R16 and rode along in
+     the round-scores payload. It is NOT in that payload any more because
+     that one is polled every sixty seconds and this is twenty kilobytes.
+     Keyed by the timeline length so a new result refetches it; per-mille
+     integers, divided back here. */
+  const { data: chancesHist } = useQuery({
+    queryKey: ['chances-history', leagueId ?? 'global', t.id, matchesTimeline.length],
+    queryFn: leagueId != null ? () => getChancesHistory(leagueId, t.id)
+                              : () => getGlobalChancesHistory(t.id),
+    enabled: !!rawData?.odds_available && matchesTimeline.length > 0,
+    staleTime: 5 * 60_000,
+    placeholderData: prev => prev,
+  })
+  const chancesAt = useMemo(() => {
+    const raw = chancesHist?.positions
+    if (!raw) return null
+    const scale = chancesHist.scale || 1000
+    const out = {}
+    for (const [pos, rows] of Object.entries(raw)) {
+      const one = {}
+      for (const [uid, v] of Object.entries(rows)) one[uid] = [v[0] / scale, v[1] / scale]
+      out[pos] = one
+    }
+    return out
+  }, [chancesHist])
+
   /* THE CHANCES OF A MOMENT THE HISTORY CANNOT REACH. `finish_history` covers
      every position from fifteen undecided matches on; before that each one is
      a hundred thousand sampled futures, so they are asked for one at a time —
@@ -1398,6 +1426,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
      the sampling was built for. */
   const needsPosChances = !!rawData?.odds_available && isScrubbing
     && !finishHistory[String(effectiveScrubPos)]
+    && !chancesAt?.[String(effectiveScrubPos)]
   const [chancePos, setChancePos] = useState(null)
   useEffect(() => {
     if (!needsPosChances) { setChancePos(null); return }
@@ -1481,7 +1510,8 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
       const r = finishHistory[String(effectiveScrubPos)]?.[String(e.user_id)]
       /* Before the range's first position the chances come from their own
          request instead — the same walk, sampled. */
-      const c = scrubChances?.[String(e.user_id)]
+      const c = chancesAt?.[String(effectiveScrubPos)]?.[String(e.user_id)]
+                ?? scrubChances?.[String(e.user_id)]
       return { ...e, round_points, total, correct_count,
                best_rank: r ? r[0] : null, worst_rank: r ? r[1] : null, podium_locked: !!r && r[1] <= 3,
                /* [best, worst, p_win, p_podium] — the chances follow the
@@ -1499,7 +1529,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
       return 0
     })
     return { entries: currentEntries, roundsWithMatches: sliceRounds }
-  }, [isScrubbing, effectiveScrubPos, matchesTimeline, entries, roundsWithMatches, userPredictions, world, worldPredictions, finishHistory, scrubChances])
+  }, [isScrubbing, effectiveScrubPos, matchesTimeline, entries, roundsWithMatches, userPredictions, world, worldPredictions, finishHistory, scrubChances, chancesAt])
 
   const pointsOrder = displayData.entries
   /* The finish column exists only once the server can enumerate the draw's
@@ -1524,7 +1554,8 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
   /* Sampled describes THE NUMBERS ON SCREEN, not the draw's present state: a
      finished draw rewound to its first round is showing sampled figures, and
      the explainer has to say so. */
-  const chancesSampled = !!rawData?.chances_sampled || (needsPosChances && !!posChances?.sampled)
+  const chancesSampled = !!rawData?.chances_sampled
+    || (isScrubbing && !finishHistory[String(effectiveScrubPos)])
   const [showChancesInfo, setShowChancesInfo] = useState(false)
   const cashPool = !!rawData?.cash_pool
 
