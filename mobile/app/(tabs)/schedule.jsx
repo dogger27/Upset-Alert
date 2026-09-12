@@ -30,6 +30,8 @@ import { useApi } from '../../useApi'
 import { footTime, isLive, isSuspended, matchFromEntry, whenLabel } from '../../schedule'
 import { leading } from '../../fontScale.js'
 import { TourBadge } from '../../cards'
+import { useScheduleDraws } from '../../scheduleFilter'
+import { rowInDraws } from '../../scheduleRows'
 import { MatchCard } from '../../scorecard'
 import { ScoreHistorySheet } from '../../scoreHistory'
 import { C, R, S, T } from '../../theme'
@@ -98,6 +100,16 @@ export default function ScheduleScreen() {
   const all = useMemo(() => day.data?.entries || [], [day.data])
   const tours = useMemo(() => [...new Set(all.map(e => e.tour).filter(Boolean))].sort(), [all])
   const hasDoubles = useMemo(() => all.some(e => e.discipline !== 'singles'), [all])
+  /* WHICH DRAWS THE TAB CHOSE (scheduleFilter). Doubles and qualifying carry
+     no draw_id, so the row test also needs the TOURNAMENTS behind those draws
+     — choosing a draw means choosing its event. */
+  const drawSel = useScheduleDraws()
+  const drawTournaments = useMemo(() => {
+    if (!drawSel) return null
+    const out = new Set()
+    for (const e of all) if (e.draw_id != null && drawSel.has(e.draw_id)) out.add(e.tournament_id)
+    return out
+  }, [drawSel, all])
   /* SEEDED ONCE PER DAY, NOT PER FETCH. This ran on `day.data`, whose identity
      changes on every poll — and the live subscription refetches this screen
      about every ten seconds — so switching WTA on held for one cycle and then
@@ -146,9 +158,14 @@ export default function ScheduleScreen() {
       // so what remains is on court now or still waiting to get there.
       if (!showDone && (e.status === 'completed' || e.status === 'postponed')) return false
       if (view === 'time' && tourSel && e.tour && !tourSel.has(e.tour)) return false
+      // THE DRAWS THE TAB ASKED ABOUT. Applied in BOTH views, unlike the tour
+      // chips: those are a control on this screen and the court view
+      // deliberately reproduces the whole sheet, while this is an answer the
+      // reader gave on the way in and means the same thing either way.
+      if (!rowInDraws(e, drawSel, drawTournaments)) return false
       return true
     })
-  }, [all, view, showDone, showDoubles, tourSel])
+  }, [all, view, showDone, showDoubles, tourSel, drawSel, drawTournaments])
 
   const groups = useMemo(() => {
     if (view === 'court') {
@@ -319,7 +336,12 @@ export default function ScheduleScreen() {
                 ? 'Every match listed is finished or postponed — switch Completed on to see them.'
                 : !showDoubles && all.every(e => e.discipline !== 'singles')
                   ? 'Only doubles is listed — switch Doubles on to see it.'
-                  : 'The current switches hide every match listed.'}
+                  : drawSel && !all.some(e => rowInDraws(e, drawSel, drawTournaments))
+                    /* The one filter that is NOT a switch on this screen, so
+                       it has to name itself: the reader set it on the way in
+                       and has nothing here to point at. */
+                    ? 'None of the draws you chose is playing today — tap Schedule again to change that.'
+                    : 'The current switches hide every match listed.'}
             </Muted>
           </Card>
         )}
