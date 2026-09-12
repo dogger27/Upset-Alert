@@ -70,5 +70,11 @@ def main():
     return 0 if ok else 1
 
 
+
+def test_serve_split_guard():
+    """The serve-split guard, run by the suite. Same reason: a file with only a
+    main() is collected as zero tests."""
+    assert main() == 0
+
 if __name__ == "__main__":
     raise SystemExit(main())
