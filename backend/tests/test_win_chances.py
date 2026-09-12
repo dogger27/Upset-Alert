@@ -360,3 +360,55 @@ def test_one_rating_pass_per_tour_with_its_own_k_schedule():
     assert pass_config("atp", {"k0": 1.0})["k0"] == 1.0
     # An unknown tour gets the shared defaults rather than a KeyError.
     assert pass_config("doubles")["k0"] > 0
+
+
+def test_sampling_reaches_where_enumeration_cannot(monkeypatch):
+    """Past fifteen undecided matches the chances are sampled, and the range
+    comes back empty rather than understated."""
+    import random
+    from app.services.scoring import (CHANCES_MAX_UNDECIDED, chances_available,
+                                      chances_sampled, finish_range_available)
+    from tests.test_finish_range import _bracket
+
+    r32_done = _bracket(32, decided_r1=16)          # 15 undecided: both exact
+    assert finish_range_available(r32_done) and chances_available(r32_done)
+    assert not chances_sampled(r32_done)
+
+    r64 = _bracket(64, decided_r1=0)                # 63 undecided: chances only
+    assert not finish_range_available(r64)
+    assert chances_available(r64) and chances_sampled(r64)
+
+    rng = random.Random(2)
+    ms = _bracket(32, decided_r1=8, rng=rng)        # 23 undecided
+    picks = {u: _random_picks(ms, 32, rng) for u in range(1, 6)}
+    banked = _banked(ms, {1: 1, 2: 2, 3: 4, 4: 8, 5: 12}, picks)
+    pts = {1: 1, 2: 2, 3: 4, 4: 8, 5: 12}
+    odds = _odds(range(1, 33))
+    # Without sampling it refuses; with it, it answers.
+    assert finish_range(ms, pts, 5, banked, picks, odds) is None
+    out = finish_range(ms, pts, 5, banked, picks, odds, sample=True)
+    assert out is not None and len(out) == 5
+    for best, worst, pw, pp in out.values():
+        assert best is None and worst is None        # an extreme is not sampled
+        assert 0.0 <= pw <= pp <= 1.0
+    assert sum(v[2] for v in out.values()) == pytest.approx(1.0, abs=0.02)
+    # Deterministic: the same state gives the same number, every time.
+    again = finish_range(ms, pts, 5, banked, picks, odds, sample=True)
+    assert again == out
+    # And sampling without odds has nothing to draw from.
+    assert finish_range(ms, pts, 5, banked, picks, None, sample=True) is None
+
+
+def test_a_sampled_chance_matches_the_exact_one():
+    """Where both can be computed they must agree to within sampling error."""
+    import random
+    rng = random.Random(4)
+    ms = _bracket(16, decided_r1=4, rng=rng)
+    picks = {u: _random_picks(ms, 16, rng) for u in range(1, 8)}
+    banked = _banked(ms, PTS16, picks)
+    odds = _odds(range(1, 17))
+    exact = finish_range(ms, PTS16, 4, banked, picks, odds)
+    drawn = finish_range(ms, PTS16, 4, banked, picks, odds, sample=True)
+    for u in exact:
+        assert drawn[u][2] == pytest.approx(exact[u][2], abs=0.01)
+        assert drawn[u][3] == pytest.approx(exact[u][3], abs=0.01)

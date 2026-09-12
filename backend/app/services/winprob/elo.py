@@ -16,13 +16,17 @@ import math
 from typing import Optional
 
 from ._params import params
-from .sets import set_prob_from_match_prob, match_from_set_prob
+from .sets import expand_best_of
 
 
 def _expand(p3: float, best_of: int) -> float:
-    """A best-of-three probability, re-expressed for the match format."""
+    """A best-of-three probability, re-expressed for the match format.
+
+    Through the interpolation table rather than a fresh bisection: the
+    pairwise table for one draw asks this sixteen thousand times.
+    """
     if best_of == 5:
-        return match_from_set_prob(set_prob_from_match_prob(p3, 3), 5)
+        return expand_best_of(p3, 3, 5)
     return p3
 
 

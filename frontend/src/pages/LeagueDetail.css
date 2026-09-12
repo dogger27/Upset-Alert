@@ -825,6 +825,15 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 .lt-progress-header-row.lt-progress-row--finish.lt-progress-row--odds {
   grid-template-columns: 28px 22px 22px var(--name-col-width, 120px) 3rem 52px 2.6rem 3.2rem 2.7rem 2.7rem 1fr;
 }
+/* THE CHANCES WITHOUT THE RANGE — every round before R16. Past fifteen
+   undecided matches the futures are sampled, which gives Win and Top 3 but
+   not the range (an extreme cannot be sampled), so this pairing is the
+   normal state for the first ten days of a Slam. Two classes deep, so the
+   three-class rules above still win when both columns are present. */
+.lt-progress-row--abs.lt-progress-row--odds,
+.lt-progress-header-row.lt-progress-row--odds {
+  grid-template-columns: 28px 22px 22px var(--name-col-width, 120px) 3rem 52px 2.6rem 2.7rem 2.7rem 1fr;
+}
 .lt-progress-row--abs {
   position: absolute; width: 100%;
   transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
@@ -1121,6 +1130,10 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   .lt-progress-header-row.lt-progress-row--finish.lt-progress-row--odds {
     grid-template-columns: 28px 22px 22px minmax(var(--name-col-width, 120px), 1fr) 3rem 52px 2.6rem 3.2rem 2.7rem 2.7rem;
   }
+  .lt-progress-row--abs.lt-progress-row--odds,
+  .lt-progress-header-row.lt-progress-row--odds {
+    grid-template-columns: 28px 22px 22px minmax(var(--name-col-width, 120px), 1fr) 3rem 52px 2.6rem 2.7rem 2.7rem;
+  }
 }
 @container (max-width: 640px) {
   /* Too narrow for the per-round point bars → drop them + their grid column */
@@ -1143,6 +1156,11 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   .lt-progress-row--abs.lt-progress-row--finish.lt-progress-row--odds,
   .lt-progress-header-row.lt-progress-row--finish.lt-progress-row--odds {
     grid-template-columns: 28px 22px 22px var(--name-col-width, 120px) 3rem 52px 3.2rem 2.7rem 2.7rem;
+  }
+  /* No range to make room for, so Max keeps its track here. */
+  .lt-progress-row--abs.lt-progress-row--odds,
+  .lt-progress-header-row.lt-progress-row--odds {
+    grid-template-columns: 28px 22px 22px var(--name-col-width, 120px) 3rem 52px 2.6rem 2.7rem 2.7rem;
   }
 }
 @container (max-width: 530px) {
@@ -1187,6 +1205,16 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   .lt-progress-header-row.lt-progress-row--finish.lt-progress-row--odds {
     grid-template-columns: 24px 22px 20px var(--name-col-width, 120px) 46px 2.8rem 2.5rem;
   }
+  /* WITHOUT THE RANGE the row still carries eight cells here — the tick and
+     Max are only dropped by the --finish rules above, which do not apply —
+     and seven tracks sent the eighth onto a second line, straight through
+     the rows beneath it. The tick goes, as it does in the --finish case and
+     for the same reason: it is a second reading of the score. */
+  .lt-progress-row--odds .lt-progress-correct { display: none; }
+  .lt-progress-row--abs.lt-progress-row--odds,
+  .lt-progress-header-row.lt-progress-row--odds {
+    grid-template-columns: 24px 22px 20px var(--name-col-width, 120px) 46px 2rem 2.5rem;
+  }
 }
 @container (max-width: 320px) {
   .lt-gender-badge { display: none; } /* drop category, leave only the name */
@@ -1220,6 +1248,11 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   .lt-progress-header-row.lt-progress-row--finish.lt-progress-row--odds {
     grid-template-columns: 22px 22px 20px var(--name-col-width, 92px) 52px 2.8rem;
   }
+  /* Narrower than a phone: with no range either, the score is all that fits. */
+  .lt-progress-row--abs.lt-progress-row--odds,
+  .lt-progress-header-row.lt-progress-row--odds {
+    grid-template-columns: 22px 22px 20px var(--name-col-width, 92px) 3rem 52px 2.6rem;
+  }
 }
 @container (max-width: 300px) {
   .lt-bracket-btn, .lt-hcol-bracket, .lt-history-btn, .lt-hcol-history { display: none; }
@@ -1240,6 +1273,10 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   .lt-progress-row--abs.lt-progress-row--finish.lt-progress-row--odds,
   .lt-progress-header-row.lt-progress-row--finish.lt-progress-row--odds {
     grid-template-columns: var(--name-col-width, 92px) 52px 2.8rem;
+  }
+  .lt-progress-row--abs.lt-progress-row--odds,
+  .lt-progress-header-row.lt-progress-row--odds {
+    grid-template-columns: var(--name-col-width, 92px) 52px 2.6rem;
   }
 }
 
