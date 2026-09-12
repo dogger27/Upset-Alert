@@ -14,7 +14,7 @@ import { Pressable, StyleSheet, Switch, Text, View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { useApi } from './useApi'
 import { C, T } from './theme'
-import { roundTag, scrubEntries, surname, worldEntries, worldLine } from './scoring'
+import { placesDecided, roundTag, scrubEntries, surname, worldEntries, worldLine } from './scoring'
 
 const THUMB = 28
 
@@ -84,10 +84,25 @@ export function useStandingsView(data, t, chancesAt = null, chancesScope = 'g',
       ? `chancehist:${chancesScope}:${drawId}:${timeline.length}` : null,
     () => chancesHistoryAt(),
     { enabled: !!(chancesHistoryAt && drawId && timeline.length && data?.odds_available) })
+  /* A DRAW OLDER THAN THE WARM WINDOW (chances_warm.ACTIVE_WINDOW) arrives
+     with an empty or partial map, and the server starts filling it on that
+     request. Ask again until it covers the timeline — otherwise the slider
+     falls back to one request per stop, which is what the owner felt on a
+     July draw. useApi has no interval of its own, so this is a timer that
+     refetches and then clears itself. */
+  const mapData = mapQ.data
+  const refetchMap = useRef(null)
+  refetchMap.current = mapQ.refetch
+  const incomplete = !!mapData && mapData.complete === false
+  useEffect(() => {
+    if (!incomplete) return
+    const id = setTimeout(() => refetchMap.current?.(), 4000)
+    return () => clearTimeout(id)
+  }, [incomplete, mapData])
   const posMap = useMemo(() => {
-    const raw = mapQ.data?.positions
+    const raw = mapData?.positions
     if (!raw) return null
-    const scale = mapQ.data.scale || 1000
+    const scale = mapData.scale || 1000
     const out = {}
     for (const [pos, rows] of Object.entries(raw)) {
       const one = {}
@@ -95,7 +110,7 @@ export function useStandingsView(data, t, chancesAt = null, chancesScope = 'g',
       out[pos] = one
     }
     return out
-  }, [mapQ.data])
+  }, [mapData])
   const needsChances = !!(chancesAt && !world && scrubbing && data?.odds_available
                           && !hist?.[String(pos)] && !posMap?.[String(pos)])
   const [chancePos, setChancePos] = useState(null)
@@ -125,6 +140,11 @@ export function useStandingsView(data, t, chancesAt = null, chancesScope = 'g',
   }, [data, hist, world, scrubbing, timeline, pos, posChances])
   return {
     entries, world, scrubbing, finalPlayed: !!world, finishFrom,
+    /* Whether the rows on screen have a decided champion — see
+       scoring.placesDecided. Derived here rather than in each screen: two
+       screens drew the medals and both read the draw's real status, so both
+       showed a trophy on a rewound table. */
+    placesDecided: placesDecided({ status: t?.status, scrubbing, world }),
     /* Sampled describes the numbers ON SCREEN: a finished draw rewound to its
        first round is showing sampled figures whatever its present state. */
     chancesSampled: !!data?.chances_sampled || (scrubbing && !hist?.[String(pos)]),

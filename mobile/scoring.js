@@ -67,6 +67,25 @@ export function pct(p) {
   return `${Math.round(p * 100)}%`
 }
 
+/* WHEN A PLACE IS A MEDAL AND NOT A PREDICTION.
+ *
+ * Two conditions, and the second one was missing (owner, 2026-09-12: a
+ * Washington Open scrubbed to 7 of 31 matches showed two trophies):
+ *
+ *   The final must have been decided — a podium mid-tournament is a guess.
+ *   AND the table must be showing THE PRESENT. `status` describes the draw in
+ *   reality, so on a finished event it stays 'completed' however far back the
+ *   slider goes: the trophy then belongs to whoever happened to lead at R32,
+ *   which is exactly the claim the first condition exists to prevent.
+ *
+ * A chosen what-if world keeps its medals: it has played its final by
+ * hypothesis, and choosing one drops the slider (they are mutually
+ * exclusive), so `scrubbing` is false there.
+ */
+export function placesDecided({ status, scrubbing, world } = {}) {
+  return !scrubbing && (status === 'completed' || !!world)
+}
+
 /* Sort by best possible finish, then by least to lose, then the standings
  * order — the same tiebreak the site uses for its Finish header. */
 export function byFinish(order) {
