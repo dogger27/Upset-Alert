@@ -419,6 +419,14 @@ def _is_qualifying(comp: dict) -> bool:
 _FINAL_STATUSES = ("STATUS_FINAL", "STATUS_RETIRED", "STATUS_WALKOVER")
 
 
+# WHEN A DAY'S PLAY CAN PLAUSIBLY BEGIN, in venue local time. A day session
+# starts late morning and a night session around seven; nothing starts at one
+# in the morning or at ten at night. Used to tell a published order of play
+# from a placeholder timestamp — see _refine_closing_time.
+SESSION_EARLIEST_HOUR = 8
+SESSION_LATEST_HOUR = 21
+
+
 def _singles_comps(event: dict, gender: str, status) -> list:
     """Return MAIN-DRAW singles competitions with the given status (a string or
     a tuple of strings) for this gender. Qualifying matches are excluded — they
@@ -999,9 +1007,24 @@ class ESPNMonitor:
         day1_starts = [(u, l) for u, l in local if l.date() == day1]
 
         first_utc, first_local = day1_starts[0]
-        if first_local.hour == 0 and first_local.minute == 0:
-            logger.debug("ESPN: order of play not published yet for %s %s (all day-1 "
-                         "matches at midnight local)", tournament.year, tournament.name)
+        # A PLACEHOLDER IS NOT A SESSION. ESPN fills a scheduled-but-unpublished
+        # match with a constant instant, and the midnight-local test only
+        # catches it for venues where that instant IS midnight. Guadalajara
+        # 2026 arrived as TWELVE day-1 matches at one timestamp — 04:00 UTC,
+        # which is 22:00 in Mexico City and 01:00 in Sao Paulo — so it passed
+        # the test and set the deadline to ten in the evening the day BEFORE
+        # the main draw, eighteen hours early (owner, 2026-09-12).
+        #
+        # So the test is the hour itself. No tournament's first ball of the day
+        # is at 22:00 or 01:00: a day session starts late morning, a night
+        # session around seven, and the whole range lives inside these bounds.
+        # A real order of play that happens to list every court at one time —
+        # which some feeds do — still passes, because the time is plausible.
+        if not (SESSION_EARLIEST_HOUR <= first_local.hour <= SESSION_LATEST_HOUR):
+            logger.debug("ESPN: order of play not published yet for %s %s "
+                         "(%d day-1 matches, first at %s local — not a session start)",
+                         tournament.year, tournament.name, len(day1_starts),
+                         first_local.strftime("%H:%M"))
             return
 
         # A schedule that lands days from the draw's own start date belongs to
