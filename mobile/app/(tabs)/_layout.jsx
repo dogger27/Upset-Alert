@@ -24,6 +24,7 @@ import { useApi } from '../../useApi'
 import { computeCohortInfo, getHomeSection } from '../../drawStatus'
 import { useCurrentDraw } from '../../currentDraw'
 import { useLastLeague } from '../../lastLeague'
+import { pruneScheduleDraws, setScheduleDraws, useScheduleDraws } from '../../scheduleFilter'
 import { C, T } from '../../theme'
 
 /* Openable means the draw actually exists to look at — the dashboard's own
@@ -89,6 +90,13 @@ export default function TabLayout() {
   const insets = useSafeAreaInsets()
   const tabBottom = Math.min(insets.bottom, TAB_BOTTOM_MAX)
   const [picking, setPicking] = useState(false)
+  /* WHICH DRAWS THE SCHEDULE SHOWS. A day's sheet can carry four tournaments
+     and a hundred rows, so the tab asks before it opens — one or many, never
+     none (scheduleFilter). Held here as a draft and published on close, so a
+     half-made selection never filters the screen behind the sheet. */
+  const [filtering, setFiltering] = useState(false)
+  const chosen = useScheduleDraws()
+  const [draft, setDraft] = useState(null)
   const showing = useCurrentDraw()
   const lastLeague = useLastLeague()
   const pathname = usePathname()
@@ -146,6 +154,20 @@ export default function TabLayout() {
           `title` stays — it is the TAB's label, not the header's. */}
       <Tabs.Screen
         name="schedule"
+        /* ASK WHICH DRAWS, exactly as the Draw tab asks which bracket — and
+           only when there is a choice to make. One live draw, or none, means
+           the sheet would be a gate with nothing behind it, so the press goes
+           straight through. */
+        listeners={{
+          tabPress: e => {
+            if (live.length < 2) return
+            e.preventDefault()
+            // Stale ids name nothing a week later; start from what is live.
+            pruneScheduleDraws(live.map(t => t.id))
+            setDraft(new Set(chosen ?? live.map(t => t.id)))
+            setFiltering(true)
+          },
+        }}
         options={{ title: 'Schedule', headerShown: false, tabBarIcon: icon('calendar') }}
       />
       {/* The bracket, between the day's play and the people you play it with. */}
@@ -229,6 +251,48 @@ export default function TabLayout() {
       )) : (
         <Text style={s.none}>No draws are being played right now.</Text>
       )}
+    </Sheet>
+
+    {/* THE SCHEDULE'S DRAWS. Multi-select, and the last one cannot be turned
+        off: a filter that hides everything is indistinguishable from a broken
+        screen (owner's rule, 2026-09-12). Closing applies the draft and goes
+        to the schedule — Close is Done here, and tapping the scrim means the
+        same thing rather than throwing the choice away. */}
+    <Sheet visible={filtering} title="Show which draws"
+           onClose={() => {
+             setScheduleDraws(draft && draft.size === live.length ? null : draft)
+             setFiltering(false)
+             router.push('/schedule')
+           }}>
+      <Pressable style={[s.row, s.first]} accessibilityRole="button"
+                 onPress={() => setDraft(new Set(live.map(t => t.id)))}>
+        <Text style={[s.name, { flex: 1 }]}>All draws</Text>
+        {draft && draft.size === live.length
+          ? <Ionicons name="checkmark" size={16} color={C.greenBright} />
+          : null}
+      </Pressable>
+      {live.map(t => {
+        const on = !!draft?.has(t.id)
+        const only = on && draft.size === 1
+        return (
+          <Pressable key={t.id} style={s.row} accessibilityRole="button"
+                     accessibilityState={{ selected: on, disabled: only }}
+                     onPress={() => setDraft(prev => {
+                       const next = new Set(prev ?? [])
+                       // NOT NONE: the last one on stays on.
+                       if (next.has(t.id)) { if (next.size > 1) next.delete(t.id) }
+                       else next.add(t.id)
+                       return next
+                     })}>
+            <View style={[s.tint, { backgroundColor: t.gender === 'F' ? C.wta : C.atp }]} />
+            <View style={s.nameWrap}>
+              <Text style={[s.name, !on && { color: C.faint }]} numberOfLines={1}>{t.name}</Text>
+              {on ? <Ionicons name="checkmark" size={16} color={C.greenBright} /> : null}
+            </View>
+            <TourBadge gender={t.gender} />
+          </Pressable>
+        )
+      })}
     </Sheet>
     </>
   )
