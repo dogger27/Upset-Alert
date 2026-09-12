@@ -560,14 +560,62 @@ _CHANCES_HISTORY: dict[tuple, dict[int, tuple]] = {}
 _CHANCES_HISTORY_MAX = 48   # one entry per draw per scope per ratings week
 
 
+def chances_fingerprint(all_matches: list, num_rounds: int,
+                        picks: dict[int, dict[int, Optional[int]]], odds=None) -> str:
+    """EVERYTHING THE CHANCES DEPEND ON EXCEPT WHICH MOMENT THEY DESCRIBE, as
+    a short digest — the answer's version.
+
+    Two jobs, and they are the same question asked twice:
+
+      it keys the assembled history, which previously keyed on picks, odds and
+      the draw id alone. A PLAYER REPLACED IN THE BRACKET changes none of
+      those, so a stored map would have been handed out unchanged for a draw
+      whose field had moved — the per-position walks were safe (their key
+      carries the snapshot) but the map served to the client was not;
+
+      and the client keys its request on it, so a completed match, a
+      replacement, a withdrawal, an edited pick or a new rating week all make
+      the browser ask again by themselves. It was keyed on the timeline LENGTH,
+      which a replacement does not change.
+
+    The field is (id, both sides, winner, bye) per match: that is what a
+    replacement, a withdrawal and a completed match each move.
+    """
+    import hashlib
+    parts = [
+        str(draw_of(all_matches)), str(num_rounds), str(CHANCES_SCRUB_SAMPLES),
+        repr(sorted((m.id, m.player1_id, m.player2_id, m.winner_id, bool(m.is_bye))
+                    for m in all_matches)),
+        repr(sorted((u, tuple(sorted((k, v) for k, v in (pk or {}).items() if v is not None)))
+                    for u, pk in picks.items())),
+        repr(getattr(odds, "cache_key", None)),
+    ]
+    return hashlib.sha1("|".join(parts).encode()).hexdigest()[:12]
+
+
+def draw_of(all_matches: list):
+    """The draw these matches belong to, for the fingerprint. Matches carry
+    draw_id; a plain SimpleNamespace snapshot may not, and then the rest of the
+    digest identifies it anyway."""
+    for m in all_matches:
+        d = getattr(m, "draw_id", None)
+        if d is not None:
+            return d
+    return None
+
+
 def chances_history_key(draw_id: int, num_rounds: int,
-                        picks: dict[int, dict[int, Optional[int]]], odds=None) -> tuple:
+                        picks: dict[int, dict[int, Optional[int]]], odds=None,
+                        all_matches: Optional[list] = None) -> tuple:
     """Everything the answers depend on except which moment they describe."""
     return (
         draw_id, num_rounds, CHANCES_SCRUB_SAMPLES,
         tuple(sorted((u, tuple(sorted((k, v) for k, v in (pk or {}).items() if v is not None)))
                      for u, pk in picks.items())),
         getattr(odds, "cache_key", None),
+        # THE FIELD, or a replaced player leaves a stale map in place: nothing
+        # else in this key moves when one entry becomes another.
+        chances_fingerprint(all_matches or [], num_rounds, picks, odds) if all_matches else None,
     )
 
 
@@ -820,7 +868,7 @@ def chances_at(draw_id: int, all_matches: list, timeline_ids: list[int], positio
     out = {u: (v[2], v[3]) for u, v in rng.items() if len(v) > 3}
     # Written through to the assembled history, so a client can be handed the
     # whole thing and scrub with no request at all.
-    chances_history_store(chances_history_key(draw_id, num_rounds, picks, odds),
+    chances_history_store(chances_history_key(draw_id, num_rounds, picks, odds, all_matches),
                           position, timeline_ids[position - 1], out)
     return sample, out
 

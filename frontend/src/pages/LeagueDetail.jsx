@@ -1386,7 +1386,12 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
      Keyed by the timeline length so a new result refetches it; per-mille
      integers, divided back here. */
   const { data: chancesHist } = useQuery({
-    queryKey: ['chances-history', leagueId ?? 'global', t.id, matchesTimeline.length],
+    /* KEYED ON THE ANSWER'S VERSION. A completed match, a player replaced in
+       the bracket, a withdrawal, an edited pick or a new rating week all
+       change it, so the map is refetched by itself — the timeline LENGTH,
+       which this used, does not move when one entry becomes another. */
+    queryKey: ['chances-history', leagueId ?? 'global', t.id,
+               rawData?.chances_version ?? matchesTimeline.length],
     queryFn: leagueId != null ? () => getChancesHistory(leagueId, t.id)
                               : () => getGlobalChancesHistory(t.id),
     enabled: !!rawData?.odds_available && matchesTimeline.length > 0,
