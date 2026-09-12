@@ -4,7 +4,7 @@ import { Stack, useLocalSearchParams } from 'expo-router'
 import { useEffect, useMemo, useState } from 'react'
 import { Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { getGrandSlamTotals, getLeague, getLeagueTournaments, shareLeagueByEmail } from '../../../api'
+import { getGlobalDraws, getGlobalGSTotals, getGrandSlamTotals, getLeague, getLeagueTournaments, shareLeagueByEmail } from '../../../api'
 import { useAuth } from '../../../auth'
 import { Sheet } from '../../../sheet'
 import { LeagueSettingsSheet, canManageLeague } from '../../../leagueSettings'
@@ -18,8 +18,17 @@ import { Button, Card, CardLink, ErrorNote, Eyebrow, Loading, Muted, Screen, Tit
 
 export default function LeagueDraws() {
   const { id } = useLocalSearchParams()
-  const league = useApi(`league:${id}`, () => getLeague(id))
-  const draws = useApi(`league:${id}:tournaments`, () => getLeagueTournaments(id))
+  /* GLOBAL IS A LEAGUE HERE, as it is on the site: the same screen, different
+     sources. One component rather than two, because the moment they are two
+     they drift — the site learned that once already
+     (feedback_global_league_duplication). There is no /leagues/global on the
+     server, so the league query is switched OFF rather than left to 404. */
+  const isGlobal = String(id) === 'global'
+  const league = useApi(isGlobal ? null : `league:${id}`, () => getLeague(id),
+                        { enabled: !isGlobal })
+  const scope = isGlobal ? 'global' : `league:${id}`
+  const draws = useApi(`${scope}:tournaments`,
+                       () => (isGlobal ? getGlobalDraws() : getLeagueTournaments(id)))
 
   /* GROUPED THE WAY THE SITE GROUPS THEM. Every draw is filed by the same
      getHomeSection the dashboard uses — computed over ALL of this league's
@@ -41,8 +50,10 @@ export default function LeagueDraws() {
          The site has hidden these from a real league's lists all along; the
          app never got the rule, which is why a phone listed draws only the
          reader had entered (owner, 2026-09-11). This page is only ever a real
-         league — Global, where solo picks DO belong, is a different screen. */
-      if ((it.picker_count ?? 0) <= 1) continue
+         league. GLOBAL IS THE EXCEPTION — alone in a draw is still a result
+         when the field is everybody — and it is this same screen now, so the
+         rule is conditional rather than absolute. */
+      if (!isGlobal && (it.picker_count ?? 0) <= 1) continue
       const sec = getHomeSection(t, cohort)
       ;(sec === 'open' || sec === 'active' || sec === 'upcoming' ? cur : prev).push(it)
     }
@@ -67,7 +78,7 @@ export default function LeagueDraws() {
       return out
     }
     return { current: events(cur), previous: events(prev) }
-  }, [draws.data])
+  }, [draws.data, isGlobal])
   const [prevShown, setPrevShown] = useState(5)
   /* SHOW ONLY THE EVENTS THIS LEAGUE PLAYED FOR MONEY — the site's Previous
      filter. Most useful here, where a season's draws pile up and the question
@@ -88,7 +99,7 @@ export default function LeagueDraws() {
   /* The site's Members tab: this year's Grand Slam point tally, ATP / WTA /
      combined, sortable by any column. Combined, descending, to start — the
      column the site opens on. */
-  const gs = useApi(`league:${id}:gs`, () => getGrandSlamTotals(id))
+  const gs = useApi(`${scope}:gs`, () => (isGlobal ? getGlobalGSTotals() : getGrandSlamTotals(id)))
   const [sortCol, setSortCol] = useState('combined')
   const [sortDir, setSortDir] = useState('desc')
   const members = useMemo(() => {
@@ -121,7 +132,7 @@ export default function LeagueDraws() {
           string cannot be pressed. */}
       <Stack.Screen options={{
         headerTitle: () => (
-          <LeagueTitle name={league.data?.name} onPress={() => setPicking(true)} />
+          <LeagueTitle name={isGlobal ? 'Global' : league.data?.name} onPress={() => setPicking(true)} />
         ),
       }} />
       <LeaguePicker visible={picking} onClose={() => setPicking(false)} currentId={id} />
@@ -139,7 +150,7 @@ export default function LeagueDraws() {
         {/* The site's "Share League": the invite code, a way to send it, and
             share-by-email. Offered to the owner, or to any member when the
             league allows member invites — the site's own gate. */}
-        {league.data?.invite_code && (league.data.owner?.id === me?.id || league.data.allow_member_invites) ? (
+        {!isGlobal && league.data?.invite_code && (league.data.owner?.id === me?.id || league.data.allow_member_invites) ? (
           <View style={s.invite}>
             <View style={{ flex: 1 }}>
               <Text style={[T.eyebrow, { color: C.muted }]}>Invite code</Text>
@@ -154,7 +165,7 @@ export default function LeagueDraws() {
         <InviteSheet visible={invite} onClose={() => setInvite(false)} league={league.data} />
         {/* The site's gear: owner, league admin or site admin — the server's
             _can_manage, mirrored so the sheet never opens on a 403. */}
-        {canManageLeague(league.data, me) ? (
+        {!isGlobal && canManageLeague(league.data, me) ? (
           <Pressable onPress={() => setSettings(true)} style={({ pressed }) => [s.settingsBtn, pressed && { opacity: 0.7 }]}
                      accessibilityRole="button" accessibilityLabel="League settings">
             <Ionicons name="settings-outline" size={16} color={C.muted} />
@@ -168,7 +179,7 @@ export default function LeagueDraws() {
         {current.length > 0 && (
           <>
             <Eyebrow>Open / Active</Eyebrow>
-            {current.map(g => <DrawRow key={g.key} items={g.items} leagueId={id} />)}
+            {current.map(g => <DrawRow key={g.key} items={g.items} leagueId={id} isGlobal={isGlobal} />)}
           </>
         )}
         {previous.length > 0 && (
@@ -186,7 +197,7 @@ export default function LeagueDraws() {
               ) : null}
             </View>
             {prevList.slice(0, prevShown).map(g => (
-              <DrawRow key={g.key} items={g.items} leagueId={id} compact />
+              <DrawRow key={g.key} items={g.items} leagueId={id} isGlobal={isGlobal} compact />
             ))}
             {prevShown < prevList.length && (
               <Pressable onPress={() => setPrevShown(n => n + 5)} style={s.more} hitSlop={8}>
@@ -198,9 +209,9 @@ export default function LeagueDraws() {
           </>
         )}
 
-        {league.data && (
+        {(league.data || isGlobal) && (
           <>
-            <Eyebrow>Members ({league.data.member_count ?? members.length})</Eyebrow>
+            <Eyebrow>{isGlobal ? `Players (${members.length})` : `Members (${league.data?.member_count ?? members.length})`}</Eyebrow>
             <View style={s.tally}>
               <Text style={[T.small, { color: C.muted, paddingHorizontal: 12, paddingTop: 10 }]}>
                 {gs.data?.year ?? new Date().getFullYear()} Grand Slam point tally
@@ -228,7 +239,11 @@ export default function LeagueDraws() {
                       <Ionicons name="person-circle-outline" size={16} color={C.faint} />
                       <View style={{ flexShrink: 1 }}>
                         <Text style={[T.bodyMed, { color: C.ink }]} numberOfLines={1}>{m.username}</Text>
-                        {league.data.show_real_name && m.full_name ? (
+                        {/* A league decides whether to show real names;
+                            Global has no such setting and shows none —
+                            reading `.show_real_name` off the absent league
+                            was a red box on that screen. */}
+                        {league.data?.show_real_name && m.full_name ? (
                           <Text style={[T.tiny, { color: C.faint }]} numberOfLines={1}>{m.full_name}</Text>
                         ) : null}
                       </View>
@@ -259,7 +274,10 @@ function tierLabel(category) {
   return '250'
 }
 
-function DrawRow({ items, leagueId, compact = false }) {
+function DrawRow({ items, leagueId, isGlobal = false, compact = false }) {
+  /* Global's standings for a draw are their own screen — /standings/[id],
+     everyone who entered — where a league's are scoped to its members. */
+  const href = drawId => (isGlobal ? `/standings/${drawId}` : `/league/${leagueId}/draw/${drawId}`)
   const a = items[0].tournament
   const b = items[1]?.tournament
   const paired = !!b
@@ -298,7 +316,7 @@ function DrawRow({ items, leagueId, compact = false }) {
      every year and nobody scans a history for them. */
   if (compact) {
     return (
-      <CardLink href={`/league/${leagueId}/draw/${a.id}`} style={s.card}>
+      <CardLink href={href(a.id)} style={s.card}>
         {paired ? (
           <View style={s.stripe}>
             <View style={[s.stripeHalf, { backgroundColor: C.atp }]} />
@@ -326,7 +344,7 @@ function DrawRow({ items, leagueId, compact = false }) {
     )
   }
   return (
-    <CardLink href={`/league/${leagueId}/draw/${a.id}`} style={s.card}>
+    <CardLink href={href(a.id)} style={s.card}>
       {paired ? (
         <View style={s.stripe}>
           <View style={[s.stripeHalf, { backgroundColor: C.atp }]} />

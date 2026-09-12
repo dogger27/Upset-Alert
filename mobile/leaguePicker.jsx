@@ -42,7 +42,8 @@ export function LeaguePicker({ visible, onClose, currentId }) {
 
   const go = id => {
     onClose()
-    if (Number(id) === Number(currentId)) return
+    // String compare: 'global' is one of the ids.
+    if (String(id) === String(currentId)) return
     setLastLeague(id)
     // replace, not push: choosing another league is a change of subject, not a
     // step deeper — Back should still return where the reader came from rather
@@ -52,6 +53,19 @@ export function LeaguePicker({ visible, onClose, currentId }) {
 
   return (
     <Sheet visible={visible} onClose={onClose} title="Leagues">
+      {/* GLOBAL IS A LEAGUE IN THIS LIST, as it is on the site: everyone
+          playing, every released draw. First, because it is the one table
+          that always has something in it. */}
+      <Pressable style={[s.row, s.first]} onPress={() => go('global')}
+                 accessibilityRole="button">
+        <View style={{ flex: 1 }}>
+          <Text style={s.name} numberOfLines={1}>Global</Text>
+          <Text style={s.sub}>Everyone playing</Text>
+        </View>
+        {String(currentId) === 'global'
+          ? <Ionicons name="checkmark" size={16} color={C.greenBright} />
+          : null}
+      </Pressable>
       {(leagues ?? []).map(lg => (
         <Pressable key={lg.id} style={s.row} onPress={() => go(lg.id)}
                    accessibilityRole="button">
@@ -87,6 +101,8 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 10,
     paddingVertical: 12, borderTopWidth: 1, borderTopColor: C.border,
   },
+  // The list's first row draws no top border — the sheet's title is above it.
+  first: { borderTopWidth: 0 },
   name: { ...T.bodyMed, color: C.ink },
   sub: { ...T.tiny, color: C.muted },
 })

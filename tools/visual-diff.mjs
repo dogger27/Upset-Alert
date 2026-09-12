@@ -93,6 +93,10 @@ const SCREENS = [
   { name: 'league-popup', mobile: '/league/10/draw/77', pwa: '/leagues/10', pwaClick: 'US Open 2026' },
   { name: 'washout-open', mobile: '/schedule?date=2026-09-01', pwa: '/schedule?date=2026-09-01', appClick: 'Completed', pwaClick: 'Completed' },
   { name: 'league',    mobile: '/league/10',   pwa: '/leagues/10' },
+  // The league picker, opened from the heading: Global first, then the leagues.
+  { name: 'league-picker', mobile: '/league/10', pwa: '/leagues/10', appClick: 'Slambam' },
+  // Global as a league: the same screen, everyone playing, every draw.
+  { name: 'league-global', mobile: '/league/global', pwa: '/leagues' },
   // The site keeps standings behind a tab rather than a route, so the PWA side
   // has to be clicked into position before it can be compared with anything.
   { name: 'standings', mobile: '/league/10/draw/77', pwa: '/leagues/10', pwaClick: 'Members' },

@@ -298,3 +298,9 @@ export const removeMember = (leagueId, userId) =>
    Members tab. { year, members: [{ user_id, username, full_name, atp_points,
    wta_points, is_admin }] }. */
 export const getGrandSlamTotals = (leagueId) => request(`/leagues/${leagueId}/grand-slam-totals`)
+/* THE GLOBAL "LEAGUE" — everyone playing, which the site has always rendered
+   through the same component as a real league. Its draws are every released
+   draw (solo picks included: alone in a draw is still a result when the field
+   is everybody), and its tally is every entrant's. */
+export const getGlobalDraws = () => request('/tournaments/global-draws')
+export const getGlobalGSTotals = () => request('/tournaments/global-gs-totals')
