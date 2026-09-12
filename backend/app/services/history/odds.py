@@ -222,10 +222,20 @@ def load_season(conn, season: int, tour: str, client=None) -> dict:
                      r.get("Surface"), str(r["Winner"]).strip(), str(r["Loser"]).strip(),
                      ow, ol, book, p, source, r.get("Comment")))
     with conn:
-        conn.executemany("""INSERT OR REPLACE INTO market_odds
+        # UPSERT, NOT REPLACE. A REPLACE rewrites the whole row, and the two
+        # columns the linkage fills are not in this statement — so re-reading
+        # the current season every night used to erase every link it had and
+        # leave the store looking unlinked until the linker caught up two
+        # minutes later. Only the price can change; the identity cannot.
+        conn.executemany("""INSERT INTO market_odds
             (tour, season, match_date, tourney, round, best_of, surface, winner_name, loser_name,
              odds_w, odds_l, book, p_market, source, comment)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", kept)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(tour, match_date, winner_name, loser_name) DO UPDATE SET
+                season=excluded.season, tourney=excluded.tourney, round=excluded.round,
+                best_of=excluded.best_of, surface=excluded.surface, odds_w=excluded.odds_w,
+                odds_l=excluded.odds_l, book=excluded.book, p_market=excluded.p_market,
+                source=excluded.source, comment=excluded.comment""", kept)
     return {"season": season, "tour": tour, "rows": len(kept), "source": source}
 
 
@@ -236,6 +246,10 @@ def link_to_record(conn, since: str = "2000-01-01") -> dict:
     tournament started, so the search is a window rather than an equality —
     and inside that window a pair of names is all but unique.
     """
+    # INDEXED BY SURNAME TOKEN, not a flat list. Scanning every candidate for
+    # every priced match is 13,849 x 30,000 frozenset intersections and took
+    # 110 seconds; keying on the tokens a name must share cuts it to a
+    # handful of candidates each.
     pool: dict = {}
     for tour, td, w, l, wid, lid in conn.execute(
             """SELECT tour, tourney_date, winner_name, loser_name, winner_id, loser_id
@@ -244,7 +258,10 @@ def link_to_record(conn, since: str = "2000-01-01") -> dict:
             t0 = date.fromisoformat(td)
         except (TypeError, ValueError):
             continue
-        pool.setdefault(tour, []).append((t0, record_name(w), record_name(l), wid, lid))
+        pw, pl = record_name(w), record_name(l)
+        entry = (t0, pw, pl, wid, lid)
+        for token in pw[0] | pl[0]:
+            pool.setdefault((tour, token), []).append(entry)
 
     rows = conn.execute("""SELECT id, tour, match_date, winner_name, loser_name FROM market_odds
                            WHERE match_date >= ? AND tml_winner_id IS NULL""", (since,)).fetchall()
@@ -257,7 +274,15 @@ def link_to_record(conn, since: str = "2000-01-01") -> dict:
             continue
         kw, kl = market_name(wn), market_name(ln)
         hits = set()
-        for t0, pw, pl, wid, lid in pool.get(tour, ()):
+        seen_entries = set()
+        candidates = []
+        for token in kw[0] | kl[0]:
+            for entry in pool.get((tour, token), ()):
+                key = id(entry)
+                if key not in seen_entries:
+                    seen_entries.add(key)
+                    candidates.append(entry)
+        for t0, pw, pl, wid, lid in candidates:
             if not (t0 - timedelta(days=2) <= day <= t0 + timedelta(days=21)):
                 continue
             if names_match(kw, pw) and names_match(kl, pl):
