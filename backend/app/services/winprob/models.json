@@ -8,11 +8,19 @@
     "rank_cap": 500
   },
   "set": {
-    "beta": 0.2750,
+    "beta": 0.275,
     "beta_bo5": 0.0568
   },
   "elo": {
     "logit_scale": 1.0,
     "_note": "1.0 = standard Elo (100 pts -> 64%). Our own tour-only Elo needed ~0.73; recalibrate against archived Tennis Abstract tables once you have a season of results."
+  },
+  "blend": {
+    "_source": "scripts/fit_winprob.py on Upset Alert's own results, every match rated as of its tournament's first Monday (1,443 matches, 2026-06-22 to 2026-09-07). Refit when the window has grown; the 90% bootstrap was k_elo 0.42..0.75, k_rank 0.05..0.24.",
+    "k_elo": 0.604,
+    "k_rank": 0.138,
+    "_surface_note": "No history of surface Elo exists yet, so k_elo_surface is the honest overall slope times the ratio of the two slopes fitted on today's page over the same matches (1.27 \u2014 the surface figure is more informative per point). The rank slope is kept as fitted; the leaked fit cannot say how the ranking's weight changes. Replace both with a direct fit once the weekly snapshots carry a season of hElo/cElo/gElo.",
+    "k_elo_surface": 0.77,
+    "k_rank_surface": 0.138
   }
 }

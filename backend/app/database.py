@@ -236,6 +236,10 @@ async def _migrate(conn):
         "ALTER TABLE te_players ADD COLUMN last_name VARCHAR",
         "ALTER TABLE te_rankings_snapshots ADD COLUMN elo INTEGER",
         "ALTER TABLE te_rankings_snapshots ADD COLUMN elo_rank INTEGER",
+        # Surface Elo, for the standings' win chances (2026-09-12).
+        "ALTER TABLE te_rankings_snapshots ADD COLUMN elo_hard INTEGER",
+        "ALTER TABLE te_rankings_snapshots ADD COLUMN elo_clay INTEGER",
+        "ALTER TABLE te_rankings_snapshots ADD COLUMN elo_grass INTEGER",
         "ALTER TABLE te_players ADD COLUMN nationality VARCHAR",
         "ALTER TABLE te_players DROP COLUMN elo",
         "ALTER TABLE te_players DROP COLUMN elo_rank",

@@ -18,8 +18,11 @@ all over simply backing the higher-ranked player.)
 ONE BIAS TO KEEP IN MIND, and it flatters the model: the Elo it reads is the
 LATEST week's, because that is what the live column reads. Scoring a match
 from March with September's Elo knows a little about what happened in
-between. Archive the weekly tables and re-run this per-match against the Elo
-of that week for a clean number.
+between — enough that Elo's apparent 0.05 edge over the ranking shrank to
+0.003 when measured without it. `fit_winprob.py` is the honest version: every
+match rated as of its tournament's first Monday, with a time split and error
+bars. Use THIS one for a quick "did the pipeline break" check, and THAT one
+for any claim about accuracy or any change to models.json.
 """
 import math
 import sqlite3
