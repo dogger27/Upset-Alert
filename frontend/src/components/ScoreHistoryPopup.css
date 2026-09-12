@@ -186,6 +186,12 @@
 .shp-tick--down { top: 16px; }
 .shp-tick--break { background: var(--warning); }
 .shp-tick--set   { background: var(--info); }
+/* A SERVE EVENT SITS ON THE SERVER'S SIDE of the rail and a break on the
+   winner's, so these two rarely share a spot with the amber break tick.
+   Without them a reader drags past every ace in the match — about one point
+   in twenty carries a label — and concludes none were ever recorded. */
+.shp-tick--ace   { background: var(--green-500, #40916c); }
+.shp-tick--df    { background: var(--h2h-p2, #c76df2); }
 
 .shp-legend {
   grid-column: 1 / -1;
