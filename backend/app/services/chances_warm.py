@@ -14,6 +14,9 @@ and discarded every walk for that draw. Now a past moment is priced without
 what is on court (`without_live`), which is also the honest snapshot: a match
 being played now was not two sets old back then.
 
+Only for draws whose PICKS ARE SHUT: a pick is part of the cache key, so
+warming a draw people are still editing is work thrown away. See `warm_draw`.
+
 So: ~0.2s of arithmetic per completed match per scope (each league with picks,
 plus the global table), and a first pass over a draw's whole timeline that is
 paid once per ratings week. Both run here, in the background, behind the same
@@ -33,6 +36,7 @@ from app.database import AsyncSessionLocal
 from app.models.league import LeagueMember
 from app.models.prediction import UserPrediction
 from app.models.tournament import Draw, Match
+from app.services.locking import draw_lock_state
 from app.services.scoring import _points_table, chances_at_async, finish_range_walks
 from app.services.win_chances import draw_odds
 
@@ -119,6 +123,25 @@ async def warm_draw(draw_id: int, budget: float = 240.0) -> dict:
         tl = _timeline_ids(all_matches)
         if not tl:
             return {"draw": draw_id, "positions": 0}
+        # NEVER WARM A DRAW WHOSE PICKS CAN STILL CHANGE. The picks are part of
+        # the walk's cache key — they have to be, a different bracket is a
+        # different answer — so one person saving one pick invalidates every
+        # position of every scope they belong to. Precomputing into that is
+        # work thrown away, over and over.
+        #
+        # Which costs nothing, because of WHEN the two lock modes close:
+        #   draw_start (109 of 111 draws): the bracket shuts at the first ball,
+        #     so while picks are open there is no timeline to scrub at all.
+        #   r1_progressive: picks stay editable through round one. That IS a
+        #     window where both are true, and it is the one this skips — those
+        #     positions are computed when someone actually visits them, as
+        #     they were before any of this.
+        # Once shut, picks only move by an admin editing them or a qualifier
+        # resolving into someone's bracket, and the five-minute pass is the
+        # self-heal for both.
+        lock = await draw_lock_state(db, draw)
+        if not lock.draw_locked:
+            return {"draw": draw_id, "positions": len(tl), "skipped": "picks still open"}
         scopes = await _scopes(db, draw_id)
         if not scopes:
             return {"draw": draw_id, "positions": len(tl), "scopes": 0}

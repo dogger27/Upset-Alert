@@ -614,3 +614,48 @@ def test_the_assembled_history_is_handed_over_whole_and_validated():
     shifted = tl[:5] + [max(m.id for m in ms) + 1] + tl[5:]
     still = chances_history_held(key, shifted)
     assert sorted(still) == [3], "positions after the insertion must be dropped"
+
+
+def test_a_draw_with_open_picks_is_not_warmed():
+    """Picks are part of the cache key, so one person saving one pick
+    invalidates every position of every scope they are in. Warming into that
+    is work thrown away — so the pass skips a draw whose bracket is still
+    open, and the positions are computed when someone visits them.
+
+    It costs nothing for the 109 of 111 draws on `draw_start`, where the
+    bracket shuts at the first ball and an open draw therefore has no timeline
+    to scrub. It matters for `r1_progressive`, where picks stay editable
+    through round one — a real window in which both are true."""
+    import asyncio
+    from types import SimpleNamespace
+    from app.services import chances_warm
+
+    calls = []
+
+    class _Draw:
+        id = 5
+        num_rounds = 7
+
+    async def fake_lock_state(db, draw):
+        calls.append(draw)
+        return SimpleNamespace(draw_locked=False, mode="r1_progressive")
+
+    class _Session:
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def get(self, model, pk): return _Draw()
+        async def execute(self, *a, **k):
+            return SimpleNamespace(scalars=lambda: SimpleNamespace(
+                all=lambda: [SimpleNamespace(id=1, status="completed", is_bye=False,
+                                             completed_at="2026-09-01T00:00:00")]))
+
+    orig_session, orig_lock = chances_warm.AsyncSessionLocal, chances_warm.draw_lock_state
+    chances_warm.AsyncSessionLocal = _Session
+    chances_warm.draw_lock_state = fake_lock_state
+    try:
+        out = asyncio.run(chances_warm.warm_draw(5))
+    finally:
+        chances_warm.AsyncSessionLocal = orig_session
+        chances_warm.draw_lock_state = orig_lock
+    assert out["skipped"] == "picks still open"
+    assert out["positions"] == 1 and len(calls) == 1
