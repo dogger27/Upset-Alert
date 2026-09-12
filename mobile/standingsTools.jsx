@@ -45,7 +45,13 @@ export function useStandingsView(data, t, chancesAt = null, chancesScope = 'g') 
      2026-09-12). Clamping keeps the feature on and lands on the last real
      future instead. */
   const drawId = t?.id ?? null
-  useEffect(() => { setPosRaw(null) }, [drawId])
+  /* The last answer that arrived, held so the columns do not blink while the
+     next position is in the air. Dropped with the scrub position when the
+     draw changes — the tour switch replaces the route without remounting
+     this hook, and one draw's chances on another draw's rows would be
+     plausible and wrong. */
+  const held = useRef(null)
+  useEffect(() => { setPosRaw(null); held.current = null }, [drawId])
   const idx = worldIdx == null || !worlds?.length
     ? null
     : Math.min(worldIdx, worlds.length - 1)
@@ -56,17 +62,24 @@ export function useStandingsView(data, t, chancesAt = null, chancesScope = 'g') 
      every position from fifteen undecided matches on; earlier than that each
      one is a hundred thousand sampled futures, so the screen asks for the
      single position the thumb came to rest on.
-     Debounced: the scrub fires continuously under the finger, and one request
-     per pixel would be a hundred and twenty walks. While the next answer is
+     Debounced 120ms: the scrub fires continuously under the finger, and one
+     request per pixel would be a hundred and twenty walks. Short, because a
+     position costs 0.12s to 0.48s (scoring.CHANCES_SCRUB_SAMPLES) — the
+     number should move while you drag, not once you let go. While the next answer is
      in the air the previous one stays on the rows — between two adjacent
      matches a probability barely moves, and a column that blinked to dashes
      on every drag would read as broken. */
+  /* The test is "does the history have this position", not "is it before the
+     range's first one": a draw too young for the range at all sends
+     finish_from: null and no history, and that is the very case the sampled
+     chances exist for. */
+  const hist = data?.finish_history ?? null
   const needsChances = !!(chancesAt && !world && scrubbing && data?.odds_available
-                          && finishFrom != null && pos < finishFrom)
+                          && !hist?.[String(pos)])
   const [chancePos, setChancePos] = useState(null)
   useEffect(() => {
     if (!needsChances) { setChancePos(null); return }
-    const id = setTimeout(() => setChancePos(pos), 220)
+    const id = setTimeout(() => setChancePos(pos), 120)
     return () => clearTimeout(id)
   }, [needsChances, pos])
   const chances = useApi(
@@ -76,16 +89,15 @@ export function useStandingsView(data, t, chancesAt = null, chancesScope = 'g') 
     needsChances && chancePos != null ? `chances:${chancesScope}:${drawId}:${chancePos}` : null,
     () => chancesAt(chancePos),
     { enabled: needsChances && chancePos != null })
-  const held = useRef(null)
   useEffect(() => { if (chances.data?.chances) held.current = chances.data.chances }, [chances.data])
   const posChances = needsChances ? (chances.data?.chances ?? held.current) : null
   const entries = useMemo(() => {
     const base = data?.entries ?? []
     if (world) return worldEntries(base, world, data?.world_predictions ?? {})
     if (scrubbing) return scrubEntries(base, timeline, pos, data?.user_predictions ?? {},
-                                       data?.finish_history ?? {}, posChances)
+                                       hist ?? {}, posChances)
     return base
-  }, [data, world, scrubbing, timeline, pos, posChances])
+  }, [data, hist, world, scrubbing, timeline, pos, posChances])
   return {
     entries, world, scrubbing, finalPlayed: !!world, finishFrom,
     /* Sampled describes the numbers ON SCREEN: a finished draw rewound to its

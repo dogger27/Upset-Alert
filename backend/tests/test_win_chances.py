@@ -456,3 +456,53 @@ def test_chances_at_a_timeline_position_the_history_cannot_reach():
 
     # No picks, no chances — and no exception.
     assert chances_at(1, ms, tl, 5, pts, 5, {}, odds=odds) == (False, {})
+
+
+def test_a_draw_too_young_for_any_history_still_has_chances():
+    """The hole the first cut left: a draw in its first week.
+
+    `finish_history` returns (None, {}) there — the range is not computable at
+    ANY position yet — and the client's first test for "should I ask for this
+    position" was `finish_from != null`, so rewinding a young tournament went
+    back to a column of dashes: exactly the case the sampling exists for. The
+    test is whether the history HAS the position, and `chances_at` answers one
+    whether or not the history exists."""
+    import random
+    from app.services.scoring import chances_at, finish_history
+    rng = random.Random(11)
+    ms = _bracket(64, decided_r1=4, rng=rng)         # 4 of 63 played
+    done = sorted([m for m in ms if m.winner_id and not m.is_bye],
+                  key=lambda m: (m.round_number, m.match_number))
+    tl = [m.id for m in done]
+    picks = {u: _random_picks(ms, 64, rng) for u in range(1, 5)}
+    pts = {1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 6: 12}
+    odds = _odds(range(1, 65))
+
+    assert finish_history(1, ms, tl, pts, 6, picks, odds=odds) == (None, {})
+    sampled, out = chances_at(1, ms, tl, len(tl), pts, 6, picks, odds=odds)
+    assert sampled and len(out) == 4
+    assert sum(p for p, _ in out.values()) == pytest.approx(1.0, abs=0.03)
+    # And position 1 — one match into the draw — answers too.
+    assert len(chances_at(1, ms, tl, 1, pts, 6, picks, odds=odds)[1]) == 4
+
+
+def test_the_scrub_draws_fewer_futures_than_the_live_figure():
+    """Different sample sizes are different cache entries, and the cheaper one
+    still lands within half a point."""
+    import random
+    from app.services.scoring import (CHANCES_SAMPLES, CHANCES_SCRUB_SAMPLES,
+                                      finish_range)
+    assert CHANCES_SCRUB_SAMPLES < CHANCES_SAMPLES
+    rng = random.Random(13)
+    ms = _bracket(32, decided_r1=6, rng=rng)         # 25 undecided: sampled
+    picks = {u: _random_picks(ms, 32, rng) for u in range(1, 7)}
+    banked = _banked(ms, {1: 1, 2: 2, 3: 4, 4: 8, 5: 12}, picks)
+    pts = {1: 1, 2: 2, 3: 4, 4: 8, 5: 12}
+    odds = _odds(range(1, 33))
+    full = finish_range(ms, pts, 5, banked, picks, odds, sample=True)
+    cheap = finish_range(ms, pts, 5, banked, picks, odds, sample=True,
+                         samples=CHANCES_SCRUB_SAMPLES)
+    assert cheap is not None and cheap != full          # a different draw of futures
+    for u in full:
+        assert cheap[u][2] == pytest.approx(full[u][2], abs=0.01)
+        assert cheap[u][3] == pytest.approx(full[u][3], abs=0.01)

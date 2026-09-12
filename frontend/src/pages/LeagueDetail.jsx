@@ -1382,18 +1382,26 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
      every position from fifteen undecided matches on; before that each one is
      a hundred thousand sampled futures, so they are asked for one at a time —
      when the slider has actually stopped somewhere.
-     Debounced, because a range input fires on every pixel of a drag: the
-     query follows where the thumb CAME TO REST, not where it passed through.
+     Debounced 120ms, because a range input fires on every pixel of a drag.
+     Short enough that the number moves WHILE you scrub — a position costs
+     0.12s to 0.48s now (scoring.CHANCES_SCRUB_SAMPLES) — rather than only
+     once the finger lifts.
      While the next position loads, the previous answer stays on screen
      (keepPreviousData): between two adjacent matches a probability barely
      moves, and a column that blinked to dashes and back on every drag would
      read as broken. */
+  /* THE TEST IS "DOES THE HISTORY HAVE THIS POSITION", not "is it before the
+     range's first one". On a draw too young for the range at all, the server
+     sends finish_from: null and NO history — and the first version of this
+     asked for a position only when finish_from was a number, so rewinding a
+     tournament in its first week went back to dashes, which is the very case
+     the sampling was built for. */
   const needsPosChances = !!rawData?.odds_available && isScrubbing
-    && finishFrom != null && effectiveScrubPos < finishFrom
+    && !finishHistory[String(effectiveScrubPos)]
   const [chancePos, setChancePos] = useState(null)
   useEffect(() => {
     if (!needsPosChances) { setChancePos(null); return }
-    const id = setTimeout(() => setChancePos(effectiveScrubPos), 220)
+    const id = setTimeout(() => setChancePos(effectiveScrubPos), 120)
     return () => clearTimeout(id)
   }, [needsPosChances, effectiveScrubPos])
   const { data: posChances } = useQuery({
@@ -1504,8 +1512,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
      chances now reach every position (they are sampled), so the range is the
      one column that has to come and go, and the table already has a layout
      without it: the one it wears live before R16. */
-  const finishShown = finishAvail && !(isScrubbing && finishFrom != null
-                                       && effectiveScrubPos < finishFrom)
+  const finishShown = finishAvail && !(isScrubbing && !finishHistory[String(effectiveScrubPos)])
   /* WIN AND PODIUM CHANCES, over the same futures the range is drawn from,
      each weighted by who is likely to win the matches left. Same R16 line,
      but its own flag: the model can be switched off for a draw whose range

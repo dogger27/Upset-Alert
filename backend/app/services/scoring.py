@@ -188,6 +188,15 @@ FINISH_RANGE_MAX_UNDECIDED = 15
 # left everyone can still finish first and last, so "1-19" tells nobody
 # anything while "12%" tells them plenty.
 CHANCES_SAMPLES = 100_000
+# THE SCRUB PAYS FOR ITS OWN RESPONSIVENESS. The live figure is computed once
+# per state and sits there being read, so it takes the full sample. A rewound
+# position is computed while someone's finger is on the slider, and the wait
+# is the whole experience of the feature: 40,000 draws is three times faster
+# (0.48s at the deepest position, 0.12s at R32) and its worst disagreement
+# with the full sample, measured over a real 19-bracket league at three
+# depths, was 0.4 of a percentage point — at most a single row rounding the
+# other way. 10,000 was tried and rejected: 1.4 points on Top 3.
+CHANCES_SCRUB_SAMPLES = 40_000
 # Fixed, so the same draw in the same state always produces the same number.
 # A column that moved while nothing had happened would read as broken, which
 # is the whole reason the exact path was built first.
@@ -236,6 +245,7 @@ def finish_range(
     picks: dict[int, dict[int, Optional[int]]],
     odds=None,
     sample: bool = False,
+    samples: Optional[int] = None,
 ) -> Optional[dict[int, tuple]]:
     """Best and worst finishing place for every bracket, over every future.
 
@@ -366,7 +376,7 @@ def finish_range(
             if ov and ov[0] in at and ov[1] in at:
                 live_over[ci] = (at[ov[0]], at[ov[1]], ov[2])
 
-    worlds = CHANCES_SAMPLES if sample else 1 << n
+    worlds = (samples or CHANCES_SAMPLES) if sample else 1 << n
     # The rank step compares every bracket with every other, per future; keep
     # that cube to a few million cells whatever the user count.
     chunk = (max(1, min(20_000, 2_000_000 // max(1, u_count)))
@@ -517,7 +527,7 @@ _FINISH_CACHE_MAX = 512   # a history is a dozen entries per draw per result
 
 def finish_range_cached(draw_id: int, all_matches: list, pts_table: dict[int, int], num_rounds: int,
                         banked: dict[int, UserScore], picks: dict[int, dict[int, Optional[int]]],
-                        odds=None, sample: bool = False):
+                        odds=None, sample: bool = False, samples: Optional[int] = None):
     key = (
         draw_id, num_rounds,
         tuple(sorted((m.id, m.winner_id, bool(m.is_bye), m.player1_id, m.player2_id) for m in all_matches)),
@@ -528,12 +538,13 @@ def finish_range_cached(draw_id: int, all_matches: list, pts_table: dict[int, in
         # for the same bracket and the same results.
         getattr(odds, "cache_key", None),
         # Sampled and enumerated are different answers to the same question,
-        # and one of them has no range in it.
-        sample,
+        # and one of them has no range in it. The sample SIZE is part of it
+        # too: the scrub draws fewer futures than the live figure does.
+        sample, samples if sample else None,
     )
     if key in _FINISH_CACHE:
         return _FINISH_CACHE[key]
-    out = finish_range(all_matches, pts_table, num_rounds, banked, picks, odds, sample)
+    out = finish_range(all_matches, pts_table, num_rounds, banked, picks, odds, sample, samples)
     if len(_FINISH_CACHE) >= _FINISH_CACHE_MAX:
         _FINISH_CACHE.pop(next(iter(_FINISH_CACHE)))
     _FINISH_CACHE[key] = out
@@ -679,7 +690,8 @@ def finish_history(draw_id: int, all_matches: list, timeline_ids: list[int], pts
 
 def _position_range(draw_id: int, all_matches: list, byes: set, timeline_ids: list[int], position: int,
                     pts_table: dict[int, int], num_rounds: int,
-                    picks: dict[int, dict[int, Optional[int]]], odds=None, sample: bool = False):
+                    picks: dict[int, dict[int, Optional[int]]], odds=None, sample: bool = False,
+                    samples: Optional[int] = None):
     """One snapshot: the draw as it stood after `position` results, scored, and
     run through the same walk the live table uses."""
     by_id = {m.id: m for m in all_matches}
@@ -695,7 +707,7 @@ def _position_range(draw_id: int, all_matches: list, byes: set, timeline_ids: li
                 by_round[m.round_number] = by_round.get(m.round_number, 0) + 1
         banked[uid] = UserScore(user_id=uid, total_points=total, correct_count=sum(by_round.values()),
                                 correct_by_round=by_round)
-    return finish_range_cached(draw_id, snap, pts_table, num_rounds, banked, picks, odds, sample)
+    return finish_range_cached(draw_id, snap, pts_table, num_rounds, banked, picks, odds, sample, samples)
 
 
 def chances_at(draw_id: int, all_matches: list, timeline_ids: list[int], position: int,
@@ -725,7 +737,8 @@ def chances_at(draw_id: int, all_matches: list, timeline_ids: list[int], positio
     if undecided > CHANCES_MAX_UNDECIDED:
         return sample, {}
     rng = _position_range(draw_id, all_matches, byes, timeline_ids, position, pts_table,
-                          num_rounds, picks, odds, sample=sample)
+                          num_rounds, picks, odds, sample=sample,
+                          samples=CHANCES_SCRUB_SAMPLES if sample else None)
     if not rng:
         return sample, {}
     return sample, {u: (v[2], v[3]) for u, v in rng.items() if len(v) > 3}
