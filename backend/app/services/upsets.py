@@ -21,9 +21,17 @@ def _compute_draw_ranks(entries: list[DrawEntry]) -> dict[int, int]:
     for e in seeded:
         ranks[e.id] = e.seed
 
+    # THE SEEDING WEEK, for both halves of the scale. `ranking` is the ENTRY
+    # week — the cutoff that decided who got in — and ordering the unseeded by
+    # it put them on a ranking a fortnight older than the seeds were drawn
+    # from. Fifteen of Guadalajara's field moved between those two weeks, and
+    # eight of its twenty unseeded would have taken a different badge.
+    # Falls back to `ranking` for draws scraped before seed_week_ranking
+    # existed, then to bracket position for a player TE never matched.
     def sort_key(e: DrawEntry):
-        if e.ranking is not None:
-            return (0, e.ranking)
+        r = e.seed_week_ranking if e.seed_week_ranking is not None else e.ranking
+        if r is not None:
+            return (0, r)
         return (1, e.bracket_position)
 
     unseeded = sorted((e for e in entries if e.seed is None), key=sort_key)

@@ -143,6 +143,7 @@ async def _migrate(conn):
         "ALTER TABLE tournaments ADD COLUMN sofa_mixed_season_id INTEGER",
         "ALTER TABLE schedule_documents ADD COLUMN content_sha VARCHAR",
         "ALTER TABLE players ADD COLUMN ranking INTEGER",
+        "ALTER TABLE draw_entries ADD COLUMN seed_week_ranking INTEGER",
         "ALTER TABLE tournaments ADD COLUMN category VARCHAR",
         "ALTER TABLE tournaments ADD COLUMN draw_release_direct DATE",
         "ALTER TABLE tournaments ADD COLUMN draw_release_qualifiers DATE",

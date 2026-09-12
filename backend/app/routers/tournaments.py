@@ -16,7 +16,7 @@ from app.schemas.league import LeaderboardEntry, LeagueTournamentOut
 from app.schemas.tournament import DrawEntryOut, DrawOut, MatchOut, TournamentCreate, TournamentOut
 from app.schemas.user import UserPublicOut
 from app.services.draw_changes import classify_change
-from app.services.rankings import assign_rankings
+from app.services.rankings import assign_rankings, assign_seed_week_rankings
 from app.services.scraper import scrape_tournament, snap_to_monday
 from app.services.scoring import (UserScore, _points_table, enumerate_worlds, finish_history_async,
                                   finish_range_async, chances_available, chances_sampled, podium_locked, rank_users)
@@ -178,6 +178,9 @@ async def backfill_rankings(
 
             before = [p.ranking for p in players]
             await assign_rankings(players, t.gender, ref_date, db)
+            # And the badge's week, which is a different one — see
+            # assign_seed_week_rankings.
+            await assign_seed_week_rankings(players, t.gender, t.seed_ranking_week, db)
             after = [p.ranking for p in players]
 
             updated = sum(1 for b, a in zip(before, after) if b != a)
@@ -2093,6 +2096,8 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
         try:
             ref_date = tournament.entry_ranking_week or tournament.start_date or date.today()
             await assign_rankings(upserted_players, tournament.gender, ref_date, db)
+            await assign_seed_week_rankings(upserted_players, tournament.gender,
+                                            tournament.seed_ranking_week, db)
             if roster_changed:
                 logger.info("Roster change in %s — rankings assigned", tournament.name)
             else:

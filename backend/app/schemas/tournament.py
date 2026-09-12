@@ -101,6 +101,10 @@ class DrawEntryOut(BaseModel):
     entry_type: Optional[str]
     bracket_position: int
     ranking: Optional[int] = None
+    # The seeding week's ranking — what the badge orders the unseeded by. The
+    # clients compute the badge themselves (computeDrawRanks), so they need the
+    # same number the server's upset check uses.
+    seed_week_ranking: Optional[int] = None
     date_of_birth: Optional[date] = None
     elo_rank: Optional[int] = None
     te_slug: Optional[str] = None
