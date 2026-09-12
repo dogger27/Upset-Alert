@@ -495,6 +495,15 @@ async def _refresh_elo() -> None:
     await refresh_elo_ratings()
 
 
+async def _warm_chances() -> None:
+    """Keep every scrub position of the active draws computed. See
+    services/chances_warm — the pass is a no-op when nothing has changed."""
+    from app.services.chances_warm import warm_active
+    out = await warm_active(budget=45)
+    if out.get("computed"):
+        logger.info("chances warm: %s", out)
+
+
 async def _history_sync(full: bool = False) -> None:
     """Our own results record, nightly: TennisMyLife's files that moved, our
     tournaments and players paired with their ids, our finished matches
@@ -528,6 +537,17 @@ async def _history_sync(full: bool = False) -> None:
         logger.warning("history: rating recompute failed", exc_info=True)
         from app.services.system_log import app_log
         await app_log("error", "history", "rating recompute failed", {}, dedup_key="ratings_fail", dedup_hours=6)
+    else:
+        # EVERY CACHED WALK JUST DIED. A new rating pass moves `ratings_as_of`,
+        # which is part of the odds cache key, so every position of every
+        # scrub has to be computed again. Doing it here, at the quiet hour,
+        # is why the slider is instant during the day — 141s for a Slam draw,
+        # newest draws first, budgeted so a long backlog cannot run away.
+        try:
+            from app.services.chances_warm import warm_active
+            logger.info("chances warm after recompute: %s", await warm_active(budget=900))
+        except Exception:
+            logger.warning("chances warm after recompute failed", exc_info=True)
 
 
 # How long a substantially-complete draw must stay stable (not reverted by a
@@ -2279,6 +2299,19 @@ def start_scheduler() -> None:
         id="refresh_schedule_estimates",
         misfire_grace_time=120,
     )
+    # THE SCRUB'S POSITIONS, KEPT WARM. Nearly free when nothing has finished
+    # since the last pass (0.2s: it walks the timeline newest-first and stops
+    # after eight positions it already holds), so this is really a self-heal —
+    # for anything that invalidates a walk without a result landing, such as an
+    # admin editing picks or a model change on deploy. New results are warmed
+    # by the results sweep itself, immediately.
+    scheduler.add_job(
+        _on_shutdown_quietly(_warm_chances),
+        "interval",
+        minutes=5,
+        id="warm_chances",
+        misfire_grace_time=120,
+    )
     scheduler.add_job(
         _on_shutdown_quietly(_refresh_weekly_rankings),
         "cron",
@@ -2358,6 +2391,20 @@ def start_scheduler() -> None:
         first = await hdb.run(lambda c: c.execute("SELECT count(*) FROM tml_files").fetchone()[0]) == 0
         await _history_sync(full=first)
     asyncio.create_task(_history_on_start())
+
+    async def _warm_on_start():
+        """A DEPLOY EMPTIES THE CACHE — it lives in the process — and deploys
+        happen several times an hour here. Without this, the first person to
+        rewind a table after every one of them pays for the walk again. Held
+        back until the startup history sync is out of the way, and budgeted:
+        whatever it misses, the five-minute pass picks up."""
+        await asyncio.sleep(180)
+        from app.services.chances_warm import warm_active
+        try:
+            logger.info("chances warm on start: %s", await warm_active(budget=420))
+        except Exception:
+            logger.warning("chances warm on start failed", exc_info=True)
+    asyncio.create_task(_warm_on_start())
 
 
 def stop_scheduler() -> None:

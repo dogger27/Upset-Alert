@@ -83,6 +83,11 @@ OWN_MIN_MATCHES = 10
 LIVE_MAX_AGE = 300.0
 
 
+def _key_without_live(key: tuple) -> tuple:
+    """The same cache key with the live-score element emptied."""
+    return tuple(key[:-1]) + ((),)
+
+
 class DrawOdds:
     """Per-match win probabilities for one draw. Pure data, no session.
 
@@ -109,6 +114,30 @@ class DrawOdds:
         self.live = live
         self.cache_key = cache_key
         self._memo: dict = {}
+
+    def without_live(self) -> "DrawOdds":
+        """The same odds with the live scores taken out — for A PAST MOMENT.
+
+        Two reasons, and the second one is why the scrub can be instant:
+
+        A rewound position is the draw as it stood after N results. Pricing one
+        of its undecided matches off a score being played RIGHT NOW mixes two
+        moments: that match was not two sets old back then, and in most
+        snapshots it had not started.
+
+        And `cache_key` carries the live scores, so every tick of the poller —
+        every ten seconds, on every court — made a different key and threw away
+        every walk that had been computed for that draw. Nothing could be kept
+        warm while play was on. Without them a position's answer is settled by
+        the draw, the picks and the ratings week, so it can be computed ONCE,
+        when the match that created it finishes, and simply read thereafter.
+        """
+        if not self.live:
+            return self
+        twin = DrawOdds(self.ratings, self.surface, self.best_of, {},
+                        _key_without_live(self.cache_key))
+        twin.attribution, twin.tour = self.attribution, self.tour
+        return twin
 
     def pair_prob(self, a: int, b: int, match_id: Optional[int] = None) -> float:
         """P(entry `a` beats entry `b`), in `match_id` if that match is live.
@@ -305,6 +334,9 @@ async def draw_odds(db: AsyncSession, draw: Draw, all_matches: list) -> Optional
             live[m.id] = (m.player1_id, m.player2_id, score)
 
     surface = draw.surface
+    # THE LIVE SCORES ARE THE LAST ELEMENT, on purpose: `without_live` drops
+    # them and nothing else, so a draw with nothing in play shares its cache
+    # entries with its own rewound positions.
     key = (MODEL_VERSION, draw.id, week, ratings_as_of, surface, best_of(draw), tour,
            tuple(sorted(live.items())))
     odds = DrawOdds(ratings, surface, best_of(draw), live, key)
