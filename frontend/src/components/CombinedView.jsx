@@ -16,6 +16,7 @@
  * `windowStart` (the parent's dot pager controls both).
  */
 import { Fragment, useEffect, useRef, useState } from 'react'
+import { computeDrawRanks } from '../utils/drawRanks'
 import { createPortal } from 'react-dom'
 import H2HPanel from './H2HPanel'
 import PredictorsPopup from './PredictorsPopup'
@@ -98,24 +99,6 @@ function GroupIcon() {
   )
 }
 
-// Inferred seed/rank: seeds keep their seed number; unseeded ranked after the
-// highest seed by world ranking (same rule as BracketView.computeDrawRanks).
-function computeDrawRanks(players) {
-  const ranks = {}
-  const seeded = players.filter(p => p.seed != null)
-  for (const p of seeded) ranks[p.id] = p.seed
-  const unseeded = players
-    .filter(p => p.seed == null)
-    .sort((a, b) => {
-      if (a.ranking != null && b.ranking != null) return a.ranking - b.ranking
-      if (a.ranking != null) return -1
-      if (b.ranking != null) return 1
-      return (a.bracket_position ?? 0) - (b.bracket_position ?? 0)
-    })
-  const offset = seeded.reduce((max, p) => Math.max(max, p.seed), 0)
-  unseeded.forEach((p, i) => { ranks[p.id] = offset + i + 1 })
-  return ranks
-}
 
 // Resolve each match's two feeder player ids the same way winnerBox displays
 // them: R1 comes straight from the draw; R2+ cascades the PICKED winner of

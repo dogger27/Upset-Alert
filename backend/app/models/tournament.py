@@ -434,7 +434,18 @@ class DrawEntry(Base):
     seed: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     entry_type: Mapped[Optional[str]] = mapped_column(String(4), nullable=True)
     bracket_position: Mapped[int] = mapped_column(Integer, nullable=False)
+    # THE WEEK THAT DETERMINED WHO GOT IN — the direct-acceptance cutoff, and
+    # the answer to "what was this player's ranking in this tournament?"
     ranking: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # THE WEEK THE SEEDS WERE DRAWN FROM, which is a different week (two later
+    # for a tour event, four for a Slam) and a different question. The BADGE
+    # rule needs this one: a bracket's numbers are the seeds, then everyone
+    # else ordered behind them — and ordering the unseeded by a fortnight-older
+    # ranking than the seeds came from stitches one scale out of two moments.
+    # Fifteen of Guadalajara's twenty-five players moved between those weeks
+    # (owner, 2026-09-12). Null on draws scraped before this existed, so every
+    # reader falls back to `ranking`.
+    seed_week_ranking: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     date_of_birth: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     te_player_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     te_slug: Mapped[Optional[str]] = mapped_column(String, nullable=True)

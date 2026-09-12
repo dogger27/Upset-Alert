@@ -537,6 +537,61 @@ async def ensure_te_week(gender: str, week_date: date, db: AsyncSession, log_err
 # High-level entry point
 # ---------------------------------------------------------------------------
 
+async def assign_seed_week_rankings(
+    players: list,
+    gender: str,
+    seed_week: Optional[date],
+    db: AsyncSession,
+) -> int:
+    """Fill `seed_week_ranking` from the OFFICIAL SEEDING WEEK.
+
+    A second, smaller pass beside assign_rankings, and deliberately not folded
+    into it: that one resolves te_player_id (fuzzy matching, TE lookups, log
+    lines) and sets `ranking` from the ENTRY week, which answers "what was this
+    player's ranking in this tournament?" — the owner's own ruling, not to be
+    changed (feedback_entry_ranking_week_for_inferred).
+
+    This answers a different question: what the SEEDS were drawn from. The
+    badge rule needs it, because a bracket's numbers are the seeds and then
+    everyone else behind them, and taking the second half from a fortnight
+    earlier than the first makes one scale out of two moments.
+
+    Runs AFTER assign_rankings, so te_player_id is already resolved; a player
+    it could not resolve simply keeps a null here and falls back to `ranking`.
+    Does not commit — caller owns the transaction. Returns how many were set.
+    """
+    from app.models.rankings import TePlayer, TeRankingsSnapshot
+
+    if not players or seed_week is None:
+        return 0
+    target = _monday(seed_week)
+    # The most recent week on or before the seeding week: TE only publishes
+    # current rankings, so a historical draw resolves to the nearest week we
+    # actually hold rather than to nothing.
+    week = (await db.execute(
+        select(TeRankingsSnapshot.week_date)
+        .join(TePlayer, TeRankingsSnapshot.player_id == TePlayer.id)
+        .where(TePlayer.gender == gender, TeRankingsSnapshot.week_date <= target)
+        .order_by(TeRankingsSnapshot.week_date.desc())
+        .limit(1))).scalar_one_or_none()
+    if week is None:
+        return 0
+    ids = [p.te_player_id for p in players if p.te_player_id is not None]
+    if not ids:
+        return 0
+    by_id = dict((await db.execute(
+        select(TeRankingsSnapshot.player_id, TeRankingsSnapshot.rank)
+        .where(TeRankingsSnapshot.week_date == week,
+               TeRankingsSnapshot.player_id.in_(ids)))).all())
+    n = 0
+    for p in players:
+        r = by_id.get(p.te_player_id) if p.te_player_id is not None else None
+        if r is not None and p.seed_week_ranking != r:
+            p.seed_week_ranking = r
+            n += 1
+    return n
+
+
 async def assign_rankings(
     players: list,
     gender: str,

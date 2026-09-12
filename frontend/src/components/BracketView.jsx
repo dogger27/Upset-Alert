@@ -17,26 +17,8 @@ import H2HPanel from './H2HPanel'
 import { buildH2HSequence, buildMatchIndex, h2hNeighbours, resolveRealFirst } from '../utils/h2hSequence'
 import './BracketView.css'
 import { nationalityIso2 } from '../utils/flags'
+import { computeDrawRanks } from '../utils/drawRanks'
 
-function computeDrawRanks(players) {
-  const ranks = {}
-  const seeded = players.filter(p => p.seed != null)
-  for (const p of seeded) ranks[p.id] = p.seed
-
-  // Sort unseeded by world ranking, then assign sequential relative ranks after the seeds.
-  // Offset = highest seed number present (not count), so withdrawn seeds don't cause collisions.
-  const unseeded = players
-    .filter(p => p.seed == null)
-    .sort((a, b) => {
-      if (a.ranking != null && b.ranking != null) return a.ranking - b.ranking
-      if (a.ranking != null) return -1
-      if (b.ranking != null) return 1
-      return a.bracket_position - b.bracket_position
-    })
-  const offset = seeded.reduce((max, p) => Math.max(max, p.seed), 0)
-  unseeded.forEach((p, i) => { ranks[p.id] = offset + i + 1 })
-  return ranks
-}
 
 const MATCH_H = 58
 const LABEL_H = 30
