@@ -12,6 +12,11 @@
 
 import { readFileSync } from 'node:fs'
 import assert from 'node:assert/strict'
+// `Buffer` below is a node global, and the project's eslint config is aimed at
+// React Native — it has no node environment, so linting this file reported an
+// undefined name. Imported explicitly rather than declared in the config: it
+// is one file, and an import is the thing that is actually true.
+import { Buffer } from 'node:buffer'
 
 const src = readFileSync(new URL('./scoring.js', import.meta.url), 'utf8')
 const { competitionRanks, sameStanding, slotLabel, pct, placesDecided, scrubEntries, worldEntries } =
@@ -128,7 +133,6 @@ check('a chosen world is certainties, not chances', () => {
   assert.equal(rows.filter(r => r.p_win === 1).length, 1)
 })
 
-console.log(`\n  ${n} passed`)
 
 check('a medal needs a decided final AND the present', () => {
   /* The owner's report: a finished Washington Open scrubbed back to 7 of 31
@@ -145,3 +149,5 @@ check('a medal needs a decided final AND the present', () => {
   assert.equal(placesDecided(), false)
   assert.equal(placesDecided({}), false)
 })
+
+console.log(`\n  ${n} passed`)
