@@ -62,4 +62,27 @@ check('sameDrawSet compares membership, not identity', () => {
   assert.equal(sameDrawSet(null, new Set([1])), false)
 })
 
+check('QUALIFYING OF A CHOSEN DRAW STAYS, on a day it plays nothing else', () => {
+  /* THE BUG, 12 September. Guadalajara (draw 142, event 35) and SP Open
+     (draw 143, event 80) were playing qualifying only — rows with no draw_id
+     and no tour — so deriving the event set from the day's ROWS produced
+     nothing for either, and their matches appeared only when the US Open's
+     women's draw was also ticked, because that row supplied the only
+     tournament id on the sheet.
+
+     The events must come from the DRAWS, which know their tournament_id
+     whether or not they are on court. Here: both chosen, neither with a
+     main-draw row that day. */
+  const draws = new Set([142, 143])
+  const events = new Set([35, 80])          // from the draw list, not the rows
+  assert.equal(rowInDraws({ draw_id: null, tournament_id: 35 }, draws, events), true,
+               'Guadalajara qualifying')
+  assert.equal(rowInDraws({ draw_id: null, tournament_id: 80 }, draws, events), true,
+               'SP Open qualifying')
+  assert.equal(rowInDraws({ draw_id: null, tournament_id: 92 }, draws, events), false,
+               'the US Open doubles is not one of the chosen events')
+  assert.equal(rowInDraws({ draw_id: 78, tournament_id: 92 }, draws, events), false,
+               "nor is the US Open's women's final")
+})
+
 console.log(`\n  ${n} passed`)
