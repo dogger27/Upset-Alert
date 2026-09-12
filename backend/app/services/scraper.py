@@ -152,11 +152,16 @@ from datetime import timedelta as _timedelta
 
 
 def snap_to_monday(d: date) -> date:
-    """Round d to the nearest Monday (tennis tournaments always start on Monday)."""
-    offset = d.isoweekday() - 1  # Mon=0 … Sun=6
-    if offset <= 3:
-        return d - _timedelta(days=offset)   # round back
-    return d + _timedelta(days=7 - offset)   # round forward
+    """The Monday of the tennis week this date belongs to.
+
+    Kept as a name because three callers use it; the rule itself lives in
+    draw_dates.tournament_monday, which is also what `tennis_week` and the
+    ranking weeks anchor on. It was duplicated here and the copies agreed —
+    but the week NUMBER did not use either of them, which is how one tour week
+    became two draw-release emails (owner, 2026-09-12).
+    """
+    from app.services.draw_dates import tournament_monday
+    return tournament_monday(d)
 
 
 # Captures all content of the date field until the next infobox field or closing }}

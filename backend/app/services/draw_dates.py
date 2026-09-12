@@ -51,14 +51,38 @@ def _lookup_days(table: dict[str, int], category: Optional[str]) -> Optional[int
     return days
 
 
+def tournament_monday(start_date: date) -> date:
+    """THE MONDAY THE TOURNAMENT'S WEEK BEGINS — the tour's own calendar, not
+    the ISO one.
+
+    Tennis weeks run Monday to Sunday and an event may start the Sunday
+    BEFORE its week: Guadalajara 2026 began Sunday 13 September and belongs to
+    the week of the 14th, alongside SP Open which began on the Monday. Taking
+    "the Monday on or before" put those two in different weeks, which is how
+    they got a draw-release email each instead of one between them (owner,
+    2026-09-12) — the batcher waits for every draw in a week, and they were
+    not in the same one.
+
+    So: Friday, Saturday and Sunday belong to the week AHEAD; Tuesday to
+    Thursday to the week they are in — which is what an extended-format event
+    needs (Cincinnati 2026 ran Thursday 13 to Sunday 23 August and is the week
+    of the 10th).
+    """
+    offset = start_date.weekday()          # Mon=0 … Sun=6
+    if offset <= 3:
+        return start_date - timedelta(days=offset)
+    return start_date + timedelta(days=7 - offset)
+
+
 def _ranking_week(start_date: Optional[date], category: Optional[str], table: dict[str, int]) -> Optional[date]:
     if not start_date:
         return None
     days_before = _lookup_days(table, category)
     if days_before is None:
         return None
-    tournament_monday = start_date - timedelta(days=start_date.weekday())
-    return tournament_monday - timedelta(days=days_before)
+    # The tour's Monday, so a Sunday-start event counts from the week it is
+    # part of rather than the one before it.
+    return tournament_monday(start_date) - timedelta(days=days_before)
 
 
 def compute_entry_ranking_week(start_date: date, category: Optional[str]) -> Optional[date]:
