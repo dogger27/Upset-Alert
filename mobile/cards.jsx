@@ -261,8 +261,16 @@ export function EntryChip({ entryType }) {
  * Gender is 'M' or 'F' in the API; anything else renders nothing rather than
  * guessing a tour.
  */
-export function TourBadge({ gender, style }) {
-  const t = TOUR[gender]
+export function TourBadge({ gender, tour, discipline, style }) {
+  /* GENDER COMES FROM THE DRAW, AND DOUBLES HAS NO DRAW. A doubles schedule
+     row carries draw_id null — we hold no doubles bracket — so `gender` is
+     null and this rendered nothing at all: the US Open doubles final sat on
+     the schedule with no tour on it while the singles beside it had a pill
+     (owner, 2026-09-12). The row's own `tour` says ATP or WTA, and mixed
+     doubles is neither, which is what `discipline` is for. */
+  const key = discipline === 'mixed' ? 'X'
+    : gender || (tour === 'WTA' ? 'F' : tour === 'ATP' ? 'M' : null)
+  const t = TOUR[key]
   if (!t) return null
   return (
     <View style={[u.tourBadge, { backgroundColor: t.bg }, style]}>

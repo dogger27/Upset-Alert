@@ -85,6 +85,11 @@ export const C = {
 export const TOUR = {
   M: { bg: '#1a2f4f', fg: '#7aa9ff', label: 'ATP' },
   F: { bg: '#3a1526', fg: '#ff8ab5', label: 'WTA' },
+  // MIXED DOUBLES belongs to neither tour, so it takes neither tour's colour.
+  // The unseeded chip's pair rather than a new one invented for it: a blend of
+  // blue and pink is a gradient decision on a 10pt pill, and there is no such
+  // token on the site to borrow.
+  X: { bg: '#2b3a35', fg: '#b8c6c0', label: 'MXD' },
 }
 
 export const BADGE = {
