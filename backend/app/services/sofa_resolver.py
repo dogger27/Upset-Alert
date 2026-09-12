@@ -128,6 +128,94 @@ async def _once() -> tuple[int, set]:
     return stamped, unnamed
 
 
+async def _refine_deadlines(db) -> int:
+    """Set the pick deadline from Sofascore's own main-draw schedule.
+
+    A deadline is the first ball, and until now nothing could say when that
+    was. Wikipedia gives the calendar — the date range, months ahead, which
+    every release date and ranking week is built on — but not a time. ESPN's
+    board can once an order of play is published, and before that fills in a
+    placeholder that set Guadalajara's deadline eighteen hours early (owner,
+    2026-09-12).
+
+    So: for a draw about to start whose picks are still open and whose first
+    ball nobody has observed yet, ask Sofascore once per pass. One request,
+    and it stops the moment there is an answer — `first_match_at` is the
+    record of having one.
+
+    Refuses on the same two grounds ESPN's refinement does, because the
+    failure modes are the same whoever publishes them: a start more than a day
+    from our own start_date belongs to some other event, and an hour outside a
+    plausible session is a placeholder rather than a time.
+    """
+    from zoneinfo import ZoneInfo
+
+    from app.services.espn_monitor import (SESSION_EARLIEST_HOUR,
+                                           SESSION_LATEST_HOUR)
+    from app.services.sofascore import first_main_draw_start
+
+    today = date.today()
+    horizon = today + timedelta(days=COVERAGE_LEAD_DAYS)
+    draws = (await db.execute(
+        select(Draw).where(
+            Draw.picks_locked_at.is_(None),
+            Draw.status.notin_(("active", "completed")),
+            Draw.start_date.isnot(None),
+            Draw.start_date <= horizon,
+            Draw.start_date >= today - timedelta(days=1),
+            Draw.first_match_at.is_(None),
+            Draw.sofa_tournament_id.isnot(None),
+            Draw.sofa_season_id.isnot(None),
+            Draw.venue_timezone.isnot(None),
+        ))).scalars().all()
+
+    set_count = 0
+    for d in draws:
+        try:
+            first = await first_main_draw_start(d.sofa_tournament_id, d.sofa_season_id)
+        except SofascoreBlocked:
+            raise
+        except Exception:
+            logger.warning("Sofascore deadline: %s %s could not be read",
+                           d.name, d.year, exc_info=True)
+            continue
+        if first is None:
+            # The main draw is not scheduled yet. Ordinary until a day or two
+            # out; the estimate stands and the next pass asks again.
+            continue
+        try:
+            local = first.astimezone(ZoneInfo(d.venue_timezone))
+        except Exception:
+            continue
+        if abs((local.date() - d.start_date).days) > 1:
+            logger.info("Sofascore deadline: ignoring %s for %s %s (start_date %s)",
+                        local.date(), d.name, d.year, d.start_date)
+            continue
+        if not (SESSION_EARLIEST_HOUR <= local.hour <= SESSION_LATEST_HOUR):
+            logger.info("Sofascore deadline: %s %s first event at %s local — "
+                        "not a session start, left alone",
+                        d.name, d.year, local.strftime("%H:%M"))
+            continue
+
+        old = d.closing_time
+        naive = first.replace(tzinfo=None)
+        d.first_match_at = naive
+        d.first_match_local_hour, d.first_match_local_minute = local.hour, local.minute
+        d.day1_start_hour, d.day1_start_minute = local.hour, local.minute
+        d.closing_time = naive
+        set_count += 1
+        await db.commit()
+        await app_log(
+            "info", "sofascore",
+            f"Pick deadline for {d.year} {d.name} "
+            f"({'ATP' if d.gender == 'M' else 'WTA'}) set from Sofascore's main "
+            f"draw: {local:%a %d %b %H:%M} local (was {old} UTC, now {naive} UTC).",
+            {"draw_id": d.id, "old_closing_time": str(old),
+             "new_closing_time": str(naive), "first_match_local": local.isoformat()},
+            dedup_key=f"sofa_deadline_{d.id}", dedup_hours=24)
+    return set_count
+
+
 async def _coverage_check(db, unnamed: set | None = None) -> None:
     """Say so when a draw is about to be played and cannot be scored.
 
@@ -237,6 +325,9 @@ async def start() -> None:
         delay = POLL_INTERVAL
         try:
             stamped, unnamed = await _once()
+            # The first ball, from the one source that publishes it days ahead.
+            async with AsyncSessionLocal() as db:
+                await _refine_deadlines(db)
             # AFTER resolving, so a draw fixed on this very pass is not reported
             # as broken a second later.
             async with AsyncSessionLocal() as db:

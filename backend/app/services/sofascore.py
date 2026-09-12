@@ -732,6 +732,58 @@ async def _season_for(uid: int, year: int) -> Optional[dict]:
             or next((s for s in seasons if y in str(s.get("name") or "")), None))
 
 
+def _is_qualifying_round(event: dict) -> bool:
+    """Qualifying arrives in the same list as the main draw and starts days
+    earlier, so its first match would drag a pick deadline back before the
+    bracket was even released."""
+    info = event.get("roundInfo") or {}
+    name = f"{info.get('name') or ''} {info.get('slug') or ''}".lower()
+    return "qualif" in name
+
+
+def _is_singles_event(event: dict) -> bool:
+    """A doubles pairing is one "team" with two names in it, and we hold no
+    doubles draw."""
+    for side in ("homeTeam", "awayTeam"):
+        team = event.get(side) or {}
+        if team.get("type") == 2 or "/" in (team.get("name") or ""):
+            return False
+    return True
+
+
+def main_draw_starts(payload: dict) -> list:
+    """Every scheduled MAIN-DRAW SINGLES start in a season payload, earliest
+    first, as aware UTC datetimes. Pure, so it can be tested on a real
+    payload without a request."""
+    from datetime import datetime as _dt
+    out = []
+    for e in (payload or {}).get("events", []):
+        ts = e.get("startTimestamp")
+        if not ts or _is_qualifying_round(e) or not _is_singles_event(e):
+            continue
+        out.append(_dt.fromtimestamp(int(ts), timezone.utc))
+    return sorted(out)
+
+
+async def first_main_draw_start(uid: int, season_id: int):
+    """WHEN THE MAIN DRAW ACTUALLY STARTS, from Sofascore's own schedule.
+
+    Wikipedia gives the calendar — the date range, months ahead, which is what
+    every release date and ranking week is built on — but it cannot say when
+    the first ball is, and that is what a pick deadline is. ESPN's board can,
+    once an order of play is published, and fills the gap before that with a
+    placeholder that already set one deadline eighteen hours early.
+
+    This is the real timestamp: one request, the season's upcoming events,
+    qualifying and doubles dropped, earliest first. None when Sofascore has
+    not scheduled the main draw yet — which is the ordinary state until a day
+    or two out, and the caller keeps its estimate.
+    """
+    payload = await _get(f"/unique-tournament/{uid}/season/{season_id}/events/next/0")
+    starts = main_draw_starts(payload)
+    return starts[0] if starts else None
+
+
 async def _field_of(uid: int, season_id: int) -> list:
     payload = await _get(f"/unique-tournament/{uid}/season/{season_id}/cuptrees")
     return _main_draw_teams(payload.get("cupTrees", []))

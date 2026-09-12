@@ -37,3 +37,32 @@ def test_the_bounds_are_where_they_are_for_a_reason():
     session, 08:00 is earlier than any tour session actually begins."""
     assert plausible(SESSION_LATEST_HOUR) and not plausible(SESSION_LATEST_HOUR + 1)
     assert plausible(SESSION_EARLIEST_HOUR) and not plausible(SESSION_EARLIEST_HOUR - 1)
+
+
+def test_main_draw_starts_drops_qualifying_and_doubles():
+    """The pick deadline is the MAIN DRAW's first ball. Qualifying is in the
+    same list and starts days earlier — Guadalajara's qualifying R1 was the
+    day before its Round of 32 — and a doubles pairing is one team with two
+    names in it."""
+    from app.services.sofascore import main_draw_starts
+    payload = {'events': [
+        {'startTimestamp': 1000, 'roundInfo': {'name': 'Qualification Round 1'},
+         'homeTeam': {'name': 'A'}, 'awayTeam': {'name': 'B'}},
+        {'startTimestamp': 3000, 'roundInfo': {'name': 'Round of 32'},
+         'homeTeam': {'name': 'Alycia Parks'}, 'awayTeam': {'name': 'Mayar Sherif'}},
+        {'startTimestamp': 2000, 'roundInfo': {'name': 'Round of 32'},
+         'homeTeam': {'name': 'A / B', 'type': 2}, 'awayTeam': {'name': 'C / D', 'type': 2}},
+        {'startTimestamp': 2500, 'roundInfo': {'name': 'Round of 16'},
+         'homeTeam': {'name': 'C'}, 'awayTeam': {'name': 'D'}},
+    ]}
+    got = [int(d.timestamp()) for d in main_draw_starts(payload)]
+    assert got == [2500, 3000], 'earliest first, qualifying and doubles gone'
+
+
+def test_main_draw_starts_survives_a_payload_with_nothing_in_it():
+    """The ordinary state until a day or two out: Sofascore has the season but
+    has not scheduled the main draw. Must be empty, not an exception."""
+    from app.services.sofascore import main_draw_starts
+    assert main_draw_starts({}) == []
+    assert main_draw_starts({'events': []}) == []
+    assert main_draw_starts({'events': [{'roundInfo': {'name': 'Round of 32'}}]}) == []
