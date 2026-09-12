@@ -36,6 +36,13 @@ The ranking term is real (its 90% bootstrap interval excludes zero) and it is
 also a confession: it is there because our weekly Elo snapshot can be a week
 stale, and the ranking moves on Monday morning.
 
+HEAD-TO-HEAD IS DELIBERATELY NOT AN INPUT. It was fitted and measured on our
+own record (scripts/fit_own_elo.py --h2h) and it made the prediction worse on
+every judged subset, most of all on the pairs with the longest history —
+because a player who keeps beating someone is already carrying the rating
+that says so. H2H belongs on the screen, where the H2H panel shows it, and
+not in the arithmetic.
+
 The upstream package also carried a Tennis Abstract HTML scraper. It is NOT
 vendored: Elo already arrives in our own database weekly
 (`te_rankings_snapshots`, see `services/rankings.refresh_elo_ratings`), and a

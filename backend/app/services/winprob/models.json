@@ -35,6 +35,7 @@
     "surface_w": 0.49,
     "k_logit": 0.745,
     "k_rank": 0.063,
-    "fitted": true
+    "fitted": true,
+    "_h2h": "NOT A TERM, and tested: a shrunk prior-meetings differential fits in sample (k~0.14) and loses out of sample everywhere \u2014 all judged 0.6139 -> 0.6140, pairs having met 3+ times 0.6380 -> 0.6406. Worst where it should help most: the rating already carries it. See scripts/fit_own_elo.py --h2h."
   }
 }
