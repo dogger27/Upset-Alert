@@ -329,6 +329,13 @@ def sync(conn, seasons: Optional[list] = None, tours=("atp", "wta")) -> dict:
                     out["sources"].add(got["source"])
     out["link"] = link_to_record(conn, since=f"{min(seasons)}-01-01")
     out["sources"] = sorted(out["sources"])
+    # THE TOTAL, NOT JUST THE NEW ONES. `linked` counts what this run
+    # attached, which is zero on a normal night because the upsert preserves
+    # what is already there — and "0 linked to the record" reads like a
+    # failure when it means the opposite. Report the coverage as well.
+    held, attached = conn.execute(
+        "SELECT count(*), sum(tml_winner_id IS NOT NULL) FROM market_odds").fetchone()
+    out["held"], out["attached"] = held, attached or 0
     with conn:
         hdb.set_meta(conn, "market_last_sync", date.today().isoformat())
     return out
@@ -355,8 +362,11 @@ async def sync_async(seasons: Optional[list] = None) -> dict:
     # quiet is exactly the failure that would otherwise sit unnoticed until
     # someone next asked how good the model is.
     level = "info" if total else "warning"
+    pct = 100 * out["attached"] / out["held"] if out.get("held") else 0
     await app_log(level, "history",
-                  f"market odds: {total} priced matches from {', '.join(out['sources']) or 'NO SOURCE REACHED'}; "
-                  f"{out['link']['linked']} linked to the record", out,
+                  f"market odds: {total} priced matches read from "
+                  f"{', '.join(out['sources']) or 'NO SOURCE REACHED'}; "
+                  f"{out['attached']} of {out['held']} held matches are linked to the record "
+                  f"({pct:.0f}%), {out['link']['linked']} newly", out,
                   dedup_key=None if total else "market_odds_empty", dedup_hours=12)
     return out
