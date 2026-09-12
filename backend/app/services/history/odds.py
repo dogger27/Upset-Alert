@@ -277,14 +277,27 @@ def link_to_record(conn, since: str = "2000-01-01") -> dict:
 
 
 def sync(conn, seasons: Optional[list] = None, tours=("atp", "wta")) -> dict:
-    """Fetch the seasons asked for, store them, and link them to the record."""
+    """Fetch the seasons asked for, store them, and link them to the record.
+
+    A PAST SEASON IS FETCHED ONCE. Its spreadsheet is finished, so re-reading
+    it every night would spend two requests on bytes we already hold — but a
+    season with no rows IS fetched, which is what backfills the years the
+    model is fitted and validated on without needing a special first run.
+    The current season is always re-read, because it grows weekly.
+    """
     import httpx
     ensure_schema(conn)
     seasons = seasons or [date.today().year]
-    out = {"seasons": [], "sources": set()}
+    this_year = date.today().year
+    out = {"seasons": [], "sources": set(), "skipped": []}
     with httpx.Client(timeout=120, follow_redirects=True, headers={"User-Agent": USER_AGENT}) as client:
         for season in seasons:
             for tour in tours:
+                if season != this_year and conn.execute(
+                        "SELECT count(*) FROM market_odds WHERE tour = ? AND season = ?",
+                        (tour, season)).fetchone()[0]:
+                    out["skipped"].append(f"{tour}{season}")
+                    continue
                 got = load_season(conn, season, tour, client)
                 out["seasons"].append(got)
                 if got["source"]:

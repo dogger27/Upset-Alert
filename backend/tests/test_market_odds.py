@@ -59,3 +59,30 @@ def test_names_match_across_the_two_forms_including_compound_surnames():
     assert not names_match(market_name("Cerundolo J."), record_name("Francisco Cerundolo"))
     # An unknown initial does not veto a surname match.
     assert names_match((frozenset({"sinner"}), ""), record_name("Jannik Sinner"))
+
+
+def test_a_past_season_is_fetched_once_and_the_current_one_always(tmp_path, monkeypatch):
+    """The steady state is two requests a night, not six."""
+    import sqlite3
+    from datetime import date
+    from app.services.history import odds as mod
+
+    from app.services.history import db as hdb
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(hdb.SCHEMA)     # sync() stamps history_meta at the end
+    mod.ensure_schema(conn)
+    year = date.today().year
+    conn.execute("""INSERT INTO market_odds (tour, season, match_date, winner_name, loser_name, p_market)
+                    VALUES ('atp', ?, '2024-05-01', 'A', 'B', 0.6)""", (year - 2,))
+    conn.commit()
+
+    asked = []
+    monkeypatch.setattr(mod, "load_season",
+                        lambda c, season, tour, client=None: (asked.append((season, tour)) or
+                                                              {"season": season, "tour": tour, "rows": 0, "source": None}))
+    monkeypatch.setattr(mod, "link_to_record", lambda c, since: {"linked": 0, "considered": 0, "ambiguous": 0, "unmatched": 0})
+    out = mod.sync(conn, seasons=[year - 2, year - 1, year], tours=("atp",))
+    # The season already held is skipped; the empty one and the live one are not.
+    assert (year - 2, "atp") not in asked
+    assert (year - 1, "atp") in asked and (year, "atp") in asked
+    assert out["skipped"] == [f"atp{year - 2}"]
