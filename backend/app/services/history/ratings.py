@@ -22,6 +22,7 @@ ratings whether or not TML has published it, and when they do, their row
 takes over and ours steps aside.
 """
 import logging
+import re
 from datetime import date
 from typing import Iterator, Optional
 
@@ -39,6 +40,45 @@ INITIAL = 1500.0
 def norm_surface(s: Optional[str]) -> str:
     s = (s or "Hard").strip().lower()
     return "Clay" if s.startswith("clay") else "Grass" if s.startswith("grass") else "Hard"
+
+
+_GAME_PAIR = re.compile(r"(\d{1,2})\s*-\s*(\d{1,2})")
+
+
+def games_won(score: Optional[str]) -> Optional[tuple]:
+    """(games won by the winner, by the loser) from a printed score.
+
+    "6-3 6-4" -> (12, 7). Tiebreak margins in brackets are ignored: the
+    scoreline is counted in GAMES, so 7-6(3) is seven games against six.
+    None when the string carries no game pair at all (a walkover, an empty
+    cell), or when the totals look impossible.
+    """
+    if not score:
+        return None
+    pairs = _GAME_PAIR.findall(re.sub(r"\([^)]*\)", " ", str(score)))
+    if not pairs:
+        return None
+    w = sum(int(a) for a, _ in pairs)
+    l = sum(int(b) for _, b in pairs)
+    if w + l == 0 or w + l > 100:
+        return None
+    return (w, l)
+
+
+def retired(score: Optional[str]) -> bool:
+    """Did the loser stop rather than lose? The scoreline is then not a
+    measure of dominance — it stops wherever the body did."""
+    return "RET" in str(score or "").upper()
+
+
+def _days_between(then: Optional[str], now: Optional[str]) -> Optional[int]:
+    """Days from one ISO date to another; None when either is missing."""
+    if not then or not now:
+        return None
+    try:
+        return (date.fromisoformat(now) - date.fromisoformat(then)).days
+    except (TypeError, ValueError):
+        return None
 
 
 def played(score: Optional[str]) -> bool:
@@ -91,6 +131,16 @@ class Ratings:
         # would leave a K of a dozen points, and a resurgence would take a
         # season to register.
         self.floor = float(c.get("k_floor", 0.0))
+        # WEIGHTED ELO (Angelini, Candila & De Angelis, EJOR 2022): the
+        # update is scaled by the WINNER's share of the games played, so
+        # 6-0 6-0 moves both ratings at full weight and 7-6 6-7 7-6 at about
+        # half. Published as beating standard Elo, Bradley-Terry and both
+        # the Klaassen-Magnus logit and the Del Corral probit over 60,000
+        # matches, and it is the baseline the 2026 literature measures
+        # against. `welo_retired` decides whether a retirement's lopsided
+        # scoreline is believed or treated as a neutral 0.5.
+        self.welo = bool(c.get("welo", False))
+        self.welo_retired = bool(c.get("welo_retired", False))
         self.elo: dict = {}
         self.selo: dict = {}
         self.n: dict = {}
@@ -104,19 +154,35 @@ class Ratings:
     def get(self, key) -> tuple:
         return (self.elo.get(key, INITIAL), self.selo.get(key, {}))
 
-    def update(self, tour, w, l, surface, level, d):
+    def weight(self, score) -> float:
+        """The WElo multiplier on K for this match; 1.0 with WElo off."""
+        if not self.welo:
+            return 1.0
+        if retired(score) and not self.welo_retired:
+            return 0.5          # the match ended for a reason the score cannot express
+        g = games_won(score)
+        if not g:
+            return 0.5
+        # A WEIGHT BELOW 0.5 IS NOT AN ERROR. You can win a match having won
+        # fewer games than you lost — drop a set 0-6, take two tight ones —
+        # and 7,019 matches in this record did. WElo is meant to call that
+        # win weak evidence, so the scoreline is believed as it stands.
+        return g[0] / (g[0] + g[1])
+
+    def update(self, tour, w, l, surface, level, d, score=None):
         kw, kl = (tour, w), (tour, l)
+        wt = self.weight(score)
         ew, el = self.elo.get(kw, INITIAL), self.elo.get(kl, INITIAL)
         pw = 1.0 / (1.0 + 10 ** ((el - ew) / 400.0))
-        self.elo[kw] = ew + self.k(self.n.get(kw, 0), level) * (1.0 - pw)
-        self.elo[kl] = el - self.k(self.n.get(kl, 0), level) * (1.0 - pw)
+        self.elo[kw] = ew + self.k(self.n.get(kw, 0), level) * wt * (1.0 - pw)
+        self.elo[kl] = el - self.k(self.n.get(kl, 0), level) * wt * (1.0 - pw)
         sw, sl = self.selo.setdefault(kw, {}), self.selo.setdefault(kl, {})
         esw, esl = sw.get(surface, ew if self.surface_from_overall else INITIAL), \
             sl.get(surface, el if self.surface_from_overall else INITIAL)
         ps = 1.0 / (1.0 + 10 ** ((esl - esw) / 400.0))
         nsw, nsl = self.ns.setdefault(kw, {}), self.ns.setdefault(kl, {})
-        sw[surface] = esw + self.k(nsw.get(surface, 0), level) * (1.0 - ps)
-        sl[surface] = esl - self.k(nsl.get(surface, 0), level) * (1.0 - ps)
+        sw[surface] = esw + self.k(nsw.get(surface, 0), level) * wt * (1.0 - ps)
+        sl[surface] = esl - self.k(nsl.get(surface, 0), level) * wt * (1.0 - ps)
         self.n[kw] = self.n.get(kw, 0) + 1
         self.n[kl] = self.n.get(kl, 0) + 1
         nsw[surface] = nsw.get(surface, 0) + 1
@@ -135,36 +201,61 @@ def walk(rows: list[tuple], cfg: Optional[dict] = None) -> Iterator[tuple]:
             continue
         ew, el = st.elo.get((tour, w), INITIAL), st.elo.get((tour, l), INITIAL)
         dw, dl = (ew, el) if st.surface_from_overall else (INITIAL, INITIAL)
+        # DAYS SINCE THE PLAYER LAST PLAYED, which a rating cannot see: a
+        # rating is frozen at whatever it was when its owner walked off court,
+        # whether that was last week or after eight months out.
         pre_w = (ew, st.selo.get((tour, w), {}).get(surface, dw),
-                 st.n.get((tour, w), 0), st.ns.get((tour, w), {}).get(surface, 0))
+                 st.n.get((tour, w), 0), st.ns.get((tour, w), {}).get(surface, 0),
+                 _days_between(st.last.get((tour, w)), d))
         pre_l = (el, st.selo.get((tour, l), {}).get(surface, dl),
-                 st.n.get((tour, l), 0), st.ns.get((tour, l), {}).get(surface, 0))
+                 st.n.get((tour, l), 0), st.ns.get((tour, l), {}).get(surface, 0),
+                 _days_between(st.last.get((tour, l)), d))
         yield r, pre_w, pre_l
-        st.update(tour, w, l, surface, level, d)
+        st.update(tour, w, l, surface, level, d, score)
     walk.final = st   # the end state, for the caller that wants it
 
 
+def pass_config(tour: Optional[str] = None, cfg: Optional[dict] = None) -> dict:
+    """The K schedule for one tour: models.json "own" plus its overrides.
+
+    ONE WALK PER TOUR, because k0 and k_decay are properties of the walk and
+    the two tours want different ones — the men's fit settled on 250/0.4 and
+    the women's on 300/0.5, which is the deeper record tolerating a steadier
+    K. A single shared schedule would hand one tour someone else's number.
+    """
+    if cfg is not None:
+        return cfg
+    own = dict(params("own"))
+    own.update((own.get("by_tour") or {}).get(tour or "", {}) or {})
+    return own
+
+
 def recompute(conn, cfg: Optional[dict] = None, as_of: Optional[str] = None) -> dict:
-    """The full pass, and player_ratings rewritten from its end state."""
+    """A pass per tour, and player_ratings rewritten from the end states."""
     rows = load_rows(conn)
-    for _ in walk(rows, cfg):
-        pass
-    st: Ratings = walk.final
     as_of = as_of or date.today().isoformat()
-    out = []
-    for (tour, pid), elo in st.elo.items():
-        s = st.selo.get((tour, pid), {})
-        ns = st.ns.get((tour, pid), {})
-        out.append((tour, pid, as_of, elo, s.get("Hard"), s.get("Clay"), s.get("Grass"),
-                    st.n.get((tour, pid), 0), ns.get("Hard"), ns.get("Clay"), ns.get("Grass"), st.last.get((tour, pid))))
+    tours = sorted({r[0] for r in rows})
+    out, walked = [], 0
+    for tour in tours:
+        mine = [r for r in rows if r[0] == tour]
+        for _ in walk(mine, pass_config(tour, cfg)):
+            pass
+        st: Ratings = walk.final
+        walked += len(mine)
+        for (t, pid), elo in st.elo.items():
+            sf = st.selo.get((t, pid), {})
+            ns = st.ns.get((t, pid), {})
+            out.append((t, pid, as_of, elo, sf.get("Hard"), sf.get("Clay"), sf.get("Grass"),
+                        st.n.get((t, pid), 0), ns.get("Hard"), ns.get("Clay"), ns.get("Grass"),
+                        st.last.get((t, pid))))
     with conn:
         conn.execute("DELETE FROM player_ratings")
         conn.executemany("""INSERT INTO player_ratings
             (tour, player_id, as_of, elo, elo_hard, elo_clay, elo_grass, n_all, n_hard, n_clay, n_grass, last_match_date)
             VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""", out)
         hdb.set_meta(conn, "ratings_as_of", as_of)
-        hdb.set_meta(conn, "ratings_rows", len(rows))
-    return {"players": len(out), "matches": len(rows), "as_of": as_of}
+        hdb.set_meta(conn, "ratings_rows", walked)
+    return {"players": len(out), "matches": walked, "tours": tours, "as_of": as_of}
 
 
 def ratings_for(conn, tour: str, player_ids: list[str]) -> dict:

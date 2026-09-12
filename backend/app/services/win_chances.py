@@ -67,7 +67,7 @@ from app.services.winprob import predict
 # Bumped whenever anything below changes the number a given draw produces —
 # a coefficient, the Elo week, the live-score handling. It rides in the cache
 # key so a deploy cannot serve yesterday's arithmetic.
-MODEL_VERSION = 3   # our own ratings first, where the field has them (2026-09-12)
+MODEL_VERSION = 4   # per-tour parameters and thin-rating shrinkage (2026-09-12)
 
 # A PLAYER NEEDS A RECORD before our rating is worth more than the fallback:
 # ten matches is what Tennis Abstract requires before it prints one, and a
@@ -97,9 +97,12 @@ class DrawOdds:
         #              our own (overall, surface) or None) — any None. Shorter
         # tuples are padded, so an older caller (or test) with no surface or
         # own figure still reads.
-        self.ratings = {k: tuple(v) + (None,) * (4 - len(v)) for k, v in ratings.items()}
+        self.ratings = {k: tuple(v) + (None,) * max(0, 4 - len(v)) for k, v in ratings.items()}
         # What the column credits: whoever rated most of the field.
         self.attribution = ATTRIBUTION
+        # Which tour's fitted parameters the model should use — they differ
+        # by more than a little, because the two records differ in depth.
+        self.tour = None
         self.surface = surface or "Hard"
         self.best_of = best_of
         # match_id -> (player1_id, player2_id, LiveScore)
@@ -129,7 +132,7 @@ class DrawOdds:
         else:
             p = predict(rank_x=rank_a, rank_y=rank_b, elo_x=elo_a, elo_y=elo_b,
                         selo_x=selo_a, selo_y=selo_b, own_x=own_a, own_y=own_b,
-                        surface=self.surface, best_of=self.best_of)["p"]
+                        surface=self.surface, best_of=self.best_of, tour=self.tour)["p"]
         p = self._live_adjust(p, a, b, match_id)
         self._memo[key] = p
         return p
@@ -249,7 +252,11 @@ async def draw_odds(db: AsyncSession, draw: Draw, all_matches: list) -> Optional
             rated, ratings_as_of = await hdb.run(_read)
             for pid, r in rated.items():
                 if (r.get("n_all") or 0) >= OWN_MIN_MATCHES:
-                    own[pid] = (float(r["elo"]), float(r.get(surface_key) or r["elo"]))
+                    # The match count travels with the rating: the model
+                    # shrinks a thin one toward the mean rather than
+                    # pretending it is as solid as a veteran's.
+                    own[pid] = (float(r["elo"]), float(r.get(surface_key) or r["elo"]),
+                                int(r["n_all"]), _days_since(r.get("last")))
         except Exception:
             import logging
             logging.getLogger(__name__).warning("own ratings unavailable; using Tennis Abstract", exc_info=True)
@@ -298,14 +305,27 @@ async def draw_odds(db: AsyncSession, draw: Draw, all_matches: list) -> Optional
             live[m.id] = (m.player1_id, m.player2_id, score)
 
     surface = draw.surface
-    key = (MODEL_VERSION, draw.id, week, ratings_as_of, surface, best_of(draw),
+    key = (MODEL_VERSION, draw.id, week, ratings_as_of, surface, best_of(draw), tour,
            tuple(sorted(live.items())))
     odds = DrawOdds(ratings, surface, best_of(draw), live, key)
+    odds.tour = tour
     # The credit follows the ratings: ours once they carry most of the field.
     from app.services.winprob._params import params as _params
     if own_count * 2 >= len(ratings) and _params("own").get("fitted"):
         odds.attribution = OWN_ATTRIBUTION
     return odds
+
+
+def _days_since(last: Optional[str]) -> Optional[int]:
+    """Days since this player last played, for the layoff decay. A rating is
+    frozen at whatever it was when its owner walked off court; after a long
+    absence that number describes a different player."""
+    if not last:
+        return None
+    try:
+        return (date.today() - date.fromisoformat(str(last)[:10])).days
+    except (TypeError, ValueError):
+        return None
 
 
 def _norm_surface(surface: Optional[str]) -> str:
