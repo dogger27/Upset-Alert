@@ -168,6 +168,14 @@ export const getPositionChances = (leagueId, tournamentId, position) =>
 export const getGlobalPositionChances = (tournamentId, position) =>
   request(`/tournaments/${tournamentId}/global-chances?position=${position}`)
 
+/* EVERY COMPUTED POSITION AT ONCE — one request per draw, after which the
+   scrub needs no network at all: it is a lookup in this map. Per-mille
+   integers (the column prints whole percents). */
+export const getChancesHistory = (leagueId, tournamentId) =>
+  request(`/leagues/${leagueId}/chances-history?tournament_id=${tournamentId}`)
+export const getGlobalChancesHistory = (tournamentId) =>
+  request(`/tournaments/${tournamentId}/global-chances-history`)
+
 /* One draw's bracket, and this user's picks in it.
    DrawOut is { tournament, draw_entries[], matches[], lock_mode, draw_locked,
    lock_reason, predictions_hidden }. A MatchOut carries player1/player2/winner

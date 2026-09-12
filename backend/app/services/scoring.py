@@ -543,6 +543,57 @@ def finish_range_walks() -> int:
     return _FINISH_CACHE_MISSES
 
 
+# ── THE WHOLE HISTORY, ASSEMBLED, SO THE CLIENT CAN HOLD IT ─────────────────
+# Positions live in _FINISH_CACHE one at a time, keyed by their snapshot — and
+# reading all of them back means BUILDING a snapshot per position just to make
+# the key, which is 3.5ms each and half a second for a Slam. Too much for a
+# request that only wants to hand the browser a map it can scrub through
+# offline. So the assembled answer is kept too, written as each position is
+# computed.
+#
+# Keyed WITHOUT the snapshot, so each stored position carries the id of the
+# last match in its slice. That is what catches a result landing in the MIDDLE
+# of the timeline (a Wikipedia backfill, a corrected completed_at): every
+# later position then means a different moment, and its stored id no longer
+# matches the one at that index. Validation is a list walk, no snapshots.
+_CHANCES_HISTORY: dict[tuple, dict[int, tuple]] = {}
+_CHANCES_HISTORY_MAX = 48   # one entry per draw per scope per ratings week
+
+
+def chances_history_key(draw_id: int, num_rounds: int,
+                        picks: dict[int, dict[int, Optional[int]]], odds=None) -> tuple:
+    """Everything the answers depend on except which moment they describe."""
+    return (
+        draw_id, num_rounds, CHANCES_SCRUB_SAMPLES,
+        tuple(sorted((u, tuple(sorted((k, v) for k, v in (pk or {}).items() if v is not None)))
+                     for u, pk in picks.items())),
+        getattr(odds, "cache_key", None),
+    )
+
+
+def chances_history_store(key: tuple, position: int, last_match_id: Optional[int],
+                          chances: dict) -> None:
+    slot = _CHANCES_HISTORY.get(key)
+    if slot is None:
+        if len(_CHANCES_HISTORY) >= _CHANCES_HISTORY_MAX:
+            _CHANCES_HISTORY.pop(next(iter(_CHANCES_HISTORY)))
+        slot = _CHANCES_HISTORY[key] = {}
+    slot[position] = (last_match_id, chances)
+
+
+def chances_history_held(key: tuple, timeline_ids: list[int]) -> dict[int, dict]:
+    """Every position held for this key that still describes the moment the
+    current timeline puts at that index."""
+    slot = _CHANCES_HISTORY.get(key)
+    if not slot:
+        return {}
+    out = {}
+    for pos, (last_id, chances) in slot.items():
+        if 1 <= pos <= len(timeline_ids) and timeline_ids[pos - 1] == last_id:
+            out[pos] = chances
+    return out
+
+
 def finish_range_cached(draw_id: int, all_matches: list, pts_table: dict[int, int], num_rounds: int,
                         banked: dict[int, UserScore], picks: dict[int, dict[int, Optional[int]]],
                         odds=None, sample: bool = False, samples: Optional[int] = None):
@@ -766,7 +817,12 @@ def chances_at(draw_id: int, all_matches: list, timeline_ids: list[int], positio
                           samples=CHANCES_SCRUB_SAMPLES if sample else None)
     if not rng:
         return sample, {}
-    return sample, {u: (v[2], v[3]) for u, v in rng.items() if len(v) > 3}
+    out = {u: (v[2], v[3]) for u, v in rng.items() if len(v) > 3}
+    # Written through to the assembled history, so a client can be handed the
+    # whole thing and scrub with no request at all.
+    chances_history_store(chances_history_key(draw_id, num_rounds, picks, odds),
+                          position, timeline_ids[position - 1], out)
+    return sample, out
 
 
 # ONE SAMPLED WALK AT A TIME. A single position costs up to a second and a half

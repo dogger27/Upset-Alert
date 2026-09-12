@@ -12,7 +12,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useState } from 'react'
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 import { useAuth } from '../../auth'
-import { getGlobalRoundScores, listTournaments, getGlobalPositionChances } from '../../api'
+import { getGlobalRoundScores, listTournaments, getGlobalPositionChances, getGlobalChancesHistory } from '../../api'
 import { useApi } from '../../useApi'
 import { byFinish, competitionRanks, finishText, pct } from '../../scoring'
 import { StandingsFoot, useStandingsView } from '../../standingsTools'
@@ -60,7 +60,8 @@ export default function GlobalStandings() {
     t.tournament_id != null ? x.tournament_id === t.tournament_id
       : x.name === t.name && x.year === t.year))
   const view = useStandingsView(standings.data, t,
-                                pos => getGlobalPositionChances(id, pos))
+                                pos => getGlobalPositionChances(id, pos), 'g',
+                                () => getGlobalChancesHistory(id))
   const entries = view.entries
   const ranks = competitionRanks(entries)
   /* WHICH NUMBER THE ROWS ARE SORTED BY: the score (the standings, and the

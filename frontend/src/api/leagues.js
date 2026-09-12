@@ -19,6 +19,11 @@ export const getLeagueTournaments = (id) => client.get(`/leagues/${id}/tournamen
 export const getPositionChances = (leagueId, tournamentId, position) =>
   client.get(`/leagues/${leagueId}/chances`,
              { params: { tournament_id: tournamentId, position } }).then(r => r.data)
+/* EVERY COMPUTED POSITION AT ONCE — one request per draw, and then the slider
+   needs no network: scrubbing is a lookup in this map. Per-mille integers. */
+export const getChancesHistory = (leagueId, tournamentId) =>
+  client.get(`/leagues/${leagueId}/chances-history`,
+             { params: { tournament_id: tournamentId } }).then(r => r.data)
 export const getLeaderboard = (id, tournamentId) =>
   client.get(`/leagues/${id}/leaderboard`, { params: tournamentId != null ? { tournament_id: tournamentId } : {} }).then(r => r.data)
 export const getRoundScores = (leagueId, tournamentId) =>

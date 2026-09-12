@@ -1373,6 +1373,46 @@ async def global_chances(tournament_id: int, position: int, db: AsyncSession = D
     }
 
 
+@router.get("/{tournament_id}/global-chances-history")
+async def global_chances_history(tournament_id: int, db: AsyncSession = Depends(get_db)):
+    """Every computed position at once, for the global standings — the twin of
+    /leagues/{id}/chances-history, and the same reason: the slider should read
+    a map it already holds rather than ask for each stop. Per-mille integers."""
+    from app.services.scoring import chances_history_held, chances_history_key
+
+    draw = await db.get(Draw, tournament_id)
+    if not draw:
+        raise HTTPException(404, "Tournament not found")
+    all_matches = (await db.execute(
+        select(Match).where(Match.draw_id == tournament_id))).scalars().all()
+    completed = [m for m in all_matches if m.status == "completed" and not m.is_bye]
+    timeline_ids = [m.id for m in sorted(
+        completed, key=lambda m: (m.completed_at is not None, m.completed_at or "", m.id))]
+    if not timeline_ids:
+        return {"scale": 1000, "positions": {}}
+    rows = (await db.execute(
+        select(UserPrediction.user_id, UserPrediction.match_id, UserPrediction.predicted_winner_id)
+        .where(UserPrediction.draw_id == tournament_id,
+               UserPrediction.predicted_winner_id.isnot(None)))).all()
+    picks_map: dict[int, dict] = {}
+    for uid, mid, w in rows:
+        picks_map.setdefault(uid, {})[mid] = w
+    if not picks_map:
+        return {"scale": 1000, "positions": {}}
+    odds = await draw_odds(db, draw, all_matches)
+    if odds is None:
+        return {"scale": 1000, "positions": {}}
+    key = chances_history_key(tournament_id, draw.num_rounds or 7, picks_map,
+                              odds.without_live())
+    held = chances_history_held(key, timeline_ids)
+    return {
+        "scale": 1000,
+        "positions": {str(p): {str(u): [round(v[0] * 1000), round(v[1] * 1000)]
+                               for u, v in rows_.items()}
+                      for p, rows_ in sorted(held.items())},
+    }
+
+
 @router.get("/{tournament_id}/draw", response_model=DrawOut)
 async def get_draw(tournament_id: int, db: AsyncSession = Depends(get_db)):
     t = await db.get(Draw, tournament_id)

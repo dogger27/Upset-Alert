@@ -982,6 +982,76 @@ async def league_chances(
     }
 
 
+@router.get("/{league_id}/chances-history")
+async def league_chances_history(
+    league_id: int,
+    tournament_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
+):
+    """EVERY POSITION AT ONCE, so the slider needs no network at all.
+
+    One request per draw instead of one per stop: the client holds the map and
+    a scrub becomes an array lookup, which is the difference between a number
+    that appears and a number that arrives. Only positions already computed
+    are sent — the warm pass (services/chances_warm) has them all within
+    moments of a result, and anything missing still falls back to
+    /chances?position=.
+
+    Values are PER MILLE integers: the column prints whole percents, and the
+    three thresholds `pct` cares about (a certainty, above 99.5%, below 0.5%)
+    all survive a thousandth. It is a third of the bytes of the floats.
+    """
+    from app.services.scoring import chances_history_held, chances_history_key
+
+    league = (await db.execute(
+        select(League).options(selectinload(League.members))
+        .where(League.id == league_id))).scalar_one_or_none()
+    if not league:
+        raise HTTPException(404, "League not found")
+    _check_access(league, current_user)
+
+    draw = await db.get(Draw, tournament_id)
+    if not draw:
+        raise HTTPException(404, "Tournament not found")
+
+    all_matches = (await db.execute(
+        select(Match).where(Match.draw_id == tournament_id))).scalars().all()
+    completed = [m for m in all_matches if m.status == "completed" and not m.is_bye]
+    timeline_ids = [m.id for m in sorted(
+        completed, key=lambda m: (m.completed_at is not None, m.completed_at or "", m.id))]
+    if not timeline_ids:
+        return {"scale": 1000, "positions": {}}
+
+    visible = await _pool_visible(db, league.id, tournament_id)
+    picks_map: dict[int, dict] = {}
+    for member in league.members:
+        if visible is not None and member.user_id not in visible:
+            continue
+        preds = (await db.execute(
+            select(UserPrediction.match_id, UserPrediction.predicted_winner_id).where(
+                UserPrediction.user_id == member.user_id,
+                UserPrediction.draw_id == tournament_id,
+                UserPrediction.predicted_winner_id.isnot(None)))).all()
+        if preds:
+            picks_map[member.user_id] = {mid: w for mid, w in preds}
+    if not picks_map:
+        return {"scale": 1000, "positions": {}}
+
+    odds = await draw_odds(db, draw, all_matches)
+    if odds is None:
+        return {"scale": 1000, "positions": {}}
+    key = chances_history_key(tournament_id, draw.num_rounds or 7, picks_map,
+                              odds.without_live())
+    held = chances_history_held(key, timeline_ids)
+    return {
+        "scale": 1000,
+        "positions": {str(p): {str(u): [round(v[0] * 1000), round(v[1] * 1000)]
+                               for u, v in rows.items()}
+                      for p, rows in sorted(held.items())},
+    }
+
+
 @router.get("/{league_id}/cash-pools", response_model=list[CashPoolOut])
 async def cash_pools(
     league_id: int,
