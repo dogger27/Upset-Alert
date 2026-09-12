@@ -154,12 +154,25 @@ def fetch_workbook(season: int, tour: str, client=None) -> tuple:
                             (WAYBACK.format(path=path), "web.archive.org")):
             try:
                 resp = client.get(url)
-                if resp.status_code != 200 or len(resp.content) < 10_000:
-                    logger.info("odds: %s gave %s (%d bytes)", source, resp.status_code, len(resp.content))
-                    continue
-                return parse_workbook(resp.content), source
-            except Exception as exc:      # noqa: BLE001 — any transport problem falls through
+            except Exception as exc:      # noqa: BLE001 — a transport problem: try the next source
                 logger.info("odds: %s unreachable: %s", source, exc)
+                continue
+            if resp.status_code != 200 or len(resp.content) < 10_000:
+                logger.info("odds: %s gave %s (%d bytes)", source, resp.status_code, len(resp.content))
+                continue
+            # A PARSE FAILURE IS NOT AN UNREACHABLE HOST, and must not be
+            # reported as one. This block used to catch both: openpyxl was
+            # missing from requirements, so production fetched the file, threw
+            # ImportError, and logged "source unreachable" — a wrong diagnosis
+            # that pointed at the network instead of at a one-line fix.
+            try:
+                return parse_workbook(resp.content), source
+            except ImportError:
+                raise
+            except Exception as exc:      # noqa: BLE001
+                logger.warning("odds: %s returned %d bytes that would not parse: %s",
+                               source, len(resp.content), exc)
+                continue
         return [], None
     finally:
         if owns:
@@ -300,7 +313,12 @@ async def sync_async(seasons: Optional[list] = None) -> dict:
     from app.services.system_log import app_log
     out = await hdb.run(sync, seasons)
     total = sum(s["rows"] for s in out["seasons"])
-    await app_log("info", "history",
-                  f"market odds: {total} priced matches from {', '.join(out['sources']) or 'nowhere'}; "
-                  f"{out['link']['linked']} linked to the record", out)
+    # NOTHING AT ALL IS A WARNING, not an info line. The yardstick going
+    # quiet is exactly the failure that would otherwise sit unnoticed until
+    # someone next asked how good the model is.
+    level = "info" if total else "warning"
+    await app_log(level, "history",
+                  f"market odds: {total} priced matches from {', '.join(out['sources']) or 'NO SOURCE REACHED'}; "
+                  f"{out['link']['linked']} linked to the record", out,
+                  dedup_key=None if total else "market_odds_empty", dedup_hours=12)
     return out
