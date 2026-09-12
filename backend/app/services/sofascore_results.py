@@ -407,6 +407,14 @@ async def sweep_once(db, *, force: bool = False) -> dict:
         # on the draw id — is the surface that most needs to hear about one.
         for d in touched_draws:
             await broadcaster.publish(d, _tournament_of.get(d))
+        # A RECORDED WINNER IS A NEW TIMELINE POSITION, and the standings
+        # slider will be asked for it. Computing it now — in the background,
+        # behind the same one-at-a-time gate a reader's request uses — is the
+        # difference between the scrub reading a number and waiting half a
+        # second for one. Cheap: every EARLIER position is unaffected by this
+        # result and stays in cache (services/chances_warm).
+        from app.services.chances_warm import warm_soon
+        warm_soon(sorted(touched_draws))
 
     # A winner recorded this sweep may decide a schedule "A or B";
     # collapse immediately rather than waiting for the next sheet.

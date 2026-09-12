@@ -522,7 +522,25 @@ def finish_range(
 # range depends on, so a pick edited by an admin or a result reverted is a
 # miss, not a stale hit.
 _FINISH_CACHE: dict[tuple, Optional[dict[int, tuple[int, int]]]] = {}
-_FINISH_CACHE_MAX = 512   # a history is a dozen entries per draw per result
+# A WARMED DRAW IS ITS WHOLE TIMELINE, not a dozen entries: 127 positions for
+# every scope that can ask (each league with picks, plus the global table) is
+# ~760 for one Slam. At 512 a warm draw evicted itself and the work was redone
+# on the next visit, which is the opposite of the point. Each entry is a dict
+# of a few dozen small tuples — a few KB — so this is tens of megabytes at
+# worst, and only for draws someone is actually reading.
+_FINISH_CACHE_MAX = 4096
+# Walks actually performed, ever. The warm pass reads it across a call to know
+# whether that position was computed or merely read — a stopwatch cannot tell
+# them apart, because the last few positions of a draw are exact walks over
+# eight futures and finish faster than any plausible "that was cached"
+# threshold. Mistaking those for cache hits made the warm pass stop eight
+# positions in and leave the rest of the timeline cold.
+_FINISH_CACHE_MISSES = 0
+
+
+def finish_range_walks() -> int:
+    """How many walks have been computed (not read from cache) in this process."""
+    return _FINISH_CACHE_MISSES
 
 
 def finish_range_cached(draw_id: int, all_matches: list, pts_table: dict[int, int], num_rounds: int,
@@ -544,6 +562,8 @@ def finish_range_cached(draw_id: int, all_matches: list, pts_table: dict[int, in
     )
     if key in _FINISH_CACHE:
         return _FINISH_CACHE[key]
+    global _FINISH_CACHE_MISSES
+    _FINISH_CACHE_MISSES += 1
     out = finish_range(all_matches, pts_table, num_rounds, banked, picks, odds, sample, samples)
     if len(_FINISH_CACHE) >= _FINISH_CACHE_MAX:
         _FINISH_CACHE.pop(next(iter(_FINISH_CACHE)))
@@ -680,6 +700,10 @@ def finish_history(draw_id: int, all_matches: list, timeline_ids: list[int], pts
     if len(timeline_ids) < first or not picks:
         return None, {}
     out: dict = {}
+    # A PAST MOMENT IS PRICED WITHOUT WHAT IS ON COURT NOW — see
+    # DrawOdds.without_live: it is both the honest snapshot and the only way
+    # these answers survive the poller's next tick.
+    odds = odds.without_live() if hasattr(odds, "without_live") else odds
     for p in range(first, len(timeline_ids) + 1):
         rng = _position_range(draw_id, all_matches, byes, timeline_ids, p, pts_table,
                               num_rounds, picks, odds, sample=False)
@@ -730,6 +754,7 @@ def chances_at(draw_id: int, all_matches: list, timeline_ids: list[int], positio
     and the caller already has it for every position where it does."""
     if not picks or not timeline_ids:
         return False, {}
+    odds = odds.without_live() if hasattr(odds, "without_live") else odds
     position = max(1, min(int(position), len(timeline_ids)))
     byes = {m.id for m in all_matches if m.is_bye}
     undecided = sum(1 for m in all_matches if not m.is_bye) - position

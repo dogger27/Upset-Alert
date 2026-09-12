@@ -506,3 +506,75 @@ def test_the_scrub_draws_fewer_futures_than_the_live_figure():
     for u in full:
         assert cheap[u][2] == pytest.approx(full[u][2], abs=0.01)
         assert cheap[u][3] == pytest.approx(full[u][3], abs=0.01)
+
+
+def test_a_past_position_is_settled_by_its_own_results():
+    """WHY WARMING WORKS AT ALL — the invariant, asserted.
+
+    `_snapshot` clears every later winner and the players a later slot only
+    learned from one, so position N's snapshot is a function of the first N
+    results alone. A match finishing afterwards must therefore leave every
+    earlier position's answer — and its cache key — untouched, or a warm pass
+    would be computing numbers that go stale the moment play resumes."""
+    import random
+    from app.services.scoring import _position_range, _snapshot
+    rng = random.Random(17)
+    ms = _bracket(32, decided_r1=16, rng=rng)
+    done = sorted([m for m in ms if m.winner_id and not m.is_bye],
+                  key=lambda m: (m.round_number, m.match_number))
+    tl = [m.id for m in done]
+    byes = {m.id for m in ms if m.is_bye}
+    picks = {u: _random_picks(ms, 32, rng) for u in range(1, 5)}
+    pts = {1: 1, 2: 2, 3: 4, 4: 8, 5: 12}
+    odds = _odds(range(1, 33))
+
+    before = _position_range(1, ms, byes, tl, 8, pts, 5, picks, odds, sample=True,
+                             samples=2_000)
+    snap_before = _snapshot(ms, byes | set(tl[:8]))
+
+    # PLAY ON: four R2 matches finish, and R3 learns the players they send up
+    # — exactly what the scraper writes when a round completes.
+    by_slot = {(m.round_number, m.match_number): m for m in ms}
+    for k in range(1, 5):
+        m = by_slot[(2, k)]
+        m.winner_id = m.player1_id
+        m.status = "completed"
+    for k in range(1, 3):
+        up = by_slot[(3, k)]
+        up.player1_id = by_slot[(2, 2 * k - 1)].winner_id
+        up.player2_id = by_slot[(2, 2 * k)].winner_id
+    tl_later = [m.id for m in sorted([m for m in ms if m.winner_id and not m.is_bye],
+                                     key=lambda m: (m.round_number, m.match_number))]
+    assert len(tl_later) == len(tl) + 4
+
+    after = _position_range(1, ms, byes, tl_later, 8, pts, 5, picks, odds, sample=True,
+                            samples=2_000)
+    snap_after = _snapshot(ms, byes | set(tl_later[:8]))
+
+    # Same moment, same snapshot, same answer — so the earlier position never
+    # needed recomputing, which is the whole basis of warming it once.
+    assert [(m.id, m.winner_id, m.player1_id, m.player2_id) for m in snap_before] == \
+           [(m.id, m.winner_id, m.player1_id, m.player2_id) for m in snap_after]
+    assert before == after
+
+
+def test_a_past_moment_is_not_priced_off_a_live_score():
+    """`without_live` — the other half of warming, and a correctness fix: a
+    snapshot from before a match started must not be priced off the score it
+    is on right now, and the live scores in the cache key were throwing every
+    warmed position away on the poller's next tick."""
+    from app.services.win_chances import DrawOdds, LiveScore, _key_without_live
+    base = (4, 77, "2026-09-08", "2026-09-12", "Hard", 3, "atp")
+    live = {9: (1, 2, LiveScore((1, 0), (3, 2), False))}
+    odds = DrawOdds({1: (1800, 1800, 1, None), 2: (1600, 1600, 20, None)},
+                    "Hard", 3, live, base + (tuple(sorted(live.items())),))
+    past = odds.without_live()
+    assert past.live == {}
+    assert past.cache_key == base + ((),)
+    assert past.cache_key != odds.cache_key
+    # The set already won moves the live price; the past price is the model's.
+    assert odds.pair_prob(1, 2, 9) != past.pair_prob(1, 2, 9)
+    # Nothing in play: the same object, so nothing is computed twice.
+    quiet = DrawOdds({}, "Hard", 3, {}, base + ((),))
+    assert quiet.without_live() is quiet
+    assert _key_without_live(base + ((),)) == base + ((),)
