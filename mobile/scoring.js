@@ -112,7 +112,8 @@ export function sortStandings(rows) {
 /* THE TABLE REWOUND to the first `pos` matches of the timeline: every row
  * re-scored from its picks on those matches alone, then re-sorted, with the
  * finish range and podium as they stood at that point. */
-export function scrubEntries(entries, timeline, pos, userPredictions, finishHistory = {}) {
+export function scrubEntries(entries, timeline, pos, userPredictions, finishHistory = {},
+                             positionChances = null) {
   const slice = timeline.slice(0, pos)
   const hist = finishHistory[String(pos)] ?? null
   const rows = entries.map(e => {
@@ -130,12 +131,15 @@ export function scrubEntries(entries, timeline, pos, userPredictions, finishHist
     // The Finish column of THIS snapshot: the range as it stood at this
     // position, a dash before the first position it exists at.
     const r = hist?.[String(e.user_id)] ?? null
+    // Before the range's first position the chances come from their own
+    // request instead — the same walk, sampled rather than enumerated.
+    const c = positionChances?.[String(e.user_id)] ?? null
     return { ...e, round_points, total, correct_count,
              best_rank: r ? r[0] : null, worst_rank: r ? r[1] : null, podium_locked: !!r && r[1] <= 3,
              // [best, worst, p_win, p_podium]: the chances belong to the same
              // snapshot as the range, so they move with the slider together.
-             p_win: r && r.length > 3 ? r[2] : null,
-             p_podium: r && r.length > 3 ? r[3] : null }
+             p_win: r && r.length > 3 ? r[2] : (c ? c[0] : null),
+             p_podium: r && r.length > 3 ? r[3] : (c ? c[1] : null) }
   })
   return sortStandings(rows)
 }

@@ -12,6 +12,13 @@ export const setMemberAdmin = (leagueId, userId, isAdmin) =>
 export const removeMember = (leagueId, userId) =>
   client.delete(`/leagues/${leagueId}/members/${userId}`)
 export const getLeagueTournaments = (id) => client.get(`/leagues/${id}/tournaments`).then(r => r.data)
+/* THE CHANCES OF ONE TIMELINE POSITION. round-scores carries the history of
+   the Win/Top 3 columns only from fifteen undecided matches on; before that a
+   position is a sampled walk, and a Slam has a hundred and twenty of them. So
+   the slider asks for the moment it has stopped on. */
+export const getPositionChances = (leagueId, tournamentId, position) =>
+  client.get(`/leagues/${leagueId}/chances`,
+             { params: { tournament_id: tournamentId, position } }).then(r => r.data)
 export const getLeaderboard = (id, tournamentId) =>
   client.get(`/leagues/${id}/leaderboard`, { params: tournamentId != null ? { tournament_id: tournamentId } : {} }).then(r => r.data)
 export const getRoundScores = (leagueId, tournamentId) =>

@@ -18,7 +18,7 @@ import { Link, Stack, useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useState } from 'react'
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 import { useAuth } from '../../../../../auth'
-import { getLeague, getLeagueTournaments, getRoundScores } from '../../../../../api'
+import { getLeague, getLeagueTournaments, getRoundScores, getPositionChances } from '../../../../../api'
 import { useApi } from '../../../../../useApi'
 import { byFinish, competitionRanks, finishText, pct } from '../../../../../scoring'
 import { StandingsFoot, useStandingsView } from '../../../../../standingsTools'
@@ -66,7 +66,8 @@ export default function Standings() {
   const siblings = (draws.data || []).map(x => x.tournament).filter(x => x && t && (
     t.tournament_id != null ? x.tournament_id === t.tournament_id
       : x.name === t.name && x.year === t.year))
-  const view = useStandingsView(scores.data, t)
+  const view = useStandingsView(scores.data, t,
+                                pos => getPositionChances(id, drawId, pos), `l${id}`)
   const entries = view.entries
   const ranks = competitionRanks(entries)
   /* WHICH NUMBER THE ROWS ARE SORTED BY: the score (the standings, and the
@@ -92,13 +93,20 @@ export default function Standings() {
      every future of the last fifteen matches and sends the best and worst
      place. Before that there are too many futures and the column is not
      drawn — the site does the same. */
-  const finishAvail = !!scores.data?.finish_range_available
+  /* THE RANGE'S COLUMN, ONLY WHERE THE RANGE IS. Read off the rows rather
+     than off the payload's flag, which describes the draw's PRESENT state:
+     rewound past the range's first position the rows have no range, and the
+     column stood there full of dashes — a broken-looking table instead of
+     "no range this early". The chances reach every position now, so this is
+     the one column that comes and goes, and the ✓ count takes its track
+     back exactly as it does live before R16. */
+  const finishAvail = entries.some(e => e.best_rank != null)
   /* WIN AND PODIUM CHANCES, from the same R16 line as the range and the
      same enumeration — its own flag, because the model can be off for a
      draw whose range is perfectly computable. */
   const oddsAvail = !!scores.data?.odds_available
   const oddsNote = scores.data?.odds_attribution
-  const chancesSampled = !!scores.data?.chances_sampled
+  const chancesSampled = view.chancesSampled
   /* TOP 3 NEEDS A WIDER PHONE. Five numbers plus a username is more
      than a 393pt row holds, and the name is the column that must not
      give way — the site drops this same column below 400px for the
@@ -113,7 +121,7 @@ export default function Standings() {
        three share the floor: a table ordered by one of them cannot be
        rewound into positions where it is a column of dashes. */
     <Pressable onPress={() => { setSortKey(key)
-                                if (key === 'finish' || key === 'p_win' || key === 'p_podium') view.clampToFinish() }}
+                                if (key === 'finish') view.clampToFinish() }}
                hitSlop={8} accessibilityRole="button"
                accessibilityState={{ selected: sortKey === key }}
                accessibilityLabel={a11y ?? `Sort by ${label}`}>

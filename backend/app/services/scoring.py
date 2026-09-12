@@ -668,25 +668,91 @@ def finish_history(draw_id: int, all_matches: list, timeline_ids: list[int], pts
     first = max(1, contests - FINISH_RANGE_MAX_UNDECIDED)
     if len(timeline_ids) < first or not picks:
         return None, {}
-    by_id = {m.id: m for m in all_matches}
     out: dict = {}
     for p in range(first, len(timeline_ids) + 1):
-        decided = byes | set(timeline_ids[:p])
-        snap = _snapshot(all_matches, decided)
-        banked = {}
-        for uid, pk in picks.items():
-            total, by_round = 0.0, {}
-            for mid in timeline_ids[:p]:
-                m = by_id.get(mid)
-                if m is not None and pk.get(mid) == m.winner_id:
-                    total += pts_table.get(m.round_number, 0)
-                    by_round[m.round_number] = by_round.get(m.round_number, 0) + 1
-            banked[uid] = UserScore(user_id=uid, total_points=total, correct_count=sum(by_round.values()),
-                                    correct_by_round=by_round)
-        rng = finish_range_cached(draw_id, snap, pts_table, num_rounds, banked, picks, odds)
+        rng = _position_range(draw_id, all_matches, byes, timeline_ids, p, pts_table,
+                              num_rounds, picks, odds, sample=False)
         if rng:
             out[p] = rng
     return first, out
+
+
+def _position_range(draw_id: int, all_matches: list, byes: set, timeline_ids: list[int], position: int,
+                    pts_table: dict[int, int], num_rounds: int,
+                    picks: dict[int, dict[int, Optional[int]]], odds=None, sample: bool = False):
+    """One snapshot: the draw as it stood after `position` results, scored, and
+    run through the same walk the live table uses."""
+    by_id = {m.id: m for m in all_matches}
+    played = timeline_ids[:position]
+    snap = _snapshot(all_matches, byes | set(played))
+    banked = {}
+    for uid, pk in picks.items():
+        total, by_round = 0.0, {}
+        for mid in played:
+            m = by_id.get(mid)
+            if m is not None and pk.get(mid) == m.winner_id:
+                total += pts_table.get(m.round_number, 0)
+                by_round[m.round_number] = by_round.get(m.round_number, 0) + 1
+        banked[uid] = UserScore(user_id=uid, total_points=total, correct_count=sum(by_round.values()),
+                                correct_by_round=by_round)
+    return finish_range_cached(draw_id, snap, pts_table, num_rounds, banked, picks, odds, sample)
+
+
+def chances_at(draw_id: int, all_matches: list, timeline_ids: list[int], position: int,
+               pts_table: dict[int, int], num_rounds: int,
+               picks: dict[int, dict[int, Optional[int]]], odds=None):
+    """THE CHANCES OF ONE SNAPSHOT, COMPUTED ON DEMAND — the position under the
+    slider's thumb, and only that one.
+
+    `finish_history` walks every position from fifteen undecided matches on,
+    because there the walk is exact, cheap, and brings the range with it. It
+    cannot reach further back eagerly: before that line a walk is a hundred
+    thousand sampled futures, about eleven milliseconds per undecided match,
+    and a Slam has a hundred and twenty such positions — ninety seconds to
+    answer a question the reader asked of one of them. So the early positions
+    are computed one at a time, when the slider actually stops on one, and
+    cached like every other walk.
+
+    Returns `(sampled, {user_id: (p_win, p_podium)})`; the range is not
+    returned, because at these depths it does not exist (see `finish_range`)
+    and the caller already has it for every position where it does."""
+    if not picks or not timeline_ids:
+        return False, {}
+    position = max(1, min(int(position), len(timeline_ids)))
+    byes = {m.id for m in all_matches if m.is_bye}
+    undecided = sum(1 for m in all_matches if not m.is_bye) - position
+    sample = undecided > FINISH_RANGE_MAX_UNDECIDED
+    if undecided > CHANCES_MAX_UNDECIDED:
+        return sample, {}
+    rng = _position_range(draw_id, all_matches, byes, timeline_ids, position, pts_table,
+                          num_rounds, picks, odds, sample=sample)
+    if not rng:
+        return sample, {}
+    return sample, {u: (v[2], v[3]) for u, v in rng.items() if len(v) > 3}
+
+
+# ONE SAMPLED WALK AT A TIME. A single position costs up to a second and a half
+# of arithmetic, and this endpoint is reachable once per slider stop: a burst
+# would otherwise put a thread per request against the live poller, which has
+# ten seconds to fetch and store every score on court. Queued, they cost the
+# same total and leave the loop alone. Built lazily — an asyncio primitive
+# created at import binds the wrong loop under the test client.
+_CHANCES_GATE = None
+
+
+async def chances_at_async(draw_id, all_matches, timeline_ids, position, pts_table, num_rounds,
+                           picks, odds=None):
+    import asyncio
+    from types import SimpleNamespace
+    global _CHANCES_GATE
+    if _CHANCES_GATE is None:
+        _CHANCES_GATE = asyncio.Semaphore(1)
+    plain = [SimpleNamespace(id=m.id, round_number=m.round_number, match_number=m.match_number,
+                             player1_id=m.player1_id, player2_id=m.player2_id,
+                             winner_id=m.winner_id, is_bye=bool(m.is_bye)) for m in all_matches]
+    async with _CHANCES_GATE:
+        return await asyncio.to_thread(chances_at, draw_id, plain, list(timeline_ids), position,
+                                       pts_table, num_rounds, picks, odds)
 
 
 async def finish_history_async(draw_id, all_matches, timeline_ids, pts_table, num_rounds, picks,

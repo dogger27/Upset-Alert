@@ -12,7 +12,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useState } from 'react'
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 import { useAuth } from '../../auth'
-import { getGlobalRoundScores, listTournaments } from '../../api'
+import { getGlobalRoundScores, listTournaments, getGlobalPositionChances } from '../../api'
 import { useApi } from '../../useApi'
 import { byFinish, competitionRanks, finishText, pct } from '../../scoring'
 import { StandingsFoot, useStandingsView } from '../../standingsTools'
@@ -59,7 +59,8 @@ export default function GlobalStandings() {
   const siblings = (all.data || []).filter(x => t && (
     t.tournament_id != null ? x.tournament_id === t.tournament_id
       : x.name === t.name && x.year === t.year))
-  const view = useStandingsView(standings.data, t)
+  const view = useStandingsView(standings.data, t,
+                                pos => getGlobalPositionChances(id, pos))
   const entries = view.entries
   const ranks = competitionRanks(entries)
   /* WHICH NUMBER THE ROWS ARE SORTED BY: the score (the standings, and the
@@ -91,7 +92,7 @@ export default function GlobalStandings() {
      for a draw whose range is perfectly computable. */
   const oddsAvail = !!standings.data?.odds_available
   const oddsNote = standings.data?.odds_attribution
-  const chancesSampled = !!standings.data?.chances_sampled
+  const chancesSampled = view.chancesSampled
   /* TOP 3 NEEDS A WIDER PHONE. Five numbers plus a username is more
      than a 393pt row holds, and the name is the column that must not
      give way — the site drops this same column below 400px for the
@@ -106,7 +107,7 @@ export default function GlobalStandings() {
        three share the floor: a table ordered by one of them cannot be
        rewound into positions where it is a column of dashes. */
     <Pressable onPress={() => { setSortKey(key)
-                                if (key === 'finish' || key === 'p_win' || key === 'p_podium') view.clampToFinish() }}
+                                if (key === 'finish') view.clampToFinish() }}
                hitSlop={8} accessibilityRole="button"
                accessibilityState={{ selected: sortKey === key }}
                accessibilityLabel={a11y ?? `Sort by ${label}`}>

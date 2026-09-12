@@ -2,8 +2,8 @@ import { useState, useMemo, useRef, useEffect, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useParams, useNavigate, useOutletContext } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getLeague, getLeagueTournaments, getRoundScores, updateLeague, setMemberAdmin, removeMember, deleteLeague, shareLeagueByEmail, getGrandSlamTotals, getCashPools, setCashPool } from '../api/leagues'
-import { getGlobalRoundScores, getGlobalDraws, getGlobalGSTotals, listTournaments } from '../api/tournaments'
+import { getLeague, getLeagueTournaments, getRoundScores, updateLeague, setMemberAdmin, removeMember, deleteLeague, shareLeagueByEmail, getGrandSlamTotals, getCashPools, setCashPool, getPositionChances } from '../api/leagues'
+import { getGlobalRoundScores, getGlobalDraws, getGlobalGSTotals, listTournaments, getGlobalPositionChances } from '../api/tournaments'
 import { PickChip, ROUND_SLOTS, ROUND_TITLES, DEPTH_ROUNDS } from '../components/ComparePicksTable'
 import { getComparePicks } from '../api/tournaments'
 import { useAuth } from '../store/auth'
@@ -1378,6 +1378,33 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
   const effectiveMax = matchesTimeline.length
   const effectiveScrubPos = scrubPos ?? effectiveMax
   const isScrubbing = effectiveScrubPos < effectiveMax
+  /* THE CHANCES OF A MOMENT THE HISTORY CANNOT REACH. `finish_history` covers
+     every position from fifteen undecided matches on; before that each one is
+     a hundred thousand sampled futures, so they are asked for one at a time —
+     when the slider has actually stopped somewhere.
+     Debounced, because a range input fires on every pixel of a drag: the
+     query follows where the thumb CAME TO REST, not where it passed through.
+     While the next position loads, the previous answer stays on screen
+     (keepPreviousData): between two adjacent matches a probability barely
+     moves, and a column that blinked to dashes and back on every drag would
+     read as broken. */
+  const needsPosChances = !!rawData?.odds_available && isScrubbing
+    && finishFrom != null && effectiveScrubPos < finishFrom
+  const [chancePos, setChancePos] = useState(null)
+  useEffect(() => {
+    if (!needsPosChances) { setChancePos(null); return }
+    const id = setTimeout(() => setChancePos(effectiveScrubPos), 220)
+    return () => clearTimeout(id)
+  }, [needsPosChances, effectiveScrubPos])
+  const { data: posChances } = useQuery({
+    queryKey: ['position-chances', leagueId ?? 'global', t.id, chancePos],
+    queryFn: leagueId != null ? () => getPositionChances(leagueId, t.id, chancePos)
+                              : () => getGlobalPositionChances(t.id, chancePos),
+    enabled: needsPosChances && chancePos != null,
+    staleTime: 5 * 60_000,
+    placeholderData: prev => prev,
+  })
+  const scrubChances = needsPosChances ? (posChances?.chances ?? null) : null
   /* How many matches the ✓ column counts: the board so far, or in a world
      that plus the matches the world decides. */
   const countedMatches = world && !isScrubbing ? effectiveMax + world.results.length : effectiveScrubPos
@@ -1444,12 +1471,16 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
       }
       const round_points = Array.from({ length: e.round_points.length }, (_, i) => byRound[i + 1] ?? 0)
       const r = finishHistory[String(effectiveScrubPos)]?.[String(e.user_id)]
+      /* Before the range's first position the chances come from their own
+         request instead — the same walk, sampled. */
+      const c = scrubChances?.[String(e.user_id)]
       return { ...e, round_points, total, correct_count,
                best_rank: r ? r[0] : null, worst_rank: r ? r[1] : null, podium_locked: !!r && r[1] <= 3,
                /* [best, worst, p_win, p_podium] — the chances follow the
                   slider too, so the two columns always describe the same
                   moment. Older payloads carry only the first two. */
-               p_win: r && r.length > 3 ? r[2] : null, p_podium: r && r.length > 3 ? r[3] : null }
+               p_win: r && r.length > 3 ? r[2] : (c ? c[0] : null),
+               p_podium: r && r.length > 3 ? r[3] : (c ? c[1] : null) }
     })
     currentEntries.sort((a, b) => {
       if (b.total !== a.total) return b.total - a.total
@@ -1460,13 +1491,21 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
       return 0
     })
     return { entries: currentEntries, roundsWithMatches: sliceRounds }
-  }, [isScrubbing, effectiveScrubPos, matchesTimeline, entries, roundsWithMatches, userPredictions, world, worldPredictions, finishHistory])
+  }, [isScrubbing, effectiveScrubPos, matchesTimeline, entries, roundsWithMatches, userPredictions, world, worldPredictions, finishHistory, scrubChances])
 
   const pointsOrder = displayData.entries
   /* The finish column exists only once the server can enumerate the draw's
      futures (R32 complete). Its values ride on each entry from the server
      and survive the scrub, like Max: a replay has no future to range over. */
   const finishAvail = !!rawData?.finish_range_available
+  /* AND ONLY WHERE IT EXISTS. Rewound past the range's first position the
+     column had nothing to print, so it stood there as a column of dashes —
+     which reads as a broken table rather than as "no range this early". The
+     chances now reach every position (they are sampled), so the range is the
+     one column that has to come and go, and the table already has a layout
+     without it: the one it wears live before R16. */
+  const finishShown = finishAvail && !(isScrubbing && finishFrom != null
+                                       && effectiveScrubPos < finishFrom)
   /* WIN AND PODIUM CHANCES, over the same futures the range is drawn from,
      each weighted by who is likely to win the matches left. Same R16 line,
      but its own flag: the model can be switched off for a draw whose range
@@ -1475,7 +1514,10 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
   const oddsNote = rawData?.odds_attribution
   /* Past fifteen undecided matches the futures are sampled rather than
      enumerated, which is what lets the columns exist this early. */
-  const chancesSampled = !!rawData?.chances_sampled
+  /* Sampled describes THE NUMBERS ON SCREEN, not the draw's present state: a
+     finished draw rewound to its first round is showing sampled figures, and
+     the explainer has to say so. */
+  const chancesSampled = !!rawData?.chances_sampled || (needsPosChances && !!posChances?.sampled)
   const [showChancesInfo, setShowChancesInfo] = useState(false)
   const cashPool = !!rawData?.cash_pool
 
@@ -1543,13 +1585,17 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
   /* SORTED BY FINISH, THE SLIDER STOPS WHERE THE COLUMN BEGINS. The range
      exists from the end of R32; a table ordered by it cannot be rewound
      into positions where it is a column of dashes. */
-  /* The chances come from the same enumeration, so a table sorted by either
-     of them has the same floor as one sorted by Finish. */
-  const futureSort = colSort === 'finish' || colSort === 'pwin' || colSort === 'ppod'
+  /* THE CHANCES NO LONGER STOP THERE. They did when they came from the same
+     enumeration as the range; now they are sampled at whatever position the
+     slider asks for, so a table ordered by Win or Top 3 rewinds as freely as
+     one ordered by points. Only the range still pins the slider. */
+  const futureSort = colSort === 'finish'
   const scrubMin = futureSort && finishFrom != null ? Math.min(finishFrom, effectiveMax) : 0
   const sortByFuture = col => {
     setColSort(col)
-    if (scrubPos != null && finishFrom != null && scrubPos < finishFrom) setScrubPos(finishFrom >= effectiveMax ? null : finishFrom)
+    if (col === 'finish' && scrubPos != null && finishFrom != null && scrubPos < finishFrom) {
+      setScrubPos(finishFrom >= effectiveMax ? null : finishFrom)
+    }
   }
   const sortByFinish = () => sortByFuture('finish')
 
@@ -1765,7 +1811,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
         <>
           {showChancesInfo && <ChancesInfoPopup attribution={oddsNote} sampled={chancesSampled}
                                                 onClose={() => setShowChancesInfo(false)} />}
-          <div className={`lt-progress-row lt-progress-header-row${finishAvail ? ' lt-progress-row--finish' : ''}${oddsAvail ? ' lt-progress-row--odds' : ''}`}
+          <div className={`lt-progress-row lt-progress-header-row${finishShown ? ' lt-progress-row--finish' : ''}${oddsAvail ? ' lt-progress-row--odds' : ''}`}
                style={{ '--name-col-width': `${nameColWidth}px`, '--sbw': `${gutter}px` }}>
             {/* Both buttons first, then the rank, then the name — the two
                 controls belong together as one group of tools rather than
@@ -1826,7 +1872,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                 every future of the last fifteen matches; before that there
                 are too many, and the column is not drawn). A range of one is
                 a place clinched. Like Max, frozen while scrubbing. */}
-            {finishAvail && (
+            {finishShown && (
               <span className={`lt-progress-finish lt-progress-col-header lt-col-sort${colSort === 'finish' ? ' lt-col-sort--on' : ''}`}
                     role="button" tabIndex={0}
                     title="Best and worst place this bracket can still finish on, over every result left to play — click to sort"
@@ -1920,7 +1966,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
             {dispEntries.map((entry, rank) => (
               <div
                 key={entry.user_id}
-                className={`lt-progress-row lt-progress-row--abs${entry.user_id === user?.id ? ' lt-progress-row--me' : ''}${finishAvail ? ' lt-progress-row--finish' : ''}${oddsAvail ? ' lt-progress-row--odds' : ''}`}
+                className={`lt-progress-row lt-progress-row--abs${entry.user_id === user?.id ? ' lt-progress-row--me' : ''}${finishShown ? ' lt-progress-row--finish' : ''}${oddsAvail ? ' lt-progress-row--odds' : ''}`}
                 style={{ transform: `translateY(${rank * ROW_SLOT}px)` }}
               >
                 <button
@@ -1993,7 +2039,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                         ? `Could still finish on ${Math.round(entry.max_points)} pts` : undefined}>
                   {entry.max_points != null ? Math.round(entry.max_points) : '–'}
                 </span>
-                {finishAvail && (
+                {finishShown && (
                   <span className={`lt-progress-finish${colSort === 'finish' ? ' lt-col-on' : ''}${entry.best_rank != null && entry.best_rank === entry.worst_rank ? ' lt-progress-finish--locked' : ''}`}
                         title={finishTitle(entry)}>
                     {finishText(entry)}
