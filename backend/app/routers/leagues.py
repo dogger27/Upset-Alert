@@ -24,7 +24,9 @@ from app.schemas.league import (
     CashPoolIn, CashPoolOut,
 )
 from app.schemas.tournament import TournamentOut
-from app.services.scoring import UserScore, enumerate_worlds, finish_history_async, finish_range_async, podium_locked, rank_users, score_user
+from app.services.scoring import (UserScore, enumerate_worlds, finish_history_async, finish_range_async,
+                                  finish_range_available, podium_locked, rank_users, score_user)
+from app.services.win_chances import ATTRIBUTION as ODDS_ATTRIBUTION, draw_odds
 from app.services.scoring import potential_points, _points_table as _pts_table_for
 from app.services.upsets import has_upset_pick
 
@@ -798,13 +800,21 @@ async def round_scores(
                 pred_by_match, all_matches, position_by_entry, pts_table),
         })
 
-    # Where each bracket can still finish, once the draw is down to R16.
+    # Where each bracket can still finish, once the draw is down to R16 — and,
+    # over the same futures, weighted by who is likely to win each match left:
+    # the chance it finishes first and the chance it finishes on the podium.
+    # The odds are built only when the range is (the same R16 line), because
+    # they ride along with that enumeration and cost two queries otherwise.
+    odds = (await draw_odds(db, tournament, all_matches)
+            if finish_range_available(all_matches) else None)
     ranges = await finish_range_async(
-        tournament_id, all_matches, pts_table, tournament.num_rounds or 7, banked, picks_map)
+        tournament_id, all_matches, pts_table, tournament.num_rounds or 7, banked, picks_map,
+        odds=odds)
     for e in entries:
         rng = (ranges or {}).get(e["user_id"])
         e["best_rank"], e["worst_rank"] = (rng[0], rng[1]) if rng else (None, None)
         e["podium_locked"] = podium_locked(rng)
+        e["p_win"], e["p_podium"] = (rng[2], rng[3]) if rng and len(rng) > 3 else (None, None)
     # WHAT-IF WORLDS, from the semis on: every way the last matches can go,
     # each labelled by its final, with everyone's picks on those matches so
     # the table can be re-scored under any of them in the browser.
@@ -865,12 +875,22 @@ async def round_scores(
     # position it is computable at. Keyed by position; the client reads the
     # one under the thumb, and prints a dash before `finish_from`.
     finish_from, finish_hist = await finish_history_async(
-        tournament_id, all_matches, [m["id"] for m in timeline], pts_table, tournament.num_rounds or 7, picks_map)
-    finish_history = {str(p): {str(u): [b, w] for u, (b, w) in r.items()} for p, r in finish_hist.items()}
+        tournament_id, all_matches, [m["id"] for m in timeline], pts_table, tournament.num_rounds or 7,
+        picks_map, odds=odds)
+    # [best, worst, p_win, p_podium] — the Chances columns follow the slider
+    # for the same reason Finish does: the row under the thumb is a snapshot,
+    # and two columns disagreeing about which moment they describe is worse
+    # than either of them being absent.
+    finish_history = {str(p): {str(u): list(v) for u, v in r.items()} for p, r in finish_hist.items()}
 
     return {
         "entries": entries,
         "finish_range_available": ranges is not None,
+        # The Chances columns come from the same enumeration, so they arrive
+        # together — but they are named separately, because the odds can be
+        # switched off for a draw the range is still perfectly happy with.
+        "odds_available": odds is not None and ranges is not None,
+        "odds_attribution": ODDS_ATTRIBUTION,
         "finish_from": finish_from,
         "finish_history": finish_history,
         # A cash pool on this draw: the standings mark a locked podium as

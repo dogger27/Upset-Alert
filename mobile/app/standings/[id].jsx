@@ -10,11 +10,11 @@
  */
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useState } from 'react'
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 import { useAuth } from '../../auth'
 import { getGlobalRoundScores, listTournaments } from '../../api'
 import { useApi } from '../../useApi'
-import { byFinish, competitionRanks, finishText } from '../../scoring'
+import { byFinish, competitionRanks, finishText, pct } from '../../scoring'
 import { StandingsFoot, useStandingsView } from '../../standingsTools'
 import { othersPicksNote } from '../../lock'
 import { C } from '../../theme'
@@ -62,10 +62,26 @@ export default function GlobalStandings() {
      place. Before that there are too many futures and the column is not
      drawn — the site does the same. */
   const finishAvail = entries.some(e => e.best_rank != null)
+  /* WIN AND PODIUM CHANCES, from the same R16 line as the range and
+     the same enumeration — its own flag, because the model can be off
+     for a draw whose range is perfectly computable. */
+  const oddsAvail = !!standings.data?.odds_available
+  /* TOP 3 NEEDS A WIDER PHONE. Five numbers plus a username is more
+     than a 393pt row holds, and the name is the column that must not
+     give way — the site drops this same column below 400px for the
+     same reason. On a 430pt phone both fit with room to spare. */
+  const { width: screenW } = useWindowDimensions()
+  const podiumCol = oddsAvail && screenW >= 410
   const cashPool = false
 
   const sortHead = (key, label, style, extra, a11y) => (
-    <Pressable onPress={() => { setSortKey(key); if (key === 'finish') view.clampToFinish() }} hitSlop={8} accessibilityRole="button"
+    /* SORTED BY A FUTURE, THE SLIDER STOPS WHERE THAT COLUMN BEGINS.
+       Finish and both chances come from the same enumeration, so all
+       three share the floor: a table ordered by one of them cannot be
+       rewound into positions where it is a column of dashes. */
+    <Pressable onPress={() => { setSortKey(key)
+                                if (key === 'finish' || key === 'p_win' || key === 'p_podium') view.clampToFinish() }}
+               hitSlop={8} accessibilityRole="button"
                accessibilityState={{ selected: sortKey === key }}
                accessibilityLabel={a11y ?? `Sort by ${label}`}>
       <Text style={[style, s.headText, sortKey === key && s.headOn]} numberOfLines={1} {...extra}>{label}</Text>
@@ -107,7 +123,7 @@ export default function GlobalStandings() {
           <ScrollView style={s.scroller} contentContainerStyle={s.scrollerBody} showsVerticalScrollIndicator={false}
                       refreshControl={<RefreshControl refreshing={pulling} onRefresh={pull} tintColor={C.muted} colors={[C.clay]} />}>
           <View style={s.table}>
-            <View style={[s.row, s.head]}>
+            <View style={[s.row, s.head, podiumCol && s.tightRow]}>
               <Text style={[s.rank, s.headText]} numberOfLines={1}>#</Text>
               <Text style={[s.who, s.headText]} numberOfLines={1}>Player</Text>
               {/* The site's header. This endpoint carries no matches-played
@@ -123,16 +139,50 @@ export default function GlobalStandings() {
                   so the sub-labels sit over their columns. Max: every pick
                   that can yet come true, paid out. Quieter than the score,
                   a possibility beside a fact. */}
-              <View style={s.scoreHead}>
-                <Text style={[s.headText, s.scoreHeadTitle]} numberOfLines={1}
-                      adjustsFontSizeToFit minimumFontScale={0.6}>Score (pts)</Text>
-                <View style={s.scoreHeadRow}>
-                  {sortHead('total', 'Curr.', s.num, { adjustsFontSizeToFit: true, minimumFontScale: 0.6 })}
-                  {sortHead('max_points', 'Max', s.num, { adjustsFontSizeToFit: true, minimumFontScale: 0.6 })}
+              {/* WITH THE CHANCES, MAX GOES. The phone row cannot carry
+                  five numbers, and of the five the ceiling is the one the
+                  chances replace: "could still reach 212" answers, less
+                  directly, the question "can this still win". One column
+                  left, so the two-line heading collapses to a single word —
+                  "Score (pts)" over "Curr." was labelling a pair. */}
+              {oddsAvail ? sortHead('total', 'Pts', [s.num, s.numTight],
+                                    { adjustsFontSizeToFit: true, minimumFontScale: 0.6 },
+                                    'Points scored so far — sort by this') : (
+                <View style={s.scoreHead}>
+                  <Text style={[s.headText, s.scoreHeadTitle]} numberOfLines={1}
+                        adjustsFontSizeToFit minimumFontScale={0.6}>Score (pts)</Text>
+                  <View style={s.scoreHeadRow}>
+                    {sortHead('total', 'Curr.', s.num, { adjustsFontSizeToFit: true, minimumFontScale: 0.6 })}
+                    {sortHead('max_points', 'Max', s.num, { adjustsFontSizeToFit: true, minimumFontScale: 0.6 })}
+                  </View>
                 </View>
-              </View>
-              {finishAvail ? sortHead('finish', 'Finish', s.fin, { adjustsFontSizeToFit: true, minimumFontScale: 0.6 },
+              )}
+              {finishAvail ? sortHead('finish', oddsAvail ? 'Fin.' : 'Finish', [s.fin, oddsAvail && s.finTight],
+                                      { adjustsFontSizeToFit: true, minimumFontScale: 0.6 },
                                       'Best and worst place this bracket can still finish on — sort by this') : null}
+              {/* ONE HEADING OVER TWO COLUMNS again, the site's shape: the
+                  chance of finishing first and the chance of finishing top
+                  three, over every way the draw can still end, each future
+                  weighted by who is likely to win the matches left. Finish
+                  says what is possible; these say how likely. */}
+              {podiumCol ? (
+                <View style={s.chanceHead}>
+                  <Text style={[s.headText, s.scoreHeadTitle]} numberOfLines={1}
+                        adjustsFontSizeToFit minimumFontScale={0.6}>Chances</Text>
+                  <View style={s.scoreHeadRow}>
+                    {sortHead('p_win', 'Win', s.chance, { adjustsFontSizeToFit: true, minimumFontScale: 0.6 },
+                              'Chance of finishing first — sort by this')}
+                    {sortHead('p_podium', 'Top 3', s.chance, { adjustsFontSizeToFit: true, minimumFontScale: 0.6 },
+                              'Chance of finishing in the top three — sort by this')}
+                  </View>
+                </View>
+              ) : oddsAvail ? (
+                /* One column left, so no group to head: "Chances" over a
+                   single "Win" is a heading for a pair that is not there,
+                   and it does not fit in one cell either. */
+                sortHead('p_win', 'Win', s.chance, { adjustsFontSizeToFit: true, minimumFontScale: 0.6 },
+                         'Chance of finishing first — sort by this')
+              ) : null}
             </View>
             {rows.map((e, i) => {
               const mine = me && e.user_id === me.id
@@ -140,7 +190,7 @@ export default function GlobalStandings() {
               return (
                 <View key={e.user_id} style={[s.row, i % 2 ? s.alt : null, mine && s.mine]}>
                   <Body href={opens ? { pathname: `/draw/${id}`, params: { user: e.user_id, name: e.username } } : undefined}
-                        grow style={s.body}>
+                        grow style={[s.body, podiumCol && s.tightRow]}>
                     <Text style={s.rank}>
                       {(t?.status === 'completed' || view.finalPlayed) && rankOf.get(e.user_id) <= 3 ? ['🏆', '🥈', '🥉'][rankOf.get(e.user_id) - 1] : rankOf.get(e.user_id)}
                     </Text>
@@ -151,17 +201,29 @@ export default function GlobalStandings() {
                     {/* The sorted column is the lit one: white and bold, the
                       other two muted. */}
                   {finishAvail ? null : <Text style={[s.right, sortKey === 'correct_count' && s.on]}>{e.correct_count}</Text>}
-                    <Text style={[s.num, sortKey === 'total' && s.on]}>{Math.round(e.total)}</Text>
-                    <Text style={[s.num, sortKey === 'max_points' && s.on]}>{e.max_points != null ? Math.round(e.max_points) : '–'}</Text>
+                    <Text style={[s.num, oddsAvail && s.numTight, sortKey === 'total' && s.on]}>{Math.round(e.total)}</Text>
+                    {oddsAvail ? null : <Text style={[s.num, sortKey === 'max_points' && s.on]}>{e.max_points != null ? Math.round(e.max_points) : '–'}</Text>}
                     {/* A place clinched is the one certainty in the column,
                         so it reads in ink like the sorted column does. */}
                     {finishAvail ? (
-                      <Text style={[s.fin, (sortKey === 'finish' || (e.best_rank != null && e.best_rank === e.worst_rank)) && s.on]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}
+                      <Text style={[s.fin, oddsAvail && s.finTight, (sortKey === 'finish' || (e.best_rank != null && e.best_rank === e.worst_rank)) && s.on]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}
                             accessibilityLabel={e.best_rank == null ? undefined
                               : e.best_rank === e.worst_rank ? `Finishes ${e.best_rank} whatever happens`
                               : `Can still finish anywhere from ${e.best_rank} to ${e.worst_rank}`}>
                         {finishText(e)}
                       </Text>
+                    ) : null}
+                    {/* 100% has stopped being a probability, so it reads like the
+                        fact it is; 0% is out of the race and steps back. */}
+                    {oddsAvail ? (
+                      <>
+                        <Text style={[s.chance, sortKey === 'p_win' && s.on, e.p_win >= 1 && s.chanceSure, e.p_win === 0 && s.chanceOut]}
+                              numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{pct(e.p_win)}</Text>
+                        {podiumCol ? (
+                          <Text style={[s.chance, sortKey === 'p_podium' && s.on, e.p_podium >= 1 && s.chanceSure, e.p_podium === 0 && s.chanceOut]}
+                                      numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{pct(e.p_podium)}</Text>
+                        ) : null}
+                      </>
                     ) : null}
                   </Body>
                 </View>
@@ -219,6 +281,27 @@ const s = StyleSheet.create({
   on: { color: C.ink, fontWeight: '800' },
   // Two `num` cells and the row's gap: the same width the cells below take.
   scoreHead: { width: 46 * 2 + 8, alignItems: 'center', gap: 2 },
+  /* Max gone: one track, so the heading is exactly its own cell wide. */
+  /* The chances: two cells and the row's gap, the same arithmetic as the
+     score heading above. A point smaller than the score, because "100%" is
+     four characters where "177" is three and the name must not pay for it. */
+  chanceHead: { width: 42 * 2 + 6, alignItems: 'center', gap: 2 },
+  chance: { color: C.muted, width: 42, fontSize: 13, textAlign: 'center', fontVariant: ['tabular-nums'] },
+  /* A CERTAINTY IN INK, NOT IN BOLD — the site's rule. 100% is one
+     character wider than anything else in the column, and bold on top
+     of that is what pushed it out of its cell. Weight stays reserved
+     for the column the rows are sorted by. */
+  chanceSure: { color: C.ink },
+  chanceOut: { opacity: 0.45 },
+  /* FIVE NUMBERS ON A PHONE ROW, so the four that are not the name give up a
+     few pixels each rather than the name giving up all of them. The score is
+     three digits and the range four characters at most ("2-13"). */
+  numTight: { width: 40 },
+  finTight: { width: 44 },
   scoreHeadTitle: { color: C.ink, textAlign: 'center' },
   scoreHeadRow: { flexDirection: 'row', gap: 8 },
+  /* SIX, NOT EIGHT, only when all five numbers are in the row: two
+     pixels a gap is ten pixels back for the name, which is the one
+     column that cannot be narrowed without losing a word. */
+  tightRow: { gap: 6 },
 })

@@ -61,6 +61,26 @@ function FitText({ text, className, maxPx, weight = 700, minPx = 11 }) {
   }, [text, maxPx, weight, minPx])
   return <span ref={ref} className={className} style={{ fontSize: `${px}px` }}>{text}</span>
 }
+/* A CHANCE, AS A READER WOULD SAY IT. Never a bare "0%" for something that
+   can still happen — a bracket with one live path to the title is not the
+   same as one that is mathematically out, and the column has to keep the two
+   apart. "–" is only for a draw too early to enumerate. */
+const pct = p => p == null ? '–'
+  : p >= 1 ? '100%'
+  : p > 0.995 ? '>99%'
+  : p <= 0 ? '0%'
+  : p < 0.005 ? '<1%'
+  : `${Math.round(p * 100)}%`
+
+const chanceTitle = (e, which) => {
+  const p = which === 'win' ? e.p_win : e.p_podium
+  if (p == null) return undefined
+  const what = which === 'win' ? 'wins the draw' : 'finishes in the top three'
+  if (p >= 1) return `Already ${which === 'win' ? 'won' : 'on the podium'} — whatever happens`
+  if (p <= 0) return `Cannot ${which === 'win' ? 'win' : 'podium'} any more`
+  return `${(p * 100).toFixed(p < 0.1 ? 1 : 0)}% of the ways the draw can end from here, this bracket ${what}`
+}
+
 const finishTitle = e => e.best_rank == null ? undefined
   : e.best_rank === e.worst_rank ? `Finishes ${ordinal(e.best_rank)} whatever happens`
   : `Can still finish anywhere from ${ordinal(e.best_rank)} to ${ordinal(e.worst_rank)}`
@@ -1346,7 +1366,10 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
       let place = 1
       const placed = scored.map((e, i) => {
         if (i > 0 && !sameStanding(scored[i - 1], e)) place = i + 1
-        return { ...e, best_rank: place, worst_rank: place, podium_locked: place <= 3 }
+        return { ...e, best_rank: place, worst_rank: place, podium_locked: place <= 3,
+                 /* A chosen world has nothing left to play, so a chance is no
+                    longer a chance: it is what happened in that world. */
+                 p_win: place === 1 ? 1 : 0, p_podium: place <= 3 ? 1 : 0 }
       })
       const rounds = [...new Set([...roundsWithMatches, ...world.results.map(r => r.round_number)])].sort((a, b) => a - b)
       return { entries: placed, roundsWithMatches: rounds }
@@ -1375,7 +1398,11 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
       const round_points = Array.from({ length: e.round_points.length }, (_, i) => byRound[i + 1] ?? 0)
       const r = finishHistory[String(effectiveScrubPos)]?.[String(e.user_id)]
       return { ...e, round_points, total, correct_count,
-               best_rank: r ? r[0] : null, worst_rank: r ? r[1] : null, podium_locked: !!r && r[1] <= 3 }
+               best_rank: r ? r[0] : null, worst_rank: r ? r[1] : null, podium_locked: !!r && r[1] <= 3,
+               /* [best, worst, p_win, p_podium] — the chances follow the
+                  slider too, so the two columns always describe the same
+                  moment. Older payloads carry only the first two. */
+               p_win: r && r.length > 3 ? r[2] : null, p_podium: r && r.length > 3 ? r[3] : null }
     })
     currentEntries.sort((a, b) => {
       if (b.total !== a.total) return b.total - a.total
@@ -1393,6 +1420,12 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
      futures (R32 complete). Its values ride on each entry from the server
      and survive the scrub, like Max: a replay has no future to range over. */
   const finishAvail = !!rawData?.finish_range_available
+  /* WIN AND PODIUM CHANCES, over the same futures the range is drawn from,
+     each weighted by who is likely to win the matches left. Same R16 line,
+     but its own flag: the model can be switched off for a draw whose range
+     is still perfectly computable. */
+  const oddsAvail = !!rawData?.odds_available
+  const oddsNote = rawData?.odds_attribution
   const cashPool = !!rawData?.cash_pool
 
   /* A PERSON'S RANK IS THEIR RANK, whatever the rows are sorted by.
@@ -1430,7 +1463,9 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
           || ((a.worst_rank ?? Infinity) - (b.worst_rank ?? Infinity))
           || (a.standingsRank - b.standingsRank))
       }
-      const key = colSort === 'correct' ? 'correct_count' : 'max_points'
+      const key = colSort === 'correct' ? 'correct_count'
+        : colSort === 'pwin' ? 'p_win'
+        : colSort === 'ppod' ? 'p_podium' : 'max_points'
       return [...ranked].sort((a, b) =>
         ((b[key] ?? 0) - (a[key] ?? 0)) || (a.standingsRank - b.standingsRank))
     }
@@ -1457,11 +1492,15 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
   /* SORTED BY FINISH, THE SLIDER STOPS WHERE THE COLUMN BEGINS. The range
      exists from the end of R32; a table ordered by it cannot be rewound
      into positions where it is a column of dashes. */
-  const scrubMin = colSort === 'finish' && finishFrom != null ? Math.min(finishFrom, effectiveMax) : 0
-  const sortByFinish = () => {
-    setColSort('finish')
+  /* The chances come from the same enumeration, so a table sorted by either
+     of them has the same floor as one sorted by Finish. */
+  const futureSort = colSort === 'finish' || colSort === 'pwin' || colSort === 'ppod'
+  const scrubMin = futureSort && finishFrom != null ? Math.min(finishFrom, effectiveMax) : 0
+  const sortByFuture = col => {
+    setColSort(col)
     if (scrubPos != null && finishFrom != null && scrubPos < finishFrom) setScrubPos(finishFrom >= effectiveMax ? null : finishFrom)
   }
+  const sortByFinish = () => sortByFuture('finish')
 
   // Fixed name column width based on longest username — shared across all absolute-positioned rows.
   // When the top 3 get a place icon (🏆/🥈/🥉) it shares this same cell, so reserve extra room for
@@ -1673,7 +1712,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
         </>
       ) : (
         <>
-          <div className={`lt-progress-row lt-progress-header-row${finishAvail ? ' lt-progress-row--finish' : ''}`}
+          <div className={`lt-progress-row lt-progress-header-row${finishAvail ? ' lt-progress-row--finish' : ''}${oddsAvail ? ' lt-progress-row--odds' : ''}`}
                style={{ '--name-col-width': `${nameColWidth}px`, '--sbw': `${gutter}px` }}>
             {/* Both buttons first, then the rank, then the name — the two
                 controls belong together as one group of tools rather than
@@ -1743,6 +1782,31 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                 Finish
               </span>
             )}
+            {/* ONE HEADING OVER TWO COLUMNS, the same shape as Score: the
+                chance this bracket finishes first, and the chance it finishes
+                on the podium. Both are read off the same enumeration Finish
+                comes from, with each future weighted by who is likely to win
+                the matches left — so Finish says what is POSSIBLE and these
+                say how likely each of those possibilities is. */}
+            {oddsAvail && (
+              <span className="lt-chance-head">
+                <span className="lt-chance-head-title lt-progress-col-header" title={oddsNote}>Chances</span>
+                <span className={`lt-progress-pwin lt-progress-col-header lt-chance-head-sub lt-col-sort${colSort === 'pwin' ? ' lt-col-sort--on' : ''}`}
+                      role="button" tabIndex={0}
+                      title="Chance of finishing first, over every way the draw can still end — click to sort"
+                      onClick={() => sortByFuture('pwin')}
+                      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sortByFuture('pwin') } }}>
+                  Win
+                </span>
+                <span className={`lt-progress-ppod lt-progress-col-header lt-chance-head-sub lt-col-sort${colSort === 'ppod' ? ' lt-col-sort--on' : ''}`}
+                      role="button" tabIndex={0}
+                      title="Chance of finishing in the top three — click to sort"
+                      onClick={() => sortByFuture('ppod')}
+                      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sortByFuture('ppod') } }}>
+                  Top 3
+                </span>
+              </span>
+            )}
             {comparing ? (
               /* The same column, two lines: the round that owns a group, and
                  the bracket position of each slot inside it. Both are grids of
@@ -1799,7 +1863,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
             {dispEntries.map((entry, rank) => (
               <div
                 key={entry.user_id}
-                className={`lt-progress-row lt-progress-row--abs${entry.user_id === user?.id ? ' lt-progress-row--me' : ''}${finishAvail ? ' lt-progress-row--finish' : ''}`}
+                className={`lt-progress-row lt-progress-row--abs${entry.user_id === user?.id ? ' lt-progress-row--me' : ''}${finishAvail ? ' lt-progress-row--finish' : ''}${oddsAvail ? ' lt-progress-row--odds' : ''}`}
                 style={{ transform: `translateY(${rank * ROW_SLOT}px)` }}
               >
                 <button
@@ -1877,6 +1941,22 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                         title={finishTitle(entry)}>
                     {finishText(entry)}
                   </span>
+                )}
+                {/* A CERTAINTY READS LIKE ONE. 100% is a fact rather than an
+                    estimate, so it steps forward in ink the way a clinched
+                    place does in Finish; 0% steps back, because a bracket that
+                    is out does not need the reader's attention twice. */}
+                {oddsAvail && (
+                  <>
+                    <span className={`lt-progress-pwin${colSort === 'pwin' ? ' lt-col-on' : ''}${entry.p_win >= 1 ? ' lt-chance--sure' : ''}${entry.p_win === 0 ? ' lt-chance--out' : ''}`}
+                          title={chanceTitle(entry, 'win')}>
+                      {pct(entry.p_win)}
+                    </span>
+                    <span className={`lt-progress-ppod${colSort === 'ppod' ? ' lt-col-on' : ''}${entry.p_podium >= 1 ? ' lt-chance--sure' : ''}${entry.p_podium === 0 ? ' lt-chance--out' : ''}`}
+                          title={chanceTitle(entry, 'podium')}>
+                      {pct(entry.p_podium)}
+                    </span>
+                  </>
                 )}
                 {comparing ? (
                   /* THE TRACK, WITH NAMES IN IT. Same cell, same column count

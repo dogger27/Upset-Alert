@@ -1,0 +1,18 @@
+{
+  "_source": "Fitted on Jeff Sackmann's tennis_atp, tour-level main draw (G/M/A/F), 2000-2024, retirements/walkovers/Davis Cup excluded. See scripts/ to refit.",
+  "rank": {
+    "beta": 0.3837,
+    "beta_bo5": 0.1529,
+    "beta_clay": -0.0015,
+    "beta_grass": -0.0579,
+    "rank_cap": 500
+  },
+  "set": {
+    "beta": 0.2750,
+    "beta_bo5": 0.0568
+  },
+  "elo": {
+    "logit_scale": 1.0,
+    "_note": "1.0 = standard Elo (100 pts -> 64%). Our own tour-only Elo needed ~0.73; recalibrate against archived Tennis Abstract tables once you have a season of results."
+  }
+}

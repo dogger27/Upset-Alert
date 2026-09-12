@@ -816,6 +816,15 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 .lt-progress-header-row.lt-progress-row--finish {
   grid-template-columns: 28px 22px 22px var(--name-col-width, 120px) 3rem 52px 2.6rem 3.2rem 1fr;
 }
+/* WITH THE CHANCES TOO: two more tracks after Finish, each wide enough for
+   "100%". THREE classes deep, which beats every two-class --finish rule at
+   any width — so every tier that sets a --finish grid has to set this one as
+   well, or the desktop template would leak onto a phone. Same trap the
+   --finish comment above records, one level further down. */
+.lt-progress-row--abs.lt-progress-row--finish.lt-progress-row--odds,
+.lt-progress-header-row.lt-progress-row--finish.lt-progress-row--odds {
+  grid-template-columns: 28px 22px 22px var(--name-col-width, 120px) 3rem 52px 2.6rem 3.2rem 2.7rem 2.7rem 1fr;
+}
 .lt-progress-row--abs {
   position: absolute; width: 100%;
   transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
@@ -984,6 +993,40 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   text-align: center; white-space: nowrap; font-variant-numeric: tabular-nums;
 }
 .lt-progress-finish--locked { color: var(--ink, var(--n-950)); }
+/* The chances. Muted like Finish and Max, for the same reason: a probability
+   is a possibility, and the score beside it is a fact. */
+.lt-progress-pwin,
+.lt-progress-ppod {
+  font-size: 0.8rem; font-weight: 600; color: var(--text-muted);
+  text-align: center; white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+/* 100% has stopped being a probability, so it reads like the fact it is; 0%
+   is out of the race and steps further back than merely unlikely. */
+.lt-chance--sure { color: var(--ink, var(--n-950)); }
+/* EXACTLY zero, not merely small: a bracket with one surviving path to the
+   title prints "<1%" and must not be greyed out with the ones that are
+   mathematically out. A null (a scrub position before the range exists) is
+   not zero either — it prints a dash. */
+.lt-chance--out { opacity: 0.45; }
+/* "Chances" over "Win" and "Top 3" — the same subgrid shape as the score
+   heading, so the two sub-labels ride the tracks their own cells use at every
+   width tier without this rule knowing what those tracks are. */
+.lt-chance-head {
+  grid-column: span 2;
+  display: grid;
+  grid-template-columns: 2.7rem 2.7rem;
+  grid-template-columns: subgrid;
+  grid-template-rows: auto auto;
+  row-gap: 2px;
+  align-items: center;
+}
+.lt-chance-head-title {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  text-align: center;
+  color: var(--ink, var(--n-950));
+}
+.lt-chance-head-sub { grid-row: 2; }
 .lt-progress-col-header { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
 /* Ruled above and below, so the header reads as a band rather than as a first
    row that happens to hold labels. Both lines, not just the one underneath:
@@ -1056,6 +1099,26 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
 
 /* ── Progress-chart responsive tiers (queried per .lt-progress-block) ──
    Placed at the end so they win over the base rules at equal specificity. */
+/* THE BARS RUN OUT OF ROOM SOONER WHEN THE CHANCES ARE THERE. Two more
+   columns take about 86px off the `1fr` the round bars live in, which at 680
+   left each of five rounds 27px and clipped every number in them. Five rounds
+   need about 275px to print two digits inside a bar, and the rest of the row
+   wants 545 — so below 820 the bars go and the chances stay.
+   BEFORE the 640 block below, because both match at 500 and the later one has
+   to win. Max stays at this tier: with the bars gone there is room for it. */
+@container (max-width: 820px) {
+  .lt-progress-row--odds .lt-bar-track { display: none; }
+  /* THE NAME TAKES THE SLACK the bars gave up. Without the `1fr` the bar
+     track used to hold, ten fixed tracks leave 200-odd pixels of nothing at
+     the right edge and the numbers huddle in the middle of the row. The name
+     column growing instead keeps the number block against the right margin,
+     where a column of figures belongs — and since every row shares the one
+     grid, they still line up exactly. */
+  .lt-progress-row--abs.lt-progress-row--finish.lt-progress-row--odds,
+  .lt-progress-header-row.lt-progress-row--finish.lt-progress-row--odds {
+    grid-template-columns: 28px 22px 22px minmax(var(--name-col-width, 120px), 1fr) 3rem 52px 2.6rem 3.2rem 2.7rem 2.7rem;
+  }
+}
 @container (max-width: 640px) {
   /* Too narrow for the per-round point bars → drop them + their grid column */
   .lt-bar-track { display: none; }
@@ -1073,6 +1136,10 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   .lt-progress-row--abs.lt-progress-row--finish,
   .lt-progress-header-row.lt-progress-row--finish {
     grid-template-columns: 28px 22px 22px var(--name-col-width, 120px) 3rem 52px 3.2rem;
+  }
+  .lt-progress-row--abs.lt-progress-row--finish.lt-progress-row--odds,
+  .lt-progress-header-row.lt-progress-row--finish.lt-progress-row--odds {
+    grid-template-columns: 28px 22px 22px var(--name-col-width, 120px) 3rem 52px 3.2rem 2.7rem 2.7rem;
   }
 }
 @container (max-width: 530px) {
@@ -1108,6 +1175,15 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   .lt-progress-header-row.lt-progress-row--finish {
     grid-template-columns: 24px 22px 20px var(--name-col-width, 120px) 46px 2.8rem;
   }
+  /* THE SECOND CHANCE GIVES WAY, not the first. Win is the headline; Top 3
+     supports it, and Finish already answers whether the podium is reachable
+     at all — a bracket whose best is fourth cannot be on it. */
+  .lt-progress-row--odds .lt-progress-ppod { display: none; }
+  .lt-progress-row--odds .lt-chance-head { grid-column: span 1; }
+  .lt-progress-row--abs.lt-progress-row--finish.lt-progress-row--odds,
+  .lt-progress-header-row.lt-progress-row--finish.lt-progress-row--odds {
+    grid-template-columns: 24px 22px 20px var(--name-col-width, 120px) 46px 2.8rem 2.5rem;
+  }
 }
 @container (max-width: 320px) {
   .lt-gender-badge { display: none; } /* drop category, leave only the name */
@@ -1133,6 +1209,14 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   .lt-progress-header-row.lt-progress-row--finish {
     grid-template-columns: 22px 22px 20px var(--name-col-width, 92px) 52px 2.8rem;
   }
+  /* Narrower than a phone: the range alone. It is the compact form of the
+     same news — "2–4" in one cell against two percentages in two. */
+  .lt-progress-row--odds .lt-progress-pwin,
+  .lt-progress-row--odds .lt-chance-head { display: none; }
+  .lt-progress-row--abs.lt-progress-row--finish.lt-progress-row--odds,
+  .lt-progress-header-row.lt-progress-row--finish.lt-progress-row--odds {
+    grid-template-columns: 22px 22px 20px var(--name-col-width, 92px) 52px 2.8rem;
+  }
 }
 @container (max-width: 300px) {
   .lt-bracket-btn, .lt-hcol-bracket, .lt-history-btn, .lt-hcol-history { display: none; }
@@ -1148,6 +1232,10 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
      track: the name, the score, and where it can still finish. */
   .lt-progress-row--abs.lt-progress-row--finish,
   .lt-progress-header-row.lt-progress-row--finish {
+    grid-template-columns: var(--name-col-width, 92px) 52px 2.8rem;
+  }
+  .lt-progress-row--abs.lt-progress-row--finish.lt-progress-row--odds,
+  .lt-progress-header-row.lt-progress-row--finish.lt-progress-row--odds {
     grid-template-columns: var(--name-col-width, 92px) 52px 2.8rem;
   }
 }

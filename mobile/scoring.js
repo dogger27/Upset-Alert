@@ -55,6 +55,18 @@ export function finishText(e) {
   return e.best_rank === e.worst_rank ? String(e.best_rank) : `${e.best_rank}–${e.worst_rank}`
 }
 
+/* A CHANCE, AS A READER WOULD SAY IT — the site's `pct`, same rules. Never a
+ * bare "0%" for something that can still happen: a bracket with one live path
+ * to the title is not the same as one that is mathematically out. */
+export function pct(p) {
+  if (p == null) return '–'
+  if (p >= 1) return '100%'
+  if (p > 0.995) return '>99%'
+  if (p <= 0) return '0%'
+  if (p < 0.005) return '<1%'
+  return `${Math.round(p * 100)}%`
+}
+
 /* Sort by best possible finish, then by least to lose, then the standings
  * order — the same tiebreak the site uses for its Finish header. */
 export function byFinish(order) {
@@ -119,7 +131,11 @@ export function scrubEntries(entries, timeline, pos, userPredictions, finishHist
     // position, a dash before the first position it exists at.
     const r = hist?.[String(e.user_id)] ?? null
     return { ...e, round_points, total, correct_count,
-             best_rank: r ? r[0] : null, worst_rank: r ? r[1] : null, podium_locked: !!r && r[1] <= 3 }
+             best_rank: r ? r[0] : null, worst_rank: r ? r[1] : null, podium_locked: !!r && r[1] <= 3,
+             // [best, worst, p_win, p_podium]: the chances belong to the same
+             // snapshot as the range, so they move with the slider together.
+             p_win: r && r.length > 3 ? r[2] : null,
+             p_podium: r && r.length > 3 ? r[3] : null }
   })
   return sortStandings(rows)
 }
@@ -143,5 +159,8 @@ export function worldEntries(entries, world, worldPredictions) {
   })
   const sorted = sortStandings(rows)
   const ranks = competitionRanks(sorted)
-  return sorted.map((e, i) => ({ ...e, best_rank: ranks[i], worst_rank: ranks[i], podium_locked: ranks[i] <= 3 }))
+  // A chosen world has nothing left to play, so a chance is what happened.
+  return sorted.map((e, i) => ({ ...e, best_rank: ranks[i], worst_rank: ranks[i],
+                                 podium_locked: ranks[i] <= 3,
+                                 p_win: ranks[i] === 1 ? 1 : 0, p_podium: ranks[i] <= 3 ? 1 : 0 }))
 }
