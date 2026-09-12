@@ -1232,11 +1232,15 @@ async def send_oop_status(*, doc_id: int, tournament: str, play_date: str,
                           summary: str = "", handoff: str = "",
                           revision: int | None = None,
                           changes: list | None = None) -> None:
-    """One concise status email per processed PDF — every outcome, every time.
+    """One concise status email per processed PDF THAT NEEDS A HUMAN.
 
-    Three shapes: clean ("no problems found"), self-healed (each fix stated in
-    the owner's requested wording — found, fixed, and made unrepeatable), and
-    failed (what remains, plus the paste-ready handoff block)."""
+    Two shapes reach an inbox now: failed (what remains, plus the paste-ready
+    handoff block) and — only if a caller asks for it — self-healed. The clean
+    and self-healed cases are no longer sent at all: the owner's rule of
+    2026-09-12 is "no emails that say no problems found", and the caller in
+    scheduler.oop_verify stops at `app_log` for both. The clean body is kept
+    below because a caller may still want it for one specific document, and
+    because deleting it would make the failed path the only tested one."""
     if not ok or problems:
         state, color = "needs attention", "#dc2626"
     elif fixed:

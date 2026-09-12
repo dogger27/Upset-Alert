@@ -1995,20 +1995,25 @@ async def _sweep_oop_verifications() -> None:
             meta = ("Unknown tournament", "?")
 
         if r.get("ok") and not problems:
+            # NO EMAIL WHEN THERE IS NOTHING TO DO — the owner's rule, 2026-09-12:
+            # "No need to send me emails that say 'No problems found'". Every
+            # sheet used to send one whatever the verdict, which at three or
+            # four revisions a day per tournament was the largest single line
+            # in the mail bill (62 of 663 sends in 30 days) and the loudest
+            # thing in the owner's inbox.
+            #
+            # A problem the verifier REPAIRED ITSELF also needs no addressing,
+            # so it is silent too — but it stays in `system_logs`, where
+            # /issues reads it, because a self-repair is still a parser defect
+            # worth finding. Deliberately logged at INFO, not WARNING: the
+            # alert digest emails warnings, and routing it there would just
+            # reintroduce the mail by another door.
             msg = (f"OOP PDF doc {doc_id}: verifier fixed "
                    f"{len(fixed)} problem(s) itself" if fixed else
                    f"OOP PDF verified clean: doc {doc_id}")
             await app_log("info", "oop_verify",
-                          f"{msg} ({r.get('summary') or 'no notes'})",
+                          f"{msg} ({r.get('summary') or 'no notes'}) — no email sent",
                           {"doc_id": doc_id, "fixed": fixed[:20]})
-            try:
-                from app.services.email import send_oop_status
-                await send_oop_status(doc_id=doc_id, tournament=meta[0],
-                                      play_date=meta[1], ok=True, fixed=fixed,
-                                      problems=[], summary=r.get("summary") or "",
-                                      revision=revision, changes=changes)
-            except Exception as exc:
-                logger.error("oop_verify status email failed: %s", exc)
         else:
             # The one case a human still needs: the machine TRIED and could
             # not finish the repair. The email carries `handoff` — the text to
