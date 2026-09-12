@@ -29,6 +29,9 @@ const KEY = 'upsetalert.lastLeague'
 // terms the install id uses. A league id is not worth a passcode prompt.
 const OPTS = { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY }
 
+/* A league id, or the string 'global' — the Global table is selectable in the
+   picker and is therefore a league the tab can reopen. Kept as a STRING for
+   that reason; it goes into a route either way. */
 let current = null
 // Until the read comes back, "no remembered league" and "not asked yet" look
 // identical, and the difference decides whether the tab redirects or shows the
@@ -64,19 +67,23 @@ async function write(value) {
    null and the tab falls back to the list — the pre-existing behaviour, which
    is a correct answer rather than a broken screen. */
 read()
-  .then(v => { const n = Number(v); if (v != null && Number.isFinite(n)) current = n })
+  .then(v => { if (valid(v)) current = v })
   .catch(() => {})
   .finally(() => { loaded = true; publish() })
 
+/* 'global' or digits. Anything else is not a route this can reopen, and a
+   stored junk value would send the tab to a 404 on every launch. */
+const valid = v => v != null && /^(global|\d+)$/.test(String(v))
+
 /** Called by the league screen for the league it is showing. */
 export function setLastLeague(id) {
-  const next = id == null ? null : Number(id)
-  if (!Number.isFinite(next) || next === current) return
+  const next = id == null ? null : String(id)
+  if (!valid(next) || next === current) return
   current = next
   publish()
   // Fire and forget: the store is a convenience, and a write that fails must
   // not break the screen that reported the league.
-  write(String(next)).catch(() => {})
+  write(next).catch(() => {})
 }
 
 /** `{ id, loaded }` — see `loaded` above; do not redirect until it is true. */
@@ -87,5 +94,5 @@ export function useLastLeague() {
     () => `${current}|${loaded}`,
   )
   const [id, ok] = snap.split('|')
-  return { id: id === 'null' ? null : Number(id), loaded: ok === 'true' }
+  return { id: id === 'null' ? null : id, loaded: ok === 'true' }
 }
