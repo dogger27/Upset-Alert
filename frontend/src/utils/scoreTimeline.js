@@ -200,6 +200,18 @@ export function timelineMarkers(snapshots, opts = {}) {
     }
   }
 
+  /* ── Ace and double fault ── the label the point itself carried.
+     About one point in twenty has one, and with no tick on the rail a reader
+     drags straight past every single one and concludes the labels were never
+     built (owner, 2026-09-12). Sided on the SERVER, the player both events
+     belong to; an unknown server goes on top rather than being dropped. */
+  for (let i = 0; i < snapshots.length; i++) {
+    const label = snapshots[i]?.point_label
+    if (!label) continue
+    out.push({ i, kind: label === 'Double Fault' ? 'df' : 'ace',
+               side: snapshots[i]?.serving === 2 ? 2 : 1 })
+  }
+
   /* ── Match finished ── a red tick at the timeline's very end, only once
      the match IS over (the popup says so — a live match's history simply
      has no end yet). Its side is the match's real winner, HANDED IN by the

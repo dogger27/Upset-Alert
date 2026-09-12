@@ -46,7 +46,14 @@ export function MatchCard({ e }) {
      had shortened and shrunk it (US Open R64, 2026-09-04). The site does
      the same with .cv-live-score--s4/--s5. Everything in the block scales
      together so the columns stay columns. */
-  const k = n >= 5 ? 0.76 : n === 4 ? 0.88 : 1
+  /* THE POINT IS A COLUMN TOO. A live three-setter is four columns wide —
+     three sets and the running point — and counting only the sets left it at
+     full size, which ran off the right edge of the score-history sheet
+     (owner, 2026-09-12). Counting the point keeps every existing case
+     identical (a finished five-setter is still 0.76, a four still 0.88) and
+     densifies the live ones that were overflowing. */
+  const cols = n + (point ? 1 : 0)
+  const k = cols >= 5 ? 0.76 : cols === 4 ? 0.88 : 1
   const dense = k < 1 ? {
     sets: { gap: Math.round(6 * k) },
     box: { minWidth: Math.round((twoDigit ? 26 : 16) * k) },
@@ -74,6 +81,7 @@ export function MatchCard({ e }) {
             )}
             <PosBadge seed={sideSeed(e.players, side)} drawRank={sideDrawRank(e.players, side)} />
             <FlagSlot codes={sideFlags(e.players, side)} slots={flagSlots} />
+            <View style={s.nameWrap}>
             <PlayerName
               name={sideName(e.players, side)}
               doubles={doubles}
@@ -83,6 +91,7 @@ export function MatchCard({ e }) {
               style={[T.bodyMed, { color: ink, flexShrink: 1, lineHeight: leading(19) }]}
               after={picked ? <Text style={s.pick} accessibilityLabel="You predicted this player to win">🤞</Text> : null}
             />
+            </View>
             {end && <Text style={s.end}>{end}</Text>}
             {winner != null && (
               <Text style={[s.mark, { color: winner === idx ? C.greenLit : C.lossMark }]}>
@@ -133,12 +142,16 @@ const s = StyleSheet.create({
   // room, so any text size above ~1.08 clipped the tick. The box now grows
   // with the mark it holds.
   mark: { fontSize: 13, lineHeight: leading(16), width: leading(14), textAlign: 'center' },
-  sets: { flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 'auto' },
+  /* THE SCORE NEVER GIVES WAY AND THE NAME ALWAYS DOES. Yoga defaults
+     flexShrink to 0, so nothing here shrank and the row simply overflowed
+     instead; the name is the one part with a ladder to climb down. */
+  sets: { flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 'auto', flexShrink: 0 },
+  nameWrap: { flex: 1, minWidth: 0 },
   setBox: { flexDirection: 'row', alignItems: 'flex-start', minWidth: 16, justifyContent: 'center' },
   setWide: { minWidth: 26 },
   set: { ...T.score },
   setWon: { fontFamily: 'SairaCondensed_700Bold' },
   sup: { fontFamily: 'SairaCondensed_700Bold', fontSize: 10, lineHeight: leading(12), marginTop: 2 },
-  point: { ...T.score, color: C.clay, minWidth: 26, textAlign: 'right' },
+  point: { ...T.score, color: C.clay, minWidth: 26, textAlign: 'right', flexShrink: 0 },
   pointTb: { color: C.warn },
 })

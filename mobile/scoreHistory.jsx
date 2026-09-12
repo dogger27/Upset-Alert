@@ -24,7 +24,18 @@ import { Loading } from './ui'
 import { useApi } from './useApi'
 
 const THUMB = 26
-const TICK = { break: C.warn, set: C.info, match: C.lossMark }
+/* A serve event sits on the SERVER's side of the rail and a break on the
+   winner's, so the two rarely share a spot — but the legend puts every colour
+   side by side, and a clay double fault was indistinguishable from the amber
+   break there. Violet instead: nothing else on this rail is close to it. */
+/* Local device time, the way every other clock in this sheet is written. */
+function clockOf(iso) {
+  try {
+    return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  } catch { return '' }
+}
+
+const TICK = { break: C.warn, set: C.info, match: C.lossMark, ace: C.greenLit, df: C.h2hP2 }
 
 /* The draw page's caller. A bracket match is not a schedule row, but the
    sheet reads one shape — so the match is dressed as a row: its two entrants
@@ -145,12 +156,18 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
      is not counted as tennis. A live one has none yet and counts up from the
      start, which IS wall-clock: while you are watching, "how long has this
      been on" includes the rain. */
-  const playedFor = (() => {
-    const mins = data?.duration_min ?? (data?.started_at && !completed
-      ? Math.floor((Date.now() - new Date(data.started_at).getTime()) / 60000)
-      : null)
-    return prettyDuration(mins && mins <= 900 ? mins : null)
-  })()
+  const playedFor = prettyDuration(
+    data?.duration_min && data.duration_min <= 900 ? data.duration_min : null)
+  /* THE CORNER SAYS A DIFFERENT THING WHILE PLAY IS ON. A finished match
+     says how long it took — Sofascore's playing time, so a rain delay is not
+     counted as tennis. A match still on court says when it STARTED (owner,
+     2026-09-12): it used to count minutes up from the start, and a number
+     that changes while you read it answers a question nobody asked, where
+     the start is a fact you can hold. Device clock, like every other time in
+     this sheet. */
+  const headRight = !completed && data?.started_at
+    ? `Started ${clockOf(data.started_at)}`
+    : playedFor
 
   if (!entry) return null
 
@@ -194,7 +211,7 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
         </View>
         <Text style={[s.when, atEnd && live && { color: C.greenLit }]}>{when}</Text>
         <View style={[s.headSide, { alignItems: 'flex-end' }]}>
-          {playedFor ? <Text style={s.headDur}>{playedFor}</Text> : null}
+          {headRight ? <Text style={s.headDur} numberOfLines={1}>{headRight}</Text> : null}
         </View>
       </View>
       {/* The scroll is OFF while the slider is held. Refusing to hand the
@@ -221,6 +238,8 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
                   <Legend color={TICK.break} label="break" />
                   <Legend color={TICK.set} label="set" />
                   {markers.some(m => m.kind === 'match') && <Legend color={TICK.match} label="match" />}
+                  {markers.some(m => m.kind === 'ace') && <Legend color={TICK.ace} label="ace" />}
+                  {markers.some(m => m.kind === 'df') && <Legend color={TICK.df} label="DF" />}
                 </View>
               )}
               {prevPoint ? (
@@ -487,7 +506,7 @@ const s = StyleSheet.create({
   },
   /* One row, fixed height: legend at the left, prev point at the right. */
   underline: { flexDirection: 'row', alignItems: 'center', minHeight: 16 },
-  legend: { flexDirection: 'row', gap: S.md },
+  legend: { flexDirection: 'row', flexWrap: 'wrap', gap: S.md, flexShrink: 1 },
   prevPoint: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 'auto' },
   prevPointValue: { ...T.tiny, color: C.ink, fontFamily: 'Archivo_700Bold' },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },

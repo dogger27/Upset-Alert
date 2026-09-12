@@ -389,6 +389,16 @@ export default function ScoreHistoryPopup({ drawId, match, entry, onClose }) {
                     <span className="shp-legend-box shp-tick--match" /> match
                   </span>
                 )}
+                {markers.some(m => m.kind === 'ace') && (
+                  <span className="shp-legend-item">
+                    <span className="shp-legend-box shp-tick--ace" /> ace
+                  </span>
+                )}
+                {markers.some(m => m.kind === 'df') && (
+                  <span className="shp-legend-item">
+                    <span className="shp-legend-box shp-tick--df" /> DF
+                  </span>
+                )}
                 </div>
               )}
               <div className="shp-prev-point" aria-live="polite">
