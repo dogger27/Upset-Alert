@@ -22,5 +22,19 @@
     "_surface_note": "No history of surface Elo exists yet, so k_elo_surface is the honest overall slope times the ratio of the two slopes fitted on today's page over the same matches (1.27 \u2014 the surface figure is more informative per point). The rank slope is kept as fitted; the leaked fit cannot say how the ranking's weight changes. Replace both with a direct fit once the weekly snapshots carry a season of hElo/cElo/gElo.",
     "k_elo_surface": 0.77,
     "k_rank_surface": 0.138
+  },
+  "own": {
+    "_note": "Our own Elo (services/history/ratings.py) over TennisMyLife's record (1967-) and our own results. K = k0/(n+k_offset)^k_decay per player (n = matches played), never below k_floor; surface ratings start at 1500 (seeding them from the overall rating tested worse); surface_w blends the surface rating with the overall one for prediction; k_logit is the slope; k_rank the ranking term. scripts/fit_own_elo.py: fitted on 1991-2023, chosen on 2024-25, judged on 2026-06-22 onward with pre-match ratings.",
+    "_status": "IN USE since 2026-09-12. Judged per tour against Tennis Abstract's Elo on the same season (fit_winprob.py, honest): atp 0.629 vs TA 0.632, wta 0.578 vs TA 0.579 \u2014 parity on day one, on our own data. Re-run the script as the record grows; the switch is `fitted`.",
+    "k0": 250.0,
+    "k_decay": 0.4,
+    "k_offset": 5,
+    "k_floor": 0.0,
+    "level_k": {},
+    "surface_from_overall": false,
+    "surface_w": 0.49,
+    "k_logit": 0.745,
+    "k_rank": 0.063,
+    "fitted": true
   }
 }

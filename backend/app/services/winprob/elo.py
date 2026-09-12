@@ -46,3 +46,22 @@ def blend_win_prob(elo_x: float, elo_y: float, rank_x=None, rank_y=None,
         cap = params("rank")["rank_cap"]
         z += k_rank * math.log2(min(rank_y, cap) / min(rank_x, cap))
     return _expand(1.0 / (1.0 + math.exp(-z)), best_of)
+
+
+def own_win_prob(own_x: tuple, own_y: tuple, rank_x=None, rank_y=None, best_of=3) -> float:
+    """Our own Elo (services/history/ratings.py): each side is (overall,
+    surface) and the prediction rating is the fitted mix of the two —
+    surface_w on the surface figure, the rest on the overall — then the same
+    logistic, ranking term and best-of-five expansion as the blend. Every
+    constant is models.json "own", fitted by scripts/fit_own_elo.py.
+    """
+    o = params("own")
+    w = float(o.get("surface_w", 0.5))
+    rx = w * own_x[1] + (1.0 - w) * own_x[0]
+    ry = w * own_y[1] + (1.0 - w) * own_y[0]
+    z = float(o["k_logit"]) * math.log(10) * (rx - ry) / 400.0
+    k_rank = float(o.get("k_rank", 0.0))
+    if k_rank and rank_x and rank_y:
+        cap = params("rank")["rank_cap"]
+        z += k_rank * math.log2(min(rank_y, cap) / min(rank_x, cap))
+    return _expand(1.0 / (1.0 + math.exp(-z)), best_of)

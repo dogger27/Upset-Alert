@@ -240,6 +240,12 @@ async def _migrate(conn):
         "ALTER TABLE te_rankings_snapshots ADD COLUMN elo_hard INTEGER",
         "ALTER TABLE te_rankings_snapshots ADD COLUMN elo_clay INTEGER",
         "ALTER TABLE te_rankings_snapshots ADD COLUMN elo_grass INTEGER",
+        # OUR players and tournaments paired with TennisMyLife's ids, so our own
+        # results and theirs rate the same person (services/history/link.py).
+        "ALTER TABLE te_players ADD COLUMN tml_player_id VARCHAR",
+        "ALTER TABLE te_players ADD COLUMN tml_link VARCHAR",
+        "CREATE INDEX IF NOT EXISTS ix_te_players_tml ON te_players(tml_player_id)",
+        "ALTER TABLE draws ADD COLUMN tml_tourney_id VARCHAR",
         "ALTER TABLE te_players ADD COLUMN nationality VARCHAR",
         "ALTER TABLE te_players DROP COLUMN elo",
         "ALTER TABLE te_players DROP COLUMN elo_rank",

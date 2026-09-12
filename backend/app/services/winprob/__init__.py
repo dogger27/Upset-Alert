@@ -15,6 +15,10 @@ extended; every coefficient lives in `models.json` — refit, never hand-edit:
 
 WHAT `predict` DOES, in order of preference, and always antisymmetrically:
 
+  0. "own" — both players carry OUR rating (services/history: an Elo over
+     TennisMyLife's record and our own results, recomputed nightly), and
+     models.json "own".fitted is true. Parity with Tennis Abstract per tour
+     on the season it was judged on, on data we hold.
   1. "surface" — both players have Tennis Abstract's Elo for the match
      surface (hElo/cElo/gElo): logit = k_elo_surface·Δelo + k_rank·Δlog2(rank).
      The surface figure is, in Tennis Abstract's own words, the more accurate

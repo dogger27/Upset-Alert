@@ -252,3 +252,22 @@ def test_live_score_is_read_off_the_snapshot():
     # And a snapshot older than LIVE_MAX_AGE is not a scoreboard any more.
     m.sofa_live_json = {"sets": [[6, 3], [2, 5]], "point": None, "tiebreak": False, "match_tiebreak": False, "serving": None, "at": "2026-01-01T00:00:00+00:00"}
     assert _live_score(m) is None
+
+
+def test_own_rating_leads_only_once_fitted(monkeypatch):
+    """Our own Elo is preferred when both players carry one AND the model has
+    been fitted; before that the Tennis Abstract path answers, unchanged."""
+    from app.services.winprob import _params
+    base = dict(_params._PARAMS)
+    own = dict(base["own"]); own.update({"fitted": False, "surface_w": 0.5, "k_logit": 1.0, "k_rank": 0.0})
+    monkeypatch.setitem(_params._PARAMS, "own", own)
+    ta = DrawOdds({1: (2000, 2000, 1, (1600.0, 1600.0)), 2: (1900, 1900, 2, (1900.0, 1900.0))}, "Hard", 3, {}, ("u",))
+    p_ta = ta.pair_prob(1, 2)
+    assert p_ta > 0.5                                  # TA says 1 is better
+    own["fitted"] = True
+    ours = DrawOdds({1: (2000, 2000, 1, (1600.0, 1600.0)), 2: (1900, 1900, 2, (1900.0, 1900.0))}, "Hard", 3, {}, ("v",))
+    assert ours.pair_prob(1, 2) < 0.5                  # our record says 2 is better, and it now leads
+    assert ours.pair_prob(1, 2) + ours.pair_prob(2, 1) == pytest.approx(1.0)
+    # One side without an own rating: the pair is answered in the scale both share.
+    mixed = DrawOdds({1: (2000, 2000, 1, None), 2: (1900, 1900, 2, (1900.0, 1900.0))}, "Hard", 3, {}, ("w",))
+    assert mixed.pair_prob(1, 2) == p_ta

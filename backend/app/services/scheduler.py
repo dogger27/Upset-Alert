@@ -495,6 +495,30 @@ async def _refresh_elo() -> None:
     await refresh_elo_ratings()
 
 
+async def _history_sync(full: bool = False) -> None:
+    """Our own results record, nightly: TennisMyLife's files that moved, our
+    tournaments and players paired with their ids, our finished matches
+    exported beside theirs, and every rating recomputed from 1967. Each step
+    is its own try, so a TML outage still lets tonight's results rate."""
+    from app.services.history import link, ratings, tml
+    try:
+        await tml.sync_async(only_current=not full)
+    except Exception:
+        logger.warning("history: TML sync failed; linking and rating what we have", exc_info=True)
+    try:
+        await link.link_all_async()
+    except Exception:
+        logger.warning("history: linkage failed", exc_info=True)
+        from app.services.system_log import app_log
+        await app_log("error", "history", "TML linkage failed", {}, dedup_key="tml_link_fail", dedup_hours=6)
+    try:
+        await ratings.recompute_async()
+    except Exception:
+        logger.warning("history: rating recompute failed", exc_info=True)
+        from app.services.system_log import app_log
+        await app_log("error", "history", "rating recompute failed", {}, dedup_key="ratings_fail", dedup_hours=6)
+
+
 # How long a substantially-complete draw must stay stable (not reverted by a
 # later scrape) before the "draw released" email fires. Wikipedia editors often
 # place seeded players into their bracket slots as soon as the entry list is
@@ -2263,6 +2287,16 @@ def start_scheduler() -> None:
         id="refresh_elo",
         misfire_grace_time=3600,
     )
+    # 04:40 UTC: TML publishes overnight (US time) and the day's play is
+    # long over everywhere; nothing else runs then.
+    scheduler.add_job(
+        _on_shutdown_quietly(_history_sync),
+        "cron",
+        hour=4,
+        minute=40,
+        id="history_sync",
+        misfire_grace_time=3600,
+    )
     eventstream._on_season_page_edit = _on_season_page_edit
     scheduler.start()
     logger.info("Tournament discovery scheduled (daily at midnight UTC)")
@@ -2304,6 +2338,15 @@ def start_scheduler() -> None:
     from app.services.rankings import backfill_all_dob, refresh_elo_ratings
     asyncio.create_task(backfill_all_dob())
     asyncio.create_task(refresh_elo_ratings())
+    # The history record: a full sync the first time (every file, ~100 MB,
+    # a minute or two), the current season's files after that — then the
+    # linkage and the ratings. Background, like the Elo refresh above; the
+    # standings fall back to Tennis Abstract until it has run once.
+    async def _history_on_start():
+        from app.services.history import db as hdb
+        first = await hdb.run(lambda c: c.execute("SELECT count(*) FROM tml_files").fetchone()[0]) == 0
+        await _history_sync(full=first)
+    asyncio.create_task(_history_on_start())
 
 
 def stop_scheduler() -> None:

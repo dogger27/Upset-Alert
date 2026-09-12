@@ -1309,7 +1309,7 @@ async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get
         "entries": entries,
         "finish_range_available": ranges is not None,
         "odds_available": odds is not None and ranges is not None,
-        "odds_attribution": ODDS_ATTRIBUTION,
+        "odds_attribution": getattr(odds, "attribution", ODDS_ATTRIBUTION),
         "finish_from": finish_from,
         "finish_history": finish_history,
         "cash_pool": False,
