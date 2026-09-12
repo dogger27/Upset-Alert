@@ -89,6 +89,29 @@ check('the chances follow the slider, with the range', () => {
   assert.equal(old[0].p_win, null)
 })
 
+check('rewound past the range, the chances come from their own request', () => {
+  /* The history stops fifteen undecided matches out; earlier positions are
+     fetched one at a time. Those figures fill the two chance columns while the
+     range stays empty, because a sample understates an extreme. */
+  const entries = [{ user_id: 1, total: 0, correct_count: 0, round_points: [0, 0] },
+                   { user_id: 2, total: 0, correct_count: 0, round_points: [0, 0] }]
+  const timeline = [{ id: 11, round_number: 1, points: 2, winner_id: 7 }]
+  const preds = { 1: { 11: 7 }, 2: { 11: 8 } }
+  const fetched = { 1: [0.6, 0.9], 2: [0.4, 0.8] }
+  const rows = scrubEntries(entries, timeline, 1, preds, {}, fetched)
+  assert.equal(rows[0].p_win, 0.6)
+  assert.equal(rows[0].p_podium, 0.9)
+  assert.equal(rows[0].best_rank, null)          // no range this early
+  assert.equal(rows[0].podium_locked, false)
+  // The history WINS where it has the position: it is the exact answer.
+  const both = scrubEntries(entries, timeline, 1, preds,
+                            { 1: { 1: [1, 1, 0.75, 1], 2: [2, 2, 0.25, 1] } }, fetched)
+  assert.equal(both[0].p_win, 0.75)
+  assert.equal(both[0].best_rank, 1)
+  // Nothing fetched yet: a dash, not a zero.
+  assert.equal(scrubEntries(entries, timeline, 1, preds, {}, null)[0].p_win, null)
+})
+
 check('a chosen world is certainties, not chances', () => {
   const entries = [{ user_id: 1, total: 10, correct_count: 1, round_points: [10, 0] },
                    { user_id: 2, total: 4, correct_count: 1, round_points: [4, 0] },

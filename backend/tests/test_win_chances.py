@@ -412,3 +412,47 @@ def test_a_sampled_chance_matches_the_exact_one():
     for u in exact:
         assert drawn[u][2] == pytest.approx(exact[u][2], abs=0.01)
         assert drawn[u][3] == pytest.approx(exact[u][3], abs=0.01)
+
+
+def test_chances_at_a_timeline_position_the_history_cannot_reach():
+    """The slider's early positions are computed one at a time.
+
+    `finish_history` stops at fifteen undecided matches because past that each
+    position is a sampled walk and a Slam has a hundred and twenty of them.
+    `chances_at` answers one — sampled when it must be, exact when it can be,
+    and agreeing with the history where the two overlap."""
+    import random
+    from app.services.scoring import chances_at, finish_history
+    rng = random.Random(7)
+    ms = _bracket(32, decided_r1=16)                 # R1 played: 15 undecided
+    # A timeline in the order the routers publish: R1 first, by match number.
+    done = sorted([m for m in ms if m.winner_id and not m.is_bye],
+                  key=lambda m: (m.round_number, m.match_number))
+    tl = [m.id for m in done]
+    picks = {u: _random_picks(ms, 32, rng) for u in range(1, 6)}
+    pts = {1: 1, 2: 2, 3: 4, 4: 8, 5: 12}
+    odds = _odds(range(1, 33))
+
+    # The history covers the last fifteen positions and no earlier one.
+    first, hist = finish_history(1, ms, tl, pts, 5, picks, odds=odds)
+    assert first == 16 and min(hist) == 16
+
+    # A position the history does not reach still answers, by sampling.
+    sampled, early = chances_at(1, ms, tl, 5, pts, 5, picks, odds=odds)
+    assert sampled and len(early) == 5
+    assert sum(p for p, _ in early.values()) == pytest.approx(1.0, abs=0.03)
+    for pw, pp in early.values():
+        assert 0.0 <= pw <= pp <= 1.0
+    # Deterministic, so scrubbing back to the same moment reads the same.
+    assert chances_at(1, ms, tl, 5, pts, 5, picks, odds=odds)[1] == early
+
+    # Where the history HAS the position, the two must agree exactly — both
+    # are the same enumeration, and a slider whose two columns disagreed about
+    # which moment they describe would be worse than either being absent.
+    at16, drawn16 = chances_at(1, ms, tl, 16, pts, 5, picks, odds=odds)
+    assert not at16
+    for u, (pw, pp) in drawn16.items():
+        assert (pw, pp) == (hist[16][u][2], hist[16][u][3])
+
+    # No picks, no chances — and no exception.
+    assert chances_at(1, ms, tl, 5, pts, 5, {}, odds=odds) == (False, {})

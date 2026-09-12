@@ -9,9 +9,10 @@
  * native module and no rebuild. Position comes from the finger's x inside
  * the track — never a translation, which RNGH on web resets at activation.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
+import { useApi } from './useApi'
 import { C, T } from './theme'
 import { roundTag, scrubEntries, surname, worldEntries, worldLine } from './scoring'
 
@@ -23,7 +24,7 @@ const THUMB = 28
    chosen world — one of the three, never two: moving the slider leaves the
    world and choosing a world drops the slider. `finalPlayed` is what the
    medals key on: a chosen world has played its final. */
-export function useStandingsView(data, t) {
+export function useStandingsView(data, t, chancesAt = null, chancesScope = 'g') {
   const [pos, setPosRaw] = useState(null)
   const [worldIdx, setWorldIdxRaw] = useState(null)
   const timeline = useMemo(() => data?.matches_timeline ?? [], [data])
@@ -50,15 +51,46 @@ export function useStandingsView(data, t) {
     : Math.min(worldIdx, worlds.length - 1)
   const world = idx != null ? worlds[idx] : null
   const scrubbing = !world && pos != null && pos < timeline.length
+  const finishFrom = data?.finish_from ?? null
+  /* THE CHANCES OF A MOMENT THE HISTORY CANNOT REACH. `finish_history` covers
+     every position from fifteen undecided matches on; earlier than that each
+     one is a hundred thousand sampled futures, so the screen asks for the
+     single position the thumb came to rest on.
+     Debounced: the scrub fires continuously under the finger, and one request
+     per pixel would be a hundred and twenty walks. While the next answer is
+     in the air the previous one stays on the rows — between two adjacent
+     matches a probability barely moves, and a column that blinked to dashes
+     on every drag would read as broken. */
+  const needsChances = !!(chancesAt && !world && scrubbing && data?.odds_available
+                          && finishFrom != null && pos < finishFrom)
+  const [chancePos, setChancePos] = useState(null)
+  useEffect(() => {
+    if (!needsChances) { setChancePos(null); return }
+    const id = setTimeout(() => setChancePos(pos), 220)
+    return () => clearTimeout(id)
+  }, [needsChances, pos])
+  const chances = useApi(
+    // SCOPED, or a league's rewound chances would be served from the cache to
+    // the global table of the same draw, and the other way about: same draw,
+    // different field of brackets, different answer.
+    needsChances && chancePos != null ? `chances:${chancesScope}:${drawId}:${chancePos}` : null,
+    () => chancesAt(chancePos),
+    { enabled: needsChances && chancePos != null })
+  const held = useRef(null)
+  useEffect(() => { if (chances.data?.chances) held.current = chances.data.chances }, [chances.data])
+  const posChances = needsChances ? (chances.data?.chances ?? held.current) : null
   const entries = useMemo(() => {
     const base = data?.entries ?? []
     if (world) return worldEntries(base, world, data?.world_predictions ?? {})
-    if (scrubbing) return scrubEntries(base, timeline, pos, data?.user_predictions ?? {}, data?.finish_history ?? {})
+    if (scrubbing) return scrubEntries(base, timeline, pos, data?.user_predictions ?? {},
+                                       data?.finish_history ?? {}, posChances)
     return base
-  }, [data, world, scrubbing, timeline, pos])
-  const finishFrom = data?.finish_from ?? null
+  }, [data, world, scrubbing, timeline, pos, posChances])
   return {
     entries, world, scrubbing, finalPlayed: !!world, finishFrom,
+    /* Sampled describes the numbers ON SCREEN: a finished draw rewound to its
+       first round is showing sampled figures whatever its present state. */
+    chancesSampled: !!data?.chances_sampled || (needsChances && !!chances.data?.sampled),
     pos, setPos: p => { setPosRaw(p); setWorldIdxRaw(null) },
     /* Sorted by Finish, the slider stops where the column begins: a table
        ordered by the range cannot sit at a position where it is dashes. */

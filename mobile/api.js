@@ -159,6 +159,15 @@ export const getRoundScores = (leagueId, tournamentId) =>
 export const getGlobalRoundScores = (tournamentId) =>
   request(`/tournaments/${tournamentId}/global-round-scores`)
 
+/* THE CHANCES OF ONE TIMELINE POSITION. round-scores carries the Win/Top 3
+   history only from fifteen undecided matches on — before that a position is
+   a hundred thousand sampled futures and a Slam has a hundred and twenty of
+   them — so the slider asks for the moment it stopped on. */
+export const getPositionChances = (leagueId, tournamentId, position) =>
+  request(`/leagues/${leagueId}/chances?tournament_id=${tournamentId}&position=${position}`)
+export const getGlobalPositionChances = (tournamentId, position) =>
+  request(`/tournaments/${tournamentId}/global-chances?position=${position}`)
+
 /* One draw's bracket, and this user's picks in it.
    DrawOut is { tournament, draw_entries[], matches[], lock_mode, draw_locked,
    lock_reason, predictions_hidden }. A MatchOut carries player1/player2/winner

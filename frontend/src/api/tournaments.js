@@ -25,6 +25,8 @@ export const getMatchPredictors = (id, matchId, leagueId) =>
     params: leagueId != null ? { league_id: leagueId } : {},
   }).then(r => r.data)
 export const getGlobalRoundScores = (id) => client.get(`/tournaments/${id}/global-round-scores`).then(r => r.data)
+export const getGlobalPositionChances = (id, position) =>
+  client.get(`/tournaments/${id}/global-chances`, { params: { position } }).then(r => r.data)
 export const getGlobalDraws = () => client.get('/tournaments/global-draws').then(r => r.data)
 export const getGlobalGSTotals = () => client.get('/tournaments/global-gs-totals').then(r => r.data)
 export const toggleUnlockSelections = (id) => client.post(`/tournaments/${id}/toggle-unlock`).then(r => r.data)

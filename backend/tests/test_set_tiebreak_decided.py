@@ -64,4 +64,14 @@ check("a different shrink is held afresh", _hold_once(1, {"sets": [[6, 5]], "poi
 _HELD.clear()
 
 print("---", "FAILED" if fails else "all passed")
-sys.exit(1 if fails else 0)
+
+
+def test_set_tiebreak_decided():
+    """Named so pytest runs the checks above as one test rather than aborting
+    the whole suite: a bare sys.exit at import time is a pytest INTERNALERROR,
+    which took the other 108 tests down with it."""
+    assert not fails, f"{fails} check(s) failed — run this file directly for the list"
+
+
+if __name__ == "__main__":
+    sys.exit(1 if fails else 0)

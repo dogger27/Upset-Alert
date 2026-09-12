@@ -917,6 +917,71 @@ async def round_scores(
     }
 
 
+@router.get("/{league_id}/chances")
+async def league_chances(
+    league_id: int,
+    tournament_id: int,
+    position: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
+):
+    """THE CHANCES OF ONE MOMENT IN THE TIMELINE, for a slider that has
+    stopped there.
+
+    `round-scores` carries the whole history of the Finish column and of the
+    chances, but only from fifteen undecided matches on: before that each
+    position costs a hundred thousand sampled futures, and a Slam has a
+    hundred and twenty of them. So the early positions are asked for one at a
+    time. The answer is cached on the same key as every other walk, so
+    scrubbing back over ground already covered costs nothing.
+    """
+    from app.services.scoring import _points_table, chances_at_async
+
+    league = (await db.execute(
+        select(League).options(selectinload(League.members))
+        .where(League.id == league_id))).scalar_one_or_none()
+    if not league:
+        raise HTTPException(404, "League not found")
+    _check_access(league, current_user)
+
+    draw = await db.get(Draw, tournament_id)
+    if not draw:
+        raise HTTPException(404, "Tournament not found")
+
+    all_matches = (await db.execute(
+        select(Match).where(Match.draw_id == tournament_id))).scalars().all()
+    # The same timeline order round-scores publishes, or the position the
+    # client sends names a different moment than the one it is showing.
+    completed = [m for m in all_matches if m.status == "completed" and not m.is_bye]
+    timeline_ids = [m.id for m in sorted(
+        completed, key=lambda m: (m.completed_at is not None, m.completed_at or "", m.id))]
+
+    visible = await _pool_visible(db, league.id, tournament_id)
+    picks_map: dict[int, dict] = {}
+    for member in league.members:
+        if visible is not None and member.user_id not in visible:
+            continue
+        preds = (await db.execute(
+            select(UserPrediction.match_id, UserPrediction.predicted_winner_id).where(
+                UserPrediction.user_id == member.user_id,
+                UserPrediction.draw_id == tournament_id,
+                UserPrediction.predicted_winner_id.isnot(None)))).all()
+        if preds:
+            picks_map[member.user_id] = {mid: w for mid, w in preds}
+
+    odds = await draw_odds(db, draw, all_matches) if picks_map else None
+    sampled, chances = False, {}
+    if odds is not None:
+        sampled, chances = await chances_at_async(
+            tournament_id, all_matches, timeline_ids, position, _points_table(draw),
+            draw.num_rounds or 7, picks_map, odds=odds)
+    return {
+        "position": max(1, min(int(position), len(timeline_ids))) if timeline_ids else 0,
+        "sampled": bool(sampled),
+        "chances": {str(u): [v[0], v[1]] for u, v in chances.items()},
+    }
+
+
 @router.get("/{league_id}/cash-pools", response_model=list[CashPoolOut])
 async def cash_pools(
     league_id: int,
