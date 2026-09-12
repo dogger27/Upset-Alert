@@ -39,5 +39,12 @@ def main():
     print("ALL PASS" if not bad else f"{bad} FAILURES")
     return 1 if bad else 0
 
+
+def test_draw_changes():
+    """A name change vs a replaced entrant — the checks above, run by the suite
+    rather than only by hand. pytest collects nothing from a file whose
+    checks live in main(), so this file's was silently not running."""
+    assert main() == 0
+
 if __name__ == "__main__":
     sys.exit(main())
