@@ -95,7 +95,7 @@ export default function TabLayout() {
      none (scheduleFilter). Held here as a draft and published on close, so a
      half-made selection never filters the screen behind the sheet. */
   const [filtering, setFiltering] = useState(false)
-  const chosen = useScheduleDraws()
+  const { draws: chosen } = useScheduleDraws()
   const [draft, setDraft] = useState(null)
   const showing = useCurrentDraw()
   const lastLeague = useLastLeague()
@@ -163,7 +163,7 @@ export default function TabLayout() {
             if (live.length < 2) return
             e.preventDefault()
             // Stale ids name nothing a week later; start from what is live.
-            pruneScheduleDraws(live.map(t => t.id))
+            pruneScheduleDraws(live)
             setDraft(new Set(chosen ?? live.map(t => t.id)))
             setFiltering(true)
           },
@@ -260,7 +260,14 @@ export default function TabLayout() {
         same thing rather than throwing the choice away. */}
     <Sheet visible={filtering} title="Show which draws"
            onClose={() => {
-             setScheduleDraws(draft && draft.size === live.length ? null : draft)
+             const all = !draft || draft.size === live.length
+             /* The EVENTS behind the chosen draws, taken from the draws
+                themselves — qualifying and doubles rows carry no draw_id and
+                can only be matched by their event. */
+             setScheduleDraws(all ? null : draft,
+                              all ? null : new Set(live.filter(t => draft.has(t.id))
+                                                       .map(t => t.tournament_id)
+                                                       .filter(v => v != null)))
              setFiltering(false)
              router.push('/schedule')
            }}>

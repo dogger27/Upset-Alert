@@ -100,16 +100,14 @@ export default function ScheduleScreen() {
   const all = useMemo(() => day.data?.entries || [], [day.data])
   const tours = useMemo(() => [...new Set(all.map(e => e.tour).filter(Boolean))].sort(), [all])
   const hasDoubles = useMemo(() => all.some(e => e.discipline !== 'singles'), [all])
-  /* WHICH DRAWS THE TAB CHOSE (scheduleFilter). Doubles and qualifying carry
-     no draw_id, so the row test also needs the TOURNAMENTS behind those draws
-     — choosing a draw means choosing its event. */
-  const drawSel = useScheduleDraws()
-  const drawTournaments = useMemo(() => {
-    if (!drawSel) return null
-    const out = new Set()
-    for (const e of all) if (e.draw_id != null && drawSel.has(e.draw_id)) out.add(e.tournament_id)
-    return out
-  }, [drawSel, all])
+  /* WHICH DRAWS THE TAB CHOSE (scheduleFilter), and the EVENTS behind them —
+     qualifying and doubles carry no draw_id and can only be matched by their
+     event. Both come from the store, which took them from the DRAW LIST. This
+     derived the events from the day's own rows instead, and on a day when a
+     chosen draw had no main-draw row — Guadalajara and SP Open were playing
+     qualifying only on 12 September — its event never entered the set and its
+     matches vanished (owner, 2026-09-12). */
+  const { draws: drawSel, tournaments: drawTournaments } = useScheduleDraws()
   /* SEEDED ONCE PER DAY, NOT PER FETCH. This ran on `day.data`, whose identity
      changes on every poll — and the live subscription refetches this screen
      about every ten seconds — so switching WTA on held for one cycle and then
