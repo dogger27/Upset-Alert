@@ -9,7 +9,7 @@
  * native module and no rebuild. Position comes from the finger's x inside
  * the track — never a translation, which RNGH on web resets at activation.
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { C, T } from './theme'
@@ -29,7 +29,26 @@ export function useStandingsView(data, t) {
   const timeline = useMemo(() => data?.matches_timeline ?? [], [data])
   const worlds = data?.worlds ?? null
   const numRounds = t?.num_rounds ?? (t?.draw_size ? Math.round(Math.log2(t.draw_size)) : 7)
-  const world = worlds && worldIdx != null && worldIdx < worlds.length ? worlds[worldIdx] : null
+  /* BOTH OF THESE BELONG TO ONE DRAW, AND THE TOUR SWITCH CHANGES THE DRAW
+     WITHOUT REMOUNTING THIS SCREEN — it replaces the route, and native
+     navigation keeps the mounted component, so the position and the world
+     index outlive the draw they were chosen for.
+     A scrub position is meaningless across that move: it counts matches
+     along one draw's timeline, and the other draw's is a different list of a
+     different length. So it resets.
+     A world index survives, CLAMPED: the men's US Open had four futures and
+     the women's two, so leaving What if on world 4 and flipping tour pointed
+     the index past the end of the new list. `world` then resolved to null
+     while the index was still set — the toggle read OFF, the bracket was
+     gone, and the screen's own state disagreed with what it drew (owner,
+     2026-09-12). Clamping keeps the feature on and lands on the last real
+     future instead. */
+  const drawId = t?.id ?? null
+  useEffect(() => { setPosRaw(null) }, [drawId])
+  const idx = worldIdx == null || !worlds?.length
+    ? null
+    : Math.min(worldIdx, worlds.length - 1)
+  const world = idx != null ? worlds[idx] : null
   const scrubbing = !world && pos != null && pos < timeline.length
   const entries = useMemo(() => {
     const base = data?.entries ?? []
@@ -44,7 +63,9 @@ export function useStandingsView(data, t) {
     /* Sorted by Finish, the slider stops where the column begins: a table
        ordered by the range cannot sit at a position where it is dashes. */
     clampToFinish: () => { if (pos != null && finishFrom != null && pos < finishFrom) setPosRaw(finishFrom >= timeline.length ? null : finishFrom) },
-    worldIdx, setWorldIdx: i => { setWorldIdxRaw(i); setPosRaw(null) },
+    /* The CLAMPED index, so the dot rail and the counter say where the
+       stepper actually is rather than where another draw left it. */
+    worldIdx: idx, setWorldIdx: i => { setWorldIdxRaw(i); setPosRaw(null) },
     timeline, worlds, tailMatches: data?.tail_matches ?? [], numRounds,
   }
 }
