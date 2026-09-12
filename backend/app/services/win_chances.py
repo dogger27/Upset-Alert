@@ -39,6 +39,19 @@ since 2026-09-12 and read here first): under the same leak it is worth 0.028
 of log loss over the overall rating, and 0.079 on grass. Its own slope cannot
 be fitted until the snapshots hold a season of it; until then it carries the
 honest overall slope scaled by the ratio measured on today's page.
+
+OUR OWN RATING COMES FIRST (services/history: TennisMyLife's record since
+1967 plus our own results, every player paired with their id by the exact
+method, an Elo recomputed nightly). Judged per tour on this season against
+Tennis Abstract's Elo it reads atp 0.629 vs 0.632 and wta 0.578 vs 0.579 —
+parity, on our own data, with no scrape and no licence condition. The
+pooled figure (0.610 vs 0.591) is NOT a fair comparison: the two judged sets
+carry different tour mixes and this season's ATP is simply harder to call
+by any model. `models.json "own".fitted` is the switch, and
+scripts/fit_own_elo.py the only thing that should move it. A player with
+fewer than OWN_MIN_MATCHES on record falls through to Tennis Abstract's
+figures, and a draw where fewer than half the field has our rating keeps
+Tennis Abstract's credit.
 """
 
 from datetime import date
@@ -47,14 +60,19 @@ from typing import NamedTuple, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.rankings import TeRankingsSnapshot
+from app.models.rankings import TePlayer, TeRankingsSnapshot
 from app.models.tournament import Draw, DrawEntry
 from app.services.winprob import predict
 
 # Bumped whenever anything below changes the number a given draw produces —
 # a coefficient, the Elo week, the live-score handling. It rides in the cache
 # key so a deploy cannot serve yesterday's arithmetic.
-MODEL_VERSION = 2   # surface Elo, the rank blend, and the game score (2026-09-12)
+MODEL_VERSION = 3   # our own ratings first, where the field has them (2026-09-12)
+
+# A PLAYER NEEDS A RECORD before our rating is worth more than the fallback:
+# ten matches is what Tennis Abstract requires before it prints one, and a
+# newcomer at 1500 with two results is a guess dressed as a number.
+OWN_MIN_MATCHES = 10
 
 # HOW OLD A LIVE SET SCORE MAY BE and still be used. Far longer than the 45s
 # the point score is allowed, because a set count is a different kind of fact:
@@ -75,8 +93,13 @@ class DrawOdds:
 
     def __init__(self, ratings: dict, surface: Optional[str], best_of: int,
                  live: dict, cache_key: tuple):
-        # entry_id -> (overall elo, elo for THIS draw's surface, world ranking) — any None
-        self.ratings = ratings
+        # entry_id -> (overall elo, elo for THIS draw's surface, world ranking,
+        #              our own (overall, surface) or None) — any None. Shorter
+        # tuples are padded, so an older caller (or test) with no surface or
+        # own figure still reads.
+        self.ratings = {k: tuple(v) + (None,) * (4 - len(v)) for k, v in ratings.items()}
+        # What the column credits: whoever rated most of the field.
+        self.attribution = ATTRIBUTION
         self.surface = surface or "Hard"
         self.best_of = best_of
         # match_id -> (player1_id, player2_id, LiveScore)
@@ -96,16 +119,16 @@ class DrawOdds:
         hit = self._memo.get(key)
         if hit is not None:
             return hit
-        elo_a, selo_a, rank_a = self.ratings.get(a, (None, None, None))
-        elo_b, selo_b, rank_b = self.ratings.get(b, (None, None, None))
-        if (elo_a is None or elo_b is None) and rank_a is None and rank_b is None:
+        elo_a, selo_a, rank_a, own_a = self.ratings.get(a, (None, None, None, None))
+        elo_b, selo_b, rank_b, own_b = self.ratings.get(b, (None, None, None, None))
+        if (elo_a is None or elo_b is None) and (own_a is None or own_b is None) and rank_a is None and rank_b is None:
             # predict() refuses this rather than guessing, which is right for a
             # library and wrong for a column: two unrated qualifiers are a coin
             # toss, and one blank pair must not blank the whole draw.
             p = 0.5
         else:
             p = predict(rank_x=rank_a, rank_y=rank_b, elo_x=elo_a, elo_y=elo_b,
-                        selo_x=selo_a, selo_y=selo_b,
+                        selo_x=selo_a, selo_y=selo_b, own_x=own_a, own_y=own_b,
                         surface=self.surface, best_of=self.best_of)["p"]
         p = self._live_adjust(p, a, b, match_id)
         self._memo[key] = p
@@ -201,10 +224,35 @@ def _live_score(match) -> Optional[LiveScore]:
 async def draw_odds(db: AsyncSession, draw: Draw, all_matches: list) -> Optional[DrawOdds]:
     """The odds source for one draw, or None when there is no field to rate."""
     rows = (await db.execute(
-        select(DrawEntry.id, DrawEntry.te_player_id, DrawEntry.ranking)
+        select(DrawEntry.id, DrawEntry.te_player_id, DrawEntry.ranking, TePlayer.tml_player_id)
+        .outerjoin(TePlayer, TePlayer.id == DrawEntry.te_player_id)
         .where(DrawEntry.draw_id == draw.id))).all()
     if not rows:
         return None
+
+    # OUR OWN RATINGS FIRST, for every player the linkage has paired with the
+    # record (services/history). Read off the loop: the history file is its
+    # own database. A player with too thin a record falls through to the
+    # Tennis Abstract figures and the ranking, per pair.
+    own: dict = {}
+    ratings_as_of = None
+    tour = "wta" if draw.gender == "F" else "atp"
+    tml_ids = [r.tml_player_id for r in rows if r.tml_player_id]
+    if tml_ids:
+        try:
+            from app.services.history import db as hdb
+            from app.services.history.ratings import ratings_for
+            surface_key = {"Hard": "elo_hard", "Clay": "elo_clay", "Grass": "elo_grass"}[_norm_surface(draw.surface)]
+
+            def _read(conn):
+                return ratings_for(conn, tour, tml_ids), hdb.get_meta(conn, "ratings_as_of")
+            rated, ratings_as_of = await hdb.run(_read)
+            for pid, r in rated.items():
+                if (r.get("n_all") or 0) >= OWN_MIN_MATCHES:
+                    own[pid] = (float(r["elo"]), float(r.get(surface_key) or r["elo"]))
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning("own ratings unavailable; using Tennis Abstract", exc_info=True)
 
     te_ids = [r.te_player_id for r in rows if r.te_player_id]
     by_te: dict[int, tuple] = {}   # te_player_id -> (elo, surface elo, rank)
@@ -237,9 +285,10 @@ async def draw_odds(db: AsyncSession, draw: Draw, all_matches: list) -> Optional
 
     def _rating(r):
         elo, selo, rank = by_te.get(r.te_player_id, (None, None, None)) if r.te_player_id else (None, None, None)
-        return (elo, selo, rank or r.ranking)
+        return (elo, selo, rank or r.ranking, own.get(r.tml_player_id) if r.tml_player_id else None)
 
     ratings = {r.id: _rating(r) for r in rows}
+    own_count = sum(1 for v in ratings.values() if v[3] is not None)
     live = {}
     for m in all_matches:
         if m.winner_id is not None or m.is_bye or not m.player1_id or not m.player2_id:
@@ -249,9 +298,14 @@ async def draw_odds(db: AsyncSession, draw: Draw, all_matches: list) -> Optional
             live[m.id] = (m.player1_id, m.player2_id, score)
 
     surface = draw.surface
-    key = (MODEL_VERSION, draw.id, week, surface, best_of(draw),
+    key = (MODEL_VERSION, draw.id, week, ratings_as_of, surface, best_of(draw),
            tuple(sorted(live.items())))
-    return DrawOdds(ratings, surface, best_of(draw), live, key)
+    odds = DrawOdds(ratings, surface, best_of(draw), live, key)
+    # The credit follows the ratings: ours once they carry most of the field.
+    from app.services.winprob._params import params as _params
+    if own_count * 2 >= len(ratings) and _params("own").get("fitted"):
+        odds.attribution = OWN_ATTRIBUTION
+    return odds
 
 
 def _norm_surface(surface: Optional[str]) -> str:
@@ -268,3 +322,4 @@ _SURFACE_COLUMN = {
 
 # What the column credits, once, wherever it is drawn.
 ATTRIBUTION = "Elo ratings from Tennis Abstract (CC BY-NC-SA 4.0)"
+OWN_ATTRIBUTION = "Upset Alert's own Elo, from its match record and TennisMyLife's open results database (MIT)"

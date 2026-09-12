@@ -3,6 +3,12 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     database_url: str = "sqlite+aiosqlite:///./tennis_fantasy.db"
+    # THE MATCH HISTORY LIVES IN ITS OWN FILE. Half a million rows of results
+    # back to 1967, re-derivable from TennisMyLife at any time, and the daily
+    # sync rewrites whole files of it — none of which belongs in the app's
+    # single-writer database, whose every lock is contended. Same directory
+    # as the app database in production (/data), so the mount rule holds.
+    history_db_path: str = "./history.db"
     secret_key: str = "change-me-to-a-long-random-string"
     algorithm: str = "HS256"
     # A YEAR. Signing in is friction with no security dividend here: the token

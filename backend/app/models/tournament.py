@@ -198,6 +198,10 @@ class Draw(Base):
     sofa_resolved_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True)
     venue_timezone: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    # TennisMyLife's tournament id for this draw ("2026-560" — year, then the
+    # ATP or WTA tournament id). Exact where our own ATP/WTA id gives it,
+    # else paired by name and date; see services/history/link.py.
+    tml_tourney_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     # The venue's assumed day-1 start, from tournament_schedule's curated lookup
     # table. An assumption until first_match_* below observes the real thing.
     day1_start_hour: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)

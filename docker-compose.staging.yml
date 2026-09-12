@@ -61,6 +61,10 @@ services:
       - /home/paulwiens/upsetalert/staging-logs:/logs
     environment:
       - DATABASE_URL=sqlite+aiosqlite:////data/tennis_fantasy.db
+      # The match history and our own ratings: its own file, beside the app
+      # database on the same mount — half a million rows rewritten by the
+      # nightly sync have no business in the app's single-writer file.
+      - HISTORY_DB_PATH=/data/history.db
       - LOG_FILE=/logs/backend.log
       # Its own key. Sharing production's would make staging-issued session
       # tokens valid on the live site.

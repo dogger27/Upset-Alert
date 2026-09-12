@@ -890,7 +890,7 @@ async def round_scores(
         # together — but they are named separately, because the odds can be
         # switched off for a draw the range is still perfectly happy with.
         "odds_available": odds is not None and ranges is not None,
-        "odds_attribution": ODDS_ATTRIBUTION,
+        "odds_attribution": getattr(odds, "attribution", ODDS_ATTRIBUTION),
         "finish_from": finish_from,
         "finish_history": finish_history,
         # A cash pool on this draw: the standings mark a locked podium as

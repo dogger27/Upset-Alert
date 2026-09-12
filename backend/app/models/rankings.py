@@ -22,6 +22,13 @@ class TePlayer(Base):
     last_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)    # "Auger Aliassime"
     date_of_birth: Mapped[Optional[date]] = mapped_column(Date, nullable=True)  # fetched from TE player page
     nationality: Mapped[Optional[str]] = mapped_column(String, nullable=True)   # "Canada" — from TE profile "Country:" field
+    # TennisMyLife's id for this person (an ATP code like "Z355", or a WTA
+    # number), and how it was established: 'match' — this player's own
+    # result in a paired tournament, the exact method; 'name' — an exact
+    # name-key match; 'fuzzy' — the backup, worth a human's glance;
+    # 'manual'. See services/history/link.py. Null: not linked yet.
+    tml_player_id: Mapped[Optional[str]] = mapped_column(String, nullable=True, index=True)
+    tml_link: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     # NOTE: elo and elo_rank belong on TeRankingsSnapshot, not here.
 
     snapshots: Mapped[list["TeRankingsSnapshot"]] = relationship(

@@ -23,6 +23,10 @@ services:
       - /home/paulwiens/upsetalert/secrets:/secrets:ro
     environment:
       - DATABASE_URL=sqlite+aiosqlite:////data/tennis_fantasy.db
+      # The match history and our own ratings: its own file, beside the app
+      # database on the same mount — half a million rows rewritten by the
+      # nightly sync have no business in the app's single-writer file.
+      - HISTORY_DB_PATH=/data/history.db
       - LOG_FILE=/logs/backend.log
       # `:?` not `:-`. A default here is what let production run for weeks on
       # the placeholder key that is committed in this public repo — compose
