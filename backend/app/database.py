@@ -104,12 +104,16 @@ def _enrol_all_notifications_sql() -> str:
 
     Bots are excluded — their addresses are not real — and unverified accounts
     are left alone, since _mark_verified enrols them when they verify.
+
+    DEFAULT_ON_KEYS, not ALL_KEYS: a key can be offered in the settings screen
+    without being handed out, which is what "off for everyone until they ask"
+    means. See notification_keys.DEFAULT_OFF_EMAIL_KEYS.
     """
-    from app.services.notification_keys import ALL_KEYS
+    from app.services.notification_keys import DEFAULT_ON_KEYS
 
     keys = " UNION ALL ".join(
         f"SELECT '{k}' AS pref_key" if i == 0 else f"SELECT '{k}'"
-        for i, k in enumerate(ALL_KEYS)
+        for i, k in enumerate(DEFAULT_ON_KEYS)
     )
     return (
         "INSERT OR IGNORE INTO notification_preferences (user_id, pref_key) "
