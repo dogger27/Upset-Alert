@@ -1389,7 +1389,7 @@ async def global_chances_history(tournament_id: int, db: AsyncSession = Depends(
     timeline_ids = [m.id for m in sorted(
         completed, key=lambda m: (m.completed_at is not None, m.completed_at or "", m.id))]
     if not timeline_ids:
-        return {"scale": 1000, "positions": {}}
+        return {"scale": 1000, "complete": True, "positions": {}}
     rows = (await db.execute(
         select(UserPrediction.user_id, UserPrediction.match_id, UserPrediction.predicted_winner_id)
         .where(UserPrediction.draw_id == tournament_id,
@@ -1398,15 +1398,21 @@ async def global_chances_history(tournament_id: int, db: AsyncSession = Depends(
     for uid, mid, w in rows:
         picks_map.setdefault(uid, {})[mid] = w
     if not picks_map:
-        return {"scale": 1000, "positions": {}}
+        return {"scale": 1000, "complete": True, "positions": {}}
     odds = await draw_odds(db, draw, all_matches)
     if odds is None:
-        return {"scale": 1000, "positions": {}}
+        return {"scale": 1000, "complete": True, "positions": {}}
     key = chances_history_key(tournament_id, draw.num_rounds or 7, picks_map,
                               odds.without_live())
     held = chances_history_held(key, timeline_ids)
+    # See the note on /leagues/{id}/chances-history: a visit warms the draw
+    # being read, because the scheduled pass only covers the last three weeks.
+    if len(held) < len(timeline_ids):
+        from app.services.chances_warm import warm_soon
+        warm_soon([tournament_id])
     return {
         "scale": 1000,
+        "complete": len(held) >= len(timeline_ids),
         "positions": {str(p): {str(u): [round(v[0] * 1000), round(v[1] * 1000)]
                                for u, v in rows_.items()}
                       for p, rows_ in sorted(held.items())},

@@ -266,11 +266,13 @@ export default function Standings() {
                   href={opens ? { pathname: `/draw/${drawId}`, params: { user: e.user_id, name: e.username } } : undefined}
                   grow style={[s.body, podiumCol && s.tightRow]}
                 >
-                  {/* The site's place medal, on a finished draw only: a
-                      podium mid-tournament would be a prediction. Ties share
-                      a place, so two 1sts both get the trophy. */}
+                  {/* The site's place medal, on a finished draw only AND
+                      only while the table shows the present — a podium
+                      mid-tournament, or on a rewound one, would be a
+                      prediction (scoring.placesDecided). Ties share a place,
+                      so two 1sts both get the trophy. */}
                   <Text style={s.rank}>
-                    {(t?.status === 'completed' || view.finalPlayed) && rankOf.get(e.user_id) <= 3
+                    {view.placesDecided && rankOf.get(e.user_id) <= 3
                       ? ['🏆', '🥈', '🥉'][rankOf.get(e.user_id) - 1]
                       : rankOf.get(e.user_id)}
                   </Text>

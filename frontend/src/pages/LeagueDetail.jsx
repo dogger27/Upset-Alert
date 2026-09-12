@@ -1392,6 +1392,12 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
     enabled: !!rawData?.odds_available && matchesTimeline.length > 0,
     staleTime: 5 * 60_000,
     placeholderData: prev => prev,
+    /* A DRAW OLDER THAN THE WARM WINDOW arrives with an empty or partial map
+       and the server starts filling it on this very request. Come back for
+       the rest rather than making the slider ask position by position, which
+       is the difference the owner felt on a July draw. Stops the moment the
+       map covers the timeline. */
+    refetchInterval: q => (q?.state?.data?.complete === false ? 4000 : false),
   })
   const chancesAt = useMemo(() => {
     const raw = chancesHist?.positions
@@ -1658,6 +1664,13 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
     ...entries.map(e => textWidth(e.username, nameFontPx, 600)),
   ) + 6 + (finalPlayed ? 24 : 0)
   const PLACE_ICONS = ['🏆', '🥈', '🥉']
+  /* AND ONLY WHILE THE TABLE SHOWS THE PRESENT. `finalPlayed` reads the
+     SERVER's rounds, not the scrubbed slice, so on a finished draw it stays
+     true however far back the slider goes — and the trophy went to whoever
+     led at R32. The name column's reserve above deliberately still keys on
+     `finalPlayed`, so the width does not change under the cursor mid-drag;
+     only the glyph comes and goes. */
+  const placesShown = finalPlayed && !isScrubbing
 
   /* THE BARS SPAN THE SERVER'S STATE AND THE CHOSEN WORLD'S, TOGETHER.
      Columns and scale come from the union, which serves both instruments:
@@ -2051,7 +2064,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                       rank — ties share it — so a shared place shares its
                       medal, and a tie for first is two trophies and no
                       silver, which is what a tie means. */}
-                  {finalPlayed && entry.standingsRank <= 3 && (
+                  {placesShown && entry.standingsRank <= 3 && (
                     <span className="lt-place-icon">{PLACE_ICONS[entry.standingsRank - 1]}</span>
                   )}
                   <UserName className="lt-progress-name-text" user={{ username: entry.username, full_name: showRealName ? entry.full_name : null }} />

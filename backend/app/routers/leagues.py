@@ -1021,7 +1021,7 @@ async def league_chances_history(
     timeline_ids = [m.id for m in sorted(
         completed, key=lambda m: (m.completed_at is not None, m.completed_at or "", m.id))]
     if not timeline_ids:
-        return {"scale": 1000, "positions": {}}
+        return {"scale": 1000, "complete": True, "positions": {}}
 
     visible = await _pool_visible(db, league.id, tournament_id)
     picks_map: dict[int, dict] = {}
@@ -1036,16 +1036,26 @@ async def league_chances_history(
         if preds:
             picks_map[member.user_id] = {mid: w for mid, w in preds}
     if not picks_map:
-        return {"scale": 1000, "positions": {}}
+        return {"scale": 1000, "complete": True, "positions": {}}
 
     odds = await draw_odds(db, draw, all_matches)
     if odds is None:
-        return {"scale": 1000, "positions": {}}
+        return {"scale": 1000, "complete": True, "positions": {}}
     key = chances_history_key(tournament_id, draw.num_rounds or 7, picks_map,
                               odds.without_live())
     held = chances_history_held(key, timeline_ids)
+    # THE REQUEST FOR THE MAP IS THE SIGNAL THAT SOMEONE IS ABOUT TO SCRUB.
+    # The scheduled warm only covers draws from the last three weeks
+    # (chances_warm.ACTIVE_WINDOW), so opening an older one found an empty map
+    # and every stop on the slider paid for its own walk — the owner scrubbing
+    # a July draw, 2026-09-12. A visit warms what is being read, in the
+    # background; `complete` tells the client to come back for the rest.
+    if len(held) < len(timeline_ids):
+        from app.services.chances_warm import warm_soon
+        warm_soon([tournament_id])
     return {
         "scale": 1000,
+        "complete": len(held) >= len(timeline_ids),
         "positions": {str(p): {str(u): [round(v[0] * 1000), round(v[1] * 1000)]
                                for u, v in rows.items()}
                       for p, rows in sorted(held.items())},

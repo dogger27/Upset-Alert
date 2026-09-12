@@ -14,7 +14,7 @@ import { readFileSync } from 'node:fs'
 import assert from 'node:assert/strict'
 
 const src = readFileSync(new URL('./scoring.js', import.meta.url), 'utf8')
-const { competitionRanks, sameStanding, slotLabel, pct, scrubEntries, worldEntries } =
+const { competitionRanks, sameStanding, slotLabel, pct, placesDecided, scrubEntries, worldEntries } =
   await import('data:text/javascript;base64,' + Buffer.from(src).toString('base64'))
 
 let n = 0
@@ -129,3 +129,19 @@ check('a chosen world is certainties, not chances', () => {
 })
 
 console.log(`\n  ${n} passed`)
+
+check('a medal needs a decided final AND the present', () => {
+  /* The owner's report: a finished Washington Open scrubbed back to 7 of 31
+     matches showed two trophies. `status` describes the draw in reality, so it
+     stays 'completed' however far back the slider goes. */
+  assert.equal(placesDecided({ status: 'completed', scrubbing: false }), true)
+  assert.equal(placesDecided({ status: 'completed', scrubbing: true }), false)
+  // Mid-tournament, at the far right: still no podium — nothing is decided.
+  assert.equal(placesDecided({ status: 'active', scrubbing: false }), false)
+  // A chosen what-if world HAS played its final, and choosing one drops the
+  // slider, so its medals stand.
+  assert.equal(placesDecided({ status: 'active', scrubbing: false, world: { results: [] } }), true)
+  // Called with nothing at all (a screen before its data lands) must not throw.
+  assert.equal(placesDecided(), false)
+  assert.equal(placesDecided({}), false)
+})
