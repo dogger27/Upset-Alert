@@ -1239,29 +1239,68 @@ _TA_HEADERS = {
 }
 
 
-async def _fetch_ta_elo_page(gender: str) -> dict[frozenset, int]:
-    """Scrape Tennis Abstract Elo page; return {frozenset(name_tokens) → elo}."""
+# The columns we read off the Tennis Abstract table, by their printed header.
+# Surface Elo — hElo / cElo / gElo — is, in the page's own words, "a mix of
+# overall Elo and separate ratings generated using only results on the given
+# surface. These ratings give more accurate forecasts for individual
+# matches." The win-probability model reads them first (services/win_chances).
+_TA_ELO_COLUMNS = {"Elo": "elo", "hElo": "elo_hard", "cElo": "elo_clay", "gElo": "elo_grass"}
+
+
+def parse_ta_elo_table(page: str) -> dict[frozenset, dict]:
+    """{frozenset(name_tokens) → {"elo": int, "elo_hard": int|None, ...}}.
+
+    HEADER-DRIVEN, not positional. The overall Elo used to be read as
+    `cells[3]`, which was right until the day the page grew or lost a column
+    and would then have stored ages as ratings without a word of complaint.
+    Now every column is found by its printed name, and a column the page
+    stops printing simply comes back None.
+    """
     import html as html_lib
+
+    def _text(cell: str) -> str:
+        return html_lib.unescape(re.sub(r'<[^>]+>', '', cell)).replace('\xa0', ' ').strip()
+
+    columns: dict[str, int] = {}
+    result: dict[frozenset, dict] = {}
+    for row_m in re.finditer(r'<tr[^>]*>(.*?)</tr>', page, re.DOTALL):
+        cells = re.findall(r'<t[hd][^>]*>(.*?)</t[hd]>', row_m.group(1), re.DOTALL)
+        if not cells:
+            continue
+        texts = [_text(c) for c in cells]
+        if not columns:
+            # The header row names the columns; nothing before it is data.
+            if "Player" in texts and "Elo" in texts:
+                columns = {texts[i]: i for i in range(len(texts))}
+            continue
+        try:
+            name = texts[columns["Player"]]
+        except IndexError:
+            continue
+        if not name:
+            continue
+        values: dict = {}
+        for header, field in _TA_ELO_COLUMNS.items():
+            i = columns.get(header)
+            try:
+                values[field] = round(float(texts[i])) if i is not None else None
+            except (ValueError, IndexError, TypeError):
+                values[field] = None
+        if values.get("elo") is None:
+            continue
+        result[frozenset(name.lower().split())] = values
+    return result
+
+
+async def _fetch_ta_elo_page(gender: str) -> dict[frozenset, dict]:
+    """Scrape Tennis Abstract Elo page; see parse_ta_elo_table for the shape."""
     import httpx
 
     url = _TA_ELO_URLS[gender]
     async with httpx.AsyncClient(timeout=30, follow_redirects=True, headers=_TA_HEADERS) as client:
         resp = await client.get(url)
         resp.raise_for_status()
-
-    result: dict[frozenset, int] = {}
-    for row_m in re.finditer(r'<tr[^>]*>(.*?)</tr>', resp.text, re.DOTALL):
-        cells = re.findall(r'<td[^>]*>(.*?)</td>', row_m.group(1), re.DOTALL)
-        if len(cells) < 4:
-            continue
-        name = html_lib.unescape(re.sub(r'<[^>]+>', '', cells[1])).strip()
-        try:
-            elo = round(float(cells[3].strip()))
-        except (ValueError, IndexError):
-            continue
-        if name:
-            result[frozenset(name.lower().split())] = elo
-    return result
+    return parse_ta_elo_table(resp.text)
 
 
 async def refresh_elo_ratings() -> None:
@@ -1301,10 +1340,14 @@ async def refresh_elo_ratings() -> None:
                 )
                 rows = snap_res.all()
 
-                # Assign elo to each snapshot row.
+                # Assign elo — overall and per surface — to each snapshot row.
                 for snap, name_norm in rows:
                     tokens = frozenset(name_norm.split())
-                    snap.elo = elo_map.get(tokens) or None
+                    values = elo_map.get(tokens) or {}
+                    snap.elo = values.get("elo") or None
+                    snap.elo_hard = values.get("elo_hard") or None
+                    snap.elo_clay = values.get("elo_clay") or None
+                    snap.elo_grass = values.get("elo_grass") or None
 
                 # Assign elo_rank: sort by elo desc; unmatched players get None.
                 ranked = sorted(

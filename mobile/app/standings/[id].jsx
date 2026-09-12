@@ -10,7 +10,7 @@
  */
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useState } from 'react'
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
+import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 import { useAuth } from '../../auth'
 import { getGlobalRoundScores, listTournaments } from '../../api'
 import { useApi } from '../../useApi'
@@ -20,6 +20,24 @@ import { othersPicksNote } from '../../lock'
 import { C } from '../../theme'
 import { PlayerName, TourSwitch } from '../../cards'
 import { Card, CardLink, ErrorNote, Loading, Muted, Screen, Title } from '../../ui'
+
+/* WHAT THE CHANCES ARE, in the reader's words, and who the ratings belong to.
+   The heading is the natural place to ask; on a phone there is no hover, so
+   a tap opens the same explanation the site's tooltip and info sheet carry.
+   The credit line is not decoration: Tennis Abstract's Elo is CC BY-NC-SA,
+   and attribution is the licence's one condition. */
+function explainChances(attribution) {
+  Alert.alert(
+    'Win and Top 3',
+    'Every way the rest of the draw can still go is played out, and each of ' +
+    'those futures is weighted by how likely its results are — a match\u2019s ' +
+    'odds come from the players\u2019 Elo ratings on this surface and their ' +
+    'rankings, and a match in progress counts its score. Win is the share of ' +
+    'those futures this bracket finishes first in; Top 3 the share it finishes ' +
+    'on the podium in. A tie for first counts as a win for everyone level.\n\n' +
+    (attribution || 'Elo ratings from Tennis Abstract (CC BY-NC-SA 4.0)') + '.',
+  )
+}
 
 export default function GlobalStandings() {
   const { id } = useLocalSearchParams()
@@ -66,6 +84,7 @@ export default function GlobalStandings() {
      the same enumeration — its own flag, because the model can be off
      for a draw whose range is perfectly computable. */
   const oddsAvail = !!standings.data?.odds_available
+  const oddsNote = standings.data?.odds_attribution
   /* TOP 3 NEEDS A WIDER PHONE. Five numbers plus a username is more
      than a 393pt row holds, and the name is the column that must not
      give way — the site drops this same column below 400px for the
@@ -167,8 +186,11 @@ export default function GlobalStandings() {
                   says what is possible; these say how likely. */}
               {podiumCol ? (
                 <View style={s.chanceHead}>
-                  <Text style={[s.headText, s.scoreHeadTitle]} numberOfLines={1}
-                        adjustsFontSizeToFit minimumFontScale={0.6}>Chances</Text>
+                  <Pressable onPress={() => explainChances(oddsNote)} hitSlop={8} accessibilityRole="button"
+                             accessibilityLabel="What the chances mean">
+                    <Text style={[s.headText, s.scoreHeadTitle]} numberOfLines={1}
+                          adjustsFontSizeToFit minimumFontScale={0.6}>Chances ⓘ</Text>
+                  </Pressable>
                   <View style={s.scoreHeadRow}>
                     {sortHead('p_win', 'Win', s.chance, { adjustsFontSizeToFit: true, minimumFontScale: 0.6 },
                               'Chance of finishing first — sort by this')}

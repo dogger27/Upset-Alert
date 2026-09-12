@@ -61,6 +61,39 @@ function FitText({ text, className, maxPx, weight = 700, minPx = 11 }) {
   }, [text, maxPx, weight, minPx])
   return <span ref={ref} className={className} style={{ fontSize: `${px}px` }}>{text}</span>
 }
+/* WHAT THE CHANCES ARE, in the reader's words, and whose ratings they rest
+   on. Same dressing as the H2H panel's Elo note (its classes are global once
+   bundled), so the two explanations read as one voice. The credit line is
+   not decoration: Tennis Abstract's Elo is CC BY-NC-SA, and attribution is
+   the licence's one condition. */
+function ChancesInfoPopup({ attribution, onClose }) {
+  const backdrop = useBackdropClose(onClose)
+  return (
+    <div className="h2h-elo-popup-backdrop" {...backdrop}>
+      <div className="h2h-elo-popup" onClick={e => e.stopPropagation()}>
+        <div className="h2h-elo-popup-header">
+          <span className="h2h-elo-popup-title">Win and Top 3</span>
+          <button className="h2h-elo-popup-close" onClick={onClose} aria-label="Close">✕</button>
+        </div>
+        <p className="h2h-elo-popup-body">
+          Every way the rest of the draw can still go is played out, and each of
+          those futures is weighted by how likely its results are. A match's odds
+          come from the two players' Elo ratings on this surface and their
+          rankings; a match in progress counts its score. <strong>Win</strong> is
+          the share of those futures this bracket finishes first in,
+          <strong> Top 3</strong> the share it finishes on the podium in. A tie
+          for first counts as a win for everyone level.
+        </p>
+        <p className="h2h-elo-popup-body">
+          Finish says what is still <em>possible</em>; these say how <em>likely</em> each
+          possibility is. Both follow the timeline slider.
+        </p>
+        <p className="h2h-elo-popup-source">{attribution || 'Elo ratings from Tennis Abstract (CC BY-NC-SA 4.0)'} · Updated weekly</p>
+      </div>
+    </div>
+  )
+}
+
 /* A CHANCE, AS A READER WOULD SAY IT. Never a bare "0%" for something that
    can still happen — a bracket with one live path to the title is not the
    same as one that is mathematically out, and the column has to keep the two
@@ -1426,6 +1459,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
      is still perfectly computable. */
   const oddsAvail = !!rawData?.odds_available
   const oddsNote = rawData?.odds_attribution
+  const [showChancesInfo, setShowChancesInfo] = useState(false)
   const cashPool = !!rawData?.cash_pool
 
   /* A PERSON'S RANK IS THEIR RANK, whatever the rows are sorted by.
@@ -1712,6 +1746,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
         </>
       ) : (
         <>
+          {showChancesInfo && <ChancesInfoPopup attribution={oddsNote} onClose={() => setShowChancesInfo(false)} />}
           <div className={`lt-progress-row lt-progress-header-row${finishAvail ? ' lt-progress-row--finish' : ''}${oddsAvail ? ' lt-progress-row--odds' : ''}`}
                style={{ '--name-col-width': `${nameColWidth}px`, '--sbw': `${gutter}px` }}>
             {/* Both buttons first, then the rank, then the name — the two
@@ -1790,7 +1825,11 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                 say how likely each of those possibilities is. */}
             {oddsAvail && (
               <span className="lt-chance-head">
-                <span className="lt-chance-head-title lt-progress-col-header" title={oddsNote}>Chances</span>
+                <span className="lt-chance-head-title lt-progress-col-header" title={oddsNote}>
+                  Chances
+                  <button type="button" className="h2h-info-btn lt-chance-info" aria-label="What the chances mean"
+                          onClick={e => { e.stopPropagation(); setShowChancesInfo(true) }}>ⓘ</button>
+                </span>
                 <span className={`lt-progress-pwin lt-progress-col-header lt-chance-head-sub lt-col-sort${colSort === 'pwin' ? ' lt-col-sort--on' : ''}`}
                       role="button" tabIndex={0}
                       title="Chance of finishing first, over every way the draw can still end — click to sort"

@@ -40,6 +40,12 @@ class TeRankingsSnapshot(Base):
     points: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     elo: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     elo_rank: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Tennis Abstract's surface Elo (hElo / cElo / gElo): overall Elo blended
+    # with a rating built from that surface's results alone. What the
+    # win-probability model prefers; None where the page had no figure.
+    elo_hard: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    elo_clay: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    elo_grass: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     player: Mapped["TePlayer"] = relationship("TePlayer", back_populates="snapshots")
 

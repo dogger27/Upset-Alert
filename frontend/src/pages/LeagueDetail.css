@@ -1027,6 +1027,9 @@ td.lmt-name { text-align: left; color: var(--text); min-width: 0; display: flex;
   color: var(--ink, var(--n-950));
 }
 .lt-chance-head-sub { grid-row: 2; }
+/* The ⓘ rides the heading's baseline, a hair after the word; the heading
+   itself is not the click target, so a mis-tap sorts nothing. */
+.lt-chance-info { margin-left: 0.25em; font-size: 0.7rem; vertical-align: 1px; }
 .lt-progress-col-header { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
 /* Ruled above and below, so the header reads as a band rather than as a first
    row that happens to hold labels. Both lines, not just the one underneath:
