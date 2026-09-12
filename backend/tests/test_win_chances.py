@@ -600,7 +600,7 @@ def test_the_assembled_history_is_handed_over_whole_and_validated():
     pts = {1: 1, 2: 2, 3: 4, 4: 8, 5: 12}
     odds = _odds(range(1, 33))
     key = chances_history_key(7, 5, picks, odds.without_live()
-                              if hasattr(odds, "without_live") else odds)
+                              if hasattr(odds, "without_live") else odds, ms)
 
     assert chances_history_held(key, tl) == {}
     for pos in (3, 7, 11):

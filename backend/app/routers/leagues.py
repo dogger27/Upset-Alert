@@ -25,7 +25,8 @@ from app.schemas.league import (
 )
 from app.schemas.tournament import TournamentOut
 from app.services.scoring import (UserScore, enumerate_worlds, finish_history_async, finish_range_async,
-                                  chances_available, chances_sampled, podium_locked, rank_users, score_user)
+                                  chances_available, chances_fingerprint, chances_sampled,
+                                  podium_locked, rank_users, score_user)
 from app.services.win_chances import ATTRIBUTION as ODDS_ATTRIBUTION, draw_odds
 from app.services.scoring import potential_points, _points_table as _pts_table_for
 from app.services.upsets import has_upset_pick
@@ -812,9 +813,22 @@ async def round_scores(
     # because it is an extreme and a sample would understate it. No loss: with
     # sixty matches left every bracket can still finish first and last, so the
     # range says nothing there while the chances say plenty.
+    # NOT UNTIL THE PICKS ARE SHUT. A chance computed over brackets people
+    # are still editing is a number about a field that does not exist yet: it
+    # moves when anyone saves, it is nobody's real standing, and it invites a
+    # reader to tune their own bracket against it. The owner's rule,
+    # 2026-09-12 — and it is the same line the warm pass already draws
+    # (chances_warm refuses an open draw), so nothing is precomputed for a
+    # state that is never shown.
+    #
+    # `is_locked` is the model's own read-only property: picks_locked_at under
+    # match-by-match locking, computed_status otherwise, and it honours an
+    # admin's selections_unlocked. Read-only matters — a GET must not take the
+    # writer (feedback_reads_must_not_write).
+    picks_shut = bool(tournament.is_locked)
     sampled = chances_sampled(all_matches)
     odds = (await draw_odds(db, tournament, all_matches)
-            if chances_available(all_matches) else None)
+            if picks_shut and chances_available(all_matches) else None)
     ranges = await finish_range_async(
         tournament_id, all_matches, pts_table, tournament.num_rounds or 7, banked, picks_map,
         odds=odds, sample=sampled)
@@ -900,6 +914,11 @@ async def round_scores(
         # range is still perfectly computable.
         "odds_available": odds is not None and ranges is not None,
         "chances_sampled": bool(sampled and ranges),
+        # The answer's version: a completed match, a replaced player, an edited
+        # pick or a new rating week all change it, and the client keys its
+        # request for the scrub map on it (scoring.chances_fingerprint).
+        "chances_version": (chances_fingerprint(all_matches, tournament.num_rounds or 7,
+                                                picks_map, odds) if odds else None),
         "odds_attribution": getattr(odds, "attribution", ODDS_ATTRIBUTION),
         "finish_from": finish_from,
         "finish_history": finish_history,
@@ -969,7 +988,9 @@ async def league_chances(
         if preds:
             picks_map[member.user_id] = {mid: w for mid, w in preds}
 
-    odds = await draw_odds(db, draw, all_matches) if picks_map else None
+    # The same gate as round-scores: no chances while the brackets are open.
+    odds = (await draw_odds(db, draw, all_matches)
+            if picks_map and draw.is_locked else None)
     sampled, chances = False, {}
     if odds is not None:
         sampled, chances = await chances_at_async(
@@ -1002,7 +1023,8 @@ async def league_chances_history(
     three thresholds `pct` cares about (a certainty, above 99.5%, below 0.5%)
     all survive a thousandth. It is a third of the bytes of the floats.
     """
-    from app.services.scoring import chances_history_held, chances_history_key
+    from app.services.scoring import (chances_fingerprint, chances_history_held,
+                                      chances_history_key)
 
     league = (await db.execute(
         select(League).options(selectinload(League.members))
@@ -1042,7 +1064,7 @@ async def league_chances_history(
     if odds is None:
         return {"scale": 1000, "complete": True, "positions": {}}
     key = chances_history_key(tournament_id, draw.num_rounds or 7, picks_map,
-                              odds.without_live())
+                              odds.without_live(), all_matches)
     held = chances_history_held(key, timeline_ids)
     # THE REQUEST FOR THE MAP IS THE SIGNAL THAT SOMEONE IS ABOUT TO SCRUB.
     # The scheduled warm only covers draws from the last three weeks
@@ -1056,6 +1078,8 @@ async def league_chances_history(
     return {
         "scale": 1000,
         "complete": len(held) >= len(timeline_ids),
+        "version": chances_fingerprint(all_matches, draw.num_rounds or 7, picks_map,
+                                       odds.without_live()),
         "positions": {str(p): {str(u): [round(v[0] * 1000), round(v[1] * 1000)]
                                for u, v in rows.items()}
                       for p, rows in sorted(held.items())},

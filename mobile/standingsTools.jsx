@@ -79,9 +79,14 @@ export function useStandingsView(data, t, chancesAt = null, chancesScope = 'g',
      lookup rather than a question put to the server — which is what it was
      when the history only ran back to R16 and came with the payload. Keyed by
      the timeline length, so a new result fetches the map again. */
+  /* KEYED ON THE ANSWER'S VERSION (scoring.chances_fingerprint): a completed
+     match, a replaced player, a withdrawal, an edited pick or a new rating
+     week all change it. The timeline LENGTH, which this used, does not move
+     when one entry becomes another. */
+  const version = data?.chances_version ?? timeline.length
   const mapQ = useApi(
     chancesHistoryAt && drawId && timeline.length && data?.odds_available
-      ? `chancehist:${chancesScope}:${drawId}:${timeline.length}` : null,
+      ? `chancehist:${chancesScope}:${drawId}:${version}` : null,
     () => chancesHistoryAt(),
     { enabled: !!(chancesHistoryAt && drawId && timeline.length && data?.odds_available) })
   /* A DRAW OLDER THAN THE WARM WINDOW (chances_warm.ACTIVE_WINDOW) arrives
