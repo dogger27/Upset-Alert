@@ -27,4 +27,8 @@ curl_cffi>=0.7.0
 # Finish range: every future of the last fifteen matches, scored as one
 # array — the same loop in Python is forty times slower.
 numpy>=2.0
+# Reads the weekly betting-odds spreadsheet (services/history/odds.py). The
+# market is the only yardstick our own accuracy can be read against, and
+# without this the loader fetched the file and then could not open it.
+openpyxl>=3.1
 webauthn>=3.0.0,<4

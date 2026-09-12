@@ -159,6 +159,9 @@ def main():
     ap.add_argument("--judge-from", default="2026-06-22")
     ap.add_argument("--min-matches", type=int, default=10, help="both players need this many prior matches to be judged")
     ap.add_argument("--grid", default="full", choices=["full", "quick"], help="quick: two K schedules, for a variant check")
+    ap.add_argument("--recal", action="store_true",
+                    help="fit a temperature on the VALIDATION years and apply it, then judge. Platt scaling: "
+                         "the coefficients come from 1991-2023 and the tour has moved since.")
     ap.add_argument("--pin", default=None, metavar="K0,DECAY",
                     help="fit only this K schedule — for reading off the exact coefficients "
                          "of a configuration the grid already chose")
@@ -238,6 +241,48 @@ def main():
           "  pooled figure misleads because the two judged sets carry different tour mixes:\n"
           "    atp: TA blend 0.632, TA Elo 0.641, rank model 0.638   wta: TA blend 0.579, TA Elo 0.577, rank 0.596\n"
           "  Compare per tour with --tour; parity per tour is the bar for switching `fitted` on.")
+
+    # ── CALIBRATION ON THE VALIDATION YEARS ─────────────────────────────────
+    # k_logit is a temperature, but it was fitted on 1991-2023 and the tours
+    # have moved since. A single multiplier re-fitted on 2024-25 alone — never
+    # on the judged window — is the standard fix (Platt scaling), and it is
+    # the one that matters most for a column that PRINTS percentages: a model
+    # can carry a fine log loss while telling the reader 74% and delivering
+    # 70%. Reported before/after on the judged window and per decile.
+    if a.recal:
+        de2 = collect(rows, cfg, tour=a.tour, h2h_shrink=a.h2h_shrink, h2h_surface=a.h2h_surface)
+        rated2 = (de2["nw"] >= a.min_matches) & (de2["nl"] >= a.min_matches)
+        val2 = rated2 & (de2["date"] >= a.fit_before) & (de2["date"] < "2026-01-01")
+        jm2 = rated2 & (de2["date"] >= a.judge_from)
+
+        def _scaled(temp, mask):
+            q = probs(theta, names, de2, mask)
+            lg = np.log(np.clip(q, 1e-9, 1 - 1e-9) / (1 - np.clip(q, 1e-9, 1 - 1e-9)))
+            return np.clip(1 / (1 + np.exp(-temp * lg)), 1e-6, 1 - 1e-6)
+
+        yv = np.ones(int(val2.sum()))
+        temp, _ = nelder_mead(lambda t_: log_loss(_scaled(t_[0], val2), yv), [1.0])
+        temp = float(temp[0])
+        yj = np.ones(int(jm2.sum()))
+        before, after = probs(theta, names, de2, jm2), _scaled(temp, jm2)
+        print(f"\n=== CALIBRATION, temperature fitted on {a.fit_before}..2026 (n={int(val2.sum())}) ===")
+        print(f"  temperature {temp:.3f}  ({'sharpen' if temp > 1 else 'soften'} — 1.0 would mean no change needed)")
+        print(f"  judged window: before ll={log_loss(before, yj):.4f} brier={brier(before, yj):.4f}  "
+              f"after ll={log_loss(after, yj):.4f} brier={brier(after, yj):.4f}")
+        d_cal = -np.log(after) - (-np.log(before))
+        rngc = np.random.default_rng(13)
+        bc = np.array([d_cal[rngc.integers(0, len(d_cal), len(d_cal))].mean() for _ in range(4000)])
+        lo_c, hi_c = np.percentile(bc, [2.5, 97.5])
+        print(f"  change {d_cal.mean():+.4f}, 95% CI {lo_c:+.4f}..{hi_c:+.4f} -> "
+              f"{'calibration wins' if hi_c < 0 else 'unchanged is better' if lo_c > 0 else 'inside noise'}")
+        for lab, q in (("before", before), ("after ", after)):
+            fav = np.where(q >= 0.5, q, 1 - q); won = (q >= 0.5).astype(float)
+            cells = []
+            for lo, hi in ((0.5, 0.6), (0.6, 0.7), (0.7, 0.8), (0.8, 0.9), (0.9, 1.01)):
+                mm = (fav >= lo) & (fav < hi)
+                if mm.sum() > 15:
+                    cells.append(f"{lo:.0%}: said {fav[mm].mean():.3f} got {won[mm].mean():.3f} (n={int(mm.sum())})")
+            print(f"  {lab}: " + " | ".join(cells))
 
     # ── AN ENSEMBLE WITH AN INDEPENDENT RATING ──────────────────────────────
     # The one repeated finding in the recent literature is that two models of
