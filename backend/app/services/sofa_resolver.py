@@ -98,13 +98,21 @@ async def _play_was_due(db, draw, now: datetime) -> bool:
     return draw.start_date < now.date()
 
 
-async def _once() -> int:
+async def _once() -> tuple[int, set]:
+    """Returns (entries stamped, draw ids whose Sofascore field is UNNAMED).
+
+    The second half is for the coverage check in the same pass: "nobody
+    stamped" means something different when Sofascore has published a bracket
+    of placeholders than when it has published a field of real names and we
+    matched none of them.
+    """
     async with AsyncSessionLocal() as db:
         reports = await resolve_pending_draws(db, retry_hours=RESOLVE_RETRY_HOURS)
         await db.commit()
 
+    unnamed = {r.get("draw_id") for r in reports if r.get("field_unnamed")}
     if not reports:
-        return 0
+        return 0, unnamed
     stamped = sum(r.get("resolved", 0) for r in reports)
     for r in reports:
         if r.get("error"):
@@ -117,10 +125,10 @@ async def _once() -> int:
         else:
             logger.info("Sofascore resolve: %s — %d/%d entries stamped",
                         r.get("draw"), r.get("resolved", 0), r.get("total", 0))
-    return stamped
+    return stamped, unnamed
 
 
-async def _coverage_check(db) -> None:
+async def _coverage_check(db, unnamed: set | None = None) -> None:
     """Say so when a draw is about to be played and cannot be scored.
 
     THIS IS THE POINT OF THE WHOLE MODULE. Everything above is a mechanism, and
@@ -174,8 +182,25 @@ async def _coverage_check(db) -> None:
                     DrawEntry.draw_id == d.id,
                     DrawEntry.sofa_player_id.isnot(None)))).scalar_one()
             if stamped == 0:
-                problem = ("a tournament id but not one player resolved, so no "
-                           "match on it can be joined to a live event")
+                # AN ID IS NOT A FIELD. This branch used to fire on the premise
+                # that an id existing means the bracket is published, so a
+                # problem then is real — but Sofascore publishes the TREE
+                # first: SP Open came back as thirty slots named R16P1, R16P2 …
+                # every one of them disabled, two days out (owner, 2026-09-12).
+                # Nothing can match a placeholder, so "not one player resolved"
+                # was the ordinary state of a draw nobody has named yet.
+                #
+                # Still said the moment play is DUE, whatever the reason —
+                # that is this module's whole guarantee, and a draw on court
+                # with placeholders for a field is exactly as unscoreable as
+                # one with no ids at all.
+                # `unnamed is None` means nobody told us — no information is
+                # not evidence of innocence, so it warns, as it always did.
+                if due or unnamed is None or d.id not in unnamed:
+                    problem = ("a tournament id but not one player resolved, so "
+                               "no match on it can be joined to a live event")
+                else:
+                    problem = None
             elif due:
                 # Playing, joinable, and still nothing has arrived. That is the
                 # case no amount of retrying fixes by itself.
@@ -211,11 +236,11 @@ async def start() -> None:
     while True:
         delay = POLL_INTERVAL
         try:
-            await _once()
+            stamped, unnamed = await _once()
             # AFTER resolving, so a draw fixed on this very pass is not reported
             # as broken a second later.
             async with AsyncSessionLocal() as db:
-                await _coverage_check(db)
+                await _coverage_check(db, unnamed)
         except SofascoreBlocked as exc:
             delay = BLOCKED_BACKOFF
             logger.warning("Sofascore resolve blocked, backing off %.0fh: %s",

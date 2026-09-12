@@ -644,6 +644,31 @@ def _match_one(name: str, nationality: Optional[str],
     return None, None
 
 
+# A BRACKET SHAPE WITH NOBODY IN IT. Sofascore publishes the tree before the
+# names: SP Open 2026 came back as thirty teams called R16P1, R16P2 … every one
+# of them `disabled`, two days before play (owner's /issues run, 2026-09-12).
+# That is not a field, and mistaking it for one made the coverage check report
+# "a tournament id but not one player resolved" — a real-sounding failure for
+# the ordinary state of a draw Sofascore has not named yet.
+_PLACEHOLDER_NAME = re.compile(r"^(?:R\d+P\d+|Q\d*P?\d*|TBD|BYE|QUALIFIER)$", re.I)
+
+
+def _is_placeholder(team: dict) -> bool:
+    """A slot in the tree rather than a person in the draw."""
+    if team.get("disabled"):
+        return True
+    return bool(_PLACEHOLDER_NAME.match((team.get("name") or "").strip()))
+
+
+def field_is_unnamed(field: list) -> bool:
+    """True when Sofascore has the bracket but not the players.
+
+    Every team a placeholder, and at least one of them — an empty field is a
+    different state (`cup tree empty`) with its own message.
+    """
+    return bool(field) and all(_is_placeholder(t) for t in field)
+
+
 def _main_draw_teams(cup_trees: list) -> list:
     """
     Singles players of the MAIN draw, from a /cuptrees payload.
@@ -901,6 +926,14 @@ async def resolve_draw(db: AsyncSession, draw: Draw, *, force: bool = False) -> 
         await db.commit()
 
     report["field_size"] = len(field)
+    # The bracket published, the names not yet — an ordinary state days out,
+    # and NOT a matching failure. Said here so the coverage check can tell the
+    # two apart instead of inferring a fault from "nobody stamped".
+    if field_is_unnamed(field):
+        report["field_unnamed"] = True
+        report["error"] = ("Sofascore has published the bracket shape but not "
+                           "the names yet")
+        return report
     if not field:
         report["error"] = "cup tree empty (draw not published on Sofascore yet)"
         return report
