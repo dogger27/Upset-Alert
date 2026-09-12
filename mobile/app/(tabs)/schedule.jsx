@@ -422,7 +422,7 @@ function EntryRow({ e, venueMode, venueTz, onH2H, onHistory, onPredictors, onCha
       <View style={s.entryTop}>
         {/* The tour, named. A combined day lists the men's and women's US Open
             as the same "US Open · R128" and nothing else separated them. */}
-        <TourBadge gender={e.gender} />
+        <TourBadge gender={e.gender} tour={e.tour} discipline={e.discipline} />
         <Text style={[T.tiny, { color: C.faint, flex: 1 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
           {[e.tournament_name, e.round_label, e.discipline !== 'singles' ? 'Doubles' : null]
             .filter(Boolean).join(' · ')}
