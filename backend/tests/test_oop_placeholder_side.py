@@ -16,7 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.services.oop_parser import _is_placeholder, parse_pdf   # noqa: E402
+from app.services.oop_parser import is_placeholder, parse_pdf   # noqa: E402
 
 
 PLACEHOLDERS = [
@@ -55,9 +55,9 @@ def check(name, cond):
 def main():
     ok = True
     for text in PLACEHOLDERS:
-        ok &= check(f"{text!r} names nobody", _is_placeholder(text))
+        ok &= check(f"{text!r} names nobody", is_placeholder(text))
     for text in PEOPLE:
-        ok &= check(f"{text!r} is not a placeholder", not _is_placeholder(text))
+        ok &= check(f"{text!r} is not a placeholder", not is_placeholder(text))
 
     # The whole sheet, if it is still on disk. The three placeholder slots must
     # come back SINGLES, one entry a side, with the open side declared.
@@ -66,11 +66,11 @@ def main():
         matches, _meta = parse_pdf(pdf.read_bytes())
         ok &= check("the sheet still yields 8 slots", len(matches) == 8)
         open_seats = [m for m in matches
-                      if any(_is_placeholder(n)
+                      if any(is_placeholder(n)
                              for n in list(m.side_a) + list(m.side_b))]
         ok &= check("three slots hold an open seat", len(open_seats) == 3)
         for m in open_seats:
-            side = m.side_a if any(_is_placeholder(n) for n in m.side_a) else m.side_b
+            side = m.side_a if any(is_placeholder(n) for n in m.side_a) else m.side_b
             key = 'a' if side is m.side_a else 'b'
             ok &= check(f"{m.court}: kept whole", len(side) == 1)
             ok &= check(f"{m.court}: not a doubles team", not m.is_doubles)

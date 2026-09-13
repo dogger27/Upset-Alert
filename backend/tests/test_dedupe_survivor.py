@@ -15,16 +15,32 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.services.schedule import _open_sides, _prefer_challenger  # noqa: E402
+from app.services.schedule import (                        # noqa: E402
+    _open_sides, _prefer_challenger, _wreckage,
+)
+
+
+class P:
+    """A stored player row, as much of one as the rule reads."""
+
+    def __init__(self, raw_name, side="a"):
+        self.raw_name = raw_name
+        self.side = side
 
 
 class Row:
-    """Only what the rule reads: how open the row is, and how many names."""
+    """Only what the rule reads: how open the row is, and its player rows.
+
+    `players` may be a COUNT — the shape most of these cases care about, where
+    every row names an ordinary person — or the names themselves when what is
+    on trial is whether they are names at all.
+    """
 
     def __init__(self, is_tbd, tbd_side, players):
         self.is_tbd = is_tbd
         self.tbd_side = tbd_side
-        self.players = list(range(players))
+        self.players = ([P(f"Firstname SURNAME{i} ESP") for i in range(players)]
+                        if isinstance(players, int) else list(players))
 
 
 def check(name, cond):
@@ -73,6 +89,26 @@ def main():
     # never oscillate between two equal rows on successive sweeps.
     ok &= check("a dead tie keeps the incumbent",
                 _prefer_challenger(Row(True, "b", 3), Row(True, "b", 3)) is False)
+
+    # SAO PAULO 2026-09-14. The stored row read "[Q/LL] Qualifier/LL" as three
+    # players on a side it never declared open; the corrected parse read it as
+    # one open seat. The wreck wins BOTH older tests — it calls itself settled
+    # and it names more people — so the fix could not reach the page until the
+    # survivor rule stopped taking a shredded row's word for itself.
+    wreck = Row(False, None, [P("[Q"), P("LL] Qualifier"), P("LL"),
+                              P("[3] Solana SIERRA ARG", "b")])
+    fixed = Row(True, "a", [P("[Q/LL] Qualifier/LL"),
+                            P("[3] Solana SIERRA ARG", "b")])
+    ok &= check("the shredded row is counted as wreckage", _wreckage(wreck) == 3)
+    ok &= check("a declared-open seat is not wreckage", _wreckage(fixed) == 0)
+    ok &= check("the corrected row beats the wreck it replaces",
+                _prefer_challenger(fixed, wreck) is True)
+    ok &= check("...and the wreck does not beat it",
+                _prefer_challenger(wreck, fixed) is False)
+    # The exemption that keeps this off ordinary rows: an unresolved side is
+    # ALLOWED to name a role, because that is what the sheet printed there.
+    ok &= check("an open seat on an undeclared side is the fault, not the seat",
+                _wreckage(Row(False, None, [P("Qualifier")])) == 1)
 
     print("PASS" if ok else "FAIL")
     return 0 if ok else 1

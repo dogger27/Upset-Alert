@@ -252,7 +252,7 @@ class Match:
         names = self.side_a if side == 'a' else self.side_b
         if side not in (self.tbd_side or ''):
             return len(names)
-        return 2 if any('/' in n and not _is_placeholder(n) for n in names) else 1
+        return 2 if any('/' in n and not is_placeholder(n) for n in names) else 1
 
     @property
     def complete(self):
@@ -392,7 +392,7 @@ _ROLE_WORD_RE = re.compile(
 _MARKERS_RE = re.compile(r'^(?:\[[^\]]*\]\s*)+|(?:\s*\[[^\]]*\])+$')
 
 
-def _is_placeholder(text):
+def is_placeholder(text):
     """Does this line name NOBODY — a seat the sheet says is still open?
 
     Sao Paulo's WTA sheet (2026-09-14) printed three R32 slots as
@@ -691,7 +691,7 @@ def _slot_head(pre):
                 # A placeholder is the inside of a match box like a name is:
                 # a headless slot whose first side is "[Q/LL] Qualifier/LL"
                 # would otherwise stop the walk-back at its own first player.
-                or _is_placeholder(text)
+                or is_placeholder(text)
                 or _is_name(text)):
             break
         keep += 1
@@ -792,9 +792,9 @@ def _parse_column(lines, pno, dropped=None):
                 cur.printed_status = st.group(1).upper()
             return
 
-        if _is_name(text) or _is_placeholder(text):
+        if _is_name(text) or is_placeholder(text):
             side_key = 'b' if after_vs else 'a'
-            if _is_placeholder(text):
+            if is_placeholder(text):
                 # A SEAT NOBODY HAS TAKEN YET. "[Q/LL] Qualifier/LL" is one
                 # entrant, unresolved — declared so HERE, exactly as the
                 # inline-"or" branch above declares its own, because a tbd
