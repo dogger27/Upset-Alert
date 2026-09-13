@@ -371,7 +371,16 @@ async def hall_of_fame(
 
 @router.get("/global-gs-totals")
 async def global_gs_totals(db: AsyncSession = Depends(get_db)):
-    """Grand Slam point totals for ALL verified users this year, with is_admin flag."""
+    """Grand Slam point totals for every verified PERSON this year, with the
+    is_admin flag.
+
+    NOT THE BOTS. Highest_Rank picks the higher-ranked player in every match —
+    it is a yardstick, and a yardstick does not belong in a leaderboard of
+    people: it held the top total on the season tally, which reads as somebody
+    winning (owner, 2026-09-13). It still competes in draws and still appears
+    in a draw's standings, where beating it is the whole point.
+
+    `is_bot` is the flag the notification enrolment already honours."""
     from datetime import date
     from collections import defaultdict
     from app.services.scoring import _points_table
@@ -383,7 +392,9 @@ async def global_gs_totals(db: AsyncSession = Depends(get_db)):
     gs_draws = gs_result.scalars().all()
 
     users_result = await db.execute(
-        select(User).where(User.email_verified == True).order_by(User.username)
+        select(User).where(User.email_verified == True,               # noqa: E712
+                           func.coalesce(User.is_bot, False) == False)  # noqa: E712
+        .order_by(User.username)
     )
     users = users_result.scalars().all()
     user_ids = [u.id for u in users]
