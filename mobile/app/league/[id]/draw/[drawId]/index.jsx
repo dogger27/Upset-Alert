@@ -274,7 +274,7 @@ export default function Standings() {
                   <Text style={s.rank}>
                     {view.placesDecided && rankOf.get(e.user_id) != null && rankOf.get(e.user_id) <= 3
                       ? ['🏆', '🥈', '🥉'][rankOf.get(e.user_id) - 1]
-                      : (rankOf.get(e.user_id) ?? '–')}
+                      : (rankOf.get(e.user_id) ?? '')}
                   </Text>
                   <View style={s.who}>
                     <PlayerName name={e.podium_locked && cashPool ? `${e.username} 💰` : e.username} shrinkOnly
