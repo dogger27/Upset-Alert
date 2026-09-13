@@ -19,7 +19,7 @@ After every sync a deduplication pass runs and logs warnings for any remaining
 
 import logging
 import math
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 from typing import Optional
 
 from sqlalchemy import func, select
@@ -210,7 +210,11 @@ async def _apply_update(
     # Auckland). The scraper refines dates from the tournament infobox and
     # freezes them once active/completed (see tournaments.py), so discovery
     # must not clobber refined dates on frozen draws.
-    dates_frozen = existing.status in ("active", "completed")
+    # Frozen once play starts — and once the first ball has been OBSERVED,
+    # which is earlier. Without that second clause the season page simply
+    # rewrites a corrected start_date back to its guess on the next pass.
+    dates_frozen = (existing.status in ("active", "completed")
+                    or existing.first_match_at is not None)
     # Bracket shape belongs to the scraper once a real draw exists. The season
     # page carries a nominal entry count ("48S") that counts qualifying and bye
     # slots the played bracket doesn't contain, and applying it to a live draw

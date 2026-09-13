@@ -1051,6 +1051,13 @@ class ESPNMonitor:
             fresh.first_match_at = new_close
             fresh.first_match_local_hour = first_local.hour
             fresh.first_match_local_minute = first_local.minute
+            # The published order of play also dates day one, and it outranks
+            # the calendar that guessed it.
+            from app.services.tournament_schedule import adopt_observed_start_date
+            if adopt_observed_start_date(fresh):
+                tournament.start_date, tournament.week = fresh.start_date, fresh.week
+                logger.info("ESPN: %s %s start_date moved to %s — first ball observed there",
+                            tournament.year, tournament.name, fresh.start_date)
             moved = old_close is None or abs((new_close - old_close).total_seconds()) >= 300
             if moved:
                 fresh.closing_time = new_close

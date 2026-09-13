@@ -153,6 +153,7 @@ async def _refine_deadlines(db) -> int:
     from app.services.espn_monitor import (SESSION_EARLIEST_HOUR,
                                            SESSION_LATEST_HOUR)
     from app.services.sofascore import first_main_draw_start
+    from app.services.tournament_schedule import adopt_observed_start_date
 
     today = date.today()
     horizon = today + timedelta(days=COVERAGE_LEAD_DAYS)
@@ -203,6 +204,7 @@ async def _refine_deadlines(db) -> int:
         d.first_match_local_hour, d.first_match_local_minute = local.hour, local.minute
         d.day1_start_hour, d.day1_start_minute = local.hour, local.minute
         d.closing_time = naive
+        adopt_observed_start_date(d)
         set_count += 1
         await db.commit()
         await app_log(
