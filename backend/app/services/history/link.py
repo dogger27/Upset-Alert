@@ -689,7 +689,16 @@ async def link_all_async(draw_ids: Optional[list[int]] = None) -> dict:
                       if k in ("unpaired", "unlinked", "conflicts", "bad_te_links")},
                    "signals": signals, "previous": prev})
     try:
-        await hdb.run(lambda c: hdb.set_meta(c, "link_counts", json.dumps(signals)))
+        # `with conn` is the COMMIT, and set_meta does not do it: run() closes
+        # the connection in a finally, so an uncommitted insert is rolled back
+        # and the baseline never lands — which would leave this reporting info
+        # for ever, including for a regression it exists to catch. The idiom is
+        # the one `last_link` above uses; it is easy to miss because the write
+        # succeeds, silently, into a transaction nobody commits.
+        def _store(c):
+            with c:
+                hdb.set_meta(c, "link_counts", json.dumps(signals))
+        await hdb.run(_store)
     except Exception:
         logger.warning("could not record the linkage counts", exc_info=True)
     return report
