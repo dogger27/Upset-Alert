@@ -12,7 +12,7 @@
  * has to be above the fold rather than sorted correctly.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams } from 'expo-router'
 import { Alert, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
@@ -66,8 +66,14 @@ export default function ScheduleScreen() {
   // null = follow the landing rule; a tap on an arrow pins a day.
   const [pinned, setPinned] = useState(null)
   /* The site's filters and their defaults: completed rows shown, doubles
-     hidden, every tour on — except when arriving from a draw, when only that
-     draw's tour is on. tourSel is a SET so ATP+WTA is expressible. */
+     hidden, and EVERY TOUR ON, always. tourSel is a SET so ATP+WTA is
+     expressible; null means all of them.
+
+     It used to narrow to the tour of the draw you arrived from, re-seeding on
+     every date change — so paging through days kept switching the chips back
+     on and off under the reader (owner, 2026-09-13). A filter the reader did
+     not set should not appear, and one they did set should not be undone by
+     turning a page. */
   const [showDone, setShowDone] = useState(true)
   const [showDoubles, setShowDoubles] = useState(false)
   const [tourSel, setTourSel] = useState(null)
@@ -98,12 +104,30 @@ export default function ScheduleScreen() {
   // recompute on every keystroke of state elsewhere. Memoised on the identity
   // of the fetched data instead.
   const all = useMemo(() => day.data?.entries || [], [day.data])
-  const tours = useMemo(() => [...new Set(all.map(e => e.tour).filter(Boolean))].sort(), [all])
-  const hasDoubles = useMemo(() => all.some(e => e.discipline !== 'singles'), [all])
   /* WHICH TOURNAMENTS THE TAB CHOSE (scheduleFilter). A schedule row always
      carries a tournament_id — unlike draw_id, which is null for qualifying and
      doubles — so this needs nothing derived and nothing to go wrong. */
   const eventSel = useScheduleTournaments()
+  /* THE TOURS ON OFFER — among the rows the OTHER filters keep, not among
+     every row fetched. Filtering to one tournament and then being shown an
+     ATP chip for a women's event is a control over nothing; and qualifying
+     rows carry no tour at all, so a qualifying-only day has none. */
+  const toursHere = useMemo(() => {
+    const seen = new Set()
+    for (const e of all) {
+      if (!e.tour) continue
+      if (!rowInTournaments(e, eventSel)) continue
+      if (e.discipline !== 'singles' && !showDoubles) continue
+      if (!showDone && (e.status === 'completed' || e.status === 'postponed')) continue
+      seen.add(e.tour)
+    }
+    return [...seen].sort()
+  }, [all, eventSel, showDoubles, showDone])
+  /* ONE TOUR NEEDS NO CHIPS, and where there are none the filter must not
+     apply either: a selection made on a two-tour day would otherwise empty a
+     one-tour day with no chip on screen to undo it. */
+  const tourChips = toursHere.length > 1
+  const hasDoubles = useMemo(() => all.some(e => e.discipline !== 'singles'), [all])
   /* SEEDED ONCE PER DAY, NOT PER FETCH. This ran on `day.data`, whose identity
      changes on every poll — and the live subscription refetches this screen
      about every ten seconds — so switching WTA on held for one cycle and then
@@ -114,18 +138,11 @@ export default function ScheduleScreen() {
      Keyed on the day and the originating draw, so changing date (or arriving
      from a different draw) seeds afresh, while a refetch of the same day
      never touches the selection. */
-  const seededFor = useRef(null)
-  useEffect(() => {
-    const key = `${date}|${fromDraw ?? ''}`
-    if (seededFor.current === key || !all.length) return
-    seededFor.current = key
-    const origin = fromDraw ? all.find(e => e.draw_id === fromDraw) : null
-    setTourSel(new Set(origin?.tour ? [origin.tour] : tours))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [date, fromDraw, all])
   const toggleTour = t => setTourSel(prev => {
-    const cur = new Set(prev ?? tours)
-    if (cur.has(t)) cur.delete(t); else cur.add(t)
+    const cur = new Set(prev ?? toursHere)
+    // NOT NONE, for the same reason the tournament chooser refuses it: both
+    // tours off is an empty screen with nothing on it to explain why.
+    if (cur.has(t)) { if (cur.size > 1) cur.delete(t) } else cur.add(t)
     return cur
   })
   const venueMode = tzMode === 'venue'
@@ -151,7 +168,7 @@ export default function ScheduleScreen() {
       // rule: a match postponed off today's sheet leaves with the finished ones,
       // so what remains is on court now or still waiting to get there.
       if (!showDone && (e.status === 'completed' || e.status === 'postponed')) return false
-      if (view === 'time' && tourSel && e.tour && !tourSel.has(e.tour)) return false
+      if (view === 'time' && tourChips && tourSel && e.tour && !tourSel.has(e.tour)) return false
       // THE TOURNAMENTS THE TAB ASKED ABOUT. Applied in BOTH views, unlike
       // the tour chips: those are a control on this screen and the court view
       // deliberately reproduces the whole sheet, while this is an answer the
@@ -159,7 +176,7 @@ export default function ScheduleScreen() {
       if (!rowInTournaments(e, eventSel)) return false
       return true
     })
-  }, [all, view, showDone, showDoubles, tourSel, eventSel])
+  }, [all, view, showDone, showDoubles, tourSel, eventSel, tourChips])
 
   const groups = useMemo(() => {
     if (view === 'court') {
@@ -274,7 +291,7 @@ export default function ScheduleScreen() {
           {/* The tour chips filter the time view only, so the court view does
               not offer them — the site's rule; a chip that toggles nothing
               reads as broken. And one tour needs no chip. */}
-          {view === 'time' && tours.length > 1 && tours.map(t => {
+          {view === 'time' && tourChips && toursHere.map(t => {
             const on = !tourSel || tourSel.has(t)
             return (
               <Pressable key={t} onPress={() => toggleTour(t)}
