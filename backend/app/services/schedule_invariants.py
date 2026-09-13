@@ -19,8 +19,21 @@ from datetime import timezone as _tz
 
 from sqlalchemy import select
 
-from app.models.schedule import ScheduleEntry
+from app.models.schedule import ScheduleDocument, ScheduleEntry
 from app.services.oop_parser import COUNTRY_CODES
+
+
+def _naive_utc(dt):
+    """A timestamp column as naive UTC, whichever end of the session it came
+    from. A row read back from SQLite is naive; one written earlier in the
+    same session still holds the aware value it was assigned, and comparing
+    the two raises TypeError — which, inside `_dedupe_day`, once took a whole
+    day's ingest with it (2026-08-20). Every comparison of two of these
+    columns goes through here."""
+    if dt is None:
+        return None
+    return dt.astimezone(_tz.utc).replace(tzinfo=None) if dt.tzinfo else dt
+
 
 # The sheet's own words, in the places a name can pick them up. A slot wording
 # printed on its own line sits directly above or below a name and has been
@@ -142,20 +155,44 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
     # API actually hands out. See settled_side_not_two below for why a check
     # over the stored rows cannot.
     from datetime import date as _date, timedelta as _td
-    from app.services.schedule import settle_from_result_rows, settled_sides_index
+    from app.services.schedule import (
+        _sheet_surnames, settle_from_result_rows, settled_sides_index)
     _pd = _date.fromisoformat(play_date) if isinstance(play_date, str) else play_date
     venue_tz = (await db.execute(
         select(Draw.venue_timezone).where(
             Draw.tournament_id == tournament_id,
             Draw.venue_timezone.isnot(None)))).scalars().first()
     settled_idx: dict = {}
+    # WHEN each of those results landed, and when the document that last
+    # restated each slot was fetched — the two clocks
+    # `pending_side_decided_before_document` compares.
+    #
+    # Keyed through `settled_sides_index`'s OWN reading of a name, not a
+    # second one: this index is a join onto that one, and a law that keys its
+    # side of a join differently does not disagree loudly, it silently never
+    # matches. (Where the law needs an independent reading it keeps one — see
+    # _SHEET_CAPS_RE and _printed_instant. A join key is not that.)
+    decided_at: dict = {}
+    doc_fetched: dict = {}
     if any(e.is_tbd for e in rows):
-        settled_idx = settled_sides_index((await db.execute(
+        wins = (await db.execute(
             select(ScheduleEntry).where(
                 ScheduleEntry.tournament_id == tournament_id,
                 ScheduleEntry.winner_side.isnot(None),
                 ScheduleEntry.play_date >= _pd - _td(days=14),
-                ScheduleEntry.play_date <= _pd))).scalars().all())
+                ScheduleEntry.play_date <= _pd))).scalars().all()
+        settled_idx = settled_sides_index(wins)
+        for r in wins:
+            a = _sheet_surnames([p.raw_name for p in r.players if p.side == "a"])
+            b = _sheet_surnames([p.raw_name for p in r.players if p.side == "b"])
+            if a and b and r.completed_at is not None:
+                decided_at[frozenset(a | b)] = _naive_utc(r.completed_at)
+        doc_fetched = {
+            d.id: _naive_utc(d.fetched_at)
+            for d in (await db.execute(
+                select(ScheduleDocument).where(
+                    ScheduleDocument.tournament_id == tournament_id,
+                    ScheduleDocument.play_date == _pd))).scalars().all()}
 
     def flag(code, entry, detail):
         v.append({"code": code, "entry_id": entry.id if entry else None,
@@ -287,6 +324,52 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                          f"side {side_key} resolves to {len(served)} player row(s), "
                          f"expected {want} for {e.discipline}: "
                          + " / ".join(p.raw_name or "" for p in served))
+
+        # 2026-09-13, SP Open QUADRA CENTRAL slot 2: the row offered
+        # "W. Osuigwe or F. Labrana" hours after Osuigwe had won that Q1 —
+        # and the sheet agreed with us that she had. Document 238, fetched at
+        # 01:08, printed "[4] Whitney OSUIGWE USA" against the still-open
+        # Urrutia/Tikhonova pair; `_dedupe_day` merged that row into document
+        # 237's, kept the STALER of the two because it named one more player,
+        # and deleted the update. Only the serve path's resolver kept the page
+        # honest, and it cannot when the feeder has no result row of its own.
+        #
+        # `alternatives_already_decided` above is the same rule over the
+        # BRACKET, and it cannot see this: qualifying and doubles have no rows
+        # in `matches` at all, so for them the only record of who came through
+        # is another schedule row — exactly the half `settled_sides_index`
+        # covers and the resolver does not.
+        #
+        # Gated on the two clocks, because an open side is not by itself a
+        # fault. A sheet published BEFORE its feeder finished honestly prints
+        # the choice, and the stored row is meant to keep saying what the
+        # sheet said (routers/schedule.py settles it at serve time instead).
+        # It is only when our newest parse of the slot came from a document
+        # fetched AFTER the answer was known that an unresolved side means we
+        # dropped what that document told us. On this very sheet the gate
+        # separates the two sides correctly: side a's feeder finished 00:24
+        # (before), side b's at 01:16 (after), and 238 printed exactly that.
+        if e.is_tbd and settled_idx:
+            fetched = doc_fetched.get(e.last_document_id)
+            for side_key in (e.tbd_side or "ab"):
+                alts = sorted((p for p in players if p.side == side_key),
+                              key=lambda x: x.position or 1)
+                if len(alts) != 2 or fetched is None:
+                    continue
+                _served, resolved = settle_from_result_rows(alts, settled_idx)
+                if not resolved:
+                    continue
+                key = frozenset().union(
+                    *(_sheet_surnames([p.raw_name]) for p in alts))
+                done = decided_at.get(key)
+                if done is not None and done < fetched:
+                    flag("pending_side_decided_before_document", e,
+                         f"side {side_key} still offers "
+                         + " or ".join(p.raw_name or "" for p in alts)
+                         + f", but that match finished {done.isoformat()} and "
+                           f"document {e.last_document_id} was fetched "
+                           f"{fetched.isoformat()} — the newer sheet's "
+                           "rendering of this slot was lost")
 
         # 2026-08-28, Monterrey ESTADIO: the doubles semi-final printed a choice
         # between two whole PAIRS — "M. Chwalinska / S. Kraus OR S. Aoyama /

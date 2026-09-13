@@ -1642,6 +1642,54 @@ def _superseded(old, new, latest_pool: list) -> bool:
     return False
 
 
+def _open_sides(e) -> int:
+    """How many of a row's two sides are still an unanswered question.
+
+    0, 1 or 2 — the thing `is_tbd` flattens into a bit. `tbd_side` NULL on a
+    row that calls itself unresolved means "unresolved, side unrecorded", read
+    as both sides everywhere else here (`for side_key in (tbd_side or "ab")`),
+    so it is read that way here too.
+    """
+    return len(set(e.tbd_side or "ab")) if e.is_tbd else 0
+
+
+def _prefer_challenger(row, twin) -> bool:
+    """Of two rows found to be one slot, should `row` be the survivor?
+
+    Prefer whichever is MORE settled, regardless of which sheet confirmed it
+    last — and, between two rows settled to the same degree, whichever NAMES
+    MORE PLAYERS. The fuller row is the one parsed by the better parser;
+    letting document order decide would let a row that lost a player to an old
+    bug outlive the row that has them all, and the next sweep would simply
+    re-create the pair.
+
+    SETTLEDNESS IS A DEGREE, NOT A BOOLEAN. This read `twin.is_tbd and not
+    row.is_tbd`, so two rows that were BOTH unresolved fell through to the
+    player count — and a row with more sides open always names more players,
+    because that is what an open side IS. So the count picked the staler row
+    every time, and picked it precisely where `_resolves` had just proved one
+    row strictly more decided than the other (it demands a strict subset of
+    `tbd_side`, so the two are never equally settled when it fires).
+
+    SP Open 2026-09-13: document 237 printed Quadra Central's second Q2 slot
+    as "W. Osuigwe OR F. Labrana vs M. Urrutia OR A. Tikhonova"; document 238,
+    published after Osuigwe won her Q1, printed "[4] Whitney OSUIGWE USA"
+    against the still-open pair. The correct new row (3 players, one side
+    open) lost to the stale one (4 players, both open) and was deleted with
+    the sheet's own update inside it. Only the serve path's
+    `settle_from_result_rows` kept the page right, and it can only do that
+    once the feeder has a recorded winner — with no result row the site would
+    have offered a choice the sheet had already answered.
+
+    A function rather than an expression because it is the rule, and a rule
+    that cannot be called cannot be tested: see tests/test_dedupe_survivor.py.
+    """
+    row_open, twin_open = _open_sides(row), _open_sides(twin)
+    if row_open != twin_open:
+        return row_open < twin_open
+    return len(row.players or []) > len(twin.players or [])
+
+
 async def _absorb(db, keep, drop) -> None:
     """Fold one row into another: the surviving row inherits the earlier
     first_seen_at (it is when the slot was first printed, and _renumber_courts
@@ -1770,18 +1818,11 @@ async def _dedupe_day(db, tournament_id: int, play_date: date) -> int:
         if twin is None:
             kept.append(row)
             continue
-        # Prefer whichever of the two is settled, regardless of which sheet
-        # confirmed it last — and, between two settled rows, whichever NAMES
-        # MORE PLAYERS. The fuller row is the one parsed by the better parser;
-        # letting document order decide would let a row that lost a player to
-        # an old bug outlive the row that has them all, and the next sweep
-        # would simply re-create the pair.
+        # Which of the two survives — see _prefer_challenger for the rule and
+        # the day the old one deleted a sheet's update.
         # Captured before _absorb deletes the loser's players.
         gone, stays = _printed_pairing(row), _printed_pairing(twin)
-        twin_n = len(twin.players or [])
-        row_n = len(row.players or [])
-        if (twin.is_tbd and not row.is_tbd) or (
-                twin.is_tbd == row.is_tbd and row_n > twin_n):
+        if _prefer_challenger(row, twin):
             kept[kept.index(twin)] = row
             await _absorb(db, keep=row, drop=twin)
         else:
