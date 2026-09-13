@@ -2127,6 +2127,17 @@ async def resolve_settled_alternatives(db, tournament_id: int) -> int:
         for side_key in (entry.tbd_side or "ab"):
             rows = [p for p in (entry.players or []) if p.side == side_key]
             if len(rows) < 2:
+                # NOT COLLAPSIBLE IS NOT SETTLED. `continue` leaves this side
+                # out of `sides_left`, and the tail of this function reads an
+                # empty `sides_left` as "every question answered" and clears
+                # is_tbd. That was safe only while every unresolved side held
+                # a CHOICE between two people — and a side can hold one: an
+                # open seat the sheet names by role, "[Q/LL] Qualifier/LL"
+                # (Sao Paulo 2026-09-14, three R32 slots). There is nothing to
+                # collapse and nobody has taken it, so it stays open; the
+                # sheet itself closes it when it prints the qualifier's name.
+                # `placeholder_side_not_unresolved` is what caught this.
+                sides_left += side_key
                 continue
             ids = []
             for r in rows:
