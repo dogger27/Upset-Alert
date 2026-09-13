@@ -54,6 +54,15 @@ _INITIAL_RE = re.compile(r'^[A-Za-z]\.?$')
 _WORDY_RE = re.compile(r'[A-Za-z].*[A-Za-z]', re.S)
 # The qualifying round tokens, enumerated — "QF" starts with Q and is not one.
 _QUALI_ROUND_RE = re.compile(r'^(?:Q\d?|FQ)$', re.I)
+# THE ROLES A SHEET PRINTS WHERE A PERSON WOULD GO — "Qualifier", "LL", "Bye".
+# Read here as a TOKEN test over the whole string, where oop_parser._is_placeholder
+# matches each "/"-separated segment whole. That disagreement is the point: the
+# parser decides what a placeholder IS, and the law decides whether the row it
+# produced names anybody, so a line the parser admits as a name while every word
+# in it is a role still fails here.
+_ROLE_TOKEN_RE = re.compile(
+    r'^(?:qualifier|lucky|loser|alternate|special|exempt|'
+    r'LL|ALT|SE|Q\d?|BYE|TBD|TBA)$', re.I)
 # A leading entry-status marker, "[LL] " / "[WC] " — the mirror of
 # _TRAILING_SEED_RE, which only strips the ones printed after the name.
 _LEADING_SEED_RE = re.compile(r'^(?:\[[^\]]*\]\s*)+')
@@ -65,6 +74,21 @@ _ALPHA_RE = re.compile(r'[^A-Za-z]')
 # three is not a name any tour prints. Measured over all 705 stored player
 # rows: fires on the four shredded ones below and on nothing else.
 _SHRED_MIN_SINGLES = 3
+
+
+def _names_nobody(raw: str) -> bool:
+    """Is this stored player row a ROLE rather than a person?
+
+    Every word left after the seeding, the country and the punctuation come
+    off is a role the tour prints for a seat nobody has taken yet. Sao Paulo
+    2026-09-14 printed three R32 slots "[Q/LL] Qualifier/LL"; that is not a
+    name, and the two rules below decide what a row holding one may look like.
+    """
+    s = _LEADING_SEED_RE.sub("", _TRAILING_SEED_RE.sub("", (raw or "").strip()))
+    toks = [t for t in re.split(r'[\s/]+', s) if t]
+    while toks and toks[-1] in COUNTRY_CODES:
+        toks.pop()
+    return bool(toks) and all(_ROLE_TOKEN_RE.match(t) for t in toks)
 
 
 _CLOCK_RE = re.compile(r'^(\d{1,2})[:.](\d{2})\s*(am|pm)?$', re.I)
@@ -510,6 +534,45 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                 flag("name_not_sheet_form", e,
                      f"side {p.side}: {raw!r} has no capitalised surname — "
                      f"not the sheet's rendering")
+
+        # 2026-09-14, Sao Paulo: "[Q/LL] Qualifier/LL" — the tournament saying
+        # the seat belongs to a qualifier or a lucky loser and to nobody yet.
+        # The parser read it as a name and split it on the slash, which there
+        # means PARTNERS, so three R32 singles slots published as doubles: a
+        # three-person team ("[Q", "LL] Qualifier", "LL") against [3] Sierra,
+        # wearing a DOUBLES badge, with the side never declared unresolved.
+        # Two things must hold of a row that names nobody, and each would have
+        # caught it alone: its side is DECLARED unresolved (or the page draws
+        # an open seat as a settled opponent), and the side holds exactly ONE
+        # row (a placeholder's "/" separates the ways the seat can be filled,
+        # never two people — so it can never be a team).
+        for side_key, side in (("a", na), ("b", nb)):
+            holders = [p for p in side if _names_nobody(p.raw_name or "")]
+            if not holders:
+                continue
+            if side_key not in tbd_side:
+                flag("placeholder_side_not_unresolved", e,
+                     f"side {side_key}: "
+                     + " / ".join(p.raw_name or "" for p in holders)
+                     + " names nobody, but the side is not declared unresolved")
+            if len(side) > 1:
+                flag("placeholder_side_split", e,
+                     f"side {side_key} has {len(side)}: "
+                     + " / ".join(p.raw_name or "" for p in side)
+                     + " — an open seat is one row, not a team")
+
+        # The same wreck read syntactically, which is the cheaper half: "[Q"
+        # and "LL] Qualifier" are the two ends of ONE bracketed marker, torn
+        # apart by a split the sheet never asked for. A stored name whose
+        # brackets do not balance is a FRAGMENT — no tour prints one — however
+        # plausible the words inside it look, and this fires whatever the rule
+        # above thinks of the words.
+        for p in players:
+            raw = p.raw_name or ""
+            if raw.count("[") != raw.count("]"):
+                flag("name_bracket_unbalanced", e,
+                     f"side {p.side}: {raw!r} — half of a bracketed marker, "
+                     f"not a name")
 
         # 2026-08-25, Monterrey "Oleksandra OLIYNYKOVA vs D. Parry": the same
         # class as the rule above, through the door it leaves open. The sheet
