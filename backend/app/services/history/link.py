@@ -15,7 +15,7 @@ than when TML publishes it. Everything runs off the request path.
 """
 import json
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from typing import Optional
 
@@ -297,6 +297,10 @@ def pair_tournament(draw: Draw, tournament: Tournament, candidates: list[dict], 
 # pair of real players with one surname must not become the other.
 _REPAIR_MIN_RATIO = 0.85
 
+# How long after the last match TML is given before an unpaired draw is a fault
+# rather than a feed that has not caught up.
+TML_PUBLISH_GRACE_DAYS = 3
+
 
 def _close_name(entry_name: str, gender: str, te_rows: list) -> list:
     """Tennis Explorer players of this gender whose name is nearly this one's
@@ -469,7 +473,12 @@ async def link_draws(db: AsyncSession, draw_ids: Optional[list[int]] = None) -> 
                 # tournament that has not happened, so a future draw is
                 # unpairable by definition and says nothing about the linkage.
                 # Twenty-three of the twenty-six unpaired are exactly that.
-                played = draw.start_date is not None and draw.start_date <= date.today()
+                # TML publishes a tournament AFTER it finishes, so "has begun"
+                # is the wrong test: it makes every event in progress look
+                # stuck. Guadalajara tripped this the hour its first ball was
+                # observed. Give the feed a few days past the last match.
+                played = (draw.end_date is not None
+                          and draw.end_date + timedelta(days=TML_PUBLISH_GRACE_DAYS) < date.today())
                 report["unpaired"].append({"draw_id": draw.id, "played": played,
                                            "name": f"{tournament.name} {draw.year} {draw.gender}"})
             entries = (await db.execute(select(DrawEntry).where(DrawEntry.draw_id == draw.id))).scalars().all()
@@ -639,10 +648,16 @@ async def link_all_async(draw_ids: Optional[list[int]] = None) -> dict:
     from app.services.system_log import app_log
     async with AsyncSessionLocal() as db:
         repair = await repair_te_links(db)
-        if repair["fixed"] or repair["left"]:
-            await app_log("warning" if repair["left"] else "info", "history",
-                          f"Tennis Explorer links: {len(repair['fixed'])} entries re-pointed at the player their name "
-                          f"names, {len(repair['left'])} left on the wrong player", repair)
+        # CLEARED IS THE NEWS. repair_te_links stopped leaving an entry on the
+        # wrong player — it re-points it or it nulls the link — so `left` is
+        # structurally empty now and was the only thing that made this speak.
+        # A cleared link is a name nothing in Tennis Explorer matches, which is
+        # exactly the data problem the clearing comment hands to a human; it
+        # was being dropped in silence.
+        if repair["fixed"] or repair["cleared"]:
+            await app_log("warning" if repair["cleared"] else "info", "history",
+                          f"Tennis Explorer links: {len(repair['fixed'])} entries re-pointed at the player their "
+                          f"name names, {len(repair['cleared'])} cleared as unmatchable", repair)
         report = await link_draws(db, draw_ids)
     summary = (f"TML linkage: {report['draws']} draws ({report['paired_id']} by id, {report['paired_name']} by name, "
                f"{len(report['unpaired'])} unpaired); players +{report['linked_match']} by match, "
