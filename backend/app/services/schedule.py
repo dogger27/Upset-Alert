@@ -961,7 +961,13 @@ async def ingest_document(db, tournament, play_date: date, url: str,
             # whole feature turns on: without match_id there are no live scores
             # and no completed scores, and the page is just a nicer PDF. Only
             # singles can resolve — qualifying has no rows in `matches` and
-            # doubles has no draw at all.
+            # doubles has no draw at all. BOTH halves are gated below: the
+            # qualifying half was stated in this comment and enforced only in
+            # `relink_bracket_matches`, which is how the same omission in
+            # `_fill_tbd_rounds` pinned three Guadalajara Q2 rows to main-draw
+            # matches on 2026-09-13. A qualifier who has come through is in
+            # `draw_entries` under her MAIN-draw slot, so her qualifying row
+            # can genuinely find a bracket pairing — it is simply never hers.
             side_a_ids = [i for i in ids[:len(na)] if i]
             side_b_ids = [i for i in ids[len(na):] if i]
 
@@ -971,7 +977,7 @@ async def ingest_document(db, tournament, play_date: date, url: str,
             cand_a = _candidates(draws, na)
             cand_b = _candidates(draws, nb)
             found = None
-            if discipline == 'singles' and cand_a and cand_b:
+            if discipline == 'singles' and stage == 'main' and cand_a and cand_b:
                 found = (await db.execute(
                     select(Match).where(
                         Match.player1_id.isnot(None), Match.player2_id.isnot(None),
@@ -1255,6 +1261,19 @@ async def _fill_tbd_rounds(db, tournament_id: int, play_date: date,
             or_(ScheduleEntry.round_label.is_(None),
                 ScheduleEntry.match_id.is_(None)),
             ScheduleEntry.discipline == 'singles',
+            # "Only singles can resolve" is HALF the rule — qualifying has no
+            # rows in `matches` either, and only `relink_bracket_matches` was
+            # saying so. Guadalajara 2026-09-13: the wiki scrape had already
+            # written the qualifiers into the main draw, so a Q2 slot's one
+            # resolvable player (Dolehide, seeded into R32 as [Q]) found her
+            # MAIN-DRAW match below and the row took it — on a single side's
+            # evidence, because the other qualifier is in no draw we store.
+            # Three of the four Q2 rows were pinned to somebody else's R32,
+            # and since the serializer prefers the linked match's scores over
+            # the row's own, all three rendered "COMPLETED" with a BLANK score
+            # while the sheet printed 6-1 6-2. The one Q2 row that resolved
+            # nobody was the only one that showed its result.
+            ScheduleEntry.stage == 'main',
         ))).scalars().all()
     if not rows:
         return
@@ -2233,6 +2252,50 @@ async def relink_bracket_matches(db, tournament_id: int) -> int:
     # Same refresh as the resolver above, and needed for the same reason: this
     # runs from the ingest's own session too. See _READ_THE_DAY_AS_STORED.
     await db.flush()
+
+    # UNLINK before relinking. `match_id` is only ever WRITTEN, never cleared,
+    # so a row that took a link it was not entitled to keeps it for the life of
+    # the tournament however the writing paths are later gated — a parser or
+    # gate fix alone heals nothing already stored. Guadalajara 2026-09-13: the
+    # main draw had its qualifiers filled in, so `_fill_tbd_rounds` (gated on
+    # discipline but not stage) pinned three Q2 rows to the R32 matches those
+    # qualifiers had been seeded into. Non-main and non-singles rows have no
+    # bracket match by construction, so any link on one is somebody else's and
+    # strictly worse than none: the serializer prefers the linked match's
+    # scores over the row's own, so all three read "COMPLETED" with a blank
+    # score while their result sat unread in the row beside it.
+    stray = (await db.execute(
+        select(ScheduleEntry).where(
+            ScheduleEntry.tournament_id == tournament_id,
+            ScheduleEntry.match_id.isnot(None),
+            or_(ScheduleEntry.discipline != 'singles',
+                ScheduleEntry.stage != 'main'),
+            ScheduleEntry.play_date >= today - _td(days=1),
+        ).execution_options(populate_existing=True))).scalars().all()
+    if stray:
+        unlinked = [(e.id, e.match_id) for e in stray]
+        for e in stray:
+            # draw_id stays: a qualifying singles row is meant to carry it (it
+            # is what serves surface and gender), and ingest sets it from the
+            # players' own draw entries with no match involved. Only the match
+            # link is the contradiction. A doubles row's draw_id is cleared at
+            # ingest instead.
+            e.match_id = None
+        # Committed HERE rather than with the relink below, because every one
+        # of that block's three early returns would otherwise drop this work
+        # on the floor — the ordinary case is a day with nothing to relink.
+        await db.commit()
+        from app.services.system_log import app_log
+        await app_log(
+            "warning", "order_of_play",
+            f"Cleared {len(unlinked)} bracket link(s) from schedule slot(s) "
+            f"that cannot have one (not main-draw singles): "
+            + "; ".join(f"entry {eid} -/-> match {mid}" for eid, mid in unlinked[:5]),
+            {"tournament_id": tournament_id,
+             "unlinked": [[eid, mid] for eid, mid in unlinked[:20]]})
+        logger.info("Unlinked %d non-main schedule slot(s) for tournament %s",
+                    len(unlinked), tournament_id)
+
     entries = (await db.execute(
         select(ScheduleEntry).where(
             ScheduleEntry.tournament_id == tournament_id,
