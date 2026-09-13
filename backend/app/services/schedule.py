@@ -39,7 +39,7 @@ from app.models.schedule import (ScheduleChange, ScheduleDocument,
                                  ScheduleEntry, ScheduleEntryPlayer)
 from app.models.tournament import Draw, DrawEntry, Match
 from app.services.live_state import is_suspended
-from app.services.oop_parser import COUNTRY_CODES, parse_pdf
+from app.services.oop_parser import COUNTRY_CODES, is_placeholder, parse_pdf
 from app.services.rankings import _norm
 
 logger = logging.getLogger(__name__)
@@ -1653,6 +1653,33 @@ def _open_sides(e) -> int:
     return len(set(e.tbd_side or "ab")) if e.is_tbd else 0
 
 
+def _wreckage(e) -> int:
+    """How many of a row's player rows are not a person and never were.
+
+    Two shapes, both of them evidence that the parse that stored this row was
+    wrong rather than merely older: half of a bracketed marker ("[Q",
+    "LL] Qualifier" — no tour prints one), and a ROLE where a name belongs on
+    a side the row does not admit is open. `schedule_invariants` states both as
+    law (`name_bracket_unbalanced`, `placeholder_side_not_unresolved`).
+
+    Read by `_prefer_challenger`, because a corrected parser cannot heal a day
+    otherwise. Sao Paulo 2026-09-14: the fixed parse produced the right row for
+    each of three slots and every one of them LOST the dedupe to the wreck it
+    was meant to replace — the wreck read as settled (its shredded side was
+    never declared open) and settledness outranks everything, so the fix
+    reached the database and never reached the page. The next parser fix this
+    system ships would have hit the same wall.
+    """
+    n = 0
+    for p in (e.players or []):
+        raw = (p.raw_name or "").strip()
+        if raw.count("[") != raw.count("]"):
+            n += 1
+        elif raw and is_placeholder(raw) and p.side not in (e.tbd_side or ""):
+            n += 1
+    return n
+
+
 def _prefer_challenger(row, twin) -> bool:
     """Of two rows found to be one slot, should `row` be the survivor?
 
@@ -1681,9 +1708,20 @@ def _prefer_challenger(row, twin) -> bool:
     once the feeder has a recorded winner — with no result row the site would
     have offered a choice the sheet had already answered.
 
+    A WRECK IS NOT A SETTLED ROW, however settled it claims to be. Both tests
+    below read fields the losing parse also wrote, so a row shredded into
+    fragments answers them with the shredded parse's own words: Sao Paulo
+    2026-09-14 stored "[Q/LL] Qualifier/LL" as three players on a side it never
+    declared open, which reads here as SETTLED and as naming MORE people than
+    the corrected row. It beat the fix on both counts. `_wreckage` is the one
+    reading that does not take the row's word for itself, so it goes first.
+
     A function rather than an expression because it is the rule, and a rule
     that cannot be called cannot be tested: see tests/test_dedupe_survivor.py.
     """
+    row_junk, twin_junk = _wreckage(row), _wreckage(twin)
+    if row_junk != twin_junk:
+        return row_junk < twin_junk
     row_open, twin_open = _open_sides(row), _open_sides(twin)
     if row_open != twin_open:
         return row_open < twin_open
