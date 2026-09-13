@@ -309,6 +309,7 @@ async def hall_of_fame(
             Draw.gender,
             Draw.category,
             User.username,
+            User.is_bot,
         )
         .join(Draw, Draw.id == TournamentResult.draw_id)
         .join(User, User.id == TournamentResult.user_id)
@@ -336,9 +337,14 @@ async def hall_of_fame(
             continue
         seen[tier].add(key)
 
-        ranked[tier][gender] += 1
+        # The ranking bot competes but does not PLACE: it is a yardstick, not a
+        # rival, so it takes no number and displaces no one from the top five
+        # (owner, 2026-09-13). Its row still appears, in points order.
+        if not row.is_bot:
+            ranked[tier][gender] += 1
         entry = {
-            "rank": ranked[tier][gender],
+            "rank": None if row.is_bot else ranked[tier][gender],
+            "is_bot": bool(row.is_bot),
             "user_id": row.user_id,
             "username": row.username,
             "points": row.points,
@@ -350,7 +356,10 @@ async def hall_of_fame(
             "is_current_user": row.user_id == me_id,
         }
 
-        if entry["rank"] <= _HOF_TOP_N:
+        # A bot sits wherever its points put it among the five placed rows; past
+        # them it is simply off the list, like anyone else.
+        if (ranked[tier][gender] < _HOF_TOP_N if row.is_bot
+                else entry["rank"] <= _HOF_TOP_N):
             by_tier[tier][gender].append(entry)
         elif row.user_id == me_id and mine[tier][gender] is None:
             # rows are ordered by points desc, so the first one seen is their best

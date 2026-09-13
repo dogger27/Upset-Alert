@@ -29,7 +29,7 @@ const TOP_N = 5
 
 function rowClass(entry) {
   const classes = []
-  if (entry.rank <= 3) classes.push(`hof-row--top${entry.rank}`)
+  if (entry.rank != null && entry.rank <= 3) classes.push(`hof-row--top${entry.rank}`)
   if (entry.rank > TOP_N) classes.push('hof-row--extra')
   if (entry.is_current_user) classes.push('hof-row--me')
   return classes.join(' ')
@@ -57,7 +57,7 @@ function GenderTable({ entries, tour }) {
             <tbody>
               {entries.map(entry => (
                 <tr key={`${entry.username}-${entry.tournament_id}`} className={rowClass(entry)}>
-                  <td className="hof-rank">{MEDAL[entry.rank] ?? `#${entry.rank}`}</td>
+                  <td className="hof-rank">{entry.rank == null ? '' : MEDAL[entry.rank] ?? `#${entry.rank}`}</td>
                   <td className="hof-username">{entry.username}</td>
                   <td className="hof-tourn">
                     {entry.tournament_name}{' '}
