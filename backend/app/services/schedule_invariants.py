@@ -519,6 +519,31 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                          + f" is bracket match {pair_match[pair]}, "
                            f"but match_id is {e.match_id}")
 
+        # 2026-09-13, Guadalajara: three Q2 rows wore main-draw R32 match ids
+        # and the two checks above were both blind to it — for the same reason
+        # `pairing_duplicated` was blind to two pending rows, their own
+        # `e.stage == "main"` gate. A wrongly linked row is exactly the row
+        # that is not main, so a rule that only inspects main rows can never
+        # see this class. `bracket_match_mismatch` needs both sides to name a
+        # draw entry too; a qualifying slot never has both, because the loser
+        # of a qualifying match is in no draw we store.
+        #
+        # The rule underneath is absolute and needs no name matching: only
+        # main-draw SINGLES has rows in `matches` at all. Qualifying draws and
+        # doubles draws are not stored, so any bracket match a non-main or
+        # non-singles row finds belongs to somebody else. Measured over all
+        # 884 stored entries: 392 of 392 main singles rows are linked and
+        # every other row is not, bar the three this names.
+        #
+        # draw_id is deliberately NOT part of this: ingest gives a qualifying
+        # singles row its players' draw_id on purpose, because surface and
+        # gender are served off it. The match link is the contradiction.
+        if e.match_id is not None and not (
+                e.discipline == "singles" and e.stage == "main"):
+            flag("bracket_link_outside_main", e,
+                 f"{e.stage}/{e.discipline} row ({e.round_label}) holds "
+                 f"match_id {e.match_id} — only main-draw singles has one")
+
         # 2026-08-25, Medvedev vs Damm: the row was created from a revision
         # that printed the slot unresolved, the bracket resolver replaced both
         # players with their DRAW names, and `raw_name` was write-once — so
