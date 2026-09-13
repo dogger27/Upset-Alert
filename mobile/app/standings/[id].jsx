@@ -223,7 +223,7 @@ export default function GlobalStandings() {
                   <Body href={opens ? { pathname: `/draw/${id}`, params: { user: e.user_id, name: e.username } } : undefined}
                         grow style={[s.body, podiumCol && s.tightRow]}>
                     <Text style={s.rank}>
-                      {view.placesDecided && rankOf.get(e.user_id) != null && rankOf.get(e.user_id) <= 3 ? ['🏆', '🥈', '🥉'][rankOf.get(e.user_id) - 1] : (rankOf.get(e.user_id) ?? '–')}
+                      {view.placesDecided && rankOf.get(e.user_id) != null && rankOf.get(e.user_id) <= 3 ? ['🏆', '🥈', '🥉'][rankOf.get(e.user_id) - 1] : (rankOf.get(e.user_id) ?? '')}
                     </Text>
                     <View style={s.who}>
                       <PlayerName name={e.podium_locked && cashPool ? `${e.username} 💰` : e.username} shrinkOnly
