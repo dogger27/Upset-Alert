@@ -465,7 +465,13 @@ async def link_draws(db: AsyncSession, draw_ids: Optional[list[int]] = None) -> 
                     draw.tml_tourney_id = tml_id
                 report["paired_id" if how == "id" else "paired_name"] += 1
             else:
-                report["unpaired"].append({"draw_id": draw.id, "name": f"{tournament.name} {draw.year} {draw.gender}"})
+                # PLAYED, or merely scheduled? TML has no record of a
+                # tournament that has not happened, so a future draw is
+                # unpairable by definition and says nothing about the linkage.
+                # Twenty-three of the twenty-six unpaired are exactly that.
+                played = draw.start_date is not None and draw.start_date <= date.today()
+                report["unpaired"].append({"draw_id": draw.id, "played": played,
+                                           "name": f"{tournament.name} {draw.year} {draw.gender}"})
             entries = (await db.execute(select(DrawEntry).where(DrawEntry.draw_id == draw.id))).scalars().all()
             matches = (await db.execute(select(Match).where(Match.draw_id == draw.id, Match.winner_id.isnot(None),
                                                             Match.is_bye == False))).scalars().all()  # noqa: E712
@@ -645,6 +651,45 @@ async def link_all_async(draw_ids: Optional[list[int]] = None) -> dict:
                f"{len(report['conflicts'])} conflicts; {len(report['bad_te_links'])} broken TE links; "
                f"{report['result_disagreements']} result disagreements; "
                f"{report['exported']} results exported")
-    await app_log("warning" if report["conflicts"] or report["unpaired"] else "info", "history", summary,
-                  {k: v for k, v in report.items() if k in ("unpaired", "unlinked", "conflicts", "bad_te_links")})
+    # WARN ON WHAT CHANGED, not on what is permanently true. This warned
+    # whenever there was any unpaired draw or any conflict — and there always
+    # is: twenty-three future draws that cannot be paired until they are
+    # played, three TML gaps in the women's grass season, four genuine TML
+    # duplicates. So it warned every night with nothing to act on, and became
+    # the loudest line in /issues while saying the same thing each time
+    # (owner's run, 2026-09-13).
+    #
+    # A nightly report's news is the DELTA. Counted against the previous run,
+    # kept in history_meta, and a missing baseline is not evidence of anything
+    # — the first run after this ships simply records one.
+    signals = {
+        # Only draws that have been PLAYED: a future one is unpairable by
+        # definition.
+        "stuck": sum(1 for u in report["unpaired"] if u.get("played")),
+        "unlinked": len(report["unlinked"]),
+        "conflicts": len(report["conflicts"]),
+        "bad_te_links": len(report["bad_te_links"]),
+    }
+    prev = {}
+    try:
+        raw = await hdb.run(lambda c: hdb.get_meta(c, "link_counts"))
+        prev = json.loads(raw) if raw else {}
+    except Exception:
+        prev = {}
+    worse = sorted(k for k, v in signals.items() if v > prev.get(k, v))
+    # A fuzzy match is a GUESS the linkage made, and the one thing here worth a
+    # human's eye the first time it happens rather than the second.
+    if report["linked_fuzzy"]:
+        worse.append("fuzzy matches")
+    level = "warning" if (worse and prev) else "info"
+    if worse and prev:
+        summary += f" — NEW: {', '.join(worse)}"
+    await app_log(level, "history", summary,
+                  {**{k: v for k, v in report.items()
+                      if k in ("unpaired", "unlinked", "conflicts", "bad_te_links")},
+                   "signals": signals, "previous": prev})
+    try:
+        await hdb.run(lambda c: hdb.set_meta(c, "link_counts", json.dumps(signals)))
+    except Exception:
+        logger.warning("could not record the linkage counts", exc_info=True)
     return report
