@@ -9,6 +9,7 @@ Research conducted June 2026.
 """
 from datetime import datetime, timezone
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 # ── Per-tournament lookup ─────────────────────────────────────────────────────
 # Each entry: (name_fragments, gender_filter, iana_tz, start_hour, start_minute)
@@ -283,9 +284,19 @@ def sync_closing_time(tournament) -> bool:
     deadline has already done its job, picks are locked on evidence
     (picks_locked_at), and rewriting it could only rewrite history.
 
+    ALSO REFUSES ONCE THE FIRST BALL HAS BEEN OBSERVED. This re-derivation is a
+    guess built from start_date and a venue lookup; first_match_at is a
+    published order of play. 2026 Guadalajara starts Sunday, Wikipedia's
+    calendar says Monday, and the two writers took turns: ESPN set the deadline
+    to Sun 12:00, the next scrape put it back to Mon 12:00, ESPN set it again —
+    the same "deadline set from the published order of play" line every pass,
+    for hours. Evidence outranks the estimate, so the estimate stands aside.
+
     Returns True if closing_time changed.
     """
     if tournament.picks_locked_at is not None or tournament.status in ("active", "completed"):
+        return False
+    if tournament.first_match_at is not None:
         return False
 
     ct = closing_time_utc(
@@ -298,6 +309,67 @@ def sync_closing_time(tournament) -> bool:
         return False
 
     tournament.closing_time = ct
+    return True
+
+
+def adopt_observed_start_date(tournament) -> bool:
+    """Move start_date onto the day the first ball was actually observed.
+
+    start_date comes from Wikipedia's calendar, which is a plan written months
+    ahead; first_match_at comes from a published order of play. When they name
+    different days the calendar is the one that is wrong, and it is what the
+    draw card prints — 2026 Guadalajara advertised "Sep 14 – 19" while its first
+    match was seven minutes from starting on the 13th (owner, 2026-09-13).
+
+    Deliberately narrow:
+
+      • one day only. A larger gap is not a tournament that moved its start, it
+        is evidence about some other event, and the refiners that write
+        first_match_at already refuse those.
+      • never once picks are locked or play has begun. Then start_date is
+        history, and `week`, the ranking weeks and the release dates hang off it.
+      • never when the move would make the draw look already started. Reading a
+        start_date as "this began yesterday" shuts picks that should still be
+        open — the direction is not the danger, the appearance is
+        (feedback_start_date_backwards_locks_picks).
+
+    `week` follows, via tennis_week, which already knows a Sunday start belongs
+    to the week ahead — so a Monday→Sunday correction leaves the week alone.
+
+    Returns True if start_date changed.
+    """
+    from datetime import date as _date
+
+    from app.services.tournament_sync import tennis_week
+
+    if tournament.first_match_at is None or tournament.start_date is None:
+        return False
+    if tournament.picks_locked_at is not None or tournament.status in ("active", "completed"):
+        return False
+
+    hour = tournament.first_match_local_hour
+    if hour is None:
+        return False
+    observed = tournament.first_match_at.date()
+    if tournament.venue_timezone:
+        try:
+            observed = tournament.first_match_at.replace(
+                tzinfo=timezone.utc).astimezone(
+                    ZoneInfo(tournament.venue_timezone)).date()
+        except Exception:
+            return False
+    if observed == tournament.start_date:
+        return False
+    if abs((observed - tournament.start_date).days) > 1:
+        return False
+    if observed < _date.today():
+        # Would read as "started yesterday" and shut picks that are still open.
+        return False
+
+    tournament.start_date = observed
+    week = tennis_week(observed, tournament.year)
+    if week is not None:
+        tournament.week = week
     return True
 
 
