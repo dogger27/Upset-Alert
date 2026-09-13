@@ -1224,6 +1224,12 @@ async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get
             "user_id": user.id,
             "username": user.username,
             "full_name": user.full_name,
+            # A BOT COMPETES BUT TAKES NO PLACE. Highest_Rank picks the
+            # higher-ranked player in every match; it belongs in the table as a
+            # yardstick and not in the numbering, where it pushed every person
+            # below it down one (owner, 2026-09-13). The clients do the
+            # numbering, so they need to know which row this is.
+            "is_bot": bool(user.is_bot),
             "round_points": pts_list,
             "total": sum(pts_list),
             "correct_count": correct_count,
