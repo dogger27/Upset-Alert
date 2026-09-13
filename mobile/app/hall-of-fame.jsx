@@ -56,7 +56,7 @@ function Board({ gender, rows }) {
       {rows.map(r => (
         <View key={`${r.user_id}:${r.tournament_id}`}
               style={[s.row, r.is_current_user && s.mine]}>
-          <Text style={[s.rank, r.rank === 1 && { color: C.clay }]}>{r.rank}</Text>
+          <Text style={[s.rank, r.rank === 1 && { color: C.clay }]}>{r.rank ?? ''}</Text>
           <View style={s.who}>
             {/* Username, never display_name — see the predictors sheet. */}
             <PlayerName name={r.username} shrinkOnly style={[s.user, r.is_current_user && { color: C.clay }]} />
