@@ -150,4 +150,34 @@ check('a medal needs a decided final AND the present', () => {
   assert.equal(placesDecided({}), false)
 })
 
+check('a bot takes no place and consumes none', () => {
+  /* Highest_Rank held 8th on the US Open's global standings, so every person
+     below it read one place lower than they stood. It stays in the table,
+     sorted on points like everyone else; it just has no number. */
+  const rows = [
+    { user_id: 1, total: 209, round_points: [209] },
+    { user_id: 2, total: 192, round_points: [192] },
+    { user_id: 17, total: 166, round_points: [166], is_bot: true },
+    { user_id: 3, total: 165, round_points: [165] },
+  ]
+  assert.deepEqual(competitionRanks(rows), [1, 2, null, 3])
+})
+
+check('a bot between two level people does not break their shared rank', () => {
+  const rows = [
+    { user_id: 1, total: 100, round_points: [100] },
+    { user_id: 17, total: 100, round_points: [100], is_bot: true },
+    { user_id: 2, total: 100, round_points: [100] },
+    { user_id: 3, total: 90, round_points: [90] },
+  ]
+  // The two people are level: 1 and 1, then the next takes third.
+  assert.deepEqual(competitionRanks(rows), [1, null, 1, 3])
+})
+
+check('a table of nothing but bots numbers nobody', () => {
+  assert.deepEqual(competitionRanks([{ user_id: 17, total: 5, round_points: [5], is_bot: true }]), [null])
+  assert.deepEqual(competitionRanks([]), [])
+  assert.deepEqual(competitionRanks(null), [])
+})
+
 console.log(`\n  ${n} passed`)

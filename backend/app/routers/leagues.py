@@ -794,6 +794,12 @@ async def round_scores(
             "user_id": member.user_id,
             "username": member.user.username,
             "full_name": member.user.full_name,
+            # A BOT COMPETES BUT TAKES NO PLACE. Highest_Rank picks the
+            # higher-ranked player in every match; it belongs in the table as a
+            # yardstick and not in the numbering, where it pushed every person
+            # below it down one (owner, 2026-09-13). The clients do the
+            # numbering, so they need to know which row this is.
+            "is_bot": bool(member.user.is_bot),
             "round_points": pts_list,
             "total": sum(pts_list),
             "correct_count": correct_count,

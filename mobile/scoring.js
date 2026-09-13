@@ -23,12 +23,31 @@ export function sameStanding(a, b) {
 
 /* Competition ranking: 1, 1, 1, 4 — not 1, 1, 1, 2.
  * Genuinely level people share a rank, and the next person takes the position
- * they actually occupy. */
+ * they actually occupy.
+ *
+ * A BOT TAKES NO PLACE AND CONSUMES NONE. Highest_Rank picks the higher-ranked
+ * player in every match: it belongs in the table, sorted on points like
+ * everyone else, but it is a yardstick rather than a competitor — and while it
+ * held a number, every person below it was shown one place lower than they
+ * stood (owner, 2026-09-13). Its rank is null, and the next person takes the
+ * place the bot did not.
+ *
+ * Ties are compared against the previous PERSON for the same reason: a bot
+ * sitting between two level people must not break their shared rank.
+ */
 export function competitionRanks(entries) {
   const out = []
-  entries.forEach((e, i) => {
-    out.push(i > 0 && sameStanding(entries[i - 1], e) ? out[i - 1] : i + 1)
-  })
+  let placed = 0
+  let lastPerson = null
+  let lastRank = 0
+  for (const e of entries || []) {
+    if (e?.is_bot) { out.push(null); continue }
+    placed += 1
+    const rank = lastPerson && sameStanding(lastPerson, e) ? lastRank : placed
+    out.push(rank)
+    lastPerson = e
+    lastRank = rank
+  }
   return out
 }
 

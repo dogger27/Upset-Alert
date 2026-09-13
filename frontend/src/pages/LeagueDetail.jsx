@@ -1576,10 +1576,33 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
      number keeps saying where someone stands rather than where they happen to
      appear. It doubles as the points tiebreak below: equal by rank is equal by
      points, by construction. */
+  /* A BOT TAKES NO PLACE AND CONSUMES NONE. Highest_Rank picks the
+     higher-ranked player in every match: it belongs in the table, sorted on
+     points like everyone else, but it is a yardstick rather than a competitor
+     — and while it held a number, every person below it was shown one place
+     lower than they stood (owner, 2026-09-13). Its rank is null and the next
+     person takes the place it did not.
+
+     Ties compare against the previous PERSON for the same reason: a bot
+     sitting between two level people must not break their shared rank. */
+  /* A ROW WITH NO PLACE STILL HAS TO SORT. `a.standingsRank - b.standingsRank`
+     on a null reads as zero and floats the bot to the front of every tie, so
+     the tiebreak goes through this. A FINITE sentinel, not Infinity:
+     Infinity - Infinity is NaN, and a NaN comparator leaves the array in
+     whatever order it started — this codebase has paid for that once already,
+     in the court ordering on the schedule. */
+  const NO_PLACE = 99999
+  const placeKey = e => e.standingsRank ?? NO_PLACE
   const ranked = (() => {
-    let rank = 1
-    return pointsOrder.map((e, i) => {
-      if (i > 0 && !sameStanding(pointsOrder[i - 1], e)) rank = i + 1
+    let placed = 0
+    let lastPerson = null
+    let lastRank = 0
+    return pointsOrder.map(e => {
+      if (e.is_bot) return { ...e, standingsRank: null }
+      placed += 1
+      const rank = lastPerson && sameStanding(lastPerson, e) ? lastRank : placed
+      lastPerson = e
+      lastRank = rank
       return { ...e, standingsRank: rank }
     })
   })()
@@ -1603,13 +1626,13 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
         return [...ranked].sort((a, b) =>
           ((a.best_rank ?? Infinity) - (b.best_rank ?? Infinity))
           || ((a.worst_rank ?? Infinity) - (b.worst_rank ?? Infinity))
-          || (a.standingsRank - b.standingsRank))
+          || (placeKey(a) - placeKey(b)))
       }
       const key = colSort === 'correct' ? 'correct_count'
         : colSort === 'pwin' ? 'p_win'
         : colSort === 'ppod' ? 'p_podium' : 'max_points'
       return [...ranked].sort((a, b) =>
-        ((b[key] ?? 0) - (a[key] ?? 0)) || (a.standingsRank - b.standingsRank))
+        ((b[key] ?? 0) - (a[key] ?? 0)) || (placeKey(a) - placeKey(b)))
     }
     const { round, slot } = activeSort
     const nameAt = e => cmpByUser[e.user_id]?.[round]?.[slot]?.name ?? null
@@ -1624,7 +1647,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
       const cb = nb ? counts.get(nb) : -1
       if (ca !== cb) return cb - ca
       if (na !== nb) return (na ?? '').localeCompare(nb ?? '')
-      return a.standingsRank - b.standingsRank
+      return placeKey(a) - placeKey(b)
     })
   })()
 
@@ -2052,7 +2075,11 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                     <circle cx="12" cy="7" r="4" />
                   </svg>
                 </a>
-                <span className="lt-pos-num">{entry.standingsRank ?? rank + 1}.</span>
+                {/* A bot has no place, so it prints none — and must NOT fall
+                    back to the row index, which would show a number again. */}
+                <span className="lt-pos-num">
+                  {entry.is_bot ? '' : `${entry.standingsRank ?? rank + 1}.`}
+                </span>
                 {/* A PODIUM LOCKED — third or better in every future, ties
                     sharing a place — reads in gold, and carries the money
                     when the draw runs a cash pool: that is what the place is
@@ -2069,7 +2096,9 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                       rank — ties share it — so a shared place shares its
                       medal, and a tie for first is two trophies and no
                       silver, which is what a tie means. */}
-                  {placesShown && entry.standingsRank <= 3 && (
+                  {/* `null <= 3` is TRUE in JavaScript, so a bot would have
+                      taken a medal on the null. */}
+                  {placesShown && entry.standingsRank != null && entry.standingsRank <= 3 && (
                     <span className="lt-place-icon">{PLACE_ICONS[entry.standingsRank - 1]}</span>
                   )}
                   <UserName className="lt-progress-name-text" user={{ username: entry.username, full_name: showRealName ? entry.full_name : null }} />
