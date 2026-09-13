@@ -242,11 +242,17 @@ class Match:
         F. Auger-Aliassime") looked like two partners a side and was labelled
         doubles. A doubles candidate names its pair with a slash, which is what
         distinguishes the two cases.
+
+        A PLACEHOLDER'S SLASH IS NOT A PARTNER SEPARATOR either. "Qualifier/LL"
+        names one open seat two ways, so a side holding only placeholders is
+        one entrant wide and the SHAPE of the match comes from the other side —
+        which is what `is_doubles` asks for. Counting its slash made three
+        Sao Paulo singles slots doubles (2026-09-14).
         """
         names = self.side_a if side == 'a' else self.side_b
         if side not in (self.tbd_side or ''):
             return len(names)
-        return 2 if any('/' in n for n in names) else 1
+        return 2 if any('/' in n and not _is_placeholder(n) for n in names) else 1
 
     @property
     def complete(self):
@@ -374,6 +380,43 @@ def _split_players(text):
     for p in parts:
         out.extend(x.strip() for x in _PAIR_SPLIT_RE.split(p) if x.strip())
     return out
+
+
+# THE ROLES A SHEET PRINTS WHERE A PERSON WOULD GO. Not names — the seat is
+# still open, and the tournament is saying who will be allowed to fill it.
+_ROLE_WORD_RE = re.compile(
+    r'^(?:qualifier|lucky\s*loser|alternate|special\s*exempt|'
+    r'LL|ALT|SE|Q\d?|BYE|TBD|TBA)$', re.I)
+# The seeding/entry markers that wrap such a line, at either end — the ATP puts
+# them after the country, the WTA in front. Same brackets as everywhere else.
+_MARKERS_RE = re.compile(r'^(?:\[[^\]]*\]\s*)+|(?:\s*\[[^\]]*\])+$')
+
+
+def _is_placeholder(text):
+    """Does this line name NOBODY — a seat the sheet says is still open?
+
+    Sao Paulo's WTA sheet (2026-09-14) printed three R32 slots as
+    "[Q/LL] Qualifier/LL": qualifying was still being played, so the seat
+    belongs to *a* qualifier or *a* lucky loser and to no person yet. Read as
+    a name it went through `_split_players`, whose "/" means PARTNERS, and the
+    slot published as a three-person doubles team called
+    "[Q" / "LL] Qualifier" / "LL" against [3] Solana Sierra — the same phantom
+    team as Medvedev vs "DAMM / SHELBAYH" (2026-08-25), reached through a
+    different door. A placeholder's "/" separates the ways the seat can be
+    filled, never two people.
+
+    Whole-line and per-segment, like every other rule here that has to survive
+    the sheets' furniture: a lone "[Q]" is the wrapped marker of the name above
+    (`_is_continuation` owns it) and must NOT read as a placeholder, so the
+    line has to carry a role WORD once its brackets come off. Nothing else on
+    the line is tolerated — "Qualifier BRA" is not a shape any tour prints, and
+    admitting it would let an unparsed name in through here.
+    """
+    s = _MARKERS_RE.sub('', (text or '').strip()).strip()
+    if not s:
+        return False
+    segs = [p.strip() for p in s.split('/') if p.strip()]
+    return bool(segs) and all(_ROLE_WORD_RE.match(p) for p in segs)
 
 
 ALLCAPS_NAME_RE = re.compile(r"(?:[A-Z][A-Za-z.'-]*\s+){2,}\(?[A-Z]{3}\)?\s*$")
@@ -645,6 +688,10 @@ def _slot_head(pre):
                 or _EVENT_HEADER_RE.match(text)
                 or _is_continuation(text)
                 or (SCORE_RE.match(text) and re.search(r'\d', text))
+                # A placeholder is the inside of a match box like a name is:
+                # a headless slot whose first side is "[Q/LL] Qualifier/LL"
+                # would otherwise stop the walk-back at its own first player.
+                or _is_placeholder(text)
                 or _is_name(text)):
             break
         keep += 1
@@ -745,9 +792,23 @@ def _parse_column(lines, pno, dropped=None):
                 cur.printed_status = st.group(1).upper()
             return
 
-        if _is_name(text):
+        if _is_name(text) or _is_placeholder(text):
             side_key = 'b' if after_vs else 'a'
-            if '/' in text and side_key in (cur.tbd_side or ''):
+            if _is_placeholder(text):
+                # A SEAT NOBODY HAS TAKEN YET. "[Q/LL] Qualifier/LL" is one
+                # entrant, unresolved — declared so HERE, exactly as the
+                # inline-"or" branch above declares its own, because a tbd
+                # with no side reads downstream as "nothing unresolved here"
+                # and the ingest then stores what it holds as real players.
+                # Left to the name path it was split on its slash into "[Q",
+                # "LL] Qualifier" and "LL": a three-person doubles team, on a
+                # singles slot, wearing a DOUBLES badge (Sao Paulo,
+                # 2026-09-14). Kept whole and verbatim — the stored record
+                # says what the tour printed, and the page shortens it.
+                cur.tbd = True
+                cur.tbd_side = ''.join(sorted(set((cur.tbd_side or '') + side_key)))
+                side.append(text)
+            elif '/' in text and side_key in (cur.tbd_side or ''):
                 # On an UNRESOLVED side a "/" joins the two partners of ONE
                 # candidate team, not two players of this match — the sheet is
                 # offering a choice between two teams. Splitting it flattened
