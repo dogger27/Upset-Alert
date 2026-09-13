@@ -127,7 +127,20 @@ export default function ScheduleScreen() {
      apply either: a selection made on a two-tour day would otherwise empty a
      one-tour day with no chip on screen to undo it. */
   const tourChips = toursHere.length > 1
-  const hasDoubles = useMemo(() => all.some(e => e.discipline !== 'singles'), [all])
+  /* DOUBLES TO FILTER — among the rows the other filters keep, not among every
+     row fetched. Filtering to a tournament with no doubles while another event
+     on the same day has some left the switch on screen toggling nothing; so
+     did a day whose only doubles were finished with Completed off. Same rule
+     as the tour chips above, and the same reason: a chip that toggles nothing
+     reads as broken.
+
+     `showDoubles` is deliberately NOT part of this — a switch cannot be the
+     test of whether to show itself. */
+  const hasDoubles = useMemo(() => all.some(e =>
+    e.discipline !== 'singles'
+    && rowInTournaments(e, eventSel)
+    && (showDone || (e.status !== 'completed' && e.status !== 'postponed'))
+  ), [all, eventSel, showDone])
   /* SEEDED ONCE PER DAY, NOT PER FETCH. This ran on `day.data`, whose identity
      changes on every poll — and the live subscription refetches this screen
      about every ten seconds — so switching WTA on held for one cycle and then
