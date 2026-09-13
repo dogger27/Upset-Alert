@@ -24,7 +24,8 @@ import { useApi } from '../../useApi'
 import { computeCohortInfo, getHomeSection } from '../../drawStatus'
 import { useCurrentDraw } from '../../currentDraw'
 import { useLastLeague } from '../../lastLeague'
-import { pruneScheduleDraws, setScheduleDraws, useScheduleDraws } from '../../scheduleFilter'
+import { pruneScheduleTournaments, setScheduleTournaments, useScheduleTournaments } from '../../scheduleFilter'
+import { tournamentsOf } from '../../scheduleRows'
 import { C, T } from '../../theme'
 
 /* Openable means the draw actually exists to look at — the dashboard's own
@@ -90,12 +91,12 @@ export default function TabLayout() {
   const insets = useSafeAreaInsets()
   const tabBottom = Math.min(insets.bottom, TAB_BOTTOM_MAX)
   const [picking, setPicking] = useState(false)
-  /* WHICH DRAWS THE SCHEDULE SHOWS. A day's sheet can carry four tournaments
+  /* WHICH TOURNAMENTS THE SCHEDULE SHOWS. A day's sheet can carry four of them
      and a hundred rows, so the tab asks before it opens — one or many, never
      none (scheduleFilter). Held here as a draft and published on close, so a
      half-made selection never filters the screen behind the sheet. */
   const [filtering, setFiltering] = useState(false)
-  const { draws: chosen } = useScheduleDraws()
+  const chosen = useScheduleTournaments()
   const [draft, setDraft] = useState(null)
   const showing = useCurrentDraw()
   const lastLeague = useLastLeague()
@@ -119,6 +120,9 @@ export default function TabLayout() {
      The chooser still lists only what is live and says so when that is
      nothing — a tab that vanishes teaches people it might not be there. */
   const drawId = showing ?? live[0]?.id ?? openable[0]?.id ?? null
+  /* The same live draws, folded into the EVENTS the schedule chooser offers:
+     one US Open, not two. */
+  const liveEvents = tournamentsOf(live)
 
   return (
     <>
@@ -160,11 +164,11 @@ export default function TabLayout() {
            straight through. */
         listeners={{
           tabPress: e => {
-            if (live.length < 2) return
+            if (liveEvents.length < 2) return
             e.preventDefault()
             // Stale ids name nothing a week later; start from what is live.
-            pruneScheduleDraws(live)
-            setDraft(new Set(chosen ?? live.map(t => t.id)))
+            pruneScheduleTournaments(liveEvents.map(t => t.id))
+            setDraft(new Set(chosen ?? liveEvents.map(t => t.id)))
             setFiltering(true)
           },
         }}
@@ -253,37 +257,32 @@ export default function TabLayout() {
       )}
     </Sheet>
 
-    {/* THE SCHEDULE'S DRAWS. Multi-select, and the last one cannot be turned
-        off: a filter that hides everything is indistinguishable from a broken
-        screen (owner's rule, 2026-09-12). Closing applies the draft and goes
-        to the schedule — Close is Done here, and tapping the scrim means the
-        same thing rather than throwing the choice away. */}
-    <Sheet visible={filtering} title="Show which draws"
+    {/* WHICH TOURNAMENTS. One row per EVENT — the US Open is one entry with
+        both badges, not two rows — because the ATP/WTA split is a control the
+        screen already has and does not need repeating here (owner,
+        2026-09-13). Multi-select, and the last one cannot be turned off: a
+        filter that hides everything is indistinguishable from a broken screen.
+        Closing applies the draft and goes to the schedule — Close is Done
+        here, and tapping the scrim means the same thing rather than throwing
+        the choice away. */}
+    <Sheet visible={filtering} title="Select Tournament(s)"
            onClose={() => {
-             const all = !draft || draft.size === live.length
-             /* The EVENTS behind the chosen draws, taken from the draws
-                themselves — qualifying and doubles rows carry no draw_id and
-                can only be matched by their event. */
-             setScheduleDraws(all ? null : draft,
-                              all ? null : new Set(live.filter(t => draft.has(t.id))
-                                                       .map(t => t.tournament_id)
-                                                       .filter(v => v != null)))
+             setScheduleTournaments(draft && draft.size === liveEvents.length ? null : draft)
              setFiltering(false)
              router.push('/schedule')
            }}>
       <Pressable style={[s.row, s.first]} accessibilityRole="button"
-                 onPress={() => setDraft(new Set(live.map(t => t.id)))}>
-        <Text style={[s.name, { flex: 1 }]}>All draws</Text>
-        {draft && draft.size === live.length
+                 onPress={() => setDraft(new Set(liveEvents.map(t => t.id)))}>
+        <Text style={[s.name, { flex: 1 }]}>All tournaments</Text>
+        {draft && draft.size === liveEvents.length
           ? <Ionicons name="checkmark" size={16} color={C.greenBright} />
           : null}
       </Pressable>
-      {live.map(t => {
+      {liveEvents.map(t => {
         const on = !!draft?.has(t.id)
-        const only = on && draft.size === 1
         return (
           <Pressable key={t.id} style={s.row} accessibilityRole="button"
-                     accessibilityState={{ selected: on, disabled: only }}
+                     accessibilityState={{ selected: on }}
                      onPress={() => setDraft(prev => {
                        const next = new Set(prev ?? [])
                        // NOT NONE: the last one on stays on.
@@ -291,12 +290,14 @@ export default function TabLayout() {
                        else next.add(t.id)
                        return next
                      })}>
-            <View style={[s.tint, { backgroundColor: t.gender === 'F' ? C.wta : C.atp }]} />
             <View style={s.nameWrap}>
               <Text style={[s.name, !on && { color: C.faint }]} numberOfLines={1}>{t.name}</Text>
               {on ? <Ionicons name="checkmark" size={16} color={C.greenBright} /> : null}
             </View>
-            <TourBadge gender={t.gender} />
+            {/* Both halves of a combined event, men first. */}
+            <View style={s.badges}>
+              {t.genders.map(g => <TourBadge key={g} gender={g} />)}
+            </View>
           </Pressable>
         )
       })}
@@ -316,5 +317,7 @@ const s = {
      does. */
   nameWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
   name: { ...T.bodyMed, color: C.ink, flexShrink: 1 },
+  // A combined event carries both badges, so they need a row of their own.
+  badges: { flexDirection: 'row', gap: 4 },
   none: { ...T.smallMed, color: C.muted, textAlign: 'center', paddingVertical: 12 },
 }

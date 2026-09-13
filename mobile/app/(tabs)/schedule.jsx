@@ -30,8 +30,8 @@ import { useApi } from '../../useApi'
 import { footTime, isLive, isSuspended, matchFromEntry, whenLabel } from '../../schedule'
 import { leading } from '../../fontScale.js'
 import { TourBadge } from '../../cards'
-import { useScheduleDraws } from '../../scheduleFilter'
-import { rowInDraws } from '../../scheduleRows'
+import { useScheduleTournaments } from '../../scheduleFilter'
+import { rowInTournaments } from '../../scheduleRows'
 import { MatchCard } from '../../scorecard'
 import { ScoreHistorySheet } from '../../scoreHistory'
 import { C, R, S, T } from '../../theme'
@@ -100,14 +100,10 @@ export default function ScheduleScreen() {
   const all = useMemo(() => day.data?.entries || [], [day.data])
   const tours = useMemo(() => [...new Set(all.map(e => e.tour).filter(Boolean))].sort(), [all])
   const hasDoubles = useMemo(() => all.some(e => e.discipline !== 'singles'), [all])
-  /* WHICH DRAWS THE TAB CHOSE (scheduleFilter), and the EVENTS behind them —
-     qualifying and doubles carry no draw_id and can only be matched by their
-     event. Both come from the store, which took them from the DRAW LIST. This
-     derived the events from the day's own rows instead, and on a day when a
-     chosen draw had no main-draw row — Guadalajara and SP Open were playing
-     qualifying only on 12 September — its event never entered the set and its
-     matches vanished (owner, 2026-09-12). */
-  const { draws: drawSel, tournaments: drawTournaments } = useScheduleDraws()
+  /* WHICH TOURNAMENTS THE TAB CHOSE (scheduleFilter). A schedule row always
+     carries a tournament_id — unlike draw_id, which is null for qualifying and
+     doubles — so this needs nothing derived and nothing to go wrong. */
+  const eventSel = useScheduleTournaments()
   /* SEEDED ONCE PER DAY, NOT PER FETCH. This ran on `day.data`, whose identity
      changes on every poll — and the live subscription refetches this screen
      about every ten seconds — so switching WTA on held for one cycle and then
@@ -156,14 +152,14 @@ export default function ScheduleScreen() {
       // so what remains is on court now or still waiting to get there.
       if (!showDone && (e.status === 'completed' || e.status === 'postponed')) return false
       if (view === 'time' && tourSel && e.tour && !tourSel.has(e.tour)) return false
-      // THE DRAWS THE TAB ASKED ABOUT. Applied in BOTH views, unlike the tour
-      // chips: those are a control on this screen and the court view
+      // THE TOURNAMENTS THE TAB ASKED ABOUT. Applied in BOTH views, unlike
+      // the tour chips: those are a control on this screen and the court view
       // deliberately reproduces the whole sheet, while this is an answer the
       // reader gave on the way in and means the same thing either way.
-      if (!rowInDraws(e, drawSel, drawTournaments)) return false
+      if (!rowInTournaments(e, eventSel)) return false
       return true
     })
-  }, [all, view, showDone, showDoubles, tourSel, drawSel, drawTournaments])
+  }, [all, view, showDone, showDoubles, tourSel, eventSel])
 
   const groups = useMemo(() => {
     if (view === 'court') {
@@ -334,11 +330,11 @@ export default function ScheduleScreen() {
                 ? 'Every match listed is finished or postponed — switch Completed on to see them.'
                 : !showDoubles && all.every(e => e.discipline !== 'singles')
                   ? 'Only doubles is listed — switch Doubles on to see it.'
-                  : drawSel && !all.some(e => rowInDraws(e, drawSel, drawTournaments))
+                  : eventSel && !all.some(e => rowInTournaments(e, eventSel))
                     /* The one filter that is NOT a switch on this screen, so
                        it has to name itself: the reader set it on the way in
                        and has nothing here to point at. */
-                    ? 'None of the draws you chose is playing today — tap Schedule again to change that.'
+                    ? 'None of the tournaments you chose is playing today — tap Schedule again to change that.'
                     : 'The current switches hide every match listed.'}
             </Muted>
           </Card>

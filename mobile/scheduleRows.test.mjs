@@ -1,10 +1,10 @@
 /*
- * Which schedule rows a draw filter keeps.
+ * Which schedule rows a tournament filter keeps, and how the live draws fold
+ * into the tournaments the chooser offers.
  *
  *     node scheduleRows.test.mjs
  *
- * A plain node script, like scoring.test.mjs: scheduleRows.js imports nothing,
- * so it loads directly.
+ * A plain node script, like scoring.test.mjs.
  */
 import { readFileSync } from 'node:fs'
 import { Buffer } from 'node:buffer'
@@ -15,7 +15,7 @@ import assert from 'node:assert/strict'
    .js directly makes node reparse it and warn. scheduleRows imports nothing,
    so a data: URL resolves it completely. */
 const src = readFileSync(new URL('./scheduleRows.js', import.meta.url), 'utf8')
-const { rowInDraws, sameDrawSet } =
+const { rowInTournaments, sameDrawSet, tournamentsOf } =
   await import('data:text/javascript;base64,' + Buffer.from(src).toString('base64'))
 
 let n = 0
@@ -24,35 +24,46 @@ function check(name, fn) {
   catch (e) { console.log(`  FAIL ${name}\n      ${e.message}`); process.exitCode = 1 }
 }
 
-const chosen = new Set([77])          // the men's US Open
-const events = new Set([92])          // the tournament behind it
+const chosen = new Set([35])          // Guadalajara's tournament
 
-check('a row of a chosen draw stays', () => {
-  assert.equal(rowInDraws({ draw_id: 77, tournament_id: 92 }, chosen, events), true)
+check('a row of a chosen tournament stays', () => {
+  assert.equal(rowInTournaments({ tournament_id: 35, draw_id: 142 }, chosen), true)
 })
 
-check('the OTHER draw of the same event goes', () => {
-  // The whole point of filtering by draw rather than by tournament.
-  assert.equal(rowInDraws({ draw_id: 78, tournament_id: 92 }, chosen, events), false)
+check('QUALIFYING AND DOUBLES STAY, having no draw of their own', () => {
+  /* 12 September: Guadalajara and SP Open were playing qualifying only — rows
+     with no draw_id and no tour. Matching on the DRAW hid them; matching on
+     the tournament cannot. */
+  assert.equal(rowInTournaments({ tournament_id: 35, draw_id: null }, chosen), true)
 })
 
-check('doubles of a chosen event stays, having no draw of its own', () => {
-  assert.equal(rowInDraws({ draw_id: null, tournament_id: 92 }, chosen, events), true)
-})
-
-check('doubles of an event nobody chose goes', () => {
-  assert.equal(rowInDraws({ draw_id: null, tournament_id: 35 }, chosen, events), false)
+check('a row of another tournament goes', () => {
+  assert.equal(rowInTournaments({ tournament_id: 92, draw_id: 78 }, chosen), false)
+  assert.equal(rowInTournaments({ tournament_id: 92, draw_id: null }, chosen), false)
 })
 
 check('no filter shows everything', () => {
-  assert.equal(rowInDraws({ draw_id: 1, tournament_id: 2 }, null, null), true)
-  assert.equal(rowInDraws({ draw_id: null, tournament_id: 2 }, null, null), true)
+  assert.equal(rowInTournaments({ tournament_id: 1, draw_id: null }, null), true)
 })
 
-check('a chosen draw with no tournament set still works', () => {
-  // drawTournaments is built from the day's rows; a draw playing no singles
-  // that day contributes nothing to it, and a doubles row must not then throw.
-  assert.equal(rowInDraws({ draw_id: null, tournament_id: 92 }, chosen, null), false)
+check('the two draws of one event fold into ONE row', () => {
+  const live = [
+    { id: 77, name: 'US Open', gender: 'M', tournament_id: 92 },
+    { id: 78, name: 'US Open', gender: 'F', tournament_id: 92 },
+    { id: 142, name: 'Guadalajara Open', gender: 'F', tournament_id: 35 },
+  ]
+  const out = tournamentsOf(live)
+  assert.equal(out.length, 2)
+  const us = out.find(t => t.id === 92)
+  assert.deepEqual(us.genders, ['M', 'F'], 'men first, so a pair never swaps sides')
+  assert.deepEqual(out.find(t => t.id === 35).genders, ['F'])
+})
+
+check('a draw with no tournament id is dropped, not offered', () => {
+  // No schedule row could ever match it, so offering it would be offering a
+  // filter that empties the screen.
+  assert.deepEqual(tournamentsOf([{ id: 1, name: 'Orphan', gender: 'M', tournament_id: null }]), [])
+  assert.deepEqual(tournamentsOf(null), [])
 })
 
 check('sameDrawSet compares membership, not identity', () => {
@@ -60,29 +71,6 @@ check('sameDrawSet compares membership, not identity', () => {
   assert.equal(sameDrawSet(new Set([1]), new Set([1, 2])), false)
   assert.equal(sameDrawSet(null, null), true)
   assert.equal(sameDrawSet(null, new Set([1])), false)
-})
-
-check('QUALIFYING OF A CHOSEN DRAW STAYS, on a day it plays nothing else', () => {
-  /* THE BUG, 12 September. Guadalajara (draw 142, event 35) and SP Open
-     (draw 143, event 80) were playing qualifying only — rows with no draw_id
-     and no tour — so deriving the event set from the day's ROWS produced
-     nothing for either, and their matches appeared only when the US Open's
-     women's draw was also ticked, because that row supplied the only
-     tournament id on the sheet.
-
-     The events must come from the DRAWS, which know their tournament_id
-     whether or not they are on court. Here: both chosen, neither with a
-     main-draw row that day. */
-  const draws = new Set([142, 143])
-  const events = new Set([35, 80])          // from the draw list, not the rows
-  assert.equal(rowInDraws({ draw_id: null, tournament_id: 35 }, draws, events), true,
-               'Guadalajara qualifying')
-  assert.equal(rowInDraws({ draw_id: null, tournament_id: 80 }, draws, events), true,
-               'SP Open qualifying')
-  assert.equal(rowInDraws({ draw_id: null, tournament_id: 92 }, draws, events), false,
-               'the US Open doubles is not one of the chosen events')
-  assert.equal(rowInDraws({ draw_id: 78, tournament_id: 92 }, draws, events), false,
-               "nor is the US Open's women's final")
 })
 
 console.log(`\n  ${n} passed`)
