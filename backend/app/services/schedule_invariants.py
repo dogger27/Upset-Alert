@@ -220,12 +220,11 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
     # WHEN each revision of this day was published. Read unconditionally —
     # `slot_pulled_not_retired` below needs it on a day with no unresolved row
     # at all, which is exactly the day SP Open had on 2026-09-14.
-    doc_fetched: dict = {
-        d.id: _naive_utc(d.fetched_at)
-        for d in (await db.execute(
-            select(ScheduleDocument).where(
-                ScheduleDocument.tournament_id == tournament_id,
-                ScheduleDocument.play_date == _pd))).scalars().all()}
+    day_docs = (await db.execute(
+        select(ScheduleDocument).where(
+            ScheduleDocument.tournament_id == tournament_id,
+            ScheduleDocument.play_date == _pd))).scalars().all()
+    doc_fetched: dict = {d.id: _naive_utc(d.fetched_at) for d in day_docs}
     if any(e.is_tbd for e in rows):
         wins = (await db.execute(
             select(ScheduleEntry).where(
@@ -804,6 +803,28 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
     # (`_printed_instant`, the independent parse), so a zone or clock bug in
     # the service is a disagreement here rather than a shared blind spot.
     latest_doc = max((r.last_document_id or 0) for r in rows) if rows else 0
+    # Hoisted out of the block below because the blank-sheet rule after it
+    # asks the same question of the same rows. A singles row carries no result
+    # of its own — it lives on `matches` — so "was this ever on court" is two
+    # readings joined, and there must only be one of them.
+    played_match = {}
+    linked = [e.match_id for e in rows if e.match_id]
+    if linked:
+        from app.models.tournament import Match as _M
+        played_match = {
+            mid: bool(w or c or s or lj)
+            for mid, w, c, s, lj in (await db.execute(
+                select(_M.id, _M.winner_id, _M.completed_at,
+                       _M.started_at, _M.live_scores_json)
+                .where(_M.id.in_(linked)))).all()}
+
+    def never_played(e) -> bool:
+        return not (
+            e.started_at or e.completed_at or e.winner_side
+            or e.live_scores_json or e.scores_json or e.printed_score
+            or e.printed_status or (e.status or "scheduled") != "scheduled"
+            or played_match.get(e.match_id))
+
     if latest_doc:
         published = doc_fetched.get(latest_doc)
         # The new sheet's own account of when each court begins. Read from the
@@ -816,28 +837,12 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
             when = _naive_utc(_printed_instant(e, venue_tz))
             if when and (e.court not in anchor or when < anchor[e.court]):
                 anchor[e.court] = when
-        played_match = {}
-        linked = [e.match_id for e in rows
-                  if e.match_id and (e.last_document_id or 0) < latest_doc]
-        if linked:
-            from app.models.tournament import Match as _M
-            played_match = {
-                mid: bool(w or c or s or lj)
-                for mid, w, c, s, lj in (await db.execute(
-                    select(_M.id, _M.winner_id, _M.completed_at,
-                           _M.started_at, _M.live_scores_json)
-                    .where(_M.id.in_(linked)))).all()}
         for e in rows:
             if (e.last_document_id or 0) >= latest_doc:
                 continue
             court_at = anchor.get(e.court)
-            never_played = not (
-                e.started_at or e.completed_at or e.winner_side
-                or e.live_scores_json or e.scores_json or e.printed_score
-                or e.printed_status or (e.status or "scheduled") != "scheduled"
-                or played_match.get(e.match_id))
-            if (never_played and published and court_at and court_at > published
-                    and venue_tz):
+            if (never_played(e) and published and court_at
+                    and court_at > published and venue_tz):
                 flag("slot_pulled_not_retired", e,
                      f"document {latest_doc} dropped this slot and was "
                      f"published before {e.court} had played anything — it was "
@@ -863,6 +868,54 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                      f"{revisions_since(doc_fetched, e.last_document_id)} "
                      f"revisions since (newest {latest_doc}) without printing "
                      f"this slot or retiring it")
+
+    # 2026-09-14 (again), SP Open — THE DAY THE TOURNAMENT EMPTIED, and the
+    # reason `latest_doc` above cannot be the whole law. It is read off the
+    # ROWS, so a revision that stamped none of them is invisible to it: the
+    # 4:55 PM sheet printed three court headers over three empty columns,
+    # every row went on pointing at the 3:30 PM sheet, and this check returned
+    # CLEAN on a day whose four remaining R32 matches had just been moved to
+    # Tuesday's sheet, released fifteen minutes later. Nothing had been
+    # played. The site had no revision left that could ever take them off,
+    # because every later document belongs to another day.
+    #
+    # `printed_boxes` is what the SHEET printed, counted off its own lines
+    # before `oop_parser` assigns a column or opens a slot, and it is the one
+    # reading a broken parser cannot forge — a parse that LOST every slot
+    # leaves printed_boxes above zero against match_count zero, which is
+    # `check_parse`'s `vs_lines_exceed_matches` and emphatically not this.
+    # NULL is a document written before the column existed, or a feed that
+    # counts nothing off a sheet: unknown, and unknown never convicts.
+    #
+    # Everything after that is the law's own: `_printed_instant` for the
+    # clock, and the same never-on-court reading every other rule here uses.
+    blank_doc = max((d for d in day_docs
+                     if (d.parse_status or "") == "oop"
+                     and not (d.match_count or 0)
+                     and d.printed_boxes == 0
+                     and d.id > latest_doc),
+                    key=lambda d: d.id, default=None)
+    if blank_doc is not None and venue_tz:
+        blank_published = doc_fetched.get(blank_doc.id)
+        # No sheet prints these courts any more, so the last one that did is
+        # the only published account of when each begins. The question it has
+        # to answer is only whether the court could have been underway when
+        # the blank sheet came out.
+        anchor = {}
+        for e in rows:
+            when = _naive_utc(_printed_instant(e, venue_tz))
+            if when and (e.court not in anchor or when < anchor[e.court]):
+                anchor[e.court] = when
+        for e in rows:
+            court_at = anchor.get(e.court)
+            if (never_played(e) and blank_published and court_at
+                    and court_at > blank_published):
+                flag("blank_sheet_slot_not_retired", e,
+                     f"document {blank_doc.id} is a BLANK order of play — the "
+                     f"sheet prints no match boxes at all — and was published "
+                     f"before {e.court} had played anything, so the "
+                     f"tournament emptied this day and the slot is still on "
+                     f"the page")
 
     from app.services.schedule import _side_tokens
     _opp = {"a": "b", "b": "a"}

@@ -39,7 +39,8 @@ from app.models.schedule import (ScheduleChange, ScheduleDocument,
                                  ScheduleEntry, ScheduleEntryPlayer)
 from app.models.tournament import Draw, DrawEntry, Match
 from app.services.live_state import is_suspended
-from app.services.oop_parser import COUNTRY_CODES, is_placeholder, parse_pdf
+from app.services.oop_parser import (COUNTRY_CODES, is_placeholder, parse_pdf,
+                                     sheet_is_blank)
 from app.services.rankings import _norm
 
 logger = logging.getLogger(__name__)
@@ -814,6 +815,14 @@ async def ingest_document(db, tournament, play_date: date, url: str,
         tour=tour, sha256=digest, revision_label=meta.get('date_line'),
         parse_status=meta.get('kind') or 'ok', match_count=len(matches),
         content_sha=content_fp,
+        # What the SHEET printed, as opposed to what we read off it. Stored so
+        # the law can tell an emptied day from a broken parser without the PDF
+        # — see `blank_sheet_slot_not_retired`. None from a feed that counts
+        # nothing off a sheet; unknown is not zero.
+        printed_boxes=(max(meta.get('vs_lines') or 0,
+                           meta.get('round_headers') or 0,
+                           meta.get('slot_markers') or 0)
+                       if meta.get('vs_lines') is not None else None),
     )
     db.add(doc)
     await db.flush()
@@ -821,11 +830,47 @@ async def ingest_document(db, tournament, play_date: date, url: str,
     if not matches:
         # An OOP revision that parsed to NOTHING is exactly the revision most
         # worth independent eyes — a parser regression looks like this.
+        #
+        # AND SO DOES A DAY THE TOURNAMENT HAS EMPTIED, which is why this
+        # branch cannot simply return. SP Open's Monday sheet came back at
+        # 4:55 PM on 2026-09-14 as three court headers over three empty
+        # columns, and fifteen minutes later Tuesday's sheet was released
+        # carrying all four of Monday's remaining R32 matches. Nothing had
+        # been played. Every later revision belongs to the NEXT day, so no
+        # ingest of this day would ever run again: the site was left printing
+        # four matches at "Not before 5:30 PM" that the tour had moved, with
+        # no path by which they could ever come off.
+        #
+        # `sheet_is_blank` is the only thing allowed to tell the two apart,
+        # and it asks the sheet rather than the parser — the box counts are
+        # taken off the raw cells before a column is assigned. A parse that
+        # lost slots the sheet printed is NOT blank, keeps every row, and
+        # alarms through `check_parse` below.
+        pulled = []
+        if sheet_is_blank(meta):
+            pulled = await _retire_pulled_slots(db, tournament.id, play_date,
+                                                doc, blank_sheet=True)
+            if pulled:
+                await _renumber_courts(db, tournament.id, play_date)
         await db.commit()
+        if pulled:
+            # Same level and the same reason as the pull log in the tail of
+            # this function, and after the commit for the same reason too
+            # (`app_log` opens its own session; SQLite has one writer).
+            from app.services.system_log import app_log
+            await app_log(
+                "warning", "order_of_play",
+                f"{len(pulled)} slot(s) pulled from {tournament.name} on "
+                f"{play_date} by document {doc.id} — the sheet is blank: "
+                + "; ".join(pulled[:5]),
+                {"tournament_id": tournament.id, "play_date": str(play_date),
+                 "document_id": doc.id, "blank_sheet": True,
+                 "pulled": pulled[:20]})
         await _log_parse_violations(tournament, play_date, parse_violations)
         if queue_verify:
             _queue_verification(doc, tournament, play_date, url, pdf_bytes, 0)
-        return {'document_id': doc.id, 'kind': meta.get('kind'), 'entries': 0}
+        return {'document_id': doc.id, 'kind': meta.get('kind'), 'entries': 0,
+                'pulled': len(pulled)}
 
     # Roster for resolution: every draw of this tournament.
     draw_rows = (await db.execute(
@@ -1953,7 +1998,7 @@ def _slot_was_pulled(row, court_anchor, published, match_played: bool) -> bool:
 
 
 async def _retire_pulled_slots(db, tournament_id: int, play_date: date,
-                               doc) -> list[str]:
+                               doc, blank_sheet: bool = False) -> list[str]:
     """Delete the rows the day's newest revision no longer prints.
 
     A sheet restates the WHOLE day, so a slot missing from the newest one is a
@@ -1983,6 +2028,13 @@ async def _retire_pulled_slots(db, tournament_id: int, play_date: date,
     rather than a guess. Measured over every tournament-day stored: this
     deletes the one SP Open row and none of the five historical ones.
 
+    `blank_sheet` is the caller's proof that the revision printed no matches
+    AT ALL (`oop_parser.sheet_is_blank`, which counts the sheet's own match
+    boxes rather than trusting this parse). It is the one case in which a
+    revision restating nothing is not a parser failure — SP Open, 2026-09-14,
+    below — and it changes exactly two things: the refusal to run when nothing
+    was restated, and which sheet's clocks answer for a court.
+
     Returns one description per retired slot, for the caller to log AFTER its
     commit (`app_log` opens its own session, and SQLite has one writer).
     """
@@ -1998,12 +2050,18 @@ async def _retire_pulled_slots(db, tournament_id: int, play_date: date,
     # which "the sheet no longer prints it" is not what absence means:
     #   * a row stamped by a LATER document — this is a re-parse of an old
     #     revision, which knows nothing about what the newest one prints;
-    #   * nothing restated — a parse that produced no rows at all is a parser
-    #     failure, not a tournament cancelling its whole day;
+    #   * nothing restated — a parse that produced no rows at all is USUALLY
+    #     a parser failure rather than a tournament emptying its day. Usually,
+    #     not always: SP Open published a genuinely blank Monday sheet on
+    #     2026-09-14 and moved the day's four remaining matches to Tuesday,
+    #     and because this pass refused to run, nothing could ever take them
+    #     off the page. `blank_sheet` is the caller having PROVEN the sheet
+    #     itself prints no boxes, which is the only reading of "empty" that a
+    #     broken parser cannot forge;
     #   * no venue zone — every printed clock below would then be read as UTC,
     #     and a misread clock here DELETES rows. recompute_expected_starts can
     #     afford UTC as a last resort; this cannot.
-    if not stale or len(stale) == len(rows):
+    if not stale or (len(stale) == len(rows) and not blank_sheet):
         return []
     if any((r.last_document_id or 0) > doc.id for r in rows):
         return []
@@ -2022,9 +2080,20 @@ async def _retire_pulled_slots(db, tournament_id: int, play_date: date,
     # Earliest printed start per court, read from THIS document's rows only:
     # the question is when the new sheet says the court begins, and a stale
     # row's own time is from the sheet that has just been superseded.
+    #
+    # A BLANK sheet stamped no rows, so it has no clocks of its own and that
+    # reading would leave every court unanswerable — which is silence, and
+    # silence here means no deletion. The last sheet that DID print the court
+    # is then the only published account of when it begins, and it answers the
+    # only question being asked: could this court have been underway when the
+    # blank sheet came out? SP Open's courts were printed "Not before 5:30 PM"
+    # (20:30 UTC) and the blank sheet was fetched at 20:00 UTC. The test is
+    # unchanged and so is its conservatism — Cincinnati's 7:43 PM reissue
+    # dropped slots off a court whose own sheet said 2:00 PM, and a blank
+    # sheet at that hour would still refuse, court by court.
     anchors: dict[str, datetime] = {}
     for r in rows:
-        if (r.last_document_id or 0) != doc.id:
+        if not blank_sheet and (r.last_document_id or 0) != doc.id:
             continue
         clock = _parse_clock(r.start_time_local)
         if not clock:
