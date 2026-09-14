@@ -638,7 +638,18 @@ export function MatchGroup({ m, roundIdx, B, drawRanks, zone, onH2H, onPredictor
   const capDown = useDerivedValue(() => halfShift(sc), [sc])
   const midScale = useDerivedValue(() => Math.max(0.01, (MID_H + 2 * halfShift(sc)) / MID_H), [sc])
   const barScale = useDerivedValue(() => Math.max(0.01, (BAR_LEN + 2 * halfShift(sc)) / BAR_LEN), [sc])
-  const done = decided && !m.is_bye
+  /* A BYE IS A FINISHED MATCH. Every bye carries a winner_id and
+     status 'completed' — the player is through, and nothing about that slot
+     is still to come — so it wears the finished outline like any other
+     result. Excluding it left a settled row looking like a fixture waiting to
+     be played, beside its neighbours that had been decided the same way. The
+     site has always drawn it this way; this is the phone catching up
+     (owner, 2026-09-14).
+
+     The SCORE line stays out: `decided && !m.is_bye` still gates the gap,
+     because a bye has no score to print and inventing one would say a match
+     was played. Empty gap, finished outline — which is what the site shows. */
+  const done = decided || m.is_bye
 
   // No button role on the group: it holds two buttons of its own (the
   // chips), and a button inside a button is not a thing on the web.
