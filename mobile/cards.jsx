@@ -311,6 +311,17 @@ export function TourBadge({ gender, tour, discipline, level, style }) {
  * silently dropped on the one-draw event, which is the case least likely to
  * be the one on screen while the code is being written.
  */
+/* THE NAV BAR'S OWN RULES ARE NOT THIS APP'S. A header button on iOS 26 is
+   drawn inside a system capsule — the same one behind "Back" — and our filled
+   pill sat in it hard against the screen's right edge, so the capsule ran off
+   the display (owner, 2026-09-14). The margin gives the capsule somewhere to
+   end, and the pill radius matches it rather than fighting it: one rounded
+   shape inside another, not a square-ish tag inside a capsule.
+
+   Exported because two screens put a tour pill in a header and a third will;
+   a copy in each is a copy to forget. */
+export const headerTour = { marginRight: 8, borderRadius: 999 }
+
 export function TourSwitch({ draws, currentId, onPick, showLevel, style }) {
   const pair = [...(draws || [])]
     .filter(d => d && TOUR[d.gender])

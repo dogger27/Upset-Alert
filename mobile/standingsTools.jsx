@@ -188,9 +188,13 @@ export function Scrubber({ timeline, pos, onChange, numRounds, min = 0 }) {
   const at = pos ?? max
   const scrubbing = at < max
   const [width, setWidth] = useState(0)
-  /* At 0 there is no last match: the board before a ball was struck. */
+  /* At 0 there is no last match: the board before a ball was struck. That is
+     the ONLY position without one. The far right used to clear this too, on
+     the reasoning that "all matches" names no single point — but it is
+     position N, and its match is the most recently completed one, which is
+     the very thing a reader who scrubs to the end is asking about (owner,
+     2026-09-14). */
   const last = at > 0 ? timeline[at - 1] : null
-  const flash = scrubbing ? last : null
   const fromX = x => {
     const usable = Math.max(1, width - THUMB)
     const v = lo + Math.round(Math.max(0, Math.min(1, (x - THUMB / 2) / usable)) * (max - lo))
@@ -210,10 +214,10 @@ export function Scrubber({ timeline, pos, onChange, numRounds, min = 0 }) {
     <View style={s.scrub}>
       {/* The answer to "what happened here" sits ABOVE the slider, so the
           slider never moves under the finger when it appears. */}
-      {flash ? (
+      {last ? (
         <Text style={s.flash} numberOfLines={2}>
-          {roundTag(flash.round_number, numRounds)}: {flash.winner_name ?? '?'} def. {flash.loser_name ?? '?'}
-          {flash.completed_at ? <Text style={s.flashWhen}>{'\n'}{when(flash.completed_at)}</Text> : null}
+          {roundTag(last.round_number, numRounds)}: {last.winner_name ?? '?'} def. {last.loser_name ?? '?'}
+          {last.completed_at ? <Text style={s.flashWhen}>{'\n'}{when(last.completed_at)}</Text> : null}
         </Text>
       ) : null}
       <GestureDetector gesture={pan}>
