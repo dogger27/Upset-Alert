@@ -84,7 +84,9 @@ const SCREENS = [
   // The league settings sheet (owner / league admin / site admin).
   { name: 'league-settings', mobile: '/league/10', pwa: '/leagues/10', appClick: 'Settings' },
   // The league page's foot: the Members tally beside the site's Members tab.
-  { name: 'league-members', mobile: '/league/10', pwa: '/leagues/10', pwaClick: 'Members', scrollEnd: true },
+  // Members is behind the page's section switch on the app now, so the shot
+  // has to press it — the site still reaches the same rows through its tab.
+  { name: 'league-members', mobile: '/league/10', pwa: '/leagues/10', appClick: 'Members', pwaClick: 'Members', scrollEnd: true },
   // Global standings for a draw — the site's Global league list for it.
   { name: 'standings-global', mobile: '/standings/77', pwa: '/leagues' },
   // The dashboard's hamburger, open.
