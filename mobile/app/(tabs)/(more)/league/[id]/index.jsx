@@ -329,17 +329,12 @@ function DrawRow({ items, leagueId, isGlobal = false, compact = false }) {
           <View style={s.nameRow}>
             <Text style={[s.name, s.nameCompact]} numberOfLines={1}>{a.name}</Text>
             {pooled ? <Text style={s.bag} accessibilityLabel="Cash pool">💰</Text> : null}
-            {paired ? (
-              <View style={s.badges}><TourBadge gender="M" /><TourBadge gender="F" /></View>
-            ) : (
-              <TourBadge gender={a.gender} />
-            )}
           </View>
           <Text style={s.meta} numberOfLines={1}>
             {[tierText, a.year].filter(Boolean).join(' · ')}
           </Text>
         </View>
-        <Text style={s.chev}>›</Text>
+        <Tours a={a} paired={paired} />
       </CardLink>
     )
   }
@@ -357,24 +352,36 @@ function DrawRow({ items, leagueId, isGlobal = false, compact = false }) {
         <View style={s.nameRow}>
           <Text style={s.name} numberOfLines={2}>{a.name}</Text>
           {pooled ? <Text style={s.bag} accessibilityLabel="Cash pool">💰</Text> : null}
-          {/* Both tours named on a combined card — the split stripe alone
-              does not say the event has two draws you can open. */}
-          {paired ? (
-            <View style={s.badges}>
-              <TourBadge gender="M" />
-              <TourBadge gender="F" />
-            </View>
-          ) : (
-            <TourBadge gender={a.gender} />
-          )}
         </View>
         <Text style={s.meta}>
           {[tierText, a.surface, a.year].filter(Boolean).join(' · ')}
         </Text>
         <Text style={s.meta}>{sizes} · {pickers}</Text>
       </View>
-      <Text style={s.chev}>›</Text>
+      <Tours a={a} paired={paired} />
     </CardLink>
+  )
+}
+
+/* THE TOURS, AT THE CARD'S RIGHT EDGE.
+ *
+ * They used to trail the name inside a wrapping row, so the pill landed at a
+ * different x on every card and, on a long name, dropped to a second line —
+ * and the chevron held the right edge instead. The chevron said only "this
+ * opens", which every card in the list does and the whole list already
+ * implies; the tours say WHICH draws are behind it. The one carrying
+ * information gets the fixed column (owner, 2026-09-14).
+ *
+ * Both halves named on a combined card: the split stripe alone does not say
+ * the event has two draws you can open.
+ */
+function Tours({ a, paired }) {
+  return (
+    <View style={s.tours}>
+      {paired
+        ? <><TourBadge gender="M" /><TourBadge gender="F" /></>
+        : <TourBadge gender={a.gender} />}
+    </View>
   )
 }
 
@@ -394,7 +401,6 @@ const s = StyleSheet.create({
   poolChipOn: { backgroundColor: C.green, borderColor: 'transparent' },
   poolChipText: { ...T.tiny, color: C.muted },
   poolChipTextOn: { color: '#ffffff', fontFamily: 'Archivo_700Bold' },
-  badges: { flexDirection: 'row', gap: 4 },
   tally: { backgroundColor: C.card, borderRadius: 14, borderWidth: 1, borderColor: C.border, overflow: 'hidden' },
   tRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, gap: 4 },
   tHead: { borderBottomWidth: 1, borderColor: C.border },
@@ -424,7 +430,14 @@ const s = StyleSheet.create({
   codeBig: { fontFamily: 'SairaCondensed_700Bold', fontSize: 34, letterSpacing: 5, color: C.ink, textAlign: 'center', paddingVertical: 6 },
   shareBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: C.borderOn },
   input: { backgroundColor: C.bg, borderWidth: 1, borderColor: C.border, borderRadius: 10, paddingHorizontal: 12, height: 44, fontSize: 16, color: C.ink },
-  chev: { color: C.muted, fontSize: 22, paddingRight: 14 },
+  /* alignItems:'center' because TourBadge carries alignSelf:'flex-start' for
+     the stacked layouts it usually sits in, which would pin these to the top
+     of the card. The padding is the chevron's own, so the right edge is where
+     it always was. */
+  tours: {
+    flexDirection: 'row', gap: 4, alignItems: 'center',
+    alignSelf: 'center', paddingRight: 14,
+  },
 })
 
 
