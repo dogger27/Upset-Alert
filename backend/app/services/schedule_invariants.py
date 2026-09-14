@@ -23,6 +23,26 @@ from app.models.schedule import ScheduleDocument, ScheduleEntry
 from app.services.oop_parser import COUNTRY_CODES
 
 
+# How many of the DAY'S OWN revisions have come and gone without restating a
+# slot before it counts as abandoned. One is the window between a sheet
+# dropping a row and `_retire_pulled_slots` acting on it at the next ingest,
+# which is a fix in progress, not a fault.
+UNCONFIRMED_GRACE = 2
+
+
+def revisions_since(day_doc_ids, last_document_id) -> int:
+    """How many of this day's sheets are newer than the one that last printed
+    a slot.
+
+    COUNTED, never subtracted. Document ids are global, so
+    `latest_doc - last_document_id` counts every other tournament's sheet
+    fetched in between and would call a one-revision gap a five-revision one on
+    a busy afternoon. The caller passes the ids scoped to this tournament and
+    date, which is the only set where the answer means anything.
+    """
+    return sum(1 for d in day_doc_ids if d > (last_document_id or 0))
+
+
 def _naive_utc(dt):
     """A timestamp column as naive UTC, whichever end of the session it came
     from. A row read back from SQLite is naive; one written earlier in the
@@ -822,11 +842,27 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                      f"document {latest_doc} dropped this slot and was "
                      f"published before {e.court} had played anything — it was "
                      f"pulled, and it is still chaining the clocks behind it")
-            else:
+            elif revisions_since(doc_fetched, e.last_document_id) >= UNCONFIRMED_GRACE:
+                # ONE REVISION OF SILENCE IS THE WINDOW, NOT A FAULT. A sheet
+                # that stops printing a row has either pulled it — which
+                # `_retire_pulled_slots` acts on at the NEXT ingest — or failed
+                # to parse. SP Open's doubles R16 on 2026-09-14 was the first:
+                # document 254 dropped it, this flagged an error, and document
+                # 255 retired it thirteen minutes later, exactly as designed
+                # (owner's /issues run, 2026-09-15). Alarming inside the window
+                # a fix runs in reports the fix working.
+                #
+                # TWO of the DAY'S OWN revisions, counted from doc_fetched,
+                # which is scoped to this tournament and date — document ids
+                # are global, so their arithmetic counts other events' sheets.
+                # Two means nothing retired it and nothing restated it: a row
+                # the sheet has genuinely left behind.
                 flag("slot_unconfirmed", e,
-                     f"last confirmed by document {e.last_document_id}, but the "
-                     f"day's newest document is {latest_doc} — the current sheet "
-                     f"does not print this slot")
+                     f"last confirmed by document {e.last_document_id}, and the "
+                     f"day has published "
+                     f"{revisions_since(doc_fetched, e.last_document_id)} "
+                     f"revisions since (newest {latest_doc}) without printing "
+                     f"this slot or retiring it")
 
     from app.services.schedule import _side_tokens
     _opp = {"a": "b", "b": "a"}
