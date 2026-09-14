@@ -190,10 +190,6 @@ export default function DrawScreen() {
           <View style={s.head}>
             <View style={[s.tint, { backgroundColor: t.gender === 'F' ? C.wta : C.atp }]} />
             <View style={s.headBody}>
-              {/* Name left, tour right, pushed apart by space-between — so
-                  the badge sits at the edge whatever the name's length,
-                  rather than trailing after a short one. */}
-              <Text style={s.headName} numberOfLines={1}>{t.name}</Text>
               {/* THE PAIR, AS A SWITCH. A combined event is two draws under
                   one name, and the reader on one of them usually wants the
                   other next — the standings screens already offer it this
@@ -210,6 +206,10 @@ export default function DrawScreen() {
                   has mounted. */}
               <TourSwitch draws={siblings} currentId={t.id} showLevel style={{ alignSelf: 'center' }}
                           onPick={d => { setCurrentDraw(d.id); router.replace(`/draw/${d.id}`) }} />
+              {/* THE NAME TAKES THE SLACK, so the step button sits hard
+                  against the right edge whatever the tournament is called,
+                  and the pill holds the left whatever its tier reads. */}
+              <Text style={s.headName} numberOfLines={1}>{t.name}</Text>
               {/* ON TO THE NEXT ONE BEING PLAYED. Not the old stepper arrows:
                   those walked a list you could not see, one at a time, which
                   is what the Draw tab's chooser replaced. This is one step
@@ -308,8 +308,7 @@ const s = StyleSheet.create({
      single line (owner, 2026-09-08), and the title's line box is trimmed
      to match, so the banner is as tall as its name and no more. */
   headBody: {
-    flex: 1, flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'space-between', gap: 10,
+    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10,
     paddingHorizontal: S.md, paddingVertical: 0,
   },
   /* The line box is the type's own height: 19pt Saira Condensed needs no
@@ -327,7 +326,7 @@ const s = StyleSheet.create({
     alignSelf: 'center',
   },
   headName: {
-    ...T.h2, lineHeight: leading(19), color: C.ink, flexShrink: 1,
+    ...T.h2, lineHeight: leading(19), color: C.ink, flex: 1,
     transform: [{ translateY: 1.5 * FONT_SCALE }],
   },
 
