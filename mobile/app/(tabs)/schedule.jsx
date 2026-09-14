@@ -316,35 +316,12 @@ export default function ScheduleScreen() {
           </CardLink>
         ) : null}
 
-        <View style={s.filters}>
-          {/* The tour chips filter the time view only, so the court view does
-              not offer them — the site's rule; a chip that toggles nothing
-              reads as broken. And one tour needs no chip. */}
-          {view === 'time' && tourChips && toursHere.map(t => {
-            const on = !tourSel || tourSel.has(t)
-            return (
-              <Pressable key={t} onPress={() => toggleTour(t)}
-                         style={[s.chip, on && (t === 'WTA' ? s.chipWta : s.chipAtp)]}
-                         accessibilityRole="button" accessibilityState={{ selected: on }}>
-                <Text style={[s.chipText, on && { color: '#fff' }]}>{t}</Text>
-              </Pressable>
-            )
-          })}
-          {/* Only a day that HAS doubles offers the switch — the site's rule.
-              A chip that toggles nothing reads as broken. */}
-          {view === 'time' && hasDoubles && (
-            <Pressable onPress={() => setShowDoubles(v => !v)} style={[s.chip, showDoubles && s.chipOn]}
-                       accessibilityRole="button" accessibilityState={{ selected: showDoubles }}>
-              <Text style={[s.chipText, showDoubles && { color: '#fff' }]}>Doubles</Text>
-            </Pressable>
-          )}
-          <Pressable onPress={() => setShowDone(v => !v)} style={[s.chip, showDone && s.chipOn]}
-                     accessibilityRole="button" accessibilityState={{ selected: showDone }}>
-            <Text style={[s.chipText, showDone && { color: '#fff' }]}>Completed</Text>
-          </Pressable>
-        </View>
+        {/* THE CONTROLS, WIDEST SCOPE FIRST: the day, then Time-or-Court,
+            then which tournaments, then the filters that thin the rows
+            (owner, 2026-09-14). Each one narrows what the one above it
+            selected, so reading down the screen is reading the query.
 
-        {/* FULL WIDTH, SHORTER. The height is what was excessive — a strip
+            FULL WIDTH, SHORTER. The height is what was excessive — a strip
             holding one word per side was as tall as a row of matches. The
             width is not: the switch spans the column so each half is a target
             you can hit without looking, which is the whole argument for a
@@ -392,6 +369,34 @@ export default function ScheduleScreen() {
             })}
           </View>
         )}
+
+        <View style={s.filters}>
+          {/* The tour chips filter the time view only, so the court view does
+              not offer them — the site's rule; a chip that toggles nothing
+              reads as broken. And one tour needs no chip. */}
+          {view === 'time' && tourChips && toursHere.map(t => {
+            const on = !tourSel || tourSel.has(t)
+            return (
+              <Pressable key={t} onPress={() => toggleTour(t)}
+                         style={[s.chip, on && (t === 'WTA' ? s.chipWta : s.chipAtp)]}
+                         accessibilityRole="button" accessibilityState={{ selected: on }}>
+                <Text style={[s.chipText, on && { color: '#fff' }]}>{t}</Text>
+              </Pressable>
+            )
+          })}
+          {/* Only a day that HAS doubles offers the switch — the site's rule.
+              A chip that toggles nothing reads as broken. */}
+          {view === 'time' && hasDoubles && (
+            <Pressable onPress={() => setShowDoubles(v => !v)} style={[s.chip, showDoubles && s.chipOn]}
+                       accessibilityRole="button" accessibilityState={{ selected: showDoubles }}>
+              <Text style={[s.chipText, showDoubles && { color: '#fff' }]}>Doubles</Text>
+            </Pressable>
+          )}
+          <Pressable onPress={() => setShowDone(v => !v)} style={[s.chip, showDone && s.chipOn]}
+                     accessibilityRole="button" accessibilityState={{ selected: showDone }}>
+            <Text style={[s.chipText, showDone && { color: '#fff' }]}>Completed</Text>
+          </Pressable>
+        </View>
 
         {day.loading && !day.data ? <Loading /> : null}
         <ErrorNote error={day.error} onRetry={refetch} />
