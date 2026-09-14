@@ -18,19 +18,12 @@ import { Ionicons } from '@expo/vector-icons'
 import { BracketIcon } from '../../BracketIcon'
 import { TourBadge } from '../../cards'
 import { Sheet } from '../../sheet'
-import { getScheduleDates, listTournaments } from '../../api'
 import { useAuth } from '../../auth'
-import { useApi } from '../../useApi'
-import { computeCohortInfo, getHomeSection } from '../../drawStatus'
+import { hasDrawData, useChoosableTournaments } from '../../choosableTournaments'
 import { setCurrentDraw, useCurrentDraw } from '../../currentDraw'
 import { useLastLeague } from '../../lastLeague'
 import { pruneScheduleTournaments, setScheduleTournaments, useScheduleTournaments } from '../../scheduleFilter'
-import { tournamentsOf } from '../../scheduleRows'
 import { C, T } from '../../theme'
-
-/* Openable means the draw actually exists to look at — the dashboard's own
-   test, so the tab cannot offer a tournament whose bracket is unreleased. */
-const hasDrawData = t => t.status === 'completed' || !!t.draw_released_direct_at
 
 /* THE TAB BAR'S OWN HEIGHT ARITHMETIC, because it has to be reproduced to be
    trimmed. getTabBarHeight() returns TABBAR_HEIGHT_UIKIT + insets.bottom and
@@ -60,14 +53,6 @@ const TAB_BOTTOM_MAX = 12
    thing in this file's arithmetic that must not shrink, or a label clips at
    the phone's larger text sizes. */
 const TAB_BORDER_H = 2
-
-/* LIVE ONLY. The chooser was listing every draw that had ever been released,
-   so a season of finished tournaments buried the two being played. These are
-   the dashboard's own top two sections: picks still open, or play under way.
-   getHomeSection also promotes a completed draw back to 'active' while the
-   rest of its cohort is still going — a men's final does not retire the
-   event while the women's is on court. */
-const LIVE_SECTIONS = new Set(['open', 'active'])
 
 function icon(name) {
   // The filled/outline pair is what makes the selected tab obvious without
@@ -106,33 +91,14 @@ export default function TabLayout() {
      would 401 — which this app treats as "sign out". */
   const { phase } = useAuth()
   const ready = phase === 'ready'
-  const tours = useApi(ready ? 'tournaments' : null, listTournaments, { enabled: ready })
-  /* computeCohortInfo needs EVERY draw: clustering a filtered list moves the
-     boundaries it works out, which is how "Last Week" starts stealing from
-     "Active". Filter AFTER, never before. */
-  const all = tours.data || []
-  const cohort = computeCohortInfo(all)
-  const openable = all.filter(hasDrawData)
-  // What the CHOOSER lists. The href below is a separate question.
-  const live = openable.filter(t => LIVE_SECTIONS.has(getHomeSection(t, cohort)))
+  /* The one derivation, shared with the Schedule page's own checkboxes so the
+     two controls can never offer different tournaments. */
+  const { all, live, choosable } = useChoosableTournaments(ready)
   /* The tab's destination falls back past `live` to any released draw, so the
      bar keeps four tabs through an off-season week with nothing being played.
      The chooser still lists only what is live and says so when that is
      nothing — a tab that vanishes teaches people it might not be there. */
-  const drawId = showing ?? live[0]?.id ?? openable[0]?.id ?? null
-  /* The same live draws, folded into the EVENTS the schedule chooser offers:
-     one US Open, not two. */
-  const liveEvents = tournamentsOf(live)
-  /* ...AND ONLY THE ONES WITH MATCHES ON A SHEET. A live bracket is not the
-     same as a schedule: a draw released for next week has no order of play
-     yet, and offering it here is a filter over nothing. One request, the
-     stepper's own, which the schedule screen is usually holding already. */
-  const sched = useApi(ready ? 'schedule-dates:all' : null, () => getScheduleDates(),
-                       { enabled: ready })
-  const onSheets = sched.data?.tournaments
-  const choosable = onSheets?.length
-    ? liveEvents.filter(t => onSheets.includes(t.id))
-    : liveEvents
+  const drawId = showing ?? live[0]?.id ?? all.find(hasDrawData)?.id ?? null
   /* Is the Schedule the page we are ON? That is what separates "take me
      there" from "let me change what I see there", and it is the whole of the
      rule below. */
