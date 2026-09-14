@@ -18,7 +18,7 @@ import { byFinish, competitionRanks, finishText, pct } from '../../../../scoring
 import { StandingsFoot, useStandingsView } from '../../../../standingsTools'
 import { othersPicksNote } from '../../../../lock'
 import { C } from '../../../../theme'
-import { PlayerName, TourSwitch } from '../../../../cards'
+import { PlayerName, TourSwitch, headerTour } from '../../../../cards'
 import { Card, CardLink, ErrorNote, Loading, Muted, Screen, Title } from '../../../../ui'
 
 /* WHAT THE CHANCES ARE, in the reader's words, and who the ratings belong to.
@@ -126,7 +126,8 @@ export default function GlobalStandings() {
           push, so flipping tours does not stack history. */}
       <Stack.Screen options={{ title: t?.name ? `${t.name} · Global` : 'Global standings',
                                headerRight: () => (
-                                 <TourSwitch draws={siblings} currentId={t?.id}
+                                 <TourSwitch draws={siblings} currentId={t?.id} showLevel
+                                             style={headerTour}
                                              onPick={d => router.replace(`/standings/${d.id}`)} />
                                ) }} />
       {/* THE FOOT IS PINNED. The table scrolls in a bounded box and the

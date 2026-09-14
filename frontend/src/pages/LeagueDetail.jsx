@@ -2204,18 +2204,27 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                   so an idle scrubber reserves nothing. Cleared when the drag
                   returns to the end: at "all matches" there is no single
                   point to answer for. */}
-              {flashMatch && (
-                <span key={flashMatch._key} className="lt-scrubber-flash">
-                  {getRoundLabel(flashMatch.round_number - 1, numRounds)}
-                  {': '}
-                  {flashMatch.winner_name ?? '?'} def. {flashMatch.loser_name ?? '?'}
-                  {flashMatch.completed_at && (
-                    <span className="lt-scrubber-when">
-                      {new Date(flashMatch.completed_at).toLocaleString('en-US', { month: 'short', day: '2-digit', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })}
-                    </span>
-                  )}
-                </span>
-              )}
+              {/* AT REST IT FALLS BACK TO THE POSITION'S OWN MATCH.
+                  flashMatch is only written by a drag, so arriving at the
+                  panel — the common case, with the slider at the end — named
+                  nothing at all. `lastMatch` is the match at wherever the
+                  slider is, which is the same answer the drag was giving,
+                  minus the re-flash animation. */}
+              {(flashMatch ?? lastMatch) && (() => {
+                const fm = flashMatch ?? lastMatch
+                return (
+                  <span key={flashMatch?._key ?? 'rest'} className="lt-scrubber-flash">
+                    {getRoundLabel(fm.round_number - 1, numRounds)}
+                    {': '}
+                    {fm.winner_name ?? '?'} def. {fm.loser_name ?? '?'}
+                    {fm.completed_at && (
+                      <span className="lt-scrubber-when">
+                        {new Date(fm.completed_at).toLocaleString('en-US', { month: 'short', day: '2-digit', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })}
+                      </span>
+                    )}
+                  </span>
+                )
+              })()}
               <input
                 type="range"
                 min={scrubMin}
@@ -2225,7 +2234,14 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                   const v = Number(e.target.value)
                   setScrubPos(v >= effectiveMax ? null : v)
                   setWorldIdx(null)
-                  const m = v < effectiveMax ? matchesTimeline[v - 1] : null
+                  /* THE LAST POSITION IS A POSITION. It used to clear the
+                     line here on the reasoning that "all matches" names no
+                     single point — but it does: the far right is position N,
+                     and its match is the most recently completed one, which
+                     is the single thing a reader scrubbing to the end most
+                     wants named (owner, 2026-09-14). Only position ZERO, the
+                     draw before any result, genuinely has no match. */
+                  const m = v > 0 ? matchesTimeline[v - 1] : null
                   if (m) {
                     /* IT STAYS. This is the answer to "what happened at
                        this point", and it was deleting itself 2.5 seconds
