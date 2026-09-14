@@ -123,6 +123,21 @@ export default function TabLayout() {
   /* The same live draws, folded into the EVENTS the schedule chooser offers:
      one US Open, not two. */
   const liveEvents = tournamentsOf(live)
+  /* Is the Schedule the page we are ON? That is what separates "take me
+     there" from "let me change what I see there", and it is the whole of the
+     rule below. */
+  const onSchedule = pathname === '/schedule' || pathname.startsWith('/schedule/')
+  /* The EVENT behind the bracket last opened — the US Open, not the US Open
+     WTA, because the chooser and the filter both work in events. Null when
+     that draw is no longer among the live ones, which is the off-season and
+     the week-old draw alike; the schedule then shows everything, as before. */
+  const readingDrawId = showing ?? null
+  const readingTournamentId = readingDrawId != null
+    ? all.find(t => t.id === readingDrawId)?.tournament_id ?? null
+    : null
+  const readingEventId = liveEvents.some(t => t.id === readingTournamentId)
+    ? readingTournamentId
+    : null
 
   return (
     <>
@@ -158,16 +173,27 @@ export default function TabLayout() {
           `title` stays — it is the TAB's label, not the header's. */}
       <Tabs.Screen
         name="schedule"
-        /* ASK WHICH DRAWS, exactly as the Draw tab asks which bracket — and
-           only when there is a choice to make. One live draw, or none, means
-           the sheet would be a gate with nothing behind it, so the press goes
-           straight through. */
+        /* THE SHEET OPENS FROM THE SCHEDULE, NOT ON THE WAY TO IT.
+
+           Arriving from a bracket, the question "which tournaments?" already
+           has an answer — the one being read — so asking it is a gate in front
+           of a door that was open. The press filters to that tournament and
+           goes. A SECOND press, now that the tab is the page you are on, is
+           the one that means "show me the others" and opens the chooser
+           (owner, 2026-09-14).
+
+           Still nothing to ask when there is nothing to choose between: one
+           live event, or none, and the press goes straight through either way. */
         listeners={{
           tabPress: e => {
             if (liveEvents.length < 2) return
+            if (!onSchedule) {
+              // Stale ids name nothing a week later; start from what is live.
+              pruneScheduleTournaments(liveEvents.map(t => t.id))
+              if (readingEventId != null) setScheduleTournaments(new Set([readingEventId]))
+              return
+            }
             e.preventDefault()
-            // Stale ids name nothing a week later; start from what is live.
-            pruneScheduleTournaments(liveEvents.map(t => t.id))
             setDraft(new Set(chosen ?? liveEvents.map(t => t.id)))
             setFiltering(true)
           },
@@ -269,7 +295,10 @@ export default function TabLayout() {
            onClose={() => {
              setScheduleTournaments(draft && draft.size === liveEvents.length ? null : draft)
              setFiltering(false)
-             router.push('/schedule')
+             // Only when the sheet was a detour. It now opens FROM the
+             // schedule, where pushing it again just stacks a second copy of
+             // the page the reader is already looking at.
+             if (!onSchedule) router.push('/schedule')
            }}>
       <Pressable style={[s.row, s.first]} accessibilityRole="button"
                  onPress={() => setDraft(new Set(liveEvents.map(t => t.id)))}>
