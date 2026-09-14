@@ -42,7 +42,7 @@ import { textWidth } from './measure.js'
 import { expectedStartLabel } from './dates'
 import { scoreLine, setCount } from './score'
 import { matchStarted } from './scoreHistory'
-import { EntryChip, PosBadge } from './cards'
+import { EntryChip, FlagSlot, PosBadge } from './cards'
 import { C, PICK, S } from './theme'
 import { ScrubContext } from './scrubContext'
 
@@ -435,6 +435,19 @@ function PlayerBox({ box, serving, picked, won, noteWon, drawRanks, B }) {
                 <PosBadge seed={p.seed} drawRank={drawRanks?.[p.id]} />
               </View>
             )}
+            {/* THE FLAG IS A FIXED SLOT, on every box that is not a bye —
+                including one still showing TBD. FlagSlot draws an outlined
+                empty box where there is no country, which is the point: a
+                neutral athlete, or a seat nobody has taken yet, must not
+                shift the name beside it out of line with the box above.
+                Same rule and same placement as the site's bracket: after the
+                seed, before the name (owner, 2026-09-14).
+
+                The name ladder needs no arithmetic for this. It fits itself
+                to whatever `nameSlot` measures, and the slot is flex:1, so
+                the width the flag takes is already out of the budget before
+                the first form is tried. */}
+            <View style={s.flag}><FlagSlot codes={[p?.nationality]} /></View>
             <BoxName player={p} B={B} won={won} picked={picked} />
             {serving && <TennisBall />}
             {p && <EntryChip entryType={p.entry_type} />}
@@ -776,6 +789,9 @@ const s = StyleSheet.create({
   boxBye: { backgroundColor: N[100], borderStyle: 'dashed' },
   // .cv-scroll--compact .cv-badges { margin-right: 6px }
   badge: { marginRight: 6 },
+  // The flag's own air. The glyph's box ends flush with its right edge, so
+  // without this the name began against the flag with no gap at all.
+  flag: { marginRight: 5 },
   nameSlot: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 4 },
   name: { fontFamily: NAME_FAMILY, fontSize: NAME_FONT, color: N[950], flexShrink: 1 },
   nameMuted: { fontFamily: 'Archivo_500Medium', fontStyle: 'italic', color: C.muted },
