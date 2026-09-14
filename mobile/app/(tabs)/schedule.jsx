@@ -30,7 +30,8 @@ import { useApi } from '../../useApi'
 import { footTime, isLive, isSuspended, matchFromEntry, whenLabel } from '../../schedule'
 import { leading } from '../../fontScale.js'
 import { TourBadge } from '../../cards'
-import { useScheduleTournaments } from '../../scheduleFilter'
+import { setScheduleTournaments, useScheduleTournaments } from '../../scheduleFilter'
+import { useChoosableTournaments } from '../../choosableTournaments'
 import { rowInTournaments } from '../../scheduleRows'
 import { MatchCard } from '../../scorecard'
 import { ScoreHistorySheet } from '../../scoreHistory'
@@ -108,6 +109,21 @@ export default function ScheduleScreen() {
      carries a tournament_id — unlike draw_id, which is null for qualifying and
      doubles — so this needs nothing derived and nothing to go wrong. */
   const eventSel = useScheduleTournaments()
+  /* WHAT THE PAGE'S OWN CHECKBOXES OFFER — the same derivation the tab bar's
+     sheet uses, so the two controls list the same tournaments and either can
+     undo the other. */
+  const { choosable: events } = useChoosableTournaments()
+  /* `null` in the store means EVERY tournament, so a box is ticked when there
+     is no selection at all. Turning the last one off would empty the screen
+     with nothing on it to explain why, so the whole set comes back instead —
+     which is the same state, said the other way, and leaves every box ticked
+     rather than every box blank. */
+  const toggleEvent = id => {
+    const cur = new Set(eventSel ?? events.map(t => t.id))
+    if (cur.has(id)) cur.delete(id)
+    else cur.add(id)
+    setScheduleTournaments(cur.size ? cur : null)
+  }
   /* THE TOURS ON OFFER — among the rows the OTHER filters keep, not among
      every row fetched. Filtering to one tournament and then being shown an
      ATP chip for a women's event is a control over nothing; and qualifying
@@ -328,6 +344,10 @@ export default function ScheduleScreen() {
           </Pressable>
         </View>
 
+        {/* TWO WORDS DO NOT NEED THE WIDTH OF A PHONE. Full-bleed segments
+            made a switch between "Time" and "Court" the widest thing on the
+            screen, which reads as the page's subject rather than one of its
+            controls. Content width, left-aligned with everything else. */}
         <View style={s.tabs}>
           {['time', 'court'].map(v => (
             <Pressable key={v} onPress={() => setView(v)}
@@ -338,6 +358,34 @@ export default function ScheduleScreen() {
             </Pressable>
           ))}
         </View>
+
+        {/* THE TOURNAMENTS, ON THE PAGE. They were reachable only by pressing
+            the Schedule tab a second time, which is a thing you have to be
+            told; the filter that decides what the whole screen holds belongs
+            where the screen is (owner, 2026-09-14).
+
+            The SAME list the sheet offers — both read useChoosableTournaments
+            — so the two controls cannot disagree, and either can undo the
+            other. Hidden below two, where there is nothing to choose. */}
+        {events.length > 1 && (
+          <View style={s.events}>
+            {events.map(t => {
+              const on = !eventSel || eventSel.has(t.id)
+              return (
+                <Pressable key={t.id} onPress={() => toggleEvent(t.id)}
+                           style={s.eventBox} accessibilityRole="button"
+                           accessibilityState={{ selected: on }}>
+                  <View style={[s.check, on && s.checkOn]}>
+                    {on ? <Ionicons name="checkmark" size={12} color={C.bg} /> : null}
+                  </View>
+                  <Text style={[s.eventName, !on && { color: C.muted }]} numberOfLines={1}>
+                    {t.name}
+                  </Text>
+                </Pressable>
+              )
+            })}
+          </View>
+        )}
 
         {day.loading && !day.data ? <Loading /> : null}
         <ErrorNote error={day.error} onRetry={refetch} />
@@ -611,9 +659,31 @@ const s = StyleSheet.create({
   lockChip: { paddingHorizontal: 6 },
   lockChipOn: { backgroundColor: C.greenLit, borderColor: C.greenLit },
   lockIcon: { fontSize: 11 },
-  tabs: { flexDirection: 'row', gap: S.xs, backgroundColor: C.sunken, borderRadius: R.md, padding: 3 },
-  tab: { flex: 1, alignItems: 'center', paddingVertical: S.sm, borderRadius: R.sm },
+  // alignSelf so the shell hugs its two segments instead of stretching to the
+  // column; the segments pay their own way in padding rather than flex.
+  tabs: {
+    flexDirection: 'row', gap: S.xs, backgroundColor: C.sunken,
+    borderRadius: R.md, padding: 3, alignSelf: 'flex-start',
+  },
+  tab: { alignItems: 'center', paddingVertical: 6, paddingHorizontal: S.lg, borderRadius: R.sm },
   tabOn: { backgroundColor: C.raised },
+  /* The tournament filter. A wrapping row, because two names can be longer
+     than a phone and a horizontal scroller hides its own overflow. */
+  events: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
+  eventBox: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    borderRadius: R.pill, borderWidth: 1, borderColor: C.border,
+    backgroundColor: C.card, paddingHorizontal: 10, paddingVertical: 5,
+    flexShrink: 1,
+  },
+  eventName: { ...T.tiny, color: C.ink, fontFamily: 'Archivo_700Bold', flexShrink: 1 },
+  // Sized in points, not from the type scale: a control, and a row of them
+  // has to line up.
+  check: {
+    width: 16, height: 16, borderRadius: 3, borderWidth: 1.5,
+    borderColor: C.border, alignItems: 'center', justifyContent: 'center',
+  },
+  checkOn: { backgroundColor: C.greenBright, borderColor: C.greenBright },
 
   // Rows breathe: the gap is what separates one match from the next, and at
   // S.xs the cards read as a single ruled block rather than a stack of cards.
