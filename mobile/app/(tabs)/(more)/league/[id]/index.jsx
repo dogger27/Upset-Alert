@@ -96,6 +96,25 @@ export default function LeagueDraws() {
      reader rather than a guess. */
   useEffect(() => { if (id != null) setLastLeague(id) }, [id])
   const [settings, setSettings] = useState(false)
+  /* ONE SECTION AT A TIME. The page was three lists end to end — the draws
+     being played, the ones finished, and the member tally — so reaching the
+     tally meant scrolling past a season (owner, 2026-09-14).
+
+     The switch offers only sections that EXIST: a league with nothing
+     finished has no Previous to select, and a tab over an empty list reads as
+     broken. Members is always there, so there is always something to show.
+
+     `tabRaw` is validated against that list rather than trusted, which is what
+     makes the empty case safe: a league whose last open draw finishes while
+     the page is up falls back to the first section still standing instead of
+     rendering nothing. */
+  const [tabRaw, setTab] = useState(null)
+  const tabs = [
+    current.length > 0 && { key: 'current', label: 'Open / Active' },
+    previous.length > 0 && { key: 'previous', label: 'Previous' },
+    { key: 'members', label: isGlobal ? 'Players' : 'Members' },
+  ].filter(Boolean)
+  const tab = tabs.some(x => x.key === tabRaw) ? tabRaw : tabs[0].key
   /* The site's Members tab: this year's Grand Slam point tally, ATP / WTA /
      combined, sortable by any column. Combined, descending, to start — the
      column the site opens on. */
@@ -165,24 +184,46 @@ export default function LeagueDraws() {
         <InviteSheet visible={invite} onClose={() => setInvite(false)} league={league.data} />
         {/* The site's gear: owner, league admin or site admin — the server's
             _can_manage, mirrored so the sheet never opens on a 403. */}
-        {!isGlobal && canManageLeague(league.data, me) ? (
-          <Pressable onPress={() => setSettings(true)} style={({ pressed }) => [s.settingsBtn, pressed && { opacity: 0.7 }]}
-                     accessibilityRole="button" accessibilityLabel="League settings">
-            <Ionicons name="settings-outline" size={16} color={C.muted} />
-            <Text style={[T.smallMed, { color: C.muted }]}>Settings</Text>
-          </Pressable>
-        ) : null}
+        {/* SETTINGS AND THE SWITCH SHARE THE LINE. The gear is a door opened
+            rarely and the switch is used on every visit, so the switch takes
+            the slack and the gear keeps only the width of its own label. On
+            the Global league there is no gear and the switch has the row. */}
+        <View style={s.tabRow}>
+          {!isGlobal && canManageLeague(league.data, me) ? (
+            <Pressable onPress={() => setSettings(true)} style={({ pressed }) => [s.settingsBtn, pressed && { opacity: 0.7 }]}
+                       accessibilityRole="button" accessibilityLabel="League settings">
+              <Ionicons name="settings-outline" size={16} color={C.muted} />
+              <Text style={[T.smallMed, { color: C.muted }]}>Settings</Text>
+            </Pressable>
+          ) : null}
+          {tabs.length > 1 && (
+            <View style={s.tabs}>
+              {tabs.map(x => (
+                <Pressable key={x.key} onPress={() => setTab(x.key)}
+                           style={[s.tab, tab === x.key && s.tabOn]}
+                           accessibilityRole="button" accessibilityState={{ selected: tab === x.key }}>
+                  {/* Shrink, never truncate: "Open / Active" is the widest of
+                      the three and the segment it lives in is a third of what
+                      the gear leaves. */}
+                  <Text style={[s.tabText, tab === x.key && s.tabTextOn]}
+                        numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+                    {x.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+        </View>
         {settings ? (
           <LeagueSettingsSheet key={league.data?.id} visible={settings} onClose={() => setSettings(false)} league={league.data} />
         ) : null}
 
-        {current.length > 0 && (
+        {tab === 'current' && (
           <>
-            <Eyebrow>Open / Active</Eyebrow>
             {current.map(g => <DrawRow key={g.key} items={g.items} leagueId={id} isGlobal={isGlobal} />)}
           </>
         )}
-        {previous.length > 0 && (
+        {tab === 'previous' && (
           <>
             {/* The count and the filter share a line: a chip of its own would
                 cost a row of a list that is meant to be scanned. */}
@@ -209,7 +250,7 @@ export default function LeagueDraws() {
           </>
         )}
 
-        {(league.data || isGlobal) && (
+        {tab === 'members' && (league.data || isGlobal) && (
           <>
             <Eyebrow>{isGlobal ? `Players (${members.length})` : `Members (${league.data?.member_count ?? members.length})`}</Eyebrow>
             <View style={s.tally}>
@@ -387,6 +428,17 @@ function Tours({ a, paired }) {
 
 const s = StyleSheet.create({
   stripeHalf: { flex: 1 },
+  tabRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  tabs: {
+    flex: 1, flexDirection: 'row', gap: 4, backgroundColor: C.sunken,
+    borderRadius: R.md, padding: 2,
+  },
+  tab: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 4, borderRadius: R.sm },
+  tabOn: { backgroundColor: C.raised },
+  // No lineHeight: on iOS the extra leading lands above the glyphs and pushes
+  // the caps off a short strip's centre. The row centres the text.
+  tabText: { fontFamily: 'Archivo_500Medium', fontSize: 13, color: C.muted },
+  tabTextOn: { color: C.ink },
   /* Previous: one line of name, one of meta, and less air than a card being
      read rather than scanned. The height comes from the INNER padding, not
      the card's — trimming the card did nothing at all. */
