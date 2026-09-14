@@ -32,7 +32,7 @@ import re
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
 
-from sqlalchemy import and_, or_, select, update
+from sqlalchemy import and_, delete, or_, select, update
 
 from app.services.sofascore_doubles import _sheet_surnames
 from app.models.schedule import (ScheduleChange, ScheduleDocument,
@@ -1116,6 +1116,11 @@ async def ingest_document(db, tournament, play_date: date, url: str,
     await db.flush()
     await _fill_tbd_rounds(db, tournament.id, play_date, entry_draw, draw_by_id)
     await _dedupe_day(db, tournament.id, play_date)
+    # AFTER the dedupe, which is what hands a merge's survivor the newest
+    # document id — a row this pass would otherwise read as one the new sheet
+    # had dropped. BEFORE the renumber, so the gap a pulled slot leaves in a
+    # court's order closes in the same pass.
+    pulled = await _retire_pulled_slots(db, tournament.id, play_date, doc)
     await _renumber_courts(db, tournament.id, play_date)
     await db.commit()
 
@@ -1138,6 +1143,22 @@ async def ingest_document(db, tournament, play_date: date, url: str,
             + "; ".join(f"{o!r}->{n!r}" for o, n in renamed[:5]),
             {"tournament_id": tournament.id, "play_date": str(play_date),
              "renamed": [[o, n] for o, n in renamed[:20]]})
+
+    if pulled:
+        # WARNING, not info, and the level is the point. A tournament taking a
+        # match off the sheet is ordinary — but a slot the PARSER stopped
+        # seeing is indistinguishable from it here, and this line is the only
+        # record that a row left the page. Rare enough to be worth reading:
+        # one slot in a month of sheets across every tournament.
+        # After the commit, for the reason above `renamed`.
+        from app.services.system_log import app_log
+        await app_log(
+            "warning", "order_of_play",
+            f"{len(pulled)} slot(s) pulled from {tournament.name} on "
+            f"{play_date} by document {doc.id} — the sheet no longer prints "
+            + "; ".join(pulled[:5]),
+            {"tournament_id": tournament.id, "play_date": str(play_date),
+             "document_id": doc.id, "pulled": pulled[:20]})
 
     # AFTER the commit, in this order: the LAW first, then the verifier queue.
     # The invariants (schedule_invariants.py) are the deterministic record of
@@ -1904,6 +1925,141 @@ async def _dedupe_day(db, tournament_id: int, play_date: date) -> int:
     if dropped:
         await db.flush()
     return dropped
+
+
+def _slot_was_pulled(row, court_anchor, published, match_played: bool) -> bool:
+    """Can this dropped slot be PROVEN to have been pulled, not played?
+
+    `court_anchor` is the first printed start on the row's court according to
+    the revision that dropped it, `published` when that revision was fetched.
+    Split out from the pass below so the judgement can be tested without a
+    database — see tests/test_pulled_slot.py, which runs it over the whole
+    stored corpus of dropped rows.
+    """
+    if court_anchor is None or published is None or court_anchor <= published:
+        # Either the sheet gives this court no clock to reason from, or the
+        # court was already underway when it was published — in which case a
+        # missing slot may simply be one that had finished.
+        return False
+    # Any trace of having been on court — the same disqualification
+    # `_dedupe_day` applies before it will call a row a withdrawal ghost, plus
+    # the sheet's own printed score and status, which for a doubles or
+    # qualifying row is the only sighting of play that ever exists.
+    return not (row.started_at or row.completed_at or row.winner_side
+                or row.live_scores_json or row.scores_json or row.printed_score
+                or row.printed_status
+                or (row.status or 'scheduled') != 'scheduled'
+                or match_played)
+
+
+async def _retire_pulled_slots(db, tournament_id: int, play_date: date,
+                               doc) -> list[str]:
+    """Delete the rows the day's newest revision no longer prints.
+
+    A sheet restates the WHOLE day, so a slot missing from the newest one is a
+    slot that revision dropped. Two very different events look identical in
+    the data afterwards, and only one of them may be deleted:
+
+    * the tournament PULLED the match. SP Open 2026-09-14: the 2:05 PM
+      revision moved the day's start from 2:30 to 3:30 PM and took the doubles
+      R16 off QUADRA CENTRAL altogether. Nothing retired the row, so the page
+      kept printing a match that was never going to be played — and because
+      the estimate chain runs down a court in order, the phantom pushed
+      Badosa's printed "Not before 5:30 PM" out to a rendered "~7:15 PM" and
+      the slot behind it to "~9:25 PM". A slot the sheet has dropped is a
+      WRONG CLOCK on its neighbours, exactly the damage a duplicate row does.
+    * the match was already PLAYED and the evening reissue simply stopped
+      listing it. Cincinnati 2026-08-19: the 7:43 PM revision dropped four
+      slots the morning sheet had, two of them finished singles and two of
+      them doubles, which ESPN never covered and which therefore carry no
+      result anywhere. Deleting those erases a real match from the day.
+
+    The discriminator is the clock, and it is only allowed to answer when it
+    is certain: a court whose FIRST printed start on the new sheet was still
+    in the future when that sheet was published has not played anything yet,
+    so nothing on it can have been dropped for being finished. A revision
+    published mid-session is left entirely alone — `slot_unconfirmed` in
+    schedule_invariants goes on reporting the row, which is the status quo
+    rather than a guess. Measured over every tournament-day stored: this
+    deletes the one SP Open row and none of the five historical ones.
+
+    Returns one description per retired slot, for the caller to log AFTER its
+    commit (`app_log` opens its own session, and SQLite has one writer).
+    """
+    from zoneinfo import ZoneInfo
+
+    rows = (await db.execute(
+        select(ScheduleEntry).where(
+            ScheduleEntry.tournament_id == tournament_id,
+            ScheduleEntry.play_date == play_date,
+        ))).scalars().all()
+    stale = [r for r in rows if (r.last_document_id or 0) != doc.id]
+    # Three ways this pass must refuse to run at all, each of them a state in
+    # which "the sheet no longer prints it" is not what absence means:
+    #   * a row stamped by a LATER document — this is a re-parse of an old
+    #     revision, which knows nothing about what the newest one prints;
+    #   * nothing restated — a parse that produced no rows at all is a parser
+    #     failure, not a tournament cancelling its whole day;
+    #   * no venue zone — every printed clock below would then be read as UTC,
+    #     and a misread clock here DELETES rows. recompute_expected_starts can
+    #     afford UTC as a last resort; this cannot.
+    if not stale or len(stale) == len(rows):
+        return []
+    if any((r.last_document_id or 0) > doc.id for r in rows):
+        return []
+    venue_tz = (await db.execute(
+        select(Draw.venue_timezone).where(
+            Draw.tournament_id == tournament_id,
+            Draw.venue_timezone.isnot(None)))).scalars().first()
+    try:
+        tz = ZoneInfo(venue_tz) if venue_tz else None
+    except Exception:
+        tz = None
+    if tz is None:
+        return []
+
+    published = _aware(doc.fetched_at) or datetime.now(timezone.utc)
+    # Earliest printed start per court, read from THIS document's rows only:
+    # the question is when the new sheet says the court begins, and a stale
+    # row's own time is from the sheet that has just been superseded.
+    anchors: dict[str, datetime] = {}
+    for r in rows:
+        if (r.last_document_id or 0) != doc.id:
+            continue
+        clock = _parse_clock(r.start_time_local)
+        if not clock:
+            continue
+        when = datetime.combine(play_date, clock, tzinfo=tz).astimezone(timezone.utc)
+        if r.court not in anchors or when < anchors[r.court]:
+            anchors[r.court] = when
+
+    linked = [r.match_id for r in stale if r.match_id]
+    match_played: dict[int, bool] = {}
+    if linked:
+        for mid, winner, done, began, live, sofa_done, sofa_began in (await db.execute(
+                select(Match.id, Match.winner_id, Match.completed_at,
+                       Match.started_at, Match.live_scores_json,
+                       Match.sofa_completed_at, Match.sofa_started_at)
+                .where(Match.id.in_(linked)))).all():
+            match_played[mid] = bool(winner or done or began or live
+                                     or sofa_done or sofa_began)
+
+    retired: list[str] = []
+    for r in stale:
+        if not _slot_was_pulled(r, anchors.get(r.court), published,
+                                bool(match_played.get(r.match_id))):
+            continue
+        retired.append(f"{_printed_pairing(r)} ({r.court}, "
+                       f"{r.round_label or '?'} {r.discipline})")
+        # The history rows point at a slot that is about to stop existing, and
+        # schedule_changes.schedule_entry_id is NOT NULL — a merge hands them
+        # to the survivor (`_absorb`), a pull has none to hand them to.
+        await db.execute(delete(ScheduleChange).where(
+            ScheduleChange.schedule_entry_id == r.id))
+        await db.delete(r)       # players cascade off the relationship
+    if retired:
+        await db.flush()
+    return retired
 
 
 def _ascii_fold(s: str) -> str:
