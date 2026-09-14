@@ -197,7 +197,15 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
     # matches. (Where the law needs an independent reading it keeps one — see
     # _SHEET_CAPS_RE and _printed_instant. A join key is not that.)
     decided_at: dict = {}
-    doc_fetched: dict = {}
+    # WHEN each revision of this day was published. Read unconditionally —
+    # `slot_pulled_not_retired` below needs it on a day with no unresolved row
+    # at all, which is exactly the day SP Open had on 2026-09-14.
+    doc_fetched: dict = {
+        d.id: _naive_utc(d.fetched_at)
+        for d in (await db.execute(
+            select(ScheduleDocument).where(
+                ScheduleDocument.tournament_id == tournament_id,
+                ScheduleDocument.play_date == _pd))).scalars().all()}
     if any(e.is_tbd for e in rows):
         wins = (await db.execute(
             select(ScheduleEntry).where(
@@ -211,12 +219,6 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
             b = _sheet_surnames([p.raw_name for p in r.players if p.side == "b"])
             if a and b and r.completed_at is not None:
                 decided_at[frozenset(a | b)] = _naive_utc(r.completed_at)
-        doc_fetched = {
-            d.id: _naive_utc(d.fetched_at)
-            for d in (await db.execute(
-                select(ScheduleDocument).where(
-                    ScheduleDocument.tournament_id == tournament_id,
-                    ScheduleDocument.play_date == _pd))).scalars().all()}
 
     def flag(code, entry, detail):
         v.append({"code": code, "entry_id": entry.id if entry else None,
@@ -767,10 +769,60 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
     # absorb it), and four rows from the first Cincinnati sheet. No noise.
     # `_absorb` hands the newer document id to a merge's survivor so that
     # collapsing two rows cannot look like this.
+    #
+    # 2026-09-14, SP Open: reporting it is not enough when the row is
+    # PROVABLY dead. The 2:05 PM revision moved the day's start to 3:30 PM and
+    # dropped the doubles R16 off QUADRA CENTRAL; the row stayed, and the
+    # estimate chain — which runs down a court in order — carried the phantom
+    # forward into its neighbours' clocks, publishing "~7:15 PM" under a
+    # printed "Not before 5:30 PM". `schedule._retire_pulled_slots` deletes
+    # exactly the rows the sheet can be PROVEN to have pulled rather than
+    # stopped listing because they were played: no trace of having been on
+    # court, on a court whose first printed start on the new sheet was still
+    # ahead when that sheet was published. This is that predicate, stated
+    # again as law — with the law's OWN reading of the printed clock
+    # (`_printed_instant`, the independent parse), so a zone or clock bug in
+    # the service is a disagreement here rather than a shared blind spot.
     latest_doc = max((r.last_document_id or 0) for r in rows) if rows else 0
     if latest_doc:
+        published = doc_fetched.get(latest_doc)
+        # The new sheet's own account of when each court begins. Read from the
+        # rows IT stamped: a stale row's printed time belongs to the revision
+        # that has just been superseded.
+        anchor: dict = {}
         for e in rows:
-            if (e.last_document_id or 0) < latest_doc:
+            if (e.last_document_id or 0) != latest_doc:
+                continue
+            when = _naive_utc(_printed_instant(e, venue_tz))
+            if when and (e.court not in anchor or when < anchor[e.court]):
+                anchor[e.court] = when
+        played_match = {}
+        linked = [e.match_id for e in rows
+                  if e.match_id and (e.last_document_id or 0) < latest_doc]
+        if linked:
+            from app.models.tournament import Match as _M
+            played_match = {
+                mid: bool(w or c or s or lj)
+                for mid, w, c, s, lj in (await db.execute(
+                    select(_M.id, _M.winner_id, _M.completed_at,
+                           _M.started_at, _M.live_scores_json)
+                    .where(_M.id.in_(linked)))).all()}
+        for e in rows:
+            if (e.last_document_id or 0) >= latest_doc:
+                continue
+            court_at = anchor.get(e.court)
+            never_played = not (
+                e.started_at or e.completed_at or e.winner_side
+                or e.live_scores_json or e.scores_json or e.printed_score
+                or e.printed_status or (e.status or "scheduled") != "scheduled"
+                or played_match.get(e.match_id))
+            if (never_played and published and court_at and court_at > published
+                    and venue_tz):
+                flag("slot_pulled_not_retired", e,
+                     f"document {latest_doc} dropped this slot and was "
+                     f"published before {e.court} had played anything — it was "
+                     f"pulled, and it is still chaining the clocks behind it")
+            else:
                 flag("slot_unconfirmed", e,
                      f"last confirmed by document {e.last_document_id}, but the "
                      f"day's newest document is {latest_doc} — the current sheet "
