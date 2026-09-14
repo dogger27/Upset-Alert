@@ -12,7 +12,7 @@ import traceback
 from datetime import date, datetime, timedelta, timezone
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.exc import OperationalError
 
 from app.database import AsyncSessionLocal
@@ -1396,6 +1396,10 @@ async def _notify_pending_round_digests() -> None:
 # spam on every run, short enough that a genuinely stuck tournament doesn't
 # go unnoticed for days (as Iași Open's title did before anyone looked).
 DRAW_HEALTH_REALERT_HOURS = 6.0
+# How long play must have been under way before an entry with no Tennis
+# Explorer player is the matcher giving up rather than the resolver not having
+# reached it yet.
+UNRESOLVED_GRACE_HOURS = 12
 
 
 async def _check_draw_health() -> None:
@@ -1548,6 +1552,16 @@ async def _check_rankings_health() -> None:
         # play has begun is not waiting on TE to publish — it is a name our
         # matcher cannot bridge, and it costs that player's ranking, ELO, H2H
         # and form on a draw people are actively picking.
+        #
+        # "GIVEN UP ON" NEEDS TIME TO HAVE PASSED, and `start_date <= today`
+        # does not supply it. start_date is now corrected backwards onto the
+        # day the first ball was observed, so it can land mid-afternoon and
+        # make a draw "started" in the same hour — before one scrape has
+        # re-attempted anything. Guadalajara did exactly that: three names
+        # reported as unbridgeable at 20:43, all three stamped by the resolver
+        # shortly after, the error repeated once per process generation in
+        # between (owner's /issues run, 2026-09-14).
+        started_before = datetime.now(timezone.utc) - timedelta(hours=UNRESOLVED_GRACE_HOURS)
         unresolved = (
             await db.execute(
                 select(Draw.id, Draw.name, Draw.gender, Draw.year, DrawEntry.name)
@@ -1559,6 +1573,15 @@ async def _check_rankings_health() -> None:
                     Draw.status != "completed",
                     Draw.start_date.isnot(None),
                     Draw.start_date <= today,
+                    # The observed first ball where there is one, so the clock
+                    # runs from play rather than from midnight; a draw whose
+                    # start we only know by date falls back to the date.
+                    or_(
+                        and_(Draw.first_match_at.isnot(None),
+                             Draw.first_match_at <= started_before.replace(tzinfo=None)),
+                        and_(Draw.first_match_at.is_(None),
+                             Draw.start_date < today),
+                    ),
                 )
             )
         ).all()
