@@ -19,7 +19,7 @@ import { FONT_SCALE, leading } from '../../../fontScale.js'
 import { Ionicons } from '@expo/vector-icons'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { GestureDetector } from 'react-native-gesture-handler'
-import { getDraw, getMyStandouts, getPredictions } from '../../../api'
+import { getDraw, getMyStandouts, getPredictions, listTournaments } from '../../../api'
 import { useAuth } from '../../../auth'
 import { H2HSheet } from '../../../h2h'
 import { useLiveUpdates } from '../../../live'
@@ -29,7 +29,7 @@ import { computeDrawRanks } from '../../../drawRanks'
 import { useApi } from '../../../useApi'
 import { currentRound } from '../../../rounds'
 import { C, R, S, T } from '../../../theme'
-import { TourBadge } from '../../../cards'
+import { TourSwitch } from '../../../cards'
 import { Card, ErrorNote, Loading, Muted, Screen, Title } from '../../../ui'
 import { BOX_PITCH, CHIP_OVERHANG, CONNECTOR_W, ChampionGroup, GROUP_H, MatchGroup, buildBracket } from '../../../bracket'
 import { RoundScrubView, useRoundScrub } from '../../../RoundScrub'
@@ -61,10 +61,25 @@ export default function DrawScreen() {
   const [picked, setPicked] = useState(null)   // null = follow the live round
 
   const t = draw.data?.tournament
+  /* THE TWO HALVES OF ONE EVENT — the draws sharing a tournament_id, or the
+     name and year where the API has none, which is the rule the standings
+     screens use. Only ones with a bracket to open: an unreleased other half
+     is a switch to a blank page.
 
-  /* The sibling-draw arrows lived in the header and went with it. Moving
-     between draws is the Draw tab's chooser now, which lists them all rather
-     than stepping through one at a time. */
+     `listTournaments` under the key the tab bar and the standings already
+     hold, so this is a cache read on all but the first visit. */
+  const allDraws = useApi('tournaments', listTournaments)
+  const siblings = useMemo(() => (allDraws.data || []).filter(x => t && (
+    x.status === 'completed' || x.draw_released_direct_at
+  ) && (
+    t.tournament_id != null ? x.tournament_id === t.tournament_id
+      : x.name === t.name && x.year === t.year
+  )), [allDraws.data, t])
+
+  /* The header's old sibling ARROWS are not coming back — stepping one at a
+     time through a list you cannot see is the thing the Draw tab's chooser
+     replaced. The tour switch above is a different control: it names both
+     halves and shows which one you are on. */
   const router = useRouter()
 
   /* WHICH CLOCK an upcoming start is shown in — the site's rule, exactly:
@@ -168,11 +183,22 @@ export default function DrawScreen() {
                   the badge sits at the edge whatever the name's length,
                   rather than trailing after a short one. */}
               <Text style={s.headName} numberOfLines={1}>{t.name}</Text>
-              {/* alignSelf overrides the row's alignItems, and TourBadge
-                  carries alignSelf:'flex-start' for the stacked layouts it
-                  usually sits in — which pinned it to the TOP of this row.
-                  Centred explicitly so it sits on the name's line. */}
-              <TourBadge gender={t.gender} style={{ alignSelf: 'center' }} />
+              {/* THE PAIR, AS A SWITCH. A combined event is two draws under
+                  one name, and the reader on one of them usually wants the
+                  other next — the standings screens already offer it this
+                  way, so the bracket does too. The tour being read wears the
+                  badge; the other is greyed and waiting to be pressed. One
+                  draw, and TourSwitch renders the plain badge it always did
+                  (owner, 2026-09-14).
+
+                  REPLACE, NOT PUSH: flipping tours is changing what you are
+                  looking at, not going somewhere new, and pushing would stack
+                  a back-button trail of the same event. setCurrentDraw keeps
+                  the Draw tab and the Schedule's default in step — the
+                  screen's own effect does it too, but not until the new route
+                  has mounted. */}
+              <TourSwitch draws={siblings} currentId={t.id} style={{ alignSelf: 'center' }}
+                          onPick={d => { setCurrentDraw(d.id); router.replace(`/draw/${d.id}`) }} />
             </View>
           </View>
         )}
