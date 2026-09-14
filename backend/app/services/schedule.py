@@ -14,6 +14,7 @@ time view cannot sort on the sheet alone. Times are chained per court:
 
     fixed       -> as printed
     not_before  -> MAX(printed, predecessor's expected end)
+    after_event -> as not_before when it prints a clock, else as followed_by
     followed_by -> predecessor's expected end
 
 `not_before` taking the max is the interesting one: it is a lower bound, not a
@@ -2619,6 +2620,18 @@ async def relink_bracket_matches(db, tournament_id: int) -> int:
     return len(healed)
 
 
+# "NB" IS "NOT BEFORE". Guadalajara 2026-09-15 printed its last doubles slot
+# "NB 3:30 PM - After suitable rest"; the substring test here knew only the
+# spelled-out wording, so the "after" branch took it as after_event — a type the
+# estimate chain gave no floor — and the page said "~2:50 PM" for a match that
+# could not start before 3:30. The corpus holds two more of the same: "After
+# suitable rest, but NB 2:30" (read as after_event) and "Starting at NB 3:00 PM"
+# (read as FIXED). The abbreviation counts only in front of a clock, so a stray
+# "NB" can never turn a wording that states no time into a floor.
+_NOT_BEFORE_RE = re.compile(
+    r'\bnot\s+bef|\bn\s*[./]?\s*b\.?\s*(?=\d{1,2}[:.]\d{2})', re.I)
+
+
 def _start_type_of(m) -> str:
     """The printed wording decides, NOT the presence of a clock time.
 
@@ -2627,7 +2640,7 @@ def _start_type_of(m) -> str:
     expected-start chain exists to model.
     """
     raw = (getattr(m, 'start_raw', '') or '').lower()
-    if 'not before' in raw or 'not bef' in raw:
+    if _NOT_BEFORE_RE.search(raw):
         return 'not_before'
     if 'followed by' in raw:
         return 'followed_by'
@@ -3129,7 +3142,12 @@ async def recompute_expected_starts(db, tournament_id: int, play_date: date,
 
             if s.start_type == 'fixed' and printed_dt:
                 expected, source = printed_dt, 'printed'
-            elif s.start_type == 'not_before' and printed_dt:
+            elif s.start_type in ('not_before', 'after_event') and printed_dt:
+                # A CLOCK PRINTED ON A CHAINED SLOT IS A FLOOR, whatever words
+                # surround it. "After suitable rest" with a time says the match
+                # waits for the rest AND the clock; reading only the rest let
+                # the predecessor's end undercut the printed time (Guadalajara
+                # 2026-09-15, "NB 3:30 PM - After suitable rest" -> "~2:50 PM").
                 expected = max(printed_dt, prev_end) if prev_end else printed_dt
                 source = 'printed' if expected == printed_dt else 'estimated'
             elif prev_end:
