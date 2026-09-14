@@ -14,12 +14,12 @@
  *    no fresh point holds its place with a dim dash rather than shifting.
  */
 import { StyleSheet, Text, View } from 'react-native'
-import { FlagSlot, PlayerName, PosBadge } from './cards'
+import { EntryChip, FlagSlot, PlayerName, PosBadge } from './cards'
 import { Bump } from './fx'
 import { useFlashOnChange } from './scoreFx'
 import { leading } from './fontScale.js'
 import { endedWith, parseSet, scoreSets, setCount, setWon, winnerSideOf } from './score'
-import { isLive, isSuspended, pointOf, servingSide, sideDrawRank, sideFlags, sideName, sideSeed } from './schedule'
+import { isLive, isSuspended, pointOf, servingSide, sideDrawRank, sideEntryType, sideFlags, sideName, sideSeed } from './schedule'
 import { C, S, T } from './theme'
 
 export function MatchCard({ e }) {
@@ -92,6 +92,13 @@ export function MatchCard({ e }) {
               after={picked ? <Text style={s.pick} accessibilityLabel="You predicted this player to win">🤞</Text> : null}
             />
             </View>
+            {/* AFTER the name slot, not inside it. nameWrap is flex:1, so the
+                chip's width comes out of the name's budget before PlayerName
+                measures — and PlayerName's own ladder then shortens or shrinks
+                to whatever is left. That is the whole of "decrease the font
+                size when necessary": it is already the rule, it just has to be
+                given the real width (owner, 2026-09-14). */}
+            <EntryChip entryType={sideEntryType(e.players, side)} />
             {end && <Text style={s.end}>{end}</Text>}
             {winner != null && (
               <Text style={[s.mark, { color: winner === idx ? C.greenLit : C.lossMark }]}>

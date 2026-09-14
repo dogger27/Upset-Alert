@@ -39,6 +39,18 @@ export function sideSeed(players, side) {
   return p?.seed ?? null
 }
 
+/* HOW THIS SIDE GOT INTO THE DRAW — Q, WC, LL and the rest. The bracket has
+   always shown it; the schedule row, which is where a reader first meets a
+   name they do not know, did not.
+
+   The FIRST non-null on the side, which is also the only one: a doubles team
+   enters as a unit, so both halves carry the team's entry type, and reading
+   one of them is reading the pair's. */
+export function sideEntryType(players, side) {
+  const p = (players || []).find(x => x.side === side && x.entry_type)
+  return p?.entry_type ?? null
+}
+
 /* The inferred seed, for the badge to fall back to. Main-draw singles only —
    the server withholds it for doubles and qualifying, where a draw_entry_id
    points at the player's SINGLES row and any number read off it would describe
