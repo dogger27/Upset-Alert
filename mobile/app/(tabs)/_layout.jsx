@@ -22,7 +22,7 @@ import { getScheduleDates, listTournaments } from '../../api'
 import { useAuth } from '../../auth'
 import { useApi } from '../../useApi'
 import { computeCohortInfo, getHomeSection } from '../../drawStatus'
-import { useCurrentDraw } from '../../currentDraw'
+import { setCurrentDraw, useCurrentDraw } from '../../currentDraw'
 import { useLastLeague } from '../../lastLeague'
 import { pruneScheduleTournaments, setScheduleTournaments, useScheduleTournaments } from '../../scheduleFilter'
 import { tournamentsOf } from '../../scheduleRows'
@@ -137,6 +137,7 @@ export default function TabLayout() {
      there" from "let me change what I see there", and it is the whole of the
      rule below. */
   const onSchedule = pathname === '/schedule' || pathname.startsWith('/schedule/')
+  const onDraw = pathname.startsWith('/draw/')
   /* The EVENT behind the bracket last opened — the US Open, not the US Open
      WTA, because the chooser and the filter both work in events. Null when
      that draw is no longer among the live ones, which is the off-season and
@@ -148,6 +149,29 @@ export default function TabLayout() {
   const readingEventId = choosable.some(t => t.id === readingTournamentId)
     ? readingTournamentId
     : null
+
+  /* WHICH BRACKET THE DRAW TAB OPENS WITHOUT ASKING, or null to ask.
+
+     One live draw is the easy half: a chooser holding one row is a gate in
+     front of an open door, the same thing the Schedule tab stopped doing.
+
+     The other half is the reader's own context. Filtering the Schedule to one
+     tournament is a statement about what they are following, so the Draw tab
+     honours it rather than re-asking (owner, 2026-09-14). A combined event
+     still has two brackets under that one name — the bracket already being
+     read wins, and failing that the men's, which is the order the header's
+     tour switch uses, so the tab never picks a different half on different
+     days. Either way the switch in the header is one tap to the other. */
+  const soleFollowed = chosen?.size === 1 ? [...chosen][0] : null
+  const followedDraws = soleFollowed != null
+    ? live.filter(d => d.tournament_id === soleFollowed)
+    : []
+  const jumpTo = live.length === 1
+    ? live[0].id
+    : followedDraws.length
+      ? (followedDraws.find(d => d.id === showing)
+         ?? [...followedDraws].sort((a, b) => (a.gender === 'M' ? 0 : 1) - (b.gender === 'M' ? 0 : 1))[0]).id
+      : null
 
   return (
     <>
@@ -213,11 +237,28 @@ export default function TabLayout() {
       {/* The bracket, between the day's play and the people you play it with. */}
       <Tabs.Screen
         name="draw/[id]"
-        /* ASK WHICH ONE. There is never a single "the draw" — two at every
-           slam — so the tab opens a chooser instead of guessing. The href
-           still points somewhere real: it is what keeps the tab on the bar
-           and gives the press a destination if this listener ever misses. */
-        listeners={{ tabPress: e => { e.preventDefault(); setPicking(true) } }}
+        /* ASK WHICH ONE — but only when there is genuinely a question. There
+           is usually no single "the draw", two at every slam, so the default
+           is a chooser rather than a guess; `jumpTo` above is the short list
+           of cases where the answer is already known. The href still points
+           somewhere real: it is what keeps the tab on the bar and gives the
+           press a destination if this listener ever misses. */
+        listeners={{
+          tabPress: e => {
+            e.preventDefault()
+            /* A SECOND PRESS IS THE WAY TO ANOTHER BRACKET, the same rule the
+               Schedule tab follows. Without this the chooser would be
+               unreachable whenever `jumpTo` answers — and unlike the schedule,
+               the draw header's tour switch only reaches the OTHER HALF of
+               this event, never another tournament. */
+            if (jumpTo != null && !(onDraw && live.length > 1)) {
+              setCurrentDraw(jumpTo)
+              router.push(`/draw/${jumpTo}`)
+              return
+            }
+            setPicking(true)
+          },
+        }}
         options={{
           /* The LABEL is always "Draw". The screen used to set `title`, which
              drives the tab label as well as the header, so the bar read
