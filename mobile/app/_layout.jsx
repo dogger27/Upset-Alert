@@ -93,19 +93,20 @@ export default function RootLayout() {
             contentStyle: { backgroundColor: C.bg },
           }}
         >
-          {/* The tab bar owns the four main destinations — the draw among them
-              now. It used to be PUSHED over the tabs, which gave it a Back
-              button and took the bar away; a draw is a place you switch to,
-              not somewhere you went. Everything below is still pushed. */}
+          {/* EVERYTHING WITH A TAB BAR IS INSIDE (tabs) — not just the four
+              destinations, but the screens you push from them. A pushed route
+              on THIS stack draws over the tab navigator, which is how the
+              league, the Hall of Fame, the rules and the draw history each
+              took the bar away (owner, 2026-09-14). They live in
+              (tabs)/(more) now, a group so their paths are unchanged, with a
+              stack of their own for their headers and Back buttons.
+
+              What is left here is the signed-OUT app. A tab bar on sign-in
+              would offer four destinations that all bounce back to it. */}
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="sign-in" options={{ headerShown: false }} />
-          <Stack.Screen name="history" options={{ title: 'Draw history' }} />
-          <Stack.Screen name="standings/[id]" options={{ title: 'Standings' }} />
-          <Stack.Screen name="hall-of-fame" options={{ title: 'Hall of Fame' }} />
-          <Stack.Screen name="rules" options={{ title: 'Rules' }} />
           <Stack.Screen name="forgot-password" options={{ title: 'Forgot password' }} />
           <Stack.Screen name="register" options={{ title: 'Create account' }} />
-          <Stack.Screen name="about" options={{ title: 'About' }} />
         </Stack>
         </Gate>
       </AuthProvider>

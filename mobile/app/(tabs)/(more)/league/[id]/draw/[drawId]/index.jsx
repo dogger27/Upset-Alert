@@ -1,25 +1,31 @@
 /*
- * Global standings for one draw — the site's Global "league": every player
- * who entered, classic scoring, no league. Reached from the dashboard's
- * position ("29th of 29") and the draw header's tally, where the site's
- * sidebar shows this list beside the bracket.
+ * Standings for one draw.
  *
- * Same two rules as the league standings, for the same reasons: the server's
- * order is kept (its tiebreak is lexicographic over the round vector), and
- * ties share a rank with the next rank skipped.
+ * Two things here are easy to get subtly wrong, and both would make the app
+ * disagree with the website in ways nobody would notice for weeks:
+ *
+ * 1. DO NOT RE-SORT. The server returns entries already ordered by total
+ *    points, then by points in the latest rounds first (Final -> SF -> QF ...).
+ *    That tiebreak is lexicographic over the round vector, not a weighted sum,
+ *    so any client-side sort by `total` alone silently reorders ties.
+ *
+ * 2. Ties share a rank, and the next rank skips. Competition ranking:
+ *    1, 1, 1, 4 — not 1, 1, 1, 2. Two people genuinely level are level, and
+ *    the person behind them is fourth.
  */
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router'
+
+import { Link, Stack, useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useState } from 'react'
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
-import { useAuth } from '../../auth'
-import { getGlobalRoundScores, listTournaments, getGlobalPositionChances, getGlobalChancesHistory } from '../../api'
-import { useApi } from '../../useApi'
-import { byFinish, competitionRanks, finishText, pct } from '../../scoring'
-import { StandingsFoot, useStandingsView } from '../../standingsTools'
-import { othersPicksNote } from '../../lock'
-import { C } from '../../theme'
-import { PlayerName, TourSwitch } from '../../cards'
-import { Card, CardLink, ErrorNote, Loading, Muted, Screen, Title } from '../../ui'
+import { useAuth } from '../../../../../../../auth'
+import { getLeague, getLeagueTournaments, getRoundScores, getPositionChances, getChancesHistory } from '../../../../../../../api'
+import { useApi } from '../../../../../../../useApi'
+import { byFinish, competitionRanks, finishText, pct } from '../../../../../../../scoring'
+import { StandingsFoot, useStandingsView } from '../../../../../../../standingsTools'
+import { othersPicksNote } from '../../../../../../../lock'
+import { C } from '../../../../../../../theme'
+import { PlayerName, TourSwitch } from '../../../../../../../cards'
+import { Card, CardLink, ErrorNote, Loading, Muted, Screen, Title } from '../../../../../../../ui'
 
 /* WHAT THE CHANCES ARE, in the reader's words, and who the ratings belong to.
    The heading is the natural place to ask; on a phone there is no hover, so
@@ -45,23 +51,24 @@ function explainChances(attribution, sampled) {
   )
 }
 
-export default function GlobalStandings() {
-  const { id } = useLocalSearchParams()
+export default function Standings() {
+  const { id, drawId } = useLocalSearchParams()
   const { me } = useAuth()
   const router = useRouter()
-  const all = useApi('tournaments', listTournaments)
-  /* The round-scores payload, not /standings: same rows, plus the match
-     timeline and the what-if worlds the foot of the screen needs. */
-  const standings = useApi(`gscores:${id}`, () => getGlobalRoundScores(id))
-  const t = (all.data || []).find(x => String(x.id) === String(id))
-  /* The two halves of one event: the draws sharing a tournament_id, or the
-     name and year where the API has none — the site's own rule. */
-  const siblings = (all.data || []).filter(x => t && (
+
+  const league = useApi(`league:${id}`, () => getLeague(id))
+  const draws = useApi(`league:${id}:tournaments`, () => getLeagueTournaments(id))
+  const scores = useApi(`scores:${id}:${drawId}`, () => getRoundScores(id, drawId))
+
+  const t = draws.data?.find(x => String(x.tournament?.id) === String(drawId))?.tournament
+  /* The two halves of one event, as on the site: a shared tournament_id, or
+     name and year where the API has none. */
+  const siblings = (draws.data || []).map(x => x.tournament).filter(x => x && t && (
     t.tournament_id != null ? x.tournament_id === t.tournament_id
       : x.name === t.name && x.year === t.year))
-  const view = useStandingsView(standings.data, t,
-                                pos => getGlobalPositionChances(id, pos), 'g',
-                                () => getGlobalChancesHistory(id))
+  const view = useStandingsView(scores.data, t,
+                                pos => getPositionChances(id, drawId, pos), `l${id}`,
+                                () => getChancesHistory(id, drawId))
   const entries = view.entries
   const ranks = competitionRanks(entries)
   /* WHICH NUMBER THE ROWS ARE SORTED BY: the score (the standings, and the
@@ -75,8 +82,8 @@ export default function GlobalStandings() {
   const [pulling, setPulling] = useState(false)
   const pull = useCallback(async () => {
     setPulling(true)
-    try { await standings.refetch?.() } finally { setPulling(false) }
-  }, [standings]) // eslint: the hook object is stable per screen
+    try { await scores.refetch?.() } finally { setPulling(false) }
+  }, [scores])
   const rankOf = new Map(entries.map((e, i) => [e.user_id, ranks[i]]))
   const order = new Map(entries.map((e, i) => [e.user_id, i]))
   const rows = sortKey === 'total' ? entries
@@ -87,12 +94,19 @@ export default function GlobalStandings() {
      every future of the last fifteen matches and sends the best and worst
      place. Before that there are too many futures and the column is not
      drawn — the site does the same. */
+  /* THE RANGE'S COLUMN, ONLY WHERE THE RANGE IS. Read off the rows rather
+     than off the payload's flag, which describes the draw's PRESENT state:
+     rewound past the range's first position the rows have no range, and the
+     column stood there full of dashes — a broken-looking table instead of
+     "no range this early". The chances reach every position now, so this is
+     the one column that comes and goes, and the ✓ count takes its track
+     back exactly as it does live before R16. */
   const finishAvail = entries.some(e => e.best_rank != null)
-  /* WIN AND PODIUM CHANCES, from the same R16 line as the range and
-     the same enumeration — its own flag, because the model can be off
-     for a draw whose range is perfectly computable. */
-  const oddsAvail = !!standings.data?.odds_available
-  const oddsNote = standings.data?.odds_attribution
+  /* WIN AND PODIUM CHANCES, from the same R16 line as the range and the
+     same enumeration — its own flag, because the model can be off for a
+     draw whose range is perfectly computable. */
+  const oddsAvail = !!scores.data?.odds_available
+  const oddsNote = scores.data?.odds_attribution
   const chancesSampled = view.chancesSampled
   /* TOP 3 NEEDS A WIDER PHONE. Five numbers plus a username is more
      than a 393pt row holds, and the name is the column that must not
@@ -100,7 +114,7 @@ export default function GlobalStandings() {
      same reason. On a 430pt phone both fit with room to spare. */
   const { width: screenW } = useWindowDimensions()
   const podiumCol = oddsAvail && screenW >= 410
-  const cashPool = false
+  const cashPool = !!scores.data?.cash_pool
 
   const sortHead = (key, label, style, extra, a11y) => (
     /* SORTED BY A FUTURE, THE SLIDER STOPS WHERE THAT COLUMN BEGINS.
@@ -115,36 +129,45 @@ export default function GlobalStandings() {
       <Text style={[style, s.headText, sortKey === key && s.headOn]} numberOfLines={1} {...extra}>{label}</Text>
     </Pressable>
   )
-  const opens = t?.status === 'active' || t?.status === 'completed'
+  const showReal = !!league.data?.show_real_name
 
   return (
     <>
       {/* The tour pill beside the title, as the site's popup puts ATP / WTA
           beside the draw name: which draw this is, at a glance. */}
-      {/* THE PAIR, AS A SWITCH: a Slam is two draws under one name, and the
-          reader looking at one usually wants the other next. Replace, not
-          push, so flipping tours does not stack history. */}
-      <Stack.Screen options={{ title: t?.name ? `${t.name} · Global` : 'Global standings',
+      {/* THE PAIR, AS A SWITCH — see the global standings screen. */}
+      <Stack.Screen options={{ title: t?.name || 'Standings',
                                headerRight: () => (
                                  <TourSwitch draws={siblings} currentId={t?.id}
-                                             onPick={d => router.replace(`/standings/${d.id}`)} />
+                                             onPick={d => router.replace(`/league/${id}/draw/${d.id}`)} />
                                ) }} />
       {/* THE FOOT IS PINNED. The table scrolls in a bounded box and the
           timeline and What if sit beneath it, always on screen — a control
           for the table should not be somewhere past the table's end. The
           pull-to-refresh moves into the box, since that is what scrolls. */}
       <Screen scroll={false}>
-        {standings.loading && !standings.data ? <Loading /> : null}
-        <ErrorNote error={standings.error} onRetry={standings.refetch} />
-        {standings.data && (
-          <Muted>{entries.length} entered{t?.draw_size ? ` · ${t.draw_size} draw` : ''}</Muted>
+        {scores.loading && !scores.data ? <Loading /> : null}
+        <ErrorNote error={scores.error} onRetry={scores.refetch} />
+
+        {scores.data && (
+          <View style={s.bar}>
+            <Muted>
+              {scores.data.completed_matches_count} matches played
+              {t ? ` · ${t.draw_size} draw` : ''}
+            </Muted>
+            <Link href={`/league/${id}/draw/${drawId}/picks`} style={s.link}>
+              Your picks ›
+            </Link>
+          </View>
         )}
-        {standings.data && entries.length === 0 && (
+
+        {scores.data && entries.length === 0 && (
           <Card>
             <Title>No standings yet</Title>
             <Muted>Nobody has scored in this draw yet.</Muted>
           </Card>
         )}
+
         {/* The site's sidebar toast, as a line: why a row does not open yet. */}
         {entries.length > 0 && othersPicksNote(t) ? <Muted>{othersPicksNote(t)}</Muted> : null}
         {entries.length > 0 && (
@@ -152,14 +175,25 @@ export default function GlobalStandings() {
                       refreshControl={<RefreshControl refreshing={pulling} onRefresh={pull} tintColor={C.muted} colors={[C.clay]} />}>
           <View style={s.table}>
             <View style={[s.row, s.head, podiumCol && s.tightRow]}>
+              {/* numberOfLines on every header cell, without exception: these
+                  are FIXED-WIDTH columns, and "Correct" at 12pt uppercase is
+                  wider than 62pt, so it broke as "CORREC / T". Wording follows
+                  the dashboard's own — "26 right · 26 pts" — rather than being
+                  a second vocabulary for the same two numbers. */}
               <Text style={[s.rank, s.headText]} numberOfLines={1}>#</Text>
               <Text style={[s.who, s.headText]} numberOfLines={1}>Player</Text>
-              {/* The site's header. This endpoint carries no matches-played
-                  count, so the tick stands alone here. */}
+              {/* The site's header, exactly: correct picks out of the matches
+                  played so far — the count means nothing without its
+                  denominator. Shrinks to fit rather than cutting to "RIG…",
+                  which is what a fixed column did to "Right" at a larger
+                  text size. */}
+              {/* The tick alone; the denominator is what a screen reader
+                  hears, and what the line above the table already says. */}
               {/* The tick gives its track to the finish range from R16 on — the
                   site does the same at phone width; the count is a second
                   reading of the score, the range is news. */}
-              {finishAvail ? null : sortHead('correct_count', '✓', s.right, null, 'Correct picks — sort by this')}
+              {finishAvail ? null : sortHead('correct_count', '✓', s.right, null,
+                        `Correct picks, of ${scores.data?.completed_matches_count ?? 0} matches played — sort by this`)}
               {/* ONE HEADING OVER TWO COLUMNS: "Score", then "Curr." and
                   "Max" beneath it — where a bracket stands and the best it
                   can still finish on are one fact read two ways. The group
@@ -217,46 +251,66 @@ export default function GlobalStandings() {
             </View>
             {rows.map((e, i) => {
               const mine = me && e.user_id === me.id
+              /* THE ROW IS A DOOR TO THEIR BRACKET — the site's sidebar click:
+                 once the draw is active or finished, a member's row opens the
+                 draw with their picks on it. Before that their picks are
+                 sealed (the site says so in a toast), so the row stays a row. */
+              const opens = t?.status === 'active' || t?.status === 'completed'
+              /* The link wraps the row's BODY and the history button sits
+                 beside it — never one link inside another (nested anchors on
+                 the web build, the TourCard lesson). */
               const Body = opens ? CardLink : View
               return (
                 <View key={e.user_id} style={[s.row, i % 2 ? s.alt : null, mine && s.mine]}>
-                  <Body href={opens ? { pathname: `/draw/${id}`, params: { user: e.user_id, name: e.username } } : undefined}
-                        grow style={[s.body, podiumCol && s.tightRow]}>
-                    <Text style={s.rank}>
-                      {view.placesDecided && rankOf.get(e.user_id) != null && rankOf.get(e.user_id) <= 3 ? ['🏆', '🥈', '🥉'][rankOf.get(e.user_id) - 1] : (rankOf.get(e.user_id) ?? '')}
-                    </Text>
-                    <View style={s.who}>
-                      <PlayerName name={e.podium_locked && cashPool ? `${e.username} 💰` : e.username} shrinkOnly
+                <Body
+                  href={opens ? { pathname: `/draw/${drawId}`, params: { user: e.user_id, name: e.username } } : undefined}
+                  grow style={[s.body, podiumCol && s.tightRow]}
+                >
+                  {/* The site's place medal, on a finished draw only AND
+                      only while the table shows the present — a podium
+                      mid-tournament, or on a rewound one, would be a
+                      prediction (scoring.placesDecided). Ties share a place,
+                      so two 1sts both get the trophy. */}
+                  <Text style={s.rank}>
+                    {view.placesDecided && rankOf.get(e.user_id) != null && rankOf.get(e.user_id) <= 3
+                      ? ['🏆', '🥈', '🥉'][rankOf.get(e.user_id) - 1]
+                      : (rankOf.get(e.user_id) ?? '')}
+                  </Text>
+                  <View style={s.who}>
+                    <PlayerName name={e.podium_locked && cashPool ? `${e.username} 💰` : e.username} shrinkOnly
                                 style={[s.name, mine && s.nameMine, e.podium_locked && s.namePodium]} />
-                    </View>
-                    {/* The sorted column is the lit one: white and bold, the
+                    {showReal && e.full_name ? (
+                      <PlayerName name={e.full_name} style={s.real} />
+                    ) : null}
+                  </View>
+                  {/* The sorted column is the lit one: white and bold, the
                       other two muted. */}
                   {finishAvail ? null : <Text style={[s.right, sortKey === 'correct_count' && s.on]}>{e.correct_count}</Text>}
-                    <Text style={[s.num, oddsAvail && s.numTight, sortKey === 'total' && s.on]}>{Math.round(e.total)}</Text>
-                    {oddsAvail ? null : <Text style={[s.num, sortKey === 'max_points' && s.on]}>{e.max_points != null ? Math.round(e.max_points) : '–'}</Text>}
-                    {/* A place clinched is the one certainty in the column,
-                        so it reads in ink like the sorted column does. */}
-                    {finishAvail ? (
-                      <Text style={[s.fin, oddsAvail && s.finTight, (sortKey === 'finish' || (e.best_rank != null && e.best_rank === e.worst_rank)) && s.on]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}
-                            accessibilityLabel={e.best_rank == null ? undefined
-                              : e.best_rank === e.worst_rank ? `Finishes ${e.best_rank} whatever happens`
-                              : `Can still finish anywhere from ${e.best_rank} to ${e.worst_rank}`}>
-                        {finishText(e)}
-                      </Text>
-                    ) : null}
-                    {/* 100% has stopped being a probability, so it reads like the
-                        fact it is; 0% is out of the race and steps back. */}
-                    {oddsAvail ? (
-                      <>
-                        <Text style={[s.chance, sortKey === 'p_win' && s.on, e.p_win >= 1 && s.chanceSure, e.p_win === 0 && s.chanceOut]}
-                              numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{pct(e.p_win)}</Text>
-                        {podiumCol ? (
-                          <Text style={[s.chance, sortKey === 'p_podium' && s.on, e.p_podium >= 1 && s.chanceSure, e.p_podium === 0 && s.chanceOut]}
-                                      numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{pct(e.p_podium)}</Text>
-                        ) : null}
-                      </>
-                    ) : null}
-                  </Body>
+                  <Text style={[s.num, oddsAvail && s.numTight, sortKey === 'total' && s.on]}>{e.total}</Text>
+                  {oddsAvail ? null : <Text style={[s.num, sortKey === 'max_points' && s.on]}>{e.max_points != null ? Math.round(e.max_points) : '–'}</Text>}
+                  {/* A place clinched is the one certainty in the column, so
+                      it reads in ink like the sorted column does. */}
+                  {finishAvail ? (
+                    <Text style={[s.fin, oddsAvail && s.finTight, (sortKey === 'finish' || (e.best_rank != null && e.best_rank === e.worst_rank)) && s.on]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}
+                          accessibilityLabel={e.best_rank == null ? undefined
+                            : e.best_rank === e.worst_rank ? `Finishes ${e.best_rank} whatever happens`
+                            : `Can still finish anywhere from ${e.best_rank} to ${e.worst_rank}`}>
+                      {finishText(e)}
+                    </Text>
+                  ) : null}
+                  {/* 100% has stopped being a probability, so it reads like the
+                      fact it is; 0% is out of the race and steps back. */}
+                  {oddsAvail ? (
+                    <>
+                      <Text style={[s.chance, sortKey === 'p_win' && s.on, e.p_win >= 1 && s.chanceSure, e.p_win === 0 && s.chanceOut]}
+                            numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{pct(e.p_win)}</Text>
+                      {podiumCol ? (
+                        <Text style={[s.chance, sortKey === 'p_podium' && s.on, e.p_podium >= 1 && s.chanceSure, e.p_podium === 0 && s.chanceOut]}
+                                    numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{pct(e.p_podium)}</Text>
+                      ) : null}
+                    </>
+                  ) : null}
+                </Body>
                 </View>
               )
             })}
@@ -276,11 +330,19 @@ const s = StyleSheet.create({
      column further left than its header — the ✓ count sat under the "120"
      however it was aligned. One number, in both places. */
   body: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 8 },
+  bar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
+  link: { color: C.clay, fontWeight: '700', paddingVertical: 6 },
   /* The bounded box the table scrolls in; the foot sits under it. */
   scroller: { flex: 1, minHeight: 0 },
   scrollerBody: { paddingBottom: 4 },
-  table: { borderWidth: 1, borderColor: C.border, borderRadius: 14, overflow: 'hidden', backgroundColor: C.card },
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 12, gap: 8 },
+  table: {
+    borderWidth: 1, borderColor: C.border, borderRadius: 14,
+    overflow: 'hidden', backgroundColor: C.card,
+  },
+  row: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: 10, paddingHorizontal: 12, gap: 8,
+  },
   head: { backgroundColor: C.raised, paddingVertical: 8 },
   headText: { color: C.muted, fontSize: 12, fontWeight: '700', textTransform: 'uppercase' },
   // The header the rows are sorted by.
@@ -297,6 +359,7 @@ const s = StyleSheet.create({
      with the money when the draw runs a cash pool. Beats the clay of "me":
      the certainty is the news. */
   namePodium: { color: C.gold, fontWeight: '800' },
+  real: { color: C.muted, fontSize: 12 },
   /* Centred, like the site: a label fills its cell and a number does not.
      The header is a bare tick now, so the column is the score columns'
      width and the name gets the rest. */

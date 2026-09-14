@@ -2,8 +2,8 @@
    new player asks about, and it should not need a browser to answer. */
 import { Stack } from 'expo-router'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
-import { C, R, S, T } from '../theme'
-import { Card, Muted, Screen, Title } from '../ui'
+import { C, R, S, T } from '../../../theme'
+import { Card, Muted, Screen, Title } from '../../../ui'
 
 const COLS = ['Tier', 'R128/96', 'R64', 'R32', 'R16', 'QF', 'SF', 'F']
 const ROWS = [

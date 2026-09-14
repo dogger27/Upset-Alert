@@ -263,6 +263,11 @@ export default function TabLayout() {
           destinations is the brief, and a diagnostics screen is not one of
           the four things this app is opened for. */}
       <Tabs.Screen name="status" options={{ title: 'Status', href: null }} />
+      {/* THE PUSHED SCREENS, inside the navigator so the bar survives them —
+          the league, standings, Hall of Fame, rules, draw history, about.
+          href:null keeps the group off the bar; it has its own stack, and its
+          own headers and Back buttons, in (more)/_layout. */}
+      <Tabs.Screen name="(more)" options={{ href: null, headerShown: false }} />
     </Tabs>
 
     <Sheet visible={picking} onClose={() => setPicking(false)} title="Draws">

@@ -17,18 +17,18 @@
  */
 
 import { Stack, useLocalSearchParams } from 'expo-router'
-import { leading } from '../../../../../fontScale.js'
+import { leading } from '../../../../../../../fontScale.js'
 import { useMemo } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { getDraw, getPredictions } from '../../../../../api'
-import { useApi } from '../../../../../useApi'
-import { EntryChip, PlayerName, PosBadge } from '../../../../../cards'
-import { computeDrawRanks } from '../../../../../drawRanks'
-import { shortRound } from '../../../../../rounds'
-import { scoreLine } from '../../../../../score'
-import { slotLabel } from '../../../../../scoring'
-import { C } from '../../../../../theme'
-import { Card, ErrorNote, Loading, Muted, Screen, Title } from '../../../../../ui'
+import { getDraw, getPredictions } from '../../../../../../../api'
+import { useApi } from '../../../../../../../useApi'
+import { EntryChip, PlayerName, PosBadge } from '../../../../../../../cards'
+import { computeDrawRanks } from '../../../../../../../drawRanks'
+import { shortRound } from '../../../../../../../rounds'
+import { scoreLine } from '../../../../../../../score'
+import { slotLabel } from '../../../../../../../scoring'
+import { C } from '../../../../../../../theme'
+import { Card, ErrorNote, Loading, Muted, Screen, Title } from '../../../../../../../ui'
 
 export default function Picks() {
   const { drawId } = useLocalSearchParams()
