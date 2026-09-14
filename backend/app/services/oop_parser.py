@@ -26,6 +26,10 @@ from typing import Optional
 # and an anchored match found neither, which is what left 19 files empty.
 SLOT_RE = re.compile(
     r'(?:start(?:s|ing)?\s+at|not\s+before|not\s+bef\.?|followed\s+by|'
+    # "NB 3:30 PM" — the abbreviation, and only in front of a clock: WTA sheets
+    # print it (Guadalajara 2026-09-15). Its line there also said "After
+    # suitable rest", which is the only reason the slot opened at all.
+    r'\bn\s*[./]?\s*b\.?\s*(?=\d{1,2}[:.]\d{2})|'
     r'after\s+(?:rest|suitable)|to\s+be\s+arranged|'
     # "30 mins after ceremony" opens the next slot on the same court. Without
     # it the doubles final was swallowed into the singles final above it.

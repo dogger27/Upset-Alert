@@ -60,6 +60,7 @@ def _naive_utc(dt):
 # absorbed by both ends of the parse before now.
 _SLOT_WORDING_RE = re.compile(
     r'\b(?:TB[ACD]|followed\s+by|not\s+bef|start(?:s|ing)?\s+at|'
+    r'N\s*[./]?\s*B\.?\s*\d{1,2}[:.]\d{2}|'
     r'to\s+be\s+(?:arranged|confirmed|announced|advised|determined))\b', re.I)
 _TRAILING_SEED_RE = re.compile(r'(?:\s*\[[^\]]*\])+\s*$')
 _TRAILING_CODE_RE = re.compile(r'\s([A-Z]{3})$')
@@ -112,6 +113,11 @@ def _names_nobody(raw: str) -> bool:
 
 
 _CLOCK_RE = re.compile(r'^(\d{1,2})[:.](\d{2})\s*(am|pm)?$', re.I)
+# A not-before wording as the LAW reads it: spelled out, clipped ("Not Bef."),
+# or abbreviated in front of a clock ("NB 3:30 PM", "N/B 2:30"). Stated apart
+# from schedule._NOT_BEFORE_RE on purpose — see _printed_instant.
+_NOT_BEFORE_WORDING_RE = re.compile(
+    r'\bnot\s+bef|(?<![A-Za-z])N\s*[./]?\s*B\.?\s*\d{1,2}[:.]\d{2}', re.I)
 
 
 def _printed_instant(entry, tz_name):
@@ -296,6 +302,39 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                          f"printed {e.start_time_local!r} is {want.isoformat()} "
                          f"at {venue_tz}, but expected_start_at is "
                          f"{got.isoformat()}")
+
+        # 2026-09-15, Guadalajara CANCHA MEXCOVERY.COM: the sheet printed
+        # "NB 3:30 PM - After suitable rest" and the page said "~2:50 PM".
+        # `_start_type_of` knew only the spelled-out "not before", so the
+        # abbreviation fell to its "after" branch, and the estimate chain —
+        # which floored only a not_before — let the predecessor's end undercut
+        # a time the match cannot start before. Two readings, two codes.
+        #
+        # The WORDING: a note that says not-before must be stored as one, or
+        # every consumer that branches on start_type (the chain, both clients'
+        # floor rendering) treats a floor as a guess.
+        if (e.start_note and _NOT_BEFORE_WORDING_RE.search(e.start_note)
+                and e.start_type != "not_before"):
+            flag("not_before_wording_misread", e,
+                 f"start_note {e.start_note!r} states a not-before floor but "
+                 f"start_type is {e.start_type!r}")
+        # The CLOCK: an estimate may run late of a printed time, never early —
+        # whatever the start_type says, so a misread wording cannot hide it.
+        # Only for a row still to come: once a match is on court its start is
+        # history, and recompute pins it to the printed time.
+        if (e.expected_source == "estimated" and e.expected_start_at is not None
+                and not (e.started_at or e.completed_at or e.winner_side
+                         or e.live_scores_json)):
+            want = _printed_instant(e, venue_tz)
+            got = e.expected_start_at
+            if want is not None:
+                if got.tzinfo is None:
+                    got = got.replace(tzinfo=_tz.utc)
+                if (want - got).total_seconds() > 60:
+                    flag("expected_undercuts_printed_floor", e,
+                         f"printed {e.start_note or e.start_time_local!r} is "
+                         f"{want.isoformat()}, but the estimate "
+                         f"{got.isoformat()} starts the match before it")
 
         # tbd_side must be one of a/b/ab — anything else means a writer
         # invented a value nothing downstream reads. (Defensive; no incident.)
@@ -1159,7 +1198,9 @@ def check_parse(meta, match_count: int | None = None,
 # on settled state, so a real contradiction is still caught — just not blamed
 # on the ingest that was about to fix it. Same lesson as the two-transaction
 # window the sweep itself had to learn.
-INGEST_DEFERRED = frozenset({"expected_contradicts_printed"})
+# `expected_undercuts_printed_floor` reads the same half-written estimate.
+INGEST_DEFERRED = frozenset({"expected_contradicts_printed",
+                             "expected_undercuts_printed_floor"})
 
 
 async def check_and_log(db, tournament, play_date, *,
