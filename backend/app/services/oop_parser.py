@@ -503,7 +503,16 @@ def parse_pdf(pdf_bytes):
             # its own ("DOUBLES FINAL"). Counted the same way and for the same
             # reason as vs_lines: it is what the SHEET says, so the caller can
             # tell that a round was printed and no match came back wearing one.
-            'round_headers': 0}
+            'round_headers': 0,
+            # How many start wordings the sheet printed ("Starting at 10:30
+            # AM", "Followed by", "Not before 1:00 PM", "TBC"). The third count
+            # taken off the sheet's own lines, and the one that sees a box the
+            # other two cannot: some sheets print "A vs B" inline on a single
+            # line, which VS_RE does not match, and most boxes carry no event
+            # header at all. Every match box in every layout opens with one of
+            # these — it is what `_column_origins` anchors the columns on. See
+            # `sheet_is_blank`.
+            'slot_markers': 0}
     matches = []
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
         meta['pages'] = len(pdf.pages)
@@ -561,6 +570,8 @@ def parse_pdf(pdf_bytes):
             meta['vs_lines'] += sum(1 for _y, _m, t in cells if VS_RE.match(_clean(t)))
             meta['round_headers'] += sum(
                 1 for _y, _m, t in cells if _EVENT_HEADER_RE.match(_clean(t)))
+            meta['slot_markers'] += sum(
+                1 for _y, _m, t in cells if _slot_of(_clean(t)))
 
             origins = _column_origins(cells)
             if not origins:
@@ -592,6 +603,50 @@ def parse_pdf(pdf_bytes):
     if not matches and meta['reason'] is None:
         meta['reason'] = 'no matches found'
     return matches, meta
+
+
+# The three counts `parse_pdf` takes off the sheet's own lines, before a
+# column is assigned or a slot is opened. Named here because `sheet_is_blank`
+# is the only reader that needs all of them, and because a parser that does
+# not produce them must never be able to claim a sheet is blank.
+_SHEET_COUNTS = ('vs_lines', 'round_headers', 'slot_markers')
+
+
+def sheet_is_blank(meta) -> bool:
+    """Did the SHEET print no matches — as opposed to the parse losing them?
+
+    An order of play that comes back with zero matches means one of two
+    opposite things, and the consequence of confusing them is severe in both
+    directions:
+
+    * the parser broke, and the day's real slots must be left exactly where
+      they are (a regression that emptied the page would be far worse than one
+      that froze it);
+    * the tournament EMPTIED the day. SP Open published a blank Monday sheet
+      at 4:55 PM on 2026-09-14 — court headers over three empty columns — and
+      fifteen minutes later released Tuesday's order of play carrying all four
+      of Monday's remaining R32 matches. Nothing had been played. The site
+      went on printing those four at "Not before 5:30 PM" with no revision
+      able to take them off, because `ingest_document` returns before
+      `_retire_pulled_slots` when a parse yields nothing.
+
+    The sheet answers this itself. `vs_lines`, `round_headers` and
+    `slot_markers` are counted off the raw cells before any rule in this
+    module has had an opinion, so a sheet with match boxes cannot report zero
+    however badly the slot parser fails — and a parse that lost a box while
+    the sheet printed one is already an alarm (`check_parse`'s
+    `vs_lines_exceed_matches`).
+
+    Every key must be PRESENT and zero. The other feeds that satisfy
+    `ingest_document`'s (matches, meta) contract — uso_feed, wta_feed,
+    sofa_schedule — count nothing off a sheet, and a missing count is not a
+    zero one: absent keys mean "this source cannot tell", which is False.
+    """
+    if (meta or {}).get('kind') != 'oop':
+        return False           # results summary, placeholder, slam, no text
+    if (meta or {}).get('dropped_slots'):
+        return False           # a marker opened a slot this parse could not fill
+    return all(meta.get(k) == 0 for k in _SHEET_COUNTS)
 
 
 def _apply_header(match):

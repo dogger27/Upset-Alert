@@ -58,6 +58,14 @@ class ScheduleDocument(Base):
     revision_label: Mapped[Optional[str]] = mapped_column(String, nullable=True)  # "REVISED 2"
     parse_status: Mapped[str] = mapped_column(String, default="ok")   # ok|empty|not-an-oop|slam|error
     match_count: Mapped[int] = mapped_column(Integer, default=0)
+    # How many match boxes the SHEET printed, counted off its own lines before
+    # the slot parser had an opinion (oop_parser's vs_lines / slot_markers /
+    # round_headers). `match_count` is what we managed to read; this is what
+    # was there to read, and the gap between them is the difference between a
+    # tournament emptying a day and a parser regression — see
+    # `oop_parser.sheet_is_blank` and the law's `blank_sheet_slot_not_retired`.
+    # NULL on every document written before 2026-09-14: unknown, not zero.
+    printed_boxes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     fetched_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
