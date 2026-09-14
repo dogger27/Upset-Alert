@@ -153,6 +153,25 @@ export default function LeagueDraws() {
         headerTitle: () => (
           <LeagueTitle name={isGlobal ? 'Global' : league.data?.name} onPress={() => setPicking(true)} />
         ),
+        /* THE GEAR BELONGS IN THE BAR, level with the name by construction
+           rather than by arithmetic. It sat in the page under the title,
+           sharing a line with the section switch — where it took width from
+           the control used on every visit and pushed it off centre (owner,
+           2026-09-14). The bar's right slot is where a screen's one
+           configuration door goes.
+
+           Icon only. A nav-bar button is drawn inside a system capsule and
+           "Settings" beside a gear is the label twice; the accessibility
+           label carries the word for anyone who needs it. */
+        headerRight: !isGlobal && canManageLeague(league.data, me)
+          ? () => (
+            <Pressable onPress={() => setSettings(true)} hitSlop={10}
+                       style={({ pressed }) => [s.gear, pressed && { opacity: 0.6 }]}
+                       accessibilityRole="button" accessibilityLabel="League settings">
+              <Ionicons name="settings-outline" size={20} color={C.ink} />
+            </Pressable>
+          )
+          : undefined,
       }} />
       <LeaguePicker visible={picking} onClose={() => setPicking(false)} currentId={id} />
       <Screen onRefresh={draws.refetch}>
@@ -184,36 +203,25 @@ export default function LeagueDraws() {
         <InviteSheet visible={invite} onClose={() => setInvite(false)} league={league.data} />
         {/* The site's gear: owner, league admin or site admin — the server's
             _can_manage, mirrored so the sheet never opens on a 403. */}
-        {/* SETTINGS AND THE SWITCH SHARE THE LINE. The gear is a door opened
-            rarely and the switch is used on every visit, so the switch takes
-            the slack and the gear keeps only the width of its own label. On
-            the Global league there is no gear and the switch has the row. */}
-        <View style={s.tabRow}>
-          {!isGlobal && canManageLeague(league.data, me) ? (
-            <Pressable onPress={() => setSettings(true)} style={({ pressed }) => [s.settingsBtn, pressed && { opacity: 0.7 }]}
-                       accessibilityRole="button" accessibilityLabel="League settings">
-              <Ionicons name="settings-outline" size={16} color={C.muted} />
-              <Text style={[T.smallMed, { color: C.muted }]}>Settings</Text>
-            </Pressable>
-          ) : null}
-          {tabs.length > 1 && (
-            <View style={s.tabs}>
-              {tabs.map(x => (
-                <Pressable key={x.key} onPress={() => setTab(x.key)}
-                           style={[s.tab, tab === x.key && s.tabOn]}
-                           accessibilityRole="button" accessibilityState={{ selected: tab === x.key }}>
-                  {/* Shrink, never truncate: "Open / Active" is the widest of
-                      the three and the segment it lives in is a third of what
-                      the gear leaves. */}
-                  <Text style={[s.tabText, tab === x.key && s.tabTextOn]}
-                        numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
-                    {x.label}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          )}
-        </View>
+        {/* THE SWITCH, CENTRED, SIZED TO ITS LABELS. With the gear gone to
+            the bar it no longer has to share a line, so the segments can take
+            the width their words need instead of an equal third — three
+            stretched thirds put "Previous" adrift in its box while
+            "Open / Active" was still shrinking to fit in the one beside it.
+            Now nothing shrinks and the group centres under the title. */}
+        {tabs.length > 1 && (
+          <View style={s.tabs}>
+            {tabs.map(x => (
+              <Pressable key={x.key} onPress={() => setTab(x.key)}
+                         style={({ pressed }) => [s.tab, tab === x.key && s.tabOn, pressed && { opacity: 0.7 }]}
+                         accessibilityRole="button" accessibilityState={{ selected: tab === x.key }}>
+                <Text style={[s.tabText, tab === x.key && s.tabTextOn]} numberOfLines={1}>
+                  {x.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
         {settings ? (
           <LeagueSettingsSheet key={league.data?.id} visible={settings} onClose={() => setSettings(false)} league={league.data} />
         ) : null}
@@ -428,17 +436,25 @@ function Tours({ a, paired }) {
 
 const s = StyleSheet.create({
   stripeHalf: { flex: 1 },
-  tabRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  gear: { paddingHorizontal: 4, paddingVertical: 4 },
+  /* A capsule of capsules: the shell rounded as far as it goes and the live
+     segment rounded to match, so the selection reads as a token lifted out of
+     the track rather than a rectangle laid over it. The hairline is what
+     separates the shell from the page — raised-on-sunken alone is two greys
+     a point apart and, on a phone in daylight, no edge at all. */
   tabs: {
-    flex: 1, flexDirection: 'row', gap: 4, backgroundColor: C.sunken,
-    borderRadius: R.md, padding: 2,
+    alignSelf: 'center', flexDirection: 'row', gap: 2,
+    backgroundColor: C.sunken, borderRadius: R.pill, padding: 3,
+    borderWidth: 1, borderColor: C.border,
   },
-  tab: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 4, borderRadius: R.sm },
-  tabOn: { backgroundColor: C.raised },
-  // No lineHeight: on iOS the extra leading lands above the glyphs and pushes
-  // the caps off a short strip's centre. The row centres the text.
+  tab: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: R.pill },
+  tabOn: { backgroundColor: C.raised, borderWidth: 1, borderColor: C.borderOn },
+  /* No lineHeight: on iOS the extra leading lands above the glyphs and pushes
+     the caps off a short strip's centre. The row centres the text.
+     The live label goes BOLD as well as bright — weight survives a glance
+     that colour alone does not. */
   tabText: { fontFamily: 'Archivo_500Medium', fontSize: 13, color: C.muted },
-  tabTextOn: { color: C.ink },
+  tabTextOn: { fontFamily: 'Archivo_700Bold', color: C.ink },
   /* Previous: one line of name, one of meta, and less air than a card being
      read rather than scanned. The height comes from the INNER padding, not
      the card's — trimming the card did nothing at all. */
@@ -462,7 +478,6 @@ const s = StyleSheet.create({
   tPtsText: { ...T.body, color: C.ink, textAlign: 'right', width: 52 },
   tHeadText: { ...T.tiny, color: C.faint, fontFamily: 'Archivo_700Bold', letterSpacing: 0.5 },
   adminBadge: { ...T.tiny, color: C.info, borderWidth: 1, borderColor: C.info, borderRadius: 4, paddingHorizontal: 4, overflow: 'hidden' },
-  settingsBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingVertical: 4 },
   card: {
     backgroundColor: C.card, borderRadius: 14, borderWidth: 1,
     borderColor: C.border, flexDirection: 'row', alignItems: 'center',
