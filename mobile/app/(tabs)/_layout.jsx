@@ -18,7 +18,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { BracketIcon } from '../../BracketIcon'
 import { TourBadge } from '../../cards'
 import { Sheet } from '../../sheet'
-import { listTournaments } from '../../api'
+import { getScheduleDates, listTournaments } from '../../api'
 import { useAuth } from '../../auth'
 import { useApi } from '../../useApi'
 import { computeCohortInfo, getHomeSection } from '../../drawStatus'
@@ -123,6 +123,16 @@ export default function TabLayout() {
   /* The same live draws, folded into the EVENTS the schedule chooser offers:
      one US Open, not two. */
   const liveEvents = tournamentsOf(live)
+  /* ...AND ONLY THE ONES WITH MATCHES ON A SHEET. A live bracket is not the
+     same as a schedule: a draw released for next week has no order of play
+     yet, and offering it here is a filter over nothing. One request, the
+     stepper's own, which the schedule screen is usually holding already. */
+  const sched = useApi(ready ? 'schedule-dates:all' : null, () => getScheduleDates(),
+                       { enabled: ready })
+  const onSheets = sched.data?.tournaments
+  const choosable = onSheets?.length
+    ? liveEvents.filter(t => onSheets.includes(t.id))
+    : liveEvents
   /* Is the Schedule the page we are ON? That is what separates "take me
      there" from "let me change what I see there", and it is the whole of the
      rule below. */
@@ -135,7 +145,7 @@ export default function TabLayout() {
   const readingTournamentId = readingDrawId != null
     ? all.find(t => t.id === readingDrawId)?.tournament_id ?? null
     : null
-  const readingEventId = liveEvents.some(t => t.id === readingTournamentId)
+  const readingEventId = choosable.some(t => t.id === readingTournamentId)
     ? readingTournamentId
     : null
 
@@ -186,15 +196,15 @@ export default function TabLayout() {
            live event, or none, and the press goes straight through either way. */
         listeners={{
           tabPress: e => {
-            if (liveEvents.length < 2) return
+            if (choosable.length < 2) return
             if (!onSchedule) {
               // Stale ids name nothing a week later; start from what is live.
-              pruneScheduleTournaments(liveEvents.map(t => t.id))
+              pruneScheduleTournaments(choosable.map(t => t.id))
               if (readingEventId != null) setScheduleTournaments(new Set([readingEventId]))
               return
             }
             e.preventDefault()
-            setDraft(new Set(chosen ?? liveEvents.map(t => t.id)))
+            setDraft(new Set(chosen ?? choosable.map(t => t.id)))
             setFiltering(true)
           },
         }}
@@ -303,9 +313,9 @@ export default function TabLayout() {
            titleRight={
              <View style={s.titleActions}>
                <Pressable hitSlop={8} accessibilityRole="button"
-                          disabled={!!draft && draft.size === liveEvents.length}
-                          onPress={() => setDraft(new Set(liveEvents.map(t => t.id)))}>
-                 <Text style={[s.action, draft && draft.size === liveEvents.length && s.actionOff]}>
+                          disabled={!!draft && draft.size === choosable.length}
+                          onPress={() => setDraft(new Set(choosable.map(t => t.id)))}>
+                 <Text style={[s.action, draft && draft.size === choosable.length && s.actionOff]}>
                    Select all
                  </Text>
                </Pressable>
@@ -317,14 +327,14 @@ export default function TabLayout() {
              </View>
            }
            onClose={() => {
-             setScheduleTournaments(draft && draft.size === liveEvents.length ? null : draft)
+             setScheduleTournaments(draft && draft.size === choosable.length ? null : draft)
              setFiltering(false)
              // Only when the sheet was a detour. It now opens FROM the
              // schedule, where pushing it again just stacks a second copy of
              // the page the reader is already looking at.
              if (!onSchedule) router.push('/schedule')
            }}>
-      {liveEvents.map(t => {
+      {choosable.map(t => {
         const on = !!draft?.has(t.id)
         return (
           <Pressable key={t.id} style={s.row} accessibilityRole="button"

@@ -1292,5 +1292,17 @@ async def schedule_dates(
     if tournament_id:
         q = q.where(ScheduleEntry.tournament_id == tournament_id)
     rows = (await db.execute(q.order_by(ScheduleEntry.play_date))).all()
+    # WHICH TOURNAMENTS ARE ON THE SHEETS AT ALL. The app's tournament chooser
+    # needs to know whether there is a choice to make before it offers one: a
+    # tournament with a live bracket but no schedule row anywhere is a filter
+    # over nothing, and a chooser holding one row is a gate in front of an open
+    # door (owner, 2026-09-14). Distinct ids over the same filtered set, so it
+    # answers for exactly the rows `dates` describes.
+    tq = select(ScheduleEntry.tournament_id).distinct().where(
+        ScheduleEntry.tournament_id.isnot(None))
+    if tournament_id:
+        tq = tq.where(ScheduleEntry.tournament_id == tournament_id)
+    tournaments = [r[0] for r in (await db.execute(tq)).all()]
     return {"dates": [r[0].isoformat() for r in rows],
-            "open_counts": {r[0].isoformat(): int(r[2] or 0) for r in rows}}
+            "open_counts": {r[0].isoformat(): int(r[2] or 0) for r in rows},
+            "tournaments": tournaments}
