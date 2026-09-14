@@ -312,15 +312,22 @@ export function TourBadge({ gender, tour, discipline, level, style }) {
  * be the one on screen while the code is being written.
  */
 /* THE NAV BAR'S OWN RULES ARE NOT THIS APP'S. A header button on iOS 26 is
-   drawn inside a system capsule — the same one behind "Back" — and our filled
-   pill sat in it hard against the screen's right edge, so the capsule ran off
-   the display (owner, 2026-09-14). The margin gives the capsule somewhere to
-   end, and the pill radius matches it rather than fighting it: one rounded
-   shape inside another, not a square-ish tag inside a capsule.
+   drawn inside a system capsule — the same one behind "Back" — and with the
+   pill hard against the screen's right edge that capsule ran off the display
+   (owner, 2026-09-14).
+
+   THE MARGIN IS SPLIT, and that is the whole of the second correction. The
+   capsule is drawn around our view INCLUDING its margin, so a right-only
+   margin does not move the capsule off the edge — it moves the pill left
+   inside it, by exactly the margin. Four a side buys the same room and leaves
+   the pill where the capsule centres it.
+
+   The radius matches the capsule rather than fighting it: one rounded shape
+   inside another, not a square-ish tag inside a capsule.
 
    Exported because two screens put a tour pill in a header and a third will;
    a copy in each is a copy to forget. */
-export const headerTour = { marginRight: 8, borderRadius: 999 }
+export const headerTour = { marginHorizontal: 4, borderRadius: 999 }
 
 export function TourSwitch({ draws, currentId, onPick, showLevel, style }) {
   const pair = [...(draws || [])]
