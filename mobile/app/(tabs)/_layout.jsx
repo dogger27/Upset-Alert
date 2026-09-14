@@ -286,12 +286,36 @@ export default function TabLayout() {
     {/* WHICH TOURNAMENTS. One row per EVENT — the US Open is one entry with
         both badges, not two rows — because the ATP/WTA split is a control the
         screen already has and does not need repeating here (owner,
-        2026-09-13). Multi-select, and the last one cannot be turned off: a
-        filter that hides everything is indistinguishable from a broken screen.
-        Closing applies the draft and goes to the schedule — Close is Done
-        here, and tapping the scrim means the same thing rather than throwing
-        the choice away. */}
+        2026-09-13). Closing applies the draft and goes to the schedule —
+        Close is Done here, and tapping the scrim means the same thing rather
+        than throwing the choice away.
+
+        NEVER NONE, ENFORCED WHERE IT APPLIES rather than under the reader's
+        finger. The rule is about what the SCHEDULE shows: a screen filtered
+        to nothing is indistinguishable from a broken one. It used to be kept
+        by refusing to untick the last row, which made Clear impossible and
+        made one arbitrary row behave unlike its neighbours. An empty
+        selection is simply the store's own word for "every tournament"
+        (scheduleFilter turns an empty set into null), so the draft may now go
+        empty and closing on it shows everything — the guarantee intact, and
+        every row behaving the same way (owner, 2026-09-14). */}
     <Sheet visible={filtering} title="Select Tournament(s)"
+           titleRight={
+             <View style={s.titleActions}>
+               <Pressable hitSlop={8} accessibilityRole="button"
+                          disabled={!!draft && draft.size === liveEvents.length}
+                          onPress={() => setDraft(new Set(liveEvents.map(t => t.id)))}>
+                 <Text style={[s.action, draft && draft.size === liveEvents.length && s.actionOff]}>
+                   Select all
+                 </Text>
+               </Pressable>
+               <Pressable hitSlop={8} accessibilityRole="button"
+                          disabled={!draft || draft.size === 0}
+                          onPress={() => setDraft(new Set())}>
+                 <Text style={[s.action, (!draft || draft.size === 0) && s.actionOff]}>Clear</Text>
+               </Pressable>
+             </View>
+           }
            onClose={() => {
              setScheduleTournaments(draft && draft.size === liveEvents.length ? null : draft)
              setFiltering(false)
@@ -300,13 +324,6 @@ export default function TabLayout() {
              // the page the reader is already looking at.
              if (!onSchedule) router.push('/schedule')
            }}>
-      <Pressable style={[s.row, s.first]} accessibilityRole="button"
-                 onPress={() => setDraft(new Set(liveEvents.map(t => t.id)))}>
-        <Text style={[s.name, { flex: 1 }]}>All tournaments</Text>
-        {draft && draft.size === liveEvents.length
-          ? <Ionicons name="checkmark" size={16} color={C.greenBright} />
-          : null}
-      </Pressable>
       {liveEvents.map(t => {
         const on = !!draft?.has(t.id)
         return (
@@ -314,8 +331,7 @@ export default function TabLayout() {
                      accessibilityState={{ selected: on }}
                      onPress={() => setDraft(prev => {
                        const next = new Set(prev ?? [])
-                       // NOT NONE: the last one on stays on.
-                       if (next.has(t.id)) { if (next.size > 1) next.delete(t.id) }
+                       if (next.has(t.id)) next.delete(t.id)
                        else next.add(t.id)
                        return next
                      })}>
@@ -341,6 +357,13 @@ const s = {
     paddingVertical: 12, borderTopWidth: 1, borderTopColor: C.border,
   },
   tint: { width: 3, height: 20, borderRadius: 2 },
+  /* The heading's own controls. Small and quiet — they act on the list below
+     rather than being the choice itself, so they read as tools beside the
+     title, not as two more options in it. */
+  titleActions: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  action: { ...T.smallMed, color: C.clay },
+  // Nothing left to do: dimmed rather than hidden, so the pair never reflows.
+  actionOff: { color: C.faint },
   /* The name and its tick, as one group: flex so it takes the row's slack,
      shrink on the TEXT so a long tournament name gives way before the tick
      does. */

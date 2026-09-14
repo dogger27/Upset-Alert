@@ -9,13 +9,33 @@ import { C, S, T } from './theme'
    history's tabs swap panels with different row counts, and a bottom sheet
    grows upward, so without this the timeline slid up the screen as the reader
    switched tabs. Everything else leaves it off and keeps hugging its content. */
-export function Sheet({ visible, onClose, title, children, height }) {
+export function Sheet({ visible, onClose, title, titleRight, children, height }) {
   return (
     <Modal visible={!!visible} animationType="slide" transparent onRequestClose={onClose}>
       <Pressable style={s.scrim} onPress={onClose} accessibilityLabel="Close" />
       <View style={[s.sheet, height ? { height } : null]}>
         <View style={s.grabber} />
-        {title ? <Text style={s.title}>{title}</Text> : null}
+        {/* A TITLE WITH CONTROLS BESIDE IT CANNOT STAY CENTRED. Centring
+            measures the title against the whole width, so an accessory on the
+            right pushes the words off-centre by half its size — the heading
+            drifts left as the buttons grow. With `titleRight` the row splits
+            properly: title left, controls right, each honestly aligned to its
+            own edge. Without it, nothing changes for the sheets that have
+            only a heading. */}
+        {title ? (
+          titleRight ? (
+            <View style={s.titleRow}>
+              {/* SHRINKS, NEVER TRUNCATES. "Select Tournament(s)" beside two
+                  controls is already close to the width of a phone, and it
+                  runs out of room outright at a large text size — where an
+                  ellipsis would eat the word that says what the sheet is for.
+                  Same ladder the bracket's names use: make it fit. */}
+              <Text style={[s.title, s.titleLeft]} numberOfLines={1}
+                    adjustsFontSizeToFit minimumFontScale={0.75}>{title}</Text>
+              {titleRight}
+            </View>
+          ) : <Text style={s.title}>{title}</Text>
+        ) : null}
         {children}
         <Pressable onPress={onClose} style={s.close} hitSlop={8}>
           <Text style={s.closeText}>Close</Text>
@@ -35,6 +55,8 @@ const s = StyleSheet.create({
   },
   grabber: { width: 36, height: 4, borderRadius: 2, backgroundColor: C.border, alignSelf: 'center', marginBottom: S.xs },
   title: { ...T.h2, color: C.ink, textAlign: 'center' },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
+  titleLeft: { flex: 1, textAlign: 'left' },
   close: { alignSelf: 'center', paddingVertical: S.sm, paddingHorizontal: S.lg },
   closeText: { ...T.smallMed, color: C.clay },
 })
