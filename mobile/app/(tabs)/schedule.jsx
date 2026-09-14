@@ -344,15 +344,21 @@ export default function ScheduleScreen() {
           </Pressable>
         </View>
 
-        {/* TWO WORDS DO NOT NEED THE WIDTH OF A PHONE. Full-bleed segments
-            made a switch between "Time" and "Court" the widest thing on the
-            screen, which reads as the page's subject rather than one of its
-            controls. Content width, left-aligned with everything else. */}
+        {/* FULL WIDTH, SHORTER. The height is what was excessive — a strip
+            holding one word per side was as tall as a row of matches. The
+            width is not: the switch spans the column so each half is a target
+            you can hit without looking, which is the whole argument for a
+            segmented control over two links (owner, 2026-09-14).
+
+            The LABEL DROPS ITS LINE HEIGHT. T.smallMed carries leading(18)
+            for 13pt text, and on iOS the extra leading lands ABOVE the
+            glyphs, so it both padded the strip and pushed the caps off its
+            centre. The row centres the text instead. */}
         <View style={s.tabs}>
           {['time', 'court'].map(v => (
             <Pressable key={v} onPress={() => setView(v)}
                        style={[s.tab, view === v && s.tabOn]}>
-              <Text style={[T.smallMed, { color: view === v ? C.ink : C.muted }]}>
+              <Text style={[s.tabText, { color: view === v ? C.ink : C.muted }]}>
                 {v === 'time' ? 'Time' : 'Court'}
               </Text>
             </Pressable>
@@ -659,13 +665,13 @@ const s = StyleSheet.create({
   lockChip: { paddingHorizontal: 6 },
   lockChipOn: { backgroundColor: C.greenLit, borderColor: C.greenLit },
   lockIcon: { fontSize: 11 },
-  // alignSelf so the shell hugs its two segments instead of stretching to the
-  // column; the segments pay their own way in padding rather than flex.
   tabs: {
     flexDirection: 'row', gap: S.xs, backgroundColor: C.sunken,
-    borderRadius: R.md, padding: 3, alignSelf: 'flex-start',
+    borderRadius: R.md, padding: 2,
   },
-  tab: { alignItems: 'center', paddingVertical: 6, paddingHorizontal: S.lg, borderRadius: R.sm },
+  tab: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 4, borderRadius: R.sm },
+  // No lineHeight — see the note at the control. The Pressable centres it.
+  tabText: { fontFamily: 'Archivo_500Medium', fontSize: 13 },
   tabOn: { backgroundColor: C.raised },
   /* The tournament filter. A wrapping row, because two names can be longer
      than a phone and a horizontal scroller hides its own overflow. */
