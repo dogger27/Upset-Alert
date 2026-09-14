@@ -290,17 +290,23 @@ export function TourBadge({ gender, tour, discipline, style }) {
  * `draws` is the pair (either order); the switch sorts men first so it never
  * swaps sides between events. With fewer than two it renders the plain badge,
  * because there is nothing to switch to.
+ *
+ * `style` reaches BOTH shapes. TourBadge carries alignSelf:'flex-start' for
+ * the stacked layouts it usually sits in, so a caller placing it on a row's
+ * centre line has to override that — and would otherwise find the override
+ * silently dropped on the one-draw event, which is the case least likely to
+ * be the one on screen while the code is being written.
  */
-export function TourSwitch({ draws, currentId, onPick }) {
+export function TourSwitch({ draws, currentId, onPick, style }) {
   const pair = [...(draws || [])]
     .filter(d => d && TOUR[d.gender])
     .sort((a, b) => (a.gender === 'M' ? 0 : 1) - (b.gender === 'M' ? 0 : 1))
   if (pair.length < 2) {
     const only = pair[0] ?? (draws || [])[0]
-    return <TourBadge gender={only?.gender} />
+    return <TourBadge gender={only?.gender} style={style} />
   }
   return (
-    <View style={u.tourSwitch}>
+    <View style={[u.tourSwitch, style]}>
       {pair.map(d => {
         const t = TOUR[d.gender]
         const on = d.id === currentId
