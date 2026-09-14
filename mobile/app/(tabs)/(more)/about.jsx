@@ -5,22 +5,22 @@
 import { useState } from 'react'
 import { Stack } from 'expo-router'
 import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
-import { sendContact } from '../api'
-import { C, S, T } from '../theme'
-import { leading } from '../fontScale.js'
-import { Button, Card, Muted, Screen, Title } from '../ui'
+import { sendContact } from '../../../api'
+import { C, S, T } from '../../../theme'
+import { leading } from '../../../fontScale.js'
+import { Button, Card, Muted, Screen, Title } from '../../../ui'
 
 /* The photo and the install screenshots ship WITH the app (assets/about/,
    copied from frontend/public). Fetching them from the site would have made
    this page depend on the network and on the site being deployed first — the
    photo rendered as an empty box until then. ~155 KB for four files, behind a
    tap for three of them. Update these alongside the site's copies. */
-const PHOTO = require('../assets/about/paul-wiens.jpg')
+const PHOTO = require('../../../assets/about/paul-wiens.jpg')
 const SHOTS = {
-  'safari-more': require('../assets/about/safari-more.jpg'),
-  'safari-share': require('../assets/about/safari-share.jpg'),
-  'add-to-home': require('../assets/about/add-to-home.jpg'),
-  'chrome-share': require('../assets/about/chrome-share.jpg'),
+  'safari-more': require('../../../assets/about/safari-more.jpg'),
+  'safari-share': require('../../../assets/about/safari-share.jpg'),
+  'add-to-home': require('../../../assets/about/add-to-home.jpg'),
+  'chrome-share': require('../../../assets/about/chrome-share.jpg'),
 }
 
 /* One platform's instructions, closed until tapped — the site's <details>,

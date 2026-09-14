@@ -9,11 +9,11 @@
 
 import { Stack, useLocalSearchParams } from 'expo-router'
 import { StyleSheet, Text, View } from 'react-native'
-import { getMyDrawHistory, getUserDrawHistory } from '../api'
-import { useApi } from '../useApi'
-import { TourBadge } from '../cards'
-import { C, R, S, T } from '../theme'
-import { Card, CardLink, ErrorNote, Loading, Muted, Screen, Title } from '../ui'
+import { getMyDrawHistory, getUserDrawHistory } from '../../../api'
+import { useApi } from '../../../useApi'
+import { TourBadge } from '../../../cards'
+import { C, R, S, T } from '../../../theme'
+import { Card, CardLink, ErrorNote, Loading, Muted, Screen, Title } from '../../../ui'
 
 export default function History() {
   /* ?user= shows someone else's record — the site's per-row Draw History

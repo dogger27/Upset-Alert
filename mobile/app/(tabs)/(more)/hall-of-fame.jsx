@@ -9,11 +9,11 @@
 
 import { Stack } from 'expo-router'
 import { StyleSheet, Text, View } from 'react-native'
-import { getHallOfFame } from '../api'
-import { useApi } from '../useApi'
-import { PlayerName, TourBadge } from '../cards'
-import { C, R, S, T } from '../theme'
-import { Card, ErrorNote, Eyebrow, Loading, Muted, Screen, Title } from '../ui'
+import { getHallOfFame } from '../../../api'
+import { useApi } from '../../../useApi'
+import { PlayerName, TourBadge } from '../../../cards'
+import { C, R, S, T } from '../../../theme'
+import { Card, ErrorNote, Eyebrow, Loading, Muted, Screen, Title } from '../../../ui'
 
 export default function HallOfFame() {
   const q = useApi('hall-of-fame', getHallOfFame)
