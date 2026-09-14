@@ -197,7 +197,7 @@ export default function DrawScreen() {
                   the Draw tab and the Schedule's default in step — the
                   screen's own effect does it too, but not until the new route
                   has mounted. */}
-              <TourSwitch draws={siblings} currentId={t.id} style={{ alignSelf: 'center' }}
+              <TourSwitch draws={siblings} currentId={t.id} showLevel style={{ alignSelf: 'center' }}
                           onPick={d => { setCurrentDraw(d.id); router.replace(`/draw/${d.id}`) }} />
             </View>
           </View>

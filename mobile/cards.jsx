@@ -261,7 +261,21 @@ export function EntryChip({ entryType }) {
  * Gender is 'M' or 'F' in the API; anything else renders nothing rather than
  * guessing a tour.
  */
-export function TourBadge({ gender, tour, discipline, style }) {
+/* THE TIER, SHORT ENOUGH TO SIT IN A PILL. `category` is "WTA 500",
+   "ATP 250" or "Grand Slam"; the tour half is already the badge, so only the
+   level is left to say. A Slam has no number and "Grand Slam" is wider than
+   the name of most tournaments, so it contracts to GS — the abbreviation the
+   sport itself uses. Anything unrecognised returns null and the badge reads
+   exactly as it did. */
+export function levelLabel(category) {
+  const c = (category || '').trim()
+  if (!c) return null
+  if (/grand\s*slam/i.test(c)) return 'GS'
+  const n = c.match(/(\d{3,4})\s*$/)
+  return n ? n[1] : null
+}
+
+export function TourBadge({ gender, tour, discipline, level, style }) {
   /* GENDER COMES FROM THE DRAW, AND DOUBLES HAS NO DRAW. A doubles schedule
      row carries draw_id null — we hold no doubles bracket — so `gender` is
      null and this rendered nothing at all: the US Open doubles final sat on
@@ -274,7 +288,7 @@ export function TourBadge({ gender, tour, discipline, style }) {
   if (!t) return null
   return (
     <View style={[u.tourBadge, { backgroundColor: t.bg }, style]}>
-      <Text style={[u.tourText, { color: t.fg }]}>{t.label}</Text>
+      <Text style={[u.tourText, { color: t.fg }]}>{level ? `${t.label} ${level}` : t.label}</Text>
     </View>
   )
 }
@@ -297,13 +311,14 @@ export function TourBadge({ gender, tour, discipline, style }) {
  * silently dropped on the one-draw event, which is the case least likely to
  * be the one on screen while the code is being written.
  */
-export function TourSwitch({ draws, currentId, onPick, style }) {
+export function TourSwitch({ draws, currentId, onPick, showLevel, style }) {
   const pair = [...(draws || [])]
     .filter(d => d && TOUR[d.gender])
     .sort((a, b) => (a.gender === 'M' ? 0 : 1) - (b.gender === 'M' ? 0 : 1))
   if (pair.length < 2) {
     const only = pair[0] ?? (draws || [])[0]
-    return <TourBadge gender={only?.gender} style={style} />
+    return <TourBadge gender={only?.gender} style={style}
+                      level={showLevel ? levelLabel(only?.category) : null} />
   }
   return (
     <View style={[u.tourSwitch, style]}>
@@ -315,7 +330,9 @@ export function TourSwitch({ draws, currentId, onPick, style }) {
                      accessibilityRole="button" accessibilityState={{ selected: on }}
                      accessibilityLabel={`${t.label} draw`}
                      style={[u.tourSeg, on ? { backgroundColor: t.bg } : u.tourSegOff]}>
-            <Text style={[u.tourText, { color: on ? t.fg : C.muted }]}>{t.label}</Text>
+            <Text style={[u.tourText, { color: on ? t.fg : C.muted }]}>
+              {showLevel && levelLabel(d.category) ? `${t.label} ${levelLabel(d.category)}` : t.label}
+            </Text>
           </Pressable>
         )
       })}
