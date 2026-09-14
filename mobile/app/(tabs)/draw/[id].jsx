@@ -19,13 +19,15 @@ import { FONT_SCALE, leading } from '../../../fontScale.js'
 import { Ionicons } from '@expo/vector-icons'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { GestureDetector } from 'react-native-gesture-handler'
-import { getDraw, getMyStandouts, getPredictions, listTournaments } from '../../../api'
+import { getDraw, getMyStandouts, getPredictions } from '../../../api'
 import { useAuth } from '../../../auth'
 import { H2HSheet } from '../../../h2h'
 import { useLiveUpdates } from '../../../live'
 import { ScoreHistorySheet, entryFromMatch } from '../../../scoreHistory'
 import { PredictorsSheet } from '../../../predictors'
 import { computeDrawRanks } from '../../../drawRanks'
+import { hasDrawData, useChoosableTournaments } from '../../../choosableTournaments'
+import { nextLiveDraw } from '../../../drawCycle'
 import { useApi } from '../../../useApi'
 import { currentRound } from '../../../rounds'
 import { C, R, S, T } from '../../../theme'
@@ -66,15 +68,24 @@ export default function DrawScreen() {
      screens use. Only ones with a bracket to open: an unreleased other half
      is a switch to a blank page.
 
-     `listTournaments` under the key the tab bar and the standings already
-     hold, so this is a cache read on all but the first visit. */
-  const allDraws = useApi('tournaments', listTournaments)
-  const siblings = useMemo(() => (allDraws.data || []).filter(x => t && (
-    x.status === 'completed' || x.draw_released_direct_at
-  ) && (
+     From `all`, not `live`: a finished event still has two halves, and its
+     switch must keep working long after it drops out of the live set. */
+  const { all: allDraws, live } = useChoosableTournaments()
+  const siblings = useMemo(() => allDraws.filter(x => t && hasDrawData(x) && (
     t.tournament_id != null ? x.tournament_id === t.tournament_id
       : x.name === t.name && x.year === t.year
-  )), [allDraws.data, t])
+  )), [allDraws, t])
+
+  /* THE NEXT BRACKET BEING PLAYED, anywhere — not the other half of this one.
+     Sorted so the cycle has a fixed order a reader can learn: by start date,
+     then the men's draw before the women's, then by name. Without that the
+     order is whatever the API listed and "next" means something different
+     each visit.
+
+     Hidden when every live draw belongs to THIS tournament, because then the
+     tour switch beside it already is this control, and two buttons doing one
+     thing is worse than one (owner, 2026-09-14). */
+  const cycle = useMemo(() => nextLiveDraw(live, t), [live, t])
 
   /* The header's old sibling ARROWS are not coming back — stepping one at a
      time through a list you cannot see is the thing the Draw tab's chooser
@@ -199,6 +210,20 @@ export default function DrawScreen() {
                   has mounted. */}
               <TourSwitch draws={siblings} currentId={t.id} showLevel style={{ alignSelf: 'center' }}
                           onPick={d => { setCurrentDraw(d.id); router.replace(`/draw/${d.id}`) }} />
+              {/* ON TO THE NEXT ONE BEING PLAYED. Not the old stepper arrows:
+                  those walked a list you could not see, one at a time, which
+                  is what the Draw tab's chooser replaced. This is one step
+                  through the draws that are actually live, it names its
+                  destination to a screen reader, and the chooser is still
+                  there for going anywhere. */}
+              {cycle && (
+                <Pressable onPress={() => { setCurrentDraw(cycle.id); router.replace(`/draw/${cycle.id}`) }}
+                           hitSlop={10} accessibilityRole="button"
+                           accessibilityLabel={`Next draw: ${cycle.name} ${cycle.gender === 'F' ? 'WTA' : 'ATP'}`}
+                           style={({ pressed }) => [s.cycle, pressed && { opacity: 0.6 }]}>
+                  <Ionicons name="chevron-forward" size={16} color={C.greenLit} />
+                </Pressable>
+              )}
             </View>
           </View>
         )}
@@ -294,6 +319,13 @@ const s = StyleSheet.create({
      own height iOS sets the caps ~1.5pt above the centre of it, and in a
      banner this short that reads as the name floating. A transform, so
      the banner's height is untouched. */
+  /* A step, not a destination: the same green the header's other affordance
+     uses, in a ring small enough to read as a control on a one-line bar. */
+  cycle: {
+    width: 24, height: 24, borderRadius: 12, alignItems: 'center',
+    justifyContent: 'center', borderWidth: 1, borderColor: C.border,
+    alignSelf: 'center',
+  },
   headName: {
     ...T.h2, lineHeight: leading(19), color: C.ink, flexShrink: 1,
     transform: [{ translateY: 1.5 * FONT_SCALE }],
