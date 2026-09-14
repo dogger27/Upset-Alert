@@ -345,9 +345,18 @@ export default function TabLayout() {
                        else next.add(t.id)
                        return next
                      })}>
-            <View style={s.nameWrap}>
-              <Text style={[s.name, !on && { color: C.faint }]} numberOfLines={1}>{t.name}</Text>
-              {on ? <Ionicons name="checkmark" size={16} color={C.greenBright} /> : null}
+            <Text style={[s.name, s.nameGrow, !on && { color: C.faint }]} numberOfLines={1}>
+              {t.name}
+            </Text>
+            {/* A BOX, NOT A BARE TICK. Beside the name a tick only ever
+                appeared — there was nothing on an unselected row to say it
+                COULD be selected, so the rows that were off read as inert
+                text. An empty grey box is the affordance; the tick fills it.
+                Parked on the right beside the badges, where the eye can run
+                one column of states instead of hunting each one at the end of
+                a name of a different length (owner, 2026-09-14). */}
+            <View style={[s.check, on && s.checkOn]}>
+              {on ? <Ionicons name="checkmark" size={14} color={C.bg} /> : null}
             </View>
             {/* Both halves of a combined event, men first. */}
             <View style={s.badges}>
@@ -374,11 +383,24 @@ const s = {
   action: { ...T.smallMed, color: C.clay },
   // Nothing left to do: dimmed rather than hidden, so the pair never reflows.
   actionOff: { color: C.faint },
-  /* The name and its tick, as one group: flex so it takes the row's slack,
+  /* The DRAW chooser's name-and-tick group: flex so it takes the row's slack,
      shrink on the TEXT so a long tournament name gives way before the tick
-     does. */
+     does. The tournament chooser below uses a checkbox in its own column
+     instead, and needs only `nameGrow`. */
   nameWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
   name: { ...T.bodyMed, color: C.ink, flexShrink: 1 },
+  // The name takes the row's slack, so the box and the badges hold their
+  // column whatever the tournament is called.
+  nameGrow: { flex: 1 },
+  /* The checkbox. Square, and sized in points rather than from the type
+     scale: it is a control, not text, and a row of them has to line up. */
+  check: {
+    width: 20, height: 20, borderRadius: 4, borderWidth: 1.5,
+    borderColor: C.border, alignItems: 'center', justifyContent: 'center',
+  },
+  // Filled when on, with the tick knocked out in the page's own dark — the
+  // strongest reading of "yes" available without inventing a colour.
+  checkOn: { backgroundColor: C.greenBright, borderColor: C.greenBright },
   // A combined event carries both badges, so they need a row of their own.
   badges: { flexDirection: 'row', gap: 4 },
   none: { ...T.smallMed, color: C.muted, textAlign: 'center', paddingVertical: 12 },
