@@ -441,7 +441,7 @@ async def send_test_push(
 
     delivered = await send_push_to_users(
         [current_user.id],
-        title="Upset Alert test",
+        title="Test alert",
         body="Push notifications are working on this device.",
         url="/",
         tag="upset-alert-test",

@@ -31,6 +31,20 @@ MAX_LISTED_PICKS = 5
 # at roughly 35 characters a matchup the whole list still clears MAX_BODY.
 MAX_LISTED_QUALIFIERS = 16
 
+# TITLES SHARE THEIR LINE WITH A TIMESTAMP, and iOS gives them exactly one.
+# "Changes to Your Draw" came through as "Changes to Your…" and "4 Qualifiers
+# Added" as "4 Qualif…" — the second is only eighteen characters, because by
+# then the clock beside it read "Yesterday, 10:45 PM" rather than "12:30 AM"
+# (owner, 2026-09-15). The budget is therefore not a number the phone will ever
+# tell us: it SHRINKS AS THE NOTIFICATION AGES, so a title that fitted when it
+# arrived is cut in Notification Centre an hour later.
+#
+# Fifteen is what survives the long form. This has been fixed once before
+# (88d519c7, "Short titles", Aug 2026) and drifted back, so it is a test over
+# every builder in this file now rather than a rule to remember. The body is
+# where detail belongs; a title only has to say which KIND of thing arrived.
+MAX_TITLE = 15
+
 
 def tour_label(gender: str) -> str:
     """'ATP' / 'WTA'. Never '(M)' / '(F)'.
@@ -142,8 +156,9 @@ def draw_change(draws: list[dict], affects_your_picks: bool, event_seq: int = 0)
     total = sum(len(d["changes"]) for d in draws)
     # No tournament name in the title — it truncated ("Draw change — Cincin…").
     # The name is the body's first line instead, where it has the width to
-    # survive alongside its tier.
-    title = "Changes to Your Draw"
+    # survive alongside its tier. Nor "Changes to Your Draw", which is twenty
+    # characters and truncated on its own (MAX_TITLE).
+    title = "Draw Changed"
 
     # NO "one of your picks was replaced" LINE. Any replacement in a draw you
     # are competing in can reach your bracket — whoever comes in plays on, and
@@ -239,7 +254,9 @@ def qualifiers_added(draws: list[dict], affects_your_picks: bool, event_seq: int
         for d in draws for c in d["changes"]
     )
     noun = "Lucky Loser" if only_ll else "Qualifier"
-    title = f"{noun} Added" if total == 1 else f"{total} {noun}s Added"
+    # "Added" is what a notification arriving already means, and dropping it is
+    # what keeps "3 Lucky Losers" inside MAX_TITLE.
+    title = f"{noun} In" if total == 1 else f"{total} {noun}s"
 
     matches = {id(d): dedupe_matchups(d["changes"]) for d in draws}
     total_matches = sum(len(m) for m in matches.values())
@@ -334,7 +351,7 @@ def league_join(new_username: str, league_name: str, league_id: int) -> dict:
     old title/body pair that said the same thing twice in different words.
     """
     return {
-        "title": "New League Member",
+        "title": "New Member",
         "body": f"@{new_username} joined {league_name}",
         "url": f"/leagues/{league_id}",
         "tag": f"league-join-{league_id}",
@@ -346,6 +363,12 @@ def sample(pref_key: str) -> dict:
     """
     Stand-in for a type that has never fired, so the test button still shows the
     shape of the thing rather than erroring.
+
+    THESE TITLES ARE COPIES AND COPIES DRIFT. "Draw Changes Made" and
+    "12 Qualifiers Added" were strings the builders above had stopped
+    producing, so the preview of a notification said something the real one
+    never would — which is the one thing a preview must not do. The title test
+    covers this dict too; keep it that way rather than trusting a reading.
     """
     return {
         "draw_released": {
@@ -370,14 +393,14 @@ def sample(pref_key: str) -> dict:
             "actions": [{"action": "open", "title": "View standings", "url": "/leagues"}],
         },
         "league_member_joined": {
-            "title": "New League Member",
+            "title": "New Member",
             "body": "@dwightcharles joined BetaTesters",
             "url": "/leagues",
             "tag": "sample-league-join",
             "actions": [{"action": "open", "title": "View league", "url": "/leagues"}],
         },
         "draw_changed": {
-            "title": "Draw Changes Made",
+            "title": "Draw Changed",
             "body": "Cincinnati Open · ATP 1000\n"
                     "⚠️ One of your picks was replaced.\nFils → Bergs (LL)",
             "url": "/",
@@ -388,7 +411,7 @@ def sample(pref_key: str) -> dict:
         # draw that actually has a qualifying field, because an invented
         # three-qualifier ATP 1000 is a number that event cannot produce.
         "qualifiers_added": {
-            "title": "12 Qualifiers Added",
+            "title": "12 Qualifiers",
             "body": "Cincinnati Open · ATP 1000\nCobolli (Q) vs Fils\n"
                     "Bergs (Q) vs Alcaraz [1]\nDamm (Q) vs de Minaur [7]\n…and 9 more",
             "url": "/",
@@ -404,7 +427,7 @@ def sample(pref_key: str) -> dict:
             "actions": [{"action": "open", "title": "View draw", "url": "/"}],
         },
     }.get(pref_key, {
-        "title": "Upset Alert test",
+        "title": "Test alert",
         "body": "Push notifications are working on this device.",
         "url": "/",
         "tag": "sample",
