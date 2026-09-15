@@ -168,14 +168,33 @@ export function StatusChip({ tone = 'muted', children }) {
  * the accent bar carries both tours instead, split down the middle, which is
  * the one place a tour colour still means something here.
  */
-export function TourCard({ draws, name, children, footer, href, corner }) {
+/* `plain`: the tier as WORDS, not artwork.
+ *
+ * A week card is a line under a name, and the stamp was the tallest thing on
+ * it — 27pt for a tier plate, 51 for a Slam crest against 19pt of type, so the
+ * Last Week card stood a third taller than its neighbours on the strength of a
+ * picture (owner, 2026-09-15). The words say the same thing in the height the
+ * name already needs.
+ *
+ * Each tour's own ink, so the label still carries the tour where the plate
+ * used to; a combined Slam says it once, because both halves are the same
+ * words and it is the event's tier, not either draw's.
+ */
+export function TourCard({ draws, name, children, footer, href, corner, plain }) {
   const list = (draws || []).filter(Boolean)
   const combined = list.length > 1
   const isATP = list[0]?.gender !== 'F'
   /* A Slam's crest is the EVENT's mark, the same artwork for either tour, so
      stacking it twice would print the same picture twice. Every other tier
      stamp names a tour and both are shown. */
-  const stamps = combined && isSlamTier(list[0]?.category) ? list.slice(0, 1) : list
+  const oneTier = combined && isSlamTier(list[0]?.category)
+  const stamps = oneTier ? list.slice(0, 1) : list
+  const tiers = !plain ? null
+    : oneTier
+      ? [{ id: 'event', text: list[0].category, color: C.muted }]
+      : list.filter(d => d.category).map(d => ({
+        id: d.id, text: d.category, color: TOUR[d.gender === 'F' ? 'F' : 'M'].text,
+      }))
   const skin = combined
     ? { card: C.card, line: C.border, rule: C.border }
     : { card: TOUR[isATP ? 'M' : 'F'].card, line: TOUR[isATP ? 'M' : 'F'].line,
@@ -192,12 +211,22 @@ export function TourCard({ draws, name, children, footer, href, corner }) {
               pill's own colour did not go away: it is the plate under the
               tier stamp. */}
           <CardTitle name={name} />
-          <View style={u.stampStack}>
-            {stamps.map(d => (
-              <TierBadge key={d.id} tour={d.gender === 'F' ? 'WTA' : 'ATP'}
-                         tier={d.category} name={name} />
-            ))}
-          </View>
+          {tiers ? (
+            <View style={u.tierRow}>
+              {tiers.map(t => (
+                <Text key={t.id} style={[u.tierText, { color: t.color }]} numberOfLines={1}>
+                  {t.text}
+                </Text>
+              ))}
+            </View>
+          ) : (
+            <View style={u.stampStack}>
+              {stamps.map(d => (
+                <TierBadge key={d.id} tour={d.gender === 'F' ? 'WTA' : 'ATP'}
+                           tier={d.category} name={name} />
+              ))}
+            </View>
+          )}
         </View>
         {children}
     </>
@@ -255,6 +284,9 @@ export function TourCard({ draws, name, children, footer, href, corner }) {
  * - No ellipsis. A cut tournament name is the same loss as a cut surname, and
  *   the house rule rules it out (see PlayerName below).
  */
+// Between two tours' tier words on one line.
+const S_TIER_GAP = 8
+
 const TITLE_SIZE = 19
 const TITLE_FACE = 'SairaCondensed_700Bold'
 // 0.01em, as the style sets it — small, but 35 characters of it is 6pt.
@@ -316,6 +348,12 @@ const u = StyleSheet.create({
   // are different widths (a 250's line is shorter than a 1000's) and a
   // centred pair would read as two things rather than one block.
   stampStack: { gap: 4, alignItems: 'flex-end' },
+  /* The tier in words, where a week card cannot afford the artwork. No shrink:
+     the title beside it is what gives way (CardTitle measures what it is
+     given), and a tier abbreviated to "ATP 5…" would be a worse answer than a
+     shorter name. */
+  tierRow: { flexDirection: 'row', gap: S_TIER_GAP, flexShrink: 0 },
+  tierText: { fontFamily: 'Archivo_700Bold', fontSize: 11, letterSpacing: 0.6 },
   // 1.18rem at 16px root = 18.9; lineHeight 1.05; letterSpacing 0.01em.
   title: {
     fontFamily: TITLE_FACE, fontSize: TITLE_SIZE, lineHeight: leading(20),

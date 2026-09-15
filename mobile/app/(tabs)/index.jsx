@@ -543,7 +543,7 @@ function WeekCard({ draws, done }) {
     .filter(Boolean)
     .sort()[0]
   return (
-    <TourCard draws={draws} name={draws[0].name} href={cardHref(draws)}>
+    <TourCard draws={draws} name={draws[0].name} href={cardHref(draws)} plain>
       {/* ONE ROW, NO FOOTER — the whole card is the name, its tier and this.
           The date range, the surface and "Finished" came off at the owner's
           ask (2026-09-15), and taking them off alone would have saved about
