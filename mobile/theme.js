@@ -96,9 +96,15 @@ export const C = {
  * So the three steps run light → dark: card, then plate under the stamp, with
  * `line` the one edge lighter than the card it draws around.
  */
+/* `text` is the site's --atp-text / --wta-text, and it is the ink the tier
+   stamps are drawn in — the ATP's own 250 artwork is exactly this blue, which
+   is where the pair comes from. Not `fg`: that is --info, a step deeper, and
+   the pill wears it against a much darker fill than the stamp's plate.
+   gen-tier-stamps.py bakes these into the artwork and tierStamps.test.mjs
+   fails if the two ever disagree. */
 export const TOUR = {
-  M: { bg: '#1a2f4f', fg: '#7aa9ff', label: 'ATP', card: '#2c5081', plate: '#14243d', line: '#4d7ab5' },
-  F: { bg: '#3a1526', fg: '#ff8ab5', label: 'WTA', card: '#7d3352', plate: '#3a1526', line: '#b8567d' },
+  M: { bg: '#1a2f4f', fg: '#7aa9ff', label: 'ATP', card: '#2c5081', plate: '#14243d', line: '#4d7ab5', text: '#8fb6ff' },
+  F: { bg: '#3a1526', fg: '#ff8ab5', label: 'WTA', card: '#7d3352', plate: '#3a1526', line: '#b8567d', text: '#ff8ab5' },
   // MIXED DOUBLES belongs to neither tour, so it takes neither tour's colour.
   // The unseeded chip's pair rather than a new one invented for it: a blend of
   // blue and pink is a gradient decision on a 10pt pill, and there is no such
