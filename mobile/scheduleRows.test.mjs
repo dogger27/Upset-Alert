@@ -15,7 +15,7 @@ import assert from 'node:assert/strict'
    .js directly makes node reparse it and warn. scheduleRows imports nothing,
    so a data: URL resolves it completely. */
 const src = readFileSync(new URL('./scheduleRows.js', import.meta.url), 'utf8')
-const { rowInTournaments, sameDrawSet, tournamentsOf } =
+const { drawsByTournament, rowInTournaments, sameDrawSet, tournamentsOf } =
   await import('data:text/javascript;base64,' + Buffer.from(src).toString('base64'))
 
 let n = 0
@@ -64,6 +64,27 @@ check('a draw with no tournament id is dropped, not offered', () => {
   // filter that empties the screen.
   assert.deepEqual(tournamentsOf([{ id: 1, name: 'Orphan', gender: 'M', tournament_id: null }]), [])
   assert.deepEqual(tournamentsOf(null), [])
+})
+
+check('drawsByTournament keeps the draws, grouped, in the caller\'s order', () => {
+  const live = [
+    { id: 142, name: 'Guadalajara Open', gender: 'F', tournament_id: 35 },
+    { id: 78, name: 'US Open', gender: 'F', tournament_id: 92 },
+    { id: 77, name: 'US Open', gender: 'M', tournament_id: 92 },
+  ]
+  const out = drawsByTournament(live)
+  assert.equal(out.length, 2, 'two events')
+  assert.deepEqual(out[0].map(d => d.id), [142], 'a group takes the place of its first draw')
+  assert.deepEqual(out[1].map(d => d.id), [77, 78], 'men first, whatever order they arrived in')
+})
+
+check('a draw with no tournament id is its OWN group, not dropped', () => {
+  // The opposite of tournamentsOf: there it would offer a filter that empties
+  // the screen; here dropping it would hide a card.
+  const out = drawsByTournament([{ id: 1, name: 'Orphan', gender: 'M', tournament_id: null },
+                                 { id: 2, name: 'Other', gender: 'F', tournament_id: null }])
+  assert.deepEqual(out.map(g => g.map(d => d.id)), [[1], [2]], 'and never folded together')
+  assert.deepEqual(drawsByTournament(null), [])
 })
 
 check('sameDrawSet compares membership, not identity', () => {

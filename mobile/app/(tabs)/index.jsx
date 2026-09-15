@@ -24,9 +24,10 @@ import { useAuth } from '../../auth'
 import { getDrawStandings, getEntryStatus, listTournaments } from '../../api'
 import { useApi } from '../../useApi'
 import { computeCohortInfo, getHomeSection } from '../../drawStatus'
+import { drawsByTournament } from '../../scheduleRows'
 import { lockLabel } from '../../lock'
 import { C, R, S, T } from '../../theme'
-import { StatusChip, SurfacePill, TourCard } from '../../cards'
+import { StatusChip, SurfacePill, TourBadge, TourCard } from '../../cards'
 import { dateRange } from '../../dates'
 import { Button, Card, CardLink, ErrorNote, Eyebrow, Loading, Muted, Screen, Title } from '../../ui'
 import { MenuSheet } from '../../menu'
@@ -109,7 +110,14 @@ export default function Dashboard() {
     // computeCohortInfo needs EVERY draw — clustering a filtered list moves the
     // "Last Week" boundary.
     const cohort = computeCohortInfo(all)
-    const of = k => all.filter(t => getHomeSection(t, cohort) === k)
+    /* GROUPED BY EVENT, so a combined tournament is one card and not two
+       identical ones (owner, 2026-09-15). Grouped AFTER the section split,
+       because the two draws of an event can sit in different sections — a
+       men's final does not retire the event while the women's is still on
+       court, which is exactly what getHomeSection is careful about. An event
+       playing in one tour and finished in the other therefore still shows a
+       card in each section, each carrying the draws that belong there. */
+    const of = k => drawsByTournament(all.filter(t => getHomeSection(t, cohort) === k))
     return { open: of('open'), active: of('active'), upcoming: of('upcoming'), lastweek: of('lastweek') }
   }, [all])
 
@@ -147,8 +155,8 @@ export default function Dashboard() {
       {loading ? <Loading /> : null}
 
       <Section title="Open" tone={C.clay}>
-        {buckets.open.map(t => (
-          <OpenCard key={t.id} t={t} status={entry.data?.[t.id]} now={now} />
+        {buckets.open.map(g => (
+          <OpenCard key={g[0].id} draws={g} status={entry.data} now={now} />
         ))}
         {!buckets.open.length && !loading && (
           <Muted>No draws are open at this time.</Muted>
@@ -157,19 +165,21 @@ export default function Dashboard() {
 
       {buckets.active.length > 0 && (
         <Section title="Active" tone={C.greenLit}>
-          {buckets.active.map(t => <ActiveCard key={t.id} t={t} userId={me?.id} pickState={entry.data?.[t.id]} />)}
+          {buckets.active.map(g => (
+            <ActiveCard key={g[0].id} draws={g} userId={me?.id} status={entry.data} />
+          ))}
         </Section>
       )}
 
       {buckets.upcoming.length > 0 && (
         <Section title="Next week" tone={C.muted}>
-          {buckets.upcoming.map(t => <CompactRow key={t.id} t={t} />)}
+          {buckets.upcoming.map(g => <CompactRow key={g[0].id} draws={g} />)}
         </Section>
       )}
 
       {buckets.lastweek.length > 0 && (
         <Section title="Last week" tone={C.muted}>
-          {buckets.lastweek.map(t => <CompactRow key={t.id} t={t} done />)}
+          {buckets.lastweek.map(g => <CompactRow key={g[0].id} draws={g} done />)}
         </Section>
       )}
 
@@ -281,60 +291,108 @@ function Meta({ t, showSurface = true }) {
   )
 }
 
-/* The only card with something to DO, so the countdown is the loudest thing
-   on it — that is the part you can miss. */
-function OpenCard({ t, status, now }) {
+/* THE DEADLINE AND THE PICK STATE, PER DRAW. Both belong to the draw and not
+   to the event: the two halves of a combined tournament can close at different
+   times (the men's first match can be a day before the women's, which is the
+   whole reason closing_time is per draw), and picks can be in for one and not
+   the other. So a combined card shows this row twice, each labelled with its
+   tour, rather than picking one draw's answer to stand for both. */
+function OpenRow({ t, status, now, showTour }) {
   const lock = lockLabel(t, now)
   const chip = status === 'complete' ? ['good', 'Picks in']
     : status === 'partial' ? ['warn', 'Picks incomplete']
     : ['bad', 'Not entered']
+  return (
+    <View style={s.footRow}>
+      <View style={s.lockLine}>
+        {showTour ? <TourBadge gender={t.gender} style={s.footTour} /> : null}
+        {lock ? (
+          <>
+            <Text style={[T.score, { color: lock.urgent ? C.clay : C.ink }]}>{lock.value}</Text>
+            <Text style={[T.tiny, { color: C.faint }]}>{lock.suffix}</Text>
+          </>
+        ) : null}
+      </View>
+      <StatusChip tone={chip[0]}>{chip[1]}</StatusChip>
+    </View>
+  )
+}
 
+/* WHICH DRAW A CARD OPENS. One draw: its own bracket, as ever. A combined
+   event: the men's, arbitrarily but predictably — drawsByTournament puts it
+   first, and the draw screen's own ATP/WTA switch is one tap from the other
+   half. The alternative, a card that is not a link at all, would take the
+   bracket two taps away from every Slam. */
+const cardHref = draws => {
+  const open = draws.find(hasDrawData)
+  return open ? `/draw/${open.id}` : null
+}
+
+/* The only card with something to DO, so the countdown is the loudest thing
+   on it — that is the part you can miss. */
+function OpenCard({ draws, status, now }) {
   return (
         <TourCard
-          tour={t.gender === 'F' ? 'WTA' : 'ATP'} tier={t.category} name={t.name}
-          href={hasDrawData(t) ? `/draw/${t.id}` : null}
+          draws={draws} name={draws[0].name} href={cardHref(draws)}
           footer={
-            <View style={s.footRow}>
-              {lock ? (
-                <View style={s.lockLine}>
-                  <Text style={[T.score, { color: lock.urgent ? C.clay : C.ink }]}>{lock.value}</Text>
-                  <Text style={[T.tiny, { color: C.faint }]}>{lock.suffix}</Text>
-                </View>
-              ) : <View />}
-              <StatusChip tone={chip[0]}>{chip[1]}</StatusChip>
+            <View style={s.footStack}>
+              {draws.map(d => (
+                <OpenRow key={d.id} t={d} status={status?.[d.id]} now={now}
+                         showTour={draws.length > 1} />
+              ))}
             </View>
           }
         >
-          <Meta t={t} />
+          <Meta t={draws[0]} />
         </TourCard>
   )
 }
 
-/* Active: nothing to do, so the only question is where you stand. */
-function ActiveCard({ t, userId, pickState }) {
+/* WHERE YOU STAND IN THIS DRAW, and its order of play. Its own component
+   because it FETCHES: a standing is per draw, so a combined card needs two
+   requests, and a hook cannot be called in a loop. One component per row, one
+   hook each, and the card does not care how many there are. */
+function ActiveRow({ t, userId, showTour }) {
   const standings = useApi(`standings:${t.id}`, () => getDrawStandings(t.id))
   const rows = standings.data || []
   const mine = rows.find(r => r.user?.id === userId)
+  return (
+    <View style={s.footRow}>
+      {mine ? (
+        <CardLink href={`/standings/${t.id}`} style={s.lockLine} pressedOpacity={0.6}>
+          {showTour ? <TourBadge gender={t.gender} style={s.footTour} /> : null}
+          <Text style={[T.score, { color: C.ink }]}>{ordinal(mine.rank)}</Text>
+          <Text style={[T.tiny, { color: C.faint }]}>of {rows.length}</Text>
+          <Ionicons name="chevron-forward" size={13} color={C.faint} />
+        </CardLink>
+      ) : (
+        <View style={s.lockLine}>
+          {showTour ? <TourBadge gender={t.gender} style={s.footTour} /> : null}
+          <Text style={[T.tiny, { color: C.faint }]}>
+            {standings.loading ? '' : 'Not entered'}
+          </Text>
+        </View>
+      )}
+      <OrderOfPlay t={t} />
+    </View>
+  )
+}
 
+/* Active: nothing to do, so the only question is where you stand. */
+function ActiveCard({ draws, userId, status }) {
+  /* COMPETING IN THE EVENT, which is what the corner stamp claims: picks in
+     for either half of a combined tournament means you are in it. Which half
+     is in the rows below, where a standing says it better than a star. */
+  const competing = draws.some(d => status?.[d.id] === 'complete')
   return (
         <TourCard
-          tour={t.gender === 'F' ? 'WTA' : 'ATP'} tier={t.category} name={t.name}
-          href={hasDrawData(t) ? `/draw/${t.id}` : null}
-          corner={pickState === 'complete' ? <CompetingStar /> : null}
+          draws={draws} name={draws[0].name} href={cardHref(draws)}
+          corner={competing ? <CompetingStar /> : null}
           footer={
-            <View style={s.footRow}>
-              {mine ? (
-                <CardLink href={`/standings/${t.id}`} style={s.lockLine} pressedOpacity={0.6}>
-                  <Text style={[T.score, { color: C.ink }]}>{ordinal(mine.rank)}</Text>
-                  <Text style={[T.tiny, { color: C.faint }]}>of {rows.length}</Text>
-                  <Ionicons name="chevron-forward" size={13} color={C.faint} />
-                </CardLink>
-              ) : (
-                <Text style={[T.tiny, { color: C.faint }]}>
-                  {standings.loading ? '' : 'Not entered'}
-                </Text>
-              )}
-              <OrderOfPlay t={t} />
+            <View style={s.footStack}>
+              {draws.map(d => (
+                <ActiveRow key={d.id} t={d} userId={userId} showTour={draws.length > 1} />
+              ))}
             </View>
           }
         >
@@ -344,7 +402,7 @@ function ActiveCard({ t, userId, pickState }) {
               what their footer says, which is the point: a draw you are
               playing and a draw you are watching should not look like two
               different kinds of thing. */}
-          <Meta t={t} />
+          <Meta t={draws[0]} />
         </TourCard>
   )
 }
@@ -361,9 +419,9 @@ const WEEK_ROWS_AS_CARDS = true
 
 /* Next/last week: one line, because that is what they are worth. The tour dot
    carries the only thing that distinguishes them at a glance. */
-function CompactRow({ t, done }) {
-  const isATP = t.gender !== 'F'
-  if (WEEK_ROWS_AS_CARDS) return <WeekCard t={t} done={done} />
+function CompactRow({ draws, done }) {
+  const t = draws[0]
+  if (WEEK_ROWS_AS_CARDS) return <WeekCard draws={draws} done={done} />
   /* Upcoming: the site shows WHEN THE DRAW COMES OUT, which is the only thing
      a reader can act on before it does — the date range says nothing they
      need yet. Last week: the order of play still matters (results), so it
@@ -376,7 +434,13 @@ function CompactRow({ t, done }) {
   const oop = done ? oopHref(t) : null
   const body = (
     <>
-      <View style={[s.compactDot, { backgroundColor: isATP ? C.atp : C.wta }]} />
+      {/* A DOT PER TOUR, because the row is the EVENT: a combined tournament
+          is one line here too, and the dots are the only thing on it that
+          could say both halves are there. */}
+      {draws.map(d => (
+        <View key={d.id} style={[s.compactDot,
+                                 { backgroundColor: d.gender !== 'F' ? C.atp : C.wta }]} />
+      ))}
       <Text style={[T.small, { color: done ? C.muted : C.inkBody, flex: 1 }]} numberOfLines={1}>
         {t.name}
       </Text>
@@ -405,22 +469,29 @@ function CompactRow({ t, done }) {
    true by construction rather than by my matching two sets of styles. The
    footer's left slot carries the one fact each bucket has: when picks open for
    next week's draw, and the dates for last week's. */
-function WeekCard({ t, done }) {
-  const opens = !done ? (t.draw_release_direct || t.draw_release_qualifiers) : null
+function WeekCard({ draws, done }) {
   return (
-    <TourCard
-      tour={t.gender === 'F' ? 'WTA' : 'ATP'} tier={t.category} name={t.name}
-      href={hasDrawData(t) ? `/draw/${t.id}` : null}
+    <TourCard draws={draws} name={draws[0].name} href={cardHref(draws)}
       footer={
-        <View style={s.footRow}>
-          <Text style={[T.tiny, { color: C.faint }]} numberOfLines={1}>
-            {opens ? `Opens ${fmtShort(opens)}` : done ? 'Finished' : ''}
-          </Text>
-          <OrderOfPlay t={t} />
+        <View style={s.footStack}>
+          {draws.map(d => {
+            const opens = !done ? (d.draw_release_direct || d.draw_release_qualifiers) : null
+            return (
+              <View key={d.id} style={s.footRow}>
+                <View style={s.lockLine}>
+                  {draws.length > 1 ? <TourBadge gender={d.gender} style={s.footTour} /> : null}
+                  <Text style={[T.tiny, { color: C.faint }]} numberOfLines={1}>
+                    {opens ? `Opens ${fmtShort(opens)}` : done ? 'Finished' : ''}
+                  </Text>
+                </View>
+                <OrderOfPlay t={d} />
+              </View>
+            )
+          })}
         </View>
       }
     >
-      <Meta t={t} />
+      <Meta t={draws[0]} />
     </TourCard>
   )
 }
@@ -489,6 +560,12 @@ const s = StyleSheet.create({
 
   meta: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   footRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: S.sm },
+  // One row per draw on a combined card, and exactly one row otherwise — so
+  // the single-draw card's footer is unchanged by the gap.
+  footStack: { gap: S.sm },
+  // The tour label on a footer row. alignSelf centre because the row it joins
+  // is baseline-aligned for the countdown's two type sizes.
+  footTour: { alignSelf: 'center', marginRight: 2 },
   lockLine: { flexDirection: 'row', alignItems: 'baseline', gap: 5 },
 
   compact: {

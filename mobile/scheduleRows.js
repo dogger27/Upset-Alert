@@ -39,6 +39,42 @@ export function sameDrawSet(a, b) {
  * could ever match it, so offering it would be offering a filter that empties
  * the screen.
  */
+/* THE SAME DRAWS, GROUPED, for a screen that has to RENDER both of them
+ * rather than name the event once.
+ *
+ * tournamentsOf() answers "which events are there" and throws the draws away,
+ * which is right for a filter and useless to the dashboard: a combined event's
+ * card carries a tier stamp, a deadline and a standing PER TOUR, so the card
+ * needs the draws themselves, together, in one group.
+ *
+ * Two deliberate differences from tournamentsOf:
+ *
+ *   - A draw with NO tournament_id is its own group, not dropped. There it
+ *     would be offering a filter that empties the screen; here it would be
+ *     hiding a card, and a draw the dashboard cannot show is worse than one it
+ *     shows alone.
+ *   - Group order follows the input, so the caller's sort survives. The
+ *     dashboard's sections are ordered, and a group takes the position of its
+ *     first draw.
+ *
+ * Men first inside each group, matching tournamentsOf, so a pair never swaps
+ * sides between screens.
+ */
+export function drawsByTournament(draws) {
+  const groups = []
+  const by = new Map()
+  for (const d of draws || []) {
+    if (!d) continue
+    const key = d.tournament_id
+    if (key == null) { groups.push([d]); continue }
+    const cur = by.get(key)
+    if (cur) cur.push(d)
+    else { const g = [d]; by.set(key, g); groups.push(g) }
+  }
+  for (const g of groups) g.sort((a, b) => (a.gender === 'M' ? 0 : 1) - (b.gender === 'M' ? 0 : 1))
+  return groups
+}
+
 export function tournamentsOf(draws) {
   const by = new Map()
   for (const d of draws || []) {
