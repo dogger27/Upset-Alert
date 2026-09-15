@@ -82,9 +82,14 @@ export const C = {
 /* The ATP / WTA badge, resolved from the site's DARK tokens — the app has no
    light mode, so the light values (#dbeafe / #fce7f3) would be wrong here.
    ATP: --atp-tint-strong + --info.  WTA: --wta-tint + --wta-text. */
+/* `card`, `plate` and `line` are the site's --{atp,wta}-tint-strong, -tint and
+   -line: the dashboard shades a whole card by tour, and the tier stamp sits on
+   a plate one step darker than the card it is on. Two steps of the same hue,
+   both already in the site's dark palette — a card tinted with one invented
+   value and a badge tinted with another is how a palette starts to drift. */
 export const TOUR = {
-  M: { bg: '#1a2f4f', fg: '#7aa9ff', label: 'ATP' },
-  F: { bg: '#3a1526', fg: '#ff8ab5', label: 'WTA' },
+  M: { bg: '#1a2f4f', fg: '#7aa9ff', label: 'ATP', card: '#1a2f4f', plate: '#14243d', line: '#3b5a8f' },
+  F: { bg: '#3a1526', fg: '#ff8ab5', label: 'WTA', card: '#4a1c31', plate: '#3a1526', line: '#8a3a5c' },
   // MIXED DOUBLES belongs to neither tour, so it takes neither tour's colour.
   // The unseeded chip's pair rather than a new one invented for it: a blend of
   // blue and pink is a gradient decision on a 10pt pill, and there is no such

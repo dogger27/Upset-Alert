@@ -11,7 +11,7 @@
 import { useMemo, useState } from 'react'
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native'
 import { leading } from './fontScale.js'
-import { tierStamp } from './logos'
+import { isSlamTier, tierStamp } from './logos'
 import { flagEmoji } from './flags'
 import { CardLink } from './ui'
 import { textWidth } from './measure.js'
@@ -56,11 +56,25 @@ export function SurfacePill({ surface }) {
 }
 
 /* The real artwork, at the site's `sm` box (88×38). contain, so a wide WTA tag
-   and a square ATP stamp carry the same visual weight. */
+   and a square ATP stamp carry the same visual weight.
+ *
+ * ON A PLATE IN THE TOUR'S COLOUR, which is where the ATP/WTA pill's dark pink
+ * and navy went when the pill came off the card (owner, 2026-09-15). The stamp
+ * says the tier and the plate says the tour, in one object instead of two at
+ * opposite ends of the row — and since the plate's colour is a token, the tier
+ * artwork no longer has to carry a background of its own (see logos.js).
+ *
+ * EXCEPT A SLAM. The four crests are each tournament's own mark, drawn the way
+ * that tournament draws it, and they are left alone — no plate, nothing
+ * recoloured (owner, 2026-09-15). They carry the event, not the tier.
+ */
 export function TierBadge({ tour, tier, name, width = 76, height = 32 }) {
   const src = tierStamp({ tour, tier, name })
   if (!src) return null
-  return <Image source={src} style={{ width, height }} resizeMode="contain" />
+  const art = <Image source={src} style={{ width, height }} resizeMode="contain" />
+  if (isSlamTier(tier)) return art
+  const t = TOUR[String(tour || 'ATP').toUpperCase() === 'ATP' ? 'M' : 'F']
+  return <View style={[u.stamp, { backgroundColor: t.plate }]}>{art}</View>
 }
 
 /* A status chip. The website gives these their own tinted backgrounds rather
@@ -100,26 +114,35 @@ export function TourCard({ tour, tier, name, children, footer, href, corner }) {
   const body = (
     <>
         <View style={u.titleRow}>
-          {/* The tour reads BEFORE the name, not under it: a combined event
-              supplies two draws both called "US Open" and the tier stamp
-              beside them is the same logo for both, so the badge is the first
-              thing that tells them apart and belongs where the eye starts. */}
-          <TourBadge gender={isATP ? 'M' : 'F'} />
+          {/* NO TOUR PILL HERE ANY MORE (owner, 2026-09-15). It was on this
+              row because a combined event supplies two draws both called
+              "US Open" whose tier stamp is the same logo for both, so
+              something had to tell them apart. The whole card is now tinted by
+              tour — pink or blue, edge to edge — which separates those two
+              cards across the room, where a 40pt pill needed reading. The
+              pill's own colour did not go away: it is the plate under the
+              tier stamp. */}
           <CardTitle name={name} />
           <TierBadge tour={tour} tier={tier} name={name} />
         </View>
         {children}
     </>
   )
+  const t = TOUR[isATP ? 'M' : 'F']
   return (
     <View>
-      <View style={u.card}>
+      {/* SHADED BY TOUR, edge to edge: the site's own answer for a card that
+          belongs to one tour (it tints this card on hover with exactly these
+          values). The border and the footer's rule come along — a pink card
+          with the palette's grey-green edge reads as an unfinished state, not
+          a colour choice. */}
+      <View style={[u.card, { backgroundColor: t.card, borderColor: t.line }]}>
         <AccentBar from={isATP ? C.atp : C.wta} to={isATP ? C.atpDeep : C.wtaDeep} />
         <View style={u.body}>
           {href
             ? <CardLink href={href} style={u.bodyLink} pressedOpacity={0.75}>{body}</CardLink>
             : <View style={u.bodyLink}>{body}</View>}
-          {footer ? <View style={u.footer}>{footer}</View> : null}
+          {footer ? <View style={[u.footer, { borderTopColor: t.plate }]}>{footer}</View> : null}
         </View>
       </View>
       {/* box-none, not none: the slot itself must never swallow a tap meant
@@ -195,6 +218,9 @@ const u = StyleSheet.create({
   // floating beside it. Half out and half in: the badge's own ring closes the
   // card's border where it crosses it.
   corner: { position: 'absolute', top: -9, right: -9 },
+  /* The pill's radius, not the card's: this is the pill's replacement, and at
+     76pt wide the card's 12 would read as a lozenge. */
+  stamp: { borderRadius: 5, paddingHorizontal: 7, paddingVertical: 3 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   // The spare width of the title row, which is what CardTitle measures to know
   // how much the name may use. It replaced a flex:1 spacer that sat AFTER the

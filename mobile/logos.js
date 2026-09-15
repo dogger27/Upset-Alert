@@ -28,15 +28,29 @@ const ATP = {
   1000: require('./assets/logos/categorystamps_1000.png'),
 }
 
+/* LETTERING ONLY. The tags as shipped are opaque rounded rectangles in the
+   WTA's own tier colours — purple, teal, gold — and the dashboard now paints
+   the tour's colour behind every stamp, so a baked-in tier colour was the one
+   thing on the card arguing with it. tools/gen-tour-tag-plates.py strips each
+   tag to its wordmark and number (alpha = how much of the pixel the letters
+   covered) on the same canvas, so the plate colour comes from theme.js and the
+   tag keeps the margin that holds it to the ATP stamps' size. Originals kept
+   beside them: they are the generator's input. */
 const WTA = {
-  250: require('./assets/logos/250k-tag.png'),
-  500: require('./assets/logos/500k-tag.png'),
-  1000: require('./assets/logos/1000k-tag.png'),
+  250: require('./assets/logos/250k-tag-plate.png'),
+  500: require('./assets/logos/500k-tag-plate.png'),
+  1000: require('./assets/logos/1000k-tag-plate.png'),
 }
+
+/* THE SLAM TEST, EXPORTED. TierBadge needs the same answer — the slam crests
+   are left exactly as the tournaments draw them, so they take no tour-coloured
+   plate (owner, 2026-09-15) — and a second copy of this regex somewhere else
+   is a second copy to forget. */
+export const isSlamTier = tier => /slam|gs|grand/i.test(String(tier || ''))
 
 export function tierStamp({ tour, tier, name }) {
   const isATP = String(tour || 'ATP').toUpperCase() === 'ATP'
-  const isSlam = /slam|gs|grand/i.test(String(tier || ''))
+  const isSlam = isSlamTier(tier)
 
   if (isSlam) {
     const n = (name || '').toLowerCase()
