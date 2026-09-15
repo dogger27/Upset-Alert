@@ -119,8 +119,18 @@ const CREST = { width: 77, height: 51 }
 /* A crest at a week card's scale. Wider than it is tall by more than the
    square crests are, so a square one (Wimbledon, Roland Garros) fits by HEIGHT
    and the US Open's 2.09:1 flame by width — both close enough to the small
-   tier plate that a Slam barely changes the row's height. */
-const CREST_SMALL = { width: 44 * SMALL, height: 26 * SMALL }
+   tier plate that a Slam barely changes the row's height.
+
+   A FURTHER STEP DOWN from the tier plates' scale, and its own constant
+   because the two move independently: a crest is a square-ish picture where a
+   tier plate is a 6:1 strip, so it pays for scale in HEIGHT — the shared 1.5
+   took the plates from 58pt to 60 and the Slam from 71 to 84. Dividing by 1.25
+   gives that height back without touching the plates (owner, 2026-09-15). */
+const CREST_SHRINK = 1.25
+const CREST_SMALL = {
+  width: (44 * SMALL) / CREST_SHRINK,
+  height: (26 * SMALL) / CREST_SHRINK,
+}
 
 export function TierBadge({ tour, tier, name, small }) {
   const { src, aspect } = tierStamp({ tour, tier, name })
