@@ -104,7 +104,7 @@ export const C = {
    fails if the two ever disagree. */
 export const TOUR = {
   M: { bg: '#1a2f4f', fg: '#7aa9ff', label: 'ATP', card: '#2c5081', plate: '#14243d', line: '#4d7ab5', text: '#8fb6ff' },
-  F: { bg: '#3a1526', fg: '#ff8ab5', label: 'WTA', card: '#7d3352', plate: '#3a1526', line: '#b8567d', text: '#ff8ab5' },
+  F: { bg: '#3a1526', fg: '#ff8ab5', label: 'WTA', card: '#7d3352', plate: '#3a1526', line: '#b8567d', text: '#ffb3c6' },
   // MIXED DOUBLES belongs to neither tour, so it takes neither tour's colour.
   // The unseeded chip's pair rather than a new one invented for it: a blend of
   // blue and pink is a gradient decision on a 10pt pill, and there is no such
