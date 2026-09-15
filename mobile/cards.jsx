@@ -68,13 +68,36 @@ export function SurfacePill({ surface }) {
  * that tournament draws it, and they are left alone — no plate, nothing
  * recoloured (owner, 2026-09-15). They carry the event, not the tier.
  */
+/* ONE TEXT HEIGHT, TWO BOX WIDTHS.
+ *
+ * `contain` fits the artwork by whichever side runs out first, and for both
+ * tags that is the WIDTH — so the lettering's rendered HEIGHT is decided by
+ * its own aspect ratio and nothing else. "ATP 500" is about 1.35x wider per
+ * unit of height than "WTA 500" (the italic mark plus its swoosh against a
+ * condensed face), so in the same box its text came out about a third shorter
+ * (owner, 2026-09-15). The only way to set the same text height is to give it
+ * the width that height needs.
+ *
+ * Which does leave an ATP plate wider than a WTA one. That is the trade being
+ * made: the two cards can match on the size of their type or on the size of
+ * their badge, and type is what a reader is actually comparing.
+ */
+const STAMP_W = { M: 102, F: 76 }
+
 export function TierBadge({ tour, tier, name, width = 76, height = 32 }) {
   const src = tierStamp({ tour, tier, name })
   if (!src) return null
-  const art = <Image source={src} style={{ width, height }} resizeMode="contain" />
-  if (isSlamTier(tier)) return art
-  const t = TOUR[String(tour || 'ATP').toUpperCase() === 'ATP' ? 'M' : 'F']
-  return <View style={[u.stamp, { backgroundColor: t.plate }]}>{art}</View>
+  const key = String(tour || 'ATP').toUpperCase() === 'ATP' ? 'M' : 'F'
+  // A slam crest keeps the square-ish box it has always had, and no plate:
+  // it is the tournament's own mark, not a tier stamp (see logos.js).
+  if (isSlamTier(tier)) {
+    return <Image source={src} style={{ width, height }} resizeMode="contain" />
+  }
+  return (
+    <View style={[u.stamp, { backgroundColor: TOUR[key].plate }]}>
+      <Image source={src} style={{ width: STAMP_W[key], height }} resizeMode="contain" />
+    </View>
+  )
 }
 
 /* A status chip. The website gives these their own tinted backgrounds rather
