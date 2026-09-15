@@ -27,7 +27,7 @@ import { computeCohortInfo, getHomeSection } from '../../drawStatus'
 import { drawsByTournament } from '../../scheduleRows'
 import { lockLabel } from '../../lock'
 import { C, R, S, T } from '../../theme'
-import { StatusChip, SurfacePill, TourCard } from '../../cards'
+import { StatusChip, SurfaceText, TourCard } from '../../cards'
 import { dateRange } from '../../dates'
 import { Button, Card, CardLink, ErrorNote, Eyebrow, Loading, Muted, Screen, Title } from '../../ui'
 import { MenuSheet } from '../../menu'
@@ -300,7 +300,7 @@ function Meta({ t, showSurface = true }) {
           </Text>
         ) : null}
       </View>
-      {showSurface ? <SurfacePill surface={t.surface} /> : null}
+      {showSurface ? <SurfaceText surface={t.surface} /> : null}
       <View style={[s.metaSide, { alignItems: 'flex-end' }]}>
         {dateRange(t) ? (
           <Text style={[T.tiny, { color: C.muted }]} numberOfLines={1}>{dateRange(t)}</Text>
@@ -543,8 +543,18 @@ function WeekCard({ draws, done }) {
     .filter(Boolean)
     .sort()[0]
   return (
-    <TourCard draws={draws} name={draws[0].name} href={cardHref(draws)} compact>
-      {/* ONE ROW, NO FOOTER — the whole card is the name, its tier and this.
+    <TourCard draws={draws} name={draws[0].name} href={cardHref(draws)} compact
+      /* AS THE FOOTER, not as the body's children — and the difference is not
+         cosmetic. `href` makes the body a link, so a row placed inside it puts
+         Order of Play's own link INSIDE that one: invalid HTML on the web
+         build (the harness printed "<a> cannot contain a nested <a>") and a
+         tap-ownership fight on native, where pressing the button could open
+         the draw instead. The footer is a sibling inside the same frame, which
+         is what it exists for. `compact` drops its rule and its padding, so it
+         still reads as one card rather than two rows. */
+      footer={
+      <>
+      {/* ONE ROW, NO RULE — the whole card is the name, its tier and this.
           The date range, the surface and "Finished" came off at the owner's
           ask (2026-09-15), and taking them off alone would have saved about
           four points: the city still held the meta row and the button still
@@ -574,7 +584,9 @@ function WeekCard({ draws, done }) {
           <OrderOfPlay t={oopDraw(draws)} />
         </View>
       </View>
-    </TourCard>
+      </>
+      }
+    />
   )
 }
 
