@@ -66,6 +66,18 @@ export default function ScheduleScreen() {
   const asked = typeof params.date === 'string' ? params.date : undefined
   // null = follow the landing rule; a tap on an arrow pins a day.
   const [pinned, setPinned] = useState(null)
+  /* AND IT RESETS ON ARRIVAL. This screen is a TAB, so it stays mounted: read
+     an active tournament's sheets, page to a day, go back to the dashboard and
+     open a finished event's Order of Play, and the same component re-renders
+     with new params and the OLD day still pinned. The US Open opened on
+     15 September — a day it never played — with nothing listed, both arrows
+     dead (that day is not in its date list, so there is no neighbour to step
+     to) and the header counting the three matches on court at OTHER
+     tournaments (owner, 2026-09-15).
+
+     Keyed on the arrival, not on the route: the same params re-rendering is
+     not an arrival, and paging days inside one visit must not undo itself. */
+  useEffect(() => { setPinned(null) }, [tournament, fromDraw, asked])
   /* The site's filters and their defaults: completed rows shown, doubles
      hidden, and EVERY TOUR ON, always. tourSel is a SET so ATP+WTA is
      expressible; null means all of them.
@@ -92,7 +104,13 @@ export default function ScheduleScreen() {
 
   const dates = useApi(`schedule-dates:${tournament ?? 'all'}`, () => getScheduleDates(tournament))
   const available = dates.data?.dates || []
-  const date = pinned ?? landingDay(available, dates.data?.open_counts || {}, asked)
+  /* A pinned day only counts while it EXISTS in the list this page is showing.
+     The reset above is the cure for the stale day; this is the belt to its
+     braces, and it also covers the moment after an arrival when the new date
+     list is still in flight. */
+  const date = (pinned && available.includes(pinned))
+    ? pinned
+    : landingDay(available, dates.data?.open_counts || {}, asked)
   const idx = available.indexOf(date)
   const day = useApi(`schedule:${date}`, () => getScheduleDay(date))
   /* Refetch the day whenever any tournament on it changes — the site's rule.
@@ -298,7 +316,11 @@ export default function ScheduleScreen() {
   }, [visible, view])
 
   const refetch = () => { day.refetch(); dates.refetch() }
-  const liveCount = all.filter(isLive).length
+  /* ON COURT HERE, not on court anywhere. It counted the whole day's rows, so
+     a page pinned to a finished event announced three matches in progress at
+     tournaments it was not showing. `visible` is the same set the rows below
+     are drawn from, so the number and the list can never disagree. */
+  const liveCount = visible.filter(isLive).length
 
   /* A champion is a whole-screen event, so the row reports up and the
      fanfare covers the screen from here — the site's ChampionFanfare. It
