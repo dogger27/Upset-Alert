@@ -439,15 +439,20 @@ function Side({ players, doubles, tbd, tight, sets, form = 'surname', flags = fa
        SURESH"). A doubles alternative is a whole pair, so the line is twice
        as long: "SCHNAITTER / WALLNER or LAMMONS / WITHROW" ran off the right
        edge of a 390px card on 2026-08-26 and the last name was cut in half.
-       Same measured budget and same 0.72 floor as the doubles line below, and
-       the media query decides whether it applies at all. */
+       Same measured budget and same floor as the doubles line below, and the
+       media query decides whether it applies at all.
+       0.45, NOT 0.72 — PlayerName's floor. A floor above what fits is not a
+       floor, it is a truncation: the line stops shrinking and runs past the
+       card edge, which cuts the last name exactly as an ellipsis would.
+       Guadalajara 2026-09-16 clipped "…Gomez Pezuela Canc" at 390px with the
+       scale pinned at 0.72. */
     const altText = players.map(p => splitPlayerName(p.name).last || p.name).join(' or ')
     let altScale = 1
     if (box && box.avail > 0) {
       const need = textWidth(altText, box.fontPx, 600)
-      if (need > box.avail - 2) altScale = Math.max(0.72, (box.avail - 2) / need)
+      if (need > box.avail - 2) altScale = Math.max(0.45, (box.avail - 2) / need)
     } else if (altText.length > DOUBLES_FIT) {
-      altScale = Math.max(0.72, DOUBLES_FIT / altText.length)
+      altScale = Math.max(0.45, DOUBLES_FIT / altText.length)
     }
     return (
       <span className="sched-side sched-side--alt"
@@ -493,9 +498,11 @@ function Side({ players, doubles, tbd, tight, sets, form = 'surname', flags = fa
       const flagPx = flags ? players.length * (1.05 + 0.3) * rem : 0
       const budget = Math.max(0, box.avail - flagPx - NAME_SAFETY)
       const need = textWidth(doublesLine, box.fontPx, 600)
-      if (need > budget && budget > 0) teamScale = Math.max(0.72, budget / need)
+      // 0.45, the same floor as the alternatives above and PlayerName: a
+      // floor above what fits leaves the line running past the card edge.
+      if (need > budget && budget > 0) teamScale = Math.max(0.45, budget / need)
     } else if (doublesLine.length > DOUBLES_FIT) {
-      teamScale = Math.max(0.72, DOUBLES_FIT / doublesLine.length)
+      teamScale = Math.max(0.45, DOUBLES_FIT / doublesLine.length)
     }
   }
 
