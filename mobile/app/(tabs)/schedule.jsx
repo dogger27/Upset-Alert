@@ -112,12 +112,47 @@ export default function ScheduleScreen() {
   /* WHAT THE PAGE'S OWN CHECKBOXES OFFER — the same derivation the tab bar's
      sheet uses, so the two controls list the same tournaments and either can
      undo the other. */
-  const { choosable: events } = useChoosableTournaments()
+  const { all: allDraws, choosable: events } = useChoosableTournaments()
+  /* PINNED TO ONE EVENT — arriving from a tournament the chooser does not
+     offer.
+   *
+   * The chooser lists what is open or being played. Press Order of Play on a
+   * finished event (or one that has not opened) and you land here with its
+   * tournament in the URL and NOTHING on screen about it: the boxes name two
+   * other tournaments, and the selection they hold decides what you see, so
+   * the sheets you asked for are filtered by a control that cannot even name
+   * them (owner, 2026-09-15).
+   *
+   * So that arrival pins the page to that one event: its rows only, and no
+   * chooser, because there is nothing to choose between. The date list is
+   * already scoped — getScheduleDates(tournament) — so the arrows walk that
+   * event's days and no others.
+   *
+   * READINESS IS THE DRAW LIST, NOT THE CHOOSABLE SET. The first version
+   * waited for `events.length`, on the theory that an empty list meant the
+   * answer was still in flight — but an empty list is also a RIGHT answer, and
+   * a common one: nothing live in the off-season, or a week whose sheets are
+   * not out yet. So the pin never engaged in the case it exists for, and the
+   * page went on showing every tournament playing that day (three of them, on
+   * 26 August in the dev snapshot). `all` is the draw list the choosable set
+   * is derived FROM: non-empty means the question has been answered, whatever
+   * the answer turned out to be. */
+  const pinnedEvent = tournament != null && allDraws.length > 0
+    && !events.some(e => e.id === tournament)
+    ? tournament
+    : null
   /* `null` in the store means EVERY tournament, so a box is ticked when there
      is no selection at all. Turning the last one off would empty the screen
      with nothing on it to explain why, so the whole set comes back instead —
      which is the same state, said the other way, and leaves every box ticked
      rather than every box blank. */
+  /* THE SELECTION EVERY ROW IS TESTED AGAINST. The pin outranks the store —
+     it is the reason the reader is on this page — and memoised so the Set's
+     identity does not change per render and re-run every filter below. */
+  const eventFilter = useMemo(
+    () => (pinnedEvent != null ? new Set([pinnedEvent]) : eventSel),
+    [pinnedEvent, eventSel],
+  )
   const toggleEvent = id => {
     const cur = new Set(eventSel ?? events.map(t => t.id))
     if (cur.has(id)) cur.delete(id)
@@ -132,13 +167,13 @@ export default function ScheduleScreen() {
     const seen = new Set()
     for (const e of all) {
       if (!e.tour) continue
-      if (!rowInTournaments(e, eventSel)) continue
+      if (!rowInTournaments(e, eventFilter)) continue
       if (e.discipline !== 'singles' && !showDoubles) continue
       if (!showDone && (e.status === 'completed' || e.status === 'postponed')) continue
       seen.add(e.tour)
     }
     return [...seen].sort()
-  }, [all, eventSel, showDoubles, showDone])
+  }, [all, eventFilter, showDoubles, showDone])
   /* ONE TOUR NEEDS NO CHIPS, and where there are none the filter must not
      apply either: a selection made on a two-tour day would otherwise empty a
      one-tour day with no chip on screen to undo it. */
@@ -154,9 +189,9 @@ export default function ScheduleScreen() {
      test of whether to show itself. */
   const hasDoubles = useMemo(() => all.some(e =>
     e.discipline !== 'singles'
-    && rowInTournaments(e, eventSel)
+    && rowInTournaments(e, eventFilter)
     && (showDone || (e.status !== 'completed' && e.status !== 'postponed'))
-  ), [all, eventSel, showDone])
+  ), [all, eventFilter, showDone])
   /* SEEDED ONCE PER DAY, NOT PER FETCH. This ran on `day.data`, whose identity
      changes on every poll — and the live subscription refetches this screen
      about every ten seconds — so switching WTA on held for one cycle and then
@@ -202,10 +237,10 @@ export default function ScheduleScreen() {
       // the tour chips: those are a control on this screen and the court view
       // deliberately reproduces the whole sheet, while this is an answer the
       // reader gave on the way in and means the same thing either way.
-      if (!rowInTournaments(e, eventSel)) return false
+      if (!rowInTournaments(e, eventFilter)) return false
       return true
     })
-  }, [all, view, showDone, showDoubles, tourSel, eventSel, tourChips])
+  }, [all, view, showDone, showDoubles, tourSel, eventFilter, tourChips])
 
   const groups = useMemo(() => {
     if (view === 'court') {
@@ -349,8 +384,10 @@ export default function ScheduleScreen() {
 
             The SAME list the sheet offers — both read useChoosableTournaments
             — so the two controls cannot disagree, and either can undo the
-            other. Hidden below two, where there is nothing to choose. */}
-        {events.length > 1 && (
+            other. Hidden below two, where there is nothing to choose — and
+            hidden entirely while the page is pinned to one event, where the
+            boxes would name other tournaments and decide nothing. */}
+        {pinnedEvent == null && events.length > 1 && (
           <View style={s.events}>
             {events.map(t => {
               const on = !eventSel || eventSel.has(t.id)
@@ -419,12 +456,17 @@ export default function ScheduleScreen() {
                 ? 'Every match listed is finished or postponed — switch Completed on to see them.'
                 : !showDoubles && all.every(e => e.discipline !== 'singles')
                   ? 'Only doubles is listed — switch Doubles on to see it.'
-                  : eventSel && !all.some(e => rowInTournaments(e, eventSel))
-                    /* The one filter that is NOT a switch on this screen, so
-                       it has to name itself: the reader set it on the way in
-                       and has nothing here to point at. */
-                    ? 'None of the tournaments you chose is playing today — tap Schedule again to change that.'
-                    : 'The current switches hide every match listed.'}
+                  : pinnedEvent != null
+                    /* Pinned: the rows hidden are every other tournament's,
+                       which the reader did not ask for and cannot switch on
+                       from here. Name what IS being shown instead. */
+                    ? 'This tournament has nothing listed for this day.'
+                    : eventFilter && !all.some(e => rowInTournaments(e, eventFilter))
+                      /* The one filter that is NOT a switch on this screen, so
+                         it has to name itself: the reader set it on the way in
+                         and has nothing here to point at. */
+                      ? 'None of the tournaments you chose is playing today — tap Schedule again to change that.'
+                      : 'The current switches hide every match listed.'}
             </Muted>
           </Card>
         )}

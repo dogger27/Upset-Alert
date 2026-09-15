@@ -10,7 +10,7 @@
  * used a few times a day that trade is not worth making.
  */
 
-import { router, Tabs, usePathname } from 'expo-router'
+import { router, Tabs, useGlobalSearchParams, usePathname } from 'expo-router'
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -103,6 +103,16 @@ export default function TabLayout() {
      there" from "let me change what I see there", and it is the whole of the
      rule below. */
   const onSchedule = pathname === '/schedule' || pathname.startsWith('/schedule/')
+  /* THE SCHEDULE, PINNED TO ONE EVENT. Order of Play on a card whose
+     tournament is neither open nor being played sends the reader to a page
+     showing that event alone, with no chooser — there is nothing in the
+     chooser's list to choose. A second press of this tab would otherwise open
+     the sheet anyway: a control over nothing, since the pin outranks whatever
+     it sets. The press releases the pin instead, which is the one thing a
+     reader in that state could want from it. */
+  const routeParams = useGlobalSearchParams()
+  const scheduleParam = onSchedule && routeParams?.tournament != null
+    ? Number(routeParams.tournament) : null
   const onDraw = pathname.startsWith('/draw/')
   /* The EVENT behind the bracket last opened — the US Open, not the US Open
      WTA, because the chooser and the filter both work in events. Null when
@@ -115,6 +125,13 @@ export default function TabLayout() {
   const readingEventId = choosable.some(t => t.id === readingTournamentId)
     ? readingTournamentId
     : null
+  /* Pinned once the DRAW LIST has arrived — not once `choosable` is non-empty,
+     which is a different question wearing the same shape: an empty choosable
+     set is the CORRECT answer in the off-season, so waiting for it to fill
+     would mean never agreeing with the page. schedule.jsx keeps the same test,
+     and had exactly this bug. */
+  const schedulePinned = scheduleParam != null && all.length > 0
+    && !choosable.some(t => t.id === scheduleParam)
 
   /* WHICH BRACKET THE DRAW TAB OPENS WITHOUT ASKING, or null to ask.
 
@@ -186,6 +203,13 @@ export default function TabLayout() {
            live event, or none, and the press goes straight through either way. */
         listeners={{
           tabPress: e => {
+            if (schedulePinned) {
+              e.preventDefault()
+              // replace, not push: the pinned page is where we already are,
+              // and a back button onto it would put the reader straight back.
+              router.replace('/schedule')
+              return
+            }
             if (choosable.length < 2) return
             if (!onSchedule) {
               // Stale ids name nothing a week later; start from what is live.
