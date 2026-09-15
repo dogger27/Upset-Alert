@@ -68,21 +68,22 @@ export function SurfacePill({ surface }) {
  * that tournament draws it, and they are left alone — no plate, nothing
  * recoloured (owner, 2026-09-15). They carry the event, not the tier.
  */
-/* ONE TEXT HEIGHT, TWO BOX WIDTHS.
+/* ONE BOX, ONE TEXT HEIGHT, BOTH TOURS.
  *
- * `contain` fits the artwork by whichever side runs out first, and for both
- * tags that is the WIDTH — so the lettering's rendered HEIGHT is decided by
- * its own aspect ratio and nothing else. "ATP 500" is about 1.35x wider per
- * unit of height than "WTA 500" (the italic mark plus its swoosh against a
- * condensed face), so in the same box its text came out about a third shorter
- * (owner, 2026-09-15). The only way to set the same text height is to give it
- * the width that height needs.
+ * `contain` fits by whichever side runs out first, and for every one of these
+ * stamps that is the WIDTH — so the lettering's rendered height follows from
+ * the lettering's own aspect ratio, and padding cancels out of the arithmetic
+ * entirely. An ATP line runs ~6.1x its cap height against a WTA line's ~4.4,
+ * which is why the same box gave the ATP a third less type, and why giving the
+ * ATP its own wider box then bought equal type at the price of a badge a third
+ * wider than the WTA's beside it.
  *
- * Which does leave an ATP plate wider than a WTA one. That is the trade being
- * made: the two cards can match on the size of their type or on the size of
- * their badge, and type is what a reader is actually comparing.
+ * Neither is needed: gen-tier-stamps.py now sets every stamp at one cap height
+ * on one canvas, so a single box renders both tours at the same size, plate
+ * and type alike (owner, 2026-09-15). 100pt puts the caps at 15, which is
+ * where they have been all along.
  */
-const STAMP_W = { M: 102, F: 76 }
+const STAMP = { width: 100, height: 32 }
 
 export function TierBadge({ tour, tier, name, width = 76, height = 32 }) {
   const src = tierStamp({ tour, tier, name })
@@ -95,7 +96,7 @@ export function TierBadge({ tour, tier, name, width = 76, height = 32 }) {
   }
   return (
     <View style={[u.stamp, { backgroundColor: TOUR[key].plate }]}>
-      <Image source={src} style={{ width: STAMP_W[key], height }} resizeMode="contain" />
+      <Image source={src} style={STAMP} resizeMode="contain" />
     </View>
   )
 }
