@@ -38,6 +38,7 @@ class Row:
                       "printed_status"):
             setattr(self, field, kw.pop(field, None))
         self.status = kw.pop("status", "scheduled")
+        self.match_id = kw.pop("match_id", None)
         assert not kw, f"unknown field(s): {sorted(kw)}"
 
 
@@ -91,6 +92,31 @@ def main():
         ok &= check(f"a row at status={status} is kept",
                     _slot_was_pulled(Row(status=status), sp_anchor,
                                      sp_published, False) is False)
+
+    # SP Open 2026-09-15. Document 263 published 20:58 UTC, mid-session: every
+    # court began 10:30 AM São Paulo = 13:30 UTC, so the clock cannot answer.
+    # Rain had stopped Lys/Ce (started 16:09) on QUADRA CENTRAL and the sheet
+    # cut Lamens/Alves from behind it — a singles row whose bracket match never
+    # started, on a court the feed was watching.
+    tue_published, tue_anchor = at("2026-09-15 20:58:24"), at("2026-09-15 13:30")
+    ok &= check(
+        "a mid-session pull of an unplayed bracket match is deleted",
+        _slot_was_pulled(Row(match_id=5351), tue_anchor, tue_published, False,
+                         court_in_play=True) is True)
+    ok &= check(
+        "...but not when nothing on the court was in play at publication",
+        _slot_was_pulled(Row(match_id=5351), tue_anchor, tue_published, False,
+                         court_in_play=False) is False)
+    ok &= check(
+        "...nor when its bracket match had been played",
+        _slot_was_pulled(Row(match_id=5351), tue_anchor, tue_published, True,
+                         court_in_play=True) is False)
+    # Cincinnati's dropped doubles have no bracket match: nothing can prove
+    # them unplayed mid-session, however live the court was.
+    ok &= check(
+        "a mid-session doubles row with no bracket match is kept",
+        _slot_was_pulled(Row(), cin_anchor, cin_published, False,
+                         court_in_play=True) is False)
 
     # No clock to reason from — a court printed entirely as "Followed by", or
     # a tournament whose draws carry no venue timezone. Silence is not proof.
