@@ -204,7 +204,10 @@ export default function DrawScreen() {
                   the Draw tab and the Schedule's default in step — the
                   screen's own effect does it too, but not until the new route
                   has mounted. */}
-              <TourSwitch draws={siblings} currentId={t.id} showLevel style={{ alignSelf: 'center' }}
+              {/* pairLevel={false}: with both tours up there the level is the
+                  same on both pills and the name is what is short of room. */}
+              <TourSwitch draws={siblings} currentId={t.id} showLevel pairLevel={false}
+                          style={{ alignSelf: 'center' }}
                           onPick={d => { setCurrentDraw(d.id); router.replace(`/draw/${d.id}`) }} />
               {/* THE NAME TAKES THE SLACK, so the step button sits hard
                   against the right edge whatever the tournament is called,
