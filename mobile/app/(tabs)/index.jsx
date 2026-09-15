@@ -534,27 +534,38 @@ function CompactRow({ draws, done }) {
    footer's left slot carries the one fact each bucket has: when picks open for
    next week's draw, and the dates for last week's. */
 function WeekCard({ draws, done }) {
-  const rows = distinctBy(draws, d => {
-    const opens = !done ? (d.draw_release_direct || d.draw_release_qualifiers) : null
-    return opens ? `Opens ${fmtShort(opens)}` : done ? 'Finished' : ''
-  })
+  /* THE EARLIEST RELEASE, for the event. The two halves of a combined
+     tournament can open a day apart and this card no longer has a row each to
+     say so: it is a one-line summary now, and the first date is the one that
+     changes what a reader does today. The draw page has the rest. */
+  const opens = done ? null : draws
+    .map(d => d.draw_release_direct || d.draw_release_qualifiers)
+    .filter(Boolean)
+    .sort()[0]
   return (
-    <TourCard draws={draws} name={draws[0].name} href={cardHref(draws)}
-      footer={
-        <View style={s.footRow}>
-          <View style={s.footStack}>
-            {rows.map(r => (
-              <View key={r.draws[0].id} style={s.lockLine}>
-                {rows.length > 1 ? <Text style={s.footTour}>{tourWord(r.draws)}</Text> : null}
-                <Text style={[T.tiny, { color: C.faint }]} numberOfLines={1}>{r.text}</Text>
-              </View>
-            ))}
-          </View>
-          <OrderOfPlay t={oopDraw(draws)} />
-        </View>
-      }
-    >
-      <Meta t={draws[0]} />
+    <TourCard draws={draws} name={draws[0].name} href={cardHref(draws)}>
+      {/* ONE ROW, NO FOOTER — the whole card is the name, its tier and this.
+          The date range, the surface and "Finished" came off at the owner's
+          ask (2026-09-15), and taking them off alone would have saved about
+          four points: the city still held the meta row and the button still
+          held the footer. Merging what is left is what actually makes these
+          cards smaller than the ones above them, which is the difference the
+          sections are for — a draw you can still pick is worth more room than
+          one that opens next Saturday. */}
+      <View style={s.weekRow}>
+        {draws[0].city ? (
+          <Text style={[T.smallMed, { color: C.inkBody, flexShrink: 1 }]} numberOfLines={1}>
+            {draws[0].city}
+          </Text>
+        ) : null}
+        {opens ? (
+          <Text style={[T.tiny, { color: C.faint }]} numberOfLines={1}>
+            Opens {fmtShort(opens)}
+          </Text>
+        ) : null}
+        <View style={{ flex: 1 }} />
+        <OrderOfPlay t={oopDraw(draws)} />
+      </View>
     </TourCard>
   )
 }
@@ -629,6 +640,9 @@ const s = StyleSheet.create({
   // One row per draw on a combined card, and exactly one row otherwise — so
   // the single-draw card's footer is unchanged by the gap.
   footStack: { gap: S.sm },
+  // A week card's whole body: city, release, order of play. Baseline-aligned,
+  // because the city and the date are two type sizes on one line.
+  weekRow: { flexDirection: 'row', alignItems: 'baseline', gap: S.sm },
   /* The tour on a footer row, as TYPE rather than a pill. A filled badge is
      for a heading; on a line of 11pt type it outweighed the fact it was
      labelling, and it was on every row of a combined card including the ones
