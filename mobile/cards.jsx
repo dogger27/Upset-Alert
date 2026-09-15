@@ -100,8 +100,7 @@ export function TourCard({ tour, tier, name, children, footer, href }) {
               beside them is the same logo for both, so the badge is the first
               thing that tells them apart and belongs where the eye starts. */}
           <TourBadge gender={isATP ? 'M' : 'F'} />
-          <Text style={u.title} numberOfLines={2}>{name}</Text>
-          <View style={{ flex: 1 }} />
+          <CardTitle name={name} />
           <TierBadge tour={tour} tier={tier} name={name} />
         </View>
         {children}
@@ -120,6 +119,57 @@ export function TourCard({ tour, tier, name, children, footer, href }) {
   )
 }
 
+/* THE TOURNAMENT NAME, ON ONE LINE — shrunk to fit, never wrapped.
+ *
+ * "Guadalajara Open" broke across two lines on the dashboard (owner,
+ * 2026-09-15) and the reason was the reader's text size, not the name: at 19pt
+ * it measures 122pt against ~180pt of room, but every point of Dynamic Type
+ * scales the glyphs while the tier stamp beside it stays 76pt wide, so past
+ * about 1.3x the longer names run out of row and wrap. A two-line title pushes
+ * the card's meta row down and leaves the tour badge stranded beside a
+ * half-empty second line.
+ *
+ * MEASURED, the same way player names are (measure.js): the slot reports how
+ * much room it HAS, the name is measured in the face it is actually set in, and
+ * the type shrinks by exactly the ratio needed. Two details that matter:
+ *
+ * - The size is computed in UNSCALED points while the measurement is scaled,
+ *   so the answer holds at any text size — a floor in unscaled points would
+ *   let the name overflow again on a large-text phone, which is the bug.
+ * - No ellipsis. A cut tournament name is the same loss as a cut surname, and
+ *   the house rule rules it out (see PlayerName below).
+ */
+const TITLE_SIZE = 19
+const TITLE_FACE = 'SairaCondensed_700Bold'
+// 0.01em, as the style sets it — small, but 35 characters of it is 6pt.
+const TITLE_TRACK = TITLE_SIZE * 0.01
+
+function CardTitle({ name }) {
+  const [avail, setAvail] = useState(null)
+  let fontSize = TITLE_SIZE
+  if (avail != null) {
+    const need = textWidth(name, TITLE_FACE, TITLE_SIZE)
+      + String(name ?? '').length * TITLE_TRACK
+    // A point of slack: kerning is not in the tables.
+    const room = avail - 1
+    if (need > room) fontSize = Math.max(8, (TITLE_SIZE * room) / need)
+  }
+  return (
+    /* A ROW, so the Text is sized by its content rather than stretched to the
+       slot. adjustsFontSizeToFit below is the backstop for where iOS measures
+       the face a hair wider than the tables do — and given a box with slack it
+       shrinks to its floor regardless of whether the text fits (the seed badge
+       became a speck that way), so it must never be handed one. */
+    <View style={u.titleSlot} onLayout={e => setAvail(e.nativeEvent.layout.width)}>
+      <Text style={[u.title, fontSize !== TITLE_SIZE && {
+        fontSize, lineHeight: leading(fontSize + 1),
+      }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
+        {name}
+      </Text>
+    </View>
+  )
+}
+
 const u = StyleSheet.create({
   card: {
     backgroundColor: C.card,
@@ -130,12 +180,16 @@ const u = StyleSheet.create({
   body: { flex: 1, paddingTop: 14, paddingRight: 16, paddingBottom: 14, paddingLeft: 16, gap: 9 },
   bodyLink: { gap: 9 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  // The spare width of the title row, which is what CardTitle measures to know
+  // how much the name may use. It replaced a flex:1 spacer that sat AFTER the
+  // name: that pushed the tier stamp to the right edge just the same, but it
+  // left the name content-sized, so onLayout could only report how much room
+  // the name had taken — never how much there was.
+  titleSlot: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center' },
   // 1.18rem at 16px root = 18.9; lineHeight 1.05; letterSpacing 0.01em.
   title: {
-    fontFamily: 'SairaCondensed_700Bold', fontSize: 19, lineHeight: leading(20),
-    // No flex:1 — the title now sits in a COLUMN, where flex:1 would stretch it
-    // vertically and push the tour badge to the bottom of the card.
-    letterSpacing: 0.19, color: C.ink, flexShrink: 1,
+    fontFamily: TITLE_FACE, fontSize: TITLE_SIZE, lineHeight: leading(20),
+    letterSpacing: TITLE_TRACK, color: C.ink, flexShrink: 1,
   },
   footer: { borderTopWidth: 1, borderTopColor: C.border, paddingTop: 9, marginTop: 1 },
   pill: {
