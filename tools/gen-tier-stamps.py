@@ -94,25 +94,33 @@ def number_width(line):
     return line.size[0] - at - gap
 
 
-def widen_number(line, target):
-    """Set the number to `target` px wide, leaving the wordmark alone.
+def recolour(art, ink):
+    """The same glyphs in another ink: keep the coverage, replace the colour.
 
-    A HORIZONTAL SCALE, not a bigger number: the cap heights are matched across
-    both tours and a proportional scale would break that, leaving "500"
-    towering over the "WTA" beside it. The WTA sets its tier numbers in a
-    condensed face and the ATP in a wide italic, so at one cap height the ATP's
-    digits are ~1.5x wider and the WTA's read as the smaller of the two even
-    though they are the same height (owner, 2026-09-15). Stretching condensed
-    digits by that much lands them at about a normal width, which is why this
-    is worth doing at all rather than being visible damage.
+    The ATP sets its 500 in a silver gradient and its 1000 in gold, and the WTA
+    stamp's lettering is one flat off-white — so what is borrowed from the ATP
+    is the SHAPE of the numerals, never their colour. Each tour keeps its own
+    ink; the digits stop being two different typefaces.
     """
-    at, gap = split_number(line)
-    w, h = line.size
-    num = line.crop((at + gap, 0, w, h))
-    num = num.resize((target, h), Image.LANCZOS)
-    out = Image.new('RGBA', (at + gap + target, h), (0, 0, 0, 0))
-    out.alpha_composite(line.crop((0, 0, at + gap, h)), (0, 0))
-    out.alpha_composite(num, (at + gap, 0))
+    out = Image.new('RGBA', art.size, (*ink, 0))
+    out.putalpha(art.split()[3])
+    return out
+
+
+def bottom_line(mark, num, gap):
+    """A wordmark and a number side by side, sharing a baseline.
+
+    Both pieces are exactly cap-tall — the number is scaled to the cap and the
+    wordmark's box ends at its own baseline, the swoosh included — so sharing a
+    baseline is the same as sharing a top edge. Asserted rather than assumed:
+    if a redrawn mark ever dips below its letters, this is where it shows up.
+    """
+    if mark.size[1] != num.size[1]:
+        raise SystemExit(f'wordmark {mark.size[1]}px and number {num.size[1]}px '
+                         'are not the same height — the baseline is not the box')
+    out = Image.new('RGBA', (mark.size[0] + gap + num.size[0], mark.size[1]), (0, 0, 0, 0))
+    out.alpha_composite(mark, (0, 0))
+    out.alpha_composite(num, (mark.size[0] + gap, 0))
     return out.crop(out.getbbox())
 
 
@@ -238,9 +246,13 @@ def digits_only(row):
     return row.crop((at + width, 0, w, h))
 
 
-def inline(name):
-    """The wordmark with its number re-set to the right, at the wordmark's cap
-    height and on its baseline."""
+def parts(name):
+    """The ATP wordmark, its number at the wordmark's cap height, and that cap.
+
+    These are the parts BOTH tours' stamps are built from: the ATP ships the
+    only numerals either stamp uses now, and its wordmark's box is the box the
+    WTA's is fitted to.
+    """
     src = Image.open(ART / name).convert('RGBA')
     mark, row = split_at_gap(src)
     mark = mark.crop(mark.getbbox())
@@ -250,38 +262,39 @@ def inline(name):
     caps = mark.crop((round(mw * (1 - LETTERS_ONLY)), 0, mw, mh)).getbbox()
     cap = caps[3] - caps[1]
     num = num.resize((max(1, round(num.size[0] * cap / num.size[1])), cap), Image.LANCZOS)
-
-    gap = round(cap * GAP)
-    line = Image.new('RGBA', (mw + gap + num.size[0], max(mh, caps[3])), (0, 0, 0, 0))
-    line.alpha_composite(mark, (0, 0))
-    line.alpha_composite(num, (mw + gap, caps[3] - cap))     # on the baseline
-    return line.crop(line.getbbox()), cap
+    return mark, num, cap
 
 
 # ------------------------------------------------------------------- do it
 
-# ATP first: its number width is what the WTA number is set to.
 TIERS = ['250', '500', '1000']
-lines, atp_num = {}, {}
+lines = {}
 
 for tier in TIERS:
-    out_name = f'atp-{tier}-inline.png'
-    line, cap = inline(STACKED[out_name])
-    line = tight(line, cap)
-    lines[out_name] = line
-    atp_num[tier] = number_width(line)
-    print(f'{STACKED[out_name]}: number inline, {line.size[0]}x{line.size[1]}, '
-          f'number {atp_num[tier]}px wide')
+    atp_file, wta_file = f'atp-{tier}-inline.png', f'{tier}k-tag-plate.png'
+    mark, num, cap = parts(STACKED[atp_file])
+    gap = round(cap * GAP)
+    lines[atp_file] = tight(bottom_line(mark, num, gap), cap)
 
-for tier in TIERS:
-    out_name = f'{tier}k-tag-plate.png'
-    line, cap, ink, bg = strip(TAGS[out_name])
-    line = tight(line, cap)
-    was = number_width(line)
-    line = widen_number(line, atp_num[tier])
-    lines[out_name] = line
-    print(f'{TAGS[out_name]}: {ink} on {bg} -> transparent, number {was} -> '
-          f'{number_width(line)}px wide, {line.size[0]}x{line.size[1]}')
+    # THE WTA WORDMARK, IN THE ATP WORDMARK'S EXACT BOX, beside the ATP's own
+    # numerals in the WTA's ink. Everything the two stamps do not share is now
+    # just the shape of three letters: same numerals, same wordmark box, and
+    # therefore the same line, the same plate and the same margins. Stretching
+    # the WTA's condensed numerals to the ATP's width was the previous attempt
+    # at this and it did not survive contact with the phone (owner,
+    # 2026-09-15) — borrowing the glyphs outright is the version that works.
+    wta_line, wta_cap, ink, bg = strip(TAGS[wta_file])
+    at, wta_gap = split_number(wta_line)
+    wordmark = wta_line.crop((0, 0, at, wta_line.size[1]))
+    wordmark = wordmark.crop(wordmark.getbbox()).resize(mark.size, Image.LANCZOS)
+    lines[wta_file] = tight(bottom_line(wordmark, recolour(num, ink), gap), cap)
+
+    print(f'{tier}: ATP {lines[atp_file].size[0]}x{lines[atp_file].size[1]}  '
+          f'WTA {lines[wta_file].size[0]}x{lines[wta_file].size[1]}  '
+          f'(wordmark fitted to {mark.size[0]}x{mark.size[1]}, '
+          f'numerals {num.size[0]}x{num.size[1]} in {ink})')
+    if lines[atp_file].size != lines[wta_file].size:
+        raise SystemExit('the two tours ended up different sizes')
 
 for out_name, line in lines.items():
     line.save(ART / out_name)
@@ -292,23 +305,17 @@ for out_name, line in lines.items():
 # harness. They are known here, exactly, so they are written out here — and
 # tierStamps.test.mjs reads the PNG headers back to catch this file drifting
 # away from the artwork it describes.
-aspect = {'atp': {}, 'wta': {}}
-for tier in TIERS:
-    a = lines[f'atp-{tier}-inline.png']
-    w = lines[f'{tier}k-tag-plate.png']
-    aspect['atp'][tier] = round(a.size[0] / a.size[1], 4)
-    aspect['wta'][tier] = round(w.size[0] / w.size[1], 4)
-
 rows = ',\n'.join(
-    f"  {tour}: {{ " + ', '.join(f'{t}: {aspect[tour][t]}' for t in TIERS) + ' }'
-    for tour in ('atp', 'wta'))
+    f'  {tour}: {{ ' + ', '.join(
+        f'{t}: {round(lines[f + t + s].size[0] / lines[f + t + s].size[1], 4)}'
+        for t in TIERS) + ' }'
+    for tour, f, s in (('atp', 'atp-', '-inline.png'), ('wta', '', 'k-tag-plate.png')))
 (ART.parent.parent / 'tierStampAspect.js').write_text(
     '/* GENERATED by tools/gen-tier-stamps.py — do not edit.\n'
     ' * Width divided by height of each tier stamp, whose artwork is cropped to\n'
-    ' * its lettering: TierBadge draws it CAP tall and aspect x CAP wide. */\n'
+    ' * its lettering: TierBadge draws it CAP tall and aspect x CAP wide. Both\n'
+    ' * tours are built to one line, so the pairs match exactly. */\n'
     'export default {\n' + rows + ',\n}\n')
 
-print(f'\nwrote {len(lines)} stamps at cap {CAP}px, cropped to the ink:')
-for n, l in lines.items():
-    print(f'  {n:22} {l.size[0]}x{l.size[1]}  aspect {l.size[0] / l.size[1]:.2f}')
-print('  + mobile/tierStampAspect.js')
+print(f'\nwrote {len(lines)} stamps at cap {CAP}px, cropped to the ink, '
+      '+ mobile/tierStampAspect.js')
