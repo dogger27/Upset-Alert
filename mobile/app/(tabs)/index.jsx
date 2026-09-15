@@ -553,18 +553,26 @@ function WeekCard({ draws, done }) {
           sections are for — a draw you can still pick is worth more room than
           one that opens next Saturday. */}
       <View style={s.weekRow}>
-        {draws[0].city ? (
-          <Text style={[T.smallMed, { color: C.inkBody, flexShrink: 1 }]} numberOfLines={1}>
-            {draws[0].city}
-          </Text>
-        ) : null}
+        {/* THE RELEASE DATE ON THE ROW'S CENTRE LINE, by the same two-flexible-
+            slots arithmetic the surface pill uses on the cards above: the sides
+            split what the middle leaves, so the middle's centre is the row's
+            centre. It trailed the city before, which put it in four places
+            down a column of four cards (owner, 2026-09-15). */}
+        <View style={s.weekSide}>
+          {draws[0].city ? (
+            <Text style={[T.smallMed, { color: C.inkBody }]} numberOfLines={1}>
+              {draws[0].city}
+            </Text>
+          ) : null}
+        </View>
         {opens ? (
           <Text style={[T.tiny, { color: C.faint }]} numberOfLines={1}>
             Opens {fmtShort(opens)}
           </Text>
         ) : null}
-        <View style={{ flex: 1 }} />
-        <OrderOfPlay t={oopDraw(draws)} />
+        <View style={[s.weekSide, { alignItems: 'flex-end' }]}>
+          <OrderOfPlay t={oopDraw(draws)} />
+        </View>
       </View>
     </TourCard>
   )
@@ -640,9 +648,13 @@ const s = StyleSheet.create({
   // One row per draw on a combined card, and exactly one row otherwise — so
   // the single-draw card's footer is unchanged by the gap.
   footStack: { gap: S.sm },
-  // A week card's whole body: city, release, order of play. Baseline-aligned,
-  // because the city and the date are two type sizes on one line.
-  weekRow: { flexDirection: 'row', alignItems: 'baseline', gap: S.sm },
+  /* A week card's whole body: city, release, order of play. CENTRED rather
+     than baseline-aligned now — the order of play is a pill when a sheet
+     exists and bare type when it does not, and a baseline puts a pill's text
+     on the line at the cost of hanging its box below everything else. */
+  weekRow: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
+  // Equal shares of what the release date leaves — see the note at WeekCard.
+  weekSide: { flex: 1, minWidth: 0 },
   /* The tour on a footer row, as TYPE rather than a pill. A filled badge is
      for a heading; on a line of 11pt type it outweighed the fact it was
      labelling, and it was on every row of a combined card including the ones
