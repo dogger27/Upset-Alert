@@ -90,6 +90,13 @@ export function SurfacePill({ surface }) {
  * type grows (see CardTitle).
  */
 const CAP = 15
+/* WAY DOWN, for a week card (owner, 2026-09-15). The artwork is back — words
+   said the tier but a stamp says it faster, and it is most of what makes these
+   read as cards rather than list rows — at a size that fits a two-line box:
+   the caps land near the type beside them instead of towering over it, and the
+   plate's padding scales with them, since 6pt of air around 9pt of lettering
+   is a border rather than a margin. */
+const CAP_SMALL = 9
 /* A CREST IS NOT A TIER STAMP, so it is not held to the tier stamps' height.
    These are the tournaments' own marks, mostly square where a tier stamp is a
    6:1 strip, so the strip's 15pt left them a third the size of the type beside
@@ -104,20 +111,28 @@ const CAP = 15
    the real cap on any of them: much past this the crest starts taking room
    from the tournament's name. */
 const CREST = { width: 77, height: 51 }
+/* A crest at a week card's scale. Wider than it is tall by more than the
+   square crests are, so a square one (Wimbledon, Roland Garros) fits by HEIGHT
+   at 26 and the US Open's 2.09:1 flame by width at ~21 — both close enough to
+   the small tier plate's 15 that a Slam no longer changes the row's height. */
+const CREST_SMALL = { width: 44, height: 26 }
 
-export function TierBadge({ tour, tier, name }) {
+export function TierBadge({ tour, tier, name, small }) {
   const { src, aspect } = tierStamp({ tour, tier, name })
   if (!src) return null
   // A crest keeps the square-ish box it has always had, and no plate: it is
   // the tournament's own mark, not a tier stamp (see logos.js).
-  if (!aspect) return <Image source={src} style={CREST} resizeMode="contain" />
+  if (!aspect) {
+    return <Image source={src} style={small ? CREST_SMALL : CREST} resizeMode="contain" />
+  }
   const key = String(tour || 'ATP').toUpperCase() === 'ATP' ? 'M' : 'F'
+  const cap = small ? CAP_SMALL : CAP
   return (
-    <View style={[u.stamp, { backgroundColor: TOUR[key].plate }]}>
+    <View style={[u.stamp, small && u.stampSmall, { backgroundColor: TOUR[key].plate }]}>
       {/* contain as well as the computed width: the arithmetic is right, and
           if it ever stops being right the artwork letterboxes inside the plate
           instead of stretching, which is the failure you can see. */}
-      <Image source={src} style={{ width: aspect * CAP, height: CAP }} resizeMode="contain" />
+      <Image source={src} style={{ width: aspect * cap, height: cap }} resizeMode="contain" />
     </View>
   )
 }
@@ -172,18 +187,17 @@ export function StatusChip({ tone = 'muted', children }) {
  *
  * Two things, because they are one idea — this card is worth less room:
  *
- *   THE TIER AS WORDS, not artwork. The stamp was the tallest thing on a card
- *   that is otherwise a line under a name — 27pt for a tier plate, 51 for a
- *   Slam crest against 19pt of type — so Last Week stood a third taller than
- *   its neighbours on the strength of a picture. Each tour keeps its own ink,
- *   so the label still carries the tour where the plate used to; a combined
- *   Slam says it once, both halves being the same words and it being the
- *   event's tier rather than either draw's.
+ *   A SMALL STAMP. The full-size one was the tallest thing on a card that is
+ *   otherwise a line under a name (27pt for a tier plate, 51 for a Slam crest
+ *   against 19pt of type), so Last Week stood a third taller than its
+ *   neighbours on the strength of a picture. Printing the tier in words fixed
+ *   the height and lost the picture; scaling the picture keeps both (owner,
+ *   2026-09-15).
  *
  *   A TIGHTER BOX. Padding 14 and a 9pt gap are the site's numbers for a card
- *   you can act on; on a two-line card they were a third of its height
- *   (owner, 2026-09-15). Halved, and the horizontal padding left alone so
- *   every card down the column still starts its text at the same x.
+ *   you can act on; on a two-line card they were a third of its height.
+ *   Halved, and the horizontal padding left alone so every card down the
+ *   column still starts its text at the same x.
  */
 export function TourCard({ draws, name, children, footer, href, corner, compact }) {
   const list = (draws || []).filter(Boolean)
@@ -194,12 +208,6 @@ export function TourCard({ draws, name, children, footer, href, corner, compact 
      stamp names a tour and both are shown. */
   const oneTier = combined && isSlamTier(list[0]?.category)
   const stamps = oneTier ? list.slice(0, 1) : list
-  const tiers = !compact ? null
-    : oneTier
-      ? [{ id: 'event', text: list[0].category, color: C.muted }]
-      : list.filter(d => d.category).map(d => ({
-        id: d.id, text: d.category, color: TOUR[d.gender === 'F' ? 'F' : 'M'].text,
-      }))
   const skin = combined
     ? { card: C.card, line: C.border, rule: C.border }
     : { card: TOUR[isATP ? 'M' : 'F'].card, line: TOUR[isATP ? 'M' : 'F'].line,
@@ -216,22 +224,12 @@ export function TourCard({ draws, name, children, footer, href, corner, compact 
               pill's own colour did not go away: it is the plate under the
               tier stamp. */}
           <CardTitle name={name} />
-          {tiers ? (
-            <View style={u.tierRow}>
-              {tiers.map(t => (
-                <Text key={t.id} style={[u.tierText, { color: t.color }]} numberOfLines={1}>
-                  {t.text}
-                </Text>
-              ))}
-            </View>
-          ) : (
-            <View style={u.stampStack}>
-              {stamps.map(d => (
-                <TierBadge key={d.id} tour={d.gender === 'F' ? 'WTA' : 'ATP'}
-                           tier={d.category} name={name} />
-              ))}
-            </View>
-          )}
+          <View style={[u.stampStack, compact && u.stampStackTight]}>
+            {stamps.map(d => (
+              <TierBadge key={d.id} tour={d.gender === 'F' ? 'WTA' : 'ATP'}
+                         tier={d.category} name={name} small={compact} />
+            ))}
+          </View>
         </View>
         {children}
     </>
@@ -290,9 +288,6 @@ export function TourCard({ draws, name, children, footer, href, corner, compact 
  * - No ellipsis. A cut tournament name is the same loss as a cut surname, and
  *   the house rule rules it out (see PlayerName below).
  */
-// Between two tours' tier words on one line.
-const S_TIER_GAP = 8
-
 const TITLE_SIZE = 19
 const TITLE_FACE = 'SairaCondensed_700Bold'
 // 0.01em, as the style sets it — small, but 35 characters of it is 6pt.
@@ -347,6 +342,9 @@ const u = StyleSheet.create({
      The pill's radius, not the card's: this is the pill's replacement, and
      the card's 12 would read as a lozenge on a strip this size. */
   stamp: { borderRadius: 5, padding: 6 },
+  // Padding scales with the lettering: 6pt of air around 9pt of caps is a
+  // border, not a margin.
+  stampSmall: { borderRadius: 4, padding: 3 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   // The spare width of the title row, which is what CardTitle measures to know
   // how much the name may use. It replaced a flex:1 spacer that sat AFTER the
@@ -358,12 +356,9 @@ const u = StyleSheet.create({
   // are different widths (a 250's line is shorter than a 1000's) and a
   // centred pair would read as two things rather than one block.
   stampStack: { gap: 4, alignItems: 'flex-end' },
-  /* The tier in words, where a week card cannot afford the artwork. No shrink:
-     the title beside it is what gives way (CardTitle measures what it is
-     given), and a tier abbreviated to "ATP 5…" would be a worse answer than a
-     shorter name. */
-  tierRow: { flexDirection: 'row', gap: S_TIER_GAP, flexShrink: 0 },
-  tierText: { fontFamily: 'Archivo_700Bold', fontSize: 11, letterSpacing: 0.6 },
+  // Two small plates on a combined week card: the gap scales with them, or the
+  // air between reads as wider than either plate is tall.
+  stampStackTight: { gap: 2 },
   // 1.18rem at 16px root = 18.9; lineHeight 1.05; letterSpacing 0.01em.
   title: {
     fontFamily: TITLE_FACE, fontSize: TITLE_SIZE, lineHeight: leading(20),
