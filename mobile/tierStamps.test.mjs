@@ -57,13 +57,17 @@ const heights = new Set()
 for (const tour of ['atp', 'wta']) for (const t of TIERS) heights.add(pngSize(FILES[tour](t)).h)
 ok('one cap height across all six', heights.size === 1, `(${[...heights].join(', ')}px)`)
 
-// The tier number is set to the same width on both tours (a condensed WTA
-// numeral against a wide ATP italic reads as the smaller of the two at equal
-// height), so a WTA line differs from its ATP twin only by its wordmark.
+/* THE TWO TOURS ARE ONE LINE. Both stamps carry the ATP's numerals — the WTA
+   draws its own condensed, and stretching them to match was tried and did not
+   survive the phone — and the WTA wordmark is fitted to the ATP wordmark's
+   exact box. So the only thing the pair does not share is the shape of three
+   letters, and their lines, plates and margins must come out identical. A
+   difference of even a percent here means the generator's last pass silently
+   stopped pairing them. */
 for (const tier of TIERS) {
-  const d = ASPECT.atp[tier] - ASPECT.wta[tier]
-  ok(`${tier}: WTA line is narrower only by its wordmark`, d > 0.5 && d < 1.3,
-     `(atp ${ASPECT.atp[tier]} - wta ${ASPECT.wta[tier]} = ${d.toFixed(2)})`)
+  const a = pngSize(FILES.atp(tier)), w = pngSize(FILES.wta(tier))
+  ok(`${tier}: both tours are the same line`, a.w === w.w && a.h === w.h,
+     `(atp ${a.w}x${a.h}, wta ${w.w}x${w.h})`)
 }
 
 console.log(fail ? `\n${fail} failed` : '\n  all passed')
