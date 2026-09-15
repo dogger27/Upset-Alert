@@ -13,8 +13,19 @@
 import opentype from 'opentype.js'
 import { readFileSync, writeFileSync } from 'node:fs'
 
-const FONT_DIR = '../mobile/node_modules/@expo-google-fonts/archivo'
-const FACES = ['Archivo_400Regular', 'Archivo_500Medium', 'Archivo_700Bold']
+const FONT_DIR = '../mobile/node_modules/@expo-google-fonts'
+
+// Package per family, because the faces no longer all come from one download.
+// SairaCondensed is here because the dashboard's card title is set in it and
+// has to be shrunk to fit one line: measured against Archivo's tables (the
+// fallback) a condensed name reads ~20% wider than it draws, and the title
+// shrank to fit room it already had.
+const FACES = [
+  ['archivo', 'Archivo_400Regular'],
+  ['archivo', 'Archivo_500Medium'],
+  ['archivo', 'Archivo_700Bold'],
+  ['saira-condensed', 'SairaCondensed_700Bold'],
+]
 
 // Printable ASCII, Latin-1 Supplement, Latin Extended-A (Ł ł Ś ś Ž ž ļ ș …),
 // plus the typographic marks that appear in names and labels.
@@ -25,9 +36,9 @@ for (const [a, b] of ranges) for (let c = a; c <= b; c++) chars += String.fromCo
 chars += extras
 
 const out = {}
-for (const face of FACES) {
-  const dir = face.replace('Archivo_', '')
-  const buf = readFileSync(`${FONT_DIR}/${dir}/${face}.ttf`)
+for (const [pkg, face] of FACES) {
+  const dir = face.replace(/^[A-Za-z]+_/, '')
+  const buf = readFileSync(`${FONT_DIR}/${pkg}/${dir}/${face}.ttf`)
   const font = opentype.parse(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength))
   const upm = font.unitsPerEm
   const adv = []
