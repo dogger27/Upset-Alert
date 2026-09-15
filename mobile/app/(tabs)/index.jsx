@@ -275,18 +275,37 @@ function Section({ title, tone, children }) {
 /* "Sep 21 – 27", the site's date range in its mono face, right-aligned in the
    meta row so it reads as the third item in a summary rather than a heading. */
 
+/* THE SURFACE SITS ON THE ROW'S CENTRE LINE, not after the city.
+ *
+ * It used to follow the city directly, so it landed wherever that name
+ * happened to end — Seoul put it near the left, Singapore most of the way
+ * across — and a column of cards had the same pill in four places (owner,
+ * 2026-09-15). A reader scanning for the surface was re-finding the control on
+ * every row.
+ *
+ * Two FLEXIBLE side slots do it, rather than absolute positioning: they split
+ * whatever the pill leaves equally, which puts the pill's centre on the row's
+ * centre whatever the pill and the gaps measure. The city is left-aligned in
+ * its slot and the dates right-aligned in theirs, so both keep the edges they
+ * had — and each may use half the free width before it has to shrink, which
+ * is more than either needs ("New York City" is the longest and it fits).
+ */
 function Meta({ t, showSurface = true }) {
   return (
     <View style={s.meta}>
-      {t.city ? (
-        <Text style={[T.smallMed, { color: C.inkBody, flexShrink: 1 }]} numberOfLines={1}>
-          {t.city}
-        </Text>
-      ) : null}
+      <View style={s.metaSide}>
+        {t.city ? (
+          <Text style={[T.smallMed, { color: C.inkBody }]} numberOfLines={1}>
+            {t.city}
+          </Text>
+        ) : null}
+      </View>
       {showSurface ? <SurfacePill surface={t.surface} /> : null}
-      {dateRange(t) ? (
-        <Text style={[T.tiny, { color: C.muted, marginLeft: 'auto' }]}>{dateRange(t)}</Text>
-      ) : null}
+      <View style={[s.metaSide, { alignItems: 'flex-end' }]}>
+        {dateRange(t) ? (
+          <Text style={[T.tiny, { color: C.muted }]} numberOfLines={1}>{dateRange(t)}</Text>
+        ) : null}
+      </View>
     </View>
   )
 }
@@ -603,6 +622,9 @@ const s = StyleSheet.create({
   rule: { flex: 1, height: 1, backgroundColor: C.border },
 
   meta: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  // Equal shares of what the pill leaves — see the note at Meta. minWidth 0 so
+  // a long city name shrinks inside its slot instead of widening it.
+  metaSide: { flex: 1, minWidth: 0 },
   footRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: S.sm },
   // One row per draw on a combined card, and exactly one row otherwise — so
   // the single-draw card's footer is unchanged by the gap.
