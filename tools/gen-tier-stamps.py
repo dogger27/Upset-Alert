@@ -56,7 +56,21 @@ ART = Path(__file__).parent.parent / 'mobile' / 'assets' / 'logos'
 # happens to be drawn in. Both are TOUR[*].text in theme.js, and
 # tierStamps.test.mjs fails if these drift from it.
 INK_SOURCE = 'categorystamps_250-dark.png'
-WTA_INK = (255, 138, 181)       # #ff8ab5 — theme.js TOUR.F.text
+WTA_INK = (255, 179, 198)       # #ffb3c6 — theme.js TOUR.F.text, the site's --wta-300
+
+# THE SWOOSH'S SIDE BEARING. The ATP mark opens with a wedge that tapers to
+# nothing, and for its first ~28px it covers under 8% of the line's height —
+# a hairline at 15pt, and invisible. But ink is ink: it set the artwork's
+# bounding box, so the badge's padding measured to the tip of a tail nobody can
+# see and the mark appeared indented by about 13pt against the 6pt on its right
+# (owner, 2026-09-15).
+#
+# So the wispy part is treated as a SIDE BEARING and trimmed, which is what a
+# type designer does with an overshoot: the box is set on the substance of the
+# glyph, and what tapers past it is allowed to hang into the margin — here, by
+# not being in the box at all. At this threshold the cut lands where the wedge
+# is 1.5pt tall on screen, so the swoosh still reads as a swoosh.
+BEARING = 0.10
 
 
 def flat_colour(name):
@@ -132,6 +146,23 @@ def recolour(art, ink):
     """
     out = Image.new('RGBA', art.size, (*ink, 0))
     out.putalpha(art.split()[3])
+    return out
+
+
+def pad_to(art, size):
+    """The same artwork on a canvas of exactly `size`, centred.
+
+    For ROUNDING ONLY. Both tours' lines are composed from the same pieces and
+    come out the same width, but each is cropped to its ink at the end, and a
+    LANCZOS resize can leave the wordmark's last column fully transparent — so
+    the WTA's 1000 landed a single pixel narrower than the ATP's. A pixel of
+    transparency either side is invisible and keeps the pair's aspect ratios
+    identical, which the badge relies on; anything larger than rounding is a
+    real break and stays a hard failure at the call site.
+    """
+    out = Image.new('RGBA', size, (0, 0, 0, 0))
+    out.alpha_composite(art, ((size[0] - art.size[0]) // 2,
+                              (size[1] - art.size[1]) // 2))
     return out
 
 
@@ -274,6 +305,17 @@ def digits_only(row):
     return row.crop((at + width, 0, w, h))
 
 
+def trim_bearing(mark):
+    """Drop the leading columns whose ink covers less than BEARING of the
+    height — see the note on BEARING. Nothing is trimmed from a mark that
+    starts on substance, which is every one but the ATP's."""
+    w, h = mark.size
+    a = mark.split()[3]
+    solid = [x for x in range(w)
+             if sum(1 for y in range(h) if a.getpixel((x, y)) > 12) >= h * BEARING]
+    return mark.crop((solid[0], 0, w, h)) if solid else mark
+
+
 def parts(name):
     """The ATP wordmark, its number at the wordmark's cap height, and that cap.
 
@@ -283,7 +325,7 @@ def parts(name):
     """
     src = Image.open(ART / name).convert('RGBA')
     mark, row = split_at_gap(src)
-    mark = mark.crop(mark.getbbox())
+    mark = trim_bearing(mark.crop(mark.getbbox()))
     num = digits_only(row)
 
     mw, mh = mark.size
@@ -322,12 +364,18 @@ for tier in TIERS:
     lines[wta_file] = tight(
         bottom_line(recolour(wordmark, WTA_INK), recolour(num, WTA_INK), gap), cap)
 
-    print(f'{tier}: ATP {lines[atp_file].size[0]}x{lines[atp_file].size[1]}  '
-          f'WTA {lines[wta_file].size[0]}x{lines[wta_file].size[1]}  '
+    slip = tuple(a - b for a, b in zip(lines[atp_file].size, lines[wta_file].size))
+    if max(abs(v) for v in slip) > 2:
+        raise SystemExit(f'{tier}: the two tours ended up different sizes '
+                         f'({lines[atp_file].size} vs {lines[wta_file].size}) — '
+                         'they are built from the same pieces, so this is not rounding')
+    if any(slip):
+        lines[wta_file] = pad_to(lines[wta_file], lines[atp_file].size)
+
+    print(f'{tier}: both tours {lines[atp_file].size[0]}x{lines[atp_file].size[1]}'
+          f'{f" (WTA padded by {slip})" if any(slip) else ""}  '
           f'(wordmark fitted to {mark.size[0]}x{mark.size[1]}, '
           f'numerals {num.size[0]}x{num.size[1]}; tag lettering was {ink} on {bg})')
-    if lines[atp_file].size != lines[wta_file].size:
-        raise SystemExit('the two tours ended up different sizes')
 
 for out_name, line in lines.items():
     line.save(ART / out_name)

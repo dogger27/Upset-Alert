@@ -3,11 +3,11 @@
  * its lettering: TierBadge draws it CAP tall and aspect x CAP wide. Both
  * tours are built to one line, so the pairs match exactly. */
 export default {
-  atp: { 250: 5.8818, 500: 5.9364, 1000: 6.4455 },
-  wta: { 250: 5.8818, 500: 5.9364, 1000: 6.4455 },
+  atp: { 250: 5.5364, 500: 5.5909, 1000: 6.1091 },
+  wta: { 250: 5.5364, 500: 5.5909, 1000: 6.1091 },
 }
 
 /* The ink each tour's artwork is flattened to: TOUR[*].text in
  * theme.js. Exported so a token change cannot silently leave the PNGs
  * behind — tierStamps.test.mjs compares the two. */
-export const INK = { atp: '#8fb6ff', wta: '#ff8ab5' }
+export const INK = { atp: '#8fb6ff', wta: '#ffb3c6' }
