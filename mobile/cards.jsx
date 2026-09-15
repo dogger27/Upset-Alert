@@ -11,7 +11,7 @@
 import { useMemo, useState } from 'react'
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native'
 import { leading } from './fontScale.js'
-import { tierStamp } from './logos'
+import { isSlamTier, tierStamp } from './logos'
 import { flagEmoji } from './flags'
 import { CardLink } from './ui'
 import { textWidth } from './measure.js'
@@ -21,10 +21,10 @@ import { BADGE, C, R, SHADOW, T, TOUR } from './theme'
 /* The accent bar: a 4px vertical gradient from the tour's 500 to its 700.
    Six stacked bands rather than a real gradient — expo-linear-gradient is a
    native module and another build, and across four points nobody can tell. */
-export function AccentBar({ from, to, width = 4 }) {
+export function AccentBar({ from, to, width = 4, style }) {
   const steps = 6
   return (
-    <View style={{ width }}>
+    <View style={[{ width }, style]}>
       {Array.from({ length: steps }, (_, i) => (
         <View key={i} style={{ flex: 1, backgroundColor: mix(from, to, i / (steps - 1)) }} />
       ))}
@@ -154,8 +154,32 @@ export function StatusChip({ tone = 'muted', children }) {
    it (the Competing star). It is a SIBLING of the card, not a child: the card
    clips its own overflow so the accent bar keeps the corner radius, and a
    child would be cut off at exactly the edge the mark is meant to sit on. */
-export function TourCard({ tour, tier, name, children, footer, href, corner }) {
-  const isATP = String(tour || 'ATP').toUpperCase() === 'ATP'
+/* ONE CARD PER EVENT, not per draw.
+ *
+ * `draws` is the event's draws — one, or the two of a combined event (men
+ * first; drawsByTournament settles that). Two of them used to mean two cards
+ * with the same name, the same city, the same dates and the same crest,
+ * distinguished by their tint (owner, 2026-09-15). Now they are one card, and
+ * the things that differ per tour — the tier stamp, and whatever the caller
+ * puts in the footer — are what appears twice inside it.
+ *
+ * A combined card is NEUTRAL. The tint says which tour a card belongs to and
+ * this one belongs to both, so it goes back to the palette's own card colour;
+ * the accent bar carries both tours instead, split down the middle, which is
+ * the one place a tour colour still means something here.
+ */
+export function TourCard({ draws, name, children, footer, href, corner }) {
+  const list = (draws || []).filter(Boolean)
+  const combined = list.length > 1
+  const isATP = list[0]?.gender !== 'F'
+  /* A Slam's crest is the EVENT's mark, the same artwork for either tour, so
+     stacking it twice would print the same picture twice. Every other tier
+     stamp names a tour and both are shown. */
+  const stamps = combined && isSlamTier(list[0]?.category) ? list.slice(0, 1) : list
+  const skin = combined
+    ? { card: C.card, line: C.border, rule: C.border }
+    : { card: TOUR[isATP ? 'M' : 'F'].card, line: TOUR[isATP ? 'M' : 'F'].line,
+        rule: TOUR[isATP ? 'M' : 'F'].plate }
   const body = (
     <>
         <View style={u.titleRow}>
@@ -168,12 +192,16 @@ export function TourCard({ tour, tier, name, children, footer, href, corner }) {
               pill's own colour did not go away: it is the plate under the
               tier stamp. */}
           <CardTitle name={name} />
-          <TierBadge tour={tour} tier={tier} name={name} />
+          <View style={u.stampStack}>
+            {stamps.map(d => (
+              <TierBadge key={d.id} tour={d.gender === 'F' ? 'WTA' : 'ATP'}
+                         tier={d.category} name={name} />
+            ))}
+          </View>
         </View>
         {children}
     </>
   )
-  const t = TOUR[isATP ? 'M' : 'F']
   return (
     <View>
       {/* SHADED BY TOUR, edge to edge: the site's own answer for a card that
@@ -181,13 +209,21 @@ export function TourCard({ tour, tier, name, children, footer, href, corner }) {
           values). The border and the footer's rule come along — a pink card
           with the palette's grey-green edge reads as an unfinished state, not
           a colour choice. */}
-      <View style={[u.card, { backgroundColor: t.card, borderColor: t.line }]}>
-        <AccentBar from={isATP ? C.atp : C.wta} to={isATP ? C.atpDeep : C.wtaDeep} />
+      <View style={[u.card, { backgroundColor: skin.card, borderColor: skin.line }]}>
+        {combined ? (
+          // Both tours, split down the bar. Men above, as everywhere else.
+          <View style={{ width: 4 }}>
+            <AccentBar from={C.atp} to={C.atpDeep} style={{ flex: 1 }} />
+            <AccentBar from={C.wta} to={C.wtaDeep} style={{ flex: 1 }} />
+          </View>
+        ) : (
+          <AccentBar from={isATP ? C.atp : C.wta} to={isATP ? C.atpDeep : C.wtaDeep} />
+        )}
         <View style={u.body}>
           {href
             ? <CardLink href={href} style={u.bodyLink} pressedOpacity={0.75}>{body}</CardLink>
             : <View style={u.bodyLink}>{body}</View>}
-          {footer ? <View style={[u.footer, { borderTopColor: t.plate }]}>{footer}</View> : null}
+          {footer ? <View style={[u.footer, { borderTopColor: skin.rule }]}>{footer}</View> : null}
         </View>
       </View>
       {/* box-none, not none: the slot itself must never swallow a tap meant
@@ -276,6 +312,10 @@ const u = StyleSheet.create({
   // left the name content-sized, so onLayout could only report how much room
   // the name had taken — never how much there was.
   titleSlot: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center' },
+  // Stacked, and right-aligned so the two tours' plates share an edge — they
+  // are different widths (a 250's line is shorter than a 1000's) and a
+  // centred pair would read as two things rather than one block.
+  stampStack: { gap: 4, alignItems: 'flex-end' },
   // 1.18rem at 16px root = 18.9; lineHeight 1.05; letterSpacing 0.01em.
   title: {
     fontFamily: TITLE_FACE, fontSize: TITLE_SIZE, lineHeight: leading(20),
