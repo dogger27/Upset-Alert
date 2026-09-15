@@ -97,7 +97,18 @@ export function splitPlayerName(raw) {
   }
 
   const words = s.split(/\s+/).filter(Boolean)
-  const lastIdx = words.findIndex(w => w === w.toUpperCase() && /[A-Z]/.test(w))
+  // AN INITIAL IS UPPERCASE WITHOUT BEING A SURNAME. The WTA abbreviates the
+  // teams in an unresolved doubles slot — "C. Bucsa / N. Melichar-Martinez OR
+  // S. Cabezas Dominguez / M. Gomez Pezuela Cano" — and "C." passes a bare
+  // caps test, so the whole "C. Bucsa" came back as the surname. The "or" line
+  // meant to print four surnames printed all four printed names instead, and
+  // Guadalajara 2026-09-16 ran it off the right edge of the card at both widths
+  // ("…Gomez Pezuela Can"). Same exception the backend's readers already make
+  // (sofascore_doubles._sheet_people: "H. Nys"): a surname has two letters and
+  // is not a run of initials.
+  const isSurname = w => w === w.toUpperCase() && /[A-Z]/.test(w)
+    && (w.match(/\p{L}/gu) || []).length >= 2 && !/^(?:\p{Lu}\.-?)+$/u.test(w)
+  const lastIdx = words.findIndex(isSurname)
   if (lastIdx === -1) {
     // NO CAPITALISED SURNAME, so this is not a sheet name. A slot resolved from
     // the bracket carries the draw's spelling — "Frances Tiafoe", not the
