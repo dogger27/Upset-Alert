@@ -10,6 +10,8 @@
  * a retina phone.
  */
 
+import ASPECT from './tierStampAspect.js'
+
 const SLAM = {
   australian: require('./assets/logos/slams/slam_Australian.png'),
   roland: require('./assets/logos/slams/slam_RolandGarros.svg-dark.png'),
@@ -62,21 +64,34 @@ const WTA = {
    is a second copy to forget. */
 export const isSlamTier = tier => /slam|gs|grand/i.test(String(tier || ''))
 
+/* `{ src, aspect }`, not just the source. The tier artwork is cropped to its
+   lettering, so the badge sizes it by its own shape (TierBadge) rather than
+   fitting it into a box — and the aspect ratios are generated beside the
+   artwork, because Image.resolveAssetSource can answer this on iOS but does
+   not exist in react-native-web, where asking red-boxed the visual harness.
+
+   A crest has no aspect: it is left as its tournament draws it and keeps the
+   fixed box it always had. One branch decides which of the two a stamp is, so
+   the source and the way it is measured can never disagree. */
 export function tierStamp({ tour, tier, name }) {
   const isATP = String(tour || 'ATP').toUpperCase() === 'ATP'
-  const isSlam = isSlamTier(tier)
 
-  if (isSlam) {
+  if (isSlamTier(tier)) {
     const n = (name || '').toLowerCase()
-    if (n.includes('australian')) return SLAM.australian
-    if (n.includes('roland') || n.includes('french')) return SLAM.roland
-    if (n.includes('wimbledon')) return SLAM.wimbledon
-    if (n.includes('us open')) return SLAM.us
-    return isATP ? SLAM.atp : SLAM.wta
+    const crest = n.includes('australian') ? SLAM.australian
+      : n.includes('roland') || n.includes('french') ? SLAM.roland
+      : n.includes('wimbledon') ? SLAM.wimbledon
+      : n.includes('us open') ? SLAM.us
+      : isATP ? SLAM.atp : SLAM.wta
+    return { src: crest, aspect: null }
   }
 
   // "ATP 500" -> 500. Anything unrecognised is a 250, matching the web.
   const num = String(tier || '').replace(/\D/g, '') || '250'
   const table = isATP ? ATP : WTA
-  return table[num] || table['250']
+  const tour_ = isATP ? 'atp' : 'wta'
+  return {
+    src: table[num] || table['250'],
+    aspect: ASPECT[tour_][num] ?? ASPECT[tour_]['250'],
+  }
 }
