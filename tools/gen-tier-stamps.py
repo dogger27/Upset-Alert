@@ -43,6 +43,34 @@ from PIL import Image
 
 ART = Path(__file__).parent.parent / 'mobile' / 'assets' / 'logos'
 
+# ------------------------------------------------------------------- the ink
+
+# Every stamp is flattened to ONE colour per tour. The 250s already were —
+# they are flat silhouettes — and the ATP's 500 and 1000 ship as silver and
+# gold gradients, the WTA's tags as white on a tier colour, so three tiers of
+# one tour arrived in three different inks (owner, 2026-09-15).
+#
+# The ATP's is read out of its own 250 artwork rather than typed in. The WTA
+# has no pink anywhere in its artwork, so that one comes from the palette: the
+# site's --wta-text, which is the counterpart of the --atp-text the ATP's 250
+# happens to be drawn in. Both are TOUR[*].text in theme.js, and
+# tierStamps.test.mjs fails if these drift from it.
+INK_SOURCE = 'categorystamps_250-dark.png'
+WTA_INK = (255, 138, 181)       # #ff8ab5 — theme.js TOUR.F.text
+
+
+def flat_colour(name):
+    """The one colour a flat silhouette is drawn in."""
+    im = Image.open(ART / name).convert('RGBA')
+    w, h = im.size
+    px = im.load()
+    c = Counter(px[x, y][:3] for y in range(0, h, 2) for x in range(0, w, 2)
+                if px[x, y][3] == 255)
+    if not c:
+        raise SystemExit(f'{name}: nothing opaque to read a colour from')
+    return c.most_common(1)[0][0]
+
+
 # ---------------------------------------------------------------- the canvas
 
 # The cap height every stamp is set at. Close to the WTA tags' own 106-119px so
@@ -270,11 +298,15 @@ def parts(name):
 TIERS = ['250', '500', '1000']
 lines = {}
 
+ATP_INK = flat_colour(INK_SOURCE)
+print(f'ink: ATP {ATP_INK} (read from {INK_SOURCE}), WTA {WTA_INK} (theme)\n')
+
 for tier in TIERS:
     atp_file, wta_file = f'atp-{tier}-inline.png', f'{tier}k-tag-plate.png'
     mark, num, cap = parts(STACKED[atp_file])
     gap = round(cap * GAP)
-    lines[atp_file] = tight(bottom_line(mark, num, gap), cap)
+    lines[atp_file] = tight(
+        bottom_line(recolour(mark, ATP_INK), recolour(num, ATP_INK), gap), cap)
 
     # THE WTA WORDMARK, IN THE ATP WORDMARK'S EXACT BOX, beside the ATP's own
     # numerals in the WTA's ink. Everything the two stamps do not share is now
@@ -287,12 +319,13 @@ for tier in TIERS:
     at, wta_gap = split_number(wta_line)
     wordmark = wta_line.crop((0, 0, at, wta_line.size[1]))
     wordmark = wordmark.crop(wordmark.getbbox()).resize(mark.size, Image.LANCZOS)
-    lines[wta_file] = tight(bottom_line(wordmark, recolour(num, ink), gap), cap)
+    lines[wta_file] = tight(
+        bottom_line(recolour(wordmark, WTA_INK), recolour(num, WTA_INK), gap), cap)
 
     print(f'{tier}: ATP {lines[atp_file].size[0]}x{lines[atp_file].size[1]}  '
           f'WTA {lines[wta_file].size[0]}x{lines[wta_file].size[1]}  '
           f'(wordmark fitted to {mark.size[0]}x{mark.size[1]}, '
-          f'numerals {num.size[0]}x{num.size[1]} in {ink})')
+          f'numerals {num.size[0]}x{num.size[1]}; tag lettering was {ink} on {bg})')
     if lines[atp_file].size != lines[wta_file].size:
         raise SystemExit('the two tours ended up different sizes')
 
@@ -315,7 +348,12 @@ rows = ',\n'.join(
     ' * Width divided by height of each tier stamp, whose artwork is cropped to\n'
     ' * its lettering: TierBadge draws it CAP tall and aspect x CAP wide. Both\n'
     ' * tours are built to one line, so the pairs match exactly. */\n'
-    'export default {\n' + rows + ',\n}\n')
+    'export default {\n' + rows + ',\n}\n\n'
+    '/* The ink each tour\'s artwork is flattened to: TOUR[*].text in\n'
+    ' * theme.js. Exported so a token change cannot silently leave the PNGs\n'
+    ' * behind — tierStamps.test.mjs compares the two. */\n'
+    'export const INK = { atp: %r, wta: %r }\n'
+    % ('#%02x%02x%02x' % ATP_INK, '#%02x%02x%02x' % WTA_INK))
 
 print(f'\nwrote {len(lines)} stamps at cap {CAP}px, cropped to the ink, '
       '+ mobile/tierStampAspect.js')

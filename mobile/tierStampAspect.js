@@ -6,3 +6,8 @@ export default {
   atp: { 250: 5.8818, 500: 5.9364, 1000: 6.4455 },
   wta: { 250: 5.8818, 500: 5.9364, 1000: 6.4455 },
 }
+
+/* The ink each tour's artwork is flattened to: TOUR[*].text in
+ * theme.js. Exported so a token change cannot silently leave the PNGs
+ * behind — tierStamps.test.mjs compares the two. */
+export const INK = { atp: '#8fb6ff', wta: '#ff8ab5' }

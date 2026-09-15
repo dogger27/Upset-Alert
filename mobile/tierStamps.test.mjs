@@ -18,7 +18,8 @@
  *   node tierStamps.test.mjs
  */
 import { readFileSync } from 'node:fs'
-import ASPECT from './tierStampAspect.js'
+import ASPECT, { INK } from './tierStampAspect.js'
+import { TOUR } from './theme.js'
 
 const FILES = {
   atp: t => `assets/logos/atp-${t}-inline.png`,
@@ -69,6 +70,14 @@ for (const tier of TIERS) {
   ok(`${tier}: both tours are the same line`, a.w === w.w && a.h === w.h,
      `(atp ${a.w}x${a.h}, wta ${w.w}x${w.h})`)
 }
+
+/* THE BAKED INK IS THE TOKEN. Each tour's stamps are flattened to one colour
+   at generate time — the ATP's read out of its own 250 artwork, the WTA's from
+   the palette, since the WTA draws no pink — and a PNG cannot follow a token
+   that changes later. Editing TOUR.text without re-running the generator
+   would leave the badge in the old ink with nothing to say so. */
+ok('ATP ink is TOUR.M.text', INK.atp === TOUR.M.text, `(${INK.atp} vs ${TOUR.M.text})`)
+ok('WTA ink is TOUR.F.text', INK.wta === TOUR.F.text, `(${INK.wta} vs ${TOUR.F.text})`)
 
 console.log(fail ? `\n${fail} failed` : '\n  all passed')
 process.exit(fail ? 1 : 0)
