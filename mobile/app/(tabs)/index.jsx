@@ -349,10 +349,21 @@ function ActiveCard({ t, userId, pickState }) {
   )
 }
 
+/* TEMPORARY, AND MEANT TO BE (owner, 2026-09-15, "for testing purposes"):
+   Next week and Last week render as full cards, the same size and shape as an
+   Active one, instead of the single line they are worth. Flip this back to
+   false — the compact row below is untouched and takes over again — or revert
+   the commit that added it. Worth keeping around while it is on: these two
+   buckets are where the ATP cards and the slam crests live, so they are the
+   only place on this screen the blue tint and an untinted crest can be seen
+   at all. */
+const WEEK_ROWS_AS_CARDS = true
+
 /* Next/last week: one line, because that is what they are worth. The tour dot
    carries the only thing that distinguishes them at a glance. */
 function CompactRow({ t, done }) {
   const isATP = t.gender !== 'F'
+  if (WEEK_ROWS_AS_CARDS) return <WeekCard t={t} done={done} />
   /* Upcoming: the site shows WHEN THE DRAW COMES OUT, which is the only thing
      a reader can act on before it does — the date range says nothing they
      need yet. Last week: the order of play still matters (results), so it
@@ -386,6 +397,31 @@ function CompactRow({ t, done }) {
         </CardLink>
       ) : null}
     </View>
+  )
+}
+
+/* The week rows as full cards — see WEEK_ROWS_AS_CARDS. Meta and the footer
+   row are the Active card's, not copies of them, so "the same formatting" is
+   true by construction rather than by my matching two sets of styles. The
+   footer's left slot carries the one fact each bucket has: when picks open for
+   next week's draw, and the dates for last week's. */
+function WeekCard({ t, done }) {
+  const opens = !done ? (t.draw_release_direct || t.draw_release_qualifiers) : null
+  return (
+    <TourCard
+      tour={t.gender === 'F' ? 'WTA' : 'ATP'} tier={t.category} name={t.name}
+      href={hasDrawData(t) ? `/draw/${t.id}` : null}
+      footer={
+        <View style={s.footRow}>
+          <Text style={[T.tiny, { color: C.faint }]} numberOfLines={1}>
+            {opens ? `Opens ${fmtShort(opens)}` : done ? 'Finished' : ''}
+          </Text>
+          <OrderOfPlay t={t} />
+        </View>
+      }
+    >
+      <Meta t={t} />
+    </TourCard>
   )
 }
 
