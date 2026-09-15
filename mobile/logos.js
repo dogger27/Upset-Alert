@@ -16,7 +16,13 @@ const SLAM = {
   australian: require('./assets/logos/slams/slam_Australian.png'),
   roland: require('./assets/logos/slams/slam_RolandGarros.svg-dark.png'),
   wimbledon: require('./assets/logos/slams/slam_Wimbledon.svg-dark.png'),
-  us: require('./assets/logos/slams/slam_US.svg-dark.png'),
+  /* THE FLAME, WITHOUT "us open" UNDER IT. The card's title already says
+     which tournament this is, in 19pt type at the other end of the same row,
+     so the crest was saying it a second time in a smaller voice. Cut at the
+     blank band across the artwork by gen-tier-stamps.py; the original stays
+     beside it as that script's input, and it is the only crest with a
+     wordmark to separate. */
+  us: require('./assets/logos/slams/slam_US-mark.png'),
   atp: require('./assets/logos/slams/slam_atp.png'),
   wta: require('./assets/logos/slams/slam_wta.png'),
 }
