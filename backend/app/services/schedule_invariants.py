@@ -876,6 +876,31 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
             when = _naive_utc(_printed_instant(e, venue_tz))
             if when and (e.court not in anchor or when < anchor[e.court]):
                 anchor[e.court] = when
+        # 2026-09-15, SP Open — THE PULL THE CLOCK CANNOT SEE. Rain stopped
+        # play and the 5:58 PM reissue cut six unplayed R32 matches off
+        # Tuesday; every court had begun at 10:30 AM, so the rule below held
+        # its tongue, the grace window hid `slot_unconfirmed`, and the next
+        # sheet belongs to Wednesday — this was CLEAN on a page printing
+        # Lamens/Alves between Lys/Ce and Badosa and Osuigwe/Quevedo at
+        # "~2:30 AM". The mid-session proof, in the law's own reading: a slot
+        # bound to a bracket match with no trace of play, on a court where a
+        # match this sheet still prints had started and not finished when the
+        # sheet was published. Read off `started_at`/`completed_at`/
+        # `winner_id` only — the service also reads the sofa_* pair, so a
+        # disagreement between the two feeds surfaces here instead of being
+        # shared.
+        in_play: set = set()
+        on_court = {e.match_id: e.court for e in rows
+                    if (e.last_document_id or 0) == latest_doc and e.match_id}
+        if on_court and published:
+            from app.models.tournament import Match as _M
+            for mid, began, done, won in (await db.execute(
+                    select(_M.id, _M.started_at, _M.completed_at, _M.winner_id)
+                    .where(_M.id.in_(list(on_court))))).all():
+                began, done = _naive_utc(began), _naive_utc(done)
+                if (began and began <= published
+                        and (done > published if done else not won)):
+                    in_play.add(on_court[mid])
         for e in rows:
             if (e.last_document_id or 0) >= latest_doc:
                 continue
@@ -886,6 +911,13 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                      f"document {latest_doc} dropped this slot and was "
                      f"published before {e.court} had played anything — it was "
                      f"pulled, and it is still chaining the clocks behind it")
+            elif (never_played(e) and e.match_id and venue_tz
+                  and e.court in in_play):
+                flag("slot_pulled_mid_session_not_retired", e,
+                     f"document {latest_doc} dropped this slot while {e.court} "
+                     f"had a match in play and its bracket match was never "
+                     f"started — it was pulled, not played, and it is still "
+                     f"chaining the clocks behind it")
             elif revisions_since(doc_fetched, e.last_document_id) >= UNCONFIRMED_GRACE:
                 # ONE REVISION OF SILENCE IS THE WINDOW, NOT A FAULT. A sheet
                 # that stops printing a row has either pulled it — which

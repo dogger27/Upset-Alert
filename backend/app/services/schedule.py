@@ -1973,29 +1973,53 @@ async def _dedupe_day(db, tournament_id: int, play_date: date) -> int:
     return dropped
 
 
-def _slot_was_pulled(row, court_anchor, published, match_played: bool) -> bool:
+def _slot_was_pulled(row, court_anchor, published, match_played: bool,
+                     court_in_play: bool = False) -> bool:
     """Can this dropped slot be PROVEN to have been pulled, not played?
 
     `court_anchor` is the first printed start on the row's court according to
     the revision that dropped it, `published` when that revision was fetched.
+    `court_in_play` says a match that revision still prints on the same court
+    had started, by the results feed's clock, and not finished at `published`.
     Split out from the pass below so the judgement can be tested without a
     database — see tests/test_pulled_slot.py, which runs it over the whole
     stored corpus of dropped rows.
     """
-    if court_anchor is None or published is None or court_anchor <= published:
-        # Either the sheet gives this court no clock to reason from, or the
-        # court was already underway when it was published — in which case a
-        # missing slot may simply be one that had finished.
-        return False
     # Any trace of having been on court — the same disqualification
     # `_dedupe_day` applies before it will call a row a withdrawal ghost, plus
     # the sheet's own printed score and status, which for a doubles or
     # qualifying row is the only sighting of play that ever exists.
-    return not (row.started_at or row.completed_at or row.winner_side
-                or row.live_scores_json or row.scores_json or row.printed_score
-                or row.printed_status
-                or (row.status or 'scheduled') != 'scheduled'
-                or match_played)
+    if (row.started_at or row.completed_at or row.winner_side
+            or row.live_scores_json or row.scores_json or row.printed_score
+            or row.printed_status
+            or (row.status or 'scheduled') != 'scheduled'
+            or match_played):
+        return False
+    if (court_anchor is not None and published is not None
+            and court_anchor > published):
+        # The court had not begun when the sheet came out, so nothing on it
+        # can have been dropped for being finished.
+        return True
+    # MID-SESSION, SP Open 2026-09-15. Rain stopped play and the 5:58 PM
+    # reissue cut six unplayed R32 matches off Tuesday. Every court had begun
+    # at 10:30 AM, so the clock above could say nothing, the rows stayed, and
+    # the page printed Lamens/Alves between Lys/Ce and Badosa — whose "Not
+    # before 5:30 PM" rendered "~8:15 PM" — with Stoiana/Liu and
+    # Osuigwe/Quevedo chained out past midnight. Nothing would ever have
+    # retired them: the next sheet belongs to Wednesday.
+    #
+    # The proof that survives a session in progress is the bracket's own
+    # record, so it answers only for a slot bound to a bracket match: that
+    # match carries no start, result or live score (checked above), AND the
+    # feed that writes those was watching this court when the sheet came out,
+    # because a match the sheet still prints there was underway. Anything
+    # played earlier on the court finished before that one began, with the
+    # feed running. Doubles and qualifying rows have no bracket match —
+    # Cincinnati 2026-08-19's two FINISHED doubles look exactly this untouched
+    # — so they keep waiting for the clock. And a sheet that still prints
+    # final scores proves nothing: Cincinnati's reissue printed four of them
+    # and dropped those doubles anyway.
+    return bool(court_in_play and getattr(row, 'match_id', None))
 
 
 async def _retire_pulled_slots(db, tournament_id: int, play_date: date,
@@ -2024,10 +2048,14 @@ async def _retire_pulled_slots(db, tournament_id: int, play_date: date,
     is certain: a court whose FIRST printed start on the new sheet was still
     in the future when that sheet was published has not played anything yet,
     so nothing on it can have been dropped for being finished. A revision
-    published mid-session is left entirely alone — `slot_unconfirmed` in
-    schedule_invariants goes on reporting the row, which is the status quo
-    rather than a guess. Measured over every tournament-day stored: this
-    deletes the one SP Open row and none of the five historical ones.
+    published mid-session may retire only a slot whose bracket match proves it
+    unplayed while the court was demonstrably being watched (SP Open
+    2026-09-15, see `_slot_was_pulled`); anything else is left alone and
+    `slot_unconfirmed` in schedule_invariants goes on reporting it, which is
+    the status quo rather than a guess. Measured over every tournament-day
+    stored: the clock deleted the one SP Open row and none of the five
+    historical ones; the mid-session proof adds SP Open Tuesday's six and
+    still none of those five.
 
     `blank_sheet` is the caller's proof that the revision printed no matches
     AT ALL (`oop_parser.sheet_is_blank`, which counts the sheet's own match
@@ -2114,10 +2142,31 @@ async def _retire_pulled_slots(db, tournament_id: int, play_date: date,
             match_played[mid] = bool(winner or done or began or live
                                      or sofa_done or sofa_began)
 
+    # Courts with a match underway at `published`, read off the matches THIS
+    # sheet still prints there — the mid-session proof in `_slot_was_pulled`.
+    # A winner with no completion time finished at an unknown moment, which
+    # proves nothing about publication, so it does not count. A blank sheet
+    # prints no match on any court and never gets here with one.
+    on_court = {r.match_id: r.court for r in rows
+                if (r.last_document_id or 0) == doc.id and r.match_id}
+    in_play: set[str] = set()
+    if on_court:
+        for mid, winner, done, began, sofa_done, sofa_began in (await db.execute(
+                select(Match.id, Match.winner_id, Match.completed_at,
+                       Match.started_at, Match.sofa_completed_at,
+                       Match.sofa_started_at)
+                .where(Match.id.in_(list(on_court))))).all():
+            start = _aware(began or sofa_began)
+            end = _aware(done or sofa_done)
+            if (start and start <= published
+                    and (end > published if end else not winner)):
+                in_play.add(on_court[mid])
+
     retired: list[str] = []
     for r in stale:
         if not _slot_was_pulled(r, anchors.get(r.court), published,
-                                bool(match_played.get(r.match_id))):
+                                bool(match_played.get(r.match_id)),
+                                court_in_play=r.court in in_play):
             continue
         retired.append(f"{_printed_pairing(r)} ({r.court}, "
                        f"{r.round_label or '?'} {r.discipline})")
