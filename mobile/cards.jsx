@@ -383,7 +383,20 @@ export function TourBadge({ gender, tour, discipline, level, style }) {
    a copy in each is a copy to forget. */
 export const headerTour = { marginHorizontal: 4, borderRadius: 999 }
 
-export function TourSwitch({ draws, currentId, onPick, showLevel, style }) {
+/* `pairLevel`: does the level ride along when there are TWO pills?
+ *
+ * On its own a pill is the only place the tier can read — the standings header
+ * asked for "WTA 500" there outright (owner, 2026-09-12). Doubled it says
+ * nothing it did not already say: "ATP GS" beside "WTA GS" spends ~22pt a side
+ * repeating the one fact both halves share, and on the draw's header that is
+ * width taken straight out of the tournament's name, which was reading
+ * "US Op…" (owner, 2026-09-15). The tours differ; the tier does not.
+ *
+ * Default true, so the screens that asked for the level keep it. The switch
+ * still decides what "a pair" IS — the caller states the policy, not the
+ * arithmetic, or the two drift apart on an event with a malformed sibling.
+ */
+export function TourSwitch({ draws, currentId, onPick, showLevel, pairLevel = true, style }) {
   const pair = [...(draws || [])]
     .filter(d => d && TOUR[d.gender])
     .sort((a, b) => (a.gender === 'M' ? 0 : 1) - (b.gender === 'M' ? 0 : 1))
@@ -403,7 +416,8 @@ export function TourSwitch({ draws, currentId, onPick, showLevel, style }) {
                      accessibilityLabel={`${t.label} draw`}
                      style={[u.tourSeg, on ? { backgroundColor: t.bg } : u.tourSegOff]}>
             <Text style={[u.tourText, { color: on ? t.fg : C.muted }]}>
-              {showLevel && levelLabel(d.category) ? `${t.label} ${levelLabel(d.category)}` : t.label}
+              {showLevel && pairLevel && levelLabel(d.category)
+                ? `${t.label} ${levelLabel(d.category)}` : t.label}
             </Text>
           </Pressable>
         )
