@@ -51,7 +51,7 @@ import asyncio
 import time
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy import select
@@ -59,7 +59,8 @@ from sqlalchemy import select
 from app.models.tournament import Draw, DrawEntry, Match
 from app.services.sofascore import SofascoreBlocked, _get
 from app.services.system_log import app_log
-from app.services.live_state import note_resumption
+from app.services.live_state import (SOFA_STOPPED, is_suspended, note_resumption,
+                                     stop_began, stop_reads_suspended)
 from app.services.settings import sofa_authoritative
 
 logger = logging.getLogger(__name__)
@@ -95,6 +96,18 @@ FRESH_SECONDS = 45
 # sweeps of headroom keeps a genuinely dead feed from lingering while never
 # punishing a row for its source's cadence.
 ENTRY_FRESH_SECONDS = 180
+
+# A MATCH THE LIVE LIST STOPPED CARRYING is re-read by its own event id — see
+# poll_once. Once a minute per match and a handful per poll, because a rain
+# delay on a busy day must not turn into a burst against a host that answers
+# bursts with a ban. HELD_WINDOW bounds the chase: a match carried overnight
+# is well inside it, a mis-mapped match from last week is not.
+HELD_RECHECK = 60.0
+MAX_HELD_EVENTS = 8
+HELD_WINDOW = timedelta(hours=36)
+# match id -> monotonic time of its last direct read. Process memory: a restart
+# forgets it, and the first poll after one simply re-reads.
+_HELD_CHECKED: dict = {}
 
 
 class _State:
@@ -428,7 +441,15 @@ def _as_espn_shape(snap: dict) -> Optional[list]:
     live_idx = -1 if (snap or {}).get("match_tiebreak") else len(p1) - 1
     wins = [None if i == live_idx else (int(p1[i] or 0) > int(p2[i] or 0))
             for i in range(len(p1))]
-    return [p1, p2, (snap or {}).get("serving"), wins]
+    live = [p1, p2, (snap or {}).get("serving"), wins]
+    # THE FIFTH SLOT IS WHERE EVERY READER LOOKS FOR A STOP — live_state.
+    # is_suspended, the router's _is_suspended, the schedule page's
+    # `live_scores[4]`, note_resumption's edges. ESPN always wrote it; this
+    # shape never did, so once Sofascore became the writer of this column no
+    # singles match could read "Suspended" however long it rained.
+    if (snap or {}).get("suspended"):
+        live.append("suspended")
+    return live
 
 
 async def _tracked(db) -> tuple[dict, dict]:
@@ -486,6 +507,46 @@ async def poll_once(db) -> dict:
             # count is how we would notice the filter regressing.
             skipped_other += 1
 
+    # CLAIMED EVENTS THE LIVE LIST STOPPED CARRYING. Sofascore takes a match
+    # off /events/live while play is stopped, however long it stays stopped:
+    # SP Open 2026-09-15, rain from 18:08 UTC, three R32 matches "interrupted"
+    # and gone from the list. The clear below read that silence as the end,
+    # emptied both live columns after GONE_AFTER, and the page showed three
+    # matches that had never begun — for hours. A match names its event
+    # exactly, so the event is asked for by id: only for matches seen in play
+    # recently and not yet won, only once one has been missing for longer than
+    # a set break's blip, and capped per poll (see HELD_RECHECK).
+    #
+    # Selected and fetched HERE, before this session has dirtied a row — the
+    # writer never waits on the network.
+    listed = {ev.get("id") for ev, _ in ours}
+    now_mono = time.monotonic()
+    chase = [m for m in (await db.execute(
+        select(Match).where(
+            Match.draw_id.in_(list(by_tournament.values())),
+            Match.winner_id.is_(None),
+            Match.sofa_event_id.isnot(None),
+            Match.sofa_started_at >= (datetime.now(timezone.utc)
+                                      - HELD_WINDOW).replace(tzinfo=None),
+        ))).scalars().all()
+        if m.sofa_event_id not in listed
+        and _older_than((m.sofa_live_json or {}).get("at"), FRESH_SECONDS)
+        and (m.id not in _HELD_CHECKED
+             or now_mono - _HELD_CHECKED[m.id] >= HELD_RECHECK)]
+    for m in chase[:MAX_HELD_EVENTS]:
+        _HELD_CHECKED[m.id] = now_mono
+        try:
+            ev = ((await _get(f"/event/{m.sofa_event_id}")) or {}).get("event") or {}
+        except SofascoreBlocked:
+            raise
+        except Exception as exc:  # noqa: BLE001 — one missing event is not the poll
+            logger.debug("held event %s failed: %s", m.sofa_event_id, exc)
+            continue
+        # Only a match still on court — playing or stopped — rejoins the loop.
+        # A finished one is the results sweep's, and the clear below retires it.
+        if (ev.get("status") or {}).get("type") in ("inprogress",) + SOFA_STOPPED:
+            ours.append((ev, m.draw_id))
+
     written, seen_matches = 0, 0
     touched_draws: set = set()
     # WHICH MATCHES CHANGED, for anything that needs the edge rather than the
@@ -522,6 +583,22 @@ async def poll_once(db) -> dict:
             snap["point"] = [snap["point"][1], snap["point"][0]]
             if snap["serving"] in (1, 2):
                 snap["serving"] = 3 - snap["serving"]
+
+        # A STOPPED MATCH IS STILL A MATCH WITH A SCORE — the doubles sweep's
+        # rule, which this poller never had. The games stand. The feed's point
+        # during a halt is an absence, so the last one we recorded is carried.
+        # Nobody is serving, so no server is shown. And the reader is told
+        # "Suspended" once the halt has outlasted a medical timeout.
+        status = (ev.get("status") or {}).get("type")
+        if status in SOFA_STOPPED:
+            prev = match.sofa_live_json or {}
+            now = datetime.now(timezone.utc)
+            since = stop_began(ev, prev, now)
+            snap["stopped_since"] = since.isoformat()
+            snap["suspended"] = stop_reads_suspended(status, since, now)
+            snap["serving"] = None
+            if prev.get("point"):
+                snap["point"] = prev["point"]
 
         # WHEN THE FIRST POINT WAS PLAYED — not when the match was scheduled.
         #
@@ -640,6 +717,13 @@ async def poll_once(db) -> dict:
                 # Before the assignment, while the old payload is still there
                 # to compare against — see note_resumption.
                 note_resumption(match, live)
+                # The stop began when the FEED stopped, not when it earned its
+                # badge: an `interrupted` halt reads Suspended only after
+                # MIN_STOP, and dating it from then would leave a 25-minute
+                # rain stop too short to count as a resumption.
+                if (snap.get("stopped_since") and is_suspended(live)
+                        and not is_suspended(match.live_scores_json)):
+                    match.suspended_at = datetime.fromisoformat(snap["stopped_since"])
                 match.live_scores_json = live
                 written += 1
                 touched_draws.add(draw_id)
@@ -759,16 +843,27 @@ async def _anything_on_court(db) -> bool:
             ).limit(1))).first()
         return row is not None
 
-    row = (await db.execute(
-        select(Match.id)
+    rows = (await db.execute(
+        select(Match.live_scores_json, Match.sofa_live_json)
         .join(Draw, Draw.id == Match.draw_id)
         .where(
             Draw.sofa_tournament_id.isnot(None),
             Draw.status != "completed",
             or_(Match.live_scores_json.isnot(None),
                 Match.sofa_live_json.isnot(None)),
-        ).limit(1))).first()
-    return row is not None
+        ))).all()
+    for live, snap in rows:
+        if not (live or snap):
+            continue            # JSON null matches isnot(None) — nothing held
+        # A STOPPED MATCH WE ARE HOLDING is not a reason to poll every ten
+        # seconds: rain can last an afternoon and a carry lasts all night, and
+        # the gate exists so that nobody playing costs nothing. It wakes the
+        # poller once its re-read is due (HELD_RECHECK), which is all the chase
+        # in poll_once needs to notice play coming back.
+        if not (snap or {}).get("stopped_since") or _older_than(
+                (snap or {}).get("at"), HELD_RECHECK):
+            return True
+    return False
 
 
 class SofascoreLiveMonitor:

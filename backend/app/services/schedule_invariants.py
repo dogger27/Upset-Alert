@@ -1135,6 +1135,41 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                          f"score can be published on the other's slot")
                     break
 
+    # 2026-09-15, SP Open: rain stopped three R32 matches just after 18:00 UTC
+    # and Sofascore took the "interrupted" events off its live list. The
+    # singles poller read the absence as the end of the match and, after
+    # GONE_AFTER, emptied both live columns: Brace/Sierra (4-4) showed no score
+    # at all, You/Charaeva kept only Wikipedia's first set, and none of the
+    # three said Suspended — for hours, under a sheet printing "44* TBF". A
+    # match SEEN IN PLAY, with no result and no live state anywhere, reads on
+    # the page as a match that never began. Judged off the score history,
+    # which only the feeds write and nothing clears, rather than off the live
+    # columns the defect empties. The grace covers the gap between a match
+    # ending and its result landing (GONE_AFTER plus a results sweep).
+    singles_linked = {e.match_id: e for e in rows
+                      if e.match_id and e.discipline == "singles"}
+    if singles_linked:
+        from datetime import datetime as _datetime
+        from app.models.score_history import MatchScoreSnapshot as _Snap
+        _now = _naive_utc(_datetime.now(_tz.utc))
+        for m in (await db.execute(
+                select(Match).where(Match.id.in_(list(singles_linked)),
+                                    Match.winner_id.is_(None)))).scalars().all():
+            if m.live_scores_json or m.sofa_live_json:
+                continue
+            last = (await db.execute(
+                select(_Snap).where(_Snap.match_id == m.id)
+                .order_by(_Snap.at.desc()).limit(1))).scalars().first()
+            sets = ((last.snap or {}).get("sets") or []) if last else []
+            games = sum(int(g or 0) for s in sets for g in (s or [])[:2]
+                        if str(g or 0).isdigit())
+            if not games or _now - _naive_utc(last.at) < _td(minutes=20):
+                continue
+            flag("started_match_live_state_lost", singles_linked[m.id],
+                 f"match {m.id} was last seen in play at {sets} "
+                 f"({_naive_utc(last.at):%H:%M} UTC), has no result, and holds "
+                 f"no live score — the page shows it as never begun")
+
     return v
 
 
