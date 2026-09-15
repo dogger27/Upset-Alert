@@ -168,19 +168,24 @@ export function StatusChip({ tone = 'muted', children }) {
  * the accent bar carries both tours instead, split down the middle, which is
  * the one place a tour colour still means something here.
  */
-/* `plain`: the tier as WORDS, not artwork.
+/* `compact`: a card for a week that is not this one.
  *
- * A week card is a line under a name, and the stamp was the tallest thing on
- * it — 27pt for a tier plate, 51 for a Slam crest against 19pt of type, so the
- * Last Week card stood a third taller than its neighbours on the strength of a
- * picture (owner, 2026-09-15). The words say the same thing in the height the
- * name already needs.
+ * Two things, because they are one idea — this card is worth less room:
  *
- * Each tour's own ink, so the label still carries the tour where the plate
- * used to; a combined Slam says it once, because both halves are the same
- * words and it is the event's tier, not either draw's.
+ *   THE TIER AS WORDS, not artwork. The stamp was the tallest thing on a card
+ *   that is otherwise a line under a name — 27pt for a tier plate, 51 for a
+ *   Slam crest against 19pt of type — so Last Week stood a third taller than
+ *   its neighbours on the strength of a picture. Each tour keeps its own ink,
+ *   so the label still carries the tour where the plate used to; a combined
+ *   Slam says it once, both halves being the same words and it being the
+ *   event's tier rather than either draw's.
+ *
+ *   A TIGHTER BOX. Padding 14 and a 9pt gap are the site's numbers for a card
+ *   you can act on; on a two-line card they were a third of its height
+ *   (owner, 2026-09-15). Halved, and the horizontal padding left alone so
+ *   every card down the column still starts its text at the same x.
  */
-export function TourCard({ draws, name, children, footer, href, corner, plain }) {
+export function TourCard({ draws, name, children, footer, href, corner, compact }) {
   const list = (draws || []).filter(Boolean)
   const combined = list.length > 1
   const isATP = list[0]?.gender !== 'F'
@@ -189,7 +194,7 @@ export function TourCard({ draws, name, children, footer, href, corner, plain })
      stamp names a tour and both are shown. */
   const oneTier = combined && isSlamTier(list[0]?.category)
   const stamps = oneTier ? list.slice(0, 1) : list
-  const tiers = !plain ? null
+  const tiers = !compact ? null
     : oneTier
       ? [{ id: 'event', text: list[0].category, color: C.muted }]
       : list.filter(d => d.category).map(d => ({
@@ -248,10 +253,11 @@ export function TourCard({ draws, name, children, footer, href, corner, plain })
         ) : (
           <AccentBar from={isATP ? C.atp : C.wta} to={isATP ? C.atpDeep : C.wtaDeep} />
         )}
-        <View style={u.body}>
+        <View style={[u.body, compact && u.bodyTight]}>
           {href
-            ? <CardLink href={href} style={u.bodyLink} pressedOpacity={0.75}>{body}</CardLink>
-            : <View style={u.bodyLink}>{body}</View>}
+            ? <CardLink href={href} style={[u.bodyLink, compact && u.bodyLinkTight]}
+                        pressedOpacity={0.75}>{body}</CardLink>
+            : <View style={[u.bodyLink, compact && u.bodyLinkTight]}>{body}</View>}
           {footer ? <View style={[u.footer, { borderTopColor: skin.rule }]}>{footer}</View> : null}
         </View>
       </View>
@@ -327,6 +333,10 @@ const u = StyleSheet.create({
   // '14px 16px 14px 20px' with gap 9, from the source.
   body: { flex: 1, paddingTop: 14, paddingRight: 16, paddingBottom: 14, paddingLeft: 16, gap: 9 },
   bodyLink: { gap: 9 },
+  // See `compact` at TourCard. Vertical only: the horizontal padding is what
+  // lines every card's text up down the column.
+  bodyTight: { paddingTop: 7, paddingBottom: 7, gap: 5 },
+  bodyLinkTight: { gap: 5 },
   // Centred ON the corner, so it reads as pinned to the card rather than
   // floating beside it. Half out and half in: the badge's own ring closes the
   // card's border where it crosses it.
