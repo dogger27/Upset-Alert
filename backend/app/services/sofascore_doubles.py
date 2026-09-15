@@ -45,6 +45,8 @@ from app.models.schedule import ScheduleEntry, ScheduleEntryPlayer
 from app.models.tournament import Draw, DrawEntry, Tournament
 from app.services.sofascore import SofascoreBlocked, SofascoreNotFound, _get
 from app.services.sofascore_live import _as_espn_shape, _norm_point, _sets_and_tiebreak
+from app.services.live_state import (SOFA_STOPPED, SOFA_SUSPENDED, stop_began,
+                                     stop_reads_suspended)
 from app.services.sofascore_results import _final_scores
 from app.services.system_log import app_log
 
@@ -61,7 +63,7 @@ POLL_INTERVAL = 60.0
 # status left out of this list gets no write at all, its sets freeze and its
 # point ages out of freshness (twelve of thirteen US Open qualifying matches
 # read as dead that way during one delay).
-_STOPPED = ("interrupted", "suspended", "willcontinue")
+_STOPPED = SOFA_STOPPED   # one list for both Sofascore writers — see live_state
 _PLAYING_OR_STOPPED = ("inprogress",) + _STOPPED
 
 # ...but only THESE mean "suspended" to a reader.
@@ -75,7 +77,7 @@ _PLAYING_OR_STOPPED = ("inprogress",) + _STOPPED
 # `interrupted` still belongs to _STOPPED above: no server is inferred and the
 # point is still carried forward, because the feed reports 0-0 during any halt.
 # The only thing that changes is what the reader is TOLD.
-_SUSPENDED = ("suspended", "willcontinue")
+_SUSPENDED = SOFA_SUSPENDED   # plus a long `interrupted` — stop_reads_suspended
 # How many claimed-but-unlisted events one sweep will fetch individually. A
 # Slam qualifying day needs a few dozen; the cap keeps a pathological day from
 # becoming a request storm against a host that answers a burst with a ban.
@@ -894,7 +896,16 @@ async def sweep_once(db, day: Optional[date] = None) -> dict:
             # Two different questions. `stopped` decides how we READ the feed;
             # `suspended` decides what the reader is TOLD.
             stopped = status in _STOPPED
-            snap["suspended"] = status in _SUSPENDED
+            snap["suspended"] = False
+            if stopped:
+                # WHEN it stopped, carried on the row's own snapshot so the
+                # stored state holds still from sweep to sweep. It is what
+                # lets a long `interrupted` — SP Open's rain, 2026-09-15 —
+                # read Suspended while a medical timeout still does not.
+                _now = datetime.now(timezone.utc)
+                _since = stop_began(ev, e.live_point_json, _now)
+                snap["stopped_since"] = _since.isoformat()
+                snap["suspended"] = stop_reads_suspended(status, _since, _now)
             if stopped:
                 # THE FEED FORGETS THE POINT, WE DO NOT. An interrupted event
                 # reports point 0-0 — not the score when the covers came on,
