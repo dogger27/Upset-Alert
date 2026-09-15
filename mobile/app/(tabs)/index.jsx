@@ -27,7 +27,7 @@ import { computeCohortInfo, getHomeSection } from '../../drawStatus'
 import { drawsByTournament } from '../../scheduleRows'
 import { lockLabel } from '../../lock'
 import { C, R, S, T } from '../../theme'
-import { StatusChip, SurfacePill, TourBadge, TourCard } from '../../cards'
+import { StatusChip, SurfacePill, TourCard } from '../../cards'
 import { dateRange } from '../../dates'
 import { Button, Card, CardLink, ErrorNote, Eyebrow, Loading, Muted, Screen, Title } from '../../ui'
 import { MenuSheet } from '../../menu'
@@ -297,15 +297,17 @@ function Meta({ t, showSurface = true }) {
    whole reason closing_time is per draw), and picks can be in for one and not
    the other. So a combined card shows this row twice, each labelled with its
    tour, rather than picking one draw's answer to stand for both. */
-function OpenRow({ t, status, now, showTour }) {
-  const lock = lockLabel(t, now)
-  const chip = status === 'complete' ? ['good', 'Picks in']
-    : status === 'partial' ? ['warn', 'Picks incomplete']
-    : ['bad', 'Not entered']
+const pickChip = status => (status === 'complete' ? ['good', 'Picks in']
+  : status === 'partial' ? ['warn', 'Picks incomplete']
+  : ['bad', 'Not entered'])
+
+function OpenRow({ draws, status, now, label }) {
+  const lock = lockLabel(draws[0], now)
+  const chip = pickChip(status?.[draws[0].id])
   return (
     <View style={s.footRow}>
       <View style={s.lockLine}>
-        {showTour ? <TourBadge gender={t.gender} style={s.footTour} /> : null}
+        {label ? <Text style={s.footTour}>{label}</Text> : null}
         {lock ? (
           <>
             <Text style={[T.score, { color: lock.urgent ? C.clay : C.ink }]}>{lock.value}</Text>
@@ -317,6 +319,38 @@ function OpenRow({ t, status, now, showTour }) {
     </View>
   )
 }
+
+/* ONE LINE PER DISTINCT ANSWER.
+ *
+ * The two halves of an event usually agree — both finished, both opening on
+ * the same day — and a row repeated word for word with a tour pill in front of
+ * it is two rows saying one thing (owner, 2026-09-15). So the facts are
+ * grouped by what they SAY: one line when they agree, one line each when they
+ * do not, and a tour label only on the second kind, where it is the only thing
+ * telling them apart.
+ */
+function distinctBy(draws, say) {
+  const out = []
+  for (const d of draws) {
+    const text = say(d)
+    const seen = out.find(r => r.text === text)
+    if (seen) seen.draws.push(d)
+    else out.push({ text, draws: [d] })
+  }
+  return out
+}
+
+/* "ATP", "WTA", or both — the tours a row covers. Plain text, not the pill:
+   the pill is a badge for a heading and this is a label on a line of small
+   type, where a filled box outweighs the fact it is labelling. */
+const tourWord = draws => draws.map(d => (d.gender === 'F' ? 'WTA' : 'ATP')).join(' · ')
+
+/* THE ORDER OF PLAY IS THE EVENT'S, not the draw's. oopHref keys the link on
+   tournament_id, so both halves of a combined event linked to the same page:
+   two buttons, same destination, one above the other. The first half with a
+   sheet supplies it, and if none has one the greyed label still appears, which
+   is how a reader learns there is nothing to open yet. */
+const oopDraw = draws => draws.find(d => oopHref(d)) || draws[0]
 
 /* WHICH DRAW A CARD OPENS. One draw: its own bracket, as ever. A combined
    event: the men's, arbitrarily but predictably — drawsByTournament puts it
@@ -331,14 +365,21 @@ const cardHref = draws => {
 /* The only card with something to DO, so the countdown is the loudest thing
    on it — that is the part you can miss. */
 function OpenCard({ draws, status, now }) {
+  /* The deadline AND the pick state together: two halves that lock at the same
+     minute can still differ in whether your picks are in, and either one
+     differing is a reason to show both lines. */
+  const rows = distinctBy(draws, d => {
+    const lock = lockLabel(d, now)
+    return `${lock ? `${lock.value} ${lock.suffix}` : ''}|${pickChip(status?.[d.id])[1]}`
+  })
   return (
         <TourCard
           draws={draws} name={draws[0].name} href={cardHref(draws)}
           footer={
             <View style={s.footStack}>
-              {draws.map(d => (
-                <OpenRow key={d.id} t={d} status={status?.[d.id]} now={now}
-                         showTour={draws.length > 1} />
+              {rows.map(r => (
+                <OpenRow key={r.draws[0].id} draws={r.draws} status={status} now={now}
+                         label={rows.length > 1 ? tourWord(r.draws) : null} />
               ))}
             </View>
           }
@@ -352,28 +393,28 @@ function OpenCard({ draws, status, now }) {
    because it FETCHES: a standing is per draw, so a combined card needs two
    requests, and a hook cannot be called in a loop. One component per row, one
    hook each, and the card does not care how many there are. */
-function ActiveRow({ t, userId, showTour }) {
+function ActiveRow({ t, userId, label }) {
   const standings = useApi(`standings:${t.id}`, () => getDrawStandings(t.id))
   const rows = standings.data || []
   const mine = rows.find(r => r.user?.id === userId)
-  return (
-    <View style={s.footRow}>
-      {mine ? (
-        <CardLink href={`/standings/${t.id}`} style={s.lockLine} pressedOpacity={0.6}>
-          {showTour ? <TourBadge gender={t.gender} style={s.footTour} /> : null}
-          <Text style={[T.score, { color: C.ink }]}>{ordinal(mine.rank)}</Text>
-          <Text style={[T.tiny, { color: C.faint }]}>of {rows.length}</Text>
-          <Ionicons name="chevron-forward" size={13} color={C.faint} />
-        </CardLink>
-      ) : (
-        <View style={s.lockLine}>
-          {showTour ? <TourBadge gender={t.gender} style={s.footTour} /> : null}
-          <Text style={[T.tiny, { color: C.faint }]}>
-            {standings.loading ? '' : 'Not entered'}
-          </Text>
-        </View>
-      )}
-      <OrderOfPlay t={t} />
+  /* THE LABEL STAYS HERE, where the pill came off everywhere else: a standing
+     is the one fact on this card that genuinely differs between the two halves
+     and cannot be collapsed — 3rd of 8 and 7th of 8 are two different links to
+     two different pages, and unlabelled they are a coin toss. It rides inside
+     the link, as plain type. */
+  return mine ? (
+    <CardLink href={`/standings/${t.id}`} style={s.lockLine} pressedOpacity={0.6}>
+      {label ? <Text style={s.footTour}>{label}</Text> : null}
+      <Text style={[T.score, { color: C.ink }]}>{ordinal(mine.rank)}</Text>
+      <Text style={[T.tiny, { color: C.faint }]}>of {rows.length}</Text>
+      <Ionicons name="chevron-forward" size={13} color={C.faint} />
+    </CardLink>
+  ) : (
+    <View style={s.lockLine}>
+      {label ? <Text style={s.footTour}>{label}</Text> : null}
+      <Text style={[T.tiny, { color: C.faint }]}>
+        {standings.loading ? '' : 'Not entered'}
+      </Text>
     </View>
   )
 }
@@ -389,10 +430,14 @@ function ActiveCard({ draws, userId, status }) {
           draws={draws} name={draws[0].name} href={cardHref(draws)}
           corner={competing ? <CompetingStar /> : null}
           footer={
-            <View style={s.footStack}>
-              {draws.map(d => (
-                <ActiveRow key={d.id} t={d} userId={userId} showTour={draws.length > 1} />
-              ))}
+            <View style={s.footRow}>
+              <View style={s.footStack}>
+                {draws.map(d => (
+                  <ActiveRow key={d.id} t={d} userId={userId}
+                             label={draws.length > 1 ? tourWord([d]) : null} />
+                ))}
+              </View>
+              <OrderOfPlay t={oopDraw(draws)} />
             </View>
           }
         >
@@ -470,24 +515,23 @@ function CompactRow({ draws, done }) {
    footer's left slot carries the one fact each bucket has: when picks open for
    next week's draw, and the dates for last week's. */
 function WeekCard({ draws, done }) {
+  const rows = distinctBy(draws, d => {
+    const opens = !done ? (d.draw_release_direct || d.draw_release_qualifiers) : null
+    return opens ? `Opens ${fmtShort(opens)}` : done ? 'Finished' : ''
+  })
   return (
     <TourCard draws={draws} name={draws[0].name} href={cardHref(draws)}
       footer={
-        <View style={s.footStack}>
-          {draws.map(d => {
-            const opens = !done ? (d.draw_release_direct || d.draw_release_qualifiers) : null
-            return (
-              <View key={d.id} style={s.footRow}>
-                <View style={s.lockLine}>
-                  {draws.length > 1 ? <TourBadge gender={d.gender} style={s.footTour} /> : null}
-                  <Text style={[T.tiny, { color: C.faint }]} numberOfLines={1}>
-                    {opens ? `Opens ${fmtShort(opens)}` : done ? 'Finished' : ''}
-                  </Text>
-                </View>
-                <OrderOfPlay t={d} />
+        <View style={s.footRow}>
+          <View style={s.footStack}>
+            {rows.map(r => (
+              <View key={r.draws[0].id} style={s.lockLine}>
+                {rows.length > 1 ? <Text style={s.footTour}>{tourWord(r.draws)}</Text> : null}
+                <Text style={[T.tiny, { color: C.faint }]} numberOfLines={1}>{r.text}</Text>
               </View>
-            )
-          })}
+            ))}
+          </View>
+          <OrderOfPlay t={oopDraw(draws)} />
         </View>
       }
     >
@@ -563,9 +607,12 @@ const s = StyleSheet.create({
   // One row per draw on a combined card, and exactly one row otherwise — so
   // the single-draw card's footer is unchanged by the gap.
   footStack: { gap: S.sm },
-  // The tour label on a footer row. alignSelf centre because the row it joins
-  // is baseline-aligned for the countdown's two type sizes.
-  footTour: { alignSelf: 'center', marginRight: 2 },
+  /* The tour on a footer row, as TYPE rather than a pill. A filled badge is
+     for a heading; on a line of 11pt type it outweighed the fact it was
+     labelling, and it was on every row of a combined card including the ones
+     that said the same thing twice (owner, 2026-09-15). Fixed width so the
+     facts beside it start at one x whichever tour it names. */
+  footTour: { ...T.tiny, color: C.faint, letterSpacing: 0.5, width: leading(30) },
   lockLine: { flexDirection: 'row', alignItems: 'baseline', gap: 5 },
 
   compact: {
