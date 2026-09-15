@@ -43,24 +43,77 @@ from PIL import Image
 
 ART = Path(__file__).parent.parent / 'mobile' / 'assets' / 'logos'
 
-# ---------------------------------------------------------------- the frame
+# ---------------------------------------------------------------- the canvas
 
 # The cap height every stamp is set at. Close to the WTA tags' own 106-119px so
-# nothing is meaningfully resampled, and ~2x what a 96pt box needs at 3x.
+# nothing is meaningfully resampled, and ~2x what the badge needs at 3x.
 CAP = 110
-# Room either side of the widest line, and above and below the caps.
-SIDE, LEAD = 1.04, 1.45
 
 
-def frame(line, cap):
-    """One line of lettering, scaled to CAP and centred on the shared canvas."""
+def tight(line, cap):
+    """One line of lettering at CAP, cropped to the ink and nothing else.
+
+    NO PADDING BAKED IN. It used to be centred on a shared canvas sized for the
+    widest line, which is what put ~26pt of air either side of a WTA line
+    against ~6pt above and below it (owner, 2026-09-15). Padding inside the
+    artwork also cannot be equal on all four sides and constant across six
+    stamps of different widths — it is one number in the badge's style, so that
+    is where it lives now. What the artwork owes the badge is the lettering,
+    at a known height, and its own aspect ratio.
+    """
     k = CAP / cap
-    line = line.resize((max(1, round(line.size[0] * k)),
-                        max(1, round(line.size[1] * k))), Image.LANCZOS)
-    out = Image.new('RGBA', FRAME, (0, 0, 0, 0))
-    out.alpha_composite(line, ((FRAME[0] - line.size[0]) // 2,
-                               (FRAME[1] - line.size[1]) // 2))
-    return out
+    out = line.resize((max(1, round(line.size[0] * k)),
+                       max(1, round(line.size[1] * k))), Image.LANCZOS)
+    return out.crop(out.getbbox())
+
+
+def split_number(line):
+    """Where the number starts: after the widest blank column band, which is
+    the space between the wordmark and the number in every one of these."""
+    w, h = line.size
+    a = line.split()[3]
+    ink = [any(a.getpixel((x, y)) > 12 for y in range(h)) for x in range(w)]
+    runs, x = [], 0
+    while x < w:
+        if not ink[x]:
+            start = x
+            while x < w and not ink[x]:
+                x += 1
+            if x < w:                       # a trailing blank is not a gap
+                runs.append((start, x - start))
+        else:
+            x += 1
+    if not runs:
+        raise SystemExit('no space between wordmark and number')
+    at, width = max(runs, key=lambda r: r[1])
+    return at, width
+
+
+def number_width(line):
+    at, gap = split_number(line)
+    return line.size[0] - at - gap
+
+
+def widen_number(line, target):
+    """Set the number to `target` px wide, leaving the wordmark alone.
+
+    A HORIZONTAL SCALE, not a bigger number: the cap heights are matched across
+    both tours and a proportional scale would break that, leaving "500"
+    towering over the "WTA" beside it. The WTA sets its tier numbers in a
+    condensed face and the ATP in a wide italic, so at one cap height the ATP's
+    digits are ~1.5x wider and the WTA's read as the smaller of the two even
+    though they are the same height (owner, 2026-09-15). Stretching condensed
+    digits by that much lands them at about a normal width, which is why this
+    is worth doing at all rather than being visible damage.
+    """
+    at, gap = split_number(line)
+    w, h = line.size
+    num = line.crop((at + gap, 0, w, h))
+    num = num.resize((target, h), Image.LANCZOS)
+    out = Image.new('RGBA', (at + gap + target, h), (0, 0, 0, 0))
+    out.alpha_composite(line.crop((0, 0, at + gap, h)), (0, 0))
+    out.alpha_composite(num, (at + gap, 0))
+    return out.crop(out.getbbox())
 
 
 # ------------------------------------------------------- WTA: lettering only
@@ -207,26 +260,55 @@ def inline(name):
 
 # ------------------------------------------------------------------- do it
 
-lines = {}
-for out_name, src_name in TAGS.items():
-    line, cap, ink, bg = strip(src_name)
-    lines[out_name] = (line, cap)
-    print(f'{src_name}: {ink} lettering on {bg} -> transparent, '
-          f'line {line.size[0]}x{line.size[1]}, cap {cap}')
+# ATP first: its number width is what the WTA number is set to.
+TIERS = ['250', '500', '1000']
+lines, atp_num = {}, {}
 
-for out_name, src_name in STACKED.items():
-    line, cap = inline(src_name)
-    lines[out_name] = (line, cap)
-    print(f'{src_name}: number inline, line {line.size[0]}x{line.size[1]}, cap {cap} '
-          f'({line.size[0] / cap:.2f} wide per cap)')
+for tier in TIERS:
+    out_name = f'atp-{tier}-inline.png'
+    line, cap = inline(STACKED[out_name])
+    line = tight(line, cap)
+    lines[out_name] = line
+    atp_num[tier] = number_width(line)
+    print(f'{STACKED[out_name]}: number inline, {line.size[0]}x{line.size[1]}, '
+          f'number {atp_num[tier]}px wide')
 
-# The canvas: wide enough for the widest line once every line is at CAP.
-widest = max(line.size[0] * CAP / cap for line, cap in lines.values())
-tallest = max(line.size[1] * CAP / cap for line, cap in lines.values())
-FRAME = (round(widest * SIDE), round(max(tallest, CAP) * LEAD))
-print(f'\nframe {FRAME[0]}x{FRAME[1]} (aspect {FRAME[0] / FRAME[1]:.2f}), cap {CAP} '
-      f'= {100 * CAP / FRAME[1]:.0f}% of its height')
+for tier in TIERS:
+    out_name = f'{tier}k-tag-plate.png'
+    line, cap, ink, bg = strip(TAGS[out_name])
+    line = tight(line, cap)
+    was = number_width(line)
+    line = widen_number(line, atp_num[tier])
+    lines[out_name] = line
+    print(f'{TAGS[out_name]}: {ink} on {bg} -> transparent, number {was} -> '
+          f'{number_width(line)}px wide, {line.size[0]}x{line.size[1]}')
 
-for out_name, (line, cap) in lines.items():
-    frame(line, cap).save(ART / out_name)
-    print(f'  wrote {out_name}')
+for out_name, line in lines.items():
+    line.save(ART / out_name)
+
+# The badge draws each stamp CAP tall and aspect x CAP wide, so it needs the
+# aspect ratios. It cannot ask the runtime for them: Image.resolveAssetSource
+# exists on iOS but not in react-native-web, where it red-boxed the visual
+# harness. They are known here, exactly, so they are written out here — and
+# tierStamps.test.mjs reads the PNG headers back to catch this file drifting
+# away from the artwork it describes.
+aspect = {'atp': {}, 'wta': {}}
+for tier in TIERS:
+    a = lines[f'atp-{tier}-inline.png']
+    w = lines[f'{tier}k-tag-plate.png']
+    aspect['atp'][tier] = round(a.size[0] / a.size[1], 4)
+    aspect['wta'][tier] = round(w.size[0] / w.size[1], 4)
+
+rows = ',\n'.join(
+    f"  {tour}: {{ " + ', '.join(f'{t}: {aspect[tour][t]}' for t in TIERS) + ' }'
+    for tour in ('atp', 'wta'))
+(ART.parent.parent / 'tierStampAspect.js').write_text(
+    '/* GENERATED by tools/gen-tier-stamps.py — do not edit.\n'
+    ' * Width divided by height of each tier stamp, whose artwork is cropped to\n'
+    ' * its lettering: TierBadge draws it CAP tall and aspect x CAP wide. */\n'
+    'export default {\n' + rows + ',\n}\n')
+
+print(f'\nwrote {len(lines)} stamps at cap {CAP}px, cropped to the ink:')
+for n, l in lines.items():
+    print(f'  {n:22} {l.size[0]}x{l.size[1]}  aspect {l.size[0] / l.size[1]:.2f}')
+print('  + mobile/tierStampAspect.js')
