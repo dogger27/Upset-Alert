@@ -93,12 +93,17 @@ const CAP = 15
 /* A CREST IS NOT A TIER STAMP, so it is not held to the tier stamps' height.
    These are the tournaments' own marks, mostly square where a tier stamp is a
    6:1 strip, so the strip's 15pt left them a third the size of the type beside
-   them. A square crest is 64pt here and the row grows to hold it — the owner
-   asked for bigger twice (2026-09-15), and a Slam is allowed to tower over the
-   week's 250. The width is what caps it: 96pt is the widest the row can give a
-   crest before it starts taking the tournament's name, so the US Open's 3:2
-   mark fits by its width and comes out ~64 anyway. */
-const CREST = { width: 96, height: 64 }
+   them. A Slam is allowed to tower over the week's 250, and the row grows to
+   hold it.
+
+   96x64 was the first size that satisfied "bigger", and 20% off it was the
+   answer (owner, 2026-09-15) — the box is scaled, not redrawn, so both kinds
+   of crest come down by the same fifth: a square mark (Wimbledon, Roland
+   Garros) fits by height at 51pt, and the US Open's flame, which is 2.09:1
+   since it lost its wordmark, fits by width and lands at ~37pt tall. Width is
+   the real cap on any of them: much past this the crest starts taking room
+   from the tournament's name. */
+const CREST = { width: 77, height: 51 }
 
 export function TierBadge({ tour, tier, name }) {
   const { src, aspect } = tierStamp({ tour, tier, name })
