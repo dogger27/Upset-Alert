@@ -90,13 +90,18 @@ export function SurfacePill({ surface }) {
  * type grows (see CardTitle).
  */
 const CAP = 15
-/* WAY DOWN, for a week card (owner, 2026-09-15). The artwork is back — words
-   said the tier but a stamp says it faster, and it is most of what makes these
-   read as cards rather than list rows — at a size that fits a two-line box:
-   the caps land near the type beside them instead of towering over it, and the
-   plate's padding scales with them, since 6pt of air around 9pt of lettering
-   is a border rather than a margin. */
-const CAP_SMALL = 9
+/* A WEEK CARD'S STAMP. The artwork is back — words said the tier but a stamp
+   says it faster, and it is most of what makes these read as cards rather
+   than list rows — at a size that fits a two-line box: the caps land near the
+   type beside them instead of towering over it.
+
+   9pt was the first answer and read as too small (owner, 2026-09-15); this is
+   that times 1.5, which lands between it and the full 15. Read as the scale it
+   is, rather than as a number, because the plate's padding and the crest below
+   are the same multiple of what they were — a stamp that grows while its own
+   margin does not is a stamp in a tighter box, not a bigger one. */
+const SMALL = 1.5
+const CAP_SMALL = 9 * SMALL
 /* A CREST IS NOT A TIER STAMP, so it is not held to the tier stamps' height.
    These are the tournaments' own marks, mostly square where a tier stamp is a
    6:1 strip, so the strip's 15pt left them a third the size of the type beside
@@ -113,9 +118,9 @@ const CAP_SMALL = 9
 const CREST = { width: 77, height: 51 }
 /* A crest at a week card's scale. Wider than it is tall by more than the
    square crests are, so a square one (Wimbledon, Roland Garros) fits by HEIGHT
-   at 26 and the US Open's 2.09:1 flame by width at ~21 — both close enough to
-   the small tier plate's 15 that a Slam no longer changes the row's height. */
-const CREST_SMALL = { width: 44, height: 26 }
+   and the US Open's 2.09:1 flame by width — both close enough to the small
+   tier plate that a Slam barely changes the row's height. */
+const CREST_SMALL = { width: 44 * SMALL, height: 26 * SMALL }
 
 export function TierBadge({ tour, tier, name, small }) {
   const { src, aspect } = tierStamp({ tour, tier, name })
@@ -342,9 +347,10 @@ const u = StyleSheet.create({
      The pill's radius, not the card's: this is the pill's replacement, and
      the card's 12 would read as a lozenge on a strip this size. */
   stamp: { borderRadius: 5, padding: 6 },
-  // Padding scales with the lettering: 6pt of air around 9pt of caps is a
-  // border, not a margin.
-  stampSmall: { borderRadius: 4, padding: 3 },
+  // Padding scales with the lettering, and with it: 6pt of air around 9pt of
+  // caps is a border, not a margin, and 3 around 13.5 is the same mistake
+  // inverted.
+  stampSmall: { borderRadius: 4, padding: 3 * SMALL },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   // The spare width of the title row, which is what CardTitle measures to know
   // how much the name may use. It replaced a flex:1 spacer that sat AFTER the
