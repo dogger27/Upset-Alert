@@ -90,7 +90,12 @@ export function StatusChip({ tone = 'muted', children }) {
    build and a tap-ownership fight on native. Wrapping the whole card was the
    nesting the site's own TournamentCard has, and the harness flagged it here
    the day after I flagged it there. */
-export function TourCard({ tour, tier, name, children, footer, href }) {
+/* `corner`: a mark pinned to the card's top-right corner, straddling its
+   border — a state that belongs to the whole card rather than to any row in
+   it (the Competing star). It is a SIBLING of the card, not a child: the card
+   clips its own overflow so the accent bar keeps the corner radius, and a
+   child would be cut off at exactly the edge the mark is meant to sit on. */
+export function TourCard({ tour, tier, name, children, footer, href, corner }) {
   const isATP = String(tour || 'ATP').toUpperCase() === 'ATP'
   const body = (
     <>
@@ -107,14 +112,21 @@ export function TourCard({ tour, tier, name, children, footer, href }) {
     </>
   )
   return (
-    <View style={u.card}>
-      <AccentBar from={isATP ? C.atp : C.wta} to={isATP ? C.atpDeep : C.wtaDeep} />
-      <View style={u.body}>
-        {href
-          ? <CardLink href={href} style={u.bodyLink} pressedOpacity={0.75}>{body}</CardLink>
-          : <View style={u.bodyLink}>{body}</View>}
-        {footer ? <View style={u.footer}>{footer}</View> : null}
+    <View>
+      <View style={u.card}>
+        <AccentBar from={isATP ? C.atp : C.wta} to={isATP ? C.atpDeep : C.wtaDeep} />
+        <View style={u.body}>
+          {href
+            ? <CardLink href={href} style={u.bodyLink} pressedOpacity={0.75}>{body}</CardLink>
+            : <View style={u.bodyLink}>{body}</View>}
+          {footer ? <View style={u.footer}>{footer}</View> : null}
+        </View>
       </View>
+      {/* box-none, not none: the slot itself must never swallow a tap meant
+          for the card under it — the card is a link to the draw, and a hole in
+          that target at the corner would be a dead spot nobody could
+          explain — but what it HOLDS may be pressable in its own right. */}
+      {corner ? <View style={u.corner} pointerEvents="box-none">{corner}</View> : null}
     </View>
   )
 }
@@ -179,6 +191,10 @@ const u = StyleSheet.create({
   // '14px 16px 14px 20px' with gap 9, from the source.
   body: { flex: 1, paddingTop: 14, paddingRight: 16, paddingBottom: 14, paddingLeft: 16, gap: 9 },
   bodyLink: { gap: 9 },
+  // Centred ON the corner, so it reads as pinned to the card rather than
+  // floating beside it. Half out and half in: the badge's own ring closes the
+  // card's border where it crosses it.
+  corner: { position: 'absolute', top: -9, right: -9 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   // The spare width of the title row, which is what CardTitle measures to know
   // how much the name may use. It replaced a flex:1 spacer that sat AFTER the

@@ -30,6 +30,7 @@ import { StatusChip, SurfacePill, TourCard } from '../../cards'
 import { dateRange } from '../../dates'
 import { Button, Card, CardLink, ErrorNote, Eyebrow, Loading, Muted, Screen, Title } from '../../ui'
 import { MenuSheet } from '../../menu'
+import { showToast } from '../../toast'
 import { leading } from '../../fontScale'
 
 /* The site's rule for whether a card is a link at all: a draw that is neither
@@ -46,29 +47,45 @@ const oopHref = t => (t.oop_first_seen_at && t.tournament_id
   ? { pathname: '/schedule', params: { tournament: t.tournament_id, draw: t.id } }
   : null)
 
-/* The site's footer tracks for a running or finished draw: a state pill, a
-   star when this reader is competing, and the order of play. */
-function ActionRow({ t, state, pickState, starLabel }) {
+/* The order of play, as the running card's one action.
+ *
+ * It used to sit on a third row beside a "Closed" chip and the Competing star.
+ * Both of those went: "Closed" restated the ACTIVE header two lines above it
+ * and the pick state the standing already implies, and the star moved to the
+ * card's corner — which left this alone on a row of its own, so it moved up
+ * beside the standing. The Active card now has the Open card's shape: meta,
+ * then one footer row with the number on the left and the action on the right.
+ *
+ * Rendered greyed rather than dropped when a tournament has published no sheet
+ * yet: the row keeps its shape, and the reader learns that there is nothing to
+ * open rather than wondering where the link went. */
+function OrderOfPlay({ t }) {
   const oop = oopHref(t)
+  if (!oop) return <Text style={[s.oopText, { color: C.faint, opacity: 0.6 }]}>Order of Play</Text>
+  // CardLink, not <Link asChild><Pressable style>: that form drops the
+  // style — the pill rendered as bare text — and it is the trap CardLink
+  // exists to close. Third time it has been re-typed; last time.
   return (
-    <View style={s.actions}>
-      <StatusChip tone="muted">{state}</StatusChip>
-      {pickState === 'complete' ? (
-        <View style={s.star} accessibilityLabel={starLabel}>
-          <Ionicons name="star" size={13} color={C.greenLit} />
-        </View>
-      ) : <View />}
-      {oop ? (
-        // CardLink, not <Link asChild><Pressable style>: that form drops the
-        // style — the pill rendered as bare text — and it is the trap CardLink
-        // exists to close. Third time it has been re-typed; last time.
-        <CardLink href={oop} style={s.oop} pressedOpacity={0.7}>
-          <Text style={s.oopText}>Order of Play</Text>
-        </CardLink>
-      ) : (
-        <Text style={[s.oopText, { color: C.faint, opacity: 0.6 }]}>Order of Play</Text>
-      )}
-    </View>
+    <CardLink href={oop} style={s.oop} pressedOpacity={0.7}>
+      <Text style={s.oopText}>Order of Play</Text>
+    </CardLink>
+  )
+}
+
+/* COMPETING, in the corner. On the footer row it was a bare star between two
+   controls, reading as a third one; on the corner it is a stamp on the card,
+   which is what it is — a fact about the whole draw, not an action in a row.
+   Pressing it says so in words: a green star is a symbol nobody was taught,
+   and the card it sits on opens the draw, so the star needs an answer of its
+   own rather than borrowing the card's. hitSlop because the disc is 22pt and
+   Apple's minimum is 44 — the ring is what you see, not what you have to hit. */
+function CompetingStar() {
+  return (
+    <Pressable onPress={() => showToast('You are competing!')} hitSlop={11}
+               accessibilityRole="button" accessibilityLabel="Competing in this draw"
+               style={({ pressed }) => [s.star, pressed && { opacity: 0.6 }]}>
+      <Ionicons name="star" size={12} color={C.greenLit} />
+    </Pressable>
   )
 }
 
@@ -303,8 +320,8 @@ function ActiveCard({ t, userId, pickState }) {
         <TourCard
           tour={t.gender === 'F' ? 'WTA' : 'ATP'} tier={t.category} name={t.name}
           href={hasDrawData(t) ? `/draw/${t.id}` : null}
+          corner={pickState === 'complete' ? <CompetingStar /> : null}
           footer={
-            <View style={{ gap: 8 }}>
             <View style={s.footRow}>
               {mine ? (
                 <CardLink href={`/standings/${t.id}`} style={s.lockLine} pressedOpacity={0.6}>
@@ -317,18 +334,17 @@ function ActiveCard({ t, userId, pickState }) {
                   {standings.loading ? '' : 'Not entered'}
                 </Text>
               )}
-              {/* The SURFACE here, not "29 right · 29 pts". Those two numbers
-                  restate the standing immediately to their left — "29th of 29"
-                  already says how it is going — while the surface is the one
-                  thing about the event this card was not showing anywhere. */}
-              <SurfacePill surface={t.surface} />
-            </View>
-            {/* The site's row: Closed, the Competing star, Order of Play. */}
-            <ActionRow t={t} state="Closed" pickState={pickState} starLabel="Competing" />
+              <OrderOfPlay t={t} />
             </View>
           }
         >
-          <Meta t={t} showSurface={false} />
+          {/* The surface sits beside the city, exactly as it does on an Open
+              card — one line up from the footer it used to share with the
+              standing (owner, 2026-09-15). The two cards differ now only in
+              what their footer says, which is the point: a draw you are
+              playing and a draw you are watching should not look like two
+              different kinds of thing. */}
+          <Meta t={t} />
         </TourCard>
   )
 }
@@ -449,8 +465,15 @@ const s = StyleSheet.create({
     paddingVertical: S.sm, paddingHorizontal: S.md,
   },
   compactDot: { width: 6, height: 6, borderRadius: 3 },
-  actions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: S.sm },
-  star: { paddingHorizontal: 4 },
+  /* THE CORNER STAMP. A filled disc in the card's own colour with a green
+     ring: sitting half off the card, it has to close the border it crosses,
+     and a transparent badge would have shown the card's edge running straight
+     through the star. */
+  star: {
+    width: 22, height: 22, borderRadius: 11,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: C.card, borderWidth: 1, borderColor: C.green,
+  },
   oop: {
     borderRadius: R.pill, borderWidth: 1, borderColor: C.borderOn, backgroundColor: C.raised,
     paddingHorizontal: 10, paddingVertical: 4,
