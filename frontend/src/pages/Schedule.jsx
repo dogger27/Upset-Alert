@@ -15,6 +15,7 @@ import { getScheduleDay, getScheduleDates } from '../api/schedule'
 import { useScheduleTz } from '../store/scheduleTz'
 import { getPredictions } from '../api/predictions'
 import { nationalityIso2, splitPlayerName } from '../utils/flags'
+import { isSuspended, isUnderWay } from '../utils/playState'
 import { rootFontPx, textWidth } from '../utils/text'
 import { parseSet } from '../utils/score'
 import './Schedule.css'
@@ -464,14 +465,19 @@ function MatchRow({ e, showCourt, zone, venueMode, onH2H, onChampion, onHistory,
   // only the first, and the badge below was reading only the second. So a row
   // the page had already tinted as suspended still announced "In progress",
   // beside a score that had not moved since the night before.
-  const suspended = e.live_scores?.[4] === 'suspended' || !!e.live_point?.suspended
+  // GATED ON THE SERVER'S WORD, in utils/playState. Both spellings of the flag
+  // outlive the session they were written in: a match carried into the next
+  // day keeps "suspended" in its frozen payload, because the score really does
+  // still stand where play stopped. Reading that alone as "playing now" hid
+  // the time line from the three rows that most needed it — see playState.js.
+  const suspended = isSuspended(e)
   const started = startedLine(e, zone)
   // On court, finished, or stopped mid-match: the time line goes entirely.
   //
   // NOT postponed or to-be-completed, though both have played some tennis.
   // Those rows are waiting for a NEW slot, and when they will resume is the
   // one thing a reader actually wants from them.
-  const underWay = e.status === 'live' || e.status === 'completed' || suspended
+  const underWay = isUnderWay(e)
 
   // The biggest thing that just happened to this match, or null. Marks the CARD
   // rather than a digit: a set belongs to the match, and putting the emphasis

@@ -1170,6 +1170,77 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                  f"({_naive_utc(last.at):%H:%M} UTC), has no result, and holds "
                  f"no live score — the page shows it as never begun")
 
+    # 2026-09-16, SP Open doc 267: Tuesday's rain carried three R32 matches
+    # into Wednesday, and the sheet printed "Not before 2:00 PM" against each.
+    # They were the only three rows on the day with NO TIME ON THEM AT ALL —
+    # the one thing a resumption exists to tell a reader. The fault was in the
+    # web, not the data: Schedule.jsx read `live_scores[4] === 'suspended'` —
+    # a flag frozen the night play stopped, and permanently true of a carried
+    # match — as "on court right now", and hid the time line its own comment
+    # said these rows must keep. `mobile/schedule.js` had already gated its
+    # copy on the server's status; the web was the copy that never got it.
+    #
+    # The law cannot read JSX, so the rule itself is pinned by
+    # `node frontend/src/utils/playState.test.mjs` and this pins what that rule
+    # has to print: a row the serve path will call "to be completed" must carry
+    # an expected start that lands on THIS day at the venue. Without one even a
+    # correct page has nothing to say — and an estimate that drifts off the day
+    # entirely is the "~2:30 AM" damage of 2026-09-15 wearing another hat.
+    #
+    # The carried shape is read the serve path's way (routers/schedule.py):
+    # play began on an EARLIER day and there is still no result. Singles keeps
+    # that on `matches`, doubles and qualifying on the row itself, so both are
+    # asked. A match that began today and is merely suspended is still on
+    # court and is not this.
+    if venue_tz:
+        from zoneinfo import ZoneInfo as _ZI
+        try:
+            _vtz = _ZI(venue_tz)
+        except Exception:
+            _vtz = None
+        started_before: dict = {}
+        if linked:
+            from app.models.tournament import Match as _M2
+            started_before = {
+                mid: (st, win)
+                for mid, st, win in (await db.execute(
+                    select(_M2.id, _M2.started_at, _M2.winner_id)
+                    .where(_M2.id.in_(linked)))).all()}
+
+        def _venue_date(dt):
+            if dt is None or _vtz is None:
+                return None
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=_tz.utc)
+            return dt.astimezone(_vtz).date()
+
+        if _vtz is not None:
+            for e in rows:
+                # A result anywhere ends it: singles carry theirs on `matches`,
+                # doubles and qualifying on the row. Asked of both, always —
+                # reading only the source that supplied `began` is how a
+                # finished match keeps being called a resumption.
+                began, settled = None, (e.winner_side is not None
+                                        or e.completed_at is not None)
+                if e.match_id and e.match_id in started_before:
+                    m_started, m_winner = started_before[e.match_id]
+                    began = m_started
+                    settled = settled or m_winner is not None
+                if began is None:
+                    began = e.started_at
+                began_on = _venue_date(began)
+                if began_on is None or began_on >= _pd or settled:
+                    continue
+                on_day = _venue_date(e.expected_start_at)
+                if on_day == _pd:
+                    continue
+                flag("carried_slot_has_no_time", e,
+                     f"carried from {began_on} with no result, but "
+                     + (f"expected_start_at lands on {on_day}"
+                        if on_day else "no expected_start_at")
+                     + " — the page can print nothing for a resumption"
+                     + f" the sheet slots at {e.start_note or e.start_type!r}")
+
     return v
 
 
