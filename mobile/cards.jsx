@@ -41,17 +41,22 @@ function mix(a, b, t) {
   return `#${((r << 16) | (g << 8) | bl).toString(16).padStart(6, '0')}`
 }
 
-/* Dot plus label, the site's exact fills. The dot is what makes it a surface
-   rather than another grey chip — "(i)" for indoor is stripped, matching the
-   web, because indoor hard is still hard. */
-export function SurfacePill({ surface }) {
+/* THE SURFACE, AS PLAIN TYPE.
+ *
+ * It was the site's chip — a tinted pill with a coloured dot — and on a card
+ * whose every other fact is set in type it read as a control among labels
+ * (owner, 2026-09-15). The words are the fact; the dot was decoration with a
+ * colour key nobody was given.
+ *
+ * What the component is still FOR is the two bits of knowledge in it: "(i)"
+ * for indoor is stripped, matching the web, because indoor hard is still hard;
+ * and the label comes from the palette's own table, so "Hard" is spelled the
+ * same here as everywhere else. */
+export function SurfaceText({ surface, style }) {
   const key = String(surface || '').toLowerCase().replace(/\s*\(.*?\)/g, '').trim()
   const s = C.surfaces[key] || C.surfaces.hard
   return (
-    <View style={[u.pill, { backgroundColor: s.bg }]}>
-      <View style={[u.dot, { backgroundColor: s.dot }]} />
-      <Text style={[T.tiny, { color: s.fg, letterSpacing: 0.3 }]}>{s.label}</Text>
-    </View>
+    <Text style={[T.tiny, { color: C.muted }, style]} numberOfLines={1}>{s.label}</Text>
   )
 }
 
@@ -271,7 +276,11 @@ export function TourCard({ draws, name, children, footer, href, corner, compact 
             ? <CardLink href={href} style={[u.bodyLink, compact && u.bodyLinkTight]}
                         pressedOpacity={0.75}>{body}</CardLink>
             : <View style={[u.bodyLink, compact && u.bodyLinkTight]}>{body}</View>}
-          {footer ? <View style={[u.footer, { borderTopColor: skin.rule }]}>{footer}</View> : null}
+          {footer ? (
+          <View style={compact ? u.footerPlain : [u.footer, { borderTopColor: skin.rule }]}>
+            {footer}
+          </View>
+        ) : null}
         </View>
       </View>
       {/* box-none, not none: the slot itself must never swallow a tap meant
@@ -381,11 +390,11 @@ const u = StyleSheet.create({
     letterSpacing: TITLE_TRACK, color: C.ink, flexShrink: 1,
   },
   footer: { borderTopWidth: 1, borderTopColor: C.border, paddingTop: 9, marginTop: 1 },
-  pill: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingLeft: 8, paddingRight: 9, paddingVertical: 3, borderRadius: R.pill,
-  },
-  dot: { width: 7, height: 7, borderRadius: 3.5 },
+  /* A compact card's second row is a footer only in the structural sense — it
+     sits beside the body's link rather than inside it (see the note at the
+     call site) — so it takes no rule and no padding of its own: the body's own
+     gap is the space, and the card reads as one block. */
+  footerPlain: {},
   chip: {
     paddingHorizontal: 10, paddingVertical: 4, borderRadius: R.pill,
     alignSelf: 'flex-start',
