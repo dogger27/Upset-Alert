@@ -540,6 +540,9 @@ function MatchRow({ e, showCourt, zone, venueMode, onH2H, onChampion, onHistory,
       // people actually play stand out from the ones they don't.
       'sched-row--atp': e.discipline === 'singles' && e.tour === 'ATP',
       'sched-row--wta': e.discipline === 'singles' && e.tour === 'WTA',
+      // The status pill clears the H2H strip only on rows that HAVE one — see
+      // .sched-status in Schedule.css.
+      'sched-row--h2h': !!h2hPair,
     })}>
       {/* Status sits in the row's top-right corner rather than inline with the
           tags: where a court has got to is the thing you scan a column for, and
