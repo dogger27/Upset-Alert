@@ -335,6 +335,19 @@ def parts(name):
     return mark, num, cap
 
 
+# ------------------------------------------- a crest, without its own wordmark
+
+# A crest is otherwise left exactly as its tournament draws it. The US Open's
+# ships with "us open" set beneath the flame, and the card already carries the
+# tournament's name in 19pt type at the other end of the same row, so the crest
+# was saying it a second time in a smaller voice (owner, 2026-09-15).
+#
+# It is the only one: the Australian Open, Roland Garros and Wimbledon marks
+# have no blank band across them at all, so there is nothing to separate and
+# nothing here touches them.
+CRESTS = {'slam_US-mark.png': 'slams/slam_US.svg-dark.png'}
+
+
 # ------------------------------------------------------------------- do it
 
 TIERS = ['250', '500', '1000']
@@ -379,6 +392,14 @@ for tier in TIERS:
 
 for out_name, line in lines.items():
     line.save(ART / out_name)
+
+for out_name, src_name in CRESTS.items():
+    mark, name = split_at_gap(Image.open(ART / src_name).convert('RGBA'))
+    mark = mark.crop(mark.getbbox())
+    mark.save(ART / 'slams' / out_name)
+    print(f'{src_name}: mark {mark.size[0]}x{mark.size[1]} '
+          f'(aspect {mark.size[0] / mark.size[1]:.2f}), wordmark dropped, '
+          f'wrote slams/{out_name}')
 
 # The badge draws each stamp CAP tall and aspect x CAP wide, so it needs the
 # aspect ratios. It cannot ask the runtime for them: Image.resolveAssetSource
