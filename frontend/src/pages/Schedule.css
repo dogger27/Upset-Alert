@@ -781,10 +781,10 @@
 .sched-status {
   position: absolute;
   top: 0.4rem;
-  /* Clear of the H2H strip, which now occupies the row's right edge — the pill
-     was rendering on top of it. 16px strip + 1px border + the row's own 0.6rem
-     padding, so the pill still lines up with the scores beneath it. */
-  right: calc(0.6rem + 17px);
+  /* On the row's own padding, so the pill lines up with the scores beneath it
+     and sits inside the width .sched-tags--badged holds clear for it. A row
+     with an H2H strip moves it further in — see .sched-row--h2h below. */
+  right: var(--row-pad-x);
   /* Raised from 0.4rem. A tiebreak superscript rises above the cap height of
      the row beneath, and at 0.4rem the pill's underside was almost touching
      it — two unrelated things reading as one stack. */
@@ -833,6 +833,13 @@
 /* Only the TAGS need to clear the badge. Padding the whole column stopped the
    score short of the right edge, so it never lined up with the pill above it. */
 .sched-tags--badged { padding-right: 7.8rem; }
+/* Clear of the H2H strip, which occupies the right edge of a row that has one —
+   the pill was rendering on top of it. 16px strip + 1px border + the row's
+   0.6rem padding. Scoped to those rows: a DOUBLES row has no strip, and this
+   offset used to apply there too, which pushed the pill ~17px further in than
+   the tag row holds clear for it — on Guadalajara 2026-09-15 its "Completed"
+   pill sat 5.8px over the DOUBLES tag at phone width. */
+.sched-row--h2h > .sched-status { right: calc(0.6rem + 17px); }
 
 /* .sched-topright and .sched-center are display:contents in the header grid at
    the top of this file — their children are placed individually, so neither has
