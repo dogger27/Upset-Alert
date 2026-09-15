@@ -19,13 +19,27 @@ const SLAM = {
   wta: require('./assets/logos/slams/slam_wta.png'),
 }
 
-// The 250 stamp is flat navy (#050053) — 1.1:1 on a dark card, i.e. invisible.
-// It is the only one needing a variant; 500 is silver and 1000 gold, both of
-// which read fine either way. Same reasoning, same artwork, as the web.
+/* NUMBER INLINE, not stacked under the wordmark. The ATP ships these with the
+   tier number on a second line below "ATP"; the WTA tag beside it on the same
+   dashboard sets the two side by side at one height, and two stamps built to
+   different rules read as a mistake rather than as two brands (owner,
+   2026-09-15). tools/gen-tier-stamps.py takes each apart at the blank band
+   between the rows and re-sets the number to the right of the wordmark, at its
+   cap height and on its baseline.
+
+   "MASTERS" comes off the 1000 in the process. Inline it runs 7:1, which
+   `contain` would then shrink until its wordmark was half the size of the
+   250's beside it — and "WTA 1000" does not spell out its tier either.
+
+   The 250 is built from the -dark variant: the shipped 250 is flat navy
+   (#050053), 1.1:1 on a dark card, i.e. invisible. It is the only one needing
+   one; 500 is silver and 1000 gold, both of which read either way. Same
+   reasoning, same artwork, as the web. Originals stay put as the generator's
+   input. */
 const ATP = {
-  250: require('./assets/logos/categorystamps_250-dark.png'),
-  500: require('./assets/logos/categorystamps_500.png'),
-  1000: require('./assets/logos/categorystamps_1000.png'),
+  250: require('./assets/logos/atp-250-inline.png'),
+  500: require('./assets/logos/atp-500-inline.png'),
+  1000: require('./assets/logos/atp-1000-inline.png'),
 }
 
 /* LETTERING ONLY. The tags as shipped are opaque rounded rectangles in the
