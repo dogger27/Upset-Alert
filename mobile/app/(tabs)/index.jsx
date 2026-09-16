@@ -126,21 +126,28 @@ function CardPill({ href, label, a11y }) {
    */
   const edge = inks.quiet ? '66' : 'b3'
   if (!href) {
-    /* MORE TRANSPARENT AGAIN (owner, 2026-09-16), and it comes off the fill
-       and the border, never the text.
+    /* ONE INK, THREE WEIGHTS: the fill, the edge and the word are the SAME
+     * colour at 16%, 55% and 100% (owner, 2026-09-16, "make the background
+     * pill colour close in colour to the text, or more light"). A white lift
+     * was a grey-pink on a pink card; its own ink at low alpha is a pale
+     * version of itself, which is what the ask describes and what keeps the
+     * pill inside the card's family.
      *
-     * FADING THE LABEL IS THE BUG THIS PILL STARTED AS. It was C.faint under
-     * `opacity: 0.6` — about 3:1 on the near-black card and near 1.6 on a
-     * tint, illegible on most of the screen. So the pill gets quieter by
-     * giving up its FILL (white 8% -> 4%, from 1.22:1 to 1.10) and its EDGE
-     * (one step down per section: 55% loud, 30% quiet), and the word inside
-     * it stays exactly where it is.
+     * THE SECTION RIDES THE ALPHA rather than the ramp step, and that is what
+     * resolves a conflict between two of the asks: a lighter fill needs a
+     * lighter label to stay legible, while the week cards are supposed to be
+     * quieter. So the loud cards take the ink at 16% and the quiet ones
+     * inkBody at 8% — the week pill ends up both paler and a step down the
+     * ramp, and neither has to give up its label.
      *
-     * A FREE WIN IN THE PROCESS: a lighter fill sits closer to the card, so a
-     * light label on it gains contrast rather than losing it. `muted` goes
-     * from 4.09:1 to 4.52 on the loud cards, which clears AA where 8% did
-     * not, and the week cards' `faint` improves on the same arithmetic
-     * without reaching it. */
+     * AND IT CLEARS AA NOW, which the last arrangement did not: 4.94/4.73:1
+     * on the loud cards and 4.81/4.64 on the quiet ones, against the 3.4 the
+     * week cards were deliberately sitting at. That compromise is gone.
+     *
+     * THE POLARITY STILL READS, which is the thing not to break: the
+     * available chip goes 1.88:1 DARKER than the card and this goes 1.44:1
+     * LIGHTER, so the two states still move in opposite directions. */
+    const fillA = inks.quiet ? '14' : '29'
     const ghostEdge = inks.quiet ? '4d' : '8c'
     /* AND HERE THE LABEL STEPS DOWN TOO, which it does not on the chip below.
        On a week card it is `faint` at 3.4-4.3:1 rather than `muted` at
@@ -148,9 +155,10 @@ function CardPill({ href, label, a11y }) {
        place in the app where that is a fair trade: a label naming something
        that does not exist yet, on the least important card on the screen, with
        everything actionable above it. */
-    const lab = inks.quiet ? inks.faint : inks.muted
+    const lab = inks.quiet ? inks.inkBody : inks.ink
     return (
-      <View style={[s.oop, s.oopDead, { borderColor: lab + ghostEdge }]}>
+      <View style={[s.oop, { backgroundColor: lab + fillA,
+                             borderColor: lab + ghostEdge }]}>
         <Text style={[s.oopText, { color: lab }]} numberOfLines={1}>{label}</Text>
       </View>
     )
@@ -905,11 +913,6 @@ const s = StyleSheet.create({
     borderRadius: R.pill, borderWidth: 1, borderColor: C.borderOn, backgroundColor: C.raised,
     paddingHorizontal: 10, paddingVertical: 4,
   },
-  /* Barely lifted off the card rather than cut out of it — see CardPill.
-     White at 4% is 1.10:1: a shape you can find if you look for it and not
-     one that asks to be looked at. It composes ON TOP of `oop`, so the key
-     has to be set rather than omitted. */
-  oopDead: { backgroundColor: 'rgba(255,255,255,0.04)' },
   /* NO COLOUR HERE. Both states set their own from the card's skin — the
      live pill the ink, the disabled one the faint step — and a default green
      left in the shared style is a default that only looks right on the one
