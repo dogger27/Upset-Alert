@@ -745,8 +745,7 @@ async def _log_parse_violations(tournament, play_date, violations: list) -> None
     await app_log(
         "error", "order_of_play",
         f"{len(violations)} order-of-play slot(s) printed on the "
-        f"{tournament.name} sheet for {play_date} were dropped by the parser: "
-        + "; ".join(x["detail"][:90] for x in violations[:4]),
+        f"{tournament.name} sheet for {play_date} were dropped by the parser",
         {"tournament_id": tournament.id, "play_date": str(play_date),
          "violations": violations[:20]},
         dedup_key=f"sched_parse_dropped_{tournament.id}_{play_date}",
@@ -862,8 +861,7 @@ async def ingest_document(db, tournament, play_date: date, url: str,
             await app_log(
                 "warning", "order_of_play",
                 f"{len(pulled)} slot(s) pulled from {tournament.name} on "
-                f"{play_date} by document {doc.id} — the sheet is blank: "
-                + "; ".join(pulled[:5]),
+                f"{play_date} by document {doc.id} — the sheet is blank",
                 {"tournament_id": tournament.id, "play_date": str(play_date),
                  "document_id": doc.id, "blank_sheet": True,
                  "pulled": pulled[:20]})
@@ -1194,15 +1192,28 @@ async def ingest_document(db, tournament, play_date: date, url: str,
         # WARNING, not info, and the level is the point. A tournament taking a
         # match off the sheet is ordinary — but a slot the PARSER stopped
         # seeing is indistinguishable from it here, and this line is the only
-        # record that a row left the page. Rare enough to be worth reading:
-        # one slot in a month of sheets across every tournament.
+        # record that a row left the page.
+        #
+        # THE SLOTS GO IN THE DETAIL, NEVER IN THE MESSAGE, and "rare enough to
+        # be worth reading" is why that matters: it was one slot a month until
+        # rain hit SP Open, which then reissued three sheets in 27 hours and
+        # pulled a different match each time. log_fingerprint() normalises
+        # DIGITS out of a message but not words, so three pulls naming three
+        # different players were three separate problems: three alert
+        # signatures, three emails' worth of budget, and three wake-ups for the
+        # self-healing watcher, which investigated all three and correctly
+        # changed nothing (owner, 2026-09-16).
+        #
+        # With the names in detail_json the fingerprint collapses over every
+        # reissue of a tournament's day — repeats counted, not re-sent — and
+        # nothing is lost from the alert: the digest renders the detail keys
+        # under the message, so the pulled slots still read in the email.
         # After the commit, for the reason above `renamed`.
         from app.services.system_log import app_log
         await app_log(
             "warning", "order_of_play",
             f"{len(pulled)} slot(s) pulled from {tournament.name} on "
-            f"{play_date} by document {doc.id} — the sheet no longer prints "
-            + "; ".join(pulled[:5]),
+            f"{play_date} by document {doc.id}",
             {"tournament_id": tournament.id, "play_date": str(play_date),
              "document_id": doc.id, "pulled": pulled[:20]})
 
