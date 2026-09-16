@@ -60,8 +60,26 @@ const oopHref = t => (t.oop_first_seen_at && t.tournament_id
  * Rendered greyed rather than dropped when a tournament has published no sheet
  * yet: the row keeps its shape, and the reader learns that there is nothing to
  * open rather than wondering where the link went. */
+/* THE SCHEDULE AND THE DRAW ARE ONE COMPONENT, TWICE.
+ *
+ * "Exact same formatting as the schedule one" (owner, 2026-09-16) is a thing
+ * to build, not a thing to match: two pills with their own copies of four
+ * colours and two alphas agree until the next change to either. So the pill is
+ * CardPill and both links are calls to it — the draw's and the sheet's — and
+ * the only difference between them is the word and where they point.
+ */
+function DrawPill({ draws }) {
+  /* hasDrawData is the site's rule and cardHref already applies it: a draw
+     that is neither completed nor released has nothing to show, so the pill
+     goes to its unavailable state rather than linking to an empty page. */
+  return <CardPill href={cardHref(draws)} label="Draw" a11y="Tournament draw" />
+}
+
 function OrderOfPlay({ t }) {
-  const oop = oopHref(t)
+  return <CardPill href={oopHref(t)} label="Schedule" a11y="Schedule and order of play" />
+}
+
+function CardPill({ href, label, a11y }) {
   const inks = useCardSkin()
   /* NOTHING TO OPEN YET — STILL A PILL, HOLLOWED OUT (owner, 2026-09-16).
    *
@@ -107,7 +125,7 @@ function OrderOfPlay({ t }) {
    * against 2.4-3.4; on the lifted pill 2.7-3.3 against 1.5-1.6.
    */
   const edge = inks.quiet ? '66' : 'b3'
-  if (!oop) {
+  if (!href) {
     /* AND HERE THE LABEL STEPS DOWN TOO, which it does not on the chip below.
        On a week card it is `faint` at 3.4-4.3:1 rather than `muted` at
        4.1-5.5 — deliberately under AA, at the owner's ask, and this is the one
@@ -117,7 +135,7 @@ function OrderOfPlay({ t }) {
     const lab = inks.quiet ? inks.faint : inks.muted
     return (
       <View style={[s.oop, s.oopDead, { borderColor: lab + edge }]}>
-        <Text style={[s.oopText, { color: lab }]} numberOfLines={1}>Schedule</Text>
+        <Text style={[s.oopText, { color: lab }]} numberOfLines={1}>{label}</Text>
       </View>
     )
   }
@@ -173,11 +191,11 @@ function OrderOfPlay({ t }) {
    * instead, at 4.05-5.53:1 — still the quieter of the two by a wide margin,
    * since the chip beside it carries 9.5:1. */
   return (
-    <CardLink href={oop} pressedOpacity={0.7}
+    <CardLink href={href} pressedOpacity={0.7}
               style={[s.oop, { backgroundColor: inks.control,
                                borderColor: inks.controlInk + edge }]}
-              accessibilityLabel="Schedule and order of play">
-      <Text style={[s.oopText, { color: inks.controlInk }]} numberOfLines={1}>Schedule</Text>
+              accessibilityLabel={a11y}>
+      <Text style={[s.oopText, { color: inks.controlInk }]} numberOfLines={1}>{label}</Text>
     </CardLink>
   )
 }
@@ -518,11 +536,22 @@ function OpenCard({ draws, status, now }) {
         <TourCard
           draws={draws} name={draws[0].name} href={cardHref(draws)}
           footer={
-            <View style={s.footStack}>
-              {rows.map(r => (
-                <OpenRow key={r.draws[0].id} draws={r.draws} status={status} now={now}
-                         label={rows.length > 1 ? tourWord(r.draws) : null} />
-              ))}
+            /* THE CONTROLS SIT OUTSIDE THE STACK because they belong to the
+               EVENT and the rows belong to the draws: a combined tournament
+               whose halves lock at different times has two rows and still one
+               draw to open. No Schedule pill here — an Open draw is days from
+               its first match and the tour has published no sheet, so the
+               card would carry a control that is never anything but empty. */
+            <View style={s.footRow}>
+              <View style={s.footStack}>
+                {rows.map(r => (
+                  <OpenRow key={r.draws[0].id} draws={r.draws} status={status} now={now}
+                           label={rows.length > 1 ? tourWord(r.draws) : null} />
+                ))}
+              </View>
+              <View style={s.pillRow}>
+                <DrawPill draws={draws} />
+              </View>
             </View>
           }
         >
@@ -580,7 +609,13 @@ function ActiveCard({ draws, userId, status }) {
                              label={draws.length > 1 ? tourWord([d]) : null} />
                 ))}
               </View>
-              <OrderOfPlay t={oopDraw(draws)} />
+              {/* Draw first, then Schedule: the bracket is the thing most
+                  readers came for, and reading order puts it nearer the
+                  standing it belongs to. */}
+              <View style={s.pillRow}>
+                <DrawPill draws={draws} />
+                <OrderOfPlay t={oopDraw(draws)} />
+              </View>
             </View>
           }
         >
@@ -686,7 +721,7 @@ function WeekCard({ draws, done }) {
           cards smaller than the ones above them, which is the difference the
           sections are for — a draw you can still pick is worth more room than
           one that opens next Saturday. */}
-      <WeekRow draws={draws} opens={opens} />
+      <WeekRow draws={draws} opens={opens} done={done} />
       </>
       }
     />
@@ -704,7 +739,7 @@ function WeekCard({ draws, done }) {
  * child of the card it was passed to. OpenRow and ActiveRow were already this
  * shape for the same structural reason; this one now matches them.
  */
-function WeekRow({ draws, opens }) {
+function WeekRow({ draws, opens, done }) {
   const inks = useCardSkin()
   return (
     <View style={s.weekRow}>
@@ -726,7 +761,15 @@ function WeekRow({ draws, opens }) {
         </Text>
       ) : null}
       <View style={[s.weekSide, { alignItems: 'flex-end' }]}>
-        <OrderOfPlay t={oopDraw(draws)} />
+        {/* LAST WEEK GETS THE DRAW, NEXT WEEK DOES NOT (owner, 2026-09-16).
+            Next week's draws are by definition not out — that is what the
+            "Opens Sep 19" beside this says — so the pill would spend the
+            whole week in its unavailable state, which is a control that only
+            ever reports the fact the row already states. */}
+        <View style={s.pillRow}>
+          {done ? <DrawPill draws={draws} /> : null}
+          <OrderOfPlay t={oopDraw(draws)} />
+        </View>
       </View>
     </View>
   )
@@ -799,9 +842,15 @@ const s = StyleSheet.create({
   // a long city name shrinks inside its slot instead of widening it.
   metaSide: { flex: 1, minWidth: 0 },
   footRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: S.sm },
-  // One row per draw on a combined card, and exactly one row otherwise — so
-  // the single-draw card's footer is unchanged by the gap.
-  footStack: { gap: S.sm },
+  /* The controls, as a group. Two pills on an Active card and one on an Open
+     card, so the group is what the row positions rather than each pill. */
+  pillRow: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
+  /* One row per draw on a combined card, and exactly one row otherwise — so
+     the single-draw card's footer is unchanged by the gap.
+     flex 1 + minWidth 0 so the FACTS yield to the controls under pressure and
+     not the other way round: the names and labels in here already shrink to
+     fit (PlayerName, footTour), while a pill has one line it cannot break. */
+  footStack: { gap: S.sm, flex: 1, minWidth: 0 },
   /* A week card's whole body: city, release, order of play. CENTRED rather
      than baseline-aligned now — the order of play is a pill when a sheet
      exists and bare type when it does not, and a baseline puts a pill's text
