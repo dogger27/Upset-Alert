@@ -9,6 +9,7 @@ import { useHeaderHeight } from '@react-navigation/elements'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Link } from 'expo-router'
 import { C, R, S, T, TOUCH } from './theme'
+import { leading } from './fontScale.js'
 
 /* `edges` defaults to WHATEVER THE SCREEN ACTUALLY NEEDS.
  *
@@ -112,9 +113,30 @@ export function BrandMark({ size = 16, style }) {
 }
 
 /* An all-caps label above a group. Condensed and letterspaced so it reads as a
-   sign rather than as text someone forgot to sentence-case. */
+   sign rather than as text someone forgot to sentence-case.
+ *
+ * 21pt, UP FROM T.eyebrow's 12 — that token times 1.75 (owner, 2026-09-16,
+ * "increase the font size of the category names by 175%"). These are the signs
+ * that divide the dashboard into Open / Active / Next week / Last week, and
+ * the same component heads the schedule, the Hall of Fame and a league; at 12
+ * they were smaller than the body text under them, which is backwards for
+ * something whose whole job is to be found while scrolling past.
+ *
+ * THE SIZE LIVES HERE, NOT IN T.eyebrow, and that is deliberate: eleven other
+ * places use that token for a FIELD label — "New password", "Invite code",
+ * "Share via email" — where 21pt would be a heading standing over a text
+ * input. This component is the section sign; the token is the small label.
+ *
+ * The line and the tracking scale with it (1.1 x 21/12 = 1.93), because a
+ * letterspacing tuned at 12 reads as barely-tracked at 21. */
+const EYEBROW = 21
 export function Eyebrow({ children, color = C.muted, style }) {
-  return <Text style={[T.eyebrow, { color, textTransform: 'uppercase' }, style]}>{children}</Text>
+  return (
+    <Text style={[T.eyebrow, {
+      fontSize: EYEBROW, lineHeight: leading(EYEBROW + 3), letterSpacing: 1.93,
+      color, textTransform: 'uppercase',
+    }, style]}>{children}</Text>
+  )
 }
 
 export function Title({ children, style }) {
