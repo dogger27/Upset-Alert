@@ -666,16 +666,23 @@ function WeekRow({ draws, qual, done }) {
           and Active cards' meta row uses, so the two read alike. */}
       {done ? <CardNav items={navItems(draws)} /> : (
         <>
-          {/* CENTRED BY THE TWO FLEXIBLE SIDES — the city's slot and the
-              dates' — which split whatever this leaves. It is the card's one
-              piece of news, so it takes the loud step of the ink ramp rather
-              than a fixed accent: a colour chosen against one tint fights the
-              other, which the Schedule button spent an afternoon proving. */}
-          {qual ? (
-            <Text style={[T.tiny, { color: inks.ink }]} numberOfLines={1}>
-              Qualifying
-            </Text>
-          ) : null}
+          {/* THE MIDDLE SLOT: the surface, or "Qualifying" while it is on.
+              Centred by the two flexible sides — the city's slot and the
+              dates' — which split whatever this leaves, so it lands at the
+              same x as the surface on an Open or Active card (owner,
+              2026-09-16). That is the point of putting it here: the three
+              sections' cards then read down one column.
+
+              QUALIFYING TAKES THE SLOT WHEN IT IS ON, rather than sitting
+              beside the surface. Both were asked for centred and only one can
+              be; a hard court is true all fortnight and qualifying is true for
+              two days, so the news wins while it is news. It takes the loud
+              step of the card's own ink ramp rather than a fixed accent — a
+              colour chosen against one tint fights the other, which the
+              Schedule button spent an afternoon proving. */}
+          {qual
+            ? <Text style={[T.tiny, { color: inks.ink }]} numberOfLines={1}>Qualifying</Text>
+            : <SurfaceText surface={draws[0].surface} />}
           <View style={[s.weekSide, { alignItems: 'flex-end' }]}>
             {dateRange(draws[0]) ? (
               <Text style={[T.tiny, { color: inks.faint }]} numberOfLines={1}>
