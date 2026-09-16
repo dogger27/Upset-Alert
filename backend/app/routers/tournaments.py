@@ -35,6 +35,27 @@ router = APIRouter(prefix="/tournaments", tags=["tournaments"])
 BRACKET_PUBLISHED_MIN_UNSEEDED = 4
 
 
+def _clear_phantom(match: Match, mr) -> None:
+    """Undo a stored result that no source can vouch for.
+
+    Only fires when the stored winner has NO score and NO Sofascore backing —
+    the shape only a scoreless Wikipedia parse can leave. A real result always
+    has one of those, so nothing genuine is touched; the branch is a no-op for
+    the pending row it usually meets.
+    """
+    if match.winner_id is None:
+        return
+    if match.sofa_winner_id is not None:
+        return
+    if match.scores_json:              # sets, "w/o", "3r" — any real outcome
+        return
+    match.winner_id = None
+    match.status = "pending"
+    match.completed_at = None
+    match.scores_json = mr.scores
+    match.live_scores_json = None
+
+
 @router.get("", response_model=list[TournamentOut])
 async def list_tournaments(db: AsyncSession = Depends(get_db)):
     # Imported here, as the schedule lookup further down this file does: the
@@ -2333,10 +2354,20 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
                         )
                     except Exception:                                    # noqa: BLE001
                         pass
-            elif w_id is not None:
+            elif w_id is not None and (mr.scores or mr.is_bye):
                 # Wikipedia has a result and Sofascore does not (yet, or ever:
                 # an unlisted walkover, an unmapped draw) — take it, tiebreak
                 # scores included.
+                #
+                # A RESULT COMES WITH A SCORE. Every real outcome on a
+                # Wikipedia draw sheet carries one: sets, "w/o" for a
+                # walkover, "3r" for a retirement — the parser keeps all of
+                # them as truthy lists. The one legitimate scoreless winner is
+                # a first-round bye, which mr.is_bye names. Anything else that
+                # arrives as a winner with no score is the parser reading bold
+                # markup as a result (`_parse_team` treats any ''' in a cell as
+                # the winner), and that is how two Guadalajara 2026
+                # quarter-finals were "won" before being played.
                 if match.winner_id != w_id:
                     # Only stamp completed_at if ESPN hasn't already recorded it;
                     # ESPN timestamps are more accurate (per-match, within 1 min).
@@ -2346,11 +2377,39 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
                 match.status = "completed"
                 match.scores_json = mr.scores
                 match.live_scores_json = None
+            elif w_id is not None:
+                # A winner with no score and not a bye: a parse artifact, not a
+                # result. Logged rather than applied, and the match is treated
+                # below as though Wikipedia had reported nothing.
+                try:
+                    from app.services.system_log import app_log
+                    await app_log(
+                        "warning", "scraper",
+                        f"Wikipedia marks a winner but no score for match "
+                        f"{match.id} (draw {tournament.id}); not applied",
+                        detail={"match_id": match.id, "round": mr.round_number,
+                                "match_number": mr.match_number, "wiki_winner_id": w_id},
+                        dedup_key=f"scraper:scoreless-winner:{match.id}",
+                        dedup_hours=24.0,
+                    )
+                except Exception:                                    # noqa: BLE001
+                    pass
+                _clear_phantom(match, mr)
             elif match.winner_id is None:
                 # No result from either source — update scores/status normally
                 match.completed_at = None
                 match.scores_json = mr.scores
                 match.status = "pending"
+            else:
+                # Neither source reports a result now, but a winner is stored.
+                # Nothing legitimate can have put it there without a score:
+                # Sofascore writes sofa_winner_id (checked above), ESPN writes
+                # scores_json beside every winner, and a bye is caught by
+                # mr.is_bye. So a stored winner with no score and no Sofascore
+                # backing is an earlier run of the artifact above — undo it, so
+                # the draw heals on the next scrape instead of needing a hand
+                # in the database.
+                _clear_phantom(match, mr)
         else:
             match = Match(
                 draw_id=tournament.id,

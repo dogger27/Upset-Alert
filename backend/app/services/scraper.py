@@ -740,11 +740,21 @@ def _parse_16team_section(
                 winner_pos = pos_a
             elif b_wins and not a_wins:
                 winner_pos = pos_b
-            elif raw_a and not raw_b and byes_possible:
-                # Only one player present → bye or walkover. In a full draw
-                # this is an unfilled slot instead, and nobody advances.
+            elif rd == 1 and raw_a and not raw_b and byes_possible:
+                # Only one player present → bye. In a full draw this is an
+                # unfilled slot instead, and nobody advances.
+                #
+                # ROUND ONE ONLY. A bye is a property of the draw sheet — a
+                # seed placed opposite nothing because the field is smaller
+                # than the bracket — and there is no such thing past the
+                # first round. In any later round, one occupant and one blank
+                # means the OTHER feeder match has not been played yet. Read
+                # as a bye, it advanced Kostyuk and Fręch through the
+                # Guadalajara 2026 quarter-finals before either had been
+                # scheduled (owner, 2026-09-16), and put the app's only three
+                # byes-after-round-one in the database, all in that draw.
                 winner_pos = pos_a
-            elif raw_b and not raw_a and byes_possible:
+            elif rd == 1 and raw_b and not raw_a and byes_possible:
                 winner_pos = pos_b
             elif rd == 1 and not raw_a and not raw_b and slot_a in bye_positions:
                 # Seed placed directly in RD2 — first-round bye
@@ -764,9 +774,11 @@ def _parse_16team_section(
             # walkovers across the two draws, advanced players who had not
             # played, and — because the pick filler deliberately skips byes —
             # left every one of those slots without a default pick.
-            is_bye = byes_possible and (
+            # And the same gate on the flag itself: round one, or it is not a
+            # bye whatever the cells look like.
+            is_bye = rd == 1 and byes_possible and (
                 (bool(raw_a) != bool(raw_b) and not (a_wins or b_wins))
-                or (rd == 1 and not raw_a and not raw_b and slot_a in bye_positions)
+                or (not raw_a and not raw_b and slot_a in bye_positions)
             )
 
             # Match number in the full draw for this round
