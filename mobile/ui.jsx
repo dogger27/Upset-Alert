@@ -127,13 +127,27 @@ export function BrandMark({ size = 16, style }) {
  * "Share via email" — where 21pt would be a heading standing over a text
  * input. This component is the section sign; the token is the small label.
  *
- * The line and the tracking scale with it (1.1 x 21/12 = 1.93), because a
- * letterspacing tuned at 12 reads as barely-tracked at 21. */
+ * The line and the tracking scale with it, because a letterspacing tuned at
+ * 12 reads as barely-tracked at 21.
+ *
+ * `small` IS THE SECOND SIZE, for a section that is CONTEXT rather than
+ * something to act on — the dashboard's Next week and Last week against its
+ * Open and Active (owner, 2026-09-16). 15 is 0.71 of 21, and that ratio is not
+ * picked: it is the one the CARDS in those sections already use against the
+ * cards above them, 13pt city and 11pt detail against 19 and 13 (0.68). So the
+ * sign shrinks by about as much as the thing it labels, and the two pairs read
+ * as two weights of one screen rather than four arbitrary sizes.
+ *
+ * Both sizes live here together because they are a pair, and a caller says
+ * WHICH KIND of section it heads rather than a number. */
 const EYEBROW = 21
-export function Eyebrow({ children, color = C.muted, style }) {
+const EYEBROW_SMALL = 15
+export function Eyebrow({ children, color = C.muted, style, small = false }) {
+  const size = small ? EYEBROW_SMALL : EYEBROW
   return (
     <Text style={[T.eyebrow, {
-      fontSize: EYEBROW, lineHeight: leading(EYEBROW + 3), letterSpacing: 1.93,
+      // Tracking in proportion, from the token's own 1.1 at 12.
+      fontSize: size, lineHeight: leading(size + 3), letterSpacing: 1.1 * (size / 12),
       color, textTransform: 'uppercase',
     }, style]}>{children}</Text>
   )
