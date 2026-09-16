@@ -193,7 +193,7 @@ const u = StyleSheet.create({
  * is right on both targets either way.)
  */
 export function CardLink({ href, style, children, pressedOpacity = 0.75, grow = false,
-                           hitSlop, accessibilityLabel }) {
+                           hitSlop, accessibilityLabel, pressedStyle }) {
   /* `grow`: take the row's spare width, so the whole row is the hit target and
      a sibling link after it lands at the edge.
 
@@ -207,11 +207,29 @@ export function CardLink({ href, style, children, pressedOpacity = 0.75, grow = 
      of bug as the dropped `style` this component exists to prevent. hitSlop is
      how a visually thin control still meets TOUCH: the strip is what you see,
      not what you have to hit (CompetingStar does the same). */
+  /* `pressedStyle`, and `children` as a function of the press state: a caller
+     whose pressed look is a COLOUR CHANGE rather than a fade needs both — the
+     style to reach the inner View (the one that actually carries the caller's
+     style, since a style on the Pressable is dropped by `Link asChild`), and
+     the children to know, so a label can change with its plate.
+
+     EITHER OF THEM REPLACES THE OPACITY FADE rather than stacking with it: a
+     plate that lightens while the whole control dims is two answers to one
+     press. Callers that pass neither are on exactly the path they were. */
+  const dynamic = !!pressedStyle || typeof children === 'function'
+  const inner = dynamic
+    ? state => (
+        <View style={[style, state.pressed && pressedStyle]}>
+          {typeof children === 'function' ? children(state) : children}
+        </View>
+      )
+    : <View style={style}>{children}</View>
   const link = (
     <Link href={href} asChild>
       <Pressable hitSlop={hitSlop} accessibilityLabel={accessibilityLabel}
-                 style={({ pressed }) => (pressed ? { opacity: pressedOpacity } : null)}>
-        <View style={style}>{children}</View>
+                 style={({ pressed }) => (pressed && !dynamic
+                   ? { opacity: pressedOpacity } : null)}>
+        {inner}
       </Pressable>
     </Link>
   )
