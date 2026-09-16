@@ -70,6 +70,26 @@ const oopHref = t => (t.oop_first_seen_at && t.tournament_id
    the whole system is unreferenced. Kept: oopHref and oopDraw, which navItems
    uses to point the Schedule plate at a sheet. */
 
+/* QUALIFYING IS UNDERWAY — and it is the EVENT's, not a draw's.
+ *
+ * qualifying_started_at comes off the tournaments list, computed server-side
+ * from schedule_entries (stage='qualifying'), because qualifying is not in
+ * `matches` at all: a 128 draw stores rounds 1-7, and a player who fails to
+ * qualify never reaches draw_entries. The schedule row is the only record it
+ * has. Both halves of a combined event report the same answer, so `some` and
+ * `find` agree here.
+ */
+const qualifying = draws => draws.find(d => d.qualifying_started_at) || null
+
+/* Straight to the schedule, filtered to this event. NO DATE PARAM on purpose:
+   the schedule's own landing rule puts you on today, and if qualifying has
+   started then today is a qualifying day. Keyed on tournament_id because that
+   is what the schedule filters by — qualifying rows carry no draw_id, which is
+   the whole reason the filter is on the event (see scheduleRows.js). */
+const qualHref = t => (t?.tournament_id
+  ? { pathname: '/schedule', params: { tournament: t.tournament_id } }
+  : null)
+
 /* THE LEAGUE FOR THIS EVENT. A standing is per DRAW, so a combined tournament
    has two of them and one bar — the same shape cardHref settled for the
    bracket, and settled the same way: the first draw with data, with the
@@ -278,6 +298,19 @@ function Head() {
             UPSET <Text style={{ color: C.clay }}>ALERT</Text>!
           </Text>
         </View>
+        {/* ABSOLUTE, SO THE BUTTONS LINE UP WITH THE MARK (owner, 2026-09-16).
+            An absolutely-positioned child adds nothing to its parent's height,
+            so brandBlock now measures exactly the wordmark — and the row's
+            alignItems:'center' therefore centres the two buttons on the
+            WORDMARK rather than on a block that was also carrying this line.
+            That is what put them about half a slogan too low.
+
+            A STRUCTURE RATHER THAN AN OFFSET, deliberately: the alternative
+            was a negative margin derived from the wordmark's line box and the
+            button's fixed 36pt, and those two do not scale together — it would
+            have been right at one text size and wrong at every other. This way
+            the tuned -leading(12) below keeps meaning exactly what it meant,
+            because it is still measured from the wordmark's own bottom. */}
         <Text style={s.slogan} numberOfLines={1}>Your Wildest Fantasy Tennis</Text>
       </View>
       {/* CardLink, not <Link asChild><Pressable style=...>. That second form
@@ -549,12 +582,15 @@ function WeekCard({ draws, done }) {
      tournament can open a day apart and this card no longer has a row each to
      say so: it is a one-line summary now, and the first date is the one that
      changes what a reader does today. The draw page has the rest. */
-  const opens = done ? null : draws
-    .map(d => d.draw_release_direct || d.draw_release_qualifiers)
-    .filter(Boolean)
-    .sort()[0]
+  /* QUALIFYING TAKES OVER THE WHOLE CARD (owner, 2026-09-16). A next-week
+     event whose qualifying has begun is the one case where this card has
+     somewhere worth going: its draw is not out, so cardHref is null and the
+     card was not a link at all. Now the whole card opens the qualifying
+     schedule. */
+  const qual = done ? null : qualifying(draws)
   return (
-    <TourCard draws={draws} name={draws[0].name} href={cardHref(draws)} compact
+    <TourCard draws={draws} name={draws[0].name} compact
+      href={qual ? qualHref(qual) : cardHref(draws)}
       /* LAST WEEK GETS THE BAR, NEXT WEEK DOES NOT (owner, 2026-09-16). Next
          week has nothing behind any of the three: no bracket, no standings
          without one, and no sheet — a bar of three dimmed segments is a
@@ -579,7 +615,7 @@ function WeekCard({ draws, done }) {
           cards smaller than the ones above them, which is the difference the
           sections are for — a draw you can still pick is worth more room than
           one that opens next Saturday. */}
-      <WeekRow draws={draws} opens={opens} done={done} />
+      <WeekRow draws={draws} qual={qual} done={done} />
       </>
       }
     />
@@ -597,7 +633,7 @@ function WeekCard({ draws, done }) {
  * child of the card it was passed to. OpenRow was already this shape for the
  * same structural reason; this one matches it.
  */
-function WeekRow({ draws, opens, done }) {
+function WeekRow({ draws, qual, done }) {
   const inks = useCardSkin()
   return (
     <View style={s.weekRow}>
@@ -620,19 +656,33 @@ function WeekRow({ draws, opens, done }) {
       <FitText style={[T.smallMed, { color: inks.inkBody }]}>
         {draws[0].city || ''}
       </FitText>
-      {/* LAST WEEK GETS THE PLATES, ON THIS ROW. Next week keeps the centred
-          release date instead: its draws are not out, so all three
-          destinations would be dead, and what it has to say is the date. */}
+      {/* LAST WEEK GETS THE PLATES. Next week gets its dates, and — once
+          qualifying is under way — a word for it, centred between the two.
+
+          THE FULL RANGE, NOT "OPENS SEP 19" (owner, 2026-09-16). The release
+          date answered "when can I pick", which is the right question for a
+          card you cannot act on yet; the dates answer "when is this", which is
+          what a week of context is for. dateRange is the same helper the Open
+          and Active cards' meta row uses, so the two read alike. */}
       {done ? <CardNav items={navItems(draws)} /> : (
         <>
-          {opens ? (
-            <Text style={[T.tiny, { color: inks.faint }]} numberOfLines={1}>
-              Opens {fmtShort(opens)}
+          {/* CENTRED BY THE TWO FLEXIBLE SIDES — the city's slot and the
+              dates' — which split whatever this leaves. It is the card's one
+              piece of news, so it takes the loud step of the ink ramp rather
+              than a fixed accent: a colour chosen against one tint fights the
+              other, which the Schedule button spent an afternoon proving. */}
+          {qual ? (
+            <Text style={[T.tiny, { color: inks.ink }]} numberOfLines={1}>
+              Qualifying
             </Text>
           ) : null}
-          {/* The empty slot is what CENTRES that date — two flexible sides
-              split whatever the middle leaves. It holds nothing on purpose. */}
-          <View style={[s.weekSide, { alignItems: 'flex-end' }]} />
+          <View style={[s.weekSide, { alignItems: 'flex-end' }]}>
+            {dateRange(draws[0]) ? (
+              <Text style={[T.tiny, { color: inks.faint }]} numberOfLines={1}>
+                {dateRange(draws[0])}
+              </Text>
+            ) : null}
+          </View>
         </>
       )}
     </View>
@@ -649,6 +699,8 @@ const s = StyleSheet.create({
   head: {
     // Centred, not baseline: the row opens with a 36px circle, and a
     // baseline row hung the wordmark off the circle's bottom edge.
+    // WHAT IT CENTRES ON is the wordmark, because the slogan is absolute and
+    // leaves brandBlock measuring the mark alone — see the note at the slogan.
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     gap: S.sm, paddingTop: S.sm, paddingBottom: S.xs,
   },
@@ -669,7 +721,15 @@ const s = StyleSheet.create({
     // in tools/visual-diff.mjs left a ~20pt gap on the device (2026-09-04).
     // The room this closes is the wordmark's descender space, which scales
     // with the reader's text size, hence leading().
-    letterSpacing: 0.9, color: C.muted, textAlign: 'center', marginTop: -leading(12),
+    letterSpacing: 0.9, color: C.muted, textAlign: 'center',
+    /* OUT OF THE FLOW: top 100% is brandBlock's full height, which IS the
+       wordmark's line box now that this line no longer adds to it, so the
+       tuned margin is still measured from the mark's own bottom. left/right 0
+       gives it the block's width to centre in.
+       It ends about a point below the mark — the room it closes is the
+       wordmark's descender space — so it needs no reservation in the header's
+       padding, and the 36pt buttons still set the row's height. */
+    position: 'absolute', top: '100%', left: 0, right: 0, marginTop: -leading(12),
   },
   // A size up from the site's 12px, and lifted: the row centres the dot on
   // the wordmark's line box, whose centre sits below the caps' centre (the

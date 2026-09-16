@@ -37,14 +37,42 @@ BRACKET_PUBLISHED_MIN_UNSEEDED = 4
 
 @router.get("", response_model=list[TournamentOut])
 async def list_tournaments(db: AsyncSession = Depends(get_db)):
+    # Imported here, as the schedule lookup further down this file does: the
+    # module-level imports in this router are the draw/prediction models, and
+    # schedule is a different subsystem pulled in by the two places that need it.
+    from app.models.schedule import ScheduleEntry
+
     lat_subq = (
         select(Match.draw_id, func.max(Match.completed_at).label("lat"))
         .group_by(Match.draw_id)
         .subquery()
     )
+    # WHEN QUALIFYING BEGAN, per EVENT rather than per draw.
+    #
+    # Qualifying matches are not in `matches` at all — a 128 draw stores rounds
+    # 1-7 and the players who fail to qualify never reach draw_entries — so the
+    # schedule row IS the only record qualifying has, and `stage`
+    # ("main"|"qualifying") is what names it. started_at on the row is the
+    # doubles/qualifying equivalent of matches.started_at, written by the live
+    # feeds because ESPN covers neither.
+    #
+    # KEYED ON tournament_id BECAUSE THAT IS WHOSE IT IS: qualifying rows carry
+    # no draw_id, and one qualifying draw feeds both halves of a combined
+    # event, so both of an event's draws report the same answer. MIN, not MAX —
+    # the question is when the FIRST match started.
+    qual_subq = (
+        select(
+            ScheduleEntry.tournament_id.label("tid"),
+            func.min(ScheduleEntry.started_at).label("qual"),
+        )
+        .where(ScheduleEntry.stage == "qualifying", ScheduleEntry.started_at.isnot(None))
+        .group_by(ScheduleEntry.tournament_id)
+        .subquery()
+    )
     result = await db.execute(
-        select(Draw, lat_subq.c.lat)
+        select(Draw, lat_subq.c.lat, qual_subq.c.qual)
         .outerjoin(lat_subq, Draw.id == lat_subq.c.draw_id)
+        .outerjoin(qual_subq, Draw.tournament_id == qual_subq.c.tid)
         .order_by(Draw.year.desc(), Draw.name)
     )
     rows = result.all()
@@ -54,8 +82,9 @@ async def list_tournaments(db: AsyncSession = Depends(get_db)):
     # for the response and neither belongs in the column.
     return [
         TournamentOut.model_validate(t).model_copy(
-            update={"status": t.computed_status, "latest_result_at": lat})
-        for t, lat in rows
+            update={"status": t.computed_status, "latest_result_at": lat,
+                    "qualifying_started_at": qual})
+        for t, lat, qual in rows
     ]
 
 

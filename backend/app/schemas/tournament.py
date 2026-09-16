@@ -64,6 +64,11 @@ class TournamentOut(BaseModel):
     oop_first_seen_at: Optional[datetime] = None
     last_scraped_at: Optional[datetime]
     latest_result_at: Optional[datetime] = None
+    # When the event's FIRST qualifying match started, or None. Computed in
+    # list_tournaments from schedule_entries (stage='qualifying'), which is the
+    # only record qualifying has — it is not in `matches`. Per EVENT, so both
+    # halves of a combined tournament report the same answer.
+    qualifying_started_at: Optional[datetime] = None
     is_locked: bool
 
     @property
