@@ -27,6 +27,7 @@ match, so the whole system stays around 6.4 req/min.
 
 import asyncio
 import logging
+import time
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -59,6 +60,12 @@ POLL_INTERVAL = 180.0
 MAX_PAGES = 8
 
 _FINISHED = "finished"
+
+# How often each draw's `events/next/0` is read for walkovers declared ahead of
+# their slot — see sweep_once. Per draw, in process memory: a restart only
+# brings the next read forward.
+NEXT_INTERVAL = 900.0
+_next_checked: dict[int, float] = {}
 
 # Sofascore's status codes for a match that ended without being played out.
 # The feed carries these plainly; an earlier version of this file looked only at
@@ -197,6 +204,125 @@ def _played_minutes(ev: dict) -> Optional[int]:
     return mins if 15 <= mins <= 360 else None
 
 
+def decided_ahead_of_slot(payload: Optional[dict]) -> list:
+    """The finished events on an `events/next` page — walkovers, in practice.
+
+    Everything else there has not been played, and a not-started event with a
+    winnerCode would be a feed error, so only `finished` is taken.
+    """
+    return [ev for ev in ((payload or {}).get("events") or [])
+            if (ev.get("status") or {}).get("type") == _FINISHED]
+
+
+async def _record(db, ev: dict, draw_id: int, by_player: dict,
+                  now: datetime) -> str:
+    """Write one FINISHED event onto its match: "written", "unchanged", or
+    "unmatched" when the event is not a match of this draw."""
+    home_ids = _event_player_ids(ev.get("homeTeam") or {})
+    away_ids = _event_player_ids(ev.get("awayTeam") or {})
+    p1 = next((by_player[i] for i in home_ids if i in by_player), None)
+    p2 = next((by_player[i] for i in away_ids if i in by_player), None)
+    if not p1 or not p2:
+        # A qualifying or doubles event inside the same season, or a
+        # player we never stamped. Counted, not guessed at.
+        return "unmatched"
+
+    match = (await db.execute(
+        select(Match).where(
+            Match.draw_id == draw_id,
+            Match.player1_id.in_([p1, p2]),
+            Match.player2_id.in_([p1, p2]),
+        ))).scalars().first()
+    if match is None:
+        return "unmatched"
+
+    code = ev.get("winnerCode")
+    if code not in (1, 2):
+        return "unchanged"
+    # winnerCode is home/away; the bracket has its own player order.
+    # Resolve through the entry ids rather than positionally, or a
+    # match stored the other way round records the wrong winner —
+    # the single most damaging thing this file could get wrong.
+    sofa_winner = p1 if code == 1 else p2
+
+    status_code = (ev.get("status") or {}).get("code", 100)
+    home_sc = ev.get("homeScore") or {}
+    away_sc = ev.get("awayScore") or {}
+    scores = _final_scores(home_sc, away_sc, status_code, code)
+    if scores and match.player1_id == p2:
+        scores = [scores[1], scores[0]]
+
+    start_ts = ev.get("startTimestamp")
+    started = (datetime.fromtimestamp(start_ts, tz=timezone.utc)
+               if start_ts else None)
+
+    changed = False
+    # THE EVENT ID, for every match this sweep ever resolves — not
+    # just the ones the live poller happened to see on court. It is
+    # the only key the point-by-point feed can be read by, and a
+    # match that finished while nobody was watching would otherwise
+    # never get one.
+    if ev.get("id") and match.sofa_event_id != ev.get("id"):
+        match.sofa_event_id = ev.get("id")
+        changed = True
+    # How long the tennis actually took, for the order-of-play
+    # estimator. Read from the payload already in hand.
+    played = _played_minutes(ev)
+    if played is not None and match.sofa_duration_min != played:
+        match.sofa_duration_min = played
+        changed = True
+    if match.sofa_winner_id != sofa_winner:
+        match.sofa_winner_id = sofa_winner
+        changed = True
+    if scores and match.sofa_scores_json != scores:
+        match.sofa_scores_json = scores
+        changed = True
+    # Compared through _aware, because these two are never equal
+    # otherwise: SQLite hands the stored value back NAIVE while the
+    # freshly computed one carries UTC, so the same instant compares
+    # unequal and every sweep rewrote all 175 rows and committed for
+    # nothing. Same trap that killed the order-of-play ingest in
+    # _absorb — see services/schedule.py.
+    if started and _aware(match.sofa_started_at) != started:
+        match.sofa_started_at = started
+        changed = True
+    # First observation only — this is "when we noticed", and
+    # re-stamping it on every sweep would destroy the one thing it
+    # is for: comparing how quickly each source reports a result.
+    if match.sofa_completed_at is None:
+        match.sofa_completed_at = now
+        changed = True
+
+    # PROMOTE into the real columns when Sofascore is the source of
+    # record. This is the "one writer, not eighteen consumers"
+    # cutover: scoring, standings, Hall of Fame, locking, H2H and
+    # upsets all read winner_id / scores_json directly, and none of
+    # them can be reached by a shim at the API layer.
+    #
+    # Only matches we actually HAVE a result for are touched, which
+    # is what keeps byes correct: a bye has no Sofascore event and
+    # never will, so its scraper-set winner is left exactly alone.
+    # Blanking those was what put TBD through the whole bracket.
+    if sofa_authoritative():
+        if match.winner_id != sofa_winner:
+            match.winner_id = sofa_winner
+            changed = True
+        if scores and match.scores_json != scores:
+            match.scores_json = scores
+            changed = True
+        if started and _aware(match.started_at) != started:
+            match.started_at = started
+            changed = True
+        if match.completed_at is None:
+            match.completed_at = now
+            changed = True
+        if match.status != "completed":
+            match.status = "completed"
+            changed = True
+
+    return "written" if changed else "unchanged"
+
+
 async def sweep_once(db, *, force: bool = False) -> dict:
     """One pass over every tracked draw's finished events.
 
@@ -271,112 +397,10 @@ async def sweep_once(db, *, force: bool = False) -> dict:
                 if (ev.get("status") or {}).get("type") != _FINISHED:
                     continue
                 seen += 1
-
-                home_ids = _event_player_ids(ev.get("homeTeam") or {})
-                away_ids = _event_player_ids(ev.get("awayTeam") or {})
-                p1 = next((by_player[i] for i in home_ids if i in by_player), None)
-                p2 = next((by_player[i] for i in away_ids if i in by_player), None)
-                if not p1 or not p2:
-                    # A qualifying or doubles event inside the same season, or a
-                    # player we never stamped. Counted, not guessed at.
+                outcome = await _record(db, ev, draw_id, by_player, now)
+                if outcome == "unmatched":
                     unmatched += 1
-                    continue
-
-                match = (await db.execute(
-                    select(Match).where(
-                        Match.draw_id == draw_id,
-                        Match.player1_id.in_([p1, p2]),
-                        Match.player2_id.in_([p1, p2]),
-                    ))).scalars().first()
-                if match is None:
-                    unmatched += 1
-                    continue
-
-                code = ev.get("winnerCode")
-                if code not in (1, 2):
-                    continue
-                # winnerCode is home/away; the bracket has its own player order.
-                # Resolve through the entry ids rather than positionally, or a
-                # match stored the other way round records the wrong winner —
-                # the single most damaging thing this file could get wrong.
-                sofa_winner = p1 if code == 1 else p2
-
-                status_code = (ev.get("status") or {}).get("code", 100)
-                home_sc = ev.get("homeScore") or {}
-                away_sc = ev.get("awayScore") or {}
-                scores = _final_scores(home_sc, away_sc, status_code, code)
-                if scores and match.player1_id == p2:
-                    scores = [scores[1], scores[0]]
-
-                start_ts = ev.get("startTimestamp")
-                started = (datetime.fromtimestamp(start_ts, tz=timezone.utc)
-                           if start_ts else None)
-
-                changed = False
-                # THE EVENT ID, for every match this sweep ever resolves — not
-                # just the ones the live poller happened to see on court. It is
-                # the only key the point-by-point feed can be read by, and a
-                # match that finished while nobody was watching would otherwise
-                # never get one.
-                if ev.get("id") and match.sofa_event_id != ev.get("id"):
-                    match.sofa_event_id = ev.get("id")
-                    changed = True
-                # How long the tennis actually took, for the order-of-play
-                # estimator. Read from the payload already in hand.
-                played = _played_minutes(ev)
-                if played is not None and match.sofa_duration_min != played:
-                    match.sofa_duration_min = played
-                    changed = True
-                if match.sofa_winner_id != sofa_winner:
-                    match.sofa_winner_id = sofa_winner
-                    changed = True
-                if scores and match.sofa_scores_json != scores:
-                    match.sofa_scores_json = scores
-                    changed = True
-                # Compared through _aware, because these two are never equal
-                # otherwise: SQLite hands the stored value back NAIVE while the
-                # freshly computed one carries UTC, so the same instant compares
-                # unequal and every sweep rewrote all 175 rows and committed for
-                # nothing. Same trap that killed the order-of-play ingest in
-                # _absorb — see services/schedule.py.
-                if started and _aware(match.sofa_started_at) != started:
-                    match.sofa_started_at = started
-                    changed = True
-                # First observation only — this is "when we noticed", and
-                # re-stamping it on every sweep would destroy the one thing it
-                # is for: comparing how quickly each source reports a result.
-                if match.sofa_completed_at is None:
-                    match.sofa_completed_at = now
-                    changed = True
-
-                # PROMOTE into the real columns when Sofascore is the source of
-                # record. This is the "one writer, not eighteen consumers"
-                # cutover: scoring, standings, Hall of Fame, locking, H2H and
-                # upsets all read winner_id / scores_json directly, and none of
-                # them can be reached by a shim at the API layer.
-                #
-                # Only matches we actually HAVE a result for are touched, which
-                # is what keeps byes correct: a bye has no Sofascore event and
-                # never will, so its scraper-set winner is left exactly alone.
-                # Blanking those was what put TBD through the whole bracket.
-                if sofa_authoritative():
-                    if match.winner_id != sofa_winner:
-                        match.winner_id = sofa_winner
-                        changed = True
-                    if scores and match.scores_json != scores:
-                        match.scores_json = scores
-                        changed = True
-                    if started and _aware(match.started_at) != started:
-                        match.started_at = started
-                        changed = True
-                    if match.completed_at is None:
-                        match.completed_at = now
-                        changed = True
-                    if match.status != "completed":
-                        match.status = "completed"
-                        changed = True
-
-                if changed:
+                elif outcome == "written":
                     written += 1
                     page_wrote += 1
                     touched_draws.add(draw_id)
@@ -395,6 +419,42 @@ async def sweep_once(db, *, force: bool = False) -> dict:
             # way, and it is a one-off.
             if page_wrote == 0 and not force:
                 break
+
+        # A WALKOVER DECLARED AHEAD OF ITS SLOT IS ON THE OTHER LIST. Sofascore
+        # files events by `startTimestamp`, and a walkover keeps the slot it
+        # was scheduled into, so until that time passes it sits in
+        # `events/next` — finished, winnerCode set — and not in `events/last`.
+        # Guadalajara 2026-09-16: Townsend withdrew at 18:24 UTC from a
+        # 23:00 match against Kostyuk; `last` could not see it for four and a
+        # half hours, and Wikipedia (which may no longer decide a result) was
+        # the only source showing it. Page 0 only, at NEXT_INTERVAL rather than
+        # every sweep: a walkover is rare and a few minutes late costs nothing,
+        # while one more request per draw per sweep is traffic on the IP live
+        # scoring depends on. A walkover past page 0 is still recorded once
+        # its slot passes and it moves onto `last`.
+        if time.monotonic() - _next_checked.get(draw_id, float("-inf")) >= NEXT_INTERVAL:
+            _next_checked[draw_id] = time.monotonic()
+            await db.commit()           # the writer never waits at the gate
+            try:
+                payload = await _get(
+                    f"/unique-tournament/{ut_id}/season/{season_id}/events/next/0")
+            except SofascoreBlocked:
+                raise
+            except SofascoreNotFound:
+                payload = {}            # nothing upcoming: the draw's last day
+            except Exception as exc:    # noqa: BLE001 — one page is not the sweep
+                logger.warning("next page for draw %s failed: %s", draw_id, exc)
+                payload = {}
+            for ev in decided_ahead_of_slot(payload):
+                seen += 1
+                outcome = await _record(db, ev, draw_id, by_player, now)
+                if outcome == "unmatched":
+                    unmatched += 1
+                elif outcome == "written":
+                    written += 1
+                    touched_draws.add(draw_id)
+            if written:
+                await db.commit()
 
     # A recorded winner is the single most visible thing this service does, and
     # without a nudge the browser would not learn about it until its next poll —
