@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="design_doc_mode" content="canvas">
+<title>Card Nav — 4 directions</title>
+<link rel="stylesheet" href="../../tokens/fonts.css">
+<style>
+/* Colors/metrics lifted from mobile/theme.js + mobile/cards.jsx (dogger27/Upset-Alert). */
+body{margin:0;font-family:Archivo,sans-serif}
+a{color:#2d6a4f}a:hover{color:#1b4332}
+.opt{position:absolute;width:375px}
+.label{margin:0 0 14px 2px;color:#1d2925}
+.label .row{display:flex;align-items:center;gap:10px}
+.badge{font:700 12px/1 'Saira Condensed';letter-spacing:.06em;background:#1d2925;color:#fff;padding:5px 7px 4px;border-radius:5px}
+.badge.ref{background:#93a39c}
+.label h2{font:800 22px/1 'Saira Condensed';letter-spacing:.02em;text-transform:uppercase;margin:0}
+.label p{margin:8px 0 0;font-size:13px;line-height:1.45;color:#45524d;max-width:360px}
+.label p.rn{color:#687a73;font-size:12px}
+.label p.rn b{color:#2c3a35;font-weight:600}
+.screen{background:#0b1512;border-radius:20px;padding:14px 16px 20px}
+.eye{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.eye span{font:700 12px/14px 'Saira Condensed';letter-spacing:1.1px;color:#52b788}
+.eye i{flex:1;height:1px;background:#253430}
+.card{position:relative;margin-top:8px}
+.wta{--card:#7d3352;--line:#b8567d;--plate:#3a1526;--ink:#f7e7eb;--inkBody:#e2ccd0;--muted:#dbbfc6;--faint:#ccafb5;--orn:#ffb3c6;--barA:#db2777;--barB:#a3134e}
+.atp{--card:#2c5081;--line:#4d7ab5;--plate:#14243d;--ink:#e5ecf8;--inkBody:#c9d3e4;--muted:#c0cbe0;--faint:#aebad0;--orn:#8fb6ff;--barA:#2563eb;--barB:#1742a0}
+.frame{display:flex;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.5)}
+.bar{width:4px;background:linear-gradient(var(--barA),var(--barB))}
+.col{flex:1;min-width:0;display:flex;flex-direction:column;position:relative}
+.body{padding:14px 16px;display:flex;flex-direction:column;gap:9px}
+.tr{display:flex;align-items:center;gap:8px}
+.title{flex:1;font:700 19px/20px 'Saira Condensed';letter-spacing:.19px;color:var(--ink);white-space:nowrap}
+.stamp{background:var(--plate);border-radius:8px;padding:8px;display:flex}
+.stamp img{height:15px;display:block}
+.meta{display:flex;align-items:center;gap:8px}
+.city{flex:1;font:500 13px/18px Archivo;color:var(--inkBody)}
+.surf{font:500 11px/15px Archivo;color:var(--muted)}
+.dates{flex:1;text-align:right;font:500 11px/15px Archivo;color:var(--muted)}
+.star{position:absolute;top:-9px;right:-9px;width:22px;height:22px;border-radius:11px;background:var(--card);border:1px solid color-mix(in srgb,var(--ink) 50%,transparent);display:flex;align-items:center;justify-content:center;z-index:2}
+.star svg{width:12px;height:12px;fill:var(--ink)}
+.w{font:600 13px/17px 'Saira Condensed';color:var(--muted);cursor:pointer;user-select:none;white-space:nowrap;transition:color .15s}
+.w.hit{color:var(--ink)}
+
+/* ── current (reference) ── */
+.nav-0{display:flex;align-items:center;padding:11px 18px;border-top:1px solid color-mix(in srgb,var(--orn) 20%,transparent)}
+.nav-0 .rail{flex:1;height:1px;background:color-mix(in srgb,var(--orn) 24%,transparent)}
+.nav-0 .tick{width:1px;height:9px;background:color-mix(in srgb,var(--orn) 45%,transparent);margin-right:16px}
+.nav-0 .words{display:flex;gap:17px}
+.nav-0 .w{font-size:14px;color:var(--ink);transform:skewX(-8deg)}
+
+/* ── 1a Tracer ── */
+.nav-a{display:flex;align-items:center;padding:11px 18px;border-top:1px solid color-mix(in srgb,var(--orn) 22%,transparent)}
+.nav-a .rail{position:relative;flex:1;height:1px;background:color-mix(in srgb,var(--orn) 24%,transparent);margin-right:14px}
+.nav-a .streak{position:absolute;top:-1px;left:0;width:64px;height:3px;border-radius:2px;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--orn) 45%,transparent) 60%,var(--orn));animation:trace var(--per,4.4s) cubic-bezier(.45,0,.2,1) infinite;animation-delay:var(--dly,0s)}
+.nav-a .tick{width:1px;height:9px;background:color-mix(in srgb,var(--orn) 40%,transparent);margin-right:16px;animation:tickflash var(--per,4.4s) linear infinite;animation-delay:var(--dly,0s)}
+.nav-a .words{display:flex;gap:18px}
+.nav-a .w{position:relative;transform:skewX(-8deg)}
+.nav-a .w::after{content:'';position:absolute;left:0;right:0;bottom:-5px;height:2px;border-radius:1px;background:var(--orn);transform:scaleX(0);transform-origin:left;transition:transform .25s cubic-bezier(.2,.8,.2,1)}
+.nav-a .w.hit::after{transform:scaleX(1)}
+@keyframes trace{0%{left:0;transform:translateX(-100%);opacity:0}8%{opacity:1}72%{left:100%;transform:translateX(0);opacity:1}80%{opacity:0}100%{left:100%;transform:translateX(0);opacity:0}}
+@keyframes tickflash{0%,68%{background:color-mix(in srgb,var(--orn) 40%,transparent);box-shadow:none}73%{background:var(--orn);box-shadow:0 0 6px var(--orn)}90%,100%{background:color-mix(in srgb,var(--orn) 40%,transparent);box-shadow:none}}
+
+/* ── 1b Court ── */
+.nav-b{display:flex;height:34px;background:var(--plate);border-top:1px solid color-mix(in srgb,var(--ink) 55%,transparent)}
+.nav-b .alley{width:20px;border-right:1px solid color-mix(in srgb,var(--ink) 55%,transparent);display:flex;align-items:center;justify-content:center}
+.nav-b .ball{width:5px;height:5px;border-radius:50%;background:var(--orn);animation:pulse 2.4s ease-in-out infinite}
+.nav-b .court{flex:1;position:relative}
+.nav-b .court::after{content:'';position:absolute;left:50%;bottom:0;width:1px;height:5px;background:color-mix(in srgb,var(--ink) 55%,transparent)}
+.nav-b .box{display:flex;align-items:center;justify-content:center;padding:0 13px;position:relative}
+.nav-b .box::before{content:'';position:absolute;left:0;top:7px;bottom:7px;width:1px;background:color-mix(in srgb,var(--ink) 55%,transparent)}
+.nav-b .box:last-child{padding-right:16px}
+.nav-b .w{color:color-mix(in srgb,var(--ink) 72%,transparent)}
+.nav-b .box.hit{background:color-mix(in srgb,var(--orn) 18%,transparent)}
+@keyframes pulse{0%,100%{transform:scale(1);opacity:.75}50%{transform:scale(1.5);opacity:1}}
+
+/* ── 1c Livery ── */
+.nav-c{position:relative;display:flex;align-items:center;padding:8px 14px 10px 16px;overflow:hidden;border-top:1px solid color-mix(in srgb,var(--orn) 14%,transparent)}
+.nav-c .speed{display:flex;gap:5px;margin-right:auto}
+.nav-c .speed i{display:block;height:26px;transform:skewX(-20deg);background:var(--orn)}
+.nav-c .panels{display:flex;gap:3px}
+.nav-c .panel{height:26px;padding:0 13px;background:var(--plate);transform:skewX(-8deg);border-radius:3px;display:flex;align-items:center;cursor:pointer;transition:background .15s}
+.nav-c .panel .w{color:var(--inkBody)}
+.nav-c .panel.hit{background:color-mix(in srgb,var(--orn) 28%,var(--plate))}
+.nav-c .panel.hit .w{color:var(--ink)}
+.nav-c .shine{position:absolute;top:0;bottom:0;left:0;width:44px;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--orn) 22%,transparent),transparent);transform:skewX(-8deg);animation:shine var(--per,5.5s) ease-in-out infinite;animation-delay:var(--dly,0s);pointer-events:none}
+@keyframes shine{0%{left:-15%;opacity:0}5%{opacity:1}45%{left:105%;opacity:1}46%,100%{left:105%;opacity:0}}
+
+/* ── 1d Ticket ── */
+.nav-d{position:relative;display:flex;align-items:center;padding:11px 18px 12px;border-top:1px dashed color-mix(in srgb,var(--orn) 42%,transparent)}
+.nav-d .notch{position:absolute;top:-7.5px;width:13px;height:13px;border-radius:50%;background:#0b1512;border:1px solid var(--line);z-index:1}
+.nav-d .notch.l{left:-11px}.nav-d .notch.r{right:-7px}
+.nav-d .code{display:flex;align-items:center;gap:2px;height:14px;margin-right:auto}
+.nav-d .code i{display:block;height:100%;background:color-mix(in srgb,var(--orn) 55%,transparent)}
+.nav-d .words{display:flex;gap:18px}
+</style>
+</head>
+<body>
+
+<section class="opt" style="left:40px;top:40px">
+  <div class="label"><div class="row"><span class="badge ref">REF</span><h2>Current</h2></div><p>Today's band from <code>cards.jsx</code>: leader rule, tick, three oblique words at 14pt.</p></div>
+  <div class="screen"><div class="eye"><span>ACTIVE</span><i></i></div>
+    <div class="card wta"><div class="frame"><div class="bar"></div><div class="col"><div class="body"><div class="tr"><span class="title">Guadalajara Open</span><span class="stamp"><img src="../../assets/tier-stamps/wta-500.png" alt="WTA 500" style="width:83.9px"></span></div><div class="meta"><span class="city">Guadalajara</span><span class="surf">Hard</span><span class="dates">Sep 13 – 19</span></div></div>
+      <div class="nav-0"><span class="rail"></span><span class="tick"></span><div class="words"><span class="w">League</span><span class="w">Draw</span><span class="w">Schedule</span></div></div></div></div><span class="star"><svg viewBox="0 0 24 24"><path d="M12 2l3.1 6.6 7.1.9-5.2 4.9 1.4 7.1L12 18l-6.4 3.5 1.4-7.1L1.8 9.5l7.1-.9z"/></svg></span></div>
+    <div class="card atp"><div class="frame"><div class="bar"></div><div class="col"><div class="body"><div class="tr"><span class="title">Chengdu Open</span><span class="stamp"><img src="../../assets/tier-stamps/atp-250.png" alt="ATP 250" style="width:83px"></span></div><div class="meta"><span class="city">Chengdu</span><span class="surf">Hard</span><span class="dates">Sep 15 – 21</span></div></div>
+      <div class="nav-0"><span class="rail"></span><span class="tick"></span><div class="words"><span class="w">League</span><span class="w">Draw</span><span class="w">Schedule</span></div></div></div></div></div>
+  </div>
+</section>
+
+<section class="opt" id="1a" style="left:495px;top:40px">
+  <div class="label"><div class="row"><span class="badge">1a</span><h2>Tracer</h2></div><p>The leader rule becomes a live wire: a light runs along it toward the words and lands on the tick with a flash. Motion is the eye-catcher; the words drop to 13pt and the muted step, brightening only under your thumb.</p><p class="rn"><b>RN:</b> Animated.loop translateX on the native driver; the tail is 5 stacked Views (like AccentBar). Stagger by card index; run on Open/Active only.</p></div>
+  <div class="screen"><div class="eye"><span>ACTIVE</span><i></i></div>
+    <div class="card wta" style="--dly:0s"><div class="frame"><div class="bar"></div><div class="col"><div class="body"><div class="tr"><span class="title">Guadalajara Open</span><span class="stamp"><img src="../../assets/tier-stamps/wta-500.png" alt="WTA 500" style="width:83.9px"></span></div><div class="meta"><span class="city">Guadalajara</span><span class="surf">Hard</span><span class="dates">Sep 13 – 19</span></div></div>
+      <div class="nav-a"><span class="rail"><span class="streak"></span></span><span class="tick"></span><div class="words"><span class="w">League</span><span class="w">Draw</span><span class="w">Schedule</span></div></div></div></div><span class="star"><svg viewBox="0 0 24 24"><path d="M12 2l3.1 6.6 7.1.9-5.2 4.9 1.4 7.1L12 18l-6.4 3.5 1.4-7.1L1.8 9.5l7.1-.9z"/></svg></span></div>
+    <div class="card atp" style="--dly:-2.2s"><div class="frame"><div class="bar"></div><div class="col"><div class="body"><div class="tr"><span class="title">Chengdu Open</span><span class="stamp"><img src="../../assets/tier-stamps/atp-250.png" alt="ATP 250" style="width:83px"></span></div><div class="meta"><span class="city">Chengdu</span><span class="surf">Hard</span><span class="dates">Sep 15 – 21</span></div></div>
+      <div class="nav-a"><span class="rail"><span class="streak"></span></span><span class="tick"></span><div class="words"><span class="w">League</span><span class="w">Draw</span><span class="w">Schedule</span></div></div></div></div></div>
+  </div>
+</section>
+
+<section class="opt" id="1b" style="left:950px;top:40px">
+  <div class="label"><div class="row"><span class="badge">1b</span><h2>Court</h2></div><p>The band is painted as court: a recessed surface in the tier plate's dark, white lines, a doubles alley on the left with the ball in it, an empty court with its center mark, and the three destinations huddled in service boxes on the right. Zero motion beyond the ball's breath.</p><p class="rn"><b>RN:</b> Views and borders only. Ball pulse = Animated scale; use it as the "on court now" signal on Active cards.</p></div>
+  <div class="screen"><div class="eye"><span>ACTIVE</span><i></i></div>
+    <div class="card wta"><div class="frame"><div class="bar"></div><div class="col"><div class="body"><div class="tr"><span class="title">Guadalajara Open</span><span class="stamp"><img src="../../assets/tier-stamps/wta-500.png" alt="WTA 500" style="width:83.9px"></span></div><div class="meta"><span class="city">Guadalajara</span><span class="surf">Hard</span><span class="dates">Sep 13 – 19</span></div></div>
+      <div class="nav-b"><span class="alley"><span class="ball"></span></span><span class="court"></span><span class="box"><span class="w">League</span></span><span class="box"><span class="w">Draw</span></span><span class="box"><span class="w">Schedule</span></span></div></div></div><span class="star"><svg viewBox="0 0 24 24"><path d="M12 2l3.1 6.6 7.1.9-5.2 4.9 1.4 7.1L12 18l-6.4 3.5 1.4-7.1L1.8 9.5l7.1-.9z"/></svg></span></div>
+    <div class="card atp"><div class="frame"><div class="bar"></div><div class="col"><div class="body"><div class="tr"><span class="title">Chengdu Open</span><span class="stamp"><img src="../../assets/tier-stamps/atp-250.png" alt="ATP 250" style="width:83px"></span></div><div class="meta"><span class="city">Chengdu</span><span class="surf">Hard</span><span class="dates">Sep 15 – 21</span></div></div>
+      <div class="nav-b"><span class="alley"><span class="ball"></span></span><span class="court"></span><span class="box"><span class="w">League</span></span><span class="box"><span class="w">Draw</span></span><span class="box"><span class="w">Schedule</span></span></div></div></div></div>
+  </div>
+</section>
+
+<section class="opt" id="1c" style="left:1405px;top:40px">
+  <div class="label"><div class="row"><span class="badge">1c</span><h2>Livery</h2></div><p>Broadcast lower-third: three slanted plates leaning the tier marks' 8°, speed lines trailing off to the left, and a gloss that sweeps the band every few seconds. The loudest of the four by shape; the type stays 13pt semibold at the body step.</p><p class="rn"><b>RN:</b> skewX on Views; the sweep is one Animated View inside overflow:hidden; the speed lines are 4 skewed Views at rising alpha.</p></div>
+  <div class="screen"><div class="eye"><span>ACTIVE</span><i></i></div>
+    <div class="card wta" style="--dly:0s"><div class="frame"><div class="bar"></div><div class="col"><div class="body"><div class="tr"><span class="title">Guadalajara Open</span><span class="stamp"><img src="../../assets/tier-stamps/wta-500.png" alt="WTA 500" style="width:83.9px"></span></div><div class="meta"><span class="city">Guadalajara</span><span class="surf">Hard</span><span class="dates">Sep 13 – 19</span></div></div>
+      <div class="nav-c"><span class="speed"><i style="width:2px;opacity:.1"></i><i style="width:2px;opacity:.16"></i><i style="width:3px;opacity:.24"></i><i style="width:3px;opacity:.34"></i></span><div class="panels"><span class="panel"><span class="w">League</span></span><span class="panel"><span class="w">Draw</span></span><span class="panel"><span class="w">Schedule</span></span></div><span class="shine"></span></div></div></div><span class="star"><svg viewBox="0 0 24 24"><path d="M12 2l3.1 6.6 7.1.9-5.2 4.9 1.4 7.1L12 18l-6.4 3.5 1.4-7.1L1.8 9.5l7.1-.9z"/></svg></span></div>
+    <div class="card atp" style="--dly:-2.7s"><div class="frame"><div class="bar"></div><div class="col"><div class="body"><div class="tr"><span class="title">Chengdu Open</span><span class="stamp"><img src="../../assets/tier-stamps/atp-250.png" alt="ATP 250" style="width:83px"></span></div><div class="meta"><span class="city">Chengdu</span><span class="surf">Hard</span><span class="dates">Sep 15 – 21</span></div></div>
+      <div class="nav-c"><span class="speed"><i style="width:2px;opacity:.1"></i><i style="width:2px;opacity:.16"></i><i style="width:3px;opacity:.24"></i><i style="width:3px;opacity:.34"></i></span><div class="panels"><span class="panel"><span class="w">League</span></span><span class="panel"><span class="w">Draw</span></span><span class="panel"><span class="w">Schedule</span></span></div><span class="shine"></span></div></div></div></div>
+  </div>
+</section>
+
+<section class="opt" id="1d" style="left:1860px;top:40px">
+  <div class="label"><div class="row"><span class="badge">1d</span><h2>Ticket</h2></div><p>The band is the stub: a perforated tear line with notches cut into both edges, and a barcode generated from the tournament's name standing where the leader rule was. Tactile and a little absurd; the words are upright, 13pt, muted.</p><p class="rn"><b>RN:</b> borderStyle 'dashed' + two absolutely-positioned circles in the page color; bars are Views sized from a hash of the name.</p></div>
+  <div class="screen"><div class="eye"><span>ACTIVE</span><i></i></div>
+    <div class="card wta"><div class="frame"><div class="bar"></div><div class="col"><div class="body"><div class="tr"><span class="title">Guadalajara Open</span><span class="stamp"><img src="../../assets/tier-stamps/wta-500.png" alt="WTA 500" style="width:83.9px"></span></div><div class="meta"><span class="city">Guadalajara</span><span class="surf">Hard</span><span class="dates">Sep 13 – 19</span></div></div>
+      <div class="nav-d"><span class="notch l"></span><span class="notch r"></span><span class="code" data-seed="Guadalajara Open"></span><div class="words"><span class="w">League</span><span class="w">Draw</span><span class="w">Schedule</span></div></div></div></div><span class="star"><svg viewBox="0 0 24 24"><path d="M12 2l3.1 6.6 7.1.9-5.2 4.9 1.4 7.1L12 18l-6.4 3.5 1.4-7.1L1.8 9.5l7.1-.9z"/></svg></span></div>
+    <div class="card atp"><div class="frame"><div class="bar"></div><div class="col"><div class="body"><div class="tr"><span class="title">Chengdu Open</span><span class="stamp"><img src="../../assets/tier-stamps/atp-250.png" alt="ATP 250" style="width:83px"></span></div><div class="meta"><span class="city">Chengdu</span><span class="surf">Hard</span><span class="dates">Sep 15 – 21</span></div></div>
+      <div class="nav-d"><span class="notch l"></span><span class="notch r"></span><span class="code" data-seed="Chengdu Open"></span><div class="words"><span class="w">League</span><span class="w">Draw</span><span class="w">Schedule</span></div></div></div></div></div>
+  </div>
+</section>
+
+<script>
+// Barcode from the tournament name (deterministic).
+document.querySelectorAll('.code').forEach(el=>{
+  let h=0;for(const c of el.dataset.seed)h=(h*31+c.charCodeAt(0))>>>0;
+  let out='';for(let i=0;i<22;i++){h=(h*1103515245+12345)>>>0;out+=`<i style="width:${1+(h>>16)%3}px"></i>`;}
+  el.innerHTML=out;
+});
+// Press feedback: the word (or its plate/box) lights for a beat.
+document.querySelectorAll('.w').forEach(w=>{
+  const target=w.closest('.panel')||w.closest('.box')||w;
+  w.addEventListener('pointerdown',()=>{target.classList.add('hit');if(target!==w)w.classList.add('hit');
+    setTimeout(()=>{target.classList.remove('hit');w.classList.remove('hit');},700);});
+});
+</script>
+</body>
+</html>
