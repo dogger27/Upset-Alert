@@ -27,7 +27,7 @@ import { computeCohortInfo, getHomeSection } from '../../drawStatus'
 import { drawsByTournament } from '../../scheduleRows'
 import { lockLabel } from '../../lock'
 import { C, R, S, T } from '../../theme'
-import { StatusChip, SurfaceText, TourCard, useCardSkin } from '../../cards'
+import { CardNav, StatusChip, SurfaceText, TourCard, useCardSkin } from '../../cards'
 import { dateRange } from '../../dates'
 import { Button, Card, CardLink, ErrorNote, Eyebrow, Loading, Muted, Screen, Title } from '../../ui'
 import { MenuSheet } from '../../menu'
@@ -68,13 +68,6 @@ const oopHref = t => (t.oop_first_seen_at && t.tournament_id
  * CardPill and both links are calls to it — the draw's and the sheet's — and
  * the only difference between them is the word and where they point.
  */
-function DrawPill({ draws }) {
-  /* hasDrawData is the site's rule and cardHref already applies it: a draw
-     that is neither completed nor released has nothing to show, so the pill
-     goes to its unavailable state rather than linking to an empty page. */
-  return <CardPill href={cardHref(draws)} label="Draw" a11y="Tournament draw" />
-}
-
 function OrderOfPlay({ t }) {
   return <CardPill href={oopHref(t)} label="Schedule" a11y="Schedule and order of play" />
 }
@@ -223,6 +216,32 @@ function CardPill({ href, label, a11y }) {
     </CardLink>
   )
 }
+
+/* THE LEAGUE FOR THIS EVENT. A standing is per DRAW, so a combined
+   tournament has two of them and one bar — the same shape cardHref settled for
+   the bracket, and settled the same way: the first draw with data, with the
+   standings screen's own tour switch one tap from the other half. The rows
+   above the bar still show both. */
+const leagueHref = draws => {
+  const d = draws.find(hasDrawData) || draws[0]
+  return d ? `/standings/${d.id}` : null
+}
+
+/* THE THREE OPTIONS, IN ONE PLACE, so Open, Active and Last week cannot drift
+   apart in what they offer or in what order (owner, 2026-09-16).
+ *
+ * ALL THREE APPEAR ON ALL THREE SECTIONS, including the ones with nothing
+ * behind them — an Open draw has no order of play published for days, and its
+ * Schedule segment sits dimmed rather than absent. That reverses an earlier
+ * call to leave the sheet off Open cards entirely, and the bar is the reason:
+ * a pill that is not there costs nothing, but a SEGMENT that is not there
+ * changes the control's shape from card to card, which is the one thing a nav
+ * must not do. */
+const navItems = draws => [
+  { label: 'League', href: leagueHref(draws), a11y: 'League standings' },
+  { label: 'Draw', href: cardHref(draws), a11y: 'Tournament draw' },
+  { label: 'Schedule', href: oopHref(oopDraw(draws)), a11y: 'Schedule and order of play' },
+]
 
 /* COMPETING, in the corner. On the footer row it was a bare star between two
    controls, reading as a third one; on the corner it is a stamp on the card,
@@ -566,18 +585,14 @@ function OpenCard({ draws, status, now }) {
                draw to open. No Schedule pill here — an Open draw is days from
                its first match and the tour has published no sheet, so the
                card would carry a control that is never anything but empty. */
-            <View style={s.footRow}>
-              <View style={s.footStack}>
-                {rows.map(r => (
-                  <OpenRow key={r.draws[0].id} draws={r.draws} status={status} now={now}
-                           label={rows.length > 1 ? tourWord(r.draws) : null} />
-                ))}
-              </View>
-              <View style={s.pillRow}>
-                <DrawPill draws={draws} />
-              </View>
+            <View style={s.footStack}>
+              {rows.map(r => (
+                <OpenRow key={r.draws[0].id} draws={r.draws} status={status} now={now}
+                         label={rows.length > 1 ? tourWord(r.draws) : null} />
+              ))}
             </View>
           }
+          nav={<CardNav items={navItems(draws)} />}
         >
           <Meta t={draws[0]} />
         </TourCard>
@@ -593,18 +608,20 @@ function ActiveRow({ t, userId, label }) {
   const rows = standings.data || []
   const mine = rows.find(r => r.user?.id === userId)
   const inks = useCardSkin()
-  /* THE LABEL STAYS HERE, where the pill came off everywhere else: a standing
-     is the one fact on this card that genuinely differs between the two halves
-     and cannot be collapsed — 3rd of 8 and 7th of 8 are two different links to
-     two different pages, and unlabelled they are a coin toss. It rides inside
-     the link, as plain type. */
+  /* PLAIN TYPE, NOT A LINK, since the bar below took the navigating (owner,
+     2026-09-16). The chevron went with the link: it was the affordance, and a
+     chevron on a line that does nothing is a promise the row cannot keep.
+     What the row keeps is the FACT, which is the most valuable thing on this
+     screen and the reason the dashboard shows standings at all.
+     THE LABEL STAYS: a standing is the one fact here that genuinely differs
+     between the two halves of a combined event and cannot be collapsed —
+     3rd of 8 and 7th of 8 unlabelled are a coin toss. */
   return mine ? (
-    <CardLink href={`/standings/${t.id}`} style={s.lockLine} pressedOpacity={0.6}>
+    <View style={s.lockLine}>
       {label ? <Text style={[s.footTour, { color: inks.faint }]}>{label}</Text> : null}
       <Text style={[T.score, { color: inks.ink }]}>{ordinal(mine.rank)}</Text>
       <Text style={[T.tiny, { color: inks.faint }]}>of {rows.length}</Text>
-      <Ionicons name="chevron-forward" size={13} color={inks.faint} />
-    </CardLink>
+    </View>
   ) : (
     <View style={s.lockLine}>
       {label ? <Text style={[s.footTour, { color: inks.faint }]}>{label}</Text> : null}
@@ -626,22 +643,14 @@ function ActiveCard({ draws, userId, status }) {
           draws={draws} name={draws[0].name} href={cardHref(draws)}
           corner={competing ? <CompetingStar /> : null}
           footer={
-            <View style={s.footRow}>
-              <View style={s.footStack}>
-                {draws.map(d => (
-                  <ActiveRow key={d.id} t={d} userId={userId}
-                             label={draws.length > 1 ? tourWord([d]) : null} />
-                ))}
-              </View>
-              {/* Draw first, then Schedule: the bracket is the thing most
-                  readers came for, and reading order puts it nearer the
-                  standing it belongs to. */}
-              <View style={s.pillRow}>
-                <DrawPill draws={draws} />
-                <OrderOfPlay t={oopDraw(draws)} />
-              </View>
+            <View style={s.footStack}>
+              {draws.map(d => (
+                <ActiveRow key={d.id} t={d} userId={userId}
+                           label={draws.length > 1 ? tourWord([d]) : null} />
+              ))}
             </View>
           }
+          nav={<CardNav items={navItems(draws)} />}
         >
           {/* The surface sits beside the city, exactly as it does on an Open
               card — one line up from the footer it used to share with the
@@ -727,6 +736,12 @@ function WeekCard({ draws, done }) {
     .sort()[0]
   return (
     <TourCard draws={draws} name={draws[0].name} href={cardHref(draws)} compact
+      /* LAST WEEK GETS THE BAR, NEXT WEEK DOES NOT (owner, 2026-09-16). Next
+         week has nothing behind any of the three: no bracket, no standings
+         without one, and no sheet — a bar of three dimmed segments is a
+         control that only reports its own uselessness. Its single Schedule
+         pill stays in the row instead. */
+      nav={done ? <CardNav items={navItems(draws)} /> : null}
       /* AS THE FOOTER, not as the body's children — and the difference is not
          cosmetic. `href` makes the body a link, so a row placed inside it puts
          Order of Play's own link INSIDE that one: invalid HTML on the web
@@ -785,15 +800,7 @@ function WeekRow({ draws, opens, done }) {
         </Text>
       ) : null}
       <View style={[s.weekSide, { alignItems: 'flex-end' }]}>
-        {/* LAST WEEK GETS THE DRAW, NEXT WEEK DOES NOT (owner, 2026-09-16).
-            Next week's draws are by definition not out — that is what the
-            "Opens Sep 19" beside this says — so the pill would spend the
-            whole week in its unavailable state, which is a control that only
-            ever reports the fact the row already states. */}
-        <View style={s.pillRow}>
-          {done ? <DrawPill draws={draws} /> : null}
-          <OrderOfPlay t={oopDraw(draws)} />
-        </View>
+        {done ? null : <OrderOfPlay t={oopDraw(draws)} />}
       </View>
     </View>
   )
@@ -866,15 +873,11 @@ const s = StyleSheet.create({
   // a long city name shrinks inside its slot instead of widening it.
   metaSide: { flex: 1, minWidth: 0 },
   footRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: S.sm },
-  /* The controls, as a group. Two pills on an Active card and one on an Open
-     card, so the group is what the row positions rather than each pill. */
-  pillRow: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
   /* One row per draw on a combined card, and exactly one row otherwise — so
-     the single-draw card's footer is unchanged by the gap.
-     flex 1 + minWidth 0 so the FACTS yield to the controls under pressure and
-     not the other way round: the names and labels in here already shrink to
-     fit (PlayerName, footTour), while a pill has one line it cannot break. */
-  footStack: { gap: S.sm, flex: 1, minWidth: 0 },
+     the single-draw card's footer is unchanged by the gap. It is the whole
+     footer again now that the controls have moved into the bar below it, and
+     minWidth 0 is what lets a long row shrink inside it rather than widen it. */
+  footStack: { gap: S.sm, minWidth: 0 },
   /* A week card's whole body: city, release, order of play. CENTRED rather
      than baseline-aligned now — the order of play is a pill when a sheet
      exists and bare type when it does not, and a baseline puts a pill's text

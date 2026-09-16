@@ -16,7 +16,7 @@ import { flagEmoji } from './flags'
 import { CardLink } from './ui'
 import { textWidth } from './measure.js'
 import { nameForms, pairForms } from './names'
-import { BADGE, C, R, SHADOW, T, TOUR } from './theme'
+import { BADGE, C, R, SHADOW, T, TOUCH, TOUR } from './theme'
 
 /* THE INK OF WHATEVER CARD YOU ARE INSIDE.
  *
@@ -249,7 +249,7 @@ export function StatusChip({ tone = 'muted', children }) {
  *   Halved, and the horizontal padding left alone so every card down the
  *   column still starts its text at the same x.
  */
-export function TourCard({ draws, name, children, footer, href, corner, compact }) {
+export function TourCard({ draws, name, children, footer, nav, href, corner, compact }) {
   const list = (draws || []).filter(Boolean)
   const combined = list.length > 1
   const isATP = list[0]?.gender !== 'F'
@@ -325,16 +325,28 @@ export function TourCard({ draws, name, children, footer, href, corner, compact 
         ) : (
           <AccentBar from={isATP ? C.atp : C.wta} to={isATP ? C.atpDeep : C.wtaDeep} />
         )}
-        <View style={[u.body, compact && u.bodyTight]}>
-          {href
-            ? <CardLink href={href} style={[u.bodyLink, compact && u.bodyLinkTight]}
-                        pressedOpacity={0.75}>{body}</CardLink>
-            : <View style={[u.bodyLink, compact && u.bodyLinkTight]}>{body}</View>}
-          {footer ? (
-          <View style={compact ? u.footerPlain : [u.footer, { borderTopColor: skin.rule }]}>
-            {footer}
+        {/* A COLUMN, so a bar can sit flush to the card's bottom edge. The
+            body keeps the padding that lines every card's text up down the
+            screen; the nav is outside it, edge to edge, and inherits the
+            card's bottom radius from its overflow: hidden. */}
+        <View style={u.column}>
+          <View style={[u.body, compact && u.bodyTight]}>
+            {href
+              ? <CardLink href={href} style={[u.bodyLink, compact && u.bodyLinkTight]}
+                          pressedOpacity={0.75}>{body}</CardLink>
+              : <View style={[u.bodyLink, compact && u.bodyLinkTight]}>{body}</View>}
+            {footer ? (
+              /* ONE HAIRLINE, NOT TWO. The footer draws its own rule only
+                 when nothing is below it — with a nav bar present that bar's
+                 top border is the card's single divider, and both would put
+                 two lines a few points apart. */
+              <View style={(compact || nav) ? u.footerPlain
+                                            : [u.footer, { borderTopColor: skin.rule }]}>
+                {footer}
+              </View>
+            ) : null}
           </View>
-        ) : null}
+          {nav}
         </View>
       </View>
       {/* box-none, not none: the slot itself must never swallow a tap meant
@@ -344,6 +356,56 @@ export function TourCard({ draws, name, children, footer, href, corner, compact 
       {corner ? <View style={u.corner} pointerEvents="box-none">{corner}</View> : null}
     </View>
     </CardSkinContext.Provider>
+  )
+}
+
+/* THE CARD'S FOOTER, AS NAVIGATION.
+ *
+ * League, Draw and Schedule are three peers, and three peers want one control
+ * rather than three objects (owner, 2026-09-16: "it is now essentially a nav
+ * bar with 3 options"). So they are a segmented bar flush to the card's bottom
+ * edge: the BAR is the shape, which is why no segment carries a fill, a border
+ * or a radius of its own.
+ *
+ * THIS RETIRES A PILE OF MACHINERY. The pills it replaces had grown four
+ * independent decisions — available or not, loud section or quiet, the tour's
+ * ink family, and three alpha weights — because a free-floating lozenge has to
+ * manufacture its own edges out of colour. A segment inside a bordered bar
+ * gets its edges from the bar, so the only thing left to say is whether it can
+ * be pressed, and that is one ink either way.
+ *
+ * AND THESE ARE THE FIRST OF THESE TARGETS TO MEET THE HOUSE RULE. theme.js
+ * has said TOUCH = 44 since the beginning, and the pills were 25pt tall. A
+ * segment is TOUCH tall as a MINIMUM and grows with the reader's text, so it
+ * stays a 44pt target rather than a 44pt box with 24pt type crammed in it.
+ *
+ * `items` are `{ label, href, a11y }`. A null href is the state where there is
+ * nothing to open yet: the segment stays in place, dimmed, and is not
+ * pressable — a missing segment would change the control's shape from card to
+ * card, which is exactly what a nav bar must not do.
+ */
+export function CardNav({ items }) {
+  const skin = useCardSkin()
+  /* Quiet cards step both inks down, as everything else on them does. */
+  const on = skin.quiet ? skin.inkBody : skin.ink
+  const off = skin.quiet ? skin.faint : skin.muted
+  return (
+    <View style={[u.nav, { borderTopColor: skin.rule }]}>
+      {items.map((it, i) => {
+        const live = !!it.href
+        const seg = [u.navSeg, i > 0 && u.navDiv]
+        const word = (
+          <Text style={[u.navText, { color: live ? on : off }]} numberOfLines={1}>
+            {it.label}
+          </Text>
+        )
+        return live
+          ? <CardLink key={it.label} href={it.href} style={seg} pressedOpacity={0.55}
+                      accessibilityLabel={it.a11y}>{word}</CardLink>
+          : <View key={it.label} style={seg} accessibilityRole="text"
+                  accessibilityLabel={`${it.a11y} — nothing published yet`}>{word}</View>
+      })}
+    </View>
   )
 }
 
@@ -405,6 +467,7 @@ const u = StyleSheet.create({
     borderWidth: 1, borderColor: C.border, borderRadius: R.md,
     flexDirection: 'row', overflow: 'hidden', ...SHADOW,
   },
+  column: { flex: 1, minWidth: 0 },
   // '14px 16px 14px 20px' with gap 9, from the source.
   body: { flex: 1, paddingTop: 14, paddingRight: 16, paddingBottom: 14, paddingLeft: 16, gap: 9 },
   bodyLink: { gap: 9 },
@@ -455,6 +518,25 @@ const u = StyleSheet.create({
     letterSpacing: TITLE_TRACK, color: C.ink, flexShrink: 1,
   },
   footer: { borderTopWidth: 1, borderTopColor: C.border, paddingTop: 9, marginTop: 1 },
+  /* THE NAV BAR. Darkened rather than tinted: a fraction of black works on
+     every card there is, and it sinks the bar behind the facts above it, which
+     is the right order — the card states, the bar acts.
+     The divider is white at 9%, not a token: it has to read on a pink card, a
+     blue one and a near-black one, and no single token in the palette does
+     that (the same reason the bar's own ground is an alpha). */
+  nav: { flexDirection: 'row', borderTopWidth: 1, backgroundColor: 'rgba(0,0,0,0.13)' },
+  /* minHeight, not height: TOUCH is the floor and the reader's text size may
+     raise it. A fixed 44 with 12pt type is a 44pt target; a fixed 44 with 26pt
+     type is a clipped one. */
+  navSeg: {
+    flex: 1, minWidth: 0, minHeight: TOUCH, paddingVertical: 4, paddingHorizontal: 6,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  navDiv: { borderLeftWidth: 1, borderLeftColor: 'rgba(255,255,255,0.09)' },
+  navText: {
+    fontFamily: 'Archivo_500Medium', fontSize: 12, lineHeight: leading(16),
+    letterSpacing: 0.2,
+  },
   /* A compact card's second row is a footer only in the structural sense — it
      sits beside the body's link rather than inside it (see the note at the
      call site) — so it takes no rule and no padding of its own: the body's own
