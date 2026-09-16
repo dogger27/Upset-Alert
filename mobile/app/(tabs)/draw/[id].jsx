@@ -213,21 +213,31 @@ export default function DrawScreen() {
                   against the right edge whatever the tournament is called,
                   and the pill holds the left whatever its tier reads. */}
               <Text style={s.headName} numberOfLines={1}>{t.name}</Text>
-              {/* ON TO THE NEXT ONE BEING PLAYED. Not the old stepper arrows:
-                  those walked a list you could not see, one at a time, which
-                  is what the Draw tab's chooser replaced. This is one step
-                  through the draws that are actually live, it names its
-                  destination to a screen reader, and the chooser is still
-                  there for going anywhere. */}
-              {cycle && (
-                <Pressable onPress={() => { setCurrentDraw(cycle.id); router.replace(`/draw/${cycle.id}`) }}
-                           hitSlop={10} accessibilityRole="button"
-                           accessibilityLabel={`Next draw: ${cycle.name} ${cycle.gender === 'F' ? 'WTA' : 'ATP'}`}
-                           style={({ pressed }) => [s.cycle, pressed && { opacity: 0.6 }]}>
-                  <Ionicons name="chevron-forward" size={16} color={C.greenLit} />
-                </Pressable>
-              )}
             </View>
+            {/* ON TO THE NEXT ONE BEING PLAYED. Not the old stepper arrows:
+                those walked a list you could not see, one at a time, which is
+                what the Draw tab's chooser replaced. This is one step through
+                the draws that are actually live, it names its destination to a
+                screen reader, and the chooser is still there for going
+                anywhere.
+
+                A SIBLING OF headBody, NOT A CHILD OF IT (owner, 2026-09-16: a
+                button the full height of the bar). headBody carries the bar's
+                horizontal padding, so a child could never reach the right edge
+                and could never be taller than that padding allowed. Out here
+                it is the tint stripe's opposite number — the stripe is a
+                full-height block on the left and this is one on the right, and
+                both take the bar's height for free because `head` is a row
+                whose alignItems defaults to stretch. `head`'s overflow:hidden
+                is what rounds its outer corner to the card's radius. */}
+            {cycle && (
+              <Pressable onPress={() => { setCurrentDraw(cycle.id); router.replace(`/draw/${cycle.id}`) }}
+                         hitSlop={{ top: 9, bottom: 9 }} accessibilityRole="button"
+                         accessibilityLabel={`Next draw: ${cycle.name} ${cycle.gender === 'F' ? 'WTA' : 'ATP'}`}
+                         style={({ pressed }) => [s.cycle, pressed && { opacity: 0.6 }]}>
+                <Ionicons name="chevron-forward" size={leading(20)} color={C.greenLit} />
+              </Pressable>
+            )}
           </View>
         )}
 
@@ -310,9 +320,14 @@ const s = StyleSheet.create({
      card: S.md across and 2pt down — S.xs was still a touch generous for a
      single line (owner, 2026-09-08), and the title's line box is trimmed
      to match, so the banner is as tall as its name and no more. */
+  /* minHeight, AND IT IS LOAD-BEARING NOW. The bar used to be as tall as its
+     tallest child, and that child was the 24pt circle — so pulling the button
+     out of this row would have SHRUNK the bar it is meant to fill. This gives
+     the bar a height it chose rather than one it inherited, and leading() so
+     it grows with the reader instead of cropping the name. */
   headBody: {
     flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingHorizontal: S.md, paddingVertical: 0,
+    paddingHorizontal: S.md, paddingVertical: 0, minHeight: leading(26),
   },
   /* The line box is the type's own height: 19pt Saira Condensed needs no
      more than 19 of line, so the banner is exactly the name plus the
@@ -321,12 +336,24 @@ const s = StyleSheet.create({
      own height iOS sets the caps ~1.5pt above the centre of it, and in a
      banner this short that reads as the name floating. A transform, so
      the banner's height is untouched. */
-  /* A step, not a destination: the same green the header's other affordance
-     uses, in a ring small enough to read as a control on a one-line bar. */
+  /* THE BAR'S FULL HEIGHT, and no ring (owner, 2026-09-16). What the ring was
+     doing — saying "this is a control" — the block now does better: a filled
+     panel on the bar's right edge, the tint stripe's opposite number.
+     NO alignSelf and NO height: `head` is a row, its alignItems defaults to
+     stretch, so the block takes the bar's height whatever the reader's text
+     size makes it. Stating a height here would be the one way to get this
+     wrong.
+     greenDeep AND greenLit ARE ROUNDSTRIP'S OWN PAIR — the fill and edge of
+     the round pager's selected pill, which is this app's established "a green
+     block is a control you press". The fill alone is 1.17:1 against the bar,
+     so it tints rather than separates; the left border at 5.46:1 is what
+     actually cuts the block out of the bar, which is why the owner asked for
+     both. A brighter fill was the alternative and it costs more than it buys:
+     C.green reads at 2.48:1 but drops the arrow on it from 5.46 to 2.58. */
   cycle: {
-    width: 24, height: 24, borderRadius: 12, alignItems: 'center',
-    justifyContent: 'center', borderWidth: 1, borderColor: C.border,
-    alignSelf: 'center',
+    paddingHorizontal: S.sm, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: C.greenDeep,
+    borderLeftWidth: 1, borderLeftColor: C.greenLit,
   },
   headName: {
     ...T.h2, lineHeight: leading(19), color: C.ink, flex: 1,
