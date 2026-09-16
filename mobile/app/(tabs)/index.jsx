@@ -227,13 +227,13 @@ export default function Dashboard() {
       )}
 
       {buckets.upcoming.length > 0 && (
-        <Section title="Next week" tone={C.muted}>
+        <Section title="Next week" tone={C.muted} quiet>
           {buckets.upcoming.map(g => <CompactRow key={g[0].id} draws={g} />)}
         </Section>
       )}
 
       {buckets.lastweek.length > 0 && (
-        <Section title="Last week" tone={C.muted}>
+        <Section title="Last week" tone={C.muted} quiet>
           {buckets.lastweek.map(g => <CompactRow key={g[0].id} draws={g} done />)}
         </Section>
       )}
@@ -328,11 +328,15 @@ function Head() {
 /* No count. A number floating at the end of the rule said only how many cards
    were already visible directly beneath it — the reader can see that, and it
    read as a badge that meant something. */
-function Section({ title, tone, children }) {
+/* `quiet`: a section of CONTEXT rather than of things to act on — next week
+   and last week. It steps the sign down a size, the way those sections' cards
+   are already stepped down by `compact`. The word rather than a number, so the
+   two sizes stay a pair in ui.jsx. */
+function Section({ title, tone, quiet, children }) {
   return (
     <View style={s.section}>
       <View style={s.sectionHead}>
-        <Eyebrow color={tone}>{title}</Eyebrow>
+        <Eyebrow color={tone} small={quiet}>{title}</Eyebrow>
         <View style={s.rule} />
       </View>
       {children}
