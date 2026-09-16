@@ -359,89 +359,83 @@ export function TourCard({ draws, name, children, footer, nav, href, corner, com
   )
 }
 
-/* THE CARD'S FOOTER, AS NAVIGATION — IN THIS APP'S OWN GRAMMAR.
+/* THE CARD'S THREE DESTINATIONS — SMALL, SLANTED, AND PUSHED TO ONE SIDE.
  *
- * League, Draw and Schedule are three peers (owner, 2026-09-16: "it is now
- * essentially a nav bar with 3 options"). The first answer to that was an iOS
- * segmented control — 44pt tall, equal segments, hairline dividers, set in
- * Archivo — and it was a template answer rather than a designed one: it took
- * an Active card from 133pt to 172 and read as three small words adrift in an
- * empty band ("do better", owner, same day).
+ * Three passes got this wrong in three different ways and they are worth
+ * naming, because each was a default dressed as a decision: an iOS segmented
+ * control (44pt, dividers, body font); a thin strip with underlines; then 17pt
+ * caps on a plate. The last one the owner answered with "the typeface is too
+ * big… I want an eccentric design, not big bold font".
  *
- * THE APP ALREADY HAD THIS COMPONENT, which is what I should have looked at
- * first. RoundStrip.jsx is the draw's row of peer destinations and its own
- * comments state the rules: THIN, "no padding of its own"; its own field,
- * ruled, with a fill nothing else on the screen uses; space-between rather
- * than equal segments; and "no dots between them either". This follows that
- * grammar, so a reader who has used the draw's pager already knows this.
+ * TRACKED-OUT CAPS WERE THE TELL, not just the size. They are the house style
+ * of generated design — an eyebrow label over every heading — and three words
+ * that name three screens do not need to shout. So: 14pt, SEMIBOLD rather than
+ * bold, sentence case, and the character comes from three other places.
  *
- * AND IT IS SET IN THE DISPLAY FACE, which is the part that makes it belong
- * here. Saira Condensed in caps is the Eyebrow's own treatment (theme.js
- * T.eyebrow) and the face the wordmark, every title and every score on this
- * screen are drawn in. Archivo is the BODY font; navigation is not body copy.
+ *   1. THE SLANT. Every word leans 8 degrees, and the reason is on the card
+ *      already: the ATP and WTA tier marks are oblique and NOTHING else in
+ *      this app leans. Saira ships no italic here (fonts.js loads four
+ *      uprights), so this is a skewX — which is exactly how those marks are
+ *      drawn, a mechanical oblique rather than a true italic. The lean now
+ *      belongs to the artwork and to the one other thing on the card you can
+ *      act on.
  *
- * THE BAND IS MADE OF THE TIER STAMP'S MATERIAL (owner, 2026-09-16: "go wild,
- * take it to the next level"). Its ground is `control` — the card's plate, the
- * same dark the WTA 500 sits on at the other end of the card — so the card
- * reads as TWO PLATES ON A TINT: one names the tier, one names where you can
- * go. That is the whole idea, and it is why the band needs no dividers, no
- * segments, no chips and no underline: the plate supplies every edge, and 17pt
- * caps at 1.4 tracking are close enough to the tournament's own 19pt name to
- * hold the bottom of the card on their own.
+ *   2. THE LEADER. A hairline across the top, then a thin rule running out of
+ *      the card's left edge to a small tick, and the words huddled at the
+ *      right. The empty half is the half the standing used to fill and it is
+ *      kept empty on purpose: a band with all its weight at one end is a
+ *      composition, where three words spread evenly across it is a toolbar.
  *
- * THE UNDERLINE IS GONE, at the owner's ask and with nothing put in its place.
- * At this size the ink does it: live is the tour's light ink at full and dead
- * is the same ink at 70%, which halves the contrast (9.5:1 to 5.1 on the WTA
- * plate). An underline beneath 17pt caps read as a mistake rather than a mark.
+ *   3. NO PLATE. The band sits on the card's own tint, so the tier stamp is
+ *      the only plate left on the card and the thing it names stays the
+ *      loudest thing down there.
  *
- * DIMMING HAS TO BE AN ALPHA HERE, not a ramp step, and the arithmetic is the
- * same trap as the chip's: this is a LIGHT label on a DARK ground, so walking
- * it down the ink ramp RAISES its contrast — C.faint measures 7.88:1 on the
- * WTA plate against the live ink's 9.52. Only transparency actually dims it.
- *
- * ONE BRIGHT SEAM where the plate meets the tint: the same ink at 45%, which
- * is 2.3:1 against the card. It is the only line on the band and it is what
- * keeps the plate from looking like a shadow under the card.
- *
- * TOUCH IS MET BY hitSlop as well as by height: the band's own padding gives
- * about 45pt and the slop covers the reader who aims between two words.
+ * COLOUR ON THE ORNAMENT, LEGIBILITY ON THE TYPE, and the arithmetic forced
+ * that split rather than taste: the tour's light ink measures 4.01:1 on the
+ * ATP card, under the 4.5 floor for 14pt. So the words take the ink ramp —
+ * live `ink` at 6.9-7.1:1, dead `muted` at 5.0 — and the tour's ink goes to
+ * the rule and the tick, where nothing has to be read.
  *
  * `items` are `{ label, href, a11y }`. A null href is "nothing to open yet":
- * the word stays in place, dimmed and unruled, and is not pressable. It never
- * disappears — a destination that comes and goes changes the strip's shape
- * from card to card, which is the one thing a nav must not do.
+ * the word stays in place at the quieter step. It never disappears — a
+ * destination that comes and goes changes the row from card to card.
  */
 export function CardNav({ items }) {
   const skin = useCardSkin()
-  /* The plate's own ink, at full and at 70% — see the note above for why the
-     dimming is an alpha and not a ramp step. A quiet card takes the band down
-     as a whole rather than per word: 85% live, 55% dead. */
-  const on = skin.controlInk + (skin.quiet ? 'd9' : '')
-  const off = skin.controlInk + (skin.quiet ? '8c' : 'b3')
+  const on = skin.quiet ? skin.inkBody : skin.ink
+  const off = skin.quiet ? skin.faint : skin.muted
+  /* The ornament is the tour's own ink where there is one, and the palette's
+     border on a combined card — `controlInk` is already exactly that pair. */
+  const ornament = skin.controlInk
   return (
-    <View style={[u.nav, { backgroundColor: skin.control,
-                           borderTopColor: skin.controlInk + '73' }]}>
-      {items.map(it => {
-        const live = !!it.href
-        const word = (
-          <Text style={[u.navText, { color: live ? on : off }]} numberOfLines={1}>
-            {it.label}
-          </Text>
-        )
-        return live
-          ? <CardLink key={it.label} href={it.href} pressedOpacity={0.5}
-                      hitSlop={NAV_SLOP} accessibilityLabel={it.a11y}>{word}</CardLink>
-          : <View key={it.label} accessibilityRole="text"
-                  accessibilityLabel={`${it.a11y} — nothing published yet`}>{word}</View>
-      })}
+    <View style={[u.nav, { borderTopColor: ornament + '33' }]}>
+      {/* The leader: a rule that runs out of the left edge and stops. */}
+      <View style={[u.navRule, { backgroundColor: ornament + '3d' }]} />
+      <View style={[u.navTick, { backgroundColor: ornament + '73' }]} />
+      <View style={u.navWords}>
+        {items.map(it => {
+          const live = !!it.href
+          const word = (
+            <Text style={[u.navText, { color: live ? on : off }]} numberOfLines={1}>
+              {it.label}
+            </Text>
+          )
+          return live
+            ? <CardLink key={it.label} href={it.href} pressedOpacity={0.5}
+                        hitSlop={NAV_SLOP} accessibilityLabel={it.a11y}>{word}</CardLink>
+            : <View key={it.label} accessibilityRole="text"
+                    accessibilityLabel={`${it.a11y} — nothing published yet`}>{word}</View>
+        })}
+      </View>
     </View>
   )
 }
 
-/* Slop for the reader who aims between two words: the band's own padding
-   already clears TOUCH vertically, so this is about the horizontal gaps that
-   space-between opens up. */
-const NAV_SLOP = { top: 6, bottom: 6, left: 9, right: 9 }
+/* The words sit close together on the right, so the slop is what makes each
+   one a TOUCH-sized target: 13 a side on a 17pt line box clears 44 both ways,
+   and the gap between two words is 17pt, so the slop regions meet without
+   either word stealing the other's centre. */
+const NAV_SLOP = { top: 13, bottom: 13, left: 8, right: 8 }
 
 /* THE TOURNAMENT NAME, ON ONE LINE — shrunk to fit, never wrapped.
  *
@@ -552,25 +546,32 @@ const u = StyleSheet.create({
     letterSpacing: TITLE_TRACK, color: C.ink, flexShrink: 1,
   },
   footer: { borderTopWidth: 1, borderTopColor: C.border, paddingTop: 9, marginTop: 1 },
-  /* THE BAND — the tier stamp's material, holding the card's three
-     destinations. See CardNav for the whole argument.
-     SPACE-BETWEEN, NOT EQUAL SEGMENTS: three words of different lengths in
-     three equal boxes centre each one in its own box, which puts them at
-     irregular intervals and reads as an accident. Spread across the band with
-     the slack shared out, they sit on its two edges and its middle — which is
-     also RoundStrip's rule, and it is right for the same reason.
-     The padding is what makes the band ~45pt, so a word is a TOUCH-sized
-     target without a fixed height that the reader's type size could outgrow. */
+  /* THE BAND — see CardNav. No plate and no fill: it is the card's own tint
+     under a hairline, which leaves the tier stamp as the only plate on the
+     card. Asymmetric by construction — the rule takes the slack, so the words
+     are pushed right rather than spread. */
   nav: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    borderTopWidth: 1, paddingHorizontal: 18, paddingTop: 13, paddingBottom: 12,
+    flexDirection: 'row', alignItems: 'center',
+    borderTopWidth: 1, paddingHorizontal: 18, paddingTop: 11, paddingBottom: 11,
   },
-  /* 17pt against the title's 19: the band is meant to hold the bottom of the
-     card, not to whisper along it. leading() because this is TYPE and not
-     artwork — it grows with the reader, and the band grows with it. */
+  /* THE LEADER, and it takes the space: flex 1 on the rule is what pushes the
+     words to the right edge, so the asymmetry survives any card width and any
+     text size rather than being a hard-coded margin. */
+  navRule: { flex: 1, height: 1 },
+  // Where the rule stops. 9pt of upright hairline against 17pt of slanted
+  // type: the one vertical in the band, and what keeps the rule from looking
+  // like an underline that ran away from its word.
+  navTick: { width: 1, height: 9, marginRight: 16 },
+  navWords: { flexDirection: 'row', alignItems: 'center', gap: 17 },
+  /* 14pt SEMIBOLD, sentence case, and skewed 8 degrees — the tier marks'
+     own oblique (see CardNav). transform rather than an italic face because
+     no italic Saira is loaded, and because a mechanical oblique is what those
+     marks actually are.
+     NO letterSpacing: tracking is what made the last version shout, and a
+     skewed word needs its letters close or the lean reads as a wobble. */
   navText: {
-    fontFamily: 'SairaCondensed_700Bold', fontSize: 17, lineHeight: leading(20),
-    letterSpacing: 1.4, textTransform: 'uppercase',
+    fontFamily: 'SairaCondensed_600SemiBold', fontSize: 14, lineHeight: leading(17),
+    transform: [{ skewX: '-8deg' }],
   },
   /* A compact card's second row is a footer only in the structural sense — it
      sits beside the body's link rather than inside it (see the note at the
