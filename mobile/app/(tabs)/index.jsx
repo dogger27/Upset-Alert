@@ -284,10 +284,12 @@ function Head() {
     <View style={s.head}>
       {/* The hamburger, top-LEFT (moved 2026-09-04 at the user's request):
           Draw History, Hall of Fame, Rules, About. */}
-      <Pressable onPress={() => setMenu(true)} style={({ pressed }) => [s.avatar, pressed && { opacity: 0.7 }]}
-                 accessibilityRole="button" accessibilityLabel="Menu">
-        <Ionicons name="menu" size={20} color={C.inkBody} />
-      </Pressable>
+      <View style={s.headBtn}>
+        <Pressable onPress={() => setMenu(true)} style={({ pressed }) => [s.avatar, pressed && { opacity: 0.7 }]}
+                   accessibilityRole="button" accessibilityLabel="Menu">
+          <Ionicons name="menu" size={20} color={C.inkBody} />
+        </Pressable>
+      </View>
       {/* The site's wordmark, exactly: pulsing dot, UPSET ALERT! with only
           ALERT in clay (the "!" is white), and the slogan centred beneath.
           Centred between the two buttons, as the navbar centres it. */}
@@ -317,9 +319,19 @@ function Head() {
           drops the style — it is the same trap CardLink exists to close, and I
           walked straight back into it: the ring simply did not draw and the
           icon floated in the header. */}
-      <CardLink href="/status" style={s.avatar} pressedOpacity={0.7}>
-        <Ionicons name="person-outline" size={18} color={C.inkBody} />
-      </CardLink>
+      {/* THE WRAPPER IS NOT DECORATION — it is what made this button 6pt lower
+          than the hamburger, measured in the harness. CardLink puts `style` on
+          a View INSIDE its Pressable (that is the whole reason it exists: a
+          style on the Pressable is dropped by `Link asChild`), so a marginTop
+          in that style shifts the icon within its own box and never moves the
+          box the ROW lays out. The hamburger, whose style goes straight onto a
+          plain Pressable, moved correctly — so the two drifted apart by
+          exactly the offset. On a wrapper the row sees one shape for both. */}
+      <View style={s.headBtn}>
+        <CardLink href="/status" style={s.avatar} pressedOpacity={0.7}>
+          <Ionicons name="person-outline" size={18} color={C.inkBody} />
+        </CardLink>
+      </View>
       <MenuSheet visible={menu} onClose={() => setMenu(false)} />
     </View>
   )
@@ -749,25 +761,26 @@ const s = StyleSheet.create({
   dotWrap: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', marginTop: -leading(12) },
   dotRing: { position: 'absolute', width: 30, height: 30, borderRadius: 15, backgroundColor: C.clayLight },
   dot: { width: 15, height: 15, borderRadius: 7.5, backgroundColor: C.clayLight },
+  /* UP ONTO THE ICON'S LINE, by the dot's own offset (owner, 2026-09-16 —
+     asked three times, because the first attempt aligned to the WORDMARK
+     rather than the icon, and the second moved only one of the two buttons).
+   *
+   * THE ICON IS THE DOT, and the dot does not sit on the row's centre line:
+   * dotWrap carries marginTop -leading(12) to lift it onto the caps' optical
+   * centre, since the wordmark's line box keeps descender room the caps never
+   * use. Being centred then gives half of that back, so the dot rides 6pt
+   * above a centred circle — which is why aligning to the wordmark's box
+   * still left these below the mark.
+   *
+   * THE SAME MARGIN, ON A WRAPPER THE ROW ACTUALLY LAYS OUT. Both the dot and
+   * these wrappers are centred by an alignItems:'center' parent, so the
+   * identical negative margin moves both by the same redistributed amount:
+   * measured in the harness, the hamburger's centre and the dot's agree to
+   * 0.0px. It is on a wrapper rather than on `avatar` because CardLink hands
+   * `style` to a View inside its Pressable — see the note at the profile
+   * button, which is how the two buttons came to differ by 6pt. */
+  headBtn: { marginTop: -leading(12) },
   avatar: {
-    /* UP ONTO THE ICON'S LINE, by the dot's own offset (owner, 2026-09-16,
-       twice — the first attempt aligned these to the WORDMARK, which is not
-       what was asked).
-     *
-     * THE ICON IS THE DOT, and the dot does not sit on the row's centre line:
-     * dotWrap carries marginTop -leading(12) to lift it into the wordmark's
-     * cap height, so it rides about 6pt above where a centred 30pt circle
-     * would. Aligning to the wordmark's box therefore still left these two
-     * below the mark.
-     *
-     * THE SAME MARGIN IS THE WHOLE FIX, and it is exact rather than tuned:
-     * both the dot and these buttons are centred by an alignItems:'center'
-     * parent, so an identical negative marginTop moves both by the same
-     * redistributed amount. Checked at text scales 1.0 / 1.15 / 1.3 / 1.5 —
-     * the two centres agree to 0.00pt at every one, because both terms are
-     * leading() and scale together. A plain "-6" would have been right at one
-     * size only. */
-    marginTop: -leading(12),
     width: 36, height: 36, borderRadius: 18,
     // borderOn, not border: C.border on C.card is a 1.1:1 edge and the circle
     // simply was not there — the icon looked like it was floating in the
