@@ -17,6 +17,7 @@ import { getPredictions } from '../api/predictions'
 import { nationalityIso2, splitPlayerName } from '../utils/flags'
 import { isSuspended, isUnderWay } from '../utils/playState'
 import { byTimeOfDay } from '../utils/dayOrder'
+import { rewriteNoteClock } from '../utils/noteClock'
 import { rootFontPx, textWidth } from '../utils/text'
 import { parseSet } from '../utils/score'
 import './Schedule.css'
@@ -185,7 +186,7 @@ function printedStart(e, zone, venueMode) {
     const t = new Date(e.printed_start_at).toLocaleTimeString([], {
       hour: 'numeric', minute: '2-digit', ...(zone ? { timeZone: zone } : {}),
     })
-    return shorten(e.start_note.replace(e.start_time_local, t))
+    return shorten(rewriteNoteClock(e.start_note, e.start_time_local, t))
   }
   if (e.start_note) return shorten(e.start_note)
   if (e.start_type === 'followed_by') return 'Followed by'

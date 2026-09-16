@@ -164,10 +164,23 @@ function clockIn(iso, zone) {
    "my time" the wording stays but the clock inside it is rewritten. The
    fallbacks only apply to rows stored before start_note existed; they follow
    the same clock rule, which the site states but only applies to the note. */
+/* The clock inside the note, found by its DIGITS and whatever meridiem follows
+   them. start_time_local is usually the note's own substring, but not when the
+   sheet left the meridiem off: SP Open 2026-09-17 printed "NB 2:30 possible
+   court change" and the ingest stores the clock it means, "2:30 PM"
+   (backend oop_parser.settle_meridiems). Matched whole, so 2:30 never
+   rewrites the tail of a 12:30. Same rule as the site's utils/noteClock.js. */
+function rewriteNoteClock(note, clock, replacement) {
+  const digits = (clock || '').match(/^\d{1,2}[:.]\d{2}/)?.[0]
+  if (!digits) return note.replace(clock, replacement)
+  const re = new RegExp(`(^|[^\\d:.])${digits.replace('.', '\\.')}(?:\\s*[AP]\\.?M\\.?)?(?!\\d)`, 'i')
+  return note.replace(re, (_m, lead) => lead + replacement)
+}
+
 function printedStart(e, zone, venueMode) {
   const mine = !venueMode && e.printed_start_at
   if (e.start_note && mine && e.start_time_local) {
-    return shorten(e.start_note.replace(e.start_time_local, clockIn(e.printed_start_at, zone)))
+    return shorten(rewriteNoteClock(e.start_note, e.start_time_local, clockIn(e.printed_start_at, zone)))
   }
   if (e.start_note) return shorten(e.start_note)
   const clock = mine ? clockIn(e.printed_start_at, zone) : e.start_time_local
