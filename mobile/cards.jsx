@@ -8,10 +8,8 @@
  * comes from the source.
  */
 
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  AccessibilityInfo, Animated, Easing, Image, Pressable, StyleSheet, Text, View,
-} from 'react-native'
+import { createContext, useContext, useMemo, useState } from 'react'
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native'
 import { leading } from './fontScale.js'
 import { isSlamTier, tierStamp } from './logos'
 import { flagEmoji } from './flags'
@@ -370,22 +368,24 @@ export function TourCard({ draws, name, children, footer, nav, href, corner, com
  * dependency and no new value to the palette.
  *
  * THE IDEA: the graphic a broadcaster drops over the bottom of the picture.
- * Three plates leaning the tier marks' own 8 degrees, speed lines trailing off
- * to the left, and a gloss that sweeps the band every few seconds. It earns
- * the slant honestly — the ATP and WTA tier artwork on this same card is
- * oblique and nothing else in the app leans — and it puts the three
- * destinations on the same material as the tier stamp without needing to
- * shout: the type stays 13pt semibold at the BODY step, quieter than the four
- * passes before it (which reached 17pt caps before the owner called it).
+ * Three plates leaning the tier marks' own 8 degrees, with speed lines
+ * trailing off to the left. It earns the slant honestly — the ATP and WTA tier
+ * artwork on this same card is oblique and nothing else in the app leans — and
+ * it puts the three destinations on the same material as the tier stamp
+ * without needing to shout: the type stays 13pt semibold at the BODY step,
+ * quieter than the four passes before it (which reached 17pt caps before the
+ * owner called it).
  *
- * WHY A SWEEP AT ALL, given that ambient motion is usually a mistake: the
- * lower-third is a broadcast object, and the gloss is what makes it read as
- * one rather than as three buttons that happen to lean. It is one orchestrated
- * pass every 5.5s, staggered down the screen so the cards do not pulse in
- * unison, absent from the week cards, and gone entirely when the reader has
- * asked for reduced motion.
+ * NO GLOSS SWEEP. The spec had one — a 44pt band of the ornament crossing the
+ * whole nav every 5.5s, staggered down the screen — and it came out at the
+ * owner's ask (2026-09-16). The shape is what makes this read as a broadcast
+ * object; the shine was the part that had to justify itself every 5.5 seconds
+ * on a screen the reader opens to check a deadline, and it could not. What
+ * went with it: an Animated loop per card, a layout listener for the travel
+ * width, a reduced-motion subscription, and the `index` prop that existed only
+ * to stagger them.
  */
-export function CardNav({ items, index = 0 }) {
+export function CardNav({ items }) {
   const skin = useCardSkin()
   const ornament = skin.controlInk
   /* The label sits at the BODY step, not the loud one — the spec's own choice,
@@ -435,8 +435,6 @@ export function CardNav({ items, index = 0 }) {
           )
         })}
       </View>
-      {/* Last, so it passes OVER the plates. Open and Active only. */}
-      {skin.quiet ? null : <Gloss colour={ornament} index={index} />}
     </View>
   )
 }
@@ -447,84 +445,6 @@ const SPEED = [{ w: 2, a: '1a' }, { w: 2, a: '29' }, { w: 3, a: '3d' }, { w: 3, 
    because the plates are only 3pt apart and a wider slop would let one steal
    the neighbour's centre (the spec's numbers, and its reasoning). */
 const NAV_SLOP = { top: 9, bottom: 9, left: 2, right: 2 }
-
-/* THE GLOSS. One narrow band of the ornament at low alpha, slanted with the
-   plates, travelling left to right and then waiting out of frame.
- *
- * SIX SLICES RATHER THAN A GRADIENT, the same trick AccentBar uses and for the
- * same reason: expo-linear-gradient is a native module and another build, and
- * across 44 points nobody can tell. The alphas are a triangle, so the band has
- * no hard edge at either side.
- *
- * NATIVE DRIVER, and nothing here re-renders per frame: the loop drives one
- * transform. The width comes from onLayout because the travel is expressed in
- * percentages of the band, and a band is as wide as the card it is in.
- */
-const GLOSS_W = 44
-const GLOSS_SLICES = [0, 0.38, 0.85, 1, 0.6, 0].map(t => {
-  const a = Math.round(t * 0.22 * 255)
-  return a.toString(16).padStart(2, '0')
-})
-
-function Gloss({ colour, index }) {
-  const [width, setWidth] = useState(0)
-  const [still, setStill] = useState(true)
-  /* A 0 -> 1 PROGRESS DRIVER, interpolated to the travel, rather than
-     animating the offset directly. Animated.loop resets its value to the one
-     it STARTED at before each iteration, which is 0 — so driving the offset
-     itself would sweep correctly once and then restart from x=0 (mid-band)
-     for ever after. A normalised driver makes the reset value the right one by
-     construction, and the interpolation can then depend on a width that
-     arrives later. */
-  const t = useRef(new Animated.Value(0)).current
-
-  /* REDUCED MOTION IS A SETTING, NOT A GUESS. Read once and then followed:
-     a reader who turns it on mid-session gets the change without a reload. */
-  useEffect(() => {
-    let alive = true
-    AccessibilityInfo.isReduceMotionEnabled().then(v => { if (alive) setStill(!!v) })
-    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', v => setStill(!!v))
-    return () => { alive = false; sub?.remove?.() }
-  }, [])
-
-  useEffect(() => {
-    if (still || width <= 0) return undefined
-    /* THE HOLD IS THE TIMING'S OWN `delay`, NOT Animated.delay. That helper
-       builds its wait on an AnimatedValue of its own with useNativeDriver
-       FALSE, so putting one in this sequence mixes drivers inside a single
-       animation — which RN refuses. One timing with a delay is also simpler:
-       the loop resets to 0 (off frame, left), waits out the delay there, and
-       sweeps. 3000 + 2500 is the spec's 5.5s cycle, with the wait spent
-       hidden on the near side instead of the far one. */
-    const loop = Animated.loop(Animated.timing(t, {
-      toValue: 1, duration: 2500, delay: 3000,
-      easing: Easing.inOut(Easing.ease), useNativeDriver: true,
-    }))
-    /* Staggered down the screen, so a column of cards sweeps in sequence
-       rather than pulsing together — which would read as a page-wide glitch
-       rather than as three separate objects. */
-    const start = setTimeout(() => loop.start(), index * 900)
-    return () => { clearTimeout(start); loop.stop() }
-  }, [still, width, index, t])
-
-  return (
-    <View style={u.navGloss} pointerEvents="none"
-          onLayout={e => setWidth(e.nativeEvent.layout.width)}>
-      {still || width <= 0 ? null : (
-        <Animated.View style={[u.navGlossBand, { transform: [
-          { translateX: t.interpolate({
-            inputRange: [0, 1], outputRange: [-0.15 * width, 1.05 * width],
-          }) },
-          { skewX: '-8deg' },
-        ] }]}>
-          {GLOSS_SLICES.map((a, i) => (
-            <View key={i} style={{ flex: 1, backgroundColor: colour + a }} />
-          ))}
-        </Animated.View>
-      )}
-    </View>
-  )
-}
 
 /* THE TOURNAMENT NAME, ON ONE LINE — shrunk to fit, never wrapped.
  *
@@ -635,9 +555,9 @@ const u = StyleSheet.create({
     letterSpacing: TITLE_TRACK, color: C.ink, flexShrink: 1,
   },
   footer: { borderTopWidth: 1, borderTopColor: C.border, paddingTop: 9, marginTop: 1 },
-  /* THE LOWER-THIRD — livery-spec.md's band. overflow hidden is load-bearing
-     twice over: it is what crops the gloss at both ends of its travel, and
-     what keeps the skewed plates inside the card's rounded corner. */
+  /* THE LOWER-THIRD — livery-spec.md's band. overflow hidden still matters
+     with the sweep gone: it is what keeps the skewed plates and the leaning
+     speed lines inside the card's rounded corner. */
   nav: {
     flexDirection: 'row', alignItems: 'center', overflow: 'hidden',
     borderTopWidth: 1, paddingTop: 8, paddingRight: 14, paddingBottom: 10, paddingLeft: 16,
@@ -650,24 +570,28 @@ const u = StyleSheet.create({
      stamp's 8: a skewed rounded rectangle reads as a wobble past a few points,
      and a lower-third's plates are cut square. The label is a CHILD of this
      view, so it inherits the lean instead of being skewed on its own — which
-     is what keeps the word's baseline true to its plate. */
+     is what keeps the word's baseline true to its plate.
+     leading() ON THE HEIGHT, so the plate grows with the reader's type rather
+     than cropping it — the same rule `badge` follows, and the other half of
+     the centring fix at navText. */
   navPlate: {
-    height: 26, paddingHorizontal: 13, borderRadius: 3,
+    height: leading(26), paddingHorizontal: 13, borderRadius: 3,
     alignItems: 'center', justifyContent: 'center',
     transform: [{ skewX: '-8deg' }],
   },
   navPlateDead: { opacity: 0.55 },
   /* 13pt SEMIBOLD at the body step, sentence case, NO letterSpacing: tracking
      is what made the previous pass shout, and a leaning word wants its letters
-     close or the slant reads as a wobble. No skew here — the plate carries it. */
+     close or the slant reads as a wobble. No skew here — the plate carries it.
+     AND NO lineHeight, which is what was pushing the word low in its plate
+     (owner, 2026-09-16). This is the lesson `badgeText` already carries forty
+     lines down, and the spec's `leading(17)` walked straight into it: on iOS a
+     lineHeight sinks the glyphs toward the bottom of their line box, so a
+     flex-centred box centres the BOX and the ink still sits low. Dropped, the
+     font's own line is what the box centres, and the word sits on the middle.
+     The plate's leading() height is what keeps Dynamic Type safe instead. */
   navText: {
-    fontFamily: 'SairaCondensed_600SemiBold', fontSize: 13, lineHeight: leading(17),
-  },
-  // The gloss's lane: the whole band, behind nothing and above everything.
-  navGloss: { ...StyleSheet.absoluteFillObject },
-  navGlossBand: {
-    position: 'absolute', top: 0, bottom: 0, left: 0, width: GLOSS_W,
-    flexDirection: 'row',
+    fontFamily: 'SairaCondensed_600SemiBold', fontSize: 13,
   },
   /* A compact card's second row is a footer only in the structural sense — it
      sits beside the body's link rather than inside it (see the note at the

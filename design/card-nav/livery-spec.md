@@ -41,3 +41,24 @@ Keep today's `accessibilityLabel`s (`League standings`, `Tournament draw`, `Sche
 ## Contrast (checked on the mock)
 
 `inkBody` on the WTA plate `#3a1526` ≈ 10:1, on the ATP plate `#14243d` ≈ 11:1; `faint` on either ≥ 6:1. Well over AA at 13pt.
+
+---
+
+## As built — two deviations (2026-09-16)
+
+Recorded here so the spec and `mobile/cards.jsx` do not silently disagree.
+
+1. **No gloss sweep.** Removed at the owner's ask. The shape is what makes the
+   band read as a broadcast object; the shine had to justify itself every
+   5.5 s on a screen opened to check a deadline, and it could not. Gone with
+   it: the `Animated` loop, the layout listener that measured the travel, the
+   reduced-motion subscription, and the `index` prop that existed only to
+   stagger cards.
+
+2. **The label carries no `lineHeight`.** The spec's `leading(17)` put the word
+   low in its plate on device: on iOS a `lineHeight` sinks glyphs toward the
+   bottom of their line box, so a flex-centred plate centres the *box* while
+   the ink still sits low. (`badgeText` in the same file already carries this
+   lesson.) Dropped, the font's own line is what the box centres. Dynamic Type
+   safety moved to the plate, whose height is now `leading(26)` rather than a
+   fixed 26 — so it grows with the reader's type instead of cropping it.
