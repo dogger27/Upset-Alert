@@ -395,12 +395,21 @@ const u = StyleSheet.create({
      artwork is cropped to its ink (see TierBadge). It was 7 and 3, and even
      that understated it: the air either side was mostly inside the PNG.
      The pill's radius, not the card's: this is the pill's replacement, and
-     the card's 12 would read as a lozenge on a strip this size. */
-  stamp: { borderRadius: 5, padding: 6 },
+     the card's 12 would read as a lozenge on a strip this size. 8 is the step
+     between (owner, 2026-09-16, "round the pill corners a bit more"), and it
+     is still short of the card's, so the plate reads as a tag on the card
+     rather than a second card inside it.
+
+     PADDING 8, UP FROM 6, at the same ask. One number is one number: widening
+     the margin widens and heightens the plate by the same 4pt, which is what
+     "on both width and height" means once the artwork is cropped to its ink
+     and the plate is only as big as what it holds. */
+  stamp: { borderRadius: 8, padding: 8 },
   // Padding scales with the lettering, and with it: 6pt of air around 9pt of
   // caps is a border, not a margin, and 3 around 13.5 is the same mistake
-  // inverted.
-  stampSmall: { borderRadius: 4, padding: 3 * SMALL },
+  // inverted. So the base number moves with the full-size one — 3 -> 4, times
+  // SMALL — rather than being retuned on its own.
+  stampSmall: { borderRadius: 6, padding: 4 * SMALL },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   // The spare width of the title row, which is what CardTitle measures to know
   // how much the name may use. It replaced a flex:1 spacer that sat AFTER the
