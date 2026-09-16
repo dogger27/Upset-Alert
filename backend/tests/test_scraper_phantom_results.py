@@ -8,7 +8,7 @@ the apply step took the bold as a result. Both invariants live here now.
 """
 from types import SimpleNamespace
 
-from app.routers.tournaments import _clear_phantom
+from app.routers.tournaments import _clear_phantom, _wikipedia_may_decide
 from app.services.scraper import _parse_16team_section
 
 
@@ -72,7 +72,7 @@ def _match(**kw):
 
 def test_clear_phantom_undoes_a_scoreless_unbacked_winner():
     m = _match(winner_id=5901, status="completed", completed_at="t", scores_json=None)
-    assert _clear_phantom(m, SimpleNamespace(scores=None)) is True, "reports that it acted"
+    assert _clear_phantom(m) is True, "reports that it acted"
     assert m.winner_id is None and m.status == "pending" and m.completed_at is None
 
 
@@ -80,15 +80,15 @@ def test_clear_phantom_leaves_real_results_alone():
     # A score of any shape is a real outcome — sets, a walkover, a retirement.
     for scores in ([["6", "6"], ["3", "4"]], [["w/o"], [""]], [["3r"], ["5"]]):
         m = _match(winner_id=1, status="completed", scores_json=scores)
-        assert _clear_phantom(m, SimpleNamespace(scores=scores)) is False
+        assert _clear_phantom(m) is False
         assert m.winner_id == 1, f"cleared a real result with scores {scores}"
     # Sofascore's word is enough on its own, even with no score stored yet.
     m = _match(winner_id=1, sofa_winner_id=1, status="completed", scores_json=None)
-    _clear_phantom(m, SimpleNamespace(scores=None))
+    _clear_phantom(m)
     assert m.winner_id == 1
     # And a row with nothing stored is untouched.
     m = _match()
-    _clear_phantom(m, SimpleNamespace(scores=None))
+    _clear_phantom(m)
     assert m.winner_id is None and m.status == "pending"
 
 
@@ -96,3 +96,25 @@ if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):
             fn(); print("ok", name)
+
+
+# ---- THE RULE: Wikipedia never decides a result ---------------------------
+def _mr(**kw):
+    base = dict(round_number=3, match_number=1, player1_position=1, player2_position=2,
+                winner_position=1, is_bye=False, scores=None)
+    base.update(kw)
+    return SimpleNamespace(**base)
+
+
+def test_wikipedia_never_decides_a_result_even_with_a_full_score():
+    # Bold winner AND a complete score on the sheet: still not a result.
+    # "NEVER, EVER, use Wikipedia for a match result or score" (owner, 2026-09-16).
+    assert _wikipedia_may_decide(_mr(scores=[["6", "6"], ["3", "4"]])) is False
+    assert _wikipedia_may_decide(_mr(scores=[["w/o"], [""]])) is False
+    assert _wikipedia_may_decide(_mr(scores=None)) is False
+
+
+def test_the_one_exception_is_a_first_round_bye():
+    # A bye is draw shape: nobody was placed opposite, so there is no match
+    # for Sofascore or ESPN to ever report.
+    assert _wikipedia_may_decide(_mr(round_number=1, is_bye=True, winner_position=1)) is True
