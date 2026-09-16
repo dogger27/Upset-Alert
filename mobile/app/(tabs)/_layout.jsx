@@ -32,11 +32,22 @@ import { C, T } from '../../theme'
    paddingBottom alone changed nothing visible: the padding shrank inside a bar
    that stayed exactly as tall.
 
-   49 is that constant, module-private in @react-navigation/bottom-tabs 7.18,
-   so it is copied here rather than imported. It is the icon-and-label box; it
-   is NOT touched, so nothing clips at any text size — the only thing trimmed
-   is the home-indicator inset below it. */
-const TAB_CONTENT_H = 49
+   49 was that constant, module-private in @react-navigation/bottom-tabs 7.18
+   and copied here rather than imported. It is the icon-and-label box.
+
+   58 NOW, UP FROM 49 (owner, 2026-09-16: a taller bottom bar). This is the
+   lever rather than TAB_BOTTOM_MAX below, and the difference matters: the
+   inset's whole job is to keep labels off the home indicator, so raising it
+   would add dead space under the bar without giving the icons or the labels a
+   single point. The content box is where height becomes air — React
+   Navigation centres the icon-and-label group inside it, so the extra 9pt
+   lands as ~4.5 above and below, around a 22pt icon and an 11pt label that
+   together were sitting in 12pt of padding.
+
+   GROWING THIS IS THE SAFE DIRECTION, which is why the old note said not to
+   touch it: 49 was the floor at which nothing clipped at the phone's largest
+   text sizes. More room can only help that. */
+const TAB_CONTENT_H = 58
 /* Enough to clear the indicator (~8pt up, ~5pt tall) and no more. A notched
    phone hands us 34, which is generous for a gap whose whole job is to keep
    labels off a 5pt line. */
