@@ -72,7 +72,7 @@ def _match(**kw):
 
 def test_clear_phantom_undoes_a_scoreless_unbacked_winner():
     m = _match(winner_id=5901, status="completed", completed_at="t", scores_json=None)
-    _clear_phantom(m, SimpleNamespace(scores=None))
+    assert _clear_phantom(m, SimpleNamespace(scores=None)) is True, "reports that it acted"
     assert m.winner_id is None and m.status == "pending" and m.completed_at is None
 
 
@@ -80,7 +80,7 @@ def test_clear_phantom_leaves_real_results_alone():
     # A score of any shape is a real outcome — sets, a walkover, a retirement.
     for scores in ([["6", "6"], ["3", "4"]], [["w/o"], [""]], [["3r"], ["5"]]):
         m = _match(winner_id=1, status="completed", scores_json=scores)
-        _clear_phantom(m, SimpleNamespace(scores=scores))
+        assert _clear_phantom(m, SimpleNamespace(scores=scores)) is False
         assert m.winner_id == 1, f"cleared a real result with scores {scores}"
     # Sofascore's word is enough on its own, even with no score stored yet.
     m = _match(winner_id=1, sofa_winner_id=1, status="completed", scores_json=None)
