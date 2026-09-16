@@ -1,3 +1,4 @@
+import time
 from datetime import date, datetime, timezone
 from typing import Optional
 
@@ -51,6 +52,27 @@ def _wikipedia_may_decide(mr) -> bool:
     `is_bye` in round one now (scraper.py), so this is exactly that case.
     """
     return bool(mr.is_bye)
+
+
+# HOW LONG WIKIPEDIA MAY BE AHEAD OF SOFASCORE before it is worth a row in
+# /issues. Being ahead is the ordinary state for a few minutes after most
+# matches: an edit triggers a scrape within seconds (eventstream), while the
+# results sweep runs every three minutes and reads walkovers declared ahead of
+# their slot every fifteen (sofascore_results.NEXT_INTERVAL). Guadalajara
+# 2026-09-16 warned two minutes into exactly that window. Past this, the claim
+# is a real question — an unmapped event, or an edit that is wrong.
+WIKI_CLAIM_GRACE = 30 * 60
+# match id -> monotonic first sighting of the claim. In process memory, like
+# app_log's dedup: a restart restarts the clock, which delays a warning and
+# never invents one.
+_wiki_claim_seen: dict[int, float] = {}
+
+
+def _wiki_claim_overdue(match_id: int, now: Optional[float] = None) -> bool:
+    """Record a sighting of an unapplied Wikipedia result; True once it has
+    outlasted WIKI_CLAIM_GRACE."""
+    now = time.monotonic() if now is None else now
+    return now - _wiki_claim_seen.setdefault(match_id, now) >= WIKI_CLAIM_GRACE
 
 
 def _clear_phantom(match: Match) -> bool:
@@ -2375,6 +2397,8 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
             # and "65" (an unclosed <sup> on Wikipedia) all evening. The draw
             # SHAPE (players, byes, positions) stays Wikipedia's either way.
             sofa_has_it = (sofa_is_record and match.sofa_winner_id is not None)
+            if sofa_has_it or w_id is None or _wikipedia_may_decide(mr):
+                _wiki_claim_seen.pop(match.id, None)    # no claim outstanding
             if sofa_has_it:
                 if w_id is not None and w_id != match.sofa_winner_id:
                     # Worth a row in /issues, not an overwrite: a disagreement
@@ -2409,21 +2433,25 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
                 # reason is a match Sofascore never mapped, which is the thing
                 # to go and fix. The row is then treated as if the sheet had
                 # said nothing, and any earlier run that did apply it is undone.
-                try:
-                    from app.services.system_log import app_log
-                    await app_log(
-                        "warning", "scraper",
-                        f"Wikipedia shows a result for match {match.id} (draw "
-                        f"{tournament.id}, round {mr.round_number}) that Sofascore "
-                        f"has not reported; ignored — check the event mapping",
-                        detail={"match_id": match.id, "round": mr.round_number,
-                                "match_number": mr.match_number, "wiki_winner_id": w_id,
-                                "wiki_scores": mr.scores},
-                        dedup_key=f"scraper:wiki-result-ignored:{match.id}",
-                        dedup_hours=24.0,
-                    )
-                except Exception:                                    # noqa: BLE001
-                    pass
+                # Only once the claim outlasts WIKI_CLAIM_GRACE: before that,
+                # Sofascore being a few minutes behind is the normal order.
+                if _wiki_claim_overdue(match.id):
+                    try:
+                        from app.services.system_log import app_log
+                        await app_log(
+                            "warning", "scraper",
+                            f"Wikipedia shows a result for match {match.id} (draw "
+                            f"{tournament.id}, round {mr.round_number}) that Sofascore "
+                            f"has not reported; ignored — check the event mapping",
+                            detail={"match_id": match.id, "round": mr.round_number,
+                                    "match_number": mr.match_number, "wiki_winner_id": w_id,
+                                    "wiki_scores": mr.scores,
+                                    "sofa_event_id": match.sofa_event_id},
+                            dedup_key=f"scraper:wiki-result-ignored:{match.id}",
+                            dedup_hours=24.0,
+                        )
+                    except Exception:                                    # noqa: BLE001
+                        pass
                 if _clear_phantom(match):
                     await _log_phantom_cleared(match, tournament, mr)
             elif match.winner_id is None:
