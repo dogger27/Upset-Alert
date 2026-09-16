@@ -60,183 +60,33 @@ const oopHref = t => (t.oop_first_seen_at && t.tournament_id
  * Rendered greyed rather than dropped when a tournament has published no sheet
  * yet: the row keeps its shape, and the reader learns that there is nothing to
  * open rather than wondering where the link went. */
-/* THE SCHEDULE AND THE DRAW ARE ONE COMPONENT, TWICE.
- *
- * "Exact same formatting as the schedule one" (owner, 2026-09-16) is a thing
- * to build, not a thing to match: two pills with their own copies of four
- * colours and two alphas agree until the next change to either. So the pill is
- * CardPill and both links are calls to it — the draw's and the sheet's — and
- * the only difference between them is the word and where they point.
- */
-function OrderOfPlay({ t }) {
-  return <CardPill href={oopHref(t)} label="Schedule" a11y="Schedule and order of play" />
-}
+/* THE PILLS ARE GONE, all of them (owner, 2026-09-16). CardPill and its two
+   callers — OrderOfPlay and DrawPill — were about 120 lines and four crossed
+   decisions: available or not, loud section or quiet, the tour's ink family,
+   and three alpha weights. Every one of those existed because a free-floating
+   lozenge has to manufacture its own edges out of colour. CardNav's plates sit
+   in a band that supplies the edges, so none of it was needed any more; the
+   last call site was Next week's lone Schedule pill, and with that off the row
+   the whole system is unreferenced. Kept: oopHref and oopDraw, which navItems
+   uses to point the Schedule plate at a sheet. */
 
-function CardPill({ href, label, a11y }) {
-  const inks = useCardSkin()
-  /* NOTHING TO OPEN YET — STILL A PILL, HOLLOWED OUT (owner, 2026-09-16).
-   *
-   * The disabled state keeps the control's outline and loses its fill: the
-   * border says "this is the same button you press on the cards above", the
-   * empty middle says "not yet". Bare type said the second thing only, and on
-   * a week card it read as a stray label rather than the same affordance
-   * greyed.
-   *
-   * NO `opacity` MULTIPLIER, which is what it used to be: C.faint at 0.6
-   * leaves about 3:1 on the near-black card and lands near 1.6 on a tour
-   * tint, so the label was legible nowhere a card is coloured — which is most
-   * of this screen. A step of the ramp carries the text (see theme.js), and
-   * the border is that same ink, at a fraction of it, so the outline sits
-   * below the word inside it rather than boxing it in.
-   *
-   * THE ROW NO LONGER CHANGES HEIGHT with whether a sheet exists: live and
-   * dead are now the same 25pt object, where before the dead one was 15pt of
-   * type and a week card was shorter on the days nobody had published an
-   * order of play.
-   *
-   * "SCHEDULE", NOT "ORDER OF PLAY" (owner, 2026-09-16). Two reasons, and the
-   * first is measured: at the owner's text size the longer phrase wrapped to
-   * two lines inside the pill, which doubled the control's height and with it
-   * the whole week card's. The second is that it names its destination — the
-   * Schedule tab, spelled exactly that way in the tab bar — where "Order of
-   * Play" named the sheet the tour publishes. Same word for the same place.
-   *
-   * numberOfLines={1} REGARDLESS, on both states: a pill this row's height
-   * depends on must not be able to wrap, whatever the label becomes next or
-   * whatever the reader's type size is. That is the actual fault; the shorter
-   * word is what buys the room back.
-   *
-   * A SECOND AXIS, `skin.quiet`: THE SECTION (owner, 2026-09-16). Everything
-   * above is about STATE — a sheet exists or it does not. This is about how
-   * much the CARD is worth: Open and Active are this week and push the button
-   * up, next and last week are context and push it down. They are independent,
-   * so all four combinations occur — Last week's US Open has a sheet on a
-   * quiet card, and an Active draw often has none on a loud one.
-   *
-   * ONE KNOB CARRIES IT: the border's alpha over its own label, 70% on a loud
-   * card and 40% on a quiet one. On the chip that is 4.5-8.1:1 off the fill
-   * against 2.4-3.4.
-   */
-  const edge = inks.quiet ? '66' : 'b3'
-  if (!href) {
-    /* ONE INK, THREE WEIGHTS: the fill, the edge and the word are the SAME
-     * colour at 16%, 55% and 100% (owner, 2026-09-16, "make the background
-     * pill colour close in colour to the text, or more light"). A white lift
-     * was a grey-pink on a pink card; its own ink at low alpha is a pale
-     * version of itself, which is what the ask describes and what keeps the
-     * pill inside the card's family.
-     *
-     * THE SECTION RIDES THE ALPHA rather than the ramp step, and that is what
-     * resolves a conflict between two of the asks: a lighter fill needs a
-     * lighter label to stay legible, while the week cards are supposed to be
-     * quieter. So the loud cards take the ink at 16% and the quiet ones
-     * inkBody at 8% — the week pill ends up both paler and a step down the
-     * ramp, and neither has to give up its label.
-     *
-     * AND IT CLEARS AA NOW, which the last arrangement did not: 4.94/4.73:1
-     * on the loud cards and 4.81/4.64 on the quiet ones, against the 3.4 the
-     * week cards were deliberately sitting at. That compromise is gone.
-     *
-     * THE POLARITY STILL READS, which is the thing not to break: the
-     * available chip goes 1.88:1 DARKER than the card and this goes 1.44:1
-     * LIGHTER, so the two states still move in opposite directions. */
-    const fillA = inks.quiet ? '14' : '29'
-    const ghostEdge = inks.quiet ? '4d' : '8c'
-    /* AND HERE THE LABEL STEPS DOWN TOO, which it does not on the chip below.
-       On a week card it is `faint` at 3.4-4.3:1 rather than `muted` at
-       4.1-5.5 — deliberately under AA, at the owner's ask, and this is the one
-       place in the app where that is a fair trade: a label naming something
-       that does not exist yet, on the least important card on the screen, with
-       everything actionable above it. */
-    const lab = inks.quiet ? inks.inkBody : inks.ink
-    return (
-      <View style={[s.oop, { backgroundColor: lab + fillA,
-                             borderColor: lab + ghostEdge }]}>
-        <Text style={[s.oopText, { color: lab }]} numberOfLines={1}>{label}</Text>
-      </View>
-    )
-  }
-  // CardLink, not <Link asChild><Pressable style>: that form drops the
-  // style — the pill rendered as bare text — and it is the trap CardLink
-  // exists to close. Third time it has been re-typed; last time.
-  /* THE CONTROL IS READ IN THE CARD'S OWN INK, not in the brand's green
-     (owner, 2026-09-16, "the green button and icon are not working with the
-     pink").
-   *
-   * C.greenLit sits 164.5 degrees from the WTA card's hue at 3.44:1 — a near
-   * complement at low contrast, which is the definition of a vibrating pair —
-   * and 2.68:1 against the pill's own fill, under any floor. It was right when
-   * it was chosen: on the near-black card it is 12.8 degrees away and 6.40:1,
-   * a green control on a green-grey card.
-   *
-   * NO FIXED ACCENT CAN REPLACE IT, which is what settles the question rather
-   * than taste. The two tints are 100 degrees apart, so an accent that is
-   * harmonious on one is near-complementary on the other: C.gold is 89 degrees
-   * from the pink card and 171 from the blue, C.clayLight 59 and 159. Only a
-   * colour derived PER TOUR can be harmonious on both, and the card already
-   * has one. C.gold was the close second and was rejected for a second reason
-   * as well: in this palette gold means a locked podium place, and a gold
-   * button on every card spends that meaning.
-   *
-   * FILLED VERSUS HOLLOW, because there are two states and they have to be
-   * told apart across a column of cards without being read (owner,
-   * 2026-09-16). Weight alone was not enough: the first attempt lifted the
-   * available pill with white at 10%, which is 1.28:1 against the card, and
-   * beside a hollow one it read as the same object twice.
-   *
-   * THE TWO STATES GO OPPOSITE WAYS OFF THE CARD (owner, 2026-09-16). A sheet
-   * that exists is a RECESSED DARK CHIP — the card's own control pair, the
-   * dark its tier stamp sits on carrying the tour's light ink, at 9.5:1 on the
-   * WTA card, 7.6 on the ATP and 15.7 on the neutral. One that does not exist
-   * is barely LIFTED instead: white at 8%, which is 1.22:1, present as a shape
-   * and saying nothing.
-   *
-   * THE CHIP IS DEFINED BY ITS EDGE, not by its fill. The fill is only 1.9:1
-   * off a tinted card and 1.17:1 off the neutral one, where there is almost no
-   * room left to go darker — so the border is the label, at 70% on a loud card
-   * and 40% on a quiet one, standing 4.5-8.1:1 and 2.4-3.4:1 off the fill.
-   *
-   * ITS LABEL DOES NOT STEP DOWN ON A QUIET CARD, and the arithmetic is why:
-   * this is a LIGHT label on a DARK fill, so walking it down the ink ramp does
-   * not lower its contrast. `muted` measures 9.34:1 on the WTA chip against
-   * `text`'s 9.52, and on the ATP chip it goes UP — 9.53 from 7.63. The only
-   * lever that quiets a chip is its border, which is the one that moves.
-   *
-   * AND THE QUIET STATE MOVED UP A RAMP STEP, which is the part that is not
-   * obvious: lifting its fill costs its label contrast, so C.faint fell from
-   * 4.20:1 on the bare card to 3.45 on the lifted one. It takes `muted`
-   * instead, at 4.05-5.53:1 — still the quieter of the two by a wide margin,
-   * since the chip beside it carries 9.5:1. */
-  return (
-    <CardLink href={href} pressedOpacity={0.7}
-              style={[s.oop, { backgroundColor: inks.control,
-                               borderColor: inks.controlInk + edge }]}
-              accessibilityLabel={a11y}>
-      <Text style={[s.oopText, { color: inks.controlInk }]} numberOfLines={1}>{label}</Text>
-    </CardLink>
-  )
-}
-
-/* THE LEAGUE FOR THIS EVENT. A standing is per DRAW, so a combined
-   tournament has two of them and one bar — the same shape cardHref settled for
-   the bracket, and settled the same way: the first draw with data, with the
-   standings screen's own tour switch one tap from the other half. The rows
-   above the bar still show both. */
+/* THE LEAGUE FOR THIS EVENT. A standing is per DRAW, so a combined tournament
+   has two of them and one bar — the same shape cardHref settled for the
+   bracket, and settled the same way: the first draw with data, with the
+   standings screen's own tour switch one tap from the other half. */
 const leagueHref = draws => {
   const d = draws.find(hasDrawData) || draws[0]
   return d ? `/standings/${d.id}` : null
 }
 
-/* THE THREE OPTIONS, IN ONE PLACE, so Open, Active and Last week cannot drift
-   apart in what they offer or in what order (owner, 2026-09-16).
- *
- * ALL THREE APPEAR ON ALL THREE SECTIONS, including the ones with nothing
- * behind them — an Open draw has no order of play published for days, and its
- * Schedule segment sits dimmed rather than absent. That reverses an earlier
- * call to leave the sheet off Open cards entirely, and the bar is the reason:
- * a pill that is not there costs nothing, but a SEGMENT that is not there
- * changes the control's shape from card to card, which is the one thing a nav
- * must not do. */
+/* THE THREE DESTINATIONS, IN ONE PLACE, so Open, Active and Last week cannot
+   drift apart in what they offer or in what order.
+
+   ALL THREE APPEAR WHEREVER THE BAND DOES, including the ones with nothing
+   behind them — an Open draw has no order of play published for days, and its
+   Schedule plate sits translucent rather than absent. A plate that is not
+   there changes the band's shape from card to card, which is the one thing a
+   nav must not do. */
 const navItems = draws => [
   { label: 'League', href: leagueHref(draws), a11y: 'League standings' },
   { label: 'Draw', href: cardHref(draws), a11y: 'Tournament draw' },
@@ -726,7 +576,7 @@ function WeekCard({ draws, done }) {
           cards smaller than the ones above them, which is the difference the
           sections are for — a draw you can still pick is worth more room than
           one that opens next Saturday. */}
-      <WeekRow draws={draws} opens={opens} done={done} />
+      <WeekRow draws={draws} opens={opens} />
       </>
       }
     />
@@ -744,7 +594,7 @@ function WeekCard({ draws, done }) {
  * child of the card it was passed to. OpenRow was already this shape for the
  * same structural reason; this one matches it.
  */
-function WeekRow({ draws, opens, done }) {
+function WeekRow({ draws, opens }) {
   const inks = useCardSkin()
   return (
     <View style={s.weekRow}>
@@ -765,9 +615,12 @@ function WeekRow({ draws, opens, done }) {
           Opens {fmtShort(opens)}
         </Text>
       ) : null}
-      <View style={[s.weekSide, { alignItems: 'flex-end' }]}>
-        {done ? null : <OrderOfPlay t={oopDraw(draws)} />}
-      </View>
+      {/* AN EMPTY SLOT, AND IT HAS A JOB (owner, 2026-09-16: the Schedule pill
+          comes off Next week). The two flexible sides are what centre the
+          release date — they split whatever the middle leaves — so deleting
+          this one would not tidy the row, it would shove "Opens Sep 19" to the
+          right edge. It stays, holding nothing. */}
+      <View style={[s.weekSide, { alignItems: 'flex-end' }]} />
     </View>
   )
 }
@@ -867,15 +720,6 @@ const s = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     backgroundColor: C.card, borderWidth: 1, borderColor: C.green,
   },
-  oop: {
-    borderRadius: R.pill, borderWidth: 1, borderColor: C.borderOn, backgroundColor: C.raised,
-    paddingHorizontal: 10, paddingVertical: 4,
-  },
-  /* NO COLOUR HERE. Both states set their own from the card's skin — the
-     live pill the ink, the disabled one the faint step — and a default green
-     left in the shared style is a default that only looks right on the one
-     card it was chosen against. */
-  oopText: { ...T.tiny, letterSpacing: 0.3 },
   oopMini: { paddingHorizontal: S.md, alignSelf: 'stretch', justifyContent: 'center' },
 
   footer: {
