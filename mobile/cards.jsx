@@ -249,7 +249,7 @@ export function StatusChip({ tone = 'muted', children }) {
  *   Halved, and the horizontal padding left alone so every card down the
  *   column still starts its text at the same x.
  */
-export function TourCard({ draws, name, children, footer, nav, href, corner, compact }) {
+export function TourCard({ draws, name, children, footer, href, corner, compact }) {
   const list = (draws || []).filter(Boolean)
   const combined = list.length > 1
   const isATP = list[0]?.gender !== 'F'
@@ -325,28 +325,22 @@ export function TourCard({ draws, name, children, footer, nav, href, corner, com
         ) : (
           <AccentBar from={isATP ? C.atp : C.wta} to={isATP ? C.atpDeep : C.wtaDeep} />
         )}
-        {/* A COLUMN, so a bar can sit flush to the card's bottom edge. The
-            body keeps the padding that lines every card's text up down the
-            screen; the nav is outside it, edge to edge, and inherits the
-            card's bottom radius from its overflow: hidden. */}
-        <View style={u.column}>
-          <View style={[u.body, compact && u.bodyTight]}>
-            {href
-              ? <CardLink href={href} style={[u.bodyLink, compact && u.bodyLinkTight]}
-                          pressedOpacity={0.75}>{body}</CardLink>
-              : <View style={[u.bodyLink, compact && u.bodyLinkTight]}>{body}</View>}
-            {footer ? (
-              /* ONE HAIRLINE, NOT TWO. The footer draws its own rule only
-                 when nothing is below it — with a nav bar present that bar's
-                 top border is the card's single divider, and both would put
-                 two lines a few points apart. */
-              <View style={(compact || nav) ? u.footerPlain
-                                            : [u.footer, { borderTopColor: skin.rule }]}>
-                {footer}
-              </View>
-            ) : null}
-          </View>
-          {nav}
+        {/* THE COLUMN AND THE `nav` SLOT ARE GONE (owner, 2026-09-16). They
+            existed so a full-bleed band could sit flush to the card's bottom
+            edge, outside the body's padding; the band is now three plates the
+            caller puts on a row of its own choosing, so the body is the whole
+            card again. */}
+        <View style={[u.body, compact && u.bodyTight]}>
+          {href
+            ? <CardLink href={href} style={[u.bodyLink, compact && u.bodyLinkTight]}
+                        pressedOpacity={0.75}>{body}</CardLink>
+            : <View style={[u.bodyLink, compact && u.bodyLinkTight]}>{body}</View>}
+          {footer ? (
+            <View style={compact ? u.footerPlain
+                                 : [u.footer, { borderTopColor: skin.rule }]}>
+              {footer}
+            </View>
+          ) : null}
         </View>
       </View>
       {/* box-none, not none: the slot itself must never swallow a tap meant
@@ -367,44 +361,32 @@ export function TourCard({ draws, name, children, footer, nav, href, corner, com
  * is an existing theme.js token read through useCardSkin(), so this adds no
  * dependency and no new value to the palette.
  *
- * THE IDEA: the graphic a broadcaster drops over the bottom of the picture.
- * Three plates leaning the tier marks' own 8 degrees, with speed lines
- * trailing off to the left. It earns the slant honestly — the ATP and WTA tier
- * artwork on this same card is oblique and nothing else in the app leans — and
- * it puts the three destinations on the same material as the tier stamp
- * without needing to shout: the type stays 13pt semibold at the BODY step,
- * quieter than the four passes before it (which reached 17pt caps before the
- * owner called it).
+ * THE IDEA: the plates a broadcaster drops over the bottom of the picture,
+ * leaning the tier marks' own 8 degrees. It earns the slant honestly — the ATP
+ * and WTA tier artwork on this same card is oblique and nothing else in the
+ * app leans — and it puts the three destinations on the same material as the
+ * tier stamp without needing to shout: the type stays 13pt semibold at the
+ * BODY step, quieter than the four passes before it (which reached 17pt caps
+ * before the owner called it).
  *
- * NO GLOSS SWEEP. The spec had one — a 44pt band of the ornament crossing the
- * whole nav every 5.5s, staggered down the screen — and it came out at the
- * owner's ask (2026-09-16). The shape is what makes this read as a broadcast
- * object; the shine was the part that had to justify itself every 5.5 seconds
- * on a screen the reader opens to check a deadline, and it could not. What
- * went with it: an Animated loop per card, a layout listener for the travel
- * width, a reduced-motion subscription, and the `index` prop that existed only
- * to stagger them.
+ * WHAT IT HAS SHED, in two asks and in this order. The gloss sweep first — a
+ * 44pt band crossing the nav every 5.5s, and with it an Animated loop per
+ * card, a layout listener, a reduced-motion subscription and a stagger index.
+ * Then the BAND itself (owner, 2026-09-16): the full-bleed field, its top
+ * hairline, its padding and the four speed lines that trailed off to the left.
+ * What is left is the idea's core — three leaning plates — small enough to sit
+ * on a row beside the city rather than occupying a storey of its own.
+ *
+ * SO THIS IS A ROW, NOT A BAND, and the caller places it. It appears on Last
+ * week alone; Open and Active carry no destinations at all, because a card you
+ * can act on is worth its whole height to the acting.
  */
 export function CardNav({ items }) {
   const skin = useCardSkin()
-  const ornament = skin.controlInk
   /* The label sits at the BODY step, not the loud one — the spec's own choice,
      and the plate behind it is what carries the weight. */
   const label = skin.quiet ? skin.muted : skin.inkBody
   return (
-    <View style={[u.nav, { borderTopColor: ornament + '24' }]}>
-      {/* SPEED LINES, rising in weight toward the plates they trail from:
-          four rules at 2/2/3/3pt and .10/.16/.24/.34 alpha, leaning harder
-          than the plates (20 degrees against 8) so they read as motion rather
-          than as three more plates that lost their labels. */}
-      {SPEED.map((sp, i) => (
-        <View key={i} style={[u.navSpeed, {
-          width: sp.w, marginLeft: i ? 5 : 0, backgroundColor: ornament + sp.a,
-        }]} />
-      ))}
-      {/* The spacer is what pushes the plates right, so the asymmetry survives
-          any card width and any text size rather than being a fixed margin. */}
-      <View style={u.navSpacer} />
       <View style={u.navPlates}>
         {items.map(it => {
           const live = !!it.href
@@ -413,7 +395,7 @@ export function CardNav({ items }) {
             return (
               <CardLink key={it.label} href={it.href} hitSlop={NAV_SLOP}
                         accessibilityLabel={it.a11y} style={plate}
-                        pressedStyle={{ backgroundColor: ornament + '47' }}>
+                        pressedStyle={{ backgroundColor: skin.controlInk + '47' }}>
                 {({ pressed }) => (
                   <Text style={[u.navText, { color: pressed ? skin.ink : label }]}
                         numberOfLines={1}>{it.label}</Text>
@@ -435,16 +417,56 @@ export function CardNav({ items }) {
           )
         })}
       </View>
-    </View>
   )
 }
-
-const SPEED = [{ w: 2, a: '1a' }, { w: 2, a: '29' }, { w: 3, a: '3d' }, { w: 3, a: '57' }]
 
 /* 9 top and bottom takes the 26pt plate past 44; 2 a side rather than more,
    because the plates are only 3pt apart and a wider slop would let one steal
    the neighbour's centre (the spec's numbers, and its reasoning). */
 const NAV_SLOP = { top: 9, bottom: 9, left: 2, right: 2 }
+
+/* ONE LINE, SHRUNK TO FIT — the general case of what CardTitle does for a
+ * tournament name and PlayerName does for a surname.
+ *
+ * MEASURED, NOT ELLIPSISED. The slot reports how much room it HAS (flex: 1 on
+ * a wrapper is what makes onLayout report the room rather than the text's own
+ * width), the string is measured in the face it is actually set in, and the
+ * type shrinks by exactly the ratio needed. No "…", which is the house rule
+ * everywhere text is fitted here: a cut word is a word nobody can read.
+ *
+ * THE SIZE IS COMPUTED IN UNSCALED POINTS while the measurement is scaled, so
+ * the answer holds at any Dynamic Type setting — a floor in unscaled points
+ * would let the text overflow again on a large-text phone, which is the bug
+ * this pattern exists to prevent.
+ */
+export function FitText({ children, style, min = 8, track = 0 }) {
+  const [avail, setAvail] = useState(null)
+  const flat = StyleSheet.flatten(style) || {}
+  const family = flat.fontFamily || 'Archivo_500Medium'
+  const size = flat.fontSize || 13
+  const text = String(children ?? '')
+  let fontSize = size
+  if (avail != null) {
+    const need = textWidth(text, family, size) + text.length * track
+    // A point of slack: kerning is not in the tables, and a string right on
+    // the line should shrink rather than gamble.
+    const room = avail - 1
+    if (need > room) fontSize = Math.max(min, (size * room) / need)
+  }
+  return (
+    <View style={u.fitSlot} onLayout={e => setAvail(e.nativeEvent.layout.width)}>
+      {/* adjustsFontSizeToFit is the backstop for where iOS measures the face
+          a hair wider than the tables do — it takes the last step rather than
+          an ellipsis. The box must never have slack when it is on, or iOS
+          shrinks to its floor regardless; the arithmetic above guarantees the
+          text is at or over the width. */}
+      <Text style={[style, fontSize !== size && { fontSize }]} numberOfLines={1}
+            adjustsFontSizeToFit minimumFontScale={0.5}>
+        {text}
+      </Text>
+    </View>
+  )
+}
 
 /* THE TOURNAMENT NAME, ON ONE LINE — shrunk to fit, never wrapped.
  *
@@ -504,7 +526,6 @@ const u = StyleSheet.create({
     borderWidth: 1, borderColor: C.border, borderRadius: R.md,
     flexDirection: 'row', overflow: 'hidden', ...SHADOW,
   },
-  column: { flex: 1, minWidth: 0 },
   // '14px 16px 14px 20px' with gap 9, from the source.
   body: { flex: 1, paddingTop: 14, paddingRight: 16, paddingBottom: 14, paddingLeft: 16, gap: 9 },
   bodyLink: { gap: 9 },
@@ -535,6 +556,9 @@ const u = StyleSheet.create({
   // inverted. So the base number moves with the full-size one — 3 -> 4, times
   // SMALL — rather than being retuned on its own.
   stampSmall: { borderRadius: 6, padding: 4 * SMALL },
+  // As titleSlot, for FitText: the flex is what makes onLayout report the
+  // room there IS rather than the room the text took.
+  fitSlot: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center' },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   // The spare width of the title row, which is what CardTitle measures to know
   // how much the name may use. It replaced a flex:1 spacer that sat AFTER the
@@ -555,17 +579,12 @@ const u = StyleSheet.create({
     letterSpacing: TITLE_TRACK, color: C.ink, flexShrink: 1,
   },
   footer: { borderTopWidth: 1, borderTopColor: C.border, paddingTop: 9, marginTop: 1 },
-  /* THE LOWER-THIRD — livery-spec.md's band. overflow hidden still matters
-     with the sweep gone: it is what keeps the skewed plates and the leaning
-     speed lines inside the card's rounded corner. */
-  nav: {
-    flexDirection: 'row', alignItems: 'center', overflow: 'hidden',
-    borderTopWidth: 1, paddingTop: 8, paddingRight: 14, paddingBottom: 10, paddingLeft: 16,
-  },
-  // The speed lines lean HARDER than the plates: motion, not more plates.
-  navSpeed: { height: 26, transform: [{ skewX: '-20deg' }] },
-  navSpacer: { flex: 1 },
-  navPlates: { flexDirection: 'row', gap: 3 },
+  /* THE PLATES, AND NOTHING AROUND THEM. The band they used to sit in is gone
+     (see CardNav), so this is the component's root: a row the caller drops
+     where it likes. `flex: none` because it goes on a row beside text that
+     shrinks — the plates are a fixed width and the WORDS give way, never the
+     controls. */
+  navPlates: { flexDirection: 'row', gap: 3, flexShrink: 0 },
   /* A PLATE, leaning the tier marks' 8 degrees. Radius 3 rather than the
      stamp's 8: a skewed rounded rectangle reads as a wobble past a few points,
      and a lower-third's plates are cut square. The label is a CHILD of this

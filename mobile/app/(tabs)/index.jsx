@@ -27,7 +27,7 @@ import { computeCohortInfo, getHomeSection } from '../../drawStatus'
 import { drawsByTournament } from '../../scheduleRows'
 import { lockLabel } from '../../lock'
 import { C, R, S, T } from '../../theme'
-import { CardNav, StatusChip, SurfaceText, TourCard, useCardSkin } from '../../cards'
+import { CardNav, FitText, StatusChip, SurfaceText, TourCard, useCardSkin } from '../../cards'
 import { dateRange } from '../../dates'
 import { Button, Card, CardLink, ErrorNote, Eyebrow, Loading, Muted, Screen, Title } from '../../ui'
 import { MenuSheet } from '../../menu'
@@ -90,7 +90,12 @@ const leagueHref = draws => {
 const navItems = draws => [
   { label: 'League', href: leagueHref(draws), a11y: 'League standings' },
   { label: 'Draw', href: cardHref(draws), a11y: 'Tournament draw' },
-  { label: 'Schedule', href: oopHref(oopDraw(draws)), a11y: 'Schedule and order of play' },
+  /* "Sched", NOT "Schedule" (owner, 2026-09-16). The three plates now share a
+     row with the city, and the full word costs 18pt of plate that the city
+     needs: measured, the three come to 214pt with it and 196 without, which is
+     the difference between the city having 101pt and 119. It is the one label
+     here with an abbreviation everyone already reads. */
+  { label: 'Sched', href: oopHref(oopDraw(draws)), a11y: 'Schedule and order of play' },
 ]
 
 /* COMPETING, in the corner. On the footer row it was a bare star between two
@@ -442,7 +447,6 @@ function OpenCard({ draws, status, now }) {
               ))}
             </View>
           }
-          nav={<CardNav items={navItems(draws)} />}
         >
           <Meta t={draws[0]} />
         </TourCard>
@@ -466,7 +470,6 @@ function ActiveCard({ draws, status }) {
         <TourCard
           draws={draws} name={draws[0].name} href={cardHref(draws)}
           corner={competing ? <CompetingStar /> : null}
-          nav={<CardNav items={navItems(draws)} />}
         >
           {/* The surface sits beside the city, exactly as it does on an Open
               card — one line up from the footer it used to share with the
@@ -557,7 +560,7 @@ function WeekCard({ draws, done }) {
          without one, and no sheet — a bar of three dimmed segments is a
          control that only reports its own uselessness. Its single Schedule
          pill stays in the row instead. */
-      nav={done ? <CardNav items={navItems(draws)} /> : null}
+
       /* AS THE FOOTER, not as the body's children — and the difference is not
          cosmetic. `href` makes the body a link, so a row placed inside it puts
          Order of Play's own link INSIDE that one: invalid HTML on the web
@@ -576,7 +579,7 @@ function WeekCard({ draws, done }) {
           cards smaller than the ones above them, which is the difference the
           sections are for — a draw you can still pick is worth more room than
           one that opens next Saturday. */}
-      <WeekRow draws={draws} opens={opens} />
+      <WeekRow draws={draws} opens={opens} done={done} />
       </>
       }
     />
@@ -594,7 +597,7 @@ function WeekCard({ draws, done }) {
  * child of the card it was passed to. OpenRow was already this shape for the
  * same structural reason; this one matches it.
  */
-function WeekRow({ draws, opens }) {
+function WeekRow({ draws, opens, done }) {
   const inks = useCardSkin()
   return (
     <View style={s.weekRow}>
@@ -603,24 +606,35 @@ function WeekRow({ draws, opens }) {
           split what the middle leaves, so the middle's centre is the row's
           centre. It trailed the city before, which put it in four places
           down a column of four cards (owner, 2026-09-15). */}
-      <View style={s.weekSide}>
-        {draws[0].city ? (
-          <Text style={[T.smallMed, { color: inks.inkBody }]} numberOfLines={1}>
-            {draws[0].city}
-          </Text>
-        ) : null}
-      </View>
-      {opens ? (
-        <Text style={[T.tiny, { color: inks.faint }]} numberOfLines={1}>
-          Opens {fmtShort(opens)}
-        </Text>
-      ) : null}
-      {/* AN EMPTY SLOT, AND IT HAS A JOB (owner, 2026-09-16: the Schedule pill
-          comes off Next week). The two flexible sides are what centre the
-          release date — they split whatever the middle leaves — so deleting
-          this one would not tidy the row, it would shove "Opens Sep 19" to the
-          right edge. It stays, holding nothing. */}
-      <View style={[s.weekSide, { alignItems: 'flex-end' }]} />
+      {/* THE CITY SHRINKS, THE PLATES DO NOT (owner, 2026-09-16: the city
+          "always fits in its allotted space, on one line"). FitText measures
+          the room it was given and scales the type by exactly the ratio
+          needed — so "New York City" sits at its full 13pt with 119pt to play
+          with, and a long one gives way rather than wrapping or being cut.
+          The plates are flexShrink 0 for the same reason: a control that
+          shrinks is a control nobody can hit.
+          At 13pt the measured cities all fit (New York City 83pt, Rio de
+          Janeiro 85, 's-Hertogenbosch 104), so the shrink is the safety net
+          for Dynamic Type and for whatever the tour adds next, not a thing
+          the reader normally sees working. */}
+      <FitText style={[T.smallMed, { color: inks.inkBody }]}>
+        {draws[0].city || ''}
+      </FitText>
+      {/* LAST WEEK GETS THE PLATES, ON THIS ROW. Next week keeps the centred
+          release date instead: its draws are not out, so all three
+          destinations would be dead, and what it has to say is the date. */}
+      {done ? <CardNav items={navItems(draws)} /> : (
+        <>
+          {opens ? (
+            <Text style={[T.tiny, { color: inks.faint }]} numberOfLines={1}>
+              Opens {fmtShort(opens)}
+            </Text>
+          ) : null}
+          {/* The empty slot is what CENTRES that date — two flexible sides
+              split whatever the middle leaves. It holds nothing on purpose. */}
+          <View style={[s.weekSide, { alignItems: 'flex-end' }]} />
+        </>
+      )}
     </View>
   )
 }
