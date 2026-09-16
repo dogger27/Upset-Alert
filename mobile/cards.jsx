@@ -43,6 +43,8 @@ import { BADGE, C, R, SHADOW, T, TOUR } from './theme'
 const NEUTRAL_SKIN = {
   ink: C.ink, inkBody: C.inkBody, muted: C.muted, faint: C.faint,
   card: C.card, line: C.border, control: C.bg, controlInk: C.ink, quiet: false,
+  // No tour, so no tour colour to accent with — see `accent` below.
+  accent: C.ink,
 }
 const CardSkinContext = createContext(NEUTRAL_SKIN)
 export const useCardSkin = () => useContext(CardSkinContext)
@@ -281,7 +283,25 @@ export function TourCard({ draws, name, children, footer, href, corner, compact 
   const inks = {
     ...(tour
       ? { ink: tour.ink, inkBody: tour.inkBody, muted: tour.muted, faint: tour.faint,
-          card: tour.card, line: tour.line, control: tour.plate, controlInk: tour.text }
+          card: tour.card, line: tour.line, control: tour.plate, controlInk: tour.text,
+          /* `accent` — A DISGUISED ACCENT, for the rare label that should read
+             as tinted rather than as more of the ramp (owner, 2026-09-16). The
+             tour's own ink pulled 40% toward the card's near-white one: 3.4x
+             the ramp's chroma on the WTA card and 4.1x on the ATP, so it is
+             visibly coloured beside a city name, at 5.8:1 and 5.0:1, so it is
+             still a label rather than a decoration.
+
+             WHY NOT THE TOUR'S INK ITSELF, which is the obvious answer: at
+             11pt BOLD nothing here counts as large text, so the floor is
+             4.5:1 and the raw ink measures 4.01 on the ATP card. Nor a fixed
+             accent — clayLight is 4.01 and gold 4.17 on that same card, and
+             both are near-complementary to it besides (the Schedule button
+             spent an afternoon on that lesson). Blending toward the ramp is
+             the one move that raises the contrast and keeps the hue.
+
+             DERIVED RATHER THAN TWO MORE HEXES, so it follows if either token
+             moves, and mix() is already here for the accent bar. */
+          accent: mix(tour.text, tour.ink, 0.4) }
       : NEUTRAL_SKIN),
     quiet: !!compact,
   }

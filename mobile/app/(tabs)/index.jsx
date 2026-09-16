@@ -681,7 +681,8 @@ function WeekRow({ draws, qual, done }) {
               colour chosen against one tint fights the other, which the
               Schedule button spent an afternoon proving. */}
           {qual
-            ? <Text style={[T.tiny, { color: inks.ink }]} numberOfLines={1}>Qualifying</Text>
+            ? <Text style={[T.tiny, s.qualifying, { color: inks.accent }]}
+                    numberOfLines={1}>Qualifying</Text>
             : <SurfaceText surface={draws[0].surface} />}
           <View style={[s.weekSide, { alignItems: 'flex-end' }]}>
             {dateRange(draws[0]) ? (
@@ -767,6 +768,15 @@ const s = StyleSheet.create({
      footer again now that the controls have moved into the bar below it, and
      minWidth 0 is what lets a long row shrink inside it rather than widen it. */
   footStack: { gap: S.sm, minWidth: 0 },
+  /* BOLD AND ACCENTED (owner, 2026-09-16). Bold because it is the one piece
+     of news on a card of context, and Archivo_700Bold rather than a heavier
+     size: this slot holds the surface the rest of the time, and a label that
+     changed SIZE with the state would move the two flexible sides either side
+     of it. The colour is the skin's `accent` — the tour's own ink pulled
+     toward the card's, which is what "a disguised shade" buys: tinted enough
+     to read as accented beside the city, muted enough to clear 4.5:1 at 11pt
+     where the raw tour ink does not. See the derivation in cards.jsx. */
+  qualifying: { fontFamily: 'Archivo_700Bold' },
   /* A week card's whole body: city, release, order of play. CENTRED rather
      than baseline-aligned now — the order of play is a pill when a sheet
      exists and bare type when it does not, and a baseline puts a pill's text
