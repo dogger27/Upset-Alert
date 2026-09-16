@@ -35,13 +35,32 @@ router = APIRouter(prefix="/tournaments", tags=["tournaments"])
 BRACKET_PUBLISHED_MIN_UNSEEDED = 4
 
 
-def _clear_phantom(match: Match, mr) -> bool:
+def _wikipedia_may_decide(mr) -> bool:
+    """THE ONE GATE on Wikipedia deciding anything about a match's outcome.
+
+    Wikipedia supplies the draw's SHAPE — players, positions, seeds, entry
+    types — and never a result. "NEVER, EVER, use Wikipedia for a match result
+    or score. EVER AGAIN. Sofascore only, and only when necessary, ESPN."
+    (owner, 2026-09-16, after Guadalajara's four quarter-finals showed winners
+    before any had been played: bold markup read as a result, and a lone
+    occupant read as a bye.)
+
+    The single exception is a FIRST-ROUND BYE, and it is an exception because
+    it is shape, not result: a seed placed opposite nothing on the sheet has
+    no match for Sofascore or ESPN to ever report. The parser only sets
+    `is_bye` in round one now (scraper.py), so this is exactly that case.
+    """
+    return bool(mr.is_bye)
+
+
+def _clear_phantom(match: Match) -> bool:
     """Undo a stored result that no source can vouch for.
 
     Only fires when the stored winner has NO score and NO Sofascore backing —
-    the shape only a scoreless Wikipedia parse can leave. A real result always
+    the shape only a Wikipedia-derived winner can leave. A real result always
     has one of those, so nothing genuine is touched; the branch is a no-op for
-    the pending row it usually meets.
+    the pending row it usually meets. Scores are never restored from the
+    sheet: the row goes back to bare pending.
     """
     if match.winner_id is None:
         return False
@@ -52,7 +71,7 @@ def _clear_phantom(match: Match, mr) -> bool:
     match.winner_id = None
     match.status = "pending"
     match.completed_at = None
-    match.scores_json = mr.scores
+    match.scores_json = None
     match.live_scores_json = None
     return True
 
@@ -2374,52 +2393,44 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
                         )
                     except Exception:                                    # noqa: BLE001
                         pass
-            elif w_id is not None and (mr.scores or mr.is_bye):
-                # Wikipedia has a result and Sofascore does not (yet, or ever:
-                # an unlisted walkover, an unmapped draw) — take it, tiebreak
-                # scores included.
-                #
-                # A RESULT COMES WITH A SCORE. Every real outcome on a
-                # Wikipedia draw sheet carries one: sets, "w/o" for a
-                # walkover, "3r" for a retirement — the parser keeps all of
-                # them as truthy lists. The one legitimate scoreless winner is
-                # a first-round bye, which mr.is_bye names. Anything else that
-                # arrives as a winner with no score is the parser reading bold
-                # markup as a result (`_parse_team` treats any ''' in a cell as
-                # the winner), and that is how two Guadalajara 2026
-                # quarter-finals were "won" before being played.
-                if match.winner_id != w_id:
-                    # Only stamp completed_at if ESPN hasn't already recorded it;
-                    # ESPN timestamps are more accurate (per-match, within 1 min).
-                    if match.completed_at is None:
-                        match.completed_at = datetime.now(timezone.utc)
+            elif w_id is not None and _wikipedia_may_decide(mr):
+                # A FIRST-ROUND BYE, and nothing else — see _wikipedia_may_decide.
+                # The seed advances because the sheet placed nobody opposite,
+                # not because anyone won. No score, because there was no match.
+                if match.winner_id != w_id and match.completed_at is None:
+                    match.completed_at = datetime.now(timezone.utc)
                 match.winner_id = w_id
                 match.status = "completed"
-                match.scores_json = mr.scores
+                match.scores_json = None
                 match.live_scores_json = None
             elif w_id is not None:
-                # A winner with no score and not a bye: a parse artifact, not a
-                # result. Logged rather than applied, and the match is treated
-                # below as though Wikipedia had reported nothing.
+                # WIKIPEDIA CLAIMS A RESULT SOFASCORE DOES NOT HAVE. It is not
+                # applied — ever — but it is worth a row in /issues: the usual
+                # reason is a match Sofascore never mapped, which is the thing
+                # to go and fix. The row is then treated as if the sheet had
+                # said nothing, and any earlier run that did apply it is undone.
                 try:
                     from app.services.system_log import app_log
                     await app_log(
                         "warning", "scraper",
-                        f"Wikipedia marks a winner but no score for match "
-                        f"{match.id} (draw {tournament.id}); not applied",
+                        f"Wikipedia shows a result for match {match.id} (draw "
+                        f"{tournament.id}, round {mr.round_number}) that Sofascore "
+                        f"has not reported; ignored — check the event mapping",
                         detail={"match_id": match.id, "round": mr.round_number,
-                                "match_number": mr.match_number, "wiki_winner_id": w_id},
-                        dedup_key=f"scraper:scoreless-winner:{match.id}",
+                                "match_number": mr.match_number, "wiki_winner_id": w_id,
+                                "wiki_scores": mr.scores},
+                        dedup_key=f"scraper:wiki-result-ignored:{match.id}",
                         dedup_hours=24.0,
                     )
                 except Exception:                                    # noqa: BLE001
                     pass
-                if _clear_phantom(match, mr):
+                if _clear_phantom(match):
                     await _log_phantom_cleared(match, tournament, mr)
             elif match.winner_id is None:
-                # No result from either source — update scores/status normally
+                # No result from any source we trust: bare pending. Never the
+                # sheet's in-progress score either — Sofascore live owns that.
                 match.completed_at = None
-                match.scores_json = mr.scores
+                match.scores_json = None
                 match.status = "pending"
             else:
                 # Neither source reports a result now, but a winner is stored.
@@ -2430,20 +2441,23 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
                 # backing is an earlier run of the artifact above — undo it, so
                 # the draw heals on the next scrape instead of needing a hand
                 # in the database.
-                if _clear_phantom(match, mr):
+                if _clear_phantom(match):
                     await _log_phantom_cleared(match, tournament, mr)
         else:
+            # A NEW ROW TAKES NO RESULT FROM THE SHEET EITHER — only a
+            # first-round bye's advancement. Its result arrives from Sofascore.
+            bye_w = w_id if _wikipedia_may_decide(mr) else None
             match = Match(
                 draw_id=tournament.id,
                 round_number=mr.round_number,
                 match_number=mr.match_number,
                 player1_id=p1_id,
                 player2_id=p2_id,
-                winner_id=w_id,
+                winner_id=bye_w,
                 is_bye=mr.is_bye,
-                scores_json=mr.scores,
-                status="completed" if w_id else "pending",
-                completed_at=datetime.now(timezone.utc) if w_id else None,
+                scores_json=None,
+                status="completed" if bye_w else "pending",
+                completed_at=datetime.now(timezone.utc) if bye_w else None,
             )
             db.add(match)
 
