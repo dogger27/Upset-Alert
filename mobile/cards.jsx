@@ -34,15 +34,15 @@ import { BADGE, C, R, SHADOW, T, TOUR } from './theme'
  * TourCard — the schedule's rows, a plain Card — is unchanged.
  */
 /* `control`/`controlInk` are the AVAILABLE state of a control on this card —
-   a filled pill and the label on it. Named by role rather than by where they
-   came from: on a tinted card they are the tour's own light ink and the dark
-   its tier stamp sits on, and on the neutral card the off-white and the page.
-   A control that can be pressed is FILLED and one that cannot is hollow, which
-   is the widest gap available that stays harmonious on both tints — see the
-   note at OrderOfPlay. */
+   the pill's fill and the label on it. Named by role rather than by where they
+   came from: on a tinted card they are the dark its tier stamp sits on and the
+   tour's own light ink, and on the neutral card the page and the off-white.
+   A control that can be pressed is a RECESSED DARK CHIP and one that cannot is
+   barely lifted off the card, which is the polarity the owner asked for and
+   which stays harmonious on both tints — see the note at OrderOfPlay. */
 const NEUTRAL_SKIN = {
   ink: C.ink, inkBody: C.inkBody, muted: C.muted, faint: C.faint,
-  card: C.card, line: C.border, control: C.ink, controlInk: C.bg,
+  card: C.card, line: C.border, control: C.bg, controlInk: C.ink,
 }
 const CardSkinContext = createContext(NEUTRAL_SKIN)
 export const useCardSkin = () => useContext(CardSkinContext)
@@ -272,7 +272,7 @@ export function TourCard({ draws, name, children, footer, href, corner, compact 
      crosses, so a fixed C.card is a near-black blob on a tinted card. */
   const inks = tour
     ? { ink: tour.ink, inkBody: tour.inkBody, muted: tour.muted, faint: tour.faint,
-        card: tour.card, line: tour.line, control: tour.text, controlInk: tour.plate }
+        card: tour.card, line: tour.line, control: tour.plate, controlInk: tour.text }
     : NEUTRAL_SKIN
   const body = (
     <>

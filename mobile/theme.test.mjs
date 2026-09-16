@@ -104,13 +104,15 @@ for (const [key, t] of Object.entries(theme.TOUR)) {
     bad.push(`theme.js  TOUR.${key} control pair ${t.text} / ${t.plate} is `
              + `${pair.toFixed(2)}:1 — a filled Schedule pill and its label, under 4.5:1`)
   }
-  /* AND IT HAS TO BE VISIBLE AS AN OBJECT. A filled pill whose fill is the
-     card's own lightness is not a filled pill; hollow is the other state, and
-     the two are told apart by exactly this. */
-  const standoff = ratio(t.text, t.card)
-  if (standoff < 2.5) {
-    bad.push(`theme.js  TOUR.${key} control fill ${t.text} is ${standoff.toFixed(2)}:1 `
-             + `against its card ${t.card} — too close to read as a filled control`)
+  /* AND IT HAS TO GO THE RIGHT WAY OFF THE CARD. The available control is a
+     RECESSED chip and the unavailable one is lifted; if `plate` ever went
+     lighter than `card` the two states would swap polarity and the pill with a
+     sheet behind it would be the one that looks empty. Direction, not
+     magnitude — the chip's shape comes from its border, because on the neutral
+     card the fill is only 1.17:1 off and there is nowhere darker to go. */
+  if (lum(t.plate) >= lum(t.card)) {
+    bad.push(`theme.js  TOUR.${key} control fill ${t.plate} is no darker than its card `
+             + `${t.card} — the pressable state is the recessed one`)
   }
   /* THE HAIRLINE LIFTS OFF ITS CARD. C.border is lighter than C.card, so the
      footer's rule reads as a seam catching the light; the tinted cards used to
