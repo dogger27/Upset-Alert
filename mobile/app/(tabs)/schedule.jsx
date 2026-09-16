@@ -27,7 +27,7 @@ import { hideFromLockScreen, showMatchOnLockScreen, useShowingOnLockScreen } fro
 import { showToast } from '../../toast'
 import { useLiveUpdates } from '../../live'
 import { useApi } from '../../useApi'
-import { footTime, isLive, isSuspended, matchFromEntry, whenLabel } from '../../schedule'
+import { byTimeOfDay, footTime, isLive, isSuspended, matchFromEntry, whenLabel } from '../../schedule'
 import { leading } from '../../fontScale.js'
 import { TourBadge } from '../../cards'
 import { setScheduleTournaments, useScheduleTournaments } from '../../scheduleFilter'
@@ -292,27 +292,9 @@ export default function ScheduleScreen() {
       return ranked.map(r => [r.name, r.list])
     }
 
-    // Time: a chronology of the day, the site's rule exactly (Schedule.jsx
-    // timeEntries). Sort on the same instant the row DISPLAYS — when a match
-    // actually began, else the estimate — or a match that went on late sits
-    // among the slots it was printed beside while its own row says "Started
-    // at" some quite different time. A match carried over from yesterday
-    // keeps yesterday's started_at (that is what the field means), so it is
-    // keyed on when it comes back today: resumed_at once it has, the slot it
-    // is due in until then.
-    const key = e => {
-      if (e.resumed_at) return e.resumed_at
-      if (e.status === 'to_be_completed') return e.expected_start_at || ''
-      return e.started_at || e.expected_start_at || ''
-    }
-    const sorted = [...visible].sort((a, b) => {
-      const ka = key(a), kb = key(b)
-      if (ka !== kb) return ka < kb ? -1 : 1
-      // Same instant: keep a court's own running order intact.
-      return (a.court || '').localeCompare(b.court || '')
-        || (a.court_order ?? 99) - (b.court_order ?? 99)
-    })
-    return [[null, sorted]]
+    // Time: a chronology of the day, the site's rule exactly — see
+    // byTimeOfDay in schedule.js (a row with no time at all goes last).
+    return [[null, byTimeOfDay(visible)]]
   }, [visible, view])
 
   const refetch = () => { day.refetch(); dates.refetch() }

@@ -16,6 +16,7 @@ import { useScheduleTz } from '../store/scheduleTz'
 import { getPredictions } from '../api/predictions'
 import { nationalityIso2, splitPlayerName } from '../utils/flags'
 import { isSuspended, isUnderWay } from '../utils/playState'
+import { byTimeOfDay } from '../utils/dayOrder'
 import { rootFontPx, textWidth } from '../utils/text'
 import { parseSet } from '../utils/score'
 import './Schedule.css'
@@ -893,36 +894,10 @@ export default function Schedule() {
     })
   }, [data, view, showDone, showDoubles, tourSel])
 
-  /* Order the time view by when a match ACTUALLY began, falling back to the
-     estimate for anything still to come.
-     The API sorts on expected_start_at, which for a match already under way is
-     the time the sheet PRINTED — so a match that went on late sat among the
-     slots it was scheduled beside rather than where it belongs, while its own
-     row said "Started at" some quite different time. Sorting on the same value
-     the row displays is what makes the list read as a chronology. */
-  const timeEntries = useMemo(() => {
-    /* THE TIME IT HAPPENS ON THIS DAY, which for a carried match is not the
-       time it began. A match suspended overnight keeps yesterday's started_at
-       — that is what the field means — so sorting on it filed the resumptions
-       among yesterday afternoon's slots, scattered through a list that is
-       supposed to read as today's chronology.
-       Resumed: when it came back. Still waiting to resume: the slot it is
-       scheduled to come back in. Anything else is unchanged.
-       Keyed off the status rather than off comparing started_at's date with
-       play_date — those are a UTC instant and a venue-local date, and a night
-       match crossing midnight makes that comparison lie. */
-    const key = e => {
-      if (e.resumed_at) return e.resumed_at
-      if (e.status === 'to_be_completed') return e.expected_start_at || ''
-      return e.started_at || e.expected_start_at || ''
-    }
-    return [...entries].sort((a, b) => {
-      const ka = key(a), kb = key(b)
-      if (ka !== kb) return ka < kb ? -1 : 1
-      // Same instant: keep a court's own running order intact.
-      return (a.court || '').localeCompare(b.court || '') || a.court_order - b.court_order
-    })
-  }, [entries])
+  /* The time view as a chronology — when each match actually happens on this
+     day, and a slot with no time at all after every timed one. The rule and
+     its history live in utils/dayOrder.js, pinned by dayOrder.test.mjs. */
+  const timeEntries = useMemo(() => byTimeOfDay(entries), [entries])
 
   const byCourt = useMemo(() => {
     const m = new Map()

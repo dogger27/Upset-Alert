@@ -1241,6 +1241,35 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                      + " — the page can print nothing for a resumption"
                      + f" the sheet slots at {e.start_note or e.start_type!r}")
 
+    # 2026-09-17, Guadalajara doc 274: the doubles SF was printed "Time TBA -
+    # After suitable rest", alone on CANCHA with that court's first band left
+    # empty — no clock, and nothing ahead of it to chain an estimate from.
+    # The ROW was right (the time genuinely is unknown); the ORDER was not.
+    # SQLite sorts NULL first, so the day endpoint served it as the day's
+    # opener, and both clients' Time views keyed it on '' and listed it above
+    # the 1:00 PM first match that the sheet's layout and its "after rest" put
+    # it behind. The defect is in code, so this runs the SERVE path's own
+    # ordering (routers/schedule.day_order) over the stored day, the way
+    # carry_signature_collides runs its signature. The clients' copies of the
+    # rule are pinned by frontend/src/utils/dayOrder.test.mjs and
+    # mobile/schedule.test.mjs.
+    from app.routers.schedule import day_order as _day_order
+    by_id = {e.id: e for e in rows}
+    untimed = None
+    for rid, exp in (await db.execute(
+            select(ScheduleEntry.id, ScheduleEntry.expected_start_at).where(
+                ScheduleEntry.tournament_id == tournament_id,
+                ScheduleEntry.play_date == play_date,
+            ).order_by(*_day_order()))).all():
+        if exp is None:
+            untimed = untimed or rid
+        elif untimed is not None:
+            flag("untimed_slot_served_first", by_id.get(untimed),
+                 f"entry {untimed} has no expected start but is served ahead "
+                 f"of entry {rid} ({exp:%H:%M} UTC) — the page lists a slot "
+                 f"nobody can time as earlier than a timed one")
+            break
+
     return v
 
 
