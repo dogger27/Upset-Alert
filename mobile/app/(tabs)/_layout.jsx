@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { BracketIcon } from '../../BracketIcon'
 import { TourBadge } from '../../cards'
 import { Sheet } from '../../sheet'
+import { BrandMark } from '../../ui'
 import { useAuth } from '../../auth'
 import { hasDrawData, useChoosableTournaments } from '../../choosableTournaments'
 import { setCurrentDraw, useCurrentDraw } from '../../currentDraw'
@@ -303,22 +304,32 @@ export default function TabLayout() {
 
     <Sheet visible={picking} onClose={() => setPicking(false)} title="Draws">
       {live.length ? live.map(t => (
-        <Pressable key={t.id} style={s.row}
+        <Pressable key={t.id} style={s.row} accessibilityRole="button"
+                   /* The mark says "this one" to anyone who can see it; this
+                      says it to anyone who cannot. Neither the tick before it
+                      nor the logo now carries a label of its own — a mark that
+                      means "current" is the ROW's state, not a thing in it. */
+                   accessibilityState={{ selected: t.id === showing }}
                    onPress={() => { setPicking(false); router.push(`/draw/${t.id}`) }}>
           {/* The tour's colour is how the two halves of a combined event tell
               themselves apart everywhere else in the app; a list of draws is
               exactly where that matters most. */}
           <View style={[s.tint, { backgroundColor: t.gender === 'F' ? C.wta : C.atp }]} />
-          {/* THE TICK BELONGS TO THE NAME, not to the row. Pushed out to the
+          {/* THE MARK BELONGS TO THE NAME, not to the row. Pushed out to the
               far edge it read as a column of its own, a long way from the
               thing it marks; beside the name it says "this one" (owner,
               2026-09-12). The group takes the slack so the badge still sits
-              right, and the name shrinks before the tick does. */}
+              right, and the name shrinks before the mark does.
+
+              THE BRAND DOT RATHER THAN A TICK (owner, 2026-09-16). A green
+              checkmark is the app's "done/correct" mark — it grades a pick in
+              the bracket, and it confirms a choice in four other sheets — so
+              on this row it was answering a question nobody asked. The logo
+              answers the right one: this is the draw you are in. It is also
+              the one mark in the app that cannot mean anything else. */}
           <View style={s.nameWrap}>
             <Text style={s.name} numberOfLines={1}>{t.name}</Text>
-            {t.id === showing
-              ? <Ionicons name="checkmark" size={16} color={C.greenBright} />
-              : null}
+            {t.id === showing ? <BrandMark size={16} /> : null}
           </View>
           {/* The app's own badge, not a second one: same pill, same two
               colours as every draw card and bracket header. */}

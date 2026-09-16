@@ -76,6 +76,41 @@ export function Card({ children, style, tint }) {
   )
 }
 
+/* THE BRAND MARK, STILL — a clay disc inside a dimmer ring.
+ *
+ * The same object as the wordmark's BrandDot on the dashboard, and the same
+ * object as assets/icon.png: this app's logo is the dot, not the words. Drawn
+ * as two Views rather than loaded from the PNG for three reasons — the PNG
+ * bakes in its own dark background and would show as a square patch on a card,
+ * it is 1024px for a 16pt mark, and Views take the reader's text scale.
+ *
+ * NO PULSE. BrandDot breathes because it sits beside the wordmark in the
+ * header, where it is the app introducing itself. Here it is a STATE — which
+ * draw you are looking at — and a state that throbs in a list is a list that
+ * will not sit still.
+ *
+ * `size` is the disc-plus-ring diameter; the disc is half of it, which is
+ * BrandDot's own ratio (30 and 15) and what the icon draws.
+ */
+export function BrandMark({ size = 16, style }) {
+  return (
+    <View style={[{
+      width: size, height: size, borderRadius: size / 2,
+      alignItems: 'center', justifyContent: 'center',
+      /* The ring is the SAME ink at low alpha, not a second colour: that is
+         how BrandDot builds it (it animates this between 0.15 and 0.42) and
+         how the icon reads — a clay ring dimmed by the dark behind it. 0.3
+         sits in the middle of that breath. */
+      backgroundColor: C.clayLight + '4d',
+    }, style]}>
+      <View style={{
+        width: size / 2, height: size / 2, borderRadius: size / 4,
+        backgroundColor: C.clayLight,
+      }} />
+    </View>
+  )
+}
+
 /* An all-caps label above a group. Condensed and letterspaced so it reads as a
    sign rather than as text someone forgot to sentence-case. */
 export function Eyebrow({ children, color = C.muted, style }) {
