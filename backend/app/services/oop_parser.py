@@ -604,9 +604,83 @@ def parse_pdf(pdf_bytes):
                 rows = [(y, t) for y, t in sorted(buckets[i])]
                 matches += _parse_column(rows, pno, meta['dropped_slots'])
 
+    settle_meridiems(matches)
     if not matches and meta['reason'] is None:
         meta['reason'] = 'no matches found'
     return matches, meta
+
+
+_MERIDIEM_RE = re.compile(r'[ap]\.?\s*m\.?\s*$', re.I)
+_BARE_CLOCK_RE = re.compile(r'^(\d{1,2})[:.](\d{2})$')
+# Earliest hour a match is ever PRINTED to start. A bare "7:00" opening a court
+# is an evening session; "8:00"-"11:59" is an ordinary morning.
+_FIRST_MORNING_HOUR = 8
+
+
+def settle_meridiems(matches):
+    """Give a clock the sheet printed without AM/PM the half of the day it means.
+
+    SP Open's Thursday sheet (2026-09-17, document 275) printed "NB 2:30
+    possible court change" on two courts that had opened at 11:00 AM, on a
+    sheet that wrote AM/PM on every other clock. Every reader downstream —
+    `schedule._parse_clock`, the serve path's `printed_start_at`, the law's
+    `_printed_instant` — takes a clock with no meridiem as 24-hour, so both
+    floors were stored as 2:30 in the MORNING. The estimate chain then ran
+    Blinkova to "~2:25 PM" under a floor of 2:30 PM, and the law's floor check,
+    reading the same 2:30 AM, agreed with it. Nothing errored.
+
+    A bare clock is not wrong in itself: a third of the ATP corpus is 24-hour
+    ("Starts At 14:30", "Not Before 16:00") and there it is exactly right. So
+    the SHEET decides. Where no clock on it says AM or PM, nothing is missing
+    and nothing changes. Where some do, a bare 1-11 o'clock lacks its meridiem,
+    and the court's own running order supplies it — an order of play never
+    goes back in time, so the morning reading stands only if it is not earlier
+    than a clock already printed above it on the same court, and (on a court's
+    first clock) only from 8 o'clock on. 12 is noon. 0 and 13-23 are 24-hour
+    clocks that need nothing.
+
+    Rewrites `time` in place, in the sheet's own style ("2:30 PM"), which is
+    what `start_time_local` stores. `start_raw` is untouched: `start_note`
+    keeps what the tour printed. The ratchet is
+    `schedule_invariants.clock_runs_backwards`.
+    """
+    if not any(m.time and _MERIDIEM_RE.search(m.time) for m in matches):
+        return matches
+    latest: dict[str, int] = {}          # court -> latest clock so far, minutes
+    for m in matches:
+        if not m.time:
+            continue
+        clock = m.time.strip()
+        bare = _BARE_CLOCK_RE.match(clock)
+        if bare:
+            hour, minute = int(bare.group(1)), int(bare.group(2))
+            if 1 <= hour <= 11:
+                floor = latest.get(m.court)
+                morning = hour * 60 + minute
+                if (hour >= _FIRST_MORNING_HOUR
+                        and (floor is None or morning >= floor)):
+                    m.time = f'{hour}:{minute:02d} AM'
+                else:
+                    m.time = f'{hour}:{minute:02d} PM'
+            elif hour == 12:
+                m.time = f'12:{minute:02d} PM'
+        mins = _clock_minutes(m.time)
+        if mins is not None and mins > latest.get(m.court, -1):
+            latest[m.court] = mins
+    return matches
+
+
+def _clock_minutes(clock):
+    """Minutes past midnight for "2:30 PM" / "14:30" / "11:00 a.m.", else None."""
+    m = re.match(r'^(\d{1,2})[:.](\d{2})\s*([ap])?', (clock or '').strip(), re.I)
+    if not m:
+        return None
+    hour, minute, half = int(m.group(1)), int(m.group(2)), (m.group(3) or '').lower()
+    if half == 'p' and hour != 12:
+        hour += 12
+    elif half == 'a' and hour == 12:
+        hour = 0
+    return hour * 60 + minute
 
 
 # The three counts `parse_pdf` takes off the sheet's own lines, before a

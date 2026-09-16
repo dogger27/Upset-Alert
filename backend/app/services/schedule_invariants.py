@@ -151,6 +151,36 @@ def _printed_instant(entry, tz_name):
                        tzinfo=tz).astimezone(_tz.utc)
 
 
+def clock_runs_backwards(rows, tz_name) -> list[tuple]:
+    """(row, the row above it) wherever a court's printed clock goes BACK in time.
+
+    Down one court, in `court_order`, each printed clock is at or after every
+    clock printed above it — that is what an order of play is. A clock earlier
+    than one above it was read in the wrong half of the day: SP Open
+    2026-09-17 stored "NB 2:30" as 2:30 AM under "Not before 1:00 PM". Read
+    through the law's own `_printed_instant`, so it does not share the
+    parser's `settle_meridiems`. Measured over every stored court-day when it
+    was written (278): those two rows and nothing else.
+    """
+    courts: dict = {}
+    for r in rows:
+        if r.court:
+            courts.setdefault(r.court, []).append(r)
+    out = []
+    for court_rows in courts.values():
+        court_rows.sort(key=lambda r: (r.court_order is None, r.court_order or 0, r.id))
+        latest = latest_row = None
+        for r in court_rows:
+            when = _printed_instant(r, tz_name)
+            if when is None:
+                continue
+            if latest is not None and (latest - when).total_seconds() > 60:
+                out.append((r, latest_row))
+            if latest is None or when > latest:
+                latest, latest_row = when, r
+    return out
+
+
 async def check_day(db, tournament_id: int, play_date) -> list[dict]:
     """Every violation in one tournament-day. Empty list = lawful."""
     # `populate_existing`, because the law runs on what the day ACTUALLY
@@ -790,6 +820,18 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                      f"{e.court} #{e.court_order} also entry {court_orders[ck]}")
             else:
                 court_orders[ck] = e.id
+
+    # 2026-09-17, SP Open document 275: "NB 2:30 possible court change",
+    # printed without PM on a sheet that wrote AM/PM everywhere else, was
+    # stored as 2:30 in the morning on two courts that had opened at 11:00 AM.
+    # The floor check above passed it, because it reads the printed clock
+    # through the same missing meridiem. An order of play never goes back in
+    # time down a court, whatever the reading of any single clock is.
+    for e, prev in clock_runs_backwards(rows, venue_tz):
+        flag("printed_clock_runs_backwards", e,
+             f"{e.court} #{e.court_order} prints {e.start_time_local!r}, earlier "
+             f"than #{prev.court_order}'s {prev.start_time_local!r} above it — "
+             f"a clock read in the wrong half of the day")
 
     # 2026-08-26, Winston-Salem: re-reading the same sheet through a fixed
     # parser gave two courts a second row each — the clean names beside the

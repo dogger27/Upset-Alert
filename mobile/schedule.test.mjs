@@ -76,3 +76,17 @@ test('a slot with no time at all comes after every timed one', () => {
                     started_at: '2026-09-15T18:00:00Z', expected_start_at: '2026-09-17T22:00:00Z' }
   assert.deepEqual(byTimeOfDay([carried, rows[1]]).map(r => r.id), [1236, 7])
 })
+
+/* SP Open, 2026-09-17: "NB 2:30 possible court change" printed no PM, and the
+   ingest now stores the clock it means — "2:30 PM" — so the stored clock is no
+   longer a substring of the note it came from. The clock inside the note must
+   still follow the zone switch. */
+test('a clock the sheet printed without PM still follows the zone switch', () => {
+  const nb = { status: 'scheduled', start_type: 'not_before', start_time_local: '2:30 PM',
+               printed_start_at: '2026-09-17T18:30:00Z', start_note: 'NB 2:30 possible court change' }
+  assert.equal(line(nb, NY, true).text, 'NB 2:30 possible court change')
+  assert.equal(line(nb, LA, false).text, 'NB 11:30 AM possible court change')
+  // The digits are matched whole: a 2:30 clock never rewrites a 12:30 inside a note.
+  const noon = { ...nb, start_time_local: '2:30 PM', start_note: 'After 12:30 match, NB 2:30' }
+  assert.equal(line(noon, LA, false).text, 'After 12:30 match, NB 11:30 AM')
+})

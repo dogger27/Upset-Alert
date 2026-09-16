@@ -28,7 +28,7 @@ import re
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
-from app.services.oop_parser import Match
+from app.services.oop_parser import Match, settle_meridiems
 
 FEED_DAYS = "https://www.usopen.org/en_US/scores/feeds/{year}/schedule/scheduleDays.json"
 WEBVIEW_DAY = "https://www.usopen.org/en_US/scores/schedule/schedule{day}.html"
@@ -259,5 +259,8 @@ def parse_uso_day(raw: bytes):
                 nations_a=nations_a,
                 nations_b=nations_b,
             ))
+    # The feed's clocks are copied verbatim, so one printed without AM/PM gets
+    # the same reading a sheet's does — see oop_parser.settle_meridiems.
+    settle_meridiems(matches)
     meta = {"date_line": d.get("displayDate") or d.get("shortDate"), "kind": "ok"}
     return matches, meta
