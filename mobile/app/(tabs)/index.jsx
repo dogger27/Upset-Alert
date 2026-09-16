@@ -27,7 +27,7 @@ import { computeCohortInfo, getHomeSection } from '../../drawStatus'
 import { drawsByTournament } from '../../scheduleRows'
 import { lockLabel } from '../../lock'
 import { C, R, S, T } from '../../theme'
-import { StatusChip, SurfaceText, TourCard } from '../../cards'
+import { StatusChip, SurfaceText, TourCard, useCardInk } from '../../cards'
 import { dateRange } from '../../dates'
 import { Button, Card, CardLink, ErrorNote, Eyebrow, Loading, Muted, Screen, Title } from '../../ui'
 import { MenuSheet } from '../../menu'
@@ -62,13 +62,53 @@ const oopHref = t => (t.oop_first_seen_at && t.tournament_id
  * open rather than wondering where the link went. */
 function OrderOfPlay({ t }) {
   const oop = oopHref(t)
-  if (!oop) return <Text style={[s.oopText, { color: C.faint, opacity: 0.6 }]}>Order of Play</Text>
+  const inks = useCardInk()
+  /* NOTHING TO OPEN YET — STILL A PILL, HOLLOWED OUT (owner, 2026-09-16).
+   *
+   * The disabled state keeps the control's outline and loses its fill: the
+   * border says "this is the same button you press on the cards above", the
+   * empty middle says "not yet". Bare type said the second thing only, and on
+   * a week card it read as a stray label rather than the same affordance
+   * greyed.
+   *
+   * NO `opacity` MULTIPLIER, which is what it used to be: C.faint at 0.6
+   * leaves about 3:1 on the near-black card and lands near 1.6 on a tour
+   * tint, so the label was legible nowhere a card is coloured — which is most
+   * of this screen. The ramp's own quietest step carries the text (see
+   * theme.js), and the border is that same ink at 40% so the outline sits a
+   * step below the word inside it rather than boxing it in.
+   *
+   * THE ROW NO LONGER CHANGES HEIGHT with whether a sheet exists: live and
+   * dead are now the same 25pt object, where before the dead one was 15pt of
+   * type and a week card was shorter on the days nobody had published an
+   * order of play.
+   *
+   * "SCHEDULE", NOT "ORDER OF PLAY" (owner, 2026-09-16). Two reasons, and the
+   * first is measured: at the owner's text size the longer phrase wrapped to
+   * two lines inside the pill, which doubled the control's height and with it
+   * the whole week card's. The second is that it names its destination — the
+   * Schedule tab, spelled exactly that way in the tab bar — where "Order of
+   * Play" named the sheet the tour publishes. Same word for the same place.
+   *
+   * numberOfLines={1} REGARDLESS, on both states: a pill this row's height
+   * depends on must not be able to wrap, whatever the label becomes next or
+   * whatever the reader's type size is. That is the actual fault; the shorter
+   * word is what buys the room back.
+   */
+  if (!oop) {
+    return (
+      <View style={[s.oop, s.oopDead, { borderColor: inks.faint + '66' }]}>
+        <Text style={[s.oopText, { color: inks.faint }]} numberOfLines={1}>Schedule</Text>
+      </View>
+    )
+  }
   // CardLink, not <Link asChild><Pressable style>: that form drops the
   // style — the pill rendered as bare text — and it is the trap CardLink
   // exists to close. Third time it has been re-typed; last time.
   return (
-    <CardLink href={oop} style={s.oop} pressedOpacity={0.7}>
-      <Text style={s.oopText}>Order of Play</Text>
+    <CardLink href={oop} style={s.oop} pressedOpacity={0.7}
+              accessibilityLabel="Schedule and order of play">
+      <Text style={s.oopText} numberOfLines={1}>Schedule</Text>
     </CardLink>
   )
 }
@@ -291,11 +331,12 @@ function Section({ title, tone, children }) {
  * is more than either needs ("New York City" is the longest and it fits).
  */
 function Meta({ t, showSurface = true }) {
+  const inks = useCardInk()
   return (
     <View style={s.meta}>
       <View style={s.metaSide}>
         {t.city ? (
-          <Text style={[T.smallMed, { color: C.inkBody }]} numberOfLines={1}>
+          <Text style={[T.smallMed, { color: inks.inkBody }]} numberOfLines={1}>
             {t.city}
           </Text>
         ) : null}
@@ -303,7 +344,7 @@ function Meta({ t, showSurface = true }) {
       {showSurface ? <SurfaceText surface={t.surface} /> : null}
       <View style={[s.metaSide, { alignItems: 'flex-end' }]}>
         {dateRange(t) ? (
-          <Text style={[T.tiny, { color: C.muted }]} numberOfLines={1}>{dateRange(t)}</Text>
+          <Text style={[T.tiny, { color: inks.muted }]} numberOfLines={1}>{dateRange(t)}</Text>
         ) : null}
       </View>
     </View>
@@ -323,14 +364,17 @@ const pickChip = status => (status === 'complete' ? ['good', 'Picks in']
 function OpenRow({ draws, status, now, label }) {
   const lock = lockLabel(draws[0], now)
   const chip = pickChip(status?.[draws[0].id])
+  const inks = useCardInk()
   return (
     <View style={s.footRow}>
       <View style={s.lockLine}>
-        {label ? <Text style={s.footTour}>{label}</Text> : null}
+        {label ? <Text style={[s.footTour, { color: inks.faint }]}>{label}</Text> : null}
         {lock ? (
           <>
-            <Text style={[T.score, { color: lock.urgent ? C.clay : C.ink }]}>{lock.value}</Text>
-            <Text style={[T.tiny, { color: C.faint }]}>{lock.suffix}</Text>
+            {/* URGENT STAYS CLAY. It is the brand's one warm note and it reads
+                on either card; the ramp is for the ink that is merely quiet. */}
+            <Text style={[T.score, { color: lock.urgent ? C.clay : inks.ink }]}>{lock.value}</Text>
+            <Text style={[T.tiny, { color: inks.faint }]}>{lock.suffix}</Text>
           </>
         ) : null}
       </View>
@@ -416,6 +460,7 @@ function ActiveRow({ t, userId, label }) {
   const standings = useApi(`standings:${t.id}`, () => getDrawStandings(t.id))
   const rows = standings.data || []
   const mine = rows.find(r => r.user?.id === userId)
+  const inks = useCardInk()
   /* THE LABEL STAYS HERE, where the pill came off everywhere else: a standing
      is the one fact on this card that genuinely differs between the two halves
      and cannot be collapsed — 3rd of 8 and 7th of 8 are two different links to
@@ -423,15 +468,15 @@ function ActiveRow({ t, userId, label }) {
      the link, as plain type. */
   return mine ? (
     <CardLink href={`/standings/${t.id}`} style={s.lockLine} pressedOpacity={0.6}>
-      {label ? <Text style={s.footTour}>{label}</Text> : null}
-      <Text style={[T.score, { color: C.ink }]}>{ordinal(mine.rank)}</Text>
-      <Text style={[T.tiny, { color: C.faint }]}>of {rows.length}</Text>
-      <Ionicons name="chevron-forward" size={13} color={C.faint} />
+      {label ? <Text style={[s.footTour, { color: inks.faint }]}>{label}</Text> : null}
+      <Text style={[T.score, { color: inks.ink }]}>{ordinal(mine.rank)}</Text>
+      <Text style={[T.tiny, { color: inks.faint }]}>of {rows.length}</Text>
+      <Ionicons name="chevron-forward" size={13} color={inks.faint} />
     </CardLink>
   ) : (
     <View style={s.lockLine}>
-      {label ? <Text style={s.footTour}>{label}</Text> : null}
-      <Text style={[T.tiny, { color: C.faint }]}>
+      {label ? <Text style={[s.footTour, { color: inks.faint }]}>{label}</Text> : null}
+      <Text style={[T.tiny, { color: inks.faint }]}>
         {standings.loading ? '' : 'Not entered'}
       </Text>
     </View>
@@ -562,31 +607,49 @@ function WeekCard({ draws, done }) {
           cards smaller than the ones above them, which is the difference the
           sections are for — a draw you can still pick is worth more room than
           one that opens next Saturday. */}
-      <View style={s.weekRow}>
-        {/* THE RELEASE DATE ON THE ROW'S CENTRE LINE, by the same two-flexible-
-            slots arithmetic the surface pill uses on the cards above: the sides
-            split what the middle leaves, so the middle's centre is the row's
-            centre. It trailed the city before, which put it in four places
-            down a column of four cards (owner, 2026-09-15). */}
-        <View style={s.weekSide}>
-          {draws[0].city ? (
-            <Text style={[T.smallMed, { color: C.inkBody }]} numberOfLines={1}>
-              {draws[0].city}
-            </Text>
-          ) : null}
-        </View>
-        {opens ? (
-          <Text style={[T.tiny, { color: C.faint }]} numberOfLines={1}>
-            Opens {fmtShort(opens)}
-          </Text>
-        ) : null}
-        <View style={[s.weekSide, { alignItems: 'flex-end' }]}>
-          <OrderOfPlay t={oopDraw(draws)} />
-        </View>
-      </View>
+      <WeekRow draws={draws} opens={opens} />
       </>
       }
     />
+  )
+}
+
+/* The week card's one row — ITS OWN COMPONENT, and not for tidiness.
+ *
+ * The card's ink comes from a context TourCard provides (see cards.jsx), and a
+ * context is read by the component that ASKS for it, at its own place in the
+ * tree. WeekCard sits ABOVE the provider — it is what renders the card — so
+ * asking there would have handed it the neutral ramp on a pink card, which is
+ * precisely the bug being fixed, reintroduced one level up. Bare <Text> in
+ * WeekCard's JSX cannot ask at all. A component can, because it renders as a
+ * child of the card it was passed to. OpenRow and ActiveRow were already this
+ * shape for the same structural reason; this one now matches them.
+ */
+function WeekRow({ draws, opens }) {
+  const inks = useCardInk()
+  return (
+    <View style={s.weekRow}>
+      {/* THE RELEASE DATE ON THE ROW'S CENTRE LINE, by the same two-flexible-
+          slots arithmetic the surface pill uses on the cards above: the sides
+          split what the middle leaves, so the middle's centre is the row's
+          centre. It trailed the city before, which put it in four places
+          down a column of four cards (owner, 2026-09-15). */}
+      <View style={s.weekSide}>
+        {draws[0].city ? (
+          <Text style={[T.smallMed, { color: inks.inkBody }]} numberOfLines={1}>
+            {draws[0].city}
+          </Text>
+        ) : null}
+      </View>
+      {opens ? (
+        <Text style={[T.tiny, { color: inks.faint }]} numberOfLines={1}>
+          Opens {fmtShort(opens)}
+        </Text>
+      ) : null}
+      <View style={[s.weekSide, { alignItems: 'flex-end' }]}>
+        <OrderOfPlay t={oopDraw(draws)} />
+      </View>
+    </View>
   )
 }
 
@@ -698,6 +761,10 @@ const s = StyleSheet.create({
     borderRadius: R.pill, borderWidth: 1, borderColor: C.borderOn, backgroundColor: C.raised,
     paddingHorizontal: 10, paddingVertical: 4,
   },
+  /* The same pill with the fill taken out — see OrderOfPlay. `transparent`
+     rather than omitting the key: this style is composed ON TOP of `oop`, so
+     leaving it out keeps C.raised and the pill still reads as pressable. */
+  oopDead: { backgroundColor: 'transparent' },
   oopText: { ...T.tiny, color: C.greenLit, letterSpacing: 0.3 },
   oopMini: { paddingHorizontal: S.md, alignSelf: 'stretch', justifyContent: 'center' },
 

@@ -102,9 +102,41 @@ export const C = {
    the pill wears it against a much darker fill than the stamp's plate.
    gen-tier-stamps.py bakes these into the artwork and tierStamps.test.mjs
    fails if the two ever disagree. */
+/* THE INK RAMP AND THE HAIRLINE BELONG TO THE SURFACE THEY SIT ON.
+ *
+ * `ink`/`inkBody`/`muted`/`faint` shadow the C.* ramp for a card that is
+ * tinted by tour, and `rule` its footer's hairline. The neutral card keeps the
+ * C.* values; a card that is pink or blue edge to edge cannot, and the reason
+ * is arithmetic rather than taste:
+ *
+ *   THE C.* RAMP WAS DRAWN AGAINST #182521 (oklch L 0.25). The tints sit at
+ *   L 0.43 — nearly twice as light — so every step below the title lost about
+ *   half its contrast the day the cards were tinted: C.muted 6.98:1 on the
+ *   neutral card but 3.60 on the ATP one, C.faint 5.38 → 2.77. Under 3:1 is
+ *   below the floor for any text, and C.faint carries "Opens Sep 19".
+ *
+ *   AND THE HUE WAS WRONG ON TOP OF IT. The ramp runs 165–171° (green-cyan),
+ *   which is where it belongs on a green-grey card — the neutral card is
+ *   173.6°. The WTA tint is 356°, i.e. almost exactly the ramp's complement,
+ *   and that is the olive cast the pink cards had (owner, 2026-09-16).
+ *
+ * So: same lightness steps where they still clear AA, re-hued to each tint's
+ * own family at the hue of `text` (the tinted ink this palette already had),
+ * and the bottom two lifted back over 4:1 — muted to 5.0, faint to 4.2, which
+ * keeps them a visible step apart rather than collapsing into one value.
+ * `ink` is HELD at its own lightness: 6.9/7.2:1 is the 7:1 the note above
+ * already claims, and 13:1 is not reachable on an L 0.43 surface at all.
+ *
+ * `rule` is the same defect in a hairline. The footer's rule was `plate`,
+ * 0.17 L BELOW the tinted card, where C.border sits 0.06 ABOVE the neutral
+ * one — so a seam that catches the light on one card was a groove cut into
+ * the other. This is that same +0.059 lift at the tint's own hue.
+ */
 export const TOUR = {
-  M: { bg: '#1a2f4f', fg: '#7aa9ff', label: 'ATP', card: '#2c5081', plate: '#14243d', line: '#4d7ab5', text: '#8fb6ff' },
-  F: { bg: '#3a1526', fg: '#ff8ab5', label: 'WTA', card: '#7d3352', plate: '#3a1526', line: '#b8567d', text: '#ffb3c6' },
+  M: { bg: '#1a2f4f', fg: '#7aa9ff', label: 'ATP', card: '#2c5081', plate: '#14243d', line: '#4d7ab5', text: '#8fb6ff',
+       ink: '#e5ecf8', inkBody: '#c9d3e4', muted: '#c0cbe0', faint: '#aebad0', rule: '#466187' },
+  F: { bg: '#3a1526', fg: '#ff8ab5', label: 'WTA', card: '#7d3352', plate: '#3a1526', line: '#b8567d', text: '#ffb3c6',
+       ink: '#f7e7eb', inkBody: '#e2ccd0', muted: '#dbbfc6', faint: '#ccafb5', rule: '#854d62' },
   // MIXED DOUBLES belongs to neither tour, so it takes neither tour's colour.
   // The unseeded chip's pair rather than a new one invented for it: a blend of
   // blue and pink is a gradient decision on a 10pt pill, and there is no such

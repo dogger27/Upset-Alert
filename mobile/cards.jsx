@@ -8,7 +8,7 @@
  * comes from the source.
  */
 
-import { useMemo, useState } from 'react'
+import { createContext, useContext, useMemo, useState } from 'react'
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native'
 import { leading } from './fontScale.js'
 import { isSlamTier, tierStamp } from './logos'
@@ -17,6 +17,25 @@ import { CardLink } from './ui'
 import { textWidth } from './measure.js'
 import { nameForms, pairForms } from './names'
 import { BADGE, C, R, SHADOW, T, TOUR } from './theme'
+
+/* THE INK OF WHATEVER CARD YOU ARE INSIDE.
+ *
+ * A context rather than a prop because of WHO decides and WHO renders. The
+ * card decides its surface — TourCard alone knows whether an event is one
+ * tour or two, and therefore whether the card is tinted or neutral — while the
+ * things that have to match that surface are supplied by the CALLER, as
+ * `children` and `footer`: the city, the dates, the standing, the order of
+ * play. Threading an ink set through every call site would make each of them
+ * restate a decision they do not own, and the one that forgot would go black
+ * on a coloured card, silently, which is the failure theme.test.mjs exists
+ * for. Provided once by the card; read by whatever ends up inside it.
+ *
+ * DEFAULTS TO THE NEUTRAL RAMP, so a component that uses this outside a
+ * TourCard — the schedule's rows, a plain Card — is unchanged.
+ */
+const NEUTRAL_INK = { ink: C.ink, inkBody: C.inkBody, muted: C.muted, faint: C.faint }
+const CardInkContext = createContext(NEUTRAL_INK)
+export const useCardInk = () => useContext(CardInkContext)
 
 /* The accent bar: a 4px vertical gradient from the tour's 500 to its 700.
    Six stacked bands rather than a real gradient — expo-linear-gradient is a
@@ -55,8 +74,9 @@ function mix(a, b, t) {
 export function SurfaceText({ surface, style }) {
   const key = String(surface || '').toLowerCase().replace(/\s*\(.*?\)/g, '').trim()
   const s = C.surfaces[key] || C.surfaces.hard
+  const inks = useCardInk()
   return (
-    <Text style={[T.tiny, { color: C.muted }, style]} numberOfLines={1}>{s.label}</Text>
+    <Text style={[T.tiny, { color: inks.muted }, style]} numberOfLines={1}>{s.label}</Text>
   )
 }
 
@@ -228,10 +248,18 @@ export function TourCard({ draws, name, children, footer, href, corner, compact 
      stamp names a tour and both are shown. */
   const oneTier = combined && isSlamTier(list[0]?.category)
   const stamps = oneTier ? list.slice(0, 1) : list
-  const skin = combined
-    ? { card: C.card, line: C.border, rule: C.border }
-    : { card: TOUR[isATP ? 'M' : 'F'].card, line: TOUR[isATP ? 'M' : 'F'].line,
-        rule: TOUR[isATP ? 'M' : 'F'].plate }
+  /* ONE DECISION, TWO HALVES. The surface and the ink that has to read on it
+     are chosen together and in one place — see CardInkContext above and the
+     ramp's derivation in theme.js. `rule` is the footer's hairline: it lifts
+     off the card it draws on, whichever card that is, which was not true
+     while the tinted cards borrowed `plate` for it. */
+  const tour = combined ? null : TOUR[isATP ? 'M' : 'F']
+  const skin = tour
+    ? { card: tour.card, line: tour.line, rule: tour.rule }
+    : { card: C.card, line: C.border, rule: C.border }
+  const inks = tour
+    ? { ink: tour.ink, inkBody: tour.inkBody, muted: tour.muted, faint: tour.faint }
+    : NEUTRAL_INK
   const body = (
     <>
         <View style={u.titleRow}>
@@ -255,6 +283,7 @@ export function TourCard({ draws, name, children, footer, href, corner, compact 
     </>
   )
   return (
+    <CardInkContext.Provider value={inks}>
     <View>
       {/* SHADED BY TOUR, edge to edge: the site's own answer for a card that
           belongs to one tour (it tints this card on hover with exactly these
@@ -289,6 +318,7 @@ export function TourCard({ draws, name, children, footer, href, corner, compact 
           explain — but what it HOLDS may be pressable in its own right. */}
       {corner ? <View style={u.corner} pointerEvents="box-none">{corner}</View> : null}
     </View>
+    </CardInkContext.Provider>
   )
 }
 
@@ -319,6 +349,7 @@ const TITLE_TRACK = TITLE_SIZE * 0.01
 
 function CardTitle({ name }) {
   const [avail, setAvail] = useState(null)
+  const inks = useCardInk()
   let fontSize = TITLE_SIZE
   if (avail != null) {
     const need = textWidth(name, TITLE_FACE, TITLE_SIZE)
@@ -334,7 +365,7 @@ function CardTitle({ name }) {
        shrinks to its floor regardless of whether the text fits (the seed badge
        became a speck that way), so it must never be handed one. */
     <View style={u.titleSlot} onLayout={e => setAvail(e.nativeEvent.layout.width)}>
-      <Text style={[u.title, fontSize !== TITLE_SIZE && {
+      <Text style={[u.title, { color: inks.ink }, fontSize !== TITLE_SIZE && {
         fontSize, lineHeight: leading(fontSize + 1),
       }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
         {name}
