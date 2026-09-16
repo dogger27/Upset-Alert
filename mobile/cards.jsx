@@ -16,7 +16,7 @@ import { flagEmoji } from './flags'
 import { CardLink } from './ui'
 import { textWidth } from './measure.js'
 import { nameForms, pairForms } from './names'
-import { BADGE, C, R, SHADOW, T, TOUCH, TOUR } from './theme'
+import { BADGE, C, R, SHADOW, T, TOUR } from './theme'
 
 /* THE INK OF WHATEVER CARD YOU ARE INSIDE.
  *
@@ -359,30 +359,43 @@ export function TourCard({ draws, name, children, footer, nav, href, corner, com
   )
 }
 
-/* THE CARD'S FOOTER, AS NAVIGATION.
+/* THE CARD'S FOOTER, AS NAVIGATION — IN THIS APP'S OWN GRAMMAR.
  *
- * League, Draw and Schedule are three peers, and three peers want one control
- * rather than three objects (owner, 2026-09-16: "it is now essentially a nav
- * bar with 3 options"). So they are a segmented bar flush to the card's bottom
- * edge: the BAR is the shape, which is why no segment carries a fill, a border
- * or a radius of its own.
+ * League, Draw and Schedule are three peers (owner, 2026-09-16: "it is now
+ * essentially a nav bar with 3 options"). The first answer to that was an iOS
+ * segmented control — 44pt tall, equal segments, hairline dividers, set in
+ * Archivo — and it was a template answer rather than a designed one: it took
+ * an Active card from 133pt to 172 and read as three small words adrift in an
+ * empty band ("do better", owner, same day).
  *
- * THIS RETIRES A PILE OF MACHINERY. The pills it replaces had grown four
- * independent decisions — available or not, loud section or quiet, the tour's
- * ink family, and three alpha weights — because a free-floating lozenge has to
- * manufacture its own edges out of colour. A segment inside a bordered bar
- * gets its edges from the bar, so the only thing left to say is whether it can
- * be pressed, and that is one ink either way.
+ * THE APP ALREADY HAD THIS COMPONENT, which is what I should have looked at
+ * first. RoundStrip.jsx is the draw's row of peer destinations and its own
+ * comments state the rules: THIN, "no padding of its own"; its own field,
+ * ruled, with a fill nothing else on the screen uses; space-between rather
+ * than equal segments; and "no dots between them either". This follows that
+ * grammar, so a reader who has used the draw's pager already knows this.
  *
- * AND THESE ARE THE FIRST OF THESE TARGETS TO MEET THE HOUSE RULE. theme.js
- * has said TOUCH = 44 since the beginning, and the pills were 25pt tall. A
- * segment is TOUCH tall as a MINIMUM and grows with the reader's text, so it
- * stays a 44pt target rather than a 44pt box with 24pt type crammed in it.
+ * AND IT IS SET IN THE DISPLAY FACE, which is the part that makes it belong
+ * here. Saira Condensed in caps at 0.9 tracking is the Eyebrow's exact
+ * treatment (theme.js T.eyebrow) and the face the wordmark, every title and
+ * every score on this screen are drawn in. Archivo is the BODY font;
+ * navigation is not body copy. Condensed caps are also narrower, which is what
+ * buys the strip back its height: 30pt against 44, and the card lands at 143.
  *
- * `items` are `{ label, href, a11y }`. A null href is the state where there is
- * nothing to open yet: the segment stays in place, dimmed, and is not
- * pressable — a missing segment would change the control's shape from card to
- * card, which is exactly what a nav bar must not do.
+ * THE LIVE DESTINATIONS CARRY A 2pt RULE in the tour's own light ink — the tab
+ * idiom without a tab, and the only colour in the strip. With the dimming it
+ * makes two signals for one fact, which is the point: this is the whole of
+ * what replaced four decisions and three alpha weights of pill machinery.
+ *
+ * TOUCH IS MET BY hitSlop, NOT BY HEIGHT. A 30pt strip with 8pt of slop above
+ * and below is a 46pt target — the strip is what you see, not what you have to
+ * hit, exactly as CompetingStar's 22pt disc is. A 44pt band was the lazy way
+ * to the same number and it cost 14pt on every card.
+ *
+ * `items` are `{ label, href, a11y }`. A null href is "nothing to open yet":
+ * the word stays in place, dimmed and unruled, and is not pressable. It never
+ * disappears — a destination that comes and goes changes the strip's shape
+ * from card to card, which is the one thing a nav must not do.
  */
 export function CardNav({ items }) {
   const skin = useCardSkin()
@@ -390,24 +403,29 @@ export function CardNav({ items }) {
   const on = skin.quiet ? skin.inkBody : skin.ink
   const off = skin.quiet ? skin.faint : skin.muted
   return (
-    <View style={[u.nav, { borderTopColor: skin.rule }]}>
-      {items.map((it, i) => {
+    <View style={[u.nav, { borderTopColor: skin.line }]}>
+      {items.map(it => {
         const live = !!it.href
-        const seg = [u.navSeg, i > 0 && u.navDiv]
         const word = (
           <Text style={[u.navText, { color: live ? on : off }]} numberOfLines={1}>
             {it.label}
           </Text>
         )
+        const mark = [u.navItem, { borderBottomColor: live ? skin.controlInk : 'transparent' }]
         return live
-          ? <CardLink key={it.label} href={it.href} style={seg} pressedOpacity={0.55}
-                      accessibilityLabel={it.a11y}>{word}</CardLink>
-          : <View key={it.label} style={seg} accessibilityRole="text"
+          ? <CardLink key={it.label} href={it.href} style={mark} pressedOpacity={0.5}
+                      hitSlop={NAV_SLOP} accessibilityLabel={it.a11y}>{word}</CardLink>
+          : <View key={it.label} style={mark} accessibilityRole="text"
                   accessibilityLabel={`${it.a11y} — nothing published yet`}>{word}</View>
       })}
     </View>
   )
 }
+
+/* 8 a side takes a 30pt strip to a 46pt target. Horizontal too, because
+   space-between leaves real gaps between the words and a near-miss either
+   side of a word should still land on it. */
+const NAV_SLOP = { top: 8, bottom: 8, left: 7, right: 7 }
 
 /* THE TOURNAMENT NAME, ON ONE LINE — shrunk to fit, never wrapped.
  *
@@ -518,24 +536,31 @@ const u = StyleSheet.create({
     letterSpacing: TITLE_TRACK, color: C.ink, flexShrink: 1,
   },
   footer: { borderTopWidth: 1, borderTopColor: C.border, paddingTop: 9, marginTop: 1 },
-  /* THE NAV BAR. Darkened rather than tinted: a fraction of black works on
-     every card there is, and it sinks the bar behind the facts above it, which
-     is the right order — the card states, the bar acts.
-     The divider is white at 9%, not a token: it has to read on a pink card, a
-     blue one and a near-black one, and no single token in the palette does
-     that (the same reason the bar's own ground is an alpha). */
-  nav: { flexDirection: 'row', borderTopWidth: 1, backgroundColor: 'rgba(0,0,0,0.13)' },
-  /* minHeight, not height: TOUCH is the floor and the reader's text size may
-     raise it. A fixed 44 with 12pt type is a 44pt target; a fixed 44 with 26pt
-     type is a clipped one. */
-  navSeg: {
-    flex: 1, minWidth: 0, minHeight: TOUCH, paddingVertical: 4, paddingHorizontal: 6,
-    alignItems: 'center', justifyContent: 'center',
+  /* THE STRIP, on RoundStrip's rules — see CardNav.
+     SPACE-BETWEEN, NOT EQUAL SEGMENTS: three words of different lengths in
+     three equal boxes centre each one in its own box, which puts them at
+     irregular intervals and reads as an accident. Spread across the strip
+     with the slack shared out, they sit on the two edges and the middle.
+     Darkened rather than tinted, because a fraction of black is the one fill
+     that works on a pink card, a blue one and a near-black one alike — and it
+     sinks the strip behind the facts above it, which is the right order: the
+     card states, the strip acts. 0.22 rather than 0.13, or the field does not
+     read as a field at all on a tinted card. */
+  nav: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    borderTopWidth: 1, backgroundColor: 'rgba(0,0,0,0.22)',
+    paddingHorizontal: 15, paddingTop: 8, paddingBottom: 6,
   },
-  navDiv: { borderLeftWidth: 1, borderLeftColor: 'rgba(255,255,255,0.09)' },
+  /* The 2pt rule under a live destination. On the ITEM rather than the text so
+     it spans the word's box and not its glyphs, and always present — coloured
+     or transparent — so nothing moves when a sheet appears mid-afternoon. */
+  navItem: { borderBottomWidth: 2, paddingBottom: 3 },
+  /* T.eyebrow's treatment at a size that fits three words across 329pt.
+     leading() on the line height because this is TYPE, not artwork: it grows
+     with the reader, and the strip grows with it. */
   navText: {
-    fontFamily: 'Archivo_500Medium', fontSize: 12, lineHeight: leading(16),
-    letterSpacing: 0.2,
+    fontFamily: 'SairaCondensed_700Bold', fontSize: 13, lineHeight: leading(16),
+    letterSpacing: 0.9, textTransform: 'uppercase',
   },
   /* A compact card's second row is a footer only in the structural sense — it
      sits beside the body's link rather than inside it (see the note at the

@@ -192,7 +192,8 @@ const u = StyleSheet.create({
  * The inner-View form is what the dashboard's working cards already do, so it
  * is right on both targets either way.)
  */
-export function CardLink({ href, style, children, pressedOpacity = 0.75, grow = false }) {
+export function CardLink({ href, style, children, pressedOpacity = 0.75, grow = false,
+                           hitSlop, accessibilityLabel }) {
   /* `grow`: take the row's spare width, so the whole row is the hit target and
      a sibling link after it lands at the edge.
 
@@ -200,9 +201,16 @@ export function CardLink({ href, style, children, pressedOpacity = 0.75, grow = 
      on the Pressable that `Link asChild` clones is dropped (that is the whole
      reason this component exists), and a flex put there vanished the same way:
      the Last Week rows packed left with their icon floating mid-row. */
+  /* hitSlop AND accessibilityLabel BELONG ON THE PRESSABLE, and they were not
+     forwarded at all until now — callers had been passing accessibilityLabel
+     to this component and having it silently dropped, which is the same class
+     of bug as the dropped `style` this component exists to prevent. hitSlop is
+     how a visually thin control still meets TOUCH: the strip is what you see,
+     not what you have to hit (CompetingStar does the same). */
   const link = (
     <Link href={href} asChild>
-      <Pressable style={({ pressed }) => (pressed ? { opacity: pressedOpacity } : null)}>
+      <Pressable hitSlop={hitSlop} accessibilityLabel={accessibilityLabel}
+                 style={({ pressed }) => (pressed ? { opacity: pressedOpacity } : null)}>
         <View style={style}>{children}</View>
       </Pressable>
     </Link>
