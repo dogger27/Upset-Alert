@@ -746,6 +746,24 @@ const s = StyleSheet.create({
   dotRing: { position: 'absolute', width: 30, height: 30, borderRadius: 15, backgroundColor: C.clayLight },
   dot: { width: 15, height: 15, borderRadius: 7.5, backgroundColor: C.clayLight },
   avatar: {
+    /* UP ONTO THE ICON'S LINE, by the dot's own offset (owner, 2026-09-16,
+       twice — the first attempt aligned these to the WORDMARK, which is not
+       what was asked).
+     *
+     * THE ICON IS THE DOT, and the dot does not sit on the row's centre line:
+     * dotWrap carries marginTop -leading(12) to lift it into the wordmark's
+     * cap height, so it rides about 6pt above where a centred 30pt circle
+     * would. Aligning to the wordmark's box therefore still left these two
+     * below the mark.
+     *
+     * THE SAME MARGIN IS THE WHOLE FIX, and it is exact rather than tuned:
+     * both the dot and these buttons are centred by an alignItems:'center'
+     * parent, so an identical negative marginTop moves both by the same
+     * redistributed amount. Checked at text scales 1.0 / 1.15 / 1.3 / 1.5 —
+     * the two centres agree to 0.00pt at every one, because both terms are
+     * leading() and scale together. A plain "-6" would have been right at one
+     * size only. */
+    marginTop: -leading(12),
     width: 36, height: 36, borderRadius: 18,
     // borderOn, not border: C.border on C.card is a 1.1:1 edge and the circle
     // simply was not there — the icon looked like it was floating in the
