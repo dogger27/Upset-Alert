@@ -35,7 +35,7 @@ router = APIRouter(prefix="/tournaments", tags=["tournaments"])
 BRACKET_PUBLISHED_MIN_UNSEEDED = 4
 
 
-def _clear_phantom(match: Match, mr) -> None:
+def _clear_phantom(match: Match, mr) -> bool:
     """Undo a stored result that no source can vouch for.
 
     Only fires when the stored winner has NO score and NO Sofascore backing —
@@ -44,16 +44,36 @@ def _clear_phantom(match: Match, mr) -> None:
     the pending row it usually meets.
     """
     if match.winner_id is None:
-        return
+        return False
     if match.sofa_winner_id is not None:
-        return
+        return False
     if match.scores_json:              # sets, "w/o", "3r" — any real outcome
-        return
+        return False
     match.winner_id = None
     match.status = "pending"
     match.completed_at = None
     match.scores_json = mr.scores
     match.live_scores_json = None
+    return True
+
+
+async def _log_phantom_cleared(match: Match, tournament: Draw, mr) -> None:
+    """A stored result was undone. That is worth a row in /issues even though
+    it is the fix working: the interesting question is why it was there."""
+    try:
+        from app.services.system_log import app_log
+        await app_log(
+            "warning", "scraper",
+            f"Cleared a stored result nobody can vouch for on match {match.id} "
+            f"(draw {tournament.id}, round {mr.round_number}): winner with no score "
+            f"and no Sofascore backing",
+            detail={"match_id": match.id, "round": mr.round_number,
+                    "match_number": mr.match_number},
+            dedup_key=f"scraper:phantom-cleared:{match.id}",
+            dedup_hours=24.0,
+        )
+    except Exception:                                    # noqa: BLE001
+        pass
 
 
 @router.get("", response_model=list[TournamentOut])
@@ -2394,7 +2414,8 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
                     )
                 except Exception:                                    # noqa: BLE001
                     pass
-                _clear_phantom(match, mr)
+                if _clear_phantom(match, mr):
+                    await _log_phantom_cleared(match, tournament, mr)
             elif match.winner_id is None:
                 # No result from either source — update scores/status normally
                 match.completed_at = None
@@ -2409,7 +2430,8 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
                 # backing is an earlier run of the artifact above — undo it, so
                 # the draw heals on the next scrape instead of needing a hand
                 # in the database.
-                _clear_phantom(match, mr)
+                if _clear_phantom(match, mr):
+                    await _log_phantom_cleared(match, tournament, mr)
         else:
             match = Match(
                 draw_id=tournament.id,
