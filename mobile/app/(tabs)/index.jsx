@@ -122,10 +122,26 @@ function CardPill({ href, label, a11y }) {
    *
    * ONE KNOB CARRIES IT: the border's alpha over its own label, 70% on a loud
    * card and 40% on a quiet one. On the chip that is 4.5-8.1:1 off the fill
-   * against 2.4-3.4; on the lifted pill 2.7-3.3 against 1.5-1.6.
+   * against 2.4-3.4.
    */
   const edge = inks.quiet ? '66' : 'b3'
   if (!href) {
+    /* MORE TRANSPARENT AGAIN (owner, 2026-09-16), and it comes off the fill
+       and the border, never the text.
+     *
+     * FADING THE LABEL IS THE BUG THIS PILL STARTED AS. It was C.faint under
+     * `opacity: 0.6` — about 3:1 on the near-black card and near 1.6 on a
+     * tint, illegible on most of the screen. So the pill gets quieter by
+     * giving up its FILL (white 8% -> 4%, from 1.22:1 to 1.10) and its EDGE
+     * (one step down per section: 55% loud, 30% quiet), and the word inside
+     * it stays exactly where it is.
+     *
+     * A FREE WIN IN THE PROCESS: a lighter fill sits closer to the card, so a
+     * light label on it gains contrast rather than losing it. `muted` goes
+     * from 4.09:1 to 4.52 on the loud cards, which clears AA where 8% did
+     * not, and the week cards' `faint` improves on the same arithmetic
+     * without reaching it. */
+    const ghostEdge = inks.quiet ? '4d' : '8c'
     /* AND HERE THE LABEL STEPS DOWN TOO, which it does not on the chip below.
        On a week card it is `faint` at 3.4-4.3:1 rather than `muted` at
        4.1-5.5 — deliberately under AA, at the owner's ask, and this is the one
@@ -134,7 +150,7 @@ function CardPill({ href, label, a11y }) {
        everything actionable above it. */
     const lab = inks.quiet ? inks.faint : inks.muted
     return (
-      <View style={[s.oop, s.oopDead, { borderColor: lab + edge }]}>
+      <View style={[s.oop, s.oopDead, { borderColor: lab + ghostEdge }]}>
         <Text style={[s.oopText, { color: lab }]} numberOfLines={1}>{label}</Text>
       </View>
     )
@@ -889,11 +905,11 @@ const s = StyleSheet.create({
     borderRadius: R.pill, borderWidth: 1, borderColor: C.borderOn, backgroundColor: C.raised,
     paddingHorizontal: 10, paddingVertical: 4,
   },
-  /* Barely lifted off the card rather than cut out of it — see OrderOfPlay.
-     White at 8% is 1.22:1, which is a shape you can find without it being a
-     shape that asks for anything. It composes ON TOP of `oop`, so the key has
-     to be set rather than omitted. */
-  oopDead: { backgroundColor: 'rgba(255,255,255,0.08)' },
+  /* Barely lifted off the card rather than cut out of it — see CardPill.
+     White at 4% is 1.10:1: a shape you can find if you look for it and not
+     one that asks to be looked at. It composes ON TOP of `oop`, so the key
+     has to be set rather than omitted. */
+  oopDead: { backgroundColor: 'rgba(255,255,255,0.04)' },
   /* NO COLOUR HERE. Both states set their own from the card's skin — the
      live pill the ink, the disabled one the faint step — and a default green
      left in the shared style is a default that only looks right on the one
