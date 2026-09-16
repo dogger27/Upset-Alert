@@ -21,7 +21,7 @@ import { Redirect } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '../../auth'
-import { getDrawStandings, getEntryStatus, listTournaments } from '../../api'
+import { getEntryStatus, listTournaments } from '../../api'
 import { useApi } from '../../useApi'
 import { computeCohortInfo, getHomeSection } from '../../drawStatus'
 import { drawsByTournament } from '../../scheduleRows'
@@ -271,7 +271,7 @@ function CompetingStar() {
 }
 
 export default function Dashboard() {
-  const { phase, me, retry, error: authError } = useAuth()
+  const { phase, retry, error: authError } = useAuth()
   const ready = phase === 'ready'
 
   const tours = useApi(ready ? 'tournaments' : null, listTournaments, { enabled: ready })
@@ -346,7 +346,7 @@ export default function Dashboard() {
       {buckets.active.length > 0 && (
         <Section title="Active" tone={C.greenLit}>
           {buckets.active.map(g => (
-            <ActiveCard key={g[0].id} draws={g} userId={me?.id} status={entry.data} />
+            <ActiveCard key={g[0].id} draws={g} status={entry.data} />
           ))}
         </Section>
       )}
@@ -599,41 +599,15 @@ function OpenCard({ draws, status, now }) {
   )
 }
 
-/* WHERE YOU STAND IN THIS DRAW, and its order of play. Its own component
-   because it FETCHES: a standing is per draw, so a combined card needs two
-   requests, and a hook cannot be called in a loop. One component per row, one
-   hook each, and the card does not care how many there are. */
-function ActiveRow({ t, userId, label }) {
-  const standings = useApi(`standings:${t.id}`, () => getDrawStandings(t.id))
-  const rows = standings.data || []
-  const mine = rows.find(r => r.user?.id === userId)
-  const inks = useCardSkin()
-  /* PLAIN TYPE, NOT A LINK, since the bar below took the navigating (owner,
-     2026-09-16). The chevron went with the link: it was the affordance, and a
-     chevron on a line that does nothing is a promise the row cannot keep.
-     What the row keeps is the FACT, which is the most valuable thing on this
-     screen and the reason the dashboard shows standings at all.
-     THE LABEL STAYS: a standing is the one fact here that genuinely differs
-     between the two halves of a combined event and cannot be collapsed —
-     3rd of 8 and 7th of 8 unlabelled are a coin toss. */
-  return mine ? (
-    <View style={s.lockLine}>
-      {label ? <Text style={[s.footTour, { color: inks.faint }]}>{label}</Text> : null}
-      <Text style={[T.score, { color: inks.ink }]}>{ordinal(mine.rank)}</Text>
-      <Text style={[T.tiny, { color: inks.faint }]}>of {rows.length}</Text>
-    </View>
-  ) : (
-    <View style={s.lockLine}>
-      {label ? <Text style={[s.footTour, { color: inks.faint }]}>{label}</Text> : null}
-      <Text style={[T.tiny, { color: inks.faint }]}>
-        {standings.loading ? '' : 'Not entered'}
-      </Text>
-    </View>
-  )
-}
+/* NO STANDING ON THE CARD ANY MORE (owner, 2026-09-16, "remove the 4th of 8
+   completely"). ActiveRow went with it, and with ActiveRow went a
+   getDrawStandings call PER DRAW — one or two network requests per Active card
+   on every dashboard load, for one ordinal. The League band is where a
+   standing is read now, and it costs nothing until it is pressed. */
 
-/* Active: nothing to do, so the only question is where you stand. */
-function ActiveCard({ draws, userId, status }) {
+/* Active: nothing to do and nothing to say, so the card is its name, its
+   place and its band. */
+function ActiveCard({ draws, status }) {
   /* COMPETING IN THE EVENT, which is what the corner stamp claims: picks in
      for either half of a combined tournament means you are in it. Which half
      is in the rows below, where a standing says it better than a star. */
@@ -642,14 +616,6 @@ function ActiveCard({ draws, userId, status }) {
         <TourCard
           draws={draws} name={draws[0].name} href={cardHref(draws)}
           corner={competing ? <CompetingStar /> : null}
-          footer={
-            <View style={s.footStack}>
-              {draws.map(d => (
-                <ActiveRow key={d.id} t={d} userId={userId}
-                           label={draws.length > 1 ? tourWord([d]) : null} />
-              ))}
-            </View>
-          }
           nav={<CardNav items={navItems(draws)} />}
         >
           {/* The surface sits beside the city, exactly as it does on an Open
@@ -775,8 +741,8 @@ function WeekCard({ draws, done }) {
  * asking there would have handed it the neutral ramp on a pink card, which is
  * precisely the bug being fixed, reintroduced one level up. Bare <Text> in
  * WeekCard's JSX cannot ask at all. A component can, because it renders as a
- * child of the card it was passed to. OpenRow and ActiveRow were already this
- * shape for the same structural reason; this one now matches them.
+ * child of the card it was passed to. OpenRow was already this shape for the
+ * same structural reason; this one matches it.
  */
 function WeekRow({ draws, opens, done }) {
   const inks = useCardSkin()
@@ -811,17 +777,6 @@ const fmtShort = iso => {
   const d = new Date(`${iso}T12:00:00`)
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString([], { month: 'short', day: 'numeric' })
 }
-
-/* 1st, 2nd, 3rd, 4th… The server sends `rank` already computed across the whole
-   board — competition ranking, ties sharing a place — so this only formats it.
-   Recomputing here would be a second opinion on the same question. */
-function ordinal(n) {
-  if (n == null) return '—'
-  const suf = ['th', 'st', 'nd', 'rd']
-  const v = n % 100
-  return n + (suf[(v - 20) % 10] || suf[v] || suf[0])
-}
-
 
 const s = StyleSheet.create({
   head: {

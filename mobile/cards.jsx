@@ -376,21 +376,35 @@ export function TourCard({ draws, name, children, footer, nav, href, corner, com
  * grammar, so a reader who has used the draw's pager already knows this.
  *
  * AND IT IS SET IN THE DISPLAY FACE, which is the part that makes it belong
- * here. Saira Condensed in caps at 0.9 tracking is the Eyebrow's exact
- * treatment (theme.js T.eyebrow) and the face the wordmark, every title and
- * every score on this screen are drawn in. Archivo is the BODY font;
- * navigation is not body copy. Condensed caps are also narrower, which is what
- * buys the strip back its height: 30pt against 44, and the card lands at 143.
+ * here. Saira Condensed in caps is the Eyebrow's own treatment (theme.js
+ * T.eyebrow) and the face the wordmark, every title and every score on this
+ * screen are drawn in. Archivo is the BODY font; navigation is not body copy.
  *
- * THE LIVE DESTINATIONS CARRY A 2pt RULE in the tour's own light ink — the tab
- * idiom without a tab, and the only colour in the strip. With the dimming it
- * makes two signals for one fact, which is the point: this is the whole of
- * what replaced four decisions and three alpha weights of pill machinery.
+ * THE BAND IS MADE OF THE TIER STAMP'S MATERIAL (owner, 2026-09-16: "go wild,
+ * take it to the next level"). Its ground is `control` — the card's plate, the
+ * same dark the WTA 500 sits on at the other end of the card — so the card
+ * reads as TWO PLATES ON A TINT: one names the tier, one names where you can
+ * go. That is the whole idea, and it is why the band needs no dividers, no
+ * segments, no chips and no underline: the plate supplies every edge, and 17pt
+ * caps at 1.4 tracking are close enough to the tournament's own 19pt name to
+ * hold the bottom of the card on their own.
  *
- * TOUCH IS MET BY hitSlop, NOT BY HEIGHT. A 30pt strip with 8pt of slop above
- * and below is a 46pt target — the strip is what you see, not what you have to
- * hit, exactly as CompetingStar's 22pt disc is. A 44pt band was the lazy way
- * to the same number and it cost 14pt on every card.
+ * THE UNDERLINE IS GONE, at the owner's ask and with nothing put in its place.
+ * At this size the ink does it: live is the tour's light ink at full and dead
+ * is the same ink at 70%, which halves the contrast (9.5:1 to 5.1 on the WTA
+ * plate). An underline beneath 17pt caps read as a mistake rather than a mark.
+ *
+ * DIMMING HAS TO BE AN ALPHA HERE, not a ramp step, and the arithmetic is the
+ * same trap as the chip's: this is a LIGHT label on a DARK ground, so walking
+ * it down the ink ramp RAISES its contrast — C.faint measures 7.88:1 on the
+ * WTA plate against the live ink's 9.52. Only transparency actually dims it.
+ *
+ * ONE BRIGHT SEAM where the plate meets the tint: the same ink at 45%, which
+ * is 2.3:1 against the card. It is the only line on the band and it is what
+ * keeps the plate from looking like a shadow under the card.
+ *
+ * TOUCH IS MET BY hitSlop as well as by height: the band's own padding gives
+ * about 45pt and the slop covers the reader who aims between two words.
  *
  * `items` are `{ label, href, a11y }`. A null href is "nothing to open yet":
  * the word stays in place, dimmed and unruled, and is not pressable. It never
@@ -399,11 +413,14 @@ export function TourCard({ draws, name, children, footer, nav, href, corner, com
  */
 export function CardNav({ items }) {
   const skin = useCardSkin()
-  /* Quiet cards step both inks down, as everything else on them does. */
-  const on = skin.quiet ? skin.inkBody : skin.ink
-  const off = skin.quiet ? skin.faint : skin.muted
+  /* The plate's own ink, at full and at 70% — see the note above for why the
+     dimming is an alpha and not a ramp step. A quiet card takes the band down
+     as a whole rather than per word: 85% live, 55% dead. */
+  const on = skin.controlInk + (skin.quiet ? 'd9' : '')
+  const off = skin.controlInk + (skin.quiet ? '8c' : 'b3')
   return (
-    <View style={[u.nav, { borderTopColor: skin.line }]}>
+    <View style={[u.nav, { backgroundColor: skin.control,
+                           borderTopColor: skin.controlInk + '73' }]}>
       {items.map(it => {
         const live = !!it.href
         const word = (
@@ -411,21 +428,20 @@ export function CardNav({ items }) {
             {it.label}
           </Text>
         )
-        const mark = [u.navItem, { borderBottomColor: live ? skin.controlInk : 'transparent' }]
         return live
-          ? <CardLink key={it.label} href={it.href} style={mark} pressedOpacity={0.5}
+          ? <CardLink key={it.label} href={it.href} pressedOpacity={0.5}
                       hitSlop={NAV_SLOP} accessibilityLabel={it.a11y}>{word}</CardLink>
-          : <View key={it.label} style={mark} accessibilityRole="text"
+          : <View key={it.label} accessibilityRole="text"
                   accessibilityLabel={`${it.a11y} — nothing published yet`}>{word}</View>
       })}
     </View>
   )
 }
 
-/* 8 a side takes a 30pt strip to a 46pt target. Horizontal too, because
-   space-between leaves real gaps between the words and a near-miss either
-   side of a word should still land on it. */
-const NAV_SLOP = { top: 8, bottom: 8, left: 7, right: 7 }
+/* Slop for the reader who aims between two words: the band's own padding
+   already clears TOUCH vertically, so this is about the horizontal gaps that
+   space-between opens up. */
+const NAV_SLOP = { top: 6, bottom: 6, left: 9, right: 9 }
 
 /* THE TOURNAMENT NAME, ON ONE LINE — shrunk to fit, never wrapped.
  *
@@ -536,31 +552,25 @@ const u = StyleSheet.create({
     letterSpacing: TITLE_TRACK, color: C.ink, flexShrink: 1,
   },
   footer: { borderTopWidth: 1, borderTopColor: C.border, paddingTop: 9, marginTop: 1 },
-  /* THE STRIP, on RoundStrip's rules — see CardNav.
+  /* THE BAND — the tier stamp's material, holding the card's three
+     destinations. See CardNav for the whole argument.
      SPACE-BETWEEN, NOT EQUAL SEGMENTS: three words of different lengths in
      three equal boxes centre each one in its own box, which puts them at
-     irregular intervals and reads as an accident. Spread across the strip
-     with the slack shared out, they sit on the two edges and the middle.
-     Darkened rather than tinted, because a fraction of black is the one fill
-     that works on a pink card, a blue one and a near-black one alike — and it
-     sinks the strip behind the facts above it, which is the right order: the
-     card states, the strip acts. 0.22 rather than 0.13, or the field does not
-     read as a field at all on a tinted card. */
+     irregular intervals and reads as an accident. Spread across the band with
+     the slack shared out, they sit on its two edges and its middle — which is
+     also RoundStrip's rule, and it is right for the same reason.
+     The padding is what makes the band ~45pt, so a word is a TOUCH-sized
+     target without a fixed height that the reader's type size could outgrow. */
   nav: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    borderTopWidth: 1, backgroundColor: 'rgba(0,0,0,0.22)',
-    paddingHorizontal: 15, paddingTop: 8, paddingBottom: 6,
+    borderTopWidth: 1, paddingHorizontal: 18, paddingTop: 13, paddingBottom: 12,
   },
-  /* The 2pt rule under a live destination. On the ITEM rather than the text so
-     it spans the word's box and not its glyphs, and always present — coloured
-     or transparent — so nothing moves when a sheet appears mid-afternoon. */
-  navItem: { borderBottomWidth: 2, paddingBottom: 3 },
-  /* T.eyebrow's treatment at a size that fits three words across 329pt.
-     leading() on the line height because this is TYPE, not artwork: it grows
-     with the reader, and the strip grows with it. */
+  /* 17pt against the title's 19: the band is meant to hold the bottom of the
+     card, not to whisper along it. leading() because this is TYPE and not
+     artwork — it grows with the reader, and the band grows with it. */
   navText: {
-    fontFamily: 'SairaCondensed_700Bold', fontSize: 13, lineHeight: leading(16),
-    letterSpacing: 0.9, textTransform: 'uppercase',
+    fontFamily: 'SairaCondensed_700Bold', fontSize: 17, lineHeight: leading(20),
+    letterSpacing: 1.4, textTransform: 'uppercase',
   },
   /* A compact card's second row is a footer only in the structural sense — it
      sits beside the body's link rather than inside it (see the note at the
