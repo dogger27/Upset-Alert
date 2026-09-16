@@ -162,8 +162,21 @@ const CREST = { width: 77, height: 51 }
    because the two move independently: a crest is a square-ish picture where a
    tier plate is a 6:1 strip, so it pays for scale in HEIGHT — the shared 1.5
    took the plates from 58pt to 60 and the Slam from 71 to 84. Dividing by 1.25
-   gives that height back without touching the plates (owner, 2026-09-15). */
-const CREST_SHRINK = 1.25
+   gives that height back without touching the plates (owner, 2026-09-15).
+
+   1.5625 NOW, WHICH IS 1.25 / 0.8 — the week crest at 80% of what it was
+   (owner, 2026-09-16). Expressed as the divisor rather than as a new pair of
+   numbers so the one thing this constant means stays true: it is how much
+   SMALLER a week card's crest is than a full card's, and every size below is
+   still derived from the 44x26 box the full cards use.
+
+   The box goes 52.8x31.2 -> 42.2x25.0, so a square crest (Wimbledon, Roland
+   Garros) comes down from 31.2pt tall to 25.0 and the US Open's flame from
+   52.8x25.3 to 42.2x20.2 — `contain` fits a square one by height and the
+   2.09:1 flame by width, which is why the two land differently. 25.0 is now
+   just under the small tier plate's 25.5, so a Slam no longer sets the row's
+   height at all. */
+const CREST_SHRINK = 1.5625
 const CREST_SMALL = {
   width: (44 * SMALL) / CREST_SHRINK,
   height: (26 * SMALL) / CREST_SHRINK,
