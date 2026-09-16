@@ -33,9 +33,12 @@ import { BADGE, C, R, SHADOW, T, TOUR } from './theme'
  * DEFAULTS TO THE NEUTRAL RAMP, so a component that uses this outside a
  * TourCard — the schedule's rows, a plain Card — is unchanged.
  */
-const NEUTRAL_INK = { ink: C.ink, inkBody: C.inkBody, muted: C.muted, faint: C.faint }
-const CardInkContext = createContext(NEUTRAL_INK)
-export const useCardInk = () => useContext(CardInkContext)
+const NEUTRAL_SKIN = {
+  ink: C.ink, inkBody: C.inkBody, muted: C.muted, faint: C.faint,
+  card: C.card, line: C.border,
+}
+const CardSkinContext = createContext(NEUTRAL_SKIN)
+export const useCardSkin = () => useContext(CardSkinContext)
 
 /* The accent bar: a 4px vertical gradient from the tour's 500 to its 700.
    Six stacked bands rather than a real gradient — expo-linear-gradient is a
@@ -74,7 +77,7 @@ function mix(a, b, t) {
 export function SurfaceText({ surface, style }) {
   const key = String(surface || '').toLowerCase().replace(/\s*\(.*?\)/g, '').trim()
   const s = C.surfaces[key] || C.surfaces.hard
-  const inks = useCardInk()
+  const inks = useCardSkin()
   return (
     <Text style={[T.tiny, { color: inks.muted }, style]} numberOfLines={1}>{s.label}</Text>
   )
@@ -249,7 +252,7 @@ export function TourCard({ draws, name, children, footer, href, corner, compact 
   const oneTier = combined && isSlamTier(list[0]?.category)
   const stamps = oneTier ? list.slice(0, 1) : list
   /* ONE DECISION, TWO HALVES. The surface and the ink that has to read on it
-     are chosen together and in one place — see CardInkContext above and the
+     are chosen together and in one place — see CardSkinContext above and the
      ramp's derivation in theme.js. `rule` is the footer's hairline: it lifts
      off the card it draws on, whichever card that is, which was not true
      while the tinted cards borrowed `plate` for it. */
@@ -257,9 +260,13 @@ export function TourCard({ draws, name, children, footer, href, corner, compact 
   const skin = tour
     ? { card: tour.card, line: tour.line, rule: tour.rule }
     : { card: C.card, line: C.border, rule: C.border }
+  /* THE SURFACE RIDES ALONG WITH THE INK. The corner star's disc has to be
+     the CARD's colour — it sits half off the edge and closes the border it
+     crosses, so a fixed C.card is a near-black blob on a tinted card. */
   const inks = tour
-    ? { ink: tour.ink, inkBody: tour.inkBody, muted: tour.muted, faint: tour.faint }
-    : NEUTRAL_INK
+    ? { ink: tour.ink, inkBody: tour.inkBody, muted: tour.muted, faint: tour.faint,
+        card: tour.card, line: tour.line }
+    : NEUTRAL_SKIN
   const body = (
     <>
         <View style={u.titleRow}>
@@ -283,7 +290,7 @@ export function TourCard({ draws, name, children, footer, href, corner, compact 
     </>
   )
   return (
-    <CardInkContext.Provider value={inks}>
+    <CardSkinContext.Provider value={inks}>
     <View>
       {/* SHADED BY TOUR, edge to edge: the site's own answer for a card that
           belongs to one tour (it tints this card on hover with exactly these
@@ -318,7 +325,7 @@ export function TourCard({ draws, name, children, footer, href, corner, compact 
           explain — but what it HOLDS may be pressable in its own right. */}
       {corner ? <View style={u.corner} pointerEvents="box-none">{corner}</View> : null}
     </View>
-    </CardInkContext.Provider>
+    </CardSkinContext.Provider>
   )
 }
 
@@ -349,7 +356,7 @@ const TITLE_TRACK = TITLE_SIZE * 0.01
 
 function CardTitle({ name }) {
   const [avail, setAvail] = useState(null)
-  const inks = useCardInk()
+  const inks = useCardSkin()
   let fontSize = TITLE_SIZE
   if (avail != null) {
     const need = textWidth(name, TITLE_FACE, TITLE_SIZE)

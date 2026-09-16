@@ -27,7 +27,7 @@ import { computeCohortInfo, getHomeSection } from '../../drawStatus'
 import { drawsByTournament } from '../../scheduleRows'
 import { lockLabel } from '../../lock'
 import { C, R, S, T } from '../../theme'
-import { StatusChip, SurfaceText, TourCard, useCardInk } from '../../cards'
+import { StatusChip, SurfaceText, TourCard, useCardSkin } from '../../cards'
 import { dateRange } from '../../dates'
 import { Button, Card, CardLink, ErrorNote, Eyebrow, Loading, Muted, Screen, Title } from '../../ui'
 import { MenuSheet } from '../../menu'
@@ -62,7 +62,7 @@ const oopHref = t => (t.oop_first_seen_at && t.tournament_id
  * open rather than wondering where the link went. */
 function OrderOfPlay({ t }) {
   const oop = oopHref(t)
-  const inks = useCardInk()
+  const inks = useCardSkin()
   /* NOTHING TO OPEN YET — STILL A PILL, HOLLOWED OUT (owner, 2026-09-16).
    *
    * The disabled state keeps the control's outline and loses its fill: the
@@ -105,10 +105,38 @@ function OrderOfPlay({ t }) {
   // CardLink, not <Link asChild><Pressable style>: that form drops the
   // style — the pill rendered as bare text — and it is the trap CardLink
   // exists to close. Third time it has been re-typed; last time.
+  /* THE CONTROL IS READ IN THE CARD'S OWN INK, not in the brand's green
+     (owner, 2026-09-16, "the green button and icon are not working with the
+     pink").
+   *
+   * C.greenLit sits 164.5 degrees from the WTA card's hue at 3.44:1 — a near
+   * complement at low contrast, which is the definition of a vibrating pair —
+   * and 2.68:1 against the pill's own fill, under any floor. It was right when
+   * it was chosen: on the near-black card it is 12.8 degrees away and 6.40:1,
+   * a green control on a green-grey card.
+   *
+   * NO FIXED ACCENT CAN REPLACE IT, which is what settles the question rather
+   * than taste. The two tints are 100 degrees apart, so an accent that is
+   * harmonious on one is near-complementary on the other: C.gold is 89 degrees
+   * from the pink card and 171 from the blue, C.clayLight 59 and 159. Only a
+   * colour derived PER TOUR can be harmonious on both, and the card already
+   * has one. C.gold was the close second and was rejected for a second reason
+   * as well: in this palette gold means a locked podium place, and a gold
+   * button on every card spends that meaning.
+   *
+   * WHAT MAKES IT STILL READ AS PRESSABLE is the fill and the border weight
+   * rather than a hue: white at 10% lifts the pill off whatever card it is on
+   * (on the neutral card that lands within a point of the C.raised it had),
+   * the border is the ink at 55%, and the label is the ink itself at 5.3-9.9:1.
+   * The disabled state above is the same object with no fill and a 40% border,
+   * so the difference between "press this" and "nothing here yet" is weight,
+   * which survives both tints. */
   return (
-    <CardLink href={oop} style={s.oop} pressedOpacity={0.7}
+    <CardLink href={oop} pressedOpacity={0.7}
+              style={[s.oop, { backgroundColor: 'rgba(255,255,255,0.10)',
+                               borderColor: inks.ink + '8c' }]}
               accessibilityLabel="Schedule and order of play">
-      <Text style={s.oopText} numberOfLines={1}>Schedule</Text>
+      <Text style={[s.oopText, { color: inks.ink }]} numberOfLines={1}>Schedule</Text>
     </CardLink>
   )
 }
@@ -121,11 +149,21 @@ function OrderOfPlay({ t }) {
    own rather than borrowing the card's. hitSlop because the disc is 22pt and
    Apple's minimum is 44 — the ring is what you see, not what you have to hit. */
 function CompetingStar() {
+  /* THE DISC IS THE CARD'S OWN COLOUR. It sits half off the corner and has to
+     close the border it crosses (see u.corner in cards.jsx), so a fixed
+     C.card was a near-black blob pinned to a pink card — and the C.green ring
+     around it measured 1.33:1 on that card: coloured enough to argue with the
+     tint, too faint to read as a shape at all. Card colour, card ink, same
+     rule as the button beside it. */
+  const skin = useCardSkin()
   return (
     <Pressable onPress={() => showToast('You are competing!')} hitSlop={11}
                accessibilityRole="button" accessibilityLabel="Competing in this draw"
-               style={({ pressed }) => [s.star, pressed && { opacity: 0.6 }]}>
-      <Ionicons name="star" size={12} color={C.greenLit} />
+               style={({ pressed }) => [s.star,
+                                        { backgroundColor: skin.card,
+                                          borderColor: skin.ink + '80' },
+                                        pressed && { opacity: 0.6 }]}>
+      <Ionicons name="star" size={12} color={skin.ink} />
     </Pressable>
   )
 }
@@ -331,7 +369,7 @@ function Section({ title, tone, children }) {
  * is more than either needs ("New York City" is the longest and it fits).
  */
 function Meta({ t, showSurface = true }) {
-  const inks = useCardInk()
+  const inks = useCardSkin()
   return (
     <View style={s.meta}>
       <View style={s.metaSide}>
@@ -364,7 +402,7 @@ const pickChip = status => (status === 'complete' ? ['good', 'Picks in']
 function OpenRow({ draws, status, now, label }) {
   const lock = lockLabel(draws[0], now)
   const chip = pickChip(status?.[draws[0].id])
-  const inks = useCardInk()
+  const inks = useCardSkin()
   return (
     <View style={s.footRow}>
       <View style={s.lockLine}>
@@ -460,7 +498,7 @@ function ActiveRow({ t, userId, label }) {
   const standings = useApi(`standings:${t.id}`, () => getDrawStandings(t.id))
   const rows = standings.data || []
   const mine = rows.find(r => r.user?.id === userId)
-  const inks = useCardInk()
+  const inks = useCardSkin()
   /* THE LABEL STAYS HERE, where the pill came off everywhere else: a standing
      is the one fact on this card that genuinely differs between the two halves
      and cannot be collapsed — 3rd of 8 and 7th of 8 are two different links to
@@ -626,7 +664,7 @@ function WeekCard({ draws, done }) {
  * shape for the same structural reason; this one now matches them.
  */
 function WeekRow({ draws, opens }) {
-  const inks = useCardInk()
+  const inks = useCardSkin()
   return (
     <View style={s.weekRow}>
       {/* THE RELEASE DATE ON THE ROW'S CENTRE LINE, by the same two-flexible-
@@ -765,7 +803,11 @@ const s = StyleSheet.create({
      rather than omitting the key: this style is composed ON TOP of `oop`, so
      leaving it out keeps C.raised and the pill still reads as pressable. */
   oopDead: { backgroundColor: 'transparent' },
-  oopText: { ...T.tiny, color: C.greenLit, letterSpacing: 0.3 },
+  /* NO COLOUR HERE. Both states set their own from the card's skin — the
+     live pill the ink, the disabled one the faint step — and a default green
+     left in the shared style is a default that only looks right on the one
+     card it was chosen against. */
+  oopText: { ...T.tiny, letterSpacing: 0.3 },
   oopMini: { paddingHorizontal: S.md, alignSelf: 'stretch', justifyContent: 'center' },
 
   footer: {
