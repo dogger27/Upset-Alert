@@ -366,3 +366,34 @@ export function whenLabel(e) {
   if (e.status === 'live') return 'In progress'
   return ''
 }
+
+/*
+ * The Time view as a chronology of the day — the site's rule exactly
+ * (frontend/src/utils/dayOrder.js). Sort on the same instant the row DISPLAYS:
+ * when a match actually began, else the estimate — or a match that went on
+ * late sits among the slots it was printed beside while its own row says
+ * "Started at" some quite different time. A match carried over from yesterday
+ * keeps yesterday's started_at (that is what the field means), so it is keyed
+ * on when it comes back today: resumed_at once it has, the slot it is due in
+ * until then.
+ *
+ * A row with no time at all goes LAST. Guadalajara 2026-09-17 printed its
+ * doubles SF "Time TBA - After suitable rest" with nothing ahead of it on its
+ * court, so it had no estimate; an empty key sorts before every instant and
+ * listed the one match nobody can time above the 1:00 PM opener.
+ */
+export function byTimeOfDay(entries) {
+  const key = e => {
+    if (e.resumed_at) return e.resumed_at
+    if (e.status === 'to_be_completed') return e.expected_start_at || null
+    return e.started_at || e.expected_start_at || null
+  }
+  return [...entries].sort((a, b) => {
+    const ka = key(a), kb = key(b)
+    if ((ka == null) !== (kb == null)) return ka == null ? 1 : -1
+    if (ka !== kb) return ka < kb ? -1 : 1
+    // Same instant, or both unknown: keep a court's own running order intact.
+    return (a.court || '').localeCompare(b.court || '')
+      || (a.court_order ?? 99) - (b.court_order ?? 99)
+  })
+}

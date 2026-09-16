@@ -3,7 +3,7 @@
 // hold on any machine: the "device" is Los Angeles, the venue New York.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { footTime, whenLabel, isLive, isSuspended } from './schedule.js'
+import { byTimeOfDay, footTime, whenLabel, isLive, isSuspended } from './schedule.js'
 
 const LA = 'America/Los_Angeles', NY = 'America/New_York'
 const fixed = { status: 'scheduled', start_type: 'fixed', start_time_local: '11:00 AM',
@@ -58,4 +58,21 @@ test('a washed-out day has two halves, and neither is live', () => {
   assert.equal(isSuspended({ ...frozen, status: 'postponed' }), false)
   assert.equal(isLive({ ...frozen, status: 'live' }), true)
   assert.equal(isSuspended({ ...frozen, status: 'live' }), true)
+})
+
+/* Guadalajara, 2026-09-17: the doubles SF was printed "Time TBA - After
+   suitable rest" with nothing ahead of it on its court — no estimate — and
+   was listed above the 1:00 PM opener. */
+test('a slot with no time at all comes after every timed one', () => {
+  const at = (id, court, order, iso) => ({ id, court, court_order: order, status: 'scheduled', expected_start_at: iso })
+  const rows = [
+    at(1239, 'CANCHA MEXCOVERY.COM', 1, null),
+    at(1236, 'ESTADIO SKARCH', 2, '2026-09-17T20:51:00Z'),
+    at(1235, 'ESTADIO SKARCH', 1, '2026-09-17T19:00:00Z'),
+    at(1240, 'CANCHA MEXCOVERY.COM', 2, ''),
+  ]
+  assert.deepEqual(byTimeOfDay(rows).map(r => r.id), [1235, 1236, 1239, 1240])
+  const carried = { id: 7, court: 'CENTRAL', court_order: 1, status: 'to_be_completed',
+                    started_at: '2026-09-15T18:00:00Z', expected_start_at: '2026-09-17T22:00:00Z' }
+  assert.deepEqual(byTimeOfDay([carried, rows[1]]).map(r => r.id), [1236, 7])
 })

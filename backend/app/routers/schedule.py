@@ -569,6 +569,25 @@ def _winner_side(entry, match, players) -> Optional[int]:
     return {"a": 0, "b": 1}.get(ws) if isinstance(ws, str) else None
 
 
+def day_order():
+    """The order a day is served in: by expected start, a row with NO expected
+    start after every row that has one, then a court's own running order.
+
+    SQLite puts NULL first in an ascending sort, so a bare
+    `order_by(expected_start_at)` served the one slot nobody can time as the
+    first match of the day. Guadalajara 2026-09-17 (doc 274) printed its
+    doubles SF "Time TBA - After suitable rest", alone on CANCHA with that
+    court's first band left empty — no clock and nothing ahead of it to chain
+    from — and the site listed it above the 1:00 PM opener. The clients
+    re-sort the Time view by the same rule (frontend/src/utils/dayOrder.js,
+    mobile/schedule.js byTimeOfDay); the law's `untimed_slot_served_first`
+    runs this function against the stored day.
+    """
+    return (ScheduleEntry.expected_start_at.is_(None),
+            ScheduleEntry.expected_start_at, ScheduleEntry.court,
+            ScheduleEntry.court_order)
+
+
 @router.get("/day", response_model=ScheduleDayOut)
 async def schedule_day(
     play_date: Optional[date] = Query(None),
@@ -589,8 +608,7 @@ async def schedule_day(
     if tournament_id:
         q = q.where(ScheduleEntry.tournament_id == tournament_id)
     entries = (await db.execute(
-        q.order_by(ScheduleEntry.expected_start_at, ScheduleEntry.court,
-                   ScheduleEntry.court_order))).scalars().all()
+        q.order_by(*day_order()))).scalars().all()
 
     if not entries:
         return ScheduleDayOut(play_date=day, entries=[], courts=[], tournaments=[])
