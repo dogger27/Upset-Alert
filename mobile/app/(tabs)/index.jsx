@@ -335,8 +335,8 @@ export default function Dashboard() {
       {loading ? <Loading /> : null}
 
       <Section title="Open" tone={C.clay}>
-        {buckets.open.map((g, i) => (
-          <OpenCard key={g[0].id} draws={g} status={entry.data} now={now} index={i} />
+        {buckets.open.map(g => (
+          <OpenCard key={g[0].id} draws={g} status={entry.data} now={now} />
         ))}
         {!buckets.open.length && !loading && (
           <Muted>No draws are open at this time.</Muted>
@@ -345,8 +345,8 @@ export default function Dashboard() {
 
       {buckets.active.length > 0 && (
         <Section title="Active" tone={C.greenLit}>
-          {buckets.active.map((g, i) => (
-            <ActiveCard key={g[0].id} draws={g} status={entry.data} index={i} />
+          {buckets.active.map(g => (
+            <ActiveCard key={g[0].id} draws={g} status={entry.data} />
           ))}
         </Section>
       )}
@@ -567,7 +567,7 @@ const cardHref = draws => {
 
 /* The only card with something to DO, so the countdown is the loudest thing
    on it — that is the part you can miss. */
-function OpenCard({ draws, status, now, index = 0 }) {
+function OpenCard({ draws, status, now }) {
   /* The deadline AND the pick state together: two halves that lock at the same
      minute can still differ in whether your picks are in, and either one
      differing is a reason to show both lines. */
@@ -592,7 +592,7 @@ function OpenCard({ draws, status, now, index = 0 }) {
               ))}
             </View>
           }
-          nav={<CardNav items={navItems(draws)} index={index} />}
+          nav={<CardNav items={navItems(draws)} />}
         >
           <Meta t={draws[0]} />
         </TourCard>
@@ -607,7 +607,7 @@ function OpenCard({ draws, status, now, index = 0 }) {
 
 /* Active: nothing to do and nothing to say, so the card is its name, its
    place and its band. */
-function ActiveCard({ draws, status, index = 0 }) {
+function ActiveCard({ draws, status }) {
   /* COMPETING IN THE EVENT, which is what the corner stamp claims: picks in
      for either half of a combined tournament means you are in it. Which half
      is in the rows below, where a standing says it better than a star. */
@@ -616,7 +616,7 @@ function ActiveCard({ draws, status, index = 0 }) {
         <TourCard
           draws={draws} name={draws[0].name} href={cardHref(draws)}
           corner={competing ? <CompetingStar /> : null}
-          nav={<CardNav items={navItems(draws)} index={index} />}
+          nav={<CardNav items={navItems(draws)} />}
         >
           {/* The surface sits beside the city, exactly as it does on an Open
               card — one line up from the footer it used to share with the
