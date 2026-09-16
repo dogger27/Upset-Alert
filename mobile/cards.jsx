@@ -559,19 +559,27 @@ const u = StyleSheet.create({
     borderWidth: 1, borderColor: C.border, borderRadius: R.md,
     flexDirection: 'row', overflow: 'hidden', ...SHADOW,
   },
-  // '14px 16px 14px 20px' with gap 9, from the source.
-  body: { flex: 1, paddingTop: 14, paddingRight: 16, paddingBottom: 14, paddingLeft: 16, gap: 9 },
+  /* The HORIZONTAL padding is the website's — '14px 16px 14px 20px' with gap
+     9, from the source — and it stays, because it is what lines every card's
+     text up down the screen.
+     THE VERTICAL IS OURS NOW: 10 and a gap of 7, down from 14 and 9 (owner,
+     2026-09-16), which takes a full card from 88pt to 78. The site's 14 was
+     drawn for a card with four rows in it; this one has two, and the tier
+     plate that sets the first row is 31pt of artwork that does not need 14pt
+     of air above it to read. */
+  body: { flex: 1, paddingTop: 10, paddingRight: 16, paddingBottom: 10, paddingLeft: 16, gap: 7 },
   bodyLink: { gap: 9 },
   /* See `compact` at TourCard. Vertical only: the horizontal padding is what
      lines every card's text up down the column.
-     4 AND 4, DOWN FROM 7 AND 5 (owner, 2026-09-16), which takes a week card
-     from 64.5pt to 57.5. That is as far as it goes without moving something
-     real: of the 53.5pt inside the border, 25.5 is the tier plate and 18 is
-     the city's line, so the padding and the gap together are now 12 of it. The
-     next 8pt would have to come off the stamp (CAP_SMALL x SMALL in this file)
-     rather than off the air. */
-  bodyTight: { paddingTop: 4, paddingBottom: 4, gap: 4 },
-  bodyLinkTight: { gap: 4 },
+     3 AND 3, DOWN FROM 7 AND 5 IN TWO PASSES (owner, 2026-09-16), which takes
+     a week card from 64.5pt to 54.5.
+     THIS IS THE FLOOR, and the arithmetic says why: of the 52.5pt inside the
+     border, 25.5 is the tier plate and 18 is the city's line, so 9 is all the
+     air there is and 3 of it sits above a stamp that is artwork against the
+     card's own edge. Anything further has to come off the stamp — CAP_SMALL
+     and SMALL in this file — or off the type, not off the spacing. */
+  bodyTight: { paddingTop: 3, paddingBottom: 3, gap: 3 },
+  bodyLinkTight: { gap: 3 },
   // Centred ON the corner, so it reads as pinned to the card rather than
   // floating beside it. Half out and half in: the badge's own ring closes the
   // card's border where it crosses it.
