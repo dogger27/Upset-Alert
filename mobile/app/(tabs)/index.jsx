@@ -124,19 +124,24 @@ function OrderOfPlay({ t }) {
    * as well: in this palette gold means a locked podium place, and a gold
    * button on every card spends that meaning.
    *
-   * WHAT MAKES IT STILL READ AS PRESSABLE is the fill and the border weight
-   * rather than a hue: white at 10% lifts the pill off whatever card it is on
-   * (on the neutral card that lands within a point of the C.raised it had),
-   * the border is the ink at 55%, and the label is the ink itself at 5.3-9.9:1.
-   * The disabled state above is the same object with no fill and a 40% border,
-   * so the difference between "press this" and "nothing here yet" is weight,
-   * which survives both tints. */
+   * FILLED VERSUS HOLLOW, because there are two states and they have to be
+   * told apart across a column of cards without being read (owner,
+   * 2026-09-16). Weight alone was not enough: the first attempt lifted the
+   * available pill with white at 10%, which is 1.28:1 against the card, and
+   * beside a hollow one it read as the same object twice.
+   *
+   * So AVAILABLE IS A SOLID PILL in the card's own control pair — the tour's
+   * light ink as the fill, the dark its tier stamp sits on as the label:
+   * 9.5:1 on the WTA card, 7.6 on the ATP, 15.7 on the neutral, with the pill
+   * itself standing 4.0-13.4:1 off the card behind it. NOT AVAILABLE keeps the
+   * outline and nothing else. Filled or hollow is the widest gap two states
+   * can have, and because both halves are derived per tour it stays
+   * harmonious on either tint, which no fixed accent does. */
   return (
     <CardLink href={oop} pressedOpacity={0.7}
-              style={[s.oop, { backgroundColor: 'rgba(255,255,255,0.10)',
-                               borderColor: inks.ink + '8c' }]}
+              style={[s.oop, { backgroundColor: inks.control, borderColor: inks.control }]}
               accessibilityLabel="Schedule and order of play">
-      <Text style={[s.oopText, { color: inks.ink }]} numberOfLines={1}>Schedule</Text>
+      <Text style={[s.oopText, { color: inks.controlInk }]} numberOfLines={1}>Schedule</Text>
     </CardLink>
   )
 }

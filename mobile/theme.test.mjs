@@ -94,6 +94,24 @@ for (const [key, t] of Object.entries(theme.TOUR)) {
                + `card ${t.card} — under ${floor}:1`)
     }
   }
+  /* THE CONTROL PAIR IS A BUTTON AND ITS LABEL. `text` is the fill of an
+     available control and `plate` the label on it (see the skin in cards.jsx),
+     so the two have to clear AA against EACH OTHER — a pairing nothing else
+     in this palette was checking, because until the cards were tinted the
+     only filled control was C.raised with a green label. */
+  const pair = ratio(t.plate, t.text)
+  if (pair < 4.5) {
+    bad.push(`theme.js  TOUR.${key} control pair ${t.text} / ${t.plate} is `
+             + `${pair.toFixed(2)}:1 — a filled Schedule pill and its label, under 4.5:1`)
+  }
+  /* AND IT HAS TO BE VISIBLE AS AN OBJECT. A filled pill whose fill is the
+     card's own lightness is not a filled pill; hollow is the other state, and
+     the two are told apart by exactly this. */
+  const standoff = ratio(t.text, t.card)
+  if (standoff < 2.5) {
+    bad.push(`theme.js  TOUR.${key} control fill ${t.text} is ${standoff.toFixed(2)}:1 `
+             + `against its card ${t.card} — too close to read as a filled control`)
+  }
   /* THE HAIRLINE LIFTS OFF ITS CARD. C.border is lighter than C.card, so the
      footer's rule reads as a seam catching the light; the tinted cards used to
      borrow `plate` for it, which is darker than the card and therefore a
