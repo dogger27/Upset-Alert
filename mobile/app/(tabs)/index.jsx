@@ -97,8 +97,8 @@ function OrderOfPlay({ t }) {
    */
   if (!oop) {
     return (
-      <View style={[s.oop, s.oopDead, { borderColor: inks.faint + '66' }]}>
-        <Text style={[s.oopText, { color: inks.faint }]} numberOfLines={1}>Schedule</Text>
+      <View style={[s.oop, s.oopDead, { borderColor: inks.muted + '66' }]}>
+        <Text style={[s.oopText, { color: inks.muted }]} numberOfLines={1}>Schedule</Text>
       </View>
     )
   }
@@ -130,16 +130,27 @@ function OrderOfPlay({ t }) {
    * available pill with white at 10%, which is 1.28:1 against the card, and
    * beside a hollow one it read as the same object twice.
    *
-   * So AVAILABLE IS A SOLID PILL in the card's own control pair — the tour's
-   * light ink as the fill, the dark its tier stamp sits on as the label:
-   * 9.5:1 on the WTA card, 7.6 on the ATP, 15.7 on the neutral, with the pill
-   * itself standing 4.0-13.4:1 off the card behind it. NOT AVAILABLE keeps the
-   * outline and nothing else. Filled or hollow is the widest gap two states
-   * can have, and because both halves are derived per tour it stays
-   * harmonious on either tint, which no fixed accent does. */
+   * THE TWO STATES GO OPPOSITE WAYS OFF THE CARD (owner, 2026-09-16). A sheet
+   * that exists is a RECESSED DARK CHIP — the card's own control pair, the
+   * dark its tier stamp sits on carrying the tour's light ink, at 9.5:1 on the
+   * WTA card, 7.6 on the ATP and 15.7 on the neutral. One that does not exist
+   * is barely LIFTED instead: white at 8%, which is 1.22:1, present as a shape
+   * and saying nothing.
+   *
+   * THE CHIP IS DEFINED BY ITS EDGE, not by its fill. The fill is only 1.9:1
+   * off a tinted card and 1.17:1 off the neutral one, where there is almost no
+   * room left to go darker — so the border is the label at 45%, which stands
+   * 2.7-4.0:1 off the fill and gives the chip a shape on every card.
+   *
+   * AND THE QUIET STATE MOVED UP A RAMP STEP, which is the part that is not
+   * obvious: lifting its fill costs its label contrast, so C.faint fell from
+   * 4.20:1 on the bare card to 3.45 on the lifted one. It takes `muted`
+   * instead, at 4.05-5.53:1 — still the quieter of the two by a wide margin,
+   * since the chip beside it carries 9.5:1. */
   return (
     <CardLink href={oop} pressedOpacity={0.7}
-              style={[s.oop, { backgroundColor: inks.control, borderColor: inks.control }]}
+              style={[s.oop, { backgroundColor: inks.control,
+                               borderColor: inks.controlInk + '73' }]}
               accessibilityLabel="Schedule and order of play">
       <Text style={[s.oopText, { color: inks.controlInk }]} numberOfLines={1}>Schedule</Text>
     </CardLink>
@@ -804,10 +815,11 @@ const s = StyleSheet.create({
     borderRadius: R.pill, borderWidth: 1, borderColor: C.borderOn, backgroundColor: C.raised,
     paddingHorizontal: 10, paddingVertical: 4,
   },
-  /* The same pill with the fill taken out — see OrderOfPlay. `transparent`
-     rather than omitting the key: this style is composed ON TOP of `oop`, so
-     leaving it out keeps C.raised and the pill still reads as pressable. */
-  oopDead: { backgroundColor: 'transparent' },
+  /* Barely lifted off the card rather than cut out of it — see OrderOfPlay.
+     White at 8% is 1.22:1, which is a shape you can find without it being a
+     shape that asks for anything. It composes ON TOP of `oop`, so the key has
+     to be set rather than omitted. */
+  oopDead: { backgroundColor: 'rgba(255,255,255,0.08)' },
   /* NO COLOUR HERE. Both states set their own from the card's skin — the
      live pill the ink, the disabled one the faint step — and a default green
      left in the shared style is a default that only looks right on the one
