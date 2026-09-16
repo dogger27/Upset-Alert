@@ -42,7 +42,7 @@ import { BADGE, C, R, SHADOW, T, TOUR } from './theme'
    which stays harmonious on both tints — see the note at OrderOfPlay. */
 const NEUTRAL_SKIN = {
   ink: C.ink, inkBody: C.inkBody, muted: C.muted, faint: C.faint,
-  card: C.card, line: C.border, control: C.bg, controlInk: C.ink,
+  card: C.card, line: C.border, control: C.bg, controlInk: C.ink, quiet: false,
 }
 const CardSkinContext = createContext(NEUTRAL_SKIN)
 export const useCardSkin = () => useContext(CardSkinContext)
@@ -270,10 +270,21 @@ export function TourCard({ draws, name, children, footer, href, corner, compact 
   /* THE SURFACE RIDES ALONG WITH THE INK. The corner star's disc has to be
      the CARD's colour — it sits half off the edge and closes the border it
      crosses, so a fixed C.card is a near-black blob on a tinted card. */
-  const inks = tour
-    ? { ink: tour.ink, inkBody: tour.inkBody, muted: tour.muted, faint: tour.faint,
-        card: tour.card, line: tour.line, control: tour.plate, controlInk: tour.text }
-    : NEUTRAL_SKIN
+  /* `quiet` IS THE SECTION, NOT THE STATE, and the two are independent.
+     Whether a control can be pressed is one axis — a sheet exists or it does
+     not — and how much the card it sits on is worth is another: Open and
+     Active are this week, next and last week are context. `compact` already
+     carries exactly that (it is what the week cards pass), so the control
+     reads it here rather than the section re-deciding it. Spread last so it
+     reaches the neutral skin too — the Last week card is combined AND
+     compact, which is the case a tour-only branch would miss. */
+  const inks = {
+    ...(tour
+      ? { ink: tour.ink, inkBody: tour.inkBody, muted: tour.muted, faint: tour.faint,
+          card: tour.card, line: tour.line, control: tour.plate, controlInk: tour.text }
+      : NEUTRAL_SKIN),
+    quiet: !!compact,
+  }
   const body = (
     <>
         <View style={u.titleRow}>

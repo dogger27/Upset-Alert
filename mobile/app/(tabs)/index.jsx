@@ -74,9 +74,9 @@ function OrderOfPlay({ t }) {
    * NO `opacity` MULTIPLIER, which is what it used to be: C.faint at 0.6
    * leaves about 3:1 on the near-black card and lands near 1.6 on a tour
    * tint, so the label was legible nowhere a card is coloured — which is most
-   * of this screen. The ramp's own quietest step carries the text (see
-   * theme.js), and the border is that same ink at 40% so the outline sits a
-   * step below the word inside it rather than boxing it in.
+   * of this screen. A step of the ramp carries the text (see theme.js), and
+   * the border is that same ink, at a fraction of it, so the outline sits
+   * below the word inside it rather than boxing it in.
    *
    * THE ROW NO LONGER CHANGES HEIGHT with whether a sheet exists: live and
    * dead are now the same 25pt object, where before the dead one was 15pt of
@@ -94,11 +94,30 @@ function OrderOfPlay({ t }) {
    * depends on must not be able to wrap, whatever the label becomes next or
    * whatever the reader's type size is. That is the actual fault; the shorter
    * word is what buys the room back.
+   *
+   * A SECOND AXIS, `skin.quiet`: THE SECTION (owner, 2026-09-16). Everything
+   * above is about STATE — a sheet exists or it does not. This is about how
+   * much the CARD is worth: Open and Active are this week and push the button
+   * up, next and last week are context and push it down. They are independent,
+   * so all four combinations occur — Last week's US Open has a sheet on a
+   * quiet card, and an Active draw often has none on a loud one.
+   *
+   * ONE KNOB CARRIES IT: the border's alpha over its own label, 70% on a loud
+   * card and 40% on a quiet one. On the chip that is 4.5-8.1:1 off the fill
+   * against 2.4-3.4; on the lifted pill 2.7-3.3 against 1.5-1.6.
    */
+  const edge = inks.quiet ? '66' : 'b3'
   if (!oop) {
+    /* AND HERE THE LABEL STEPS DOWN TOO, which it does not on the chip below.
+       On a week card it is `faint` at 3.4-4.3:1 rather than `muted` at
+       4.1-5.5 — deliberately under AA, at the owner's ask, and this is the one
+       place in the app where that is a fair trade: a label naming something
+       that does not exist yet, on the least important card on the screen, with
+       everything actionable above it. */
+    const lab = inks.quiet ? inks.faint : inks.muted
     return (
-      <View style={[s.oop, s.oopDead, { borderColor: inks.muted + '66' }]}>
-        <Text style={[s.oopText, { color: inks.muted }]} numberOfLines={1}>Schedule</Text>
+      <View style={[s.oop, s.oopDead, { borderColor: lab + edge }]}>
+        <Text style={[s.oopText, { color: lab }]} numberOfLines={1}>Schedule</Text>
       </View>
     )
   }
@@ -139,8 +158,14 @@ function OrderOfPlay({ t }) {
    *
    * THE CHIP IS DEFINED BY ITS EDGE, not by its fill. The fill is only 1.9:1
    * off a tinted card and 1.17:1 off the neutral one, where there is almost no
-   * room left to go darker — so the border is the label at 45%, which stands
-   * 2.7-4.0:1 off the fill and gives the chip a shape on every card.
+   * room left to go darker — so the border is the label, at 70% on a loud card
+   * and 40% on a quiet one, standing 4.5-8.1:1 and 2.4-3.4:1 off the fill.
+   *
+   * ITS LABEL DOES NOT STEP DOWN ON A QUIET CARD, and the arithmetic is why:
+   * this is a LIGHT label on a DARK fill, so walking it down the ink ramp does
+   * not lower its contrast. `muted` measures 9.34:1 on the WTA chip against
+   * `text`'s 9.52, and on the ATP chip it goes UP — 9.53 from 7.63. The only
+   * lever that quiets a chip is its border, which is the one that moves.
    *
    * AND THE QUIET STATE MOVED UP A RAMP STEP, which is the part that is not
    * obvious: lifting its fill costs its label contrast, so C.faint fell from
@@ -150,7 +175,7 @@ function OrderOfPlay({ t }) {
   return (
     <CardLink href={oop} pressedOpacity={0.7}
               style={[s.oop, { backgroundColor: inks.control,
-                               borderColor: inks.controlInk + '73' }]}
+                               borderColor: inks.controlInk + edge }]}
               accessibilityLabel="Schedule and order of play">
       <Text style={[s.oopText, { color: inks.controlInk }]} numberOfLines={1}>Schedule</Text>
     </CardLink>
