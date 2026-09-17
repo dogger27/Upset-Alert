@@ -398,10 +398,13 @@ export default function ScheduleScreen() {
        running order. pastGroups.js, on its own suite. */
     if (date < today()) {
       const byTournament = new Set(chrono.map(e => e.tournament_id)).size > 1
+      // "Singles" is said only when there is doubles on the page to tell it
+      // from — Doubles off, or a day with none, is rounds alone (owner).
+      const mixed = new Set(chrono.map(e => (e.discipline === 'singles' ? 'singles' : 'other'))).size > 1
       return groupPastDay(chrono, { byTournament }).map(g => ({
         key: g.key,
         title: g.first ? g.tournament : null,
-        sub: `${g.discipline}${g.round ? ` · ${g.round}` : ''}`,
+        sub: [mixed ? g.discipline : null, g.round || null].filter(Boolean).join(' · '),
         list: g.list,
       }))
     }
