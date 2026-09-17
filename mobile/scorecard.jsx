@@ -22,7 +22,11 @@ import { endedWith, parseSet, scoreSets, setCount, setWon, winnerSideOf } from '
 import { isLive, isSuspended, pointOf, servingSide, sideDrawRank, sideEntryType, sideFlags, sideName, sideSeed } from './schedule'
 import { C, S, T } from './theme'
 
-export function MatchCard({ e }) {
+/* `scale` — the block at a fraction of its size for the schedule's mid
+   density (owner, 2026-09-17): the same two lines and box score, smaller,
+   so more matches fit a screen. Names, marks and the score cells scale
+   together; the badge and the flag keep their size (already small). */
+export function MatchCard({ e, scale = 1 }) {
   const live = isLive(e)
   const stopped = isSuspended(e) || e.status === 'postponed' || e.status === 'to_be_completed'
   const lp = e.live_point ?? null
@@ -53,7 +57,7 @@ export function MatchCard({ e }) {
      identical (a finished five-setter is still 0.76, a four still 0.88) and
      densifies the live ones that were overflowing. */
   const cols = n + (point ? 1 : 0)
-  const k = cols >= 5 ? 0.76 : cols === 4 ? 0.88 : 1
+  const k = (cols >= 5 ? 0.76 : cols === 4 ? 0.88 : 1) * scale
   const dense = k < 1 ? {
     sets: { gap: Math.round(6 * k) },
     box: { minWidth: Math.round((twoDigit ? 26 : 16) * k) },
@@ -88,7 +92,7 @@ export function MatchCard({ e }) {
               /* 1.27x rather than bodyMed's 1.4: tight enough to pull the two
                  rows together, and still clear of the ~1.2 floor where
                  descenders start to clip. */
-              style={[T.bodyMed, { color: ink, flexShrink: 1, lineHeight: leading(19) }]}
+              style={[T.bodyMed, { color: ink, flexShrink: 1, lineHeight: leading(19) }, scale < 1 && { fontSize: Math.round(T.bodyMed.fontSize * scale), lineHeight: leading(Math.round(19 * scale)) }]}
               after={picked ? <Text style={s.pick} accessibilityLabel="You predicted this player to win">🤞</Text> : null}
             />
             </View>
@@ -101,7 +105,7 @@ export function MatchCard({ e }) {
             <EntryChip entryType={sideEntryType(e.players, side)} />
             {end && <Text style={s.end}>{end}</Text>}
             {winner != null && (
-              <Text style={[s.mark, { color: winner === idx ? C.greenLit : C.lossMark }]}>
+              <Text style={[s.mark, scale < 1 && { fontSize: Math.round(13 * scale), lineHeight: leading(Math.round(16 * scale)) }, { color: winner === idx ? C.greenLit : C.lossMark }]}>
                 {winner === idx ? '✓' : '✗'}
               </Text>
             )}
