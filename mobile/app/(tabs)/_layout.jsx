@@ -181,7 +181,8 @@ export default function TabLayout() {
         tabBarInactiveTintColor: C.faint,
         tabBarStyle: {
           backgroundColor: C.card,
-          borderTopColor: C.greenLit,
+          // The darker green: the lit one was a bright line across the whole screen (owner, 2026-09-17).
+          borderTopColor: C.green,
           borderTopWidth: TAB_BORDER_H,
           // BOTH, or neither works: height is what the bar measures itself by,
           // paddingBottom is where that height goes. The border is inside that
