@@ -30,6 +30,19 @@ check('digits are matched whole', () => {
 check('a clock that is not in the note leaves it alone', () => {
   assert.equal(rewriteNoteClock('After suitable rest', '2:30 PM', '11:30 AM'), 'After suitable rest')
 })
+/* SP Open, 2026-09-18: "After suitable rest - NB 4pm". The row stores the
+   canonical "4:00 PM", so the note holds no "4:00" to replace. */
+check('a bare hour in the note is the row\'s clock', () => {
+  assert.equal(rewriteNoteClock('After suitable rest - NB 4pm', '4:00 PM', '1:00 PM'),
+               'After suitable rest - NB 1:00 PM')
+  assert.equal(rewriteNoteClock('NB 4 PM', '4:00 PM', '1:00 PM'), 'NB 1:00 PM')
+})
+/* Only ON THE HOUR, and only with a meridiem: neither a lone number nor an
+   hour whose minutes disagree is the row's clock. */
+check('a bare hour is not read where it cannot be the clock', () => {
+  assert.equal(rewriteNoteClock('Not before 4:30 PM', '4:00 PM', '1:00 PM'), 'Not before 4:30 PM')
+  assert.equal(rewriteNoteClock('4 matches, NB 4pm', '4:00 PM', '1:00 PM'), '4 matches, NB 1:00 PM')
+})
 /* SP Open, 2026-09-17: "Followed by" under a blank box printed "Starting at
    12:00 PM" — the row holds the noon, the note does not. */
 check('a note with no clock of its own is told apart', () => {
@@ -38,6 +51,9 @@ check('a note with no clock of its own is told apart', () => {
   assert.equal(noteHasClock(null), false)
   assert.equal(noteHasClock('NB 2:30 possible court change'), true)
   assert.equal(noteHasClock('Starts At 14.30'), true)
+  // SP Open 2026-09-18: a bare hour IS the note's own clock. Reading it as
+  // "no clock" made the line the clock alone and dropped the floor's wording.
+  assert.equal(noteHasClock('After suitable rest - NB 4pm'), true)
 })
 
 if (failed) { console.log(`${failed} FAILED`); process.exit(1) }

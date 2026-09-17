@@ -42,6 +42,7 @@ from app.models.tournament import Draw, DrawEntry, Match
 from app.services.live_state import is_suspended
 from app.services.oop_parser import (COUNTRY_CODES, is_placeholder, parse_pdf,
                                      sheet_is_blank)
+from app.services.oop_parser import _CLOCK_BODY as _OOP_CLOCK_BODY
 from app.services.rankings import _norm
 
 logger = logging.getLogger(__name__)
@@ -2810,8 +2811,14 @@ async def relink_bracket_matches(db, tournament_id: int) -> int:
 # suitable rest, but NB 2:30" (read as after_event) and "Starting at NB 3:00 PM"
 # (read as FIXED). The abbreviation counts only in front of a clock, so a stray
 # "NB" can never turn a wording that states no time into a floor.
+#
+# "In front of a clock" has to mean the parser's whole reading of one, or the
+# floor is lost to a format instead of to a wording: SP Open 2026-09-18 printed
+# "After suitable rest - NB 4pm" and the minutes-only lookahead here sent it to
+# the "after" branch, which carries no floor. Shares oop_parser's shape so the
+# two cannot drift apart again.
 _NOT_BEFORE_RE = re.compile(
-    r'\bnot\s+bef|\bn\s*[./]?\s*b\.?\s*(?=\d{1,2}[:.]\d{2})', re.I)
+    r'\bnot\s+bef|\bn\s*[./]?\s*b\.?\s*(?=' + _OOP_CLOCK_BODY + r')', re.I)
 
 
 def _start_type_of(m) -> str:

@@ -170,10 +170,17 @@ function clockIn(iso, zone) {
    court change" and the ingest stores the clock it means, "2:30 PM"
    (backend oop_parser.settle_meridiems). Matched whole, so 2:30 never
    rewrites the tail of a 12:30. Same rule as the site's utils/noteClock.js. */
+/* A BARE HOUR is the same moment and not the same text: SP Open 2026-09-18
+   printed "After suitable rest - NB 4pm" and the row stores the canonical
+   "4:00 PM" (backend oop_parser._canonical_clock). Only ever with a meridiem —
+   a lone number in a note is a court or a round far more often than a time. */
 function rewriteNoteClock(note, clock, replacement) {
-  const digits = (clock || '').match(/^\d{1,2}[:.]\d{2}/)?.[0]
-  if (!digits) return note.replace(clock, replacement)
-  const re = new RegExp(`(^|[^\\d:.])${digits.replace('.', '\\.')}(?:\\s*[AP]\\.?M\\.?)?(?!\\d)`, 'i')
+  const parts = (clock || '').match(/^(\d{1,2})[:.](\d{2})/)
+  if (!parts) return note.replace(clock, replacement)
+  const [digits, hour, minute] = parts
+  const alt = minute === '00' ? `|${hour}\\s*[AP]\\.?M\\.?` : ''
+  const re = new RegExp(
+    `(^|[^\\d:.])(?:${digits.replace('.', '\\.')}(?:\\s*[AP]\\.?M\\.?)?${alt})(?!\\d)`, 'i')
   return note.replace(re, (_m, lead) => lead + replacement)
 }
 
@@ -184,7 +191,8 @@ function printedStart(e, zone, venueMode) {
   // "Starting at 12:00 PM" box, and the ingest keeps the noon on the row
   // (backend oop_parser._carried_clock). The note alone would print no time.
   // Same rule as the site's utils/noteClock.js noteHasClock.
-  if (e.start_note && e.start_time_local && !/\d{1,2}[:.]\d{2}/.test(e.start_note)) {
+  if (e.start_note && e.start_time_local
+      && !/\d{1,2}(?:[:.]\d{2}|\s*[AP]\.?M\.?)/i.test(e.start_note)) {
     return mine ? clockIn(e.printed_start_at, zone) : e.start_time_local
   }
   if (e.start_note && mine && e.start_time_local) {

@@ -11,9 +11,19 @@
  * same rule.
  */
 export function rewriteNoteClock(note, clock, replacement) {
-  const digits = (clock || '').match(/^\d{1,2}[:.]\d{2}/)?.[0]
-  if (!digits) return note.replace(clock, replacement)
-  const re = new RegExp(`(^|[^\\d:.])${digits.replace('.', '\\.')}(?:\\s*[AP]\\.?M\\.?)?(?!\\d)`, 'i')
+  const parts = (clock || '').match(/^(\d{1,2})[:.](\d{2})/)
+  if (!parts) return note.replace(clock, replacement)
+  const [digits, hour, minute] = parts
+  // A BARE HOUR is the same moment and not the same text. SP Open 2026-09-18
+  // printed "After suitable rest - NB 4pm"; the row stores the canonical
+  // "4:00 PM" (backend oop_parser._canonical_clock), so there is no "4:00" in
+  // the note to find and a "my time" page kept the venue's clock — the same
+  // failure the missing meridiem above caused. On the hour, the hour alone is
+  // also the clock, and only ever WITH a meridiem: a lone number in a note is
+  // a court or a round far more often than a time.
+  const alt = minute === '00' ? `|${hour}\\s*[AP]\\.?M\\.?` : ''
+  const re = new RegExp(
+    `(^|[^\\d:.])(?:${digits.replace('.', '\\.')}(?:\\s*[AP]\\.?M\\.?)?${alt})(?!\\d)`, 'i')
   return note.replace(re, (_m, lead) => lead + replacement)
 }
 
@@ -29,5 +39,5 @@ export function rewriteNoteClock(note, clock, replacement) {
  * the same rule.
  */
 export function noteHasClock(note) {
-  return /\d{1,2}[:.]\d{2}/.test(note || '')
+  return /\d{1,2}(?:[:.]\d{2}|\s*[AP]\.?M\.?)/i.test(note || '')
 }

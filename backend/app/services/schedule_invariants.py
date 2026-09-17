@@ -60,7 +60,7 @@ def _naive_utc(dt):
 # absorbed by both ends of the parse before now.
 _SLOT_WORDING_RE = re.compile(
     r'\b(?:TB[ACD]|followed\s+by|not\s+bef|start(?:s|ing)?\s+at|'
-    r'N\s*[./]?\s*B\.?\s*\d{1,2}[:.]\d{2}|'
+    r'N\s*[./]?\s*B\.?\s*\d{1,2}(?:[:.]\d{2}|\s*[ap]\.?m\.?)|'
     r'to\s+be\s+(?:arranged|confirmed|announced|advised|determined))\b', re.I)
 _TRAILING_SEED_RE = re.compile(r'(?:\s*\[[^\]]*\])+\s*$')
 _TRAILING_CODE_RE = re.compile(r'\s([A-Z]{3})$')
@@ -117,7 +117,18 @@ _CLOCK_RE = re.compile(r'^(\d{1,2})[:.](\d{2})\s*(am|pm)?$', re.I)
 # or abbreviated in front of a clock ("NB 3:30 PM", "N/B 2:30"). Stated apart
 # from schedule._NOT_BEFORE_RE on purpose — see _printed_instant.
 _NOT_BEFORE_WORDING_RE = re.compile(
-    r'\bnot\s+bef|(?<![A-Za-z])N\s*[./]?\s*B\.?\s*\d{1,2}[:.]\d{2}', re.I)
+    r'\bnot\s+bef|(?<![A-Za-z])N\s*[./]?\s*B\.?\s*'
+    r'\d{1,2}(?:[:.]\d{2}|\s*[ap]\.?m\.?)', re.I)
+# A clock the SHEET printed, as the LAW reads one off a slot note — stated
+# here and not imported from oop_parser for the reason _printed_instant gives:
+# the reading the law measures the parser against must not be the parser's.
+# Deliberately wider, because a check for a clock the parser MISSED cannot be
+# written in the parser's own vocabulary of a clock. A meridiem alone is
+# enough ("4pm"); minutes alone are enough ("14:30"); a lone number is not, so
+# "30 mins after ceremony" and "R16" stay ordinary text.
+_NOTE_CLOCK_RE = re.compile(
+    r'(?<![\d:.])\d{1,2}(?:[:.]\d{2}\s*(?:[ap]\.?m\.?)?|\s*[ap]\.?m\.?)'
+    r'(?![\d:.])', re.I)
 
 
 def _printed_instant(entry, tz_name):
@@ -185,6 +196,29 @@ def clock_runs_backwards(rows, tz_name) -> list[tuple]:
 # is unknown — the law's own reading of both, apart from oop_parser's.
 _CHAINS_BEHIND_RE = re.compile(r'follow|\bafter\b', re.I)
 _TIME_UNKNOWN_RE = re.compile(r'\bTB[ACD]\b|\bto\s+be\s+\w', re.I)
+
+
+def printed_clock_not_captured(rows) -> list:
+    """Slots whose printed NOTE states a clock the row did not store.
+
+    -> [(row, the clock the law read)]. Split out from `check_day` so the
+    judgement can be tested without a database, like `clock_runs_backwards`
+    and `_slot_was_pulled`.
+
+    A "time unknown" wording is exempt: "AFTER REST, TIME TBA" says outright
+    that there is no clock, and Cincinnati prints "Not Before 3:00 PM" with
+    "TBA" on the line below — neither is a clock the ingest dropped.
+    """
+    out = []
+    for r in rows:
+        if r.start_time_local or not r.start_note:
+            continue
+        if _TIME_UNKNOWN_RE.search(r.start_note):
+            continue
+        m = _NOTE_CLOCK_RE.search(r.start_note)
+        if m:
+            out.append((r, m.group(0).strip()))
+    return out
 
 
 def court_opener_untimed(rows) -> list:
@@ -887,6 +921,28 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
              f"{e.court} #{e.court_order} opens the court printed "
              f"{e.start_note or e.start_type!r} with no clock — it follows a "
              f"box the ingest never read, and the page can print no time")
+
+    # 2026-09-18, SP Open document 284: "After suitable rest - NB 4pm" on
+    # QUADRA 1. Every clock reader in the ingest demanded minutes, so the hour
+    # was not a time to any of them — no `start_time_local`, an `after_event`
+    # instead of a floor, and the estimate chain ran the match to "~3:30 PM"
+    # under a printed 4:00.
+    #
+    # THE THREE FLOOR CHECKS ARE ALL DOWNSTREAM OF THE CLOCK BEING READ.
+    # `expected_undercuts_printed_floor`, `printed_clock_runs_backwards` and
+    # `not_before_wording_misread` all begin at `start_time_local`, so a clock
+    # the parser did not recognise disarms every one of them at once — the
+    # same way a clock read in the wrong half of the day disarmed the floor
+    # check on document 275. This is the check UPSTREAM of those: the note
+    # still holds whatever the tour printed, so the law can ask whether the
+    # sheet stated a time that the row does not have, without knowing what
+    # tomorrow's odd format will look like.
+    for e, printed in printed_clock_not_captured(rows):
+        flag("printed_clock_not_captured", e,
+             f"{e.court} #{e.court_order} is printed {e.start_note!r}, which "
+             f"states a clock ({printed!r}), but the row stored none — every "
+             f"floor and estimate downstream reads start_time_local, so all of "
+             f"them are silent on this row")
 
     # 2026-08-26, Winston-Salem: re-reading the same sheet through a fixed
     # parser gave two courts a second row each — the clean names beside the

@@ -20,6 +20,23 @@ import re
 from dataclasses import dataclass, field
 from typing import Optional
 
+# THE SHAPE OF A PRINTED CLOCK, stated once because five readers need the same
+# one: "2:30 PM", "14:30", "2.30pm" — and the BARE HOUR, "4pm".
+#
+# SP Open's Friday sheet (2026-09-18, document 284) printed QUADRA 1's second
+# doubles quarter-final "After suitable rest - NB 4pm". Every clock reader here
+# demanded minutes (`\d{1,2}[:.]\d{2}`), so the hour was not a clock to any of
+# them: `_slot_of` found no time, `schedule._start_type_of` saw an "NB" with
+# nothing in front of it and fell through to the "after" branch, and the
+# estimate chain — which floors a chained slot only on a clock — ran the match
+# to "~3:30 PM" under a floor of 4:00. One occurrence in the 335-file corpus,
+# and none of the three floors that exist for this could see it.
+#
+# The meridiem is MANDATORY without minutes. A lone 1-2 digit number on an
+# order of play is a seed, a court, a round or a set score far more often than
+# it is a time; "4pm" is unambiguous, "4" is noise.
+_CLOCK_BODY = r'\d{1,2}(?:[:.]\d{2}\s*(?:am|pm)?|\s*(?:am|pm))'
+
 # Time markers that open a new slot on a court.
 # The slot keyword is NOT anchored: a fifth of the corpus writes
 # "Singles Final - Starting at 1:00 PM" or "Starting at 11:00 AM Doubles Final",
@@ -29,18 +46,18 @@ SLOT_RE = re.compile(
     # "NB 3:30 PM" — the abbreviation, and only in front of a clock: WTA sheets
     # print it (Guadalajara 2026-09-15). Its line there also said "After
     # suitable rest", which is the only reason the slot opened at all.
-    r'\bn\s*[./]?\s*b\.?\s*(?=\d{1,2}[:.]\d{2})|'
+    r'\bn\s*[./]?\s*b\.?\s*(?=' + _CLOCK_BODY + r')|'
     r'after\s+(?:rest|suitable)|to\s+be\s+arranged|'
     # "30 mins after ceremony" opens the next slot on the same court. Without
     # it the doubles final was swallowed into the singles final above it.
     r'\d+\s*min(?:ute)?s?\s+after|'
     r'after\s+(?:the\s+)?(?:ceremony|presentation|previous|preceding|conclusion))', re.I)
-CLOCK_RE = re.compile(r'\d{1,2}[:.]\d{2}\s*(?:am|pm)?', re.I)
+CLOCK_RE = re.compile(_CLOCK_BODY, re.I)
 # The sheet often states the discipline outright, which beats guessing it from
 # how many names ended up on a side.
 DISC_RE = re.compile(r'\b(singles|doubles)\b', re.I)
 # A bare clock time on its own line is also a slot ("7:00 PM").
-BARE_TIME_RE = re.compile(r'^\d{1,2}[:.]\d{2}\s*(?:am|pm)?$', re.I)
+BARE_TIME_RE = re.compile(r'^' + _CLOCK_BODY + r'$', re.I)
 # A slot whose start time is not settled yet prints only "TBC" in the header
 # band where "Followed by" would go — Monterrey 2026-08-25 held its last
 # doubles quarter-final that way. It has to open a slot like any other wording,
@@ -327,6 +344,27 @@ def _column_origins(cells, tol=60):
     return [sum(g) / len(g) for g in groups]
 
 
+_BARE_HOUR_RE = re.compile(r'^(\d{1,2})\s*([ap])\.?\s*m?\.?$', re.I)
+
+
+def _canonical_clock(clock):
+    """The sheet's clock in the one shape `start_time_local` stores.
+
+    A bare hour is given its minutes here, at the single point the clock is
+    read off the line, rather than in the five readers downstream of it
+    (`_clock_minutes`, `settle_meridiems`, `schedule._parse_clock`, and the
+    serve path's and the law's `_printed_instant`) — each of those already
+    agrees on "2:30 PM" and none of them should have to learn a second shape.
+    `start_raw` is untouched, so `start_note` keeps "NB 4pm" exactly as the
+    tour printed it; this is the same division `settle_meridiems` draws.
+    """
+    clock = (clock or '').strip()
+    m = _BARE_HOUR_RE.match(clock)
+    if not m:
+        return clock
+    return f'{int(m.group(1))}:00 {m.group(2).upper()}M'
+
+
 def _slot_of(text):
     """-> (time, discipline, round) when this line opens a match slot, else None."""
     if not text:
@@ -339,7 +377,7 @@ def _slot_of(text):
         # The round is read only when the line NAMES THE EVENT too: "final" is
         # an ordinary English word, and a slot wording that happened to use it
         # is not this match's round.
-        return (times[-1].strip() if times else None,
+        return (_canonical_clock(times[-1]) if times else None,
                 d.group(1).lower() if d else None,
                 _round_token(text) if d else None)
     return None
