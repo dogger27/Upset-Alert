@@ -217,6 +217,14 @@ _egress_direct = False
 DIRECT_COOLOFF = 24 * 3600.0
 
 
+def proxy_refused_tunnel(err) -> bool:
+    """curl's wording when the PROXY answers the CONNECT with an error status:
+    "CONNECT tunnel failed, response 402". 402 is IPRoyal's balance-spent
+    answer; 407 would be bad credentials. Either way the proxy, not the site."""
+    text = str(err)
+    return "CONNECT tunnel failed" in text and bool(re.search(r"response 4\d\d", text))
+
+
 def egress_is_direct() -> bool:
     return _egress_direct
 
@@ -298,7 +306,22 @@ async def _get(path: str) -> dict:
             await asyncio.sleep(delay)
         _last_request_at = loop.time()
 
-    status, payload = await asyncio.to_thread(_fetch, path)
+    try:
+        status, payload = await asyncio.to_thread(_fetch, path)
+    except CurlError as e:
+        # THE PROXY ITSELF REFUSING THE TUNNEL is not Sofascore and not the
+        # network: "CONNECT tunnel failed, response 402" is IPRoyal saying the
+        # balance is spent. Classified transient, it was logged at debug and
+        # nobody saw that the only fallback for a ban on this host was gone
+        # (2026-09-17). Said once every six hours, as a warning the digest mails.
+        if proxy_refused_tunnel(e):
+            await app_log("warning", "sofascore",
+                          "The residential proxy refused the tunnel (HTTP 402 Payment Required) — "
+                          "the IPRoyal balance is spent. Sofascore is reachable only while this "
+                          "host's own IP is not banned; top up the proxy.",
+                          detail={"path": path, "error": str(e)[:200]},
+                          dedup_key="sofa_proxy_402", dedup_hours=6)
+        raise
 
     # A 403 means two different things depending on where we are calling FROM,
     # and treating them alike is either wasteful or dangerous.
