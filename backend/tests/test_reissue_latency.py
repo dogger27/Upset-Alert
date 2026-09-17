@@ -31,7 +31,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.services.schedule_invariants import _REISSUE_LATENCY   # noqa: E402
+from types import SimpleNamespace                               # noqa: E402
+
+from app.services.schedule_invariants import (                  # noqa: E402
+    _REISSUE_LATENCY, document_clocks)
 
 
 def _convicts(gap_minutes):
@@ -60,6 +63,41 @@ def test_document_238s_real_incident_is_still_convicted():
 def test_a_slot_left_unresolved_for_hours_is_still_convicted():
     assert _convicts(60)
     assert _convicts(600)
+
+
+def _doc(i, when, sha):
+    return SimpleNamespace(id=i, fetched_at=when, sha256=sha)
+
+
+def test_a_forced_reparse_inherits_the_clock_of_the_fetch_it_rereads():
+    """The verification harness clears sha256 and re-ingests the archived PDF
+    on every run, so ingest mints a document stamped `now` for bytes we already
+    held. 2026-09-18: document 284 fetched 21:24:51, re-parsed as 285 at
+    21:52:40 — the same bytes as the sheet still live on wtatennis.com."""
+    clocks = document_clocks([
+        _doc(284, datetime(2026, 9, 17, 21, 24, 51), 'forced-reparse'),
+        _doc(285, datetime(2026, 9, 17, 21, 52, 40), '12fcbc9dff0c'),
+    ])
+    assert clocks[285] == datetime(2026, 9, 17, 21, 24, 51)
+    assert clocks[284] == datetime(2026, 9, 17, 21, 24, 51)
+
+
+def test_a_chain_of_reparses_carries_the_original_clock():
+    first = datetime(2026, 9, 17, 21, 24, 51)
+    clocks = document_clocks([
+        _doc(284, first, 'forced-reparse'),
+        _doc(285, datetime(2026, 9, 17, 21, 52, 40), 'forced-reparse'),
+        _doc(286, datetime(2026, 9, 17, 22, 30, 0), 'abc123'),
+    ])
+    assert clocks[286] == first
+
+
+def test_an_ordinary_revision_keeps_its_own_clock():
+    """A real re-fetch of genuinely new bytes is what the check is FOR."""
+    a = datetime(2026, 9, 17, 20, 17, 21)
+    b = datetime(2026, 9, 17, 21, 24, 51)
+    clocks = document_clocks([_doc(282, a, 'fb445cd86e'), _doc(284, b, '12fcbc9dff')])
+    assert clocks == {282: a, 284: b}
 
 
 def test_the_grace_is_the_poll_interval():
