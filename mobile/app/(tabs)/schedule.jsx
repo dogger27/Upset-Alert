@@ -41,6 +41,7 @@ import { dayLabels, relativeDayWord } from '../../dayLabels'
 import { rowInTournaments } from '../../scheduleRows'
 import { MatchCard } from '../../scorecard'
 import { matchLine } from '../../matchLine'
+import { groupPastDay } from '../../pastGroups'
 import { CourtRenameSheet } from '../../courtRename'
 import { ScoreHistorySheet } from '../../scoreHistory'
 import { C, R, S, T } from '../../theme'
@@ -385,13 +386,27 @@ export default function ScheduleScreen() {
         return { name, list, best, count }
       })
       ranked.sort((a, b) => a.best - b.best || b.count - a.count || a.name.localeCompare(b.name))
-      return ranked.map(r => [r.name, r.list])
+      return ranked.map(r => ({ key: r.name, court: r.name, list: r.list }))
     }
 
     // Time: a chronology of the day, the site's rule exactly — see
     // byTimeOfDay in schedule.js (a row with no time at all goes last).
-    return [[null, byTimeOfDay(visible)]]
-  }, [visible, view])
+    const chrono = byTimeOfDay(visible)
+    /* A PAST DAY IS A RECORD (owner, 2026-09-17): by tournament when more
+       than one is showing, singles before doubles, then by round — the
+       chronology kept inside each group. Today and the days ahead stay a
+       running order. pastGroups.js, on its own suite. */
+    if (date < today()) {
+      const byTournament = new Set(chrono.map(e => e.tournament_id)).size > 1
+      return groupPastDay(chrono, { byTournament }).map(g => ({
+        key: g.key,
+        title: g.first ? g.tournament : null,
+        sub: `${g.discipline}${g.round ? ` · ${g.round}` : ''}`,
+        list: g.list,
+      }))
+    }
+    return [{ key: 'all', list: chrono }]
+  }, [visible, view, date])
 
   const refetch = () => { day.refetch(); dates.refetch() }
   /* ON COURT HERE, not on court anywhere. It counted the whole day's rows, so
@@ -567,8 +582,10 @@ export default function ScheduleScreen() {
           </Card>
         )}
 
-        {groups.map(([court, list]) => (
-          <View key={court || 'all'} style={s.group}>
+        {groups.map(({ key, court, title, sub, list }) => (
+          <View key={key} style={s.group}>
+            {title ? <FitText style={(compact ? COURT_SMALL : COURT).style} track={(compact ? COURT_SMALL : COURT).track} min={9}>{title.toUpperCase()}</FitText> : null}
+            {sub ? <Text style={SUB.style}>{sub}</Text> : null}
             {/* A COURT NAME IS ONE LINE, WHATEVER ITS LENGTH — "Quadra Central
                 Maria Esther Bueno" wrapped to two (owner, 2026-09-17). The same
                 eyebrow, through the measuring fitter: shrunk as far as it must,
@@ -827,6 +844,8 @@ function shortDate(iso) {
 // eyebrow (15 against 21, 30% down) over the compact list (owner, 2026-09-17).
 const COURT = eyebrowType()
 const COURT_SMALL = eyebrowType({ small: true })
+// A past day's sub-heading — "Singles · R16" — the small eyebrow, fainter.
+const SUB = eyebrowType({ small: true, color: C.faint })
 
 const s = StyleSheet.create({
   courtHead: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
