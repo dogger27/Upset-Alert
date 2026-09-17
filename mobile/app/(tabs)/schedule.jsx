@@ -36,14 +36,21 @@ import { setScheduleTournaments, useScheduleTournaments } from '../../scheduleFi
 import { useChoosableTournaments } from '../../choosableTournaments'
 import { DayStrip } from '../../DayStrip'
 import { SWIPE_PX, SWIPE_VX, swipeStep } from '../../swipeDay'
-import { dayLabels } from '../../dayLabels'
+import { dayLabels, relativeDayWord } from '../../dayLabels'
 import { rowInTournaments } from '../../scheduleRows'
 import { MatchCard } from '../../scorecard'
 import { ScoreHistorySheet } from '../../scoreHistory'
 import { C, R, S, T } from '../../theme'
 import { Card, CardLink, ErrorNote, Eyebrow, Loading, Muted, Screen, Title } from '../../ui'
 
-const today = () => new Date().toISOString().slice(0, 10)
+/* The DEVICE's calendar date — the schedule's rule (the zone is the device).
+   toISOString() is UTC, which after 5 PM Pacific already names tomorrow: the
+   page then landed on tomorrow's sheet during the evening session, and the
+   strip would have called the wrong day "Today" every night. */
+const today = () => {
+  const d = new Date()
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10)
+}
 
 /* THE EARLIEST DAY WITH TENNIS LEFT IN IT, never earlier than today — the
    site's rule, verbatim in intent. "Today" is not blindly the answer: out of
@@ -202,7 +209,6 @@ export default function ScheduleScreen() {
   const date = (pinned && available.includes(pinned))
     ? pinned
     : landingDay(available, dates.data?.open_counts || {}, asked)
-  const idx = available.indexOf(date)
   /* SWIPE ANYWHERE TO CHANGE THE DAY. A sideways drag on the page — the
      cards, the empty space, the header — steps one day: left for the next,
      right for the one before, and the strip slides its chip to the centre
@@ -385,7 +391,24 @@ export default function ScheduleScreen() {
       <Screen onRefresh={refetch} touchAction="pan-y pinch-zoom">
         {/* THE DAYS, as chips; the chosen one's date is written out on the
             line below, where it has always been. */}
-        {days.length > 0 && <DayStrip days={days} active={date} onPick={setPinned} />}
+        {/* THE HEADER IS THE STRIP: the days on the left, the chosen day's
+            date pinned at the far right with the court count under it. The
+            arrows went with it — the chips and the swipe are the stepper
+            now (owner, 2026-09-17). Rendered even with no days, so a day
+            with no sheet still says which day it is. "Today" and "Yester."
+            when the day has a word, else the date without its comma (owner):
+            "Tue Sep 1". */}
+        <DayStrip
+          days={days} active={date} onPick={setPinned}
+          right={(
+            <View style={s.today}>
+              <Text style={s.todayDate}>{relativeDayWord(date, today()) ?? prettyDate(date).replace(/,/g, '')}</Text>
+              {liveCount > 0 && (
+                <Text style={[T.tiny, { color: C.greenLit }]}>{liveCount} on court</Text>
+              )}
+            </View>
+          )}
+        />
         {/* THE SWIPE LIVES INSIDE THE SCROLL VIEW, BELOW THE STRIP. Above it —
             an ancestor of the ScrollView — the pan never fired on the phone:
             iOS hands a sideways drag to the scroll view's own recogniser
@@ -396,33 +419,6 @@ export default function ScheduleScreen() {
             so the empty space under a short day swipes too. */}
         <GestureDetector gesture={dayPan} touchAction="pan-y">
         <View style={s.swipeBody} collapsable={false}>
-        <View style={s.bar}>
-          <Pressable
-            onPress={() => idx > 0 && setPinned(available[idx - 1])}
-            disabled={idx <= 0} hitSlop={10}
-            style={({ pressed }) => [s.arrow, (idx <= 0) && s.arrowOff, pressed && { opacity: 0.6 }]}
-            accessibilityRole="button" accessibilityLabel="Previous day"
-          >
-            <Ionicons name="chevron-back" size={20} color={C.ink} />
-          </Pressable>
-          <View style={s.dateBox}>
-            <Text style={[T.h2, { color: C.ink }]}>{prettyDate(date)}</Text>
-            {liveCount > 0 && (
-              <Text style={[T.tiny, { color: C.greenLit }]}>{liveCount} on court</Text>
-            )}
-          </View>
-          <Pressable
-            onPress={() => idx >= 0 && idx < available.length - 1 && setPinned(available[idx + 1])}
-            disabled={idx < 0 || idx >= available.length - 1} hitSlop={10}
-            style={({ pressed }) => [
-              s.arrow, (idx < 0 || idx >= available.length - 1) && s.arrowOff,
-              pressed && { opacity: 0.6 },
-            ]}
-            accessibilityRole="button" accessibilityLabel="Next day"
-          >
-            <Ionicons name="chevron-forward" size={20} color={C.ink} />
-          </Pressable>
-        </View>
 
         {fromDraw ? (
           <CardLink href={drawReady ? `/draw/${fromDraw}` : undefined} style={[s.back, !drawReady && s.arrowOff]}>
@@ -739,17 +735,11 @@ function prettyDate(iso) {
 const s = StyleSheet.create({
   // The scroll body's own gap and growth, restated: the wrapper took its children.
   swipeBody: { flexGrow: 1, gap: S.md },
-  bar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: S.md },
-  dateBox: { alignItems: 'center' },
-  arrow: {
-    width: 40, height: 40, borderRadius: R.pill, alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: C.border, backgroundColor: C.card,
-  },
   arrowOff: { opacity: 0.3 },
-  /* The arrows are ICONS, not text glyphs. "‹" in a 40pt circle sat visibly
-     high: a typographic glyph carries its font's own vertical metrics, and a
-     hand-set lineHeight (26 here) fights the centring rather than fixing it.
-     An icon font draws inside its box, so it centres by construction. */
+  /* The date in the strip's right slot: bold, no lineHeight (the slot
+     centres it; lineHeight sinks caps on iOS), the count tucked under. */
+  today: { alignItems: 'flex-end' },
+  todayDate: { fontFamily: 'Archivo_700Bold', fontSize: 14, color: C.ink },
 
   back: { flexDirection: 'row', alignItems: 'center', gap: 2, alignSelf: 'flex-start', paddingVertical: 4 },
   filters: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },

@@ -28,13 +28,20 @@ const RUBBER = 0.6
 const RUBBER_FACTOR = 0.6
 const MOVE = { duration: 240, easing: Easing.bezier(0.22, 0.61, 0.36, 1) }
 
-export function DayStrip({ days, active, onPick }) {
+/* `right` — a node pinned at the far right of the bar, outside the sliding
+   row: the schedule puts the chosen day's date there. The chips slide
+   beneath it, and the centring below treats the slot as outside the
+   viewport, so a centred chip is centred in the space that is actually
+   visible. With no days at all the bar is just this slot. */
+export function DayStrip({ days, active, onPick, right }) {
   const tx = useSharedValue(0)          // how far the row has slid left
   const start = useSharedValue(0)
   const dragging = useSharedValue(false)
   const lim = useSharedValue(0)         // the furthest it can slide
   const lead = useSharedValue(0)        // centring air when it all fits
-  const [vw, setVw] = useState(0)
+  const [barW, setBarW] = useState(0)
+  const [rightW, setRightW] = useState(0)
+  const vw = Math.max(0, barW - rightW)   // what the chips can be seen in
   const [cw, setCw] = useState(0)
   /* WHERE EACH CHIP IS, from its own onLayout — relative to the row, which
      is what tx slides. The counter is bumped when one reports so the
@@ -105,7 +112,7 @@ export function DayStrip({ days, active, onPick }) {
   return (
     <GestureDetector gesture={pan} touchAction="pan-y">
       {/* No ref on the detector's child (React 19 logs element.ref). */}
-      <View style={s.bar} onLayout={e => setVw(e.nativeEvent.layout.width)}>
+      <View style={s.bar} onLayout={e => setBarW(e.nativeEvent.layout.width)}>
         <Animated.View
           style={[s.row, slide]}
           onLayout={e => setCw(e.nativeEvent.layout.width)}
@@ -132,6 +139,11 @@ export function DayStrip({ days, active, onPick }) {
             )
           })}
         </Animated.View>
+        {right != null && (
+          <View style={s.right} onLayout={e => setRightW(e.nativeEvent.layout.width)}>
+            {right}
+          </View>
+        )}
       </View>
     </GestureDetector>
   )
@@ -146,6 +158,7 @@ const s = StyleSheet.create({
     backgroundColor: '#12262a',
     borderTopWidth: 1, borderBottomWidth: 1, borderColor: C.borderLit,
     paddingVertical: 4,
+    minHeight: leading(30) + 8,
     overflow: 'hidden',
   },
   /* flex-start, so the row is as wide as its chips and no wider — that
@@ -158,6 +171,15 @@ const s = StyleSheet.create({
     height: leading(26), minWidth: 34, paddingHorizontal: 8, borderRadius: 6,
     borderWidth: 1, borderColor: 'transparent',
     alignItems: 'center', justifyContent: 'center',
+  },
+  /* The slot the chips slide under: the bar's own fill so they vanish at
+     its edge, a hairline to mark the edge, the bar's full height so it
+     centres whatever it holds. */
+  right: {
+    position: 'absolute', top: 0, bottom: 0, right: 0,
+    justifyContent: 'center', alignItems: 'flex-end',
+    paddingLeft: S.md, paddingRight: S.lg,
+    backgroundColor: '#12262a', borderLeftWidth: 1, borderLeftColor: C.borderLit,
   },
   chipPressed: { backgroundColor: C.greenDeep, borderColor: C.borderLit },
   /* THE PICK: lit — the only filled chip on the bar — and a size up in
