@@ -684,17 +684,16 @@ function MatchRow({ e, first, venueMode, venueTz, onHistory }) {
   // this column cannot.
   const clock = rowClock(e, venueMode ? venueTz : undefined, venueMode)
   // JUST THE CLOCK (owner, 2026-09-17): the ladder's phrases — "Started at",
-  // "Resumed at", "Not before" — are the card's; this column keeps the time
-  // and nothing else. The "~" of an estimate is already in the text, as the
-  // card prints it; only a bare estimate gets one here. Never two.
-  const text = String(clock.text || '').replace(/^[A-Za-z][A-Za-z ]* at /, '').replace(/^Not before /i, '')
-  const when = clock.estimated && !text.startsWith('~') ? `~${text}` : text
+  // "Resumed at", "Not before" — are the card's, and so is the "~" of an
+  // estimate; this column keeps the time and nothing else. The estimate is
+  // still said, in the accessibility label.
+  const when = String(clock.text || '').replace(/^[A-Za-z][A-Za-z ]* at /, '').replace(/^Not before /i, '').replace(/^~+/, '')
   const openable = onHistory && ['live', 'completed', 'postponed', 'to_be_completed'].includes(e.status)
   const Wrap = openable ? Pressable : View
   return (
     <Wrap style={[s.row, !first && s.rowNext]} onPress={openable ? () => onHistory(e) : undefined}
           accessibilityRole={openable ? 'button' : undefined}
-          accessibilityLabel={`${when}${clock.displaced ? ` (${clock.displaced})` : ''} ${round} ${names} ${score}`.trim()}>
+          accessibilityLabel={`${clock.estimated ? 'about ' : ''}${when}${clock.displaced ? ` (${clock.displaced})` : ''} ${round} ${names} ${score}`.trim()}>
       {/* Measured fitting (FitText), never "…": the names shrink to the room
           the score leaves them, and the clock to its column. */}
       <View style={s.rowWhenSlot}><FitText style={s.rowWhen} min={9}>{when}</FitText></View>
