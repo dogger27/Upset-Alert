@@ -165,38 +165,41 @@ export default function ScheduleScreen() {
      with nothing on it to explain why, so the whole set comes back instead —
      which is the same state, said the other way, and leaves every box ticked
      rather than every box blank. */
-  /* THE TOURNAMENTS THIS PAGE IS ABOUT — one answer, read by the date list
-     and by every row filter. The pin outranks the store, it is the reason the
-     reader is here; otherwise the store's selection, or every choosable event
-     when the store says "all". `null` while the draw list is in flight: not
-     none — not yet known.
+  /* TWO SCOPES (owner, 2026-09-17). The DAYS are every live tournament's:
+     the strip's labels must not change as boxes are ticked — unticking
+     Guadalajara turned "Q1 1 2 3 4 5" into "Q1 Q2 1 2 3". The ROWS are the
+     ticked tournaments'; a day the ticked ones do not play says "No matches
+     to show". A pin is both scopes at once; `null` while the draw list is
+     in flight — not none, not yet known.
 
      "ALL" USED TO MEAN ALL ON RECORD. The store's null is "every tournament",
-     and the date list took that literally: fetched with no tournament at
-     all, it held every date the sheets have ever named, so with both boxes
-     ticked the arrows walked back to a Cincinnati Friday that neither ticked
-     event played — and its rows, from a tournament the chooser could not
-     even name, came through a filter of null (owner, 2026-09-17). All means
-     the boxes on screen, and the days on offer are theirs.
+     and the date list once took that literally — fetched with no tournament
+     at all, it held every date the sheets have ever named, and rows from a
+     tournament the chooser could not even name came through a filter of
+     null. All means the boxes on screen.
 
-     Keyed on primitives so the array — and the Set built from it — keep
+     Keyed on primitives so the arrays — and the Set built from them — keep
      their identity across renders; `events` is rebuilt every render, and a
      fresh Set each time would re-run every filter below. */
   const liveKey = events.map(t => t.id).join(',')
+  const live = useMemo(() => (liveKey ? liveKey.split(',').map(Number) : []), [liveKey])
   const scope = useMemo(() => {
     if (pinnedEvent != null) return [pinnedEvent]
+    return allDraws.length === 0 ? null : live
+  }, [pinnedEvent, allDraws.length, live])
+  const scopeKey = scope ? scope.join(',') : null
+  const rowScope = useMemo(() => {
+    if (pinnedEvent != null) return [pinnedEvent]
     if (allDraws.length === 0) return null
-    const live = liveKey ? liveKey.split(',').map(Number) : []
     const chosen = eventSel ? live.filter(id => eventSel.has(id)) : live
     // A stored selection naming nothing live is no selection — the store's
     // own rule: turning the last box off brings every box back.
     return chosen.length ? chosen : live
-  }, [pinnedEvent, allDraws.length, liveKey, eventSel])
-  const scopeKey = scope ? scope.join(',') : null
+  }, [pinnedEvent, allDraws.length, live, eventSel])
   /* Rows are tested against a Set, never against null: while the scope is
      unknown nothing passes, so a slow draw list shows a page that fills
      rather than rows that vanish. */
-  const eventFilter = useMemo(() => new Set(scope || []), [scope])
+  const eventFilter = useMemo(() => new Set(rowScope || []), [rowScope])
   /* THE DAYS ON OFFER ARE THE SCOPE'S DAYS. Nothing is fetched until the
      scope is known, and nothing is fetched for an empty one — an unscoped
      call answers with every date on record, which is the bug above. */
@@ -580,9 +583,10 @@ export default function ScheduleScreen() {
         )}
         {day.data && all.length > 0 && visible.length === 0 && (
           <Card>
-            {/* One line, whatever hid them (owner, 2026-09-17): the switches
-                are on screen, and a reader who filtered can un-filter. */}
-            <Title>All matches have been filtered out.</Title>
+            {/* One line each (owner, 2026-09-17). The ticked tournaments have
+                nothing on this day — the days are every live tournament's,
+                so this is ordinary — or the switches hid what they have. */}
+            <Title>{all.some(e => rowInTournaments(e, eventFilter)) ? 'All matches have been filtered out.' : 'No matches to show.'}</Title>
           </Card>
         )}
 
