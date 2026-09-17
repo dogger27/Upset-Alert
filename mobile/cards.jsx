@@ -995,14 +995,25 @@ export function PlayerName({ name, doubles = false, shrinkOnly = false, style, a
   const glyphs = doubles && flags ? flags.map(c => flagEmoji(c)) : []
   let text = forms[0]
   let fontSize = size
+  let flagged = glyphs.length > 0
   if (avail != null) {
     // A point of slack: kerning is not in the tables, and a name that is
     // right on the line should shorten rather than gamble.
-    const room = avail - 1 - (after ? AFTER_PX : 0) - (glyphs.length ? glyphs.length * FLAG_PX * (size / 15) : 0)
-    const fits = forms.find(f => textWidth(f, family, size) <= room)
+    const room = avail - 1 - (after ? AFTER_PX : 0)
+    /* THE FLAGS GO BEFORE THE TYPE SHRINKS (owner, 2026-09-17): every rung
+       is tried wearing the flags, then every rung without them, and only
+       then does the shortest rung shrink. A flag is decoration; a name that
+       cannot be read is not a name. */
+    const flagW = glyphs.filter(Boolean).length * FLAG_PX * (size / 15)
+    const rungs = glyphs.length
+      ? [...forms.map(f => ({ f, flagged: true })), ...forms.map(f => ({ f, flagged: false }))]
+      : forms.map(f => ({ f, flagged: false }))
+    const fits = rungs.find(r => textWidth(r.f, family, size) + (r.flagged ? flagW : 0) <= room)
     if (fits) {
-      text = fits
+      text = fits.f
+      flagged = fits.flagged
     } else {
+      flagged = false
       // Every rung is too wide: the shortest one, shrunk TO FIT. No floor and
       // never "…" — a cut name is a name nobody can read, and the user ruled
       // it out outright (2026-09-04, "Auger-Aliassi…" on a four-set row).
@@ -1019,7 +1030,7 @@ export function PlayerName({ name, doubles = false, shrinkOnly = false, style, a
           native shrink takes the last step rather than an ellipsis. */}
       <Text style={[style, { flexShrink: 1 }, fontSize !== size && { fontSize }]} numberOfLines={1}
             adjustsFontSizeToFit minimumFontScale={0.3}>
-        {glyphs.length ? withFlags(text, glyphs) : text}
+        {flagged ? withFlags(text, glyphs) : text}
       </Text>
       {after}
     </View>
