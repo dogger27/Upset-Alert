@@ -374,6 +374,9 @@ export default function ScheduleScreen() {
     })
   }, [all, view, showDoubles, tourSel, eventFilter, tourChips, doneOn])
 
+  // More than one tournament on the page: the mid view names each match's (time view, today).
+  const manyTournaments = useMemo(() => new Set(visible.map(e => e.tournament_id)).size > 1, [visible])
+
   const groups = useMemo(() => {
     // Court: one group per court, by tournament when more than one is showing
     // (owner, 2026-09-17) -- courtGroups.js, on its own suite.
@@ -626,7 +629,7 @@ export default function ScheduleScreen() {
             {density === 'mid'
               ? (
                 <View style={s.rows}>
-                  {list.map((e, i) => <MatchMini key={e.id} e={e} first={i === 0} alt={i % 2 === 1} tourBar={tourBarOf(e)} past={past} venueMode={venueMode} venueTz={venueTzOf(e)} onHistory={openHist} />)}
+                  {list.map((e, i) => <MatchMini key={e.id} e={e} first={i === 0} alt={i % 2 === 1} tourBar={tourBarOf(e)} past={past} tournament={!past && view !== 'court' && manyTournaments ? e.tournament_name : null} venueMode={venueMode} venueTz={venueTzOf(e)} onHistory={openHist} />)}
                 </View>
               )
               : compact
@@ -726,27 +729,37 @@ function rowColumns(list, past, innerW) {
    hairline between matches and no chrome — as many matches on a screen as
    the box score allows (owner, 2026-09-17). A started match opens its
    history on a tap, as the card does. */
-function MatchMini({ e, first, alt, tourBar, past, venueMode, venueTz, onHistory }) {
+/* A TAG ON THE LINE between matches (owner, 2026-09-17): cut into it by two
+   half backgrounds - the row above's over the top half, this row's under the
+   bottom - so the zebra stays honest on both sides. The first row's line is
+   the card's own edge, which clips, so its tag sits inside. */
+function LineTag({ first, alt, right, children }) {
+  return (
+    <View style={[s.miniTag, right ? s.miniTagRight : s.miniTagLeft, first && s.miniTagFirst]} pointerEvents="none">
+      <View style={[s.miniTagHalf, { top: 0, backgroundColor: first || alt ? C.card : C.raised }]} />
+      <View style={[s.miniTagHalf, { bottom: 0, backgroundColor: alt ? C.raised : C.card }]} />
+      <Text style={s.rowWhen} numberOfLines={1}>{children}</Text>
+    </View>
+  )
+}
+
+function MatchMini({ e, first, alt, tourBar, past, tournament, venueMode, venueTz, onHistory }) {
   const openable = onHistory && ['live', 'completed', 'postponed', 'to_be_completed'].includes(e.status)
   const Wrap = openable ? Pressable : View
-  /* THE START TIME ON THE TOP BORDER, towards the left (owner, 2026-09-17):
-     a tag straddling the line between matches, cut into it by two half
-     backgrounds — the row above's over the top half, this row's under the
-     bottom — so the zebra stays honest on both sides. The first row's line
-     is the card's own edge, which clips, so its tag sits inside. A past day
-     is a record: no clock. */
+  /* THE START TIME ON THE TOP BORDER, towards the left (owner, 2026-09-17),
+     for an upcoming match; a past day is a record: no clock. THE TOURNAMENT
+     on the same line, far right, when the page mixes tournaments (owner,
+     2026-09-17) - the past day groups by tournament instead, the court view
+     heads each tournament's courts. */
   const when = past || hasStarted(e) ? '' : rowWhen(e, venueMode ? venueTz : undefined, venueMode)
+  const tagged = Boolean(when || tournament)
   return (
-    <Wrap style={[s.miniRow, !first && s.miniNext, first && when && s.miniFirstWhen, alt && s.rowAlt]} onPress={openable ? () => onHistory(e) : undefined}
-          accessibilityRole={openable ? 'button' : undefined} accessibilityLabel={when ? `${when} ${matchLine(e).names}` : undefined}>
+    <Wrap style={[s.miniRow, !first && s.miniNext, first && tagged && s.miniFirstWhen, alt && s.rowAlt]} onPress={openable ? () => onHistory(e) : undefined}
+          accessibilityRole={openable ? 'button' : undefined}
+          accessibilityLabel={tagged ? [when, matchLine(e).names, tournament].filter(Boolean).join(' ') : undefined}>
       {tourBar ? <View style={[s.rowBar, { backgroundColor: tourBar }]} /> : null}
-      {when ? (
-        <View style={[s.miniWhen, first && s.miniWhenFirst]} pointerEvents="none">
-          <View style={[s.miniWhenHalf, { top: 0, backgroundColor: first || alt ? C.card : C.raised }]} />
-          <View style={[s.miniWhenHalf, { bottom: 0, backgroundColor: alt ? C.raised : C.card }]} />
-          <Text style={s.rowWhen}>{when}</Text>
-        </View>
-      ) : null}
+      {when ? <LineTag first={first} alt={alt}>{when}</LineTag> : null}
+      {tournament ? <LineTag first={first} alt={alt} right>{tournament}</LineTag> : null}
       <MatchCard e={e} scale={0.8} badges={!(past && e.discipline !== 'singles')} />
     </Wrap>
   )
@@ -1005,9 +1018,11 @@ const s = StyleSheet.create({
   miniRow: { paddingHorizontal: 8, paddingTop: 6, paddingBottom: 5 },
   miniFirstWhen: { paddingTop: 13 },
   // 16 tall, centred on the 2px line above: 8 above it, 8 below.
-  miniWhen: { position: 'absolute', left: 10, top: -9, height: 16, paddingHorizontal: 4, justifyContent: 'center', zIndex: 1 },
-  miniWhenFirst: { top: 0 },
-  miniWhenHalf: { position: 'absolute', left: 0, right: 0, height: 8 },
+  miniTag: { position: 'absolute', top: -9, height: 16, paddingHorizontal: 4, justifyContent: 'center', zIndex: 1, maxWidth: '55%' },
+  miniTagLeft: { left: 10 },
+  miniTagRight: { right: 10 },
+  miniTagFirst: { top: 0 },
+  miniTagHalf: { position: 'absolute', left: 0, right: 0, height: 8 },
   // A clear rule between matches (owner, 2026-09-17): two lines of box score
   // per match need a firmer division than the list's hairline.
   miniNext: { borderTopWidth: 2, borderTopColor: C.borderLit },
