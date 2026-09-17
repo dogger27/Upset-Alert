@@ -3,7 +3,7 @@
 // hold on any machine: the "device" is Los Angeles, the venue New York.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { byTimeOfDay, footTime, whenLabel, isLive, isSuspended, startedFirst, rowWhen } from './schedule.js'
+import { byTimeOfDay, footTime, whenLabel, isLive, isSuspended, startedFirst, rowWhen, hasStarted } from './schedule.js'
 
 const LA = 'America/Los_Angeles', NY = 'America/New_York'
 const fixed = { status: 'scheduled', start_type: 'fixed', start_time_local: '11:00 AM',
@@ -128,4 +128,12 @@ test('rowWhen: the clock alone — no "Started at", no "Not before", no "~"', ()
   assert.equal(rowWhen({ status: 'live', started_at: at }, zone, false), '6:30 PM')
   assert.equal(rowWhen({ status: 'scheduled', expected_start_at: at, expected_source: 'estimated' }, zone, false), '6:30 PM')
   assert.equal(rowWhen({ status: 'scheduled' }, zone, false), 'TBA')   // the sheet's word for a slot with no clock
+})
+
+test('hasStarted: live or over; a carried, postponed or waiting match has not', () => {
+  assert.equal(hasStarted({ status: 'live' }), true)
+  assert.equal(hasStarted({ status: 'live', suspended: true }), true)
+  assert.equal(hasStarted({ status: 'completed' }), true)
+  for (const status of ['scheduled', 'to_be_completed', 'postponed']) assert.equal(hasStarted({ status }), false)
+  assert.equal(hasStarted(null), false)
 })

@@ -435,9 +435,12 @@ export function whenLabel(e) {
    match that is on court or over rises above the ones still waiting, each
    half keeping its chronology. Live is the server's word (a suspended match
    is still 'live'); a carried match waits with the rest. Stable. */
+export function hasStarted(e) {
+  return e?.status === 'live' || e?.status === 'completed'
+}
+
 export function startedFirst(entries) {
-  const started = e => e.status === 'live' || e.status === 'completed'
-  return [...entries.filter(started), ...entries.filter(e => !started(e))]
+  return [...entries.filter(hasStarted), ...entries.filter(e => !hasStarted(e))]
 }
 
 export function byTimeOfDay(entries) {
