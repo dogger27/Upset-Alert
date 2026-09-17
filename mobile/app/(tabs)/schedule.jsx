@@ -41,6 +41,7 @@ import { dayLabels, relativeDayWord } from '../../dayLabels'
 import { rowInTournaments } from '../../scheduleRows'
 import { MatchCard } from '../../scorecard'
 import { matchLine } from '../../matchLine'
+import { courtGroups } from '../../courtGroups'
 import { textWidth } from '../../measure'
 import { bestLeftColumn } from '../../nameColumns'
 import { groupPastDay } from '../../pastGroups'
@@ -374,36 +375,9 @@ export default function ScheduleScreen() {
   }, [all, view, showDoubles, tourSel, eventFilter, tourChips, doneOn])
 
   const groups = useMemo(() => {
-    if (view === 'court') {
-      const by = new Map()
-      for (const e of visible) {
-        const k = e.court || 'Court TBA'
-        if (!by.has(k)) by.set(k, [])
-        by.get(k).push(e)
-      }
-      for (const list of by.values()) {
-        list.sort((a, b) => (a.court_order ?? 99) - (b.court_order ?? 99))
-      }
-      // The site's rule: courts are ordered by the best seed playing on them,
-      // so the show courts rise to the top without hardcoding venue names —
-      // every tournament calls its main court something different. Then by
-      // how many matches a court hosts, then name. Singles only: a doubles
-      // [1] says nothing next to a singles [1]. A finite sentinel, not
-      // Infinity — two unseeded courts would compare as NaN and a NaN
-      // comparator leaves the array in whatever order it started.
-      const NO_SEED = 9999
-      const ranked = [...by.entries()].map(([name, list]) => {
-        let best = NO_SEED, count = 0
-        for (const e of list) {
-          if (e.discipline !== 'singles') continue
-          count += 1
-          for (const p of e.players || []) if (p.seed != null && p.seed < best) best = p.seed
-        }
-        return { name, list, best, count }
-      })
-      ranked.sort((a, b) => a.best - b.best || b.count - a.count || a.name.localeCompare(b.name))
-      return ranked.map(r => ({ key: r.name, court: r.name, list: r.list }))
-    }
+    // Court: one group per court, by tournament when more than one is showing
+    // (owner, 2026-09-17) -- courtGroups.js, on its own suite.
+    if (view === 'court') return courtGroups(visible)
 
     // Time: a chronology of the day, the site's rule exactly — see
     // byTimeOfDay in schedule.js (a row with no time at all goes last).
