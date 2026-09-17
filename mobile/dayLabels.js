@@ -17,3 +17,17 @@ export function dayLabels(dates, mainStart) {
   }
   return out
 }
+
+/* The chosen day's name in the strip's right slot: "Today" and "Yester." for
+ * the two days a reader has a word for, the date for every other — the
+ * owner's wording, short enough for the slot (2026-09-17). Both dates are
+ * plain YYYY-MM-DD in the DEVICE's calendar (the schedule's rule: the zone
+ * is the device), so this is string arithmetic on days, no zones involved. */
+export function relativeDayWord(iso, todayIso) {
+  if (!iso || !todayIso) return null
+  if (iso === todayIso) return 'Today'
+  const t = new Date(todayIso + 'T12:00:00Z')
+  t.setUTCDate(t.getUTCDate() - 1)
+  if (iso === t.toISOString().slice(0, 10)) return 'Yester.'
+  return null
+}

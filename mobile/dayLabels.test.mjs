@@ -1,6 +1,6 @@
 /* node dayLabels.test.mjs */
 import assert from 'node:assert/strict'
-import { dayLabels } from './dayLabels.js'
+import { dayLabels, relativeDayWord } from './dayLabels.js'
 
 const labels = (dates, main) => dayLabels(dates, main).map(d => d.label)
 
@@ -37,5 +37,16 @@ assert.deepEqual(labels(['2026-09-12', '2026-09-13'], undefined), ['1', '2'])
 
 // The date rides along with its label.
 assert.deepEqual(dayLabels(['2026-09-12'], '2026-09-13'), [{ date: '2026-09-12', label: 'Q1' }])
+
+
+// The slot's word: today, yesterday, and nothing for any other day — across a
+// month end and a year end, since it is day arithmetic, not string maths.
+assert.equal(relativeDayWord('2026-09-17', '2026-09-17'), 'Today')
+assert.equal(relativeDayWord('2026-09-16', '2026-09-17'), 'Yester.')
+assert.equal(relativeDayWord('2026-09-15', '2026-09-17'), null)
+assert.equal(relativeDayWord('2026-09-18', '2026-09-17'), null)     // tomorrow has no word
+assert.equal(relativeDayWord('2026-08-31', '2026-09-01'), 'Yester.')
+assert.equal(relativeDayWord('2025-12-31', '2026-01-01'), 'Yester.')
+assert.equal(relativeDayWord(undefined, '2026-09-17'), null)
 
 console.log('ok — dayLabels')
