@@ -491,6 +491,33 @@ def _unclaim(entry) -> None:
     entry.scores_json = None
     entry.status = "scheduled"
 
+def doubles_queries(their_name: str, our_name: Optional[str]) -> list:
+    """The searches that find a doubles event, in order.
+
+    Sofascore's newer names carry the discipline: the SP Open is
+    "WTA Sao Paulo, Brazil Women, Singles", and a search for that whole
+    string returns the singles entry alone — the doubles never surfaced and
+    the resolver gave up in silence (2026-09-17). So: the name with its
+    ", Singles" swapped for ", Doubles" (the doubles event's own name, when
+    they follow the pattern), then the name with the suffix stripped (both
+    disciplines come back together), then our own name as a last resort.
+    Older names ("Guadalajara Open") have no suffix and go through unchanged.
+    """
+    base = (their_name or "").split("(")[0].strip()
+    out = []
+    if base:
+        stripped = re.sub(r",?\s*singles\s*$", "", base, flags=re.I).strip()
+        if stripped != base:
+            out.append(f"{stripped}, Doubles")
+            out.append(stripped)
+        else:
+            out.append(base)
+    ours = (our_name or "").split("(")[0].strip()
+    if ours and ours not in out:
+        out.append(ours)
+    return out
+
+
 async def _doubles_ids(db, draw: Draw, tournament: Tournament) -> Optional[tuple]:
     """(unique_tournament_id, season_id) for this draw's DOUBLES event.
 
@@ -519,19 +546,31 @@ async def _doubles_ids(db, draw: Draw, tournament: Tournament) -> Optional[tuple
                       or (tournament.name or ""))
     except Exception:
         their_name = tournament.name or ""
-    base = their_name.split("(")[0].strip()
-    if not base:
+    queries = doubles_queries(their_name, tournament.name)
+    if not queries:
         return None
-    payload = await _get(f"/search/unique-tournaments?q={quote(base)}")
     cand = None
-    for row in payload.get("results", []):
-        ent = row.get("entity", {})
-        name = ent.get("name") or ""
-        cat = (ent.get("category") or {}).get("name")
-        if "doubles" in name.lower() and cat == want_cat:
-            cand = ent.get("id")
+    seen = []
+    for q in queries:
+        payload = await _get(f"/search/unique-tournaments?q={quote(q)}")
+        for row in payload.get("results", []):
+            ent = row.get("entity", {})
+            name = ent.get("name") or ""
+            cat = (ent.get("category") or {}).get("name")
+            seen.append(f"{ent.get('id')} {name} [{cat}]")
+            if "doubles" in name.lower() and cat == want_cat:
+                cand = ent.get("id")
+                break
+        if cand:
             break
     if not cand:
+        # SAY SO. This returned None in silence, and SP Open played a week of
+        # doubles with no scores before anyone asked why (owner, 2026-09-17).
+        await app_log("warning", "sofascore_doubles",
+                      f"No doubles event found on Sofascore for {tournament.name} {draw.gender} "
+                      f"— its doubles will carry no scores",
+                      detail={"draw_id": draw.id, "queries": queries, "seen": seen[:12]},
+                      dedup_key=f"sofa_doubles_unresolved:{draw.id}", dedup_hours=24)
         return None
 
     seasons = await _get(f"/unique-tournament/{cand}/seasons")
