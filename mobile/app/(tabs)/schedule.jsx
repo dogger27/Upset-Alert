@@ -29,7 +29,7 @@ import { hideFromLockScreen, showMatchOnLockScreen, useShowingOnLockScreen } fro
 import { showToast } from '../../toast'
 import { useLiveUpdates } from '../../live'
 import { useApi } from '../../useApi'
-import { byTimeOfDay, footTime, isLive, isSuspended, matchFromEntry, rowClock, rowWhen, sideFlags, startedFirst, whenLabel } from '../../schedule'
+import { byTimeOfDay, footTime, isLive, isSuspended, hasStarted, matchFromEntry, rowClock, rowWhen, sideFlags, startedFirst, whenLabel } from '../../schedule'
 import { leading } from '../../fontScale.js'
 import { FitText, FlagSlot, TourBadge } from '../../cards'
 import { setScheduleTournaments, useScheduleTournaments } from '../../scheduleFilter'
@@ -735,7 +735,7 @@ function MatchMini({ e, first, alt, tourBar, past, venueMode, venueTz, onHistory
      bottom — so the zebra stays honest on both sides. The first row's line
      is the card's own edge, which clips, so its tag sits inside. A past day
      is a record: no clock. */
-  const when = past ? '' : rowWhen(e, venueMode ? venueTz : undefined, venueMode)
+  const when = past || hasStarted(e) ? '' : rowWhen(e, venueMode ? venueTz : undefined, venueMode)
   return (
     <Wrap style={[s.miniRow, !first && s.miniNext, first && when && s.miniFirstWhen, alt && s.rowAlt]} onPress={openable ? () => onHistory(e) : undefined}
           accessibilityRole={openable ? 'button' : undefined} accessibilityLabel={when ? `${when} ${matchLine(e).names}` : undefined}>
@@ -770,7 +770,9 @@ function MatchRow({ e, first, alt, tourBar, past, leftW, venueMode, venueTz, onH
   // "Resumed at", "Not before" — are the card's, and so is the "~" of an
   // estimate; this column keeps the time and nothing else. The estimate is
   // still said, in the accessibility label.
-  const when = String(clock.text || '').replace(/^[A-Za-z][A-Za-z ]* at /, '').replace(/^Not before /i, '').replace(/^~+/, '')
+  // UPCOMING MATCHES ONLY (owner, 2026-09-17): once a match is on court or
+  // over, the clock slot goes quiet even when there is no score to lead with.
+  const when = hasStarted(e) ? '' : rowWhen(e, venueMode ? venueTz : undefined, venueMode)
   const openable = onHistory && ['live', 'completed', 'postponed', 'to_be_completed'].includes(e.status)
   const Wrap = openable ? Pressable : View
   return (
