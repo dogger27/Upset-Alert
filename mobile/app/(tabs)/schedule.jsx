@@ -607,7 +607,10 @@ export default function ScheduleScreen() {
             {/* Tight on the round beneath it: the heading's own line box plus
                 the group's gap read as a hole, so the gap is taken back. */}
             {title ? <FitText style={[(compact ? TOURN_SMALL : TOURN).style, s.tournHead]} track={(compact ? TOURN_SMALL : TOURN).track} min={9}>{title.toUpperCase()}</FitText> : null}
-            {sub ? <Text style={SUB.style}>{sub}</Text> : null}
+            {/* Tight above and below (owner, 2026-09-17): the list's gap and the
+                group's margin stacked to 20pt over the round, and the gap under
+                it read as a hole before the card. */}
+            {sub ? <Text style={[SUB.style, s.subHead, !title && s.subHeadFirst]}>{sub}</Text> : null}
             {/* A COURT NAME IS ONE LINE, WHATEVER ITS LENGTH — "Quadra Central
                 Maria Esther Bueno" wrapped to two (owner, 2026-09-17). The same
                 eyebrow, through the measuring fitter: shrunk as far as it must,
@@ -928,6 +931,8 @@ const TOURN_SMALL = eyebrowType({ size: 18, color: C.clayLight })
 const s = StyleSheet.create({
   courtHead: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
   tournHead: { marginBottom: -(S.sm - 2) },
+  subHead: { marginBottom: -(S.sm - 3) },          // 3pt to the card beneath
+  subHeadFirst: { marginTop: -(S.sm + 2) },        // 10pt from the card above, not 20
   courtEdit: { paddingHorizontal: 4, paddingVertical: 2 },
   // The scroll body's own gap and growth, restated: the wrapper took its children.
   swipeBody: { flexGrow: 1, gap: S.md },
