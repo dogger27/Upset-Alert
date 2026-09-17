@@ -12,10 +12,12 @@
  * has to be above the fold rather than sorted correctly.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams } from 'expo-router'
 import { Alert, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
+import { Gesture, GestureDetector } from 'react-native-gesture-handler'
+import { scheduleOnRN } from 'react-native-worklets'
 import { getScheduleDates, getScheduleDay, listTournaments } from '../../api'
 import { useAuth } from '../../auth'
 import { ChampionFanfare, TierFx } from '../../fx'
@@ -33,6 +35,7 @@ import { TourBadge } from '../../cards'
 import { setScheduleTournaments, useScheduleTournaments } from '../../scheduleFilter'
 import { useChoosableTournaments } from '../../choosableTournaments'
 import { DayStrip } from '../../DayStrip'
+import { SWIPE_PX, SWIPE_VX, swipeStep } from '../../swipeDay'
 import { dayLabels } from '../../dayLabels'
 import { rowInTournaments } from '../../scheduleRows'
 import { MatchCard } from '../../scorecard'
@@ -182,7 +185,9 @@ export default function ScheduleScreen() {
      call answers with every date on record, which is the bug above. */
   const dates = useApi(scope?.length ? `schedule-dates:${scopeKey}` : null,
                        () => getScheduleDates(scope), { enabled: !!scope?.length })
-  const available = dates.data?.dates || []
+  // Memoised on the answer: `|| []` is a fresh array per render otherwise,
+  // and the swipe's step callback keys on it.
+  const available = useMemo(() => dates.data?.dates || [], [dates.data])
   /* Q1, Q2, 1, 2 … for the strip: the sheet days before the first main-draw
      singles day, then the count from it. Memoised on the answer, not on
      `available`, which is a fresh array whenever there is no answer yet. */
@@ -198,6 +203,30 @@ export default function ScheduleScreen() {
     ? pinned
     : landingDay(available, dates.data?.open_counts || {}, asked)
   const idx = available.indexOf(date)
+  /* SWIPE ANYWHERE TO CHANGE THE DAY. A sideways drag on the page — the
+     cards, the empty space, the header — steps one day: left for the next,
+     right for the one before, and the strip slides its chip to the centre
+     to show it. The pan is axis-locked the way the draw page's scrub is (12pt
+     sideways to activate, 8pt vertical to fail), so the list still scrolls
+     and pulls to refresh, and it WAITS FOR THE STRIP'S OWN PAN TO FAIL, so
+     a drag that starts on the strip scrolls the strip and turns no page.
+     The decision is made on release — distance or a flick — so a drag that
+     comes back to where it started changes nothing. */
+  const stepDay = useCallback((delta) => {
+    const i = available.indexOf(date)
+    const j = i + delta
+    if (i >= 0 && j >= 0 && j < available.length) setPinned(available[j])
+  }, [available, date])
+  const stripPan = useRef(null)
+  const dayPan = useMemo(() => Gesture.Pan()
+    .requireExternalGestureToFail(stripPan)
+    .activeOffsetX([-12, 12])
+    .failOffsetY([-8, 8])
+    .onEnd((ev) => {
+      'worklet'
+      const delta = swipeStep(ev.translationX, ev.velocityX, SWIPE_PX, SWIPE_VX)
+      if (delta) scheduleOnRN(stepDay, delta)
+    }), [stepDay])
   const day = useApi(`schedule:${date}`, () => getScheduleDay(date))
   /* Refetch the day whenever any tournament on it changes — the site's rule.
      A day can span two tournaments, and subscribing to only the first would
@@ -355,10 +384,15 @@ export default function ScheduleScreen() {
 
   return (
     <>
-      <Screen onRefresh={refetch}>
+      {/* touchAction pan-y: on web the browser must not pan sideways under the
+          gesture (nothing here scrolls sideways but the strip, which has its
+          own). The View is the detector's native child; Screen is a component. */}
+      <GestureDetector gesture={dayPan} touchAction="pan-y">
+      <View style={s.swipeHost} collapsable={false}>
+      <Screen onRefresh={refetch} touchAction="pan-y pinch-zoom">
         {/* THE DAYS, as chips; the chosen one's date is written out on the
             line below, where it has always been. */}
-        {days.length > 0 && <DayStrip days={days} active={date} onPick={setPinned} />}
+        {days.length > 0 && <DayStrip days={days} active={date} onPick={setPinned} panRef={stripPan} />}
         <View style={s.bar}>
           <Pressable
             onPress={() => idx > 0 && setPinned(available[idx - 1])}
@@ -524,6 +558,8 @@ export default function ScheduleScreen() {
           </View>
         ))}
       </Screen>
+      </View>
+      </GestureDetector>
       {champion && <ChampionFanfare key={champion} width={screenW} />}
       <H2HSheet visible={!!h2h} onClose={() => setH2H(null)} a={h2h?.a} b={h2h?.b} />
       {/* drawId comes off the ROW, not the page: the schedule mixes the men's
@@ -698,6 +734,7 @@ function prettyDate(iso) {
 }
 
 const s = StyleSheet.create({
+  swipeHost: { flex: 1 },
   bar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: S.md },
   dateBox: { alignItems: 'center' },
   arrow: {
