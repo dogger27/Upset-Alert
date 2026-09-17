@@ -714,8 +714,13 @@ function MatchRow({ e, first, past, venueMode, venueTz, onHistory }) {
           <Text style={s.rowVerb}>{verb}</Text>
           <FitText style={[s.rowNames, decided && s.rowNamesDone]} min={9} align="center">{right}</FitText>
         </View>
-        {!!score && <Text style={[s.rowScore, live && s.rowScoreLive]} numberOfLines={1}>{score}</Text>}
+        {/* Today and ahead: the score on its own line under the verb. */}
+        {!past && !!score && <Text style={[s.rowScore, live && s.rowScoreLive]} numberOfLines={1}>{score}</Text>}
       </View>
+      {/* A past day: the score on the names' own line, at the row's right
+          (owner, 2026-09-17) — the columns it would have shared the row with
+          are gone there, so the width is spare. */}
+      {past && !!score && <Text style={[s.rowScore, s.rowScoreRight, live && s.rowScoreLive]} numberOfLines={1}>{score}</Text>}
     </Wrap>
   )
 }
@@ -896,6 +901,7 @@ const s = StyleSheet.create({
   // so the field's centre is the verb's), in a darker green — lit when live.
   rowScore: { fontFamily: 'Archivo_700Bold', fontSize: 12, color: C.greenMid, marginTop: 1, textAlign: 'center', fontVariant: ['tabular-nums'] },
   rowScoreLive: { color: C.greenLit },
+  rowScoreRight: { flexShrink: 0, marginTop: 0, marginLeft: 6, textAlign: 'right' },
   /* flex-end, not center. The left side is TWO lines — court above time — so
      centring left the buttons floating on the seam between them, level with
      neither. Bottom-aligned they sit on the time, which is the line they are
