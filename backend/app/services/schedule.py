@@ -731,6 +731,28 @@ def _queue_verification(doc, tournament, play_date, url, pdf_bytes, entries):
             "could not queue OOP verification for doc %s", doc.id)
 
 
+def _pull_level(parse_violations) -> str:
+    """The level a pulled-slot line logs at.
+
+    A tournament taking a match off its sheet is ORDINARY — rain reissues, a
+    withdrawal, a supervisor pulling a doubles whose player is on Central —
+    and `_retire_pulled_slots` only ever deletes a row it has proven unplayed.
+    The one thing that looks identical from here is the PARSER losing a box
+    the sheet still prints, and that case is not invisible: `check_parse`
+    counts the sheet's own 'vs' lines against what the parse produced
+    (`vs_lines_exceed_matches`), off the raw cells, before any rule has an
+    opinion. So the line is `info` when the parse was clean — the sheet and
+    the parser agree, the pull is the tour's — and `warning` when it was not,
+    which is the only case that needs eyes.
+
+    It was `warning` unconditionally, and that woke the self-healing watcher
+    four times in two days for four pulls it verified and correctly changed
+    nothing about (owner, 2026-09-17). An alarm for a state the system passes
+    through on its own is noise, and the fix is to stop it firing.
+    """
+    return "warning" if parse_violations else "info"
+
+
 async def _log_parse_violations(tournament, play_date, violations: list) -> None:
     """A slot the parse threw away, in the admin log where a person will see it.
 
@@ -854,16 +876,18 @@ async def ingest_document(db, tournament, play_date: date, url: str,
                 await _renumber_courts(db, tournament.id, play_date)
         await db.commit()
         if pulled:
-            # Same level and the same reason as the pull log in the tail of
-            # this function, and after the commit for the same reason too
-            # (`app_log` opens its own session; SQLite has one writer).
+            # Same level rule and the same reason as the pull log in the tail
+            # of this function (`_pull_level`), and after the commit for the
+            # same reason too (`app_log` opens its own session; SQLite has
+            # one writer).
             from app.services.system_log import app_log
             await app_log(
-                "warning", "order_of_play",
+                _pull_level(parse_violations), "order_of_play",
                 f"{len(pulled)} slot(s) pulled from {tournament.name} on "
                 f"{play_date} by document {doc.id} — the sheet is blank",
                 {"tournament_id": tournament.id, "play_date": str(play_date),
                  "document_id": doc.id, "blank_sheet": True,
+                 "parse_clean": not parse_violations,
                  "pulled": pulled[:20]})
         await _log_parse_violations(tournament, play_date, parse_violations)
         if queue_verify:
@@ -1189,10 +1213,11 @@ async def ingest_document(db, tournament, play_date: date, url: str,
              "renamed": [[o, n] for o, n in renamed[:20]]})
 
     if pulled:
-        # WARNING, not info, and the level is the point. A tournament taking a
-        # match off the sheet is ordinary — but a slot the PARSER stopped
-        # seeing is indistinguishable from it here, and this line is the only
-        # record that a row left the page.
+        # INFO WHEN THE PARSE WAS CLEAN, WARNING WHEN IT WAS NOT — `_pull_level`.
+        # A tournament taking a match off the sheet is ordinary; a slot the
+        # PARSER stopped seeing would look the same here, and `check_parse`
+        # is what tells them apart. Either way this line is the only record
+        # that a row left the page, so it is always written.
         #
         # THE SLOTS GO IN THE DETAIL, NEVER IN THE MESSAGE, and "rare enough to
         # be worth reading" is why that matters: it was one slot a month until
@@ -1211,11 +1236,12 @@ async def ingest_document(db, tournament, play_date: date, url: str,
         # After the commit, for the reason above `renamed`.
         from app.services.system_log import app_log
         await app_log(
-            "warning", "order_of_play",
+            _pull_level(parse_violations), "order_of_play",
             f"{len(pulled)} slot(s) pulled from {tournament.name} on "
             f"{play_date} by document {doc.id}",
             {"tournament_id": tournament.id, "play_date": str(play_date),
-             "document_id": doc.id, "pulled": pulled[:20]})
+             "document_id": doc.id, "parse_clean": not parse_violations,
+             "pulled": pulled[:20]})
 
     # AFTER the commit, in this order: the LAW first, then the verifier queue.
     # The invariants (schedule_invariants.py) are the deterministic record of
