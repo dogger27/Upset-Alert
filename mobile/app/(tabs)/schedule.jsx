@@ -121,7 +121,9 @@ export default function ScheduleScreen() {
   const [predictors, setPredictors] = useState(null)
   const [view, setView] = useState('time')
   // The compact list: one match, one row (owner, 2026-09-17). Session-only, like the switches above.
-  const [compact, setCompact] = useState(false)
+  const [density, setDensity] = useState('cards')   // 'cards' | 'mid' | 'list' — the button cycles
+  const compact = density === 'list'
+  const dense = density !== 'cards'
   // The court being renamed by an admin: { tournament_id, court_key, current }, or null.
   const [renaming, setRenaming] = useState(null)
 
@@ -573,10 +575,14 @@ export default function ScheduleScreen() {
           {/* THE LIST: one match, one row — time, round, the surnames with
               "vs" or "def.", the score. Far right, an icon, so it reads as a
               view switch rather than another filter. */}
-          <Pressable onPress={() => setCompact(v => !v)} style={[s.chip, s.chipIcon, compact && s.chipOn]}
+          <Pressable onPress={() => setDensity(d => (d === 'cards' ? 'mid' : d === 'mid' ? 'list' : 'cards'))}
+                     style={[s.chip, s.chipIcon, dense && s.chipOn]}
                      hitSlop={6} accessibilityRole="button" accessibilityLabel="Compact list"
-                     accessibilityState={{ selected: compact }}>
-            <Ionicons name="list" size={19} color={compact ? '#fff' : C.muted} />
+                     accessibilityState={{ selected: dense }} accessibilityValue={{ text: density }}>
+            {/* Three densities, one button (owner, 2026-09-17): cards, the
+                card's two lines with hairlines between matches, one-line
+                rows. The glyph says where you are. */}
+            <Ionicons name={density === 'list' ? 'list' : density === 'mid' ? 'reorder-three' : 'reorder-four'} size={19} color={dense ? '#fff' : C.muted} />
           </Pressable>
         </View>
 
@@ -606,7 +612,7 @@ export default function ScheduleScreen() {
           <View key={key} style={s.group}>
             {/* Tight on the round beneath it: the heading's own line box plus
                 the group's gap read as a hole, so the gap is taken back. */}
-            {title ? <FitText style={[(compact ? TOURN_SMALL : TOURN).style, s.tournHead]} track={(compact ? TOURN_SMALL : TOURN).track} min={9}>{title.toUpperCase()}</FitText> : null}
+            {title ? <FitText style={[(dense ? TOURN_SMALL : TOURN).style, s.tournHead]} track={(dense ? TOURN_SMALL : TOURN).track} min={9}>{title.toUpperCase()}</FitText> : null}
             {/* Tight above and below (owner, 2026-09-17): the list's gap and the
                 group's margin stacked to 20pt over the round, and the gap under
                 it read as a hole before the card. */}
@@ -618,7 +624,7 @@ export default function ScheduleScreen() {
                 that is drawn. */}
             {court ? (
               <View style={s.courtHead}>
-                <FitText style={(compact ? COURT_SMALL : COURT).style} track={(compact ? COURT_SMALL : COURT).track} min={9}>{court.toUpperCase()}</FitText>
+                <FitText style={(dense ? COURT_SMALL : COURT).style} track={(dense ? COURT_SMALL : COURT).track} min={9}>{court.toUpperCase()}</FitText>
                 {/* ADMINS RENAME A COURT FROM HERE (owner, 2026-09-17): the
                     pencil after the name opens the sheet; the name it sets is
                     the court's everywhere the schedule is served. The sheet's
@@ -632,7 +638,13 @@ export default function ScheduleScreen() {
                 )}
               </View>
             ) : null}
-            {compact
+            {density === 'mid'
+              ? (
+                <View style={s.rows}>
+                  {list.map((e, i) => <MatchMini key={e.id} e={e} first={i === 0} onHistory={openHist} />)}
+                </View>
+              )
+              : compact
               ? (
                 <View style={s.rows}>
                   {list.map((e, i) => <MatchRow key={e.id} e={e} first={i === 0} past={past} {...rowColumns(list, past, screenW - 2 * S.sm - 2 * 8 - 2)} venueMode={venueMode} venueTz={venueTzOf(e)} onHistory={openHist} />)}
@@ -723,6 +735,21 @@ function rowColumns(list, past, innerW) {
     }
   })
   return { leftW: bestLeftColumn(rows) + 1 }
+}
+
+/* THE MID DENSITY: the card's own two lines and box score, at 0.8, with a
+   hairline between matches and no chrome — as many matches on a screen as
+   the box score allows (owner, 2026-09-17). A started match opens its
+   history on a tap, as the card does. */
+function MatchMini({ e, first, onHistory }) {
+  const openable = onHistory && ['live', 'completed', 'postponed', 'to_be_completed'].includes(e.status)
+  const Wrap = openable ? Pressable : View
+  return (
+    <Wrap style={[s.miniRow, !first && s.rowNext]} onPress={openable ? () => onHistory(e) : undefined}
+          accessibilityRole={openable ? 'button' : undefined}>
+      <MatchCard e={e} scale={0.8} />
+    </Wrap>
+  )
 }
 
 /* ONE MATCH, ONE ROW — the compact list. The clock the card would print
@@ -964,6 +991,7 @@ const s = StyleSheet.create({
   rows: { borderRadius: R.md, borderWidth: 1, borderColor: C.border, backgroundColor: C.card, overflow: 'hidden', marginHorizontal: -(S.lg - S.sm) },
   row: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 5, minHeight: leading(34) },
   rowNext: { borderTopWidth: 1, borderTopColor: C.border },
+  miniRow: { paddingHorizontal: 8, paddingVertical: 5 },
   rowWhenSlot: { width: 58, flexDirection: 'row' },
   // The clock's and the round's columns together, for a score in their place.
   rowLeadSlot: { width: 58 + 5 + 30, flexDirection: 'row' },
