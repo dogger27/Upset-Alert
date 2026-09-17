@@ -222,6 +222,10 @@ export default function ScheduleScreen() {
   const date = (pinned && available.includes(pinned))
     ? pinned
     : landingDay(available, dates.data?.open_counts || {}, asked)
+  /* A DAY BEFORE TODAY is a record: every match on it is over, so Completed
+     is always on and its switch is not offered (owner, 2026-09-17). */
+  const past = date < today()
+  const doneOn = past || showDone
   /* SWIPE ANYWHERE TO CHANGE THE DAY. A sideways drag on the page — the
      cards, the empty space, the header — steps one day: left for the next,
      right for the one before, and the strip slides its chip to the centre
@@ -288,7 +292,7 @@ export default function ScheduleScreen() {
       if (!e.tour) continue
       if (!rowInTournaments(e, eventFilter)) continue
       if (e.discipline !== 'singles' && !showDoubles) continue
-      if (!showDone && (e.status === 'completed' || e.status === 'postponed')) continue
+      if (!doneOn && (e.status === 'completed' || e.status === 'postponed')) continue
       seen.add(e.tour)
     }
     return [...seen].sort()
@@ -309,7 +313,7 @@ export default function ScheduleScreen() {
   const hasDoubles = useMemo(() => all.some(e =>
     e.discipline !== 'singles'
     && rowInTournaments(e, eventFilter)
-    && (showDone || (e.status !== 'completed' && e.status !== 'postponed'))
+    && (doneOn || (e.status !== 'completed' && e.status !== 'postponed'))
   ), [all, eventFilter, showDone])
   /* SEEDED ONCE PER DAY, NOT PER FETCH. This ran on `day.data`, whose identity
      changes on every poll — and the live subscription refetches this screen
@@ -350,7 +354,7 @@ export default function ScheduleScreen() {
       // "Completed" off means no longer upcoming on this day — the site's
       // rule: a match postponed off today's sheet leaves with the finished ones,
       // so what remains is on court now or still waiting to get there.
-      if (!showDone && (e.status === 'completed' || e.status === 'postponed')) return false
+      if (!doneOn && (e.status === 'completed' || e.status === 'postponed')) return false
       if (view === 'time' && tourChips && tourSel && e.tour && !tourSel.has(e.tour)) return false
       // THE TOURNAMENTS THE TAB ASKED ABOUT. Applied in BOTH views, unlike
       // the tour chips: those are a control on this screen and the court view
@@ -400,7 +404,7 @@ export default function ScheduleScreen() {
        than one is showing, singles before doubles, then by round — the
        chronology kept inside each group. Today and the days ahead stay a
        running order. pastGroups.js, on its own suite. */
-    if (date < today()) {
+    if (past) {
       const byTournament = new Set(chrono.map(e => e.tournament_id)).size > 1
       // "Singles" is said only when there is doubles on the page to tell it
       // from — Doubles off, or a day with none, is rounds alone (owner).
@@ -413,7 +417,7 @@ export default function ScheduleScreen() {
       }))
     }
     return [{ key: 'all', list: chrono }]
-  }, [visible, view, date])
+  }, [visible, view, past])
 
   const refetch = () => { day.refetch(); dates.refetch() }
   /* ON COURT HERE, not on court anywhere. It counted the whole day's rows, so
@@ -554,10 +558,12 @@ export default function ScheduleScreen() {
               <Text style={[s.chipText, showDoubles && { color: '#fff' }]}>Doubles</Text>
             </Pressable>
           )}
+          {!past && (
           <Pressable onPress={() => setShowDone(v => !v)} style={[s.chip, showDone && s.chipOn]}
                      accessibilityRole="button" accessibilityState={{ selected: showDone }}>
             <Text style={[s.chipText, showDone && { color: '#fff' }]}>Completed</Text>
           </Pressable>
+          )}
           {/* THE LIST: one match, one row — time, round, the surnames with
               "vs" or "def.", the score. Far right, an icon, so it reads as a
               view switch rather than another filter. */}
@@ -620,7 +626,7 @@ export default function ScheduleScreen() {
             {compact
               ? (
                 <View style={s.rows}>
-                  {list.map((e, i) => <MatchRow key={e.id} e={e} first={i === 0} past={date < today()} scoreW={scoreColumn(list, date < today())} venueMode={venueMode} venueTz={venueTzOf(e)} onHistory={openHist} />)}
+                  {list.map((e, i) => <MatchRow key={e.id} e={e} first={i === 0} past={past} scoreW={scoreColumn(list, past)} venueMode={venueMode} venueTz={venueTzOf(e)} onHistory={openHist} />)}
                 </View>
               )
               : list.map(e => <EntryRow venueMode={venueMode} venueTz={venueTzOf(e)} onH2H={openH2H} onHistory={openHist} onPredictors={openPredictors} onChampion={setChampion} key={e.id} e={e} inCourt={view === 'court'} />)}
