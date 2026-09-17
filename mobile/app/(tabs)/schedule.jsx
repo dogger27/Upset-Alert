@@ -868,9 +868,10 @@ const s = StyleSheet.create({
   rowNames: { fontFamily: 'Archivo_500Medium', fontSize: 13, color: C.ink },   // FitText supplies the flex slot; each side is one
   rowNamesDone: { color: C.inkBody },
   rowVerb: { fontFamily: 'Archivo_500Medium', fontSize: 12, color: C.muted, paddingHorizontal: 6 },
-  // The second line: the sets, left, in the light green — brighter when live.
-  rowScore: { fontFamily: 'Archivo_700Bold', fontSize: 12, color: C.greenLit, marginTop: 1, fontVariant: ['tabular-nums'] },
-  rowScoreLive: { color: C.greenBright },
+  // The second line: the sets, centred under the verb (the halves are equal,
+  // so the field's centre is the verb's), in a darker green — lit when live.
+  rowScore: { fontFamily: 'Archivo_700Bold', fontSize: 12, color: C.greenMid, marginTop: 1, textAlign: 'center', fontVariant: ['tabular-nums'] },
+  rowScoreLive: { color: C.greenLit },
   /* flex-end, not center. The left side is TWO lines — court above time — so
      centring left the buttons floating on the seam between them, level with
      neither. Bottom-aligned they sit on the time, which is the line they are
