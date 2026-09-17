@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import AliasChoices, BaseModel, Field
 
 
 class TournamentCreate(BaseModel):
@@ -100,7 +100,9 @@ class TournamentEventOut(BaseModel):
 
 class DrawEntryOut(BaseModel):
     id: int
-    name: str
+    # The reader sees Sofascore's spelling when we have it (display_name);
+    # `name` alone is the draw's, from Wikipedia.
+    name: str = Field(validation_alias=AliasChoices('display_name', 'name'))
     nationality: Optional[str]
     seed: Optional[int]
     entry_type: Optional[str]

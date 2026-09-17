@@ -1019,10 +1019,16 @@ async def resolve_draw(db: AsyncSession, draw: Draw, *, force: bool = False) -> 
     # move a live score onto the wrong bracket slot, so both are left unresolved
     # and reported instead.
     taken = {e.sofa_player_id for e in entries if e.sofa_player_id}
+    by_id = {t.get("id"): t for t in field if isinstance(t, dict) and t.get("id")}
     dirty = False
     for entry in entries:
         if entry.sofa_player_id and not force:
             report["already"] += 1
+            # Their spelling, for an entry resolved before we kept it.
+            their = (by_id.get(entry.sofa_player_id) or {}).get("name")
+            if their and not entry.sofa_name:
+                entry.sofa_name = their
+                dirty = True
             continue
         team, rule = _match_one(entry.name, entry.nationality, cands)
         if team is None:
@@ -1036,6 +1042,8 @@ async def resolve_draw(db: AsyncSession, draw: Draw, *, force: bool = False) -> 
                                          "reason": f"id {team['id']} already claimed"})
             continue
         entry.sofa_player_id = team["id"]
+        if team.get("name"):
+            entry.sofa_name = team["name"]
         taken.add(team["id"])
         dirty = True
         report["resolved"] += 1

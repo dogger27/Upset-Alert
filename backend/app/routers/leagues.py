@@ -846,7 +846,7 @@ async def round_scores(
     # WHAT-IF WORLDS, from the semis on: every way the last matches can go,
     # each labelled by its final, with everyone's picks on those matches so
     # the table can be re-scored under any of them in the browser.
-    names_by_entry = {e.id: e.name for e in all_entries}
+    names_by_entry = {e.id: e.display_name for e in all_entries}
     worlds = enumerate_worlds(all_matches, pts_table, names_by_entry)
     world_ids = {r["match_id"] for w in (worlds or []) for r in w["results"]}
     world_predictions = {

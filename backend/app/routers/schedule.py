@@ -653,7 +653,7 @@ async def schedule_day(
             select(DrawEntry.id, DrawEntry.nationality,
                    DrawEntry.seed, DrawEntry.entry_type, DrawEntry.te_slug,
                    DrawEntry.ranking, DrawEntry.te_player_id,
-                   DrawEntry.name).where(
+                   func.coalesce(DrawEntry.sofa_name, DrawEntry.name)).where(
                 DrawEntry.id.in_(ent_ids)))).all()
         nats = {r[0]: r[1] for r in rows if r[1]}
         # Seeding from the bracket, so it survives a name that never carried it.

@@ -31,9 +31,9 @@ import time
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
-from app.models.tournament import Match
+from app.models.tournament import DrawEntry, Match
 from app.services.sofascore import SofascoreBlocked, SofascoreNotFound, _get
 from app.services.sofascore_live import _event_player_ids, _tracked
 from app.services.system_log import app_log
@@ -214,12 +214,38 @@ def decided_ahead_of_slot(payload: Optional[dict]) -> list:
             if (ev.get("status") or {}).get("type") == _FINISHED]
 
 
+def sofa_names_in_event(ev: dict) -> dict:
+    """{sofascore player id: name} for everyone in an event — a singles team
+    is the player; a doubles team carries its two under `subTeams`."""
+    out = {}
+    for team in (ev.get("homeTeam"), ev.get("awayTeam")):
+        if not isinstance(team, dict):
+            continue
+        for t in (team.get("subTeams") or [team]):
+            if isinstance(t, dict) and t.get("id") and t.get("name"):
+                out[t["id"]] = t["name"]
+    return out
+
+
+async def _stamp_sofa_names(db, ev: dict, by_player: dict) -> None:
+    """Sofascore's spelling onto the draw entries this event names, once —
+    the sweep reads every event anyway, so this costs no request. Only an
+    entry still without one; a stored spelling is not churned."""
+    for pid, name in sofa_names_in_event(ev).items():
+        eid = by_player.get(pid)
+        if eid:
+            await db.execute(update(DrawEntry)
+                             .where(DrawEntry.id == eid, DrawEntry.sofa_name.is_(None))
+                             .values(sofa_name=name))
+
+
 async def _record(db, ev: dict, draw_id: int, by_player: dict,
                   now: datetime) -> str:
     """Write one FINISHED event onto its match: "written", "unchanged", or
     "unmatched" when the event is not a match of this draw."""
     home_ids = _event_player_ids(ev.get("homeTeam") or {})
     away_ids = _event_player_ids(ev.get("awayTeam") or {})
+    await _stamp_sofa_names(db, ev, by_player)
     p1 = next((by_player[i] for i in home_ids if i in by_player), None)
     p2 = next((by_player[i] for i in away_ids if i in by_player), None)
     if not p1 or not p2:
