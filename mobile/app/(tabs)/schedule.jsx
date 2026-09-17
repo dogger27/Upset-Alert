@@ -640,9 +640,11 @@ function MatchRow({ e, first, venueMode, venueTz, onHistory }) {
   // rowClock, not footTime: the card goes quiet once a match is on or over;
   // this column cannot.
   const clock = rowClock(e, venueMode ? venueTz : undefined, venueMode)
-  // The ladder's text already carries the "~" of an estimate ("~6:50 PM"),
-  // as the card prints it; only a bare estimate gets one here. Never two.
-  const text = String(clock.text || '').replace(/^Started at /, '').replace(/^Not before /i, 'NB ')
+  // JUST THE CLOCK (owner, 2026-09-17): the ladder's phrases — "Started at",
+  // "Resumed at", "Not before" — are the card's; this column keeps the time
+  // and nothing else. The "~" of an estimate is already in the text, as the
+  // card prints it; only a bare estimate gets one here. Never two.
+  const text = String(clock.text || '').replace(/^[A-Za-z][A-Za-z ]* at /, '').replace(/^Not before /i, '')
   const when = clock.estimated && !text.startsWith('~') ? `~${text}` : text
   const openable = onHistory && ['live', 'completed', 'postponed', 'to_be_completed'].includes(e.status)
   const Wrap = openable ? Pressable : View
