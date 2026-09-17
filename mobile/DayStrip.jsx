@@ -19,6 +19,8 @@ import Animated, {
 } from 'react-native-reanimated'
 import { C, S } from './theme'
 import { leading } from './fontScale.js'
+import { textWidth } from './measure'
+import { pickLevel } from './stripLayout'
 
 // The scrub's axis lock, mirrored: a sideways drag of 8pt is ours, a
 // vertical one of 12pt is the page's.
@@ -27,6 +29,8 @@ const AXIS_FAIL_Y = 12
 const RUBBER = 0.6
 const RUBBER_FACTOR = 0.6
 const MOVE = { duration: 240, easing: Easing.bezier(0.22, 0.61, 0.36, 1) }
+const FACE = 'Archivo_500Medium', SIZE = 13         // a chip
+const FACE_ON = 'Archivo_700Bold', SIZE_ON = 15     // the chosen one, a size up
 
 /* `right` — a node pinned at the far right of the bar, outside the sliding
    row: the schedule puts the chosen day's date there. The chips slide
@@ -49,6 +53,17 @@ export function DayStrip({ days, active, onPick, right }) {
      width moves everything after it. */
   const chips = useRef(new Map())
   const [measured, setMeasured] = useState(0)
+  /* HOW TIGHT. The type never shrinks; the air between and inside the chips
+     does, level by level, until every day fits the room — and only when the
+     tightest level still does not fit does the strip scroll (owner,
+     2026-09-17). Chosen from font metrics before layout, so there is no
+     trial pass on screen: `stripLayout.js`, on its own suite. */
+  const activeIndex = days.findIndex(d => d.date === active)
+  const widths = useMemo(
+    () => days.map((d, i) => textWidth(d.label, i === activeIndex ? FACE_ON : FACE, i === activeIndex ? SIZE_ON : SIZE)),
+    [days, activeIndex],
+  )
+  const { level } = useMemo(() => pickLevel(widths, activeIndex, vw - 2 * S.md), [widths, activeIndex, vw])
 
   useEffect(() => {
     lim.value = Math.max(0, cw - vw)
@@ -114,7 +129,7 @@ export function DayStrip({ days, active, onPick, right }) {
       {/* No ref on the detector's child (React 19 logs element.ref). */}
       <View style={s.bar} onLayout={e => setBarW(e.nativeEvent.layout.width)}>
         <Animated.View
-          style={[s.row, slide]}
+          style={[s.row, { gap: level.gap }, slide]}
           onLayout={e => setCw(e.nativeEvent.layout.width)}
         >
           {days.map(({ date, label }) => {
@@ -129,7 +144,11 @@ export function DayStrip({ days, active, onPick, right }) {
                   setMeasured(n => n + 1)
                 }}
                 hitSlop={{ top: 8, bottom: 8, left: 0, right: 0 }}
-                style={({ pressed }) => [s.chip, on && s.chipOn, pressed && !on && s.chipPressed]}
+                style={({ pressed }) => [
+                  s.chip, { paddingHorizontal: level.pad, minWidth: level.min },
+                  on && s.chipOn, on && { paddingHorizontal: level.padOn, minWidth: level.minOn },
+                  pressed && !on && s.chipPressed,
+                ]}
                 accessibilityRole="button"
                 accessibilityState={{ selected: on }}
                 accessibilityLabel={`${label.startsWith('Q') ? `Qualifying day ${label.slice(1)}` : `Day ${label}`}, ${date}`}
@@ -157,18 +176,18 @@ const s = StyleSheet.create({
     marginHorizontal: -S.lg,
     backgroundColor: '#12262a',
     borderTopWidth: 1, borderBottomWidth: 1, borderColor: C.borderLit,
-    paddingVertical: 4,
-    minHeight: leading(30) + 8,
+    paddingVertical: 3,
+    minHeight: leading(27) + 6,   // the chosen chip plus the padding: 33pt, 13% under the 38 it was
     overflow: 'hidden',
   },
   /* flex-start, so the row is as wide as its chips and no wider — that
      width, against the bar's, is the travel. Centring when it all fits is
      `lead` in the transform, not alignment, so one measurement serves. */
-  row: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: S.md, alignSelf: 'flex-start' },
+  row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: S.md, alignSelf: 'flex-start' },   // gap: from the level
   /* A fixed-height box with the glyph centred in it; no lineHeight on the
      text, which sinks caps on iOS (memory ios-lineheight-sinks-caps). */
-  chip: {
-    height: leading(26), minWidth: 34, paddingHorizontal: 8, borderRadius: 6,
+  chip: {   // width and padding: from the level
+    height: leading(23), borderRadius: 6,
     borderWidth: 1, borderColor: 'transparent',
     alignItems: 'center', justifyContent: 'center',
   },
@@ -186,9 +205,9 @@ const s = StyleSheet.create({
      every dimension, so it reads from across the room. Dark ink on the
      bright fill: C.bg on C.greenLit is 7:1. */
   chipOn: {
-    height: leading(30), minWidth: 40, paddingHorizontal: 10, borderRadius: 7,
+    height: leading(27), borderRadius: 7,
     backgroundColor: C.greenLit, borderColor: C.greenBright,
   },
-  text: { fontFamily: 'Archivo_500Medium', fontSize: 13, color: C.muted },
-  textOn: { fontFamily: 'Archivo_700Bold', fontSize: 15, color: C.bg },
+  text: { fontFamily: FACE, fontSize: SIZE, color: C.muted },
+  textOn: { fontFamily: FACE_ON, fontSize: SIZE_ON, color: C.bg },
 })
