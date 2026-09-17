@@ -204,6 +204,31 @@ _CHAINS_BEHIND_RE = re.compile(r'follow|\bafter\b', re.I)
 _TIME_UNKNOWN_RE = re.compile(r'\bTB[ACD]\b|\bto\s+be\s+\w', re.I)
 
 
+def document_clocks(day_docs) -> dict:
+    """-> {document id: when its BYTES were downloaded}.
+
+    Split out from `check_day` so the judgement can be tested without a
+    database, like `clock_runs_backwards` and `printed_clock_not_captured`.
+
+    Usually just `fetched_at`. The exception is a forced re-parse: to defeat
+    the unchanged-bytes skip it clears the stored `sha256`, and ingest then
+    mints a NEW document stamped `now` for a PDF we already held. Nothing
+    about the tour happened at that moment, so the re-parse inherits the clock
+    of the fetch it re-reads — the cleared sha on the document before it is
+    the marker, and a chain of them carries the original clock through.
+    """
+    out: dict = {}
+    carried = None
+    for d in sorted(day_docs, key=lambda x: x.id):
+        when = _naive_utc(d.fetched_at)
+        if carried is not None:
+            when, carried = carried, None
+        if str(d.sha256 or '').startswith('forced'):
+            carried = when
+        out[d.id] = when
+    return out
+
+
 def printed_clock_not_captured(rows) -> list:
     """Slots whose printed NOTE states a clock the row did not store.
 
@@ -342,7 +367,22 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
         select(ScheduleDocument).where(
             ScheduleDocument.tournament_id == tournament_id,
             ScheduleDocument.play_date == _pd))).scalars().all()
-    doc_fetched: dict = {d.id: _naive_utc(d.fetched_at) for d in day_docs}
+    # WHEN THE BYTES WERE DOWNLOADED, which is not always when the row was
+    # written. A forced re-parse re-reads a PDF we already hold: it clears the
+    # stored `sha256` to defeat the unchanged-bytes skip, and ingest then mints
+    # a NEW document stamped `now`. Nothing about the tour happened at that
+    # moment, and every clock the law reads off that document is the re-parse's
+    # clock rather than the sheet's.
+    #
+    # It is not a rare path — the order-of-play verification harness re-ingests
+    # the archived PDF on every run. On 2026-09-18 that turned document 284
+    # (fetched 21:24:51, three minutes after a doubles feeder finished, and
+    # byte-identical to the sheet still live on wtatennis.com) into document
+    # 285 stamped 21:52:40, and `pending_side_decided_before_document`
+    # convicted a row that reproduces its sheet exactly — on the strength of
+    # the restamp alone. The cleared sha is the marker of the re-read, so the
+    # document that follows it inherits the clock of the fetch it re-reads.
+    doc_fetched: dict = document_clocks(day_docs)
     if any(e.is_tbd for e in rows):
         wins = (await db.execute(
             select(ScheduleEntry).where(
