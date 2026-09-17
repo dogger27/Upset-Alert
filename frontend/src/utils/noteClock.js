@@ -16,3 +16,18 @@ export function rewriteNoteClock(note, clock, replacement) {
   const re = new RegExp(`(^|[^\\d:.])${digits.replace('.', '\\.')}(?:\\s*[AP]\\.?M\\.?)?(?!\\d)`, 'i')
   return note.replace(re, (_m, lead) => lead + replacement)
 }
+
+/* Does the printed note carry a clock of its own?
+ *
+ * Not when the clock was printed over the BLANK box above the slot: SP Open
+ * 2026-09-17 left QUADRA 2's first box empty under "Starting at 12:00 PM" and
+ * printed the court's first match "Followed by". The ingest hands the noon
+ * down to that match (backend oop_parser._carried_clock) and start_note keeps
+ * "Followed by" — so a line built from the note alone says "Followed by" on a
+ * court's opener, followed by nothing, with no time. Where the note has no
+ * clock and the row has one, the clock is the line. mobile/schedule.js keeps
+ * the same rule.
+ */
+export function noteHasClock(note) {
+  return /\d{1,2}[:.]\d{2}/.test(note || '')
+}

@@ -179,6 +179,14 @@ function rewriteNoteClock(note, clock, replacement) {
 
 function printedStart(e, zone, venueMode) {
   const mine = !venueMode && e.printed_start_at
+  // A clock handed down from a BLANK box above is not in the note: SP Open
+  // 2026-09-17 printed QUADRA 2's opener "Followed by" under an empty
+  // "Starting at 12:00 PM" box, and the ingest keeps the noon on the row
+  // (backend oop_parser._carried_clock). The note alone would print no time.
+  // Same rule as the site's utils/noteClock.js noteHasClock.
+  if (e.start_note && e.start_time_local && !/\d{1,2}[:.]\d{2}/.test(e.start_note)) {
+    return mine ? clockIn(e.printed_start_at, zone) : e.start_time_local
+  }
   if (e.start_note && mine && e.start_time_local) {
     return shorten(rewriteNoteClock(e.start_note, e.start_time_local, clockIn(e.printed_start_at, zone)))
   }
