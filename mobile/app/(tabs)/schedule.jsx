@@ -628,9 +628,9 @@ export default function ScheduleScreen() {
             ) : null}
             {density === 'mid'
               ? (
-                <View style={s.rows}>
+                <MiniRows list={list} tagsOf={e => miniTags(e, { past, tournament: !past && view !== 'court' && manyTournaments ? e.tournament_name : null, venueMode, venueTz: venueTzOf(e) })}>
                   {list.map((e, i) => <MatchMini key={e.id} e={e} first={i === 0} alt={i % 2 === 1} tourBar={tourBarOf(e)} past={past} tournament={!past && view !== 'court' && manyTournaments ? e.tournament_name : null} venueMode={venueMode} venueTz={venueTzOf(e)} onHistory={openHist} onH2H={openH2H} onPredictors={openPredictors} />)}
-                </View>
+                </MiniRows>
               )
               : compact
               ? (
@@ -735,8 +735,8 @@ function rowColumns(list, past, innerW) {
    the card's own edge, which clips, so its tag sits inside. */
 function LineTag({ first, alt, right, children }) {
   return (
-    <View style={[s.miniTag, right ? s.miniTagRight : s.miniTagLeft, first && s.miniTagFirst]} pointerEvents="none">
-      <View style={[s.miniTagHalf, { top: 0, backgroundColor: first || alt ? C.card : C.raised }]} />
+    <View style={[s.miniTag, right ? s.miniTagRight : s.miniTagLeft]} pointerEvents="none">
+      <View style={[s.miniTagHalf, { top: 0, backgroundColor: first ? C.bg : alt ? C.card : C.raised }]} />
       <View style={[s.miniTagHalf, { bottom: 0, backgroundColor: alt ? C.raised : C.card }]} />
       <Text style={s.rowWhen} numberOfLines={1}>{children}</Text>
     </View>
@@ -758,6 +758,28 @@ function h2hPairOf(e) {
    aiming. The bars keep their width on every row so the cells line up; a
    row with nothing to open there (doubles has no H2H, a match with no
    bracket match has no picks) leaves the bar empty. */
+/* What a cell's two tags say: the clock for an upcoming match (a past day is
+   a record: none), the tournament when the page mixes them. */
+function miniTags(e, { past, tournament, venueMode, venueTz }) {
+  return { when: past || hasStarted(e) ? '' : rowWhen(e, venueMode ? venueTz : undefined, venueMode), tournament }
+}
+
+/* THE FIRST ROW'S TAGS SIT ON THE CARD'S OWN EDGE (owner, 2026-09-17: "the top
+   border should be lower down, matching the rest"). The card clips its
+   corners, so a tag straddling its top border cannot live inside it: this
+   wrapper draws the first row's tags over the card's edge from outside, and
+   the first row keeps the same padding as every other. */
+function MiniRows({ list, tagsOf, children }) {
+  const tags = list.length ? tagsOf(list[0]) : { when: '', tournament: null }
+  return (
+    <View style={s.miniWrap}>
+      {tags.when ? <LineTag first>{tags.when}</LineTag> : null}
+      {tags.tournament ? <LineTag first right>{tags.tournament}</LineTag> : null}
+      <View style={[s.rows, s.rowsInWrap]}>{children}</View>
+    </View>
+  )
+}
+
 function MatchMini({ e, first, alt, tourBar, past, tournament, venueMode, venueTz, onHistory, onH2H, onPredictors }) {
   const openable = onHistory && ['live', 'completed', 'postponed', 'to_be_completed'].includes(e.status)
   const Wrap = openable ? Pressable : View
@@ -768,29 +790,30 @@ function MatchMini({ e, first, alt, tourBar, past, tournament, venueMode, venueT
      on the same line, far right, when the page mixes tournaments (owner,
      2026-09-17) - the past day groups by tournament instead, the court view
      heads each tournament's courts. */
-  const when = past || hasStarted(e) ? '' : rowWhen(e, venueMode ? venueTz : undefined, venueMode)
+  const { when } = miniTags(e, { past, tournament, venueMode, venueTz })
   const tagged = Boolean(when || tournament)
   return (
-    <Wrap style={[s.miniRow, !first && s.miniNext, first && tagged && s.miniFirstWhen, alt && s.rowAlt]} onPress={openable ? () => onHistory(e) : undefined}
+    <Wrap style={[s.miniRow, !first && s.miniNext, alt && s.rowAlt]} onPress={openable ? () => onHistory(e) : undefined}
           accessibilityRole={openable ? 'button' : undefined}
           accessibilityLabel={tagged ? [when, matchLine(e).names, tournament].filter(Boolean).join(' ') : undefined}>
       {tourBar ? <View style={[s.rowBar, { backgroundColor: tourBar }]} /> : null}
-      {when ? <LineTag first={first} alt={alt}>{when}</LineTag> : null}
-      {tournament ? <LineTag first={first} alt={alt} right>{tournament}</LineTag> : null}
-      <View style={s.miniCell}>
-        <Pressable style={[s.miniBar, picks && s.miniPill]} onPress={picks ? () => onPredictors(matchFromEntry(e)) : undefined} hitSlop={4}
-                   disabled={!picks} accessibilityRole={picks ? 'button' : undefined}
-                   accessibilityLabel={picks ? (e.winner_side != null ? 'Who called it' : 'Who’s still in it') : undefined}>
-          {picks ? <Ionicons name="people" size={16} color={CHIP.text} /> : null}
-        </Pressable>
-        <View style={s.miniCard}>
-          <MatchCard e={e} scale={0.8} badges={!(past && e.discipline !== 'singles' && !(e.players || []).some(p => p.seed || p.draw_rank != null))} />
-        </View>
-        <Pressable style={[s.miniBar, pair && s.miniPill]} onPress={pair ? () => onH2H(pair) : undefined} hitSlop={4}
-                   disabled={!pair} accessibilityRole={pair ? 'button' : undefined} accessibilityLabel={pair ? 'Head to head' : undefined}>
-          {pair ? <Text style={s.miniBarText}>H2H</Text> : null}
-        </Pressable>
+      {/* The first row's tags are drawn by MiniRows, over the card's edge. */}
+      {!first && when ? <LineTag alt={alt}>{when}</LineTag> : null}
+      {!first && tournament ? <LineTag alt={alt} right>{tournament}</LineTag> : null}
+      {/* THE TABS RUN THE ROW'S FULL HEIGHT, divider to divider, with no
+          top or bottom line of their own (owner, 2026-09-17). */}
+      <Pressable style={[s.miniBar, s.miniBarLeft, picks && s.miniPill]} onPress={picks ? () => onPredictors(matchFromEntry(e)) : undefined} hitSlop={4}
+                 disabled={!picks} accessibilityRole={picks ? 'button' : undefined}
+                 accessibilityLabel={picks ? (e.winner_side != null ? 'Who called it' : 'Who’s still in it') : undefined}>
+        {picks ? <Ionicons name="people" size={16} color={CHIP.text} /> : null}
+      </Pressable>
+      <View style={s.miniCard}>
+        <MatchCard e={e} scale={0.8} badges={!(past && e.discipline !== 'singles' && !(e.players || []).some(p => p.seed || p.draw_rank != null))} />
       </View>
+      <Pressable style={[s.miniBar, s.miniBarRight, pair && s.miniPill]} onPress={pair ? () => onH2H(pair) : undefined} hitSlop={4}
+                 disabled={!pair} accessibilityRole={pair ? 'button' : undefined} accessibilityLabel={pair ? 'Head to head' : undefined}>
+        {pair ? <Text style={s.miniBarText}>H2H</Text> : null}
+      </Pressable>
     </Wrap>
   )
 }
@@ -1049,21 +1072,25 @@ const s = StyleSheet.create({
   rowNext: { borderTopWidth: 1, borderTopColor: C.border },
   // A touch tighter than the tag's full 8 below the line: the glyphs stop short of it (owner, 2026-09-17).
   miniRow: { paddingHorizontal: 0, paddingTop: 6, paddingBottom: 5 },
+  // The wrapper carries the card's side margin so the first row's tags can sit on its edge.
+  miniWrap: { marginHorizontal: -(S.lg - S.sm) },
+  rowsInWrap: { marginHorizontal: 0 },
   // The cell: [group bar][card][H2H bar], the bars full height.
-  miniCell: { flexDirection: 'row', alignItems: 'stretch' },
-  miniCard: { flex: 1, minWidth: 0, paddingHorizontal: 4 },
+  // Room for a tab on either side: the tour bar, the tab, a hair.
+  miniCard: { paddingLeft: 30, paddingRight: 30 },
   /* THE DRAW VIEW'S SIDE TABS, run top to bottom (owner, 2026-09-17): the
      bracket's chip — 24 wide, 1px green-500 on the card fill, radius 4 —
      stretched to the row's height, the word on its side, the icon upright. */
-  miniBar: { width: 24, alignItems: 'center', justifyContent: 'center', marginHorizontal: 2 },
-  miniPill: { borderRadius: 4, borderWidth: 1, borderColor: CHIP.line, backgroundColor: C.card },
+  miniBar: { position: 'absolute', top: 0, bottom: 0, width: 24, alignItems: 'center', justifyContent: 'center', zIndex: 1 },
+  miniBarLeft: { left: 3 },
+  miniBarRight: { right: 3 },
+  // Only the two upright lines: the dividers above and below are its ends.
+  miniPill: { borderLeftWidth: 1, borderRightWidth: 1, borderColor: CHIP.line, backgroundColor: C.card },
   miniBarText: { fontFamily: 'Archivo_700Bold', fontSize: 12, lineHeight: leading(16), letterSpacing: 0.25, color: CHIP.text, width: 40, textAlign: 'center', transform: [{ rotate: '-90deg' }] },
-  miniFirstWhen: { paddingTop: 13 },
   // 16 tall, centred on the 2px line above: 8 above it, 8 below.
   miniTag: { position: 'absolute', top: -9, height: 16, paddingHorizontal: 4, justifyContent: 'center', zIndex: 1, maxWidth: '55%' },
   miniTagLeft: { left: 30 },
   miniTagRight: { right: 28 },
-  miniTagFirst: { top: 0 },
   miniTagHalf: { position: 'absolute', left: 0, right: 0, height: 8 },
   // A clear rule between matches (owner, 2026-09-17): two lines of box score
   // per match need a firmer division than the list's hairline.
