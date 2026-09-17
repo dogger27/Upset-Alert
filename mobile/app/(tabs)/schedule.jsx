@@ -396,13 +396,12 @@ export default function ScheduleScreen() {
             arrows went with it — the chips and the swipe are the stepper
             now (owner, 2026-09-17). Rendered even with no days, so a day
             with no sheet still says which day it is. "Today" and "Yester."
-            when the day has a word, else the date without its comma (owner):
-            "Tue Sep 1". */}
+            when the day has a word, else month and day (owner): "Sep 15". */}
         <DayStrip
           days={days} active={date} onPick={setPinned}
           right={(
             <View style={s.today}>
-              <Text style={s.todayDate}>{relativeDayWord(date, today()) ?? prettyDate(date).replace(/,/g, '')}</Text>
+              <Text style={s.todayDate}>{relativeDayWord(date, today()) ?? shortDate(date)}</Text>
               {liveCount > 0 && (
                 <Text style={[T.tiny, { color: C.greenLit }]}>{liveCount} on court</Text>
               )}
@@ -725,6 +724,14 @@ function EntryRow({ e, venueMode, venueTz, onH2H, onHistory, onPredictors, onCha
     </Wrap>
     </TierFx>
   )
+}
+
+/* The strip's slot: month and day only — "Sep 15" (owner, 2026-09-17). The
+   chip already says which day of the event it is, and the weekday was the
+   width that pushed a Slam's chips off the bar. */
+function shortDate(iso) {
+  const d = new Date(iso + 'T12:00:00Z')
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
 function prettyDate(iso) {
