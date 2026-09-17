@@ -26,7 +26,7 @@ import { C, S, T } from './theme'
    density (owner, 2026-09-17): the same two lines and box score, smaller,
    so more matches fit a screen. Names, marks and the score cells scale
    together; the badge and the flag keep their size (already small). */
-export function MatchCard({ e, scale = 1 }) {
+export function MatchCard({ e, scale = 1, badges = true }) {
   const live = isLive(e)
   const stopped = isSuspended(e) || e.status === 'postponed' || e.status === 'to_be_completed'
   const lp = e.live_point ?? null
@@ -83,7 +83,10 @@ export function MatchCard({ e, scale = 1 }) {
                 {serving === side && <View style={s.ball} />}
               </View>
             )}
-            <PosBadge seed={sideSeed(e.players, side)} drawRank={sideDrawRank(e.players, side)} />
+            {/* `badges` off: no seed column at all — a past day's doubles, grouped
+                on their own, have no seeds to align and the column was a hole
+                on the left (owner, 2026-09-17). */}
+            {badges && <PosBadge seed={sideSeed(e.players, side)} drawRank={sideDrawRank(e.players, side)} />}
             <FlagSlot codes={sideFlags(e.players, side)} slots={flagSlots} />
             <View style={s.nameWrap}>
             <PlayerName
