@@ -592,7 +592,9 @@ export default function ScheduleScreen() {
 
         {groups.map(({ key, court, title, sub, list }) => (
           <View key={key} style={s.group}>
-            {title ? <FitText style={(compact ? COURT_SMALL : COURT).style} track={(compact ? COURT_SMALL : COURT).track} min={9}>{title.toUpperCase()}</FitText> : null}
+            {/* Tight on the round beneath it: the heading's own line box plus
+                the group's gap read as a hole, so the gap is taken back. */}
+            {title ? <FitText style={[(compact ? TOURN_SMALL : TOURN).style, s.tournHead]} track={(compact ? TOURN_SMALL : TOURN).track} min={9}>{title.toUpperCase()}</FitText> : null}
             {sub ? <Text style={SUB.style}>{sub}</Text> : null}
             {/* A COURT NAME IS ONE LINE, WHATEVER ITS LENGTH — "Quadra Central
                 Maria Esther Bueno" wrapped to two (owner, 2026-09-17). The same
@@ -880,9 +882,14 @@ const COURT = eyebrowType()
 const COURT_SMALL = eyebrowType({ small: true })
 // A past day's sub-heading — "Singles · R16" — the small eyebrow, fainter.
 const SUB = eyebrowType({ small: true, color: C.faint })
+// A past day's tournament heading: a size up on the court's, in the brand's
+// clay so it reads as the section and not another court (owner, 2026-09-17).
+const TOURN = eyebrowType({ size: 23, color: C.clayLight })
+const TOURN_SMALL = eyebrowType({ size: 18, color: C.clayLight })
 
 const s = StyleSheet.create({
   courtHead: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
+  tournHead: { marginBottom: -(S.sm - 2) },
   courtEdit: { paddingHorizontal: 4, paddingVertical: 2 },
   // The scroll body's own gap and growth, restated: the wrapper took its children.
   swipeBody: { flexGrow: 1, gap: S.md },
