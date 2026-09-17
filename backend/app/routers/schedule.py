@@ -12,7 +12,7 @@ them at render time, is what keeps that true when someone later adds a field.
 import re as _re
 from datetime import date, datetime, time, timezone, timedelta
 from zoneinfo import ZoneInfo
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -1278,7 +1278,7 @@ async def entry_score_history(entry_id: int, db: AsyncSession = Depends(get_db))
 
 @router.get("/dates")
 async def schedule_dates(
-    tournament_id: Optional[int] = Query(None),
+    tournament_id: Optional[List[int]] = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
     """Days that actually have a schedule — drives the date stepper so it can
@@ -1295,6 +1295,15 @@ async def schedule_dates(
     score, which is exactly what both of yesterday's finals did during the
     2026-08-29 block. Reading only the row would have called a finished day
     unfinished and parked the page on it.
+
+    `tournament_id` REPEATS: `?tournament_id=35&tournament_id=80` scopes the
+    answer to those events together. The app's schedule tab shows the
+    tournaments its chooser has ticked, and its date stepper has to walk
+    exactly THEIR days — one id was enough for the pinned page, but with two
+    boxes ticked the tab asked for no id at all, got every date on record,
+    and let the reader step back to a Cincinnati Friday that neither ticked
+    tournament played (owner, 2026-09-17). Unscoped stays: the chooser learns
+    which tournaments are on the sheets at all from the unfiltered answer.
     """
     q = (select(ScheduleEntry.play_date,
                 func.count(),
@@ -1308,7 +1317,7 @@ async def schedule_dates(
          .outerjoin(Match, Match.id == ScheduleEntry.match_id)
          .group_by(ScheduleEntry.play_date))
     if tournament_id:
-        q = q.where(ScheduleEntry.tournament_id == tournament_id)
+        q = q.where(ScheduleEntry.tournament_id.in_(tournament_id))
     rows = (await db.execute(q.order_by(ScheduleEntry.play_date))).all()
     # WHICH TOURNAMENTS ARE ON THE SHEETS AT ALL. The app's tournament chooser
     # needs to know whether there is a choice to make before it offers one: a
@@ -1319,7 +1328,7 @@ async def schedule_dates(
     tq = select(ScheduleEntry.tournament_id).distinct().where(
         ScheduleEntry.tournament_id.isnot(None))
     if tournament_id:
-        tq = tq.where(ScheduleEntry.tournament_id == tournament_id)
+        tq = tq.where(ScheduleEntry.tournament_id.in_(tournament_id))
     tournaments = [r[0] for r in (await db.execute(tq)).all()]
     return {"dates": [r[0].isoformat() for r in rows],
             "open_counts": {r[0].isoformat(): int(r[2] or 0) for r in rows},
