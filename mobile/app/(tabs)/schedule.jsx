@@ -296,7 +296,7 @@ export default function ScheduleScreen() {
       seen.add(e.tour)
     }
     return [...seen].sort()
-  }, [all, eventFilter, showDoubles, showDone])
+  }, [all, eventFilter, showDoubles, doneOn])
   /* ONE TOUR NEEDS NO CHIPS, and where there are none the filter must not
      apply either: a selection made on a two-tour day would otherwise empty a
      one-tour day with no chip on screen to undo it. */
@@ -314,7 +314,7 @@ export default function ScheduleScreen() {
     e.discipline !== 'singles'
     && rowInTournaments(e, eventFilter)
     && (doneOn || (e.status !== 'completed' && e.status !== 'postponed'))
-  ), [all, eventFilter, showDone])
+  ), [all, eventFilter, doneOn])
   /* SEEDED ONCE PER DAY, NOT PER FETCH. This ran on `day.data`, whose identity
      changes on every poll — and the live subscription refetches this screen
      about every ten seconds — so switching WTA on held for one cycle and then
