@@ -29,9 +29,9 @@ import { hideFromLockScreen, showMatchOnLockScreen, useShowingOnLockScreen } fro
 import { showToast } from '../../toast'
 import { useLiveUpdates } from '../../live'
 import { useApi } from '../../useApi'
-import { byTimeOfDay, footTime, isLive, isSuspended, matchFromEntry, whenLabel } from '../../schedule'
+import { byTimeOfDay, footTime, isLive, isSuspended, matchFromEntry, rowClock, whenLabel } from '../../schedule'
 import { leading } from '../../fontScale.js'
-import { TourBadge } from '../../cards'
+import { FitText, TourBadge } from '../../cards'
 import { setScheduleTournaments, useScheduleTournaments } from '../../scheduleFilter'
 import { useChoosableTournaments } from '../../choosableTournaments'
 import { DayStrip } from '../../DayStrip'
@@ -39,6 +39,7 @@ import { SWIPE_PX, SWIPE_VX, swipeStep } from '../../swipeDay'
 import { dayLabels, relativeDayWord } from '../../dayLabels'
 import { rowInTournaments } from '../../scheduleRows'
 import { MatchCard } from '../../scorecard'
+import { matchLine } from '../../matchLine'
 import { ScoreHistorySheet } from '../../scoreHistory'
 import { C, R, S, T } from '../../theme'
 import { Card, CardLink, ErrorNote, Eyebrow, Loading, Muted, Screen, Title } from '../../ui'
@@ -113,6 +114,8 @@ export default function ScheduleScreen() {
   const [hist, setHist] = useState(null)
   const [predictors, setPredictors] = useState(null)
   const [view, setView] = useState('time')
+  // The compact list: one match, one row (owner, 2026-09-17). Session-only, like the switches above.
+  const [compact, setCompact] = useState(false)
 
   /* WHICH TOURNAMENTS THE TAB CHOSE (scheduleFilter). A schedule row always
      carries a tournament_id — unlike draw_id, which is null for qualifying and
@@ -511,6 +514,14 @@ export default function ScheduleScreen() {
                      accessibilityRole="button" accessibilityState={{ selected: showDone }}>
             <Text style={[s.chipText, showDone && { color: '#fff' }]}>Completed</Text>
           </Pressable>
+          {/* THE LIST: one match, one row — time, round, the surnames with
+              "vs" or "def.", the score. Far right, an icon, so it reads as a
+              view switch rather than another filter. */}
+          <Pressable onPress={() => setCompact(v => !v)} style={[s.chip, s.chipIcon, compact && s.chipOn]}
+                     hitSlop={6} accessibilityRole="button" accessibilityLabel="Compact list"
+                     accessibilityState={{ selected: compact }}>
+            <Ionicons name="list" size={16} color={compact ? '#fff' : C.muted} />
+          </Pressable>
         </View>
 
         {day.loading && !day.data ? <Loading /> : null}
@@ -552,7 +563,13 @@ export default function ScheduleScreen() {
         {groups.map(([court, list]) => (
           <View key={court || 'all'} style={s.group}>
             {court ? <Eyebrow>{court}</Eyebrow> : null}
-            {list.map(e => <EntryRow venueMode={venueMode} venueTz={venueTzOf(e)} onH2H={setH2H} onHistory={setHist} onPredictors={setPredictors} onChampion={setChampion} key={e.id} e={e} inCourt={view === 'court'} />)}
+            {compact
+              ? (
+                <View style={s.rows}>
+                  {list.map((e, i) => <MatchRow key={e.id} e={e} first={i === 0} venueMode={venueMode} venueTz={venueTzOf(e)} onHistory={setHist} />)}
+                </View>
+              )
+              : list.map(e => <EntryRow venueMode={venueMode} venueTz={venueTzOf(e)} onH2H={setH2H} onHistory={setHist} onPredictors={setPredictors} onChampion={setChampion} key={e.id} e={e} inCourt={view === 'court'} />)}
           </View>
         ))}
       </View>
@@ -608,6 +625,36 @@ function LockPill({ matchId, live }) {
                style={[s.h2hChip, s.lockChip, showing && s.lockChipOn, busy && { opacity: 0.6 }]}>
       <Text style={[s.h2hText, s.lockIcon]}>🔒</Text>
     </Pressable>
+  )
+}
+
+/* ONE MATCH, ONE ROW — the compact list. The clock the card would print
+   (footTime, shortened: "Started at 8:30 AM" is "8:30 AM" here, "Not before"
+   is "NB"), the round, the surnames with "vs" or "def.", the sets on one
+   line. The names shrink to stay on the row rather than ellipsise — the
+   app's rule for names — and a started match opens its history on a tap,
+   as the card does. */
+function MatchRow({ e, first, venueMode, venueTz, onHistory }) {
+  const { round, names, score, decided } = matchLine(e)
+  const live = isLive(e)
+  // rowClock, not footTime: the card goes quiet once a match is on or over;
+  // this column cannot.
+  const clock = rowClock(e, venueMode ? venueTz : undefined, venueMode)
+  const when = (clock.estimated ? '~' : '') + String(clock.text || '')
+    .replace(/^Started at /, '').replace(/^Not before /i, 'NB ')
+  const openable = onHistory && ['live', 'completed', 'postponed', 'to_be_completed'].includes(e.status)
+  const Wrap = openable ? Pressable : View
+  return (
+    <Wrap style={[s.row, !first && s.rowNext]} onPress={openable ? () => onHistory(e) : undefined}
+          accessibilityRole={openable ? 'button' : undefined}
+          accessibilityLabel={`${when}${clock.displaced ? ` (${clock.displaced})` : ''} ${round} ${names} ${score}`.trim()}>
+      {/* Measured fitting (FitText), never "…": the names shrink to the room
+          the score leaves them, and the clock to its column. */}
+      <View style={s.rowWhenSlot}><FitText style={s.rowWhen} min={9}>{when}</FitText></View>
+      <Text style={s.rowRound} numberOfLines={1}>{round}</Text>
+      <FitText style={[s.rowNames, decided && s.rowNamesDone]} min={10}>{names}</FitText>
+      {!!score && <Text style={[s.rowScore, live && s.rowScoreLive]} numberOfLines={1}>{score}</Text>}
+    </Wrap>
   )
 }
 
@@ -750,6 +797,22 @@ const s = StyleSheet.create({
   chipAtp: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
   chipWta: { backgroundColor: '#db2777', borderColor: '#db2777' },
   chipText: { ...T.tiny, color: C.muted, fontFamily: 'Archivo_700Bold' },
+  // The list button: an icon in a chip, pushed to the row's far right.
+  chipIcon: { marginLeft: 'auto', paddingHorizontal: 9, paddingVertical: 4 },
+  /* The compact list: a card of hairline-ruled rows. The clock and the round
+     are fixed columns so the names line up down the page; the score keeps
+     its width and the names give. No lineHeight on the row's text — the row
+     is a fixed height and iOS sinks caps under a lineHeight. */
+  rows: { borderRadius: R.md, borderWidth: 1, borderColor: C.border, backgroundColor: C.card, overflow: 'hidden' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 10, minHeight: leading(34) },
+  rowNext: { borderTopWidth: 1, borderTopColor: C.border },
+  rowWhenSlot: { width: 58, flexDirection: 'row' },
+  rowWhen: { fontFamily: 'Archivo_500Medium', fontSize: 11, color: C.muted, fontVariant: ['tabular-nums'] },
+  rowRound: { fontFamily: 'Archivo_700Bold', fontSize: 11, color: C.faint, width: 34 },
+  rowNames: { fontFamily: 'Archivo_500Medium', fontSize: 13, color: C.ink },   // FitText supplies the flex slot
+  rowNamesDone: { color: C.inkBody },
+  rowScore: { fontFamily: 'Archivo_700Bold', fontSize: 12, color: C.inkBody, flexShrink: 0, fontVariant: ['tabular-nums'] },
+  rowScoreLive: { color: C.greenLit },
   /* flex-end, not center. The left side is TWO lines — court above time — so
      centring left the buttons floating on the seam between them, level with
      neither. Bottom-aligned they sit on the time, which is the line they are
