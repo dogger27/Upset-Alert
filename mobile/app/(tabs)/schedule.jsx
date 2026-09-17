@@ -1114,12 +1114,14 @@ const s = StyleSheet.create({
      than a phone and a horizontal scroller hides its own overflow. */
   events: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
   eventBox: {
-  eventIdle: { opacity: 0.4 },
     flexDirection: 'row', alignItems: 'center', gap: 6,
     borderRadius: R.pill, borderWidth: 1, borderColor: C.border,
     backgroundColor: C.card, paddingHorizontal: 10, paddingVertical: 5,
     flexShrink: 1,
   },
+  // Greyed when the tournament has nothing on the day. This line once sat
+  // INSIDE eventBox - a nested key no style reads - so nothing greyed.
+  eventIdle: { opacity: 0.4 },
   eventName: { ...T.tiny, color: C.ink, fontFamily: 'Archivo_700Bold', flexShrink: 1 },
   // Sized in points, not from the type scale: a control, and a row of them
   // has to line up.
