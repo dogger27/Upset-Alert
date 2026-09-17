@@ -620,7 +620,7 @@ export default function ScheduleScreen() {
         )}
 
         {groups.map(({ key, court, title, sub, list }) => (
-          <View key={key} style={s.group}>
+          <View key={key} style={[s.group, court && s.courtGroup]}>
             {/* Tight on the round beneath it: the heading's own line box plus
                 the group's gap read as a hole, so the gap is taken back. */}
             {title ? <FitText style={[(dense ? TOURN_SMALL : TOURN).style, s.tournHead]} track={(dense ? TOURN_SMALL : TOURN).track} min={9}>{title.toUpperCase()}</FitText> : null}
@@ -986,7 +986,11 @@ const TOURN_SMALL = eyebrowType({ size: 18, color: C.clayLight })
 const TOUR_BAR = { ATP: '#2563eb', WTA: '#db2777' }
 
 const s = StyleSheet.create({
-  courtHead: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
+  /* FAR LESS AIR AROUND A COURT NAME (owner, 2026-09-17): the group's
+     margin above it is given back and then some, and the gap beneath it is
+     taken back to half — the name sits on its card, not between two holes. */
+  courtHead: { flexDirection: 'row', alignItems: 'center', gap: S.sm, marginBottom: -S.xs },
+  courtGroup: { marginTop: -S.xs },
   tournHead: { marginBottom: -(S.sm - 2) },
   subHead: { marginBottom: -(S.sm - 3) },          // 3pt to the card beneath
   subHeadFirst: { marginTop: -(S.sm + 2) },        // 10pt from the card above, not 20
