@@ -36,6 +36,7 @@ export const C = {
 
   green:     '#2d6a4f',
   greenLit:  '#52b788',
+  greenMid: '#3f9170',   // between green and greenLit: a score that reads (4:1 on the card) without shouting
   // The site's --brand-text-strong in DARK: its lightest legible green, for
   // something that has to read first. Lighter than greenLit on purpose.
   greenBright: '#7fd4a6',
