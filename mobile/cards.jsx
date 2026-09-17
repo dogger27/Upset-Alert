@@ -493,8 +493,14 @@ export function FitText({ children, style, min = 8, track = 0 }) {
           an ellipsis. The box must never have slack when it is on, or iOS
           shrinks to its floor regardless; the arithmetic above guarantees the
           text is at or over the width. */}
-      <Text style={[style, fontSize !== size && { fontSize }]} numberOfLines={1}
-            adjustsFontSizeToFit minimumFontScale={0.5}>
+      {/* TRACKING SHRINKS WITH THE TYPE. `track` is a fixed add-on per
+          character, so a font shrunk by ratio r would still carry the full
+          tracking and overflow by (1 - r) of it — 16pt on a 30-letter court
+          name. Scaled with the size, width is proportional and the ratio
+          above is exact; it is also the eyebrow's own rule (tracking in
+          proportion to its size). */}
+      <Text style={[style, fontSize !== size && { fontSize, ...(track ? { letterSpacing: track * (fontSize / size) } : null) }]}
+            numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
         {text}
       </Text>
     </View>

@@ -42,7 +42,7 @@ import { MatchCard } from '../../scorecard'
 import { matchLine } from '../../matchLine'
 import { ScoreHistorySheet } from '../../scoreHistory'
 import { C, R, S, T } from '../../theme'
-import { Card, CardLink, ErrorNote, Eyebrow, Loading, Muted, Screen, Title } from '../../ui'
+import { Card, CardLink, ErrorNote, Loading, Muted, Screen, Title, eyebrowType } from '../../ui'
 
 /* The DEVICE's calendar date — the schedule's rule (the zone is the device).
    toISOString() is UTC, which after 5 PM Pacific already names tomorrow: the
@@ -562,7 +562,12 @@ export default function ScheduleScreen() {
 
         {groups.map(([court, list]) => (
           <View key={court || 'all'} style={s.group}>
-            {court ? <Eyebrow>{court}</Eyebrow> : null}
+            {/* A COURT NAME IS ONE LINE, WHATEVER ITS LENGTH — "Quadra Central
+                Maria Esther Bueno" wrapped to two (owner, 2026-09-17). The same
+                eyebrow, through the measuring fitter: shrunk as far as it must,
+                never "…". Uppercased here so the measurement is of the string
+                that is drawn. */}
+            {court ? <FitText style={COURT.style} track={COURT.track} min={9}>{court.toUpperCase()}</FitText> : null}
             {compact
               ? (
                 <View style={s.rows}>
@@ -784,6 +789,9 @@ function shortDate(iso) {
   const d = new Date(iso + 'T12:00:00Z')
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
+
+// The court header's type: the eyebrow, for the fitter.
+const COURT = eyebrowType()
 
 const s = StyleSheet.create({
   // The scroll body's own gap and growth, restated: the wrapper took its children.

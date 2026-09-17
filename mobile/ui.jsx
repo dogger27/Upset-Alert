@@ -151,15 +151,22 @@ export function BrandMark({ size = 16, style }) {
  * WHICH KIND of section it heads rather than a number. */
 const EYEBROW = 21
 const EYEBROW_SMALL = 15
-export function Eyebrow({ children, color = C.muted, style, small = false }) {
+/* The eyebrow's type, as a style and its tracking — for Eyebrow itself and
+   for anything that must set the same eyebrow through a fitter (the
+   schedule's court names, which may never wrap: FitText takes the style
+   and the tracking separately, because tracking is measured per character). */
+export function eyebrowType({ small = false, color = C.muted } = {}) {
   const size = small ? EYEBROW_SMALL : EYEBROW
-  return (
-    <Text style={[T.eyebrow, {
-      // Tracking in proportion, from the token's own 1.1 at 12.
-      fontSize: size, lineHeight: leading(size + 3), letterSpacing: 1.1 * (size / 12),
-      color, textTransform: 'uppercase',
-    }, style]}>{children}</Text>
-  )
+  // Tracking in proportion, from the token's own 1.1 at 12.
+  const track = 1.1 * (size / 12)
+  return {
+    track,
+    style: [T.eyebrow, { fontSize: size, lineHeight: leading(size + 3), letterSpacing: track, color, textTransform: 'uppercase' }],
+  }
+}
+
+export function Eyebrow({ children, color = C.muted, style, small = false }) {
+  return <Text style={[eyebrowType({ small, color }).style, style]}>{children}</Text>
 }
 
 export function Title({ children, style }) {
