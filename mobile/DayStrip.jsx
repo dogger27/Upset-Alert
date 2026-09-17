@@ -28,10 +28,7 @@ const RUBBER = 0.6
 const RUBBER_FACTOR = 0.6
 const MOVE = { duration: 240, easing: Easing.bezier(0.22, 0.61, 0.36, 1) }
 
-/* `panRef` — the strip's own pan, lent to the page: the schedule's
-   swipe-to-change-day waits for THIS gesture to fail, so a drag that starts
-   on the strip scrolls the strip and never turns the page. */
-export function DayStrip({ days, active, onPick, panRef }) {
+export function DayStrip({ days, active, onPick }) {
   const tx = useSharedValue(0)          // how far the row has slid left
   const start = useSharedValue(0)
   const dragging = useSharedValue(false)
@@ -67,7 +64,6 @@ export function DayStrip({ days, active, onPick, panRef }) {
   }, [active, vw, cw, measured, tx])
 
   const pan = useMemo(() => Gesture.Pan()
-    .withRef(panRef)
     .activeOffsetX([-AXIS_ACTIVE_X, AXIS_ACTIVE_X])
     .failOffsetY([-AXIS_FAIL_Y, AXIS_FAIL_Y])
     .onTouchesDown(() => {
@@ -102,7 +98,7 @@ export function DayStrip({ days, active, onPick, panRef }) {
       if (!dragging.value) return
       dragging.value = false
       tx.value = withDecay({ velocity: 0, clamp: [0, lim.value], rubberBandEffect: true, rubberBandFactor: RUBBER_FACTOR })
-    }), [tx, start, dragging, lim, panRef])
+    }), [tx, start, dragging, lim])
 
   const slide = useAnimatedStyle(() => ({ transform: [{ translateX: lead.value - tx.value }] }))
 
