@@ -41,6 +41,7 @@ import { dayLabels, relativeDayWord } from '../../dayLabels'
 import { rowInTournaments } from '../../scheduleRows'
 import { MatchCard } from '../../scorecard'
 import { matchLine } from '../../matchLine'
+import { textWidth } from '../../measure'
 import { groupPastDay } from '../../pastGroups'
 import { CourtRenameSheet } from '../../courtRename'
 import { ScoreHistorySheet } from '../../scoreHistory'
@@ -613,7 +614,7 @@ export default function ScheduleScreen() {
             {compact
               ? (
                 <View style={s.rows}>
-                  {list.map((e, i) => <MatchRow key={e.id} e={e} first={i === 0} past={date < today()} venueMode={venueMode} venueTz={venueTzOf(e)} onHistory={openHist} />)}
+                  {list.map((e, i) => <MatchRow key={e.id} e={e} first={i === 0} past={date < today()} scoreW={scoreColumn(list, date < today())} venueMode={venueMode} venueTz={venueTzOf(e)} onHistory={openHist} />)}
                 </View>
               )
               : list.map(e => <EntryRow venueMode={venueMode} venueTz={venueTzOf(e)} onH2H={openH2H} onHistory={openHist} onPredictors={openPredictors} onChampion={setChampion} key={e.id} e={e} inCourt={view === 'court'} />)}
@@ -676,13 +677,29 @@ function LockPill({ matchId, live }) {
   )
 }
 
+/* THE SCORE COLUMN OF A CARD (owner, 2026-09-17): on a past day the score
+   shares the names' line, and a score of its own width per row moved the
+   names' field — and so "def." — sideways row by row. Every row's score
+   takes the width of the card's WIDEST score, measured from font metrics,
+   so the names' fields are equal and the verb lands on one x down the
+   card, with the margin set by the row that needs the most room. */
+function scoreColumn(list, past) {
+  if (!past) return 0
+  let w = 0
+  for (const e of list) {
+    const { score } = matchLine(e)
+    if (score) w = Math.max(w, textWidth(score, 'Archivo_700Bold', 12))
+  }
+  return w ? Math.ceil(w * 1.06) + 2 : 0    // the bold face measures through the medium table: a little over
+}
+
 /* ONE MATCH, ONE ROW — the compact list. The clock the card would print
    (footTime, shortened: "Started at 8:30 AM" is "8:30 AM" here, "Not before"
    is "NB"), the round, the surnames with "vs" or "def.", the sets on one
    line. The names shrink to stay on the row rather than ellipsise — the
    app's rule for names — and a started match opens its history on a tap,
    as the card does. */
-function MatchRow({ e, first, past, venueMode, venueTz, onHistory }) {
+function MatchRow({ e, first, past, scoreW, venueMode, venueTz, onHistory }) {
   const { round, names, left, right, verb, score, decided } = matchLine(e)
   const live = isLive(e)
   // rowClock, not footTime: the card goes quiet once a match is on or over;
@@ -723,7 +740,7 @@ function MatchRow({ e, first, past, venueMode, venueTz, onHistory }) {
       {/* A past day: the score on the names' own line, at the row's right
           (owner, 2026-09-17) — the columns it would have shared the row with
           are gone there, so the width is spare. */}
-      {past && !!score && <Text style={[s.rowScore, s.rowScoreRight, live && s.rowScoreLive]} numberOfLines={1}>{score}</Text>}
+      {past && !!score && <Text style={[s.rowScore, s.rowScoreRight, scoreW ? { width: scoreW } : null, live && s.rowScoreLive]} numberOfLines={1}>{score}</Text>}
     </Wrap>
   )
 }
