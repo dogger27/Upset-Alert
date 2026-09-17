@@ -472,20 +472,31 @@ const NAV_SLOP = { top: 9, bottom: 9, left: 2, right: 2 }
  * would let the text overflow again on a large-text phone, which is the bug
  * this pattern exists to prevent.
  */
-export function FitText({ children, style, min = 8, track = 0 }) {
+/* `wrapAtFloor`: when even `min` cannot fit the text, wrap it instead of
+   cutting it — the schedule's compact rows, where a five-set score can leave
+   a name 20pt on a small phone. Off by default: a title that wraps is a
+   different design from one that shrinks, and every other caller chose the
+   shrink. */
+export function FitText({ children, style, min = 8, track = 0, wrapAtFloor = false }) {
   const [avail, setAvail] = useState(null)
   const flat = StyleSheet.flatten(style) || {}
   const family = flat.fontFamily || 'Archivo_500Medium'
   const size = flat.fontSize || 13
   const text = String(children ?? '')
   let fontSize = size
+  let floored = false
   if (avail != null) {
     const need = textWidth(text, family, size) + text.length * track
     // A point of slack: kerning is not in the tables, and a string right on
     // the line should shrink rather than gamble.
     const room = avail - 1
-    if (need > room) fontSize = Math.max(min, (size * room) / need)
+    if (need > room) {
+      const want = (size * room) / need
+      fontSize = Math.max(min, want)
+      floored = want < min
+    }
   }
+  const wrap = wrapAtFloor && floored
   return (
     <View style={u.fitSlot} onLayout={e => setAvail(e.nativeEvent.layout.width)}>
       {/* adjustsFontSizeToFit is the backstop for where iOS measures the face
@@ -500,7 +511,7 @@ export function FitText({ children, style, min = 8, track = 0 }) {
           above is exact; it is also the eyebrow's own rule (tracking in
           proportion to its size). */}
       <Text style={[style, fontSize !== size && { fontSize, ...(track ? { letterSpacing: track * (fontSize / size) } : null) }]}
-            numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
+            numberOfLines={wrap ? undefined : 1} adjustsFontSizeToFit={!wrap} minimumFontScale={0.5}>
         {text}
       </Text>
     </View>
