@@ -155,8 +155,8 @@ const EYEBROW_SMALL = 15
    for anything that must set the same eyebrow through a fitter (the
    schedule's court names, which may never wrap: FitText takes the style
    and the tracking separately, because tracking is measured per character). */
-export function eyebrowType({ small = false, color = C.muted } = {}) {
-  const size = small ? EYEBROW_SMALL : EYEBROW
+export function eyebrowType({ small = false, color = C.muted, size: sizeOverride } = {}) {
+  const size = sizeOverride ?? (small ? EYEBROW_SMALL : EYEBROW)
   // Tracking in proportion, from the token's own 1.1 at 12.
   const track = 1.1 * (size / 12)
   return {
