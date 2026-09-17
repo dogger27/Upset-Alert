@@ -40,11 +40,10 @@ function ServeMark({ size = 14 }) {
   )
 }
 
-/* `serveMark`: where the server's mark sits — 'left', the row's leading
-   slot (the time view), or 'score', just left of the server's score (the
-   court view; owner, 2026-09-17). The slot is held on both rows either way,
-   so the names and the sets stay in line. */
-export function MatchCard({ e, scale = 1, badges = true, serveMark = 'left' }) {
+/* The server's mark sits just left of the server's score, in every view
+   (owner, 2026-09-17). The slot is held on both rows, so the names and
+   the sets stay in line. */
+export function MatchCard({ e, scale = 1, badges = true }) {
   const live = isLive(e)
   const stopped = isSuspended(e) || e.status === 'postponed' || e.status === 'to_be_completed'
   const lp = e.live_point ?? null
@@ -96,11 +95,6 @@ export function MatchCard({ e, scale = 1, badges = true, serveMark = 'left' }) {
           && (e.players || []).some(p => p.side === side && p.draw_entry_id === e.pick_entry_id)
         return (
           <View key={side} style={s.line}>
-            {(live || stopped) && serveMark === 'left' && (
-              <View style={s.slot}>
-                {serving === side && <View style={s.ball} />}
-              </View>
-            )}
             {/* `badges` off: no seed column at all — a past day's doubles, grouped
                 on their own, have no seeds to align and the column was a hole
                 on the left (owner, 2026-09-17). */}
@@ -130,7 +124,7 @@ export function MatchCard({ e, scale = 1, badges = true, serveMark = 'left' }) {
                 {winner === idx ? '✓' : '✗'}
               </Text>
             )}
-            {(live || stopped) && serveMark === 'score' && (
+            {(live || stopped) && (
               <View style={s.serveSlot}>
                 {serving === side && <ServeMark size={Math.round(14 * scale)} />}
               </View>
@@ -171,9 +165,7 @@ const s = StyleSheet.create({
   // so they still grow with Dynamic Type.
   rows: { gap: 2 },
   line: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
-  slot: { width: 8, alignItems: 'center' },
   serveSlot: { width: 16, alignItems: 'center', marginLeft: 'auto' },
-  ball: { width: 7, height: 7, borderRadius: 4, backgroundColor: C.clay },
   end: { ...T.tiny, color: C.faint, fontStyle: 'italic' },
   pick: { fontSize: 14, lineHeight: leading(18) },
   // leading() on the WIDTH too: a 13pt glyph in a 14pt box has one point of
