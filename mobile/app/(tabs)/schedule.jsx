@@ -613,7 +613,7 @@ export default function ScheduleScreen() {
             {compact
               ? (
                 <View style={s.rows}>
-                  {list.map((e, i) => <MatchRow key={e.id} e={e} first={i === 0} venueMode={venueMode} venueTz={venueTzOf(e)} onHistory={openHist} />)}
+                  {list.map((e, i) => <MatchRow key={e.id} e={e} first={i === 0} past={date < today()} venueMode={venueMode} venueTz={venueTzOf(e)} onHistory={openHist} />)}
                 </View>
               )
               : list.map(e => <EntryRow venueMode={venueMode} venueTz={venueTzOf(e)} onH2H={openH2H} onHistory={openHist} onPredictors={openPredictors} onChampion={setChampion} key={e.id} e={e} inCourt={view === 'court'} />)}
@@ -682,7 +682,7 @@ function LockPill({ matchId, live }) {
    line. The names shrink to stay on the row rather than ellipsise — the
    app's rule for names — and a started match opens its history on a tap,
    as the card does. */
-function MatchRow({ e, first, venueMode, venueTz, onHistory }) {
+function MatchRow({ e, first, past, venueMode, venueTz, onHistory }) {
   const { round, names, left, right, verb, score, decided } = matchLine(e)
   const live = isLive(e)
   // rowClock, not footTime: the card goes quiet once a match is on or over;
@@ -701,8 +701,10 @@ function MatchRow({ e, first, venueMode, venueTz, onHistory }) {
           accessibilityLabel={`${clock.estimated ? 'about ' : ''}${when}${clock.displaced ? ` (${clock.displaced})` : ''} ${round} ${names} ${score}`.trim()}>
       {/* Measured fitting (FitText), never "…": the names shrink to the room
           the score leaves them, and the clock to its column. */}
-      <View style={s.rowWhenSlot}><FitText style={s.rowWhen} min={9}>{when}</FitText></View>
-      <View style={s.rowRoundSlot}><FitText style={s.rowRound} min={8}>{round}</FitText></View>
+      {/* A PAST DAY IS A RECORD: the round is the group's heading and the
+          clock is history, so neither takes a column (owner, 2026-09-17). */}
+      {!past && <View style={s.rowWhenSlot}><FitText style={s.rowWhen} min={9}>{when}</FitText></View>}
+      {!past && <View style={s.rowRoundSlot}><FitText style={s.rowRound} min={8}>{round}</FitText></View>}
       {/* THE PLAYERS' FIELD (owner, 2026-09-17): each name centred in its own
           half, "def." or "vs" between them; the score on a line of its own
           beneath, left, in the light green. */}
