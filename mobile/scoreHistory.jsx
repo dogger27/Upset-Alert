@@ -22,6 +22,7 @@ import { Sheet } from './sheet'
 import { C, R, S, T } from './theme'
 import { Loading } from './ui'
 import { useApi } from './useApi'
+import { FitText } from './cards'
 
 const THUMB = 26
 /* A serve event sits on the SERVER's side of the rail and a break on the
@@ -245,7 +246,7 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
               {prevPoint ? (
                 <View style={s.prevPoint} accessibilityLiveRegion="polite">
                   <Text style={s.legendText}>Prev Point:</Text>
-                  <Text style={s.prevPointValue}>{prevPoint}</Text>
+                  <FitText style={s.prevPointValue} min={9}>{prevPoint}</FitText>
                 </View>
               ) : null}
             </View>
@@ -505,15 +506,14 @@ const s = StyleSheet.create({
     backgroundColor: C.ink, borderWidth: 2, borderColor: C.card,
   },
   /* One row, fixed height: legend at the left, prev point at the right. */
-  /* TWO LINES, ALWAYS RESERVED: the legend on the first, never wrapping —
-     an ace or a double fault adds an item, and the "Prev Point" label used
-     to push the legend onto a second line (owner, 2026-09-17) — and the
-     Prev Point on the second, right-aligned. Both heights are held even
-     when empty (16 a line, as before), so the tabs below never jump as the
-     thumb crosses an ace. */
-  underline: { minHeight: 36, gap: 4 },
-  legend: { flexDirection: 'row', flexWrap: 'nowrap', gap: S.md, alignItems: 'center' },
-  prevPoint: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-end' },
+  /* ONE LINE, ONE HEIGHT (owner, 2026-09-17): the legend never wraps and the
+     tabs below never move — an ace or a double fault adds a legend item and
+     a "Prev Point" label, and neither may cost a line. The legend keeps its
+     width; the Prev Point value is the thing that gives, shrinking by
+     measurement (FitText) in the room that is left. */
+  underline: { flexDirection: 'row', alignItems: 'center', minHeight: 16, gap: S.sm },
+  legend: { flexDirection: 'row', flexWrap: 'nowrap', gap: S.sm, alignItems: 'center', flexShrink: 0 },
+  prevPoint: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 'auto', flexShrink: 1, minWidth: 0 },
   prevPointValue: { ...T.tiny, color: C.ink, fontFamily: 'Archivo_700Bold' },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   legendBox: { width: 8, height: 8, borderRadius: 2 },
