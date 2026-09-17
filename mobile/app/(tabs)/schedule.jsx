@@ -304,6 +304,11 @@ export default function ScheduleScreen() {
      apply either: a selection made on a two-tour day would otherwise empty a
      one-tour day with no chip on screen to undo it. */
   const tourChips = toursHere.length > 1
+  /* A GENDER BAR on the dense rows (owner, 2026-09-17): where the day mixes
+     the tours — a Slam, a combined event — each row carries a thin bar at
+     its far left in the tour's colour, pink or blue. One tour on the day
+     needs no bar, and a qualifying row has no tour to show. */
+  const tourBarOf = e => (tourChips && e.tour ? (e.tour === 'WTA' ? TOUR_BAR.WTA : TOUR_BAR.ATP) : null)
   /* DOUBLES TO FILTER — among the rows the other filters keep, not among every
      row fetched. Filtering to a tournament with no doubles while another event
      on the same day has some left the switch on screen toggling nothing; so
@@ -641,13 +646,13 @@ export default function ScheduleScreen() {
             {density === 'mid'
               ? (
                 <View style={s.rows}>
-                  {list.map((e, i) => <MatchMini key={e.id} e={e} first={i === 0} past={past} onHistory={openHist} />)}
+                  {list.map((e, i) => <MatchMini key={e.id} e={e} first={i === 0} alt={i % 2 === 1} tourBar={tourBarOf(e)} past={past} onHistory={openHist} />)}
                 </View>
               )
               : compact
               ? (
                 <View style={s.rows}>
-                  {list.map((e, i) => <MatchRow key={e.id} e={e} first={i === 0} past={past} {...rowColumns(list, past, screenW - 2 * S.sm - 2 * 8 - 2)} venueMode={venueMode} venueTz={venueTzOf(e)} onHistory={openHist} />)}
+                  {list.map((e, i) => <MatchRow key={e.id} e={e} first={i === 0} alt={i % 2 === 1} tourBar={tourBarOf(e)} past={past} {...rowColumns(list, past, screenW - 2 * S.sm - 2 * 8 - 2)} venueMode={venueMode} venueTz={venueTzOf(e)} onHistory={openHist} />)}
                 </View>
               )
               : list.map(e => <EntryRow venueMode={venueMode} venueTz={venueTzOf(e)} onH2H={openH2H} onHistory={openHist} onPredictors={openPredictors} onChampion={setChampion} key={e.id} e={e} inCourt={view === 'court'} />)}
@@ -741,12 +746,13 @@ function rowColumns(list, past, innerW) {
    hairline between matches and no chrome — as many matches on a screen as
    the box score allows (owner, 2026-09-17). A started match opens its
    history on a tap, as the card does. */
-function MatchMini({ e, first, past, onHistory }) {
+function MatchMini({ e, first, alt, tourBar, past, onHistory }) {
   const openable = onHistory && ['live', 'completed', 'postponed', 'to_be_completed'].includes(e.status)
   const Wrap = openable ? Pressable : View
   return (
-    <Wrap style={[s.miniRow, !first && s.miniNext]} onPress={openable ? () => onHistory(e) : undefined}
+    <Wrap style={[s.miniRow, !first && s.miniNext, alt && s.rowAlt]} onPress={openable ? () => onHistory(e) : undefined}
           accessibilityRole={openable ? 'button' : undefined}>
+      {tourBar ? <View style={[s.rowBar, { backgroundColor: tourBar }]} /> : null}
       <MatchCard e={e} scale={0.8} badges={!(past && e.discipline !== 'singles')} />
     </Wrap>
   )
@@ -758,7 +764,7 @@ function MatchMini({ e, first, past, onHistory }) {
    line. The names shrink to stay on the row rather than ellipsise — the
    app's rule for names — and a started match opens its history on a tap,
    as the card does. */
-function MatchRow({ e, first, past, leftW, venueMode, venueTz, onHistory }) {
+function MatchRow({ e, first, alt, tourBar, past, leftW, venueMode, venueTz, onHistory }) {
   const { round, names, left, right, verb, leftSide, score, decided } = matchLine(e)
   // Singles: each player's flag beside the verb (owner, 2026-09-17); doubles has four and no room.
   const singles = e.discipline === 'singles'
@@ -774,9 +780,10 @@ function MatchRow({ e, first, past, leftW, venueMode, venueTz, onHistory }) {
   const openable = onHistory && ['live', 'completed', 'postponed', 'to_be_completed'].includes(e.status)
   const Wrap = openable ? Pressable : View
   return (
-    <Wrap style={[s.row, !first && s.rowNext]} onPress={openable ? () => onHistory(e) : undefined}
+    <Wrap style={[s.row, !first && s.rowNext, alt && s.rowAlt]} onPress={openable ? () => onHistory(e) : undefined}
           accessibilityRole={openable ? 'button' : undefined}
           accessibilityLabel={`${clock.estimated ? 'about ' : ''}${when}${clock.displaced ? ` (${clock.displaced})` : ''} ${round} ${names} ${score}`.trim()}>
+      {tourBar ? <View style={[s.rowBar, { backgroundColor: tourBar }]} /> : null}
       {/* Measured fitting (FitText), never "…": the names shrink to the room
           the score leaves them, and the clock to its column. */}
       {/* A PAST DAY IS A RECORD: the round is the group's heading and the
@@ -955,6 +962,9 @@ const SUB = eyebrowType({ small: true, color: C.faint })
 const TOURN = eyebrowType({ size: 23, color: C.clayLight })
 const TOURN_SMALL = eyebrowType({ size: 18, color: C.clayLight })
 
+// The tour chips' own colours, for the bar.
+const TOUR_BAR = { ATP: '#2563eb', WTA: '#db2777' }
+
 const s = StyleSheet.create({
   courtHead: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
   tournHead: { marginBottom: -(S.sm - 2) },
@@ -995,6 +1005,9 @@ const s = StyleSheet.create({
   // A clear rule between matches (owner, 2026-09-17): two lines of box score
   // per match need a firmer division than the list's hairline.
   miniNext: { borderTopWidth: 2, borderTopColor: C.borderLit },
+  // Zebra rows, and the tour bar in the row's own left padding.
+  rowAlt: { backgroundColor: C.raised },
+  rowBar: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 3 },
   rowWhenSlot: { width: 58, flexDirection: 'row' },
   // The clock's and the round's columns together, for a score in their place.
   rowLeadSlot: { width: 58 + 5 + 30, flexDirection: 'row' },
