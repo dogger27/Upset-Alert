@@ -2529,6 +2529,82 @@ async def resolve_settled_alternatives(db, tournament_id: int) -> int:
     return collapsed
 
 
+def surname_agrees(sheet_name: str, draw_name: str) -> bool:
+    """The same surname under a plain ASCII fold — the sheet's last token
+    against the draw's. The given name is left out on purpose: the sheet
+    prints "Aleksandr SHEVCHENKO" where the draw has "Alexander Shevchenko",
+    and no fold equates those; the surname does. "A. SHEVCHENKO" agrees too.
+    A different surname is a different player (a substitute), and must not."""
+    import unicodedata
+    def last(name):
+        toks = [t for t in re.split(r"\s+", (name or "").strip()) if t]
+        if not toks:
+            return ""
+        t = unicodedata.normalize("NFKD", toks[-1]).encode("ascii", "ignore").decode()
+        return t.casefold().strip(".,")
+    a, b = last(sheet_name), last(draw_name)
+    return bool(a) and a == b
+
+
+async def stamp_linked_rows(db, tournament_id: int) -> int:
+    """THE OTHER SIDE OF A LINKED ROW. A row can hold its bracket match with
+    one player still unlinked: the match was pinned from the side that
+    matched, and the other side's spelling never folded onto the draw's —
+    "Aleksandr SHEVCHENKO" against "Alexander Shevchenko", US Open
+    2026-08-30 — while the row's OWN match already says who he is. The
+    relink pass never looked, because it revisits only rows with no match
+    yet. So: for every singles main-draw row with a match and exactly one
+    unlinked side, take the match's other entry when the surname agrees.
+    Everything downstream — seed, rank, nationality, the proper name — keys
+    on that id (owner, 2026-09-17: "why does this player have no seed?")."""
+    rows = (await db.execute(
+        select(ScheduleEntry).where(
+            ScheduleEntry.tournament_id == tournament_id,
+            ScheduleEntry.match_id.isnot(None),
+            ScheduleEntry.discipline == 'singles',
+            ScheduleEntry.stage == 'main',
+        ).execution_options(populate_existing=True))).scalars().all()
+    if not rows:
+        return 0
+    match_by_id = {m.id: m for m in (await db.execute(
+        select(Match).where(Match.id.in_({r.match_id for r in rows})))).scalars().all()}
+    name_by_id = {}
+    stamped = []
+    for entry in rows:
+        m = match_by_id.get(entry.match_id)
+        if m is None or not m.player1_id or not m.player2_id:
+            continue
+        na = [p for p in (entry.players or []) if p.side == 'a']
+        nb = [p for p in (entry.players or []) if p.side == 'b']
+        if len(na) != 1 or len(nb) != 1:
+            continue
+        linked = [p for p in (na[0], nb[0]) if p.draw_entry_id]
+        missing = [p for p in (na[0], nb[0]) if not p.draw_entry_id]
+        if len(linked) != 1 or len(missing) != 1:
+            continue
+        if linked[0].draw_entry_id not in (m.player1_id, m.player2_id):
+            continue
+        other = m.player2_id if linked[0].draw_entry_id == m.player1_id else m.player1_id
+        if other not in name_by_id:
+            name_by_id[other] = (await db.execute(
+                select(DrawEntry.name).where(DrawEntry.id == other))).scalar()
+        if not surname_agrees(missing[0].raw_name, name_by_id.get(other) or ""):
+            continue
+        missing[0].draw_entry_id = other
+        stamped.append((entry, missing[0].raw_name, other))
+    if not stamped:
+        return 0
+    await db.commit()
+    from app.services.system_log import app_log
+    await app_log(
+        "info", "order_of_play",
+        f"Linked {len(stamped)} player(s) on already-matched slots from their own bracket match: "
+        + "; ".join(f"{raw!r} -> entry {eid} (slot {e.id})" for e, raw, eid in stamped[:5]),
+        {"tournament_id": tournament_id,
+         "stamped": [[e.id, str(e.play_date), raw, eid] for e, raw, eid in stamped[:20]]})
+    return len(stamped)
+
+
 async def relink_bracket_matches(db, tournament_id: int) -> int:
     """Attach a bracket match to slots the draw could not identify at ingest.
 
@@ -2564,6 +2640,9 @@ async def relink_bracket_matches(db, tournament_id: int) -> int:
     # Same refresh as the resolver above, and needed for the same reason: this
     # runs from the ingest's own session too. See _READ_THE_DAY_AS_STORED.
     await db.flush()
+    # The other side of an already-linked row first — the case this pass's
+    # own filter (match_id IS NULL) never reaches.
+    await stamp_linked_rows(db, tournament_id)
 
     # UNLINK before relinking. `match_id` is only ever WRITTEN, never cleared,
     # so a row that took a link it was not entitled to keeps it for the life of
