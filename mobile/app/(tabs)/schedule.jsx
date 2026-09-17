@@ -591,7 +591,7 @@ export default function ScheduleScreen() {
                 that is drawn. */}
             {court ? (
               <View style={s.courtHead}>
-                <FitText style={COURT.style} track={COURT.track} min={9}>{court.toUpperCase()}</FitText>
+                <FitText style={(compact ? COURT_SMALL : COURT).style} track={(compact ? COURT_SMALL : COURT).track} min={9}>{court.toUpperCase()}</FitText>
                 {/* ADMINS RENAME A COURT FROM HERE (owner, 2026-09-17): the
                     pencil after the name opens the sheet; the name it sets is
                     the court's everywhere the schedule is served. The sheet's
@@ -828,8 +828,10 @@ function shortDate(iso) {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
-// The court header's type: the eyebrow, for the fitter.
+// The court header's type: the eyebrow, for the fitter — and the small
+// eyebrow (15 against 21, 30% down) over the compact list (owner, 2026-09-17).
 const COURT = eyebrowType()
+const COURT_SMALL = eyebrowType({ small: true })
 
 const s = StyleSheet.create({
   courtHead: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
