@@ -417,10 +417,13 @@ export default function ScheduleScreen() {
       // "Singles" is said only when there is doubles on the page to tell it
       // from — Doubles off, or a day with none, is rounds alone (owner).
       const mixed = new Set(chrono.map(e => (e.discipline === 'singles' ? 'singles' : 'other'))).size > 1
-      return groupPastDay(chrono, { byTournament }).map(g => ({
+      // A dual-gender day — a Slam, a combined event — groups by tour too:
+      // tournament, then ATP / WTA, then round (owner, 2026-09-17).
+      const byTour = new Set(chrono.map(e => e.tour).filter(Boolean)).size > 1
+      return groupPastDay(chrono, { byTournament, byTour }).map(g => ({
         key: g.key,
         title: g.first ? g.tournament : null,
-        sub: [mixed ? g.discipline : null, g.round || null].filter(Boolean).join(' · '),
+        sub: [byTour ? g.tour : null, mixed ? g.discipline : null, g.round || null].filter(Boolean).join(' · '),
         list: g.list,
       }))
     }
