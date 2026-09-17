@@ -1021,8 +1021,9 @@ const s = StyleSheet.create({
   rows: { borderRadius: R.md, borderWidth: 1, borderColor: C.border, backgroundColor: C.card, overflow: 'hidden', marginHorizontal: -(S.lg - S.sm) },
   row: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 5, minHeight: leading(34) },
   rowNext: { borderTopWidth: 1, borderTopColor: C.border },
-  miniRow: { paddingHorizontal: 8, paddingTop: 9, paddingBottom: 5 },
-  miniFirstWhen: { paddingTop: 15 },
+  // A touch tighter than the tag's full 8 below the line: the glyphs stop short of it (owner, 2026-09-17).
+  miniRow: { paddingHorizontal: 8, paddingTop: 6, paddingBottom: 5 },
+  miniFirstWhen: { paddingTop: 13 },
   // 16 tall, centred on the 2px line above: 8 above it, 8 below.
   miniWhen: { position: 'absolute', left: 10, top: -9, height: 16, paddingHorizontal: 4, justifyContent: 'center', zIndex: 1 },
   miniWhenFirst: { top: 0 },
