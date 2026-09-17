@@ -244,8 +244,9 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
                 </View>
               )}
               {prevPoint ? (
-                <View style={s.prevPoint} accessibilityLiveRegion="polite">
-                  <Text style={s.legendText}>Prev Point:</Text>
+                <View style={s.prevPoint} accessibilityLiveRegion="polite" accessibilityLabel={`Previous point: ${prevPoint}`}>
+                  {/* Just the word — "Ace", "Double Fault" — no label (owner,
+                      2026-09-17); the label lives in the accessibility text. */}
                   <FitText style={s.prevPointValue} min={9}>{prevPoint}</FitText>
                 </View>
               ) : null}
