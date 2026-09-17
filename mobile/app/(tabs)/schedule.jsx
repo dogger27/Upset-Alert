@@ -1011,7 +1011,8 @@ const s = StyleSheet.create({
      the glass rather than the page's S.lg — the text inside still lands on
      the page's own margin — and the round sits close on the names. */
   edge: { marginHorizontal: -(S.lg - S.sm) },
-  rows: { borderRadius: R.md, borderWidth: 1, borderColor: C.border, backgroundColor: C.card, overflow: 'hidden', marginHorizontal: -(S.lg - S.sm) },
+  // The card's edge is the same line as the dividers inside it (owner, 2026-09-17).
+  rows: { borderRadius: R.md, borderWidth: 2, borderColor: C.borderLit, backgroundColor: C.card, overflow: 'hidden', marginHorizontal: -(S.lg - S.sm) },
   row: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 5, minHeight: leading(34) },
   rowNext: { borderTopWidth: 1, borderTopColor: C.border },
   // A touch tighter than the tag's full 8 below the line: the glyphs stop short of it (owner, 2026-09-17).
