@@ -363,7 +363,7 @@ export default function ScheduleScreen() {
       if (!rowInTournaments(e, eventFilter)) return false
       return true
     })
-  }, [all, view, showDone, showDoubles, tourSel, eventFilter, tourChips])
+  }, [all, view, showDoubles, tourSel, eventFilter, tourChips, doneOn])
 
   const groups = useMemo(() => {
     if (view === 'court') {
