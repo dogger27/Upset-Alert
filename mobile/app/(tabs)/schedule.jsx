@@ -629,7 +629,7 @@ export default function ScheduleScreen() {
             {density === 'mid'
               ? (
                 <View style={s.rows}>
-                  {list.map((e, i) => <MatchMini key={e.id} e={e} first={i === 0} alt={i % 2 === 1} tourBar={tourBarOf(e)} past={past} tournament={!past && view !== 'court' && manyTournaments ? e.tournament_name : null} venueMode={venueMode} venueTz={venueTzOf(e)} onHistory={openHist} />)}
+                  {list.map((e, i) => <MatchMini key={e.id} e={e} first={i === 0} alt={i % 2 === 1} tourBar={tourBarOf(e)} past={past} tournament={!past && view !== 'court' && manyTournaments ? e.tournament_name : null} venueMode={venueMode} venueTz={venueTzOf(e)} onHistory={openHist} onH2H={openH2H} onPredictors={openPredictors} />)}
                 </View>
               )
               : compact
@@ -743,9 +743,26 @@ function LineTag({ first, alt, right, children }) {
   )
 }
 
-function MatchMini({ e, first, alt, tourBar, past, tournament, venueMode, venueTz, onHistory }) {
+/* The H2H pair a row can open — singles, both players known to Tennis
+   Explorer — in the shape the H2H sheet takes. */
+function h2hPairOf(e) {
+  const a = (e.players || []).find(p => p.side === 'a'), b = (e.players || []).find(p => p.side === 'b')
+  return e.discipline === 'singles' && a?.te_slug && b?.te_slug
+    ? { a: { name: a.entry_name || a.name, te_slug: a.te_slug }, b: { name: b.entry_name || b.name, te_slug: b.te_slug } }
+    : null
+}
+
+/* A CELL'S TWO SIDE BARS (owner, 2026-09-17): on the far left the group —
+   who called it, the draw page's own icon — and on the far right "H2H",
+   set on its side, each a full-height bar the thumb can find without
+   aiming. The bars keep their width on every row so the cells line up; a
+   row with nothing to open there (doubles has no H2H, a match with no
+   bracket match has no picks) leaves the bar empty. */
+function MatchMini({ e, first, alt, tourBar, past, tournament, venueMode, venueTz, onHistory, onH2H, onPredictors }) {
   const openable = onHistory && ['live', 'completed', 'postponed', 'to_be_completed'].includes(e.status)
   const Wrap = openable ? Pressable : View
+  const pair = onH2H ? h2hPairOf(e) : null
+  const picks = onPredictors && e.match_id != null
   /* THE START TIME ON THE TOP BORDER, towards the left (owner, 2026-09-17),
      for an upcoming match; a past day is a record: no clock. THE TOURNAMENT
      on the same line, far right, when the page mixes tournaments (owner,
@@ -760,7 +777,20 @@ function MatchMini({ e, first, alt, tourBar, past, tournament, venueMode, venueT
       {tourBar ? <View style={[s.rowBar, { backgroundColor: tourBar }]} /> : null}
       {when ? <LineTag first={first} alt={alt}>{when}</LineTag> : null}
       {tournament ? <LineTag first={first} alt={alt} right>{tournament}</LineTag> : null}
-      <MatchCard e={e} scale={0.8} badges={!(past && e.discipline !== 'singles' && !(e.players || []).some(p => p.seed || p.draw_rank != null))} />
+      <View style={s.miniCell}>
+        <Pressable style={s.miniBar} onPress={picks ? () => onPredictors(matchFromEntry(e)) : undefined} hitSlop={4}
+                   disabled={!picks} accessibilityRole={picks ? 'button' : undefined}
+                   accessibilityLabel={picks ? (e.winner_side != null ? 'Who called it' : 'Who’s still in it') : undefined}>
+          {picks ? <Ionicons name="people" size={15} color={C.greenLit} /> : null}
+        </Pressable>
+        <View style={s.miniCard}>
+          <MatchCard e={e} scale={0.8} badges={!(past && e.discipline !== 'singles' && !(e.players || []).some(p => p.seed || p.draw_rank != null))} />
+        </View>
+        <Pressable style={s.miniBar} onPress={pair ? () => onH2H(pair) : undefined} hitSlop={4}
+                   disabled={!pair} accessibilityRole={pair ? 'button' : undefined} accessibilityLabel={pair ? 'Head to head' : undefined}>
+          {pair ? <Text style={s.miniBarText}>H2H</Text> : null}
+        </Pressable>
+      </View>
     </Wrap>
   )
 }
@@ -1016,12 +1046,18 @@ const s = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 5, minHeight: leading(34) },
   rowNext: { borderTopWidth: 1, borderTopColor: C.border },
   // A touch tighter than the tag's full 8 below the line: the glyphs stop short of it (owner, 2026-09-17).
-  miniRow: { paddingHorizontal: 8, paddingTop: 6, paddingBottom: 5 },
+  miniRow: { paddingHorizontal: 0, paddingTop: 6, paddingBottom: 5 },
+  // The cell: [group bar][card][H2H bar], the bars full height.
+  miniCell: { flexDirection: 'row', alignItems: 'stretch' },
+  miniCard: { flex: 1, minWidth: 0, paddingHorizontal: 4 },
+  miniBar: { width: 26, alignItems: 'center', justifyContent: 'center' },
+  // "H2H" on its side: the box stays the word's width, rotated about its centre.
+  miniBarText: { fontFamily: 'Archivo_700Bold', fontSize: 10, lineHeight: leading(14), letterSpacing: 0.5, color: C.greenLit, width: 40, textAlign: 'center', transform: [{ rotate: '-90deg' }] },
   miniFirstWhen: { paddingTop: 13 },
   // 16 tall, centred on the 2px line above: 8 above it, 8 below.
   miniTag: { position: 'absolute', top: -9, height: 16, paddingHorizontal: 4, justifyContent: 'center', zIndex: 1, maxWidth: '55%' },
-  miniTagLeft: { left: 10 },
-  miniTagRight: { right: 10 },
+  miniTagLeft: { left: 30 },
+  miniTagRight: { right: 28 },
   miniTagFirst: { top: 0 },
   miniTagHalf: { position: 'absolute', left: 0, right: 0, height: 8 },
   // A clear rule between matches (owner, 2026-09-17): two lines of box score
