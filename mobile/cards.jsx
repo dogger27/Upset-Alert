@@ -967,7 +967,18 @@ export function FlagSlot({ codes, slots = 1 }) {
    inside the slot, so it follows the name rather than drifting to the row's
    far edge. Its width comes off what the name may use. */
 const AFTER_PX = 24
-export function PlayerName({ name, doubles = false, shrinkOnly = false, style, after = null }) {
+/* `flags`: a doubles pair's two countries, one BEFORE EACH NAME (owner,
+   2026-09-17) - "🇺🇸 Stearns / 🇺🇸 Stephens" - rather than two flags side by
+   side ahead of the pair. The glyphs are not in the metric tables, so each
+   takes a fixed allowance off the room before the rungs are measured. */
+const FLAG_PX = 20
+/* "A / B" with each side's flag ahead of its name; a side with no country
+   keeps its name alone. pairForms joins with " / ", so the split is exact. */
+export function withFlags(text, glyphs) {
+  const parts = String(text).split(' / ')
+  return parts.map((part, i) => (glyphs[i] ? `${glyphs[i]} ${part}` : part)).join(' / ')
+}
+export function PlayerName({ name, doubles = false, shrinkOnly = false, style, after = null, flags = null }) {
   /* shrinkOnly: a USERNAME. It cannot be initialised or reduced to a surname —
      "koounderpressure" has neither — but the last two rungs still apply:
      shrink first, and only then "…". Truncating a handle is the same loss as
@@ -981,12 +992,13 @@ export function PlayerName({ name, doubles = false, shrinkOnly = false, style, a
   const family = flat.fontFamily || 'Archivo_500Medium'
   const size = flat.fontSize || 15
 
+  const glyphs = doubles && flags ? flags.map(c => flagEmoji(c)) : []
   let text = forms[0]
   let fontSize = size
   if (avail != null) {
     // A point of slack: kerning is not in the tables, and a name that is
     // right on the line should shorten rather than gamble.
-    const room = avail - 1 - (after ? AFTER_PX : 0)
+    const room = avail - 1 - (after ? AFTER_PX : 0) - (glyphs.length ? glyphs.length * FLAG_PX * (size / 15) : 0)
     const fits = forms.find(f => textWidth(f, family, size) <= room)
     if (fits) {
       text = fits
@@ -1007,7 +1019,7 @@ export function PlayerName({ name, doubles = false, shrinkOnly = false, style, a
           native shrink takes the last step rather than an ellipsis. */}
       <Text style={[style, { flexShrink: 1 }, fontSize !== size && { fontSize }]} numberOfLines={1}
             adjustsFontSizeToFit minimumFontScale={0.3}>
-        {text}
+        {glyphs.length ? withFlags(text, glyphs) : text}
       </Text>
       {after}
     </View>
