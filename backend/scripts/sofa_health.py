@@ -7,7 +7,9 @@ holds every real address and push subscription. So a 403 opens the thirty-minute
 breaker, writes a warning nobody reads, and the only visible symptom is that
 live scores quietly stop.
 
-That matters more since the residential proxy was cancelled on 2026-08-22.
+That matters more while there is no residential proxy: cancelled on 2026-08-22,
+briefly back, and OFF again by the owner's decision on 2026-09-17 (IPRoyal not
+renewed; SOFASCORE_PROXY is empty and stays so until the owner says otherwise).
 Sofascore requests leave from Jupiter's own address now, and the 403 handler's
 rotate-to-a-fresh-exit path is a no-op without a proxy — correct, because
 retrying into a block from a fixed address is what turns a short block into a
