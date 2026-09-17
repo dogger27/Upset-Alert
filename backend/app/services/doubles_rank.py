@@ -8,7 +8,7 @@ the shape of the singles badge (services/upsets.py::_compute_draw_ranks).
 Sofascore holds no doubles ranking at all — a player carries one `ranking`
 and it is the live singles rank — so the figure comes from Tennis Explorer's
 weekly doubles list (rankings.py::ensure_te_doubles_week), snapshotted like
-the singles one and read at the tournament's seeding week.
+the singles one and read at the draw's seeding week.
 
 Read-only on the request path. The badge is served by the schedule day
 endpoint, which the live subscription polls every ten seconds, so the answer
@@ -116,24 +116,8 @@ def _fill_week_in_background(gender: str, week: date) -> None:
 
 
 async def _compute(db, tournament_id: int) -> dict[tuple[int, str], int]:
-    from app.models.rankings import TeDoublesSnapshot, TePlayer
     from app.models.schedule import ScheduleEntry
-    from app.models.tournament import DrawEntry, Tournament
-    from app.routers.schedule import _name_key, _printed_mark
-    from app.services.rankings import _build_te_index, _match_token_set
-
-    t = await db.get(Tournament, tournament_id)
-    if t is None:
-        return {}
-    anchor = t.seed_ranking_week or t.start_date or date.today()
-    target = _monday(anchor)
-    week = await _latest_week(db, t.gender, target)
-    if week is None:
-        _fill_week_in_background(t.gender, target)
-        return {}
-    if week < target:
-        # We hold an older week; the seeding week itself is worth fetching.
-        _fill_week_in_background(t.gender, target)
+    from app.models.tournament import Draw
 
     entries = (await db.execute(
         select(ScheduleEntry)
@@ -145,9 +129,55 @@ async def _compute(db, tournament_id: int) -> dict[tuple[int, str], int]:
     if not entries:
         return {}
 
+    # `schedule_entries.tournament_id` is the TOURNAMENT; the gender, the dates
+    # and the seeding week live on its DRAWS, one per gender — a combined event
+    # seeds its men's and women's doubles from different weeks. A row's gender
+    # is its tour, else its draw's, else the only draw there is.
+    draws = (await db.execute(select(Draw).where(Draw.tournament_id == tournament_id))).scalars().all()
+    by_gender = {d.gender: d for d in draws}
+    by_id = {d.id: d for d in draws}
+
+    def gender_of(e) -> Optional[str]:
+        g = {"WTA": "F", "ATP": "M"}.get(e.tour or "")
+        if g:
+            return g
+        d = by_id.get(e.draw_id)
+        if d is not None:
+            return d.gender
+        return draws[0].gender if len(draws) == 1 else None
+
+    out: dict[tuple[int, str], int] = {}
+    groups: dict[str, list] = {}
+    for e in entries:
+        g = gender_of(e)
+        if g:
+            groups.setdefault(g, []).append(e)
+    for gender, rows in sorted(groups.items()):
+        d = by_gender.get(gender)
+        if d is None:
+            continue
+        anchor = d.seed_ranking_week or d.start_date or date.today()
+        target = _monday(anchor)
+        week = await _latest_week(db, gender, target)
+        if week is None:
+            _fill_week_in_background(gender, target)
+            continue
+        if week < target:
+            # We hold an older week; the seeding week itself is worth fetching.
+            _fill_week_in_background(gender, target)
+        out.update(await _rank_field(db, rows, gender, week))
+    return out
+
+
+async def _rank_field(db, entries, gender: str, week: date) -> dict[tuple[int, str], int]:
+    from app.models.rankings import TeDoublesSnapshot, TePlayer
+    from app.models.tournament import DrawEntry
+    from app.routers.schedule import _name_key, _printed_mark
+    from app.services.rankings import _build_te_index, _match_token_set
+
     ranks_by_te = {s.player_id: s.rank for s in (await db.execute(
         select(TeDoublesSnapshot).where(TeDoublesSnapshot.week_date == week))).scalars()}
-    te_players = (await db.execute(select(TePlayer).where(TePlayer.gender == t.gender))).scalars().all()
+    te_players = (await db.execute(select(TePlayer).where(TePlayer.gender == gender))).scalars().all()
     te_index, _norms, _slugs = _build_te_index(te_players)
 
     de_ids = {p.draw_entry_id for e in entries for p in e.players if p.draw_entry_id}

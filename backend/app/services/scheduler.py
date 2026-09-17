@@ -471,6 +471,11 @@ async def _refresh_weekly_rankings() -> None:
                 scraped = await ensure_te_week(gender, week_date, db, log_errors=True)
                 if scraped:
                     scraped_any = True
+            # The doubles list too (owner, 2026-09-17): the pair badge reads it.
+            from app.services.rankings import ensure_te_doubles_week
+            for gender in ("M", "F"):
+                if await ensure_te_doubles_week(gender, week_date, db, log_errors=True):
+                    scraped_any = True
             if scraped_any:
                 await db.commit()
 
