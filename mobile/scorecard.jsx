@@ -26,7 +26,25 @@ import { C, S, T } from './theme'
    density (owner, 2026-09-17): the same two lines and box score, smaller,
    so more matches fit a screen. Names, marks and the score cells scale
    together; the badge and the flag keep their size (already small). */
-export function MatchCard({ e, scale = 1, badges = true }) {
+/* THE SERVE MARK, as the owner drew it (2026-09-17): a clay disc inside a
+   dark ring with a lighter outline — the brand dot's anatomy. */
+function ServeMark({ size = 14 }) {
+  return (
+    <View style={{
+      width: size, height: size, borderRadius: size / 2,
+      backgroundColor: C.clayDeep + '66', borderWidth: 1, borderColor: C.clayLight + '80',
+      alignItems: 'center', justifyContent: 'center',
+    }}>
+      <View style={{ width: size * 0.55, height: size * 0.55, borderRadius: size * 0.275, backgroundColor: C.clay }} />
+    </View>
+  )
+}
+
+/* `serveMark`: where the server's mark sits — 'left', the row's leading
+   slot (the time view), or 'score', just left of the server's score (the
+   court view; owner, 2026-09-17). The slot is held on both rows either way,
+   so the names and the sets stay in line. */
+export function MatchCard({ e, scale = 1, badges = true, serveMark = 'left' }) {
   const live = isLive(e)
   const stopped = isSuspended(e) || e.status === 'postponed' || e.status === 'to_be_completed'
   const lp = e.live_point ?? null
@@ -78,7 +96,7 @@ export function MatchCard({ e, scale = 1, badges = true }) {
           && (e.players || []).some(p => p.side === side && p.draw_entry_id === e.pick_entry_id)
         return (
           <View key={side} style={s.line}>
-            {(live || stopped) && (
+            {(live || stopped) && serveMark === 'left' && (
               <View style={s.slot}>
                 {serving === side && <View style={s.ball} />}
               </View>
@@ -111,6 +129,11 @@ export function MatchCard({ e, scale = 1, badges = true }) {
               <Text style={[s.mark, scale < 1 && { fontSize: Math.round(13 * scale), lineHeight: leading(Math.round(16 * scale)) }, { color: winner === idx ? C.greenLit : C.lossMark }]}>
                 {winner === idx ? '✓' : '✗'}
               </Text>
+            )}
+            {(live || stopped) && serveMark === 'score' && (
+              <View style={s.serveSlot}>
+                {serving === side && <ServeMark size={Math.round(14 * scale)} />}
+              </View>
             )}
             <View style={[s.sets, dense?.sets]}>
               {Array.from({ length: n }, (_, i) => {
@@ -149,6 +172,7 @@ const s = StyleSheet.create({
   rows: { gap: 2 },
   line: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
   slot: { width: 8, alignItems: 'center' },
+  serveSlot: { width: 16, alignItems: 'center', marginLeft: 'auto' },
   ball: { width: 7, height: 7, borderRadius: 4, backgroundColor: C.clay },
   end: { ...T.tiny, color: C.faint, fontStyle: 'italic' },
   pick: { fontSize: 14, lineHeight: leading(18) },

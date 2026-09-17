@@ -883,7 +883,7 @@ function EntryRow({ e, venueMode, venueTz, onH2H, onHistory, onPredictors, onCha
         </Text>
       </View>
 
-      <MatchCard e={e} />
+      <MatchCard e={e} serveMark={inCourt ? 'score' : 'left'} />
 
       {/* Court on its own line, the time UNDER it — the site's own stacking.
           They shared a line while the time was a bare clock; the site's phrase
