@@ -16,12 +16,12 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import case, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth import get_optional_user
+from app.core.auth import get_current_user, get_optional_user
 from app.database import get_db
-from app.models.schedule import ScheduleEntry, ScheduleEntryPlayer
+from app.models.schedule import CourtAlias, ScheduleEntry, ScheduleEntryPlayer
 from app.models.rankings import TePlayer, TeRankingsSnapshot
 from app.services.schedule import (carry_surname, settle_from_result_rows,
                                    settled_sides_index)
@@ -84,7 +84,8 @@ class ScheduleEntryOut(BaseModel):
     stage: str
     discipline: str
     round_label: Optional[str] = None
-    court: Optional[str] = None
+    court: Optional[str] = None            # as DISPLAYED — an admin's alias if there is one
+    court_key: Optional[str] = None        # as the sheet prints it — the key an alias is set against
     court_order: int
     # As printed — the court view renders this verbatim rather than a time.
     start_type: str
@@ -617,6 +618,11 @@ async def schedule_day(
     t_rows = (await db.execute(
         select(Tournament.id, Tournament.name).where(Tournament.id.in_(t_ids)))).all()
     t_names = {r[0]: r[1] for r in t_rows}
+    # THE COURTS' DISPLAY NAMES, set by an admin (CourtAlias): looked up once
+    # for the day's tournaments and applied to every outgoing `court`, so the
+    # site, the app and anything else that reads this answer show the same
+    # name. The sheet's own name rides along as `court_key` for the editor.
+    aliases = await _court_aliases(db, t_ids)
 
     ent_ids = {p.draw_entry_id for e in entries for p in e.players if p.draw_entry_id}
 
@@ -1033,8 +1039,9 @@ async def schedule_day(
     for e in entries:
         if e.id in dropped:
             continue
-        if e.court and e.court not in courts:
-            courts.append(e.court)
+        shown = display_court(aliases, e.tournament_id, e.court)
+        if shown and shown not in courts:
+            courts.append(shown)
         m = matches.get(e.match_id) if e.match_id else None
 
         unresolved = e.tbd_side or ""
@@ -1106,7 +1113,8 @@ async def schedule_day(
             draw_id=e.draw_id, match_id=e.match_id, play_date=e.play_date,
             pick_entry_id=picks.get(e.match_id) if e.match_id else None,
             tour=e.tour, stage=e.stage, discipline=e.discipline,
-            round_label=e.round_label, court=e.court, court_order=e.court_order,
+            round_label=e.round_label, court=display_court(aliases, e.tournament_id, e.court),
+            court_key=e.court, court_order=e.court_order,
             start_type=e.start_type, start_time_local=e.start_time_local,
             start_note=e.start_note,
             printed_start_at=_printed_instant(e, tzs.get(e.tournament_id)),
@@ -1274,6 +1282,81 @@ async def entry_score_history(entry_id: int, db: AsyncSession = Depends(get_db))
         "snapshots": snapshots,
         "final": final,
     }
+
+
+def display_court(aliases: dict, tournament_id: int, court: Optional[str]) -> Optional[str]:
+    """The court as the reader should see it: the admin's alias for this
+    tournament's court if one is set, else the sheet's own name. Pure, so
+    the rule is one line and tested."""
+    if not court:
+        return court
+    return aliases.get((tournament_id, court)) or court
+
+
+async def _court_aliases(db: AsyncSession, tournament_ids) -> dict:
+    if not tournament_ids:
+        return {}
+    rows = (await db.execute(
+        select(CourtAlias.tournament_id, CourtAlias.court, CourtAlias.display_name)
+        .where(CourtAlias.tournament_id.in_(list(tournament_ids))))).all()
+    return {(r[0], r[1]): r[2] for r in rows}
+
+
+class CourtAliasIn(BaseModel):
+    tournament_id: int
+    court: str
+    display_name: str = ""       # empty = back to the sheet's own name
+
+
+@router.get("/court-aliases")
+async def list_court_aliases(
+    tournament_id: Optional[int] = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    q = select(CourtAlias).order_by(CourtAlias.tournament_id, CourtAlias.court)
+    if tournament_id:
+        q = q.where(CourtAlias.tournament_id == tournament_id)
+    rows = (await db.execute(q)).scalars().all()
+    return [{"tournament_id": r.tournament_id, "court": r.court, "display_name": r.display_name} for r in rows]
+
+
+@router.put("/court-alias")
+async def set_court_alias(
+    body: CourtAliasIn,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Rename a court everywhere it is shown — admin only. The sheet's name is
+    the key; an empty display name deletes the alias and the sheet's name
+    comes back. Logged, because a rename is a fact about the site the next
+    reader of the logs should be able to find."""
+    if not getattr(current_user, "is_admin", False):
+        raise HTTPException(status_code=403, detail="Admin only")
+    court = body.court.strip()
+    if not court:
+        raise HTTPException(status_code=400, detail="Which court?")
+    name = " ".join(body.display_name.split())
+    existing = (await db.execute(select(CourtAlias).where(
+        CourtAlias.tournament_id == body.tournament_id, CourtAlias.court == court))).scalars().first()
+    if not name or name == court:
+        if existing:
+            await db.execute(delete(CourtAlias).where(CourtAlias.id == existing.id))
+        await db.commit()
+        await app_log("info", "schedule", f"Court alias cleared: {court!r} (tournament {body.tournament_id})",
+                      {"tournament_id": body.tournament_id, "court": court, "by": getattr(current_user, "id", None)})
+        return {"tournament_id": body.tournament_id, "court": court, "display_name": None}
+    if existing:
+        existing.display_name = name
+        existing.updated_by = getattr(current_user, "id", None)
+        existing.updated_at = datetime.now(timezone.utc)
+    else:
+        db.add(CourtAlias(tournament_id=body.tournament_id, court=court, display_name=name,
+                          updated_by=getattr(current_user, "id", None)))
+    await db.commit()
+    await app_log("info", "schedule", f"Court renamed: {court!r} → {name!r} (tournament {body.tournament_id})",
+                  {"tournament_id": body.tournament_id, "court": court, "display_name": name,
+                   "by": getattr(current_user, "id", None)})
+    return {"tournament_id": body.tournament_id, "court": court, "display_name": name}
 
 
 @router.get("/dates")

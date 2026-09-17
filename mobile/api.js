@@ -117,6 +117,11 @@ export const deleteAccount = (currentPassword) =>
 export const getAppConfig = () => request('/app/config')
 export const getOffer = (matchId) =>
   request(matchId != null ? `/app/live-activities/offer?match_id=${matchId}` : '/app/live-activities/offer')
+/* A court's display name, everywhere the schedule is served — admin only on
+   the server; an empty name restores the sheet's own. */
+export const setCourtAlias = (tournament_id, court, display_name) =>
+  request('/schedule/court-alias', { method: 'PUT', body: { tournament_id, court, display_name } })
+
 export const getScheduleDay = (playDate) =>
   request(`/schedule/day${playDate ? `?play_date=${playDate}` : ''}`)
 
