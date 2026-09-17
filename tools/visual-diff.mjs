@@ -49,6 +49,14 @@ const SCREENS = [
   { name: 'draw-lock', mobile: '/draw/77', pwa: '/tournaments/77', pwaClick: 'Predictions locked' },
   { name: 'leagues',   mobile: '/leagues',     pwa: '/leagues' },
   { name: 'schedule',  mobile: '/schedule',    pwa: '/schedule' },
+  /* THE DAY STRIP, pinned to the US Open (the snapshot's only Slam: five
+     qualifying days and fifteen more, too many chips for one width): a day
+     mid-strip, the last day (the strip clamps at its right end) and the
+     first qualifying day (clamps at its left). The PWA has no strip; its
+     side is the same day for the rows. */
+  { name: 'day-strip',     mobile: '/schedule?tournament=92&date=2026-09-01', pwa: '/schedule?date=2026-09-01' },
+  { name: 'day-strip-end', mobile: '/schedule?tournament=92&date=2026-09-10', pwa: '/schedule?date=2026-09-10' },
+  { name: 'day-strip-q',   mobile: '/schedule?tournament=92&date=2026-08-24', pwa: '/schedule?date=2026-08-24' },
   // A day with a washout behind it: postponed, carried-over and resumed rows.
   { name: 'washout',   mobile: '/schedule?date=2026-09-01', pwa: '/schedule?date=2026-09-01' },
   // The same day scrolled to its end, where the postponed rows live, and with

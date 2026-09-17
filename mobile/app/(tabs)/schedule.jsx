@@ -32,6 +32,8 @@ import { leading } from '../../fontScale.js'
 import { TourBadge } from '../../cards'
 import { setScheduleTournaments, useScheduleTournaments } from '../../scheduleFilter'
 import { useChoosableTournaments } from '../../choosableTournaments'
+import { DayStrip } from '../../DayStrip'
+import { dayLabels } from '../../dayLabels'
 import { rowInTournaments } from '../../scheduleRows'
 import { MatchCard } from '../../scorecard'
 import { ScoreHistorySheet } from '../../scoreHistory'
@@ -181,6 +183,13 @@ export default function ScheduleScreen() {
   const dates = useApi(scope?.length ? `schedule-dates:${scopeKey}` : null,
                        () => getScheduleDates(scope), { enabled: !!scope?.length })
   const available = dates.data?.dates || []
+  /* Q1, Q2, 1, 2 … for the strip: the sheet days before the first main-draw
+     singles day, then the count from it. Memoised on the answer, not on
+     `available`, which is a fresh array whenever there is no answer yet. */
+  const days = useMemo(
+    () => dayLabels(dates.data?.dates || [], dates.data?.main_start ?? null),
+    [dates.data],
+  )
   /* A pinned day only counts while it EXISTS in the list this page is showing.
      The reset above is the cure for the stale day; this is the belt to its
      braces, and it also covers the moment after an arrival when the new date
@@ -347,6 +356,9 @@ export default function ScheduleScreen() {
   return (
     <>
       <Screen onRefresh={refetch}>
+        {/* THE DAYS, as chips; the chosen one's date is written out on the
+            line below, where it has always been. */}
+        {days.length > 0 && <DayStrip days={days} active={date} onPick={setPinned} />}
         <View style={s.bar}>
           <Pressable
             onPress={() => idx > 0 && setPinned(available[idx - 1])}
@@ -402,8 +414,9 @@ export default function ScheduleScreen() {
         <View style={s.tabs}>
           {['time', 'court'].map(v => (
             <Pressable key={v} onPress={() => setView(v)}
-                       style={[s.tab, view === v && s.tabOn]}>
-              <Text style={[s.tabText, { color: view === v ? C.ink : C.muted }]}>
+                       style={[s.tab, view === v && s.tabOn]}
+                       accessibilityRole="button" accessibilityState={{ selected: view === v }}>
+              <Text style={[s.tabText, view === v && s.tabTextOn]}>
                 {v === 'time' ? 'Time' : 'Court'}
               </Text>
             </Pressable>
@@ -749,10 +762,21 @@ const s = StyleSheet.create({
     flexDirection: 'row', gap: S.xs, backgroundColor: C.sunken,
     borderRadius: R.md, padding: 2,
   },
-  tab: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 4, borderRadius: R.sm },
+  /* Every half carries a border so the box does not change size when it
+     moves; only the chosen one's shows. */
+  tab: {
+    flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 4, borderRadius: R.sm,
+    borderWidth: 1, borderColor: 'transparent',
+  },
   // No lineHeight — see the note at the control. The Pressable centres it.
-  tabText: { fontFamily: 'Archivo_500Medium', fontSize: 13 },
-  tabOn: { backgroundColor: C.raised },
+  tabText: { fontFamily: 'Archivo_500Medium', fontSize: 13, color: C.muted },
+  tabTextOn: { fontFamily: 'Archivo_700Bold', color: C.ink },
+  /* THE CHOSEN HALF IS BOXED. A fill one step lighter than the strip was
+     the only mark, and on the phone the two halves read as the same
+     shade (owner, 2026-09-17): now a lit border on a deep-green fill, and
+     the label in bold ink — the same lit-on-deep pair as the draw page's
+     round pill, so it says "chosen" in the app's own words. */
+  tabOn: { backgroundColor: C.greenDeep, borderColor: C.greenLit },
   /* The tournament filter. A wrapping row, because two names can be longer
      than a phone and a horizontal scroller hides its own overflow. */
   events: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },

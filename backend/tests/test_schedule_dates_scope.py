@@ -31,13 +31,16 @@ for _m in pkgutil.iter_modules(app.models.__path__):
     importlib.import_module(f"app.models.{_m.name}")
 
 # Cincinnati (1) played in August; Guadalajara (2) and the SP Open (3) share
-# the mid-September week, and share a day.
+# the mid-September week, and share a day. Guadalajara qualified on the
+# 12th; the SP Open's 14th was doubles only.
 ROWS = [
-    (1, date(2026, 8, 21)),
-    (2, date(2026, 9, 13)),
-    (2, date(2026, 9, 15)),
-    (3, date(2026, 9, 15)),
-    (3, date(2026, 9, 16)),
+    (1, date(2026, 8, 21), "main", "singles"),
+    (2, date(2026, 9, 12), "qualifying", "singles"),
+    (2, date(2026, 9, 13), "main", "singles"),
+    (2, date(2026, 9, 15), "main", "singles"),
+    (3, date(2026, 9, 14), "main", "doubles"),
+    (3, date(2026, 9, 15), "main", "singles"),
+    (3, date(2026, 9, 16), "main", "singles"),
 ]
 
 
@@ -47,8 +50,9 @@ async def _dates(ids):
         await conn.run_sync(Base.metadata.create_all)
     Session = async_sessionmaker(engine, expire_on_commit=False)
     async with Session() as db:
-        db.add_all(ScheduleEntry(tournament_id=t, play_date=d, pairing_key=f"{t}:{d}:{i}")
-                   for i, (t, d) in enumerate(ROWS))
+        db.add_all(ScheduleEntry(tournament_id=t, play_date=d, stage=stage, discipline=disc,
+                                 pairing_key=f"{t}:{d}:{i}")
+                   for i, (t, d, stage, disc) in enumerate(ROWS))
         await db.commit()
         out = await schedule_dates(tournament_id=ids, db=db)
     await engine.dispose()
@@ -57,20 +61,31 @@ async def _dates(ids):
 
 def test_two_ids_answer_with_their_days_only():
     out = asyncio.run(_dates([2, 3]))
-    assert out["dates"] == ["2026-09-13", "2026-09-15", "2026-09-16"]
+    assert out["dates"] == ["2026-09-12", "2026-09-13", "2026-09-14", "2026-09-15", "2026-09-16"]
     assert sorted(out["tournaments"]) == [2, 3]
     # The shared day counts both tournaments' matches, nothing else's.
     assert out["open_counts"]["2026-09-15"] == 2
+    # Day 1 is the earlier event's first main-draw singles day.
+    assert out["main_start"] == "2026-09-13"
 
 
 def test_one_id_is_still_one_tournament():
     out = asyncio.run(_dates([2]))
-    assert out["dates"] == ["2026-09-13", "2026-09-15"]
+    assert out["dates"] == ["2026-09-12", "2026-09-13", "2026-09-15"]
     assert out["tournaments"] == [2]
     assert out["open_counts"]["2026-09-15"] == 1
+    assert out["main_start"] == "2026-09-13"
+
+
+def test_main_start_skips_a_doubles_only_day():
+    out = asyncio.run(_dates([3]))
+    assert out["dates"] == ["2026-09-14", "2026-09-15", "2026-09-16"]
+    assert out["main_start"] == "2026-09-15"
 
 
 def test_unscoped_is_every_date_on_record():
     out = asyncio.run(_dates(None))
-    assert out["dates"] == ["2026-08-21", "2026-09-13", "2026-09-15", "2026-09-16"]
+    assert out["dates"] == ["2026-08-21", "2026-09-12", "2026-09-13", "2026-09-14",
+                            "2026-09-15", "2026-09-16"]
     assert sorted(out["tournaments"]) == [1, 2, 3]
+    assert out["main_start"] == "2026-08-21"
