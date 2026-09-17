@@ -1330,6 +1330,17 @@ async def schedule_dates(
     if tournament_id:
         tq = tq.where(ScheduleEntry.tournament_id.in_(tournament_id))
     tournaments = [r[0] for r in (await db.execute(tq)).all()]
+    # THE FIRST MAIN-DRAW SINGLES DAY — what the app's day strip calls day 1:
+    # the sheet days before it are Q1, Q2 …, and it counts up from there to
+    # the last sheet. Over the same scope as `dates`, so with two events
+    # ticked it is the earlier one's opening day. None until a main-draw
+    # sheet exists, and the strip then numbers every day from 1.
+    mq = select(func.min(ScheduleEntry.play_date)).where(
+        ScheduleEntry.stage == "main", ScheduleEntry.discipline == "singles")
+    if tournament_id:
+        mq = mq.where(ScheduleEntry.tournament_id.in_(tournament_id))
+    main_start = (await db.execute(mq)).scalar()
     return {"dates": [r[0].isoformat() for r in rows],
+            "main_start": main_start.isoformat() if main_start else None,
             "open_counts": {r[0].isoformat(): int(r[2] or 0) for r in rows},
             "tournaments": tournaments}
