@@ -570,7 +570,7 @@ export default function ScheduleScreen() {
           <Pressable onPress={() => setCompact(v => !v)} style={[s.chip, s.chipIcon, compact && s.chipOn]}
                      hitSlop={6} accessibilityRole="button" accessibilityLabel="Compact list"
                      accessibilityState={{ selected: compact }}>
-            <Ionicons name="list" size={16} color={compact ? '#fff' : C.muted} />
+            <Ionicons name="list" size={19} color={compact ? '#fff' : C.muted} />
           </Pressable>
         </View>
 
@@ -913,7 +913,9 @@ const s = StyleSheet.create({
   chipWta: { backgroundColor: '#db2777', borderColor: '#db2777' },
   chipText: { ...T.tiny, color: C.muted, fontFamily: 'Archivo_700Bold' },
   // The list button: an icon in a chip, pushed to the row's far right.
-  chipIcon: { marginLeft: 'auto', paddingHorizontal: 9, paddingVertical: 4 },
+  // The Completed chip's height exactly — its text line plus the chip's
+  // padding and border — with the glyph a size up to fill it (owner).
+  chipIcon: { marginLeft: 'auto', paddingHorizontal: 10, paddingVertical: 0, height: T.tiny.lineHeight + 5 * 2 + 2, justifyContent: 'center' },
   /* The compact list: a card of hairline-ruled rows. The clock and the round
      are fixed columns so the names line up down the page; the score keeps
      its width and the names give. No lineHeight on the row's text — the row
