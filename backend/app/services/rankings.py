@@ -361,6 +361,7 @@ async def _scrape_te(gender: str, week_date: Optional[date] = None, log_errors: 
 
     url = _TE_URLS[gender]
     results: list[tuple[str, int, Optional[str], Optional[int]]] = []
+    last_full = False
     try:
         async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
             page = 1
@@ -369,8 +370,29 @@ async def _scrape_te(gender: str, week_date: Optional[date] = None, log_errors: 
                 resp = await client.get(url, params=params, headers=_TE_HEADERS)
                 resp.raise_for_status()
                 rows = _TE_ROW_RE.findall(resp.text)
+                if not rows and page > 1 and last_full:
+                    # A FULL PAGE FOLLOWED BY AN EMPTY ONE is not the end of the
+                    # list: TE answered the doubles list's third page with no
+                    # rows in production (2026-09-17, 100 of ~1850 stored) where
+                    # the same request from the host got all 38. Ask once more
+                    # after a breath, and say so if it is still empty.
+                    await asyncio.sleep(2.0)
+                    resp = await client.get(url, params=params, headers=_TE_HEADERS)
+                    resp.raise_for_status()
+                    rows = _TE_ROW_RE.findall(resp.text)
+                    if not rows:
+                        logger.warning("Tennis Explorer %s %s: page %d empty after a full page (HTTP %s, %d bytes) — list may be partial",
+                                       gender, "doubles" if doubles else "singles", page, resp.status_code, len(resp.text))
+                        if log_errors:
+                            from app.services.system_log import app_log
+                            await app_log("warning", "rankings",
+                                          f"Tennis Explorer {gender} {'doubles' if doubles else 'singles'} list stopped early at page {page}",
+                                          {"gender": gender, "page": page, "status": resp.status_code, "bytes": len(resp.text),
+                                           "rows_so_far": len(results)},
+                                          dedup_key=f"te_page_empty_{gender}_{doubles}", dedup_hours=6)
                 if not rows:
                     break
+                last_full = len(rows) >= 50
                 for rank_str, href, raw_name, pts_str in rows:
                     slug_m = _TE_SLUG_RE.match(href)
                     slug = slug_m.group(1) if slug_m else None
@@ -550,6 +572,21 @@ async def ensure_te_week(gender: str, week_date: date, db: AsyncSession, log_err
 # High-level entry point
 # ---------------------------------------------------------------------------
 
+# A whole doubles list runs to ~1500 (ATP) / ~1850 (WTA) players. Fewer than
+# this is a page or two — TE cut the list short — and is never stored as a
+# week, and a stored week this thin is scraped again (2026-09-17).
+TE_DOUBLES_MIN_ROWS = 300
+
+
+async def te_doubles_week_rows(gender: str, week_date: date, db: AsyncSession) -> int:
+    from app.models.rankings import TeDoublesSnapshot, TePlayer
+    return (await db.execute(
+        select(func.count()).select_from(TeDoublesSnapshot)
+        .join(TePlayer, TePlayer.id == TeDoublesSnapshot.player_id)
+        .where(TePlayer.gender == gender, TeDoublesSnapshot.week_date == week_date)
+    )).scalar_one()
+
+
 async def ensure_te_doubles_week(gender: str, week_date: date, db: AsyncSession, log_errors: bool = True) -> bool:
     """te_doubles_snapshots for (gender, week_date), scraped once (owner, 2026-09-17).
 
@@ -561,17 +598,15 @@ async def ensure_te_doubles_week(gender: str, week_date: date, db: AsyncSession,
     """
     from app.models.rankings import TeDoublesSnapshot, TePlayer
 
-    have = (await db.execute(
-        select(func.count()).select_from(TeDoublesSnapshot)
-        .join(TePlayer, TePlayer.id == TeDoublesSnapshot.player_id)
-        .where(TePlayer.gender == gender, TeDoublesSnapshot.week_date == week_date)
-    )).scalar_one()
-    if have:
+    have = await te_doubles_week_rows(gender, week_date, db)
+    if have >= TE_DOUBLES_MIN_ROWS:
         return False
+    if have:
+        logger.info("TE %s doubles week %s holds only %d rows — scraping again", gender, week_date, have)
 
     logger.info("Scraping Tennis Explorer doubles for %s week %s...", gender, week_date)
     raw_rows = await _scrape_te(gender, week_date=week_date, log_errors=log_errors, doubles=True)
-    if len(raw_rows) < 100:
+    if len(raw_rows) < TE_DOUBLES_MIN_ROWS:
         logger.warning("TE %s doubles scrape returned only %d players for week %s — not storing",
                        gender, len(raw_rows), week_date)
         if log_errors:

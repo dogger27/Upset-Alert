@@ -118,6 +118,7 @@ def _fill_week_in_background(gender: str, week: date) -> None:
 async def _compute(db, tournament_id: int) -> dict[tuple[int, str], int]:
     from app.models.schedule import ScheduleEntry
     from app.models.tournament import Draw
+    from app.services.rankings import TE_DOUBLES_MIN_ROWS, te_doubles_week_rows
 
     entries = (await db.execute(
         select(ScheduleEntry)
@@ -162,8 +163,9 @@ async def _compute(db, tournament_id: int) -> dict[tuple[int, str], int]:
         if week is None:
             _fill_week_in_background(gender, target)
             continue
-        if week < target:
-            # We hold an older week; the seeding week itself is worth fetching.
+        if week < target or await te_doubles_week_rows(gender, week, db) < TE_DOUBLES_MIN_ROWS:
+            # An older week, or a week TE cut short (a hundred rows of ~1850,
+            # 2026-09-17): rank with what we hold and fetch the whole week.
             _fill_week_in_background(gender, target)
         out.update(await _rank_field(db, rows, gender, week))
     return out
