@@ -2,9 +2,7 @@ import { useState, useCallback } from 'react'
 /* The shared pieces. Not a design system for its own sake — these are the
    components that would otherwise be copy-pasted into six screens and drift. */
 
-import {
-  ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View,
-} from 'react-native'
+import { ActivityIndicator, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useHeaderHeight } from '@react-navigation/elements'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Link } from 'expo-router'
@@ -24,8 +22,18 @@ import { leading } from './fontScale.js'
  * that gets forgotten on the fourth. useHeaderHeight() is 0 when a screen sets
  * headerShown: false, so the dashboard still gets its inset.
  */
+/* `touchAction` — web only, and only for a screen that hosts a SIDEWAYS
+   gesture of its own (the schedule's swipe-to-change-day). The browser gives
+   a touch to the nearest scroller whose touch-action allows it, and a
+   ScrollView's is `auto`: two moves in, it claimed the drag as a native
+   scroll and cancelled the pointer under the gesture (pointercancel), so the
+   swipe fired only from a mouse. touch-action has to be ON THE ELEMENT THAT
+   SCROLLS — the draw page learned the same on the site (memory
+   reference-draw-swipe-paging) — so it goes on the ScrollView itself.
+   `pan-y pinch-zoom`, never bare `pan-y`, which kills pinch. Native ignores
+   it: gestures there never pass through the browser. */
 export function Screen({
-  children, scroll = true, edges, onRefresh, style,
+  children, scroll = true, edges, onRefresh, style, touchAction,
 }) {
   const headerHeight = useHeaderHeight()
   const resolvedEdges = edges ?? (headerHeight > 0 ? ['left', 'right'] : ['top', 'left', 'right'])
@@ -46,6 +54,7 @@ export function Screen({
   const extra = scroll
     ? {
         contentContainerStyle: [u.body, style],
+        style: Platform.OS === 'web' && touchAction ? { touchAction } : undefined,
         showsVerticalScrollIndicator: false,
         refreshControl: onRefresh ? (
           <RefreshControl
