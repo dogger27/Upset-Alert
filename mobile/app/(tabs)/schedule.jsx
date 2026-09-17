@@ -734,11 +734,6 @@ function shortDate(iso) {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
-function prettyDate(iso) {
-  const d = new Date(iso + 'T12:00:00Z')
-  return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
-}
-
 const s = StyleSheet.create({
   // The scroll body's own gap and growth, restated: the wrapper took its children.
   swipeBody: { flexGrow: 1, gap: S.md },
