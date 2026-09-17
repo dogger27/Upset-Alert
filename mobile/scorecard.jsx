@@ -13,6 +13,7 @@
  *  - the point comes last, tinted apart from the games, and a live row with
  *    no fresh point holds its place with a dim dash rather than shifting.
  */
+import { useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { EntryChip, FlagSlot, PlayerName, PosBadge } from './cards'
 import { Bump } from './fx'
@@ -21,6 +22,7 @@ import { leading } from './fontScale.js'
 import { endedWith, parseSet, scoreSets, setCount, setWon, winnerSideOf } from './score'
 import { isLive, isSuspended, pointOf, servingSide, sideDrawRank, sideEntryType, sideFlags, sideName, sideSeed } from './schedule'
 import { C, S, T } from './theme'
+import { setsScale } from './scoreFit'
 
 /* `scale` — the block at a fraction of its size for the schedule's mid
    density (owner, 2026-09-17): the same two lines and box score, smaller,
@@ -74,7 +76,12 @@ export function MatchCard({ e, scale = 1, badges = true }) {
      identical (a finished five-setter is still 0.76, a four still 0.88) and
      densifies the live ones that were overflowing. */
   const cols = n + (point ? 1 : 0)
-  const k = (cols >= 5 ? 0.76 : cols === 4 ? 0.88 : 1) * scale
+  /* ONLY AS MUCH AS IT MUST (owner, 2026-09-17): the cells shrink by what
+     the measured row lacks, not by their count - scoreFit.js, on its own
+     suite. Until the first layout the column rule stands in. */
+  const [width, setWidth] = useState(0)
+  const tiebreaks = Math.max(0, ...['a', 'b'].map((_, idx) => (sets?.[idx] || []).filter(c => parseSet(c).tb != null).length))
+  const k = setsScale({ width, scale, cols, point: !!point, twoDigit, tiebreaks, flagSlots, badges, live: live || stopped })
   const dense = k < 1 ? {
     sets: { gap: Math.round(6 * k) },
     box: { minWidth: Math.round((twoDigit ? 26 : 16) * k) },
@@ -84,7 +91,7 @@ export function MatchCard({ e, scale = 1, badges = true }) {
   } : null
 
   return (
-    <View style={s.rows}>
+    <View style={s.rows} onLayout={ev => setWidth(ev.nativeEvent.layout.width)}>
       {['a', 'b'].map((side, idx) => {
         const lost = winner != null && winner !== idx
         const end = endedWith(e.scores, idx)
