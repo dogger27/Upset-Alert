@@ -348,6 +348,31 @@ def _te_params(week_date: Optional[date], doubles: bool = False, page: int = 1) 
     return params
 
 
+async def _te_get(client, url: str, params: dict):
+    """One ranking page, asked again when the connection drops.
+
+    Production's doubles scrape ended after two pages with no third request
+    in the log and no error anywhere (2026-09-17): TE closed the kept-alive
+    connection, the transport error counted as transient, and the scraper
+    handed back the hundred rows it had. A dropped connection is retried
+    here, page by page, before the whole list is given up on.
+    """
+    import httpx
+    from app.services.http_errors import is_transient_http_error
+    for attempt in range(3):
+        try:
+            resp = await client.get(url, params=params, headers=_TE_HEADERS)
+            resp.raise_for_status()
+            return resp
+        except Exception as exc:
+            if attempt < 2 and (isinstance(exc, httpx.TransportError) or is_transient_http_error(exc)):
+                logger.info("Tennis Explorer page %s: %s — retrying", params.get("page"), type(exc).__name__)
+                await asyncio.sleep(2.0 * (attempt + 1))
+                continue
+            raise
+    raise RuntimeError("unreachable")
+
+
 async def _scrape_te(gender: str, week_date: Optional[date] = None, log_errors: bool = True,
                      doubles: bool = False) -> list[tuple[str, int, Optional[str], Optional[int]]]:
     """
@@ -367,8 +392,7 @@ async def _scrape_te(gender: str, week_date: Optional[date] = None, log_errors: 
             page = 1
             while True:
                 params = _te_params(week_date, doubles, page)
-                resp = await client.get(url, params=params, headers=_TE_HEADERS)
-                resp.raise_for_status()
+                resp = await _te_get(client, url, params)
                 rows = _TE_ROW_RE.findall(resp.text)
                 if not rows and page > 1 and last_full:
                     # A FULL PAGE FOLLOWED BY AN EMPTY ONE is not the end of the
@@ -377,8 +401,7 @@ async def _scrape_te(gender: str, week_date: Optional[date] = None, log_errors: 
                     # the same request from the host got all 38. Ask once more
                     # after a breath, and say so if it is still empty.
                     await asyncio.sleep(2.0)
-                    resp = await client.get(url, params=params, headers=_TE_HEADERS)
-                    resp.raise_for_status()
+                    resp = await _te_get(client, url, params)
                     rows = _TE_ROW_RE.findall(resp.text)
                     if not rows:
                         logger.warning("Tennis Explorer %s %s: page %d empty after a full page (HTTP %s, %d bytes) — list may be partial",
