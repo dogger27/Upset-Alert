@@ -505,9 +505,15 @@ const s = StyleSheet.create({
     backgroundColor: C.ink, borderWidth: 2, borderColor: C.card,
   },
   /* One row, fixed height: legend at the left, prev point at the right. */
-  underline: { flexDirection: 'row', alignItems: 'center', minHeight: 16 },
-  legend: { flexDirection: 'row', flexWrap: 'wrap', gap: S.md, flexShrink: 1 },
-  prevPoint: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 'auto' },
+  /* TWO LINES, ALWAYS RESERVED: the legend on the first, never wrapping —
+     an ace or a double fault adds an item, and the "Prev Point" label used
+     to push the legend onto a second line (owner, 2026-09-17) — and the
+     Prev Point on the second, right-aligned. Both heights are held even
+     when empty (16 a line, as before), so the tabs below never jump as the
+     thumb crosses an ace. */
+  underline: { minHeight: 36, gap: 4 },
+  legend: { flexDirection: 'row', flexWrap: 'nowrap', gap: S.md, alignItems: 'center' },
+  prevPoint: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-end' },
   prevPointValue: { ...T.tiny, color: C.ink, fontFamily: 'Archivo_700Bold' },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   legendBox: { width: 8, height: 8, borderRadius: 2 },
