@@ -15,7 +15,7 @@ checklist.
 
 import re
 import unicodedata as _ud
-from datetime import timezone as _tz
+from datetime import timedelta as _timedelta, timezone as _tz
 
 from sqlalchemy import select
 
@@ -119,6 +119,12 @@ _CLOCK_RE = re.compile(r'^(\d{1,2})[:.](\d{2})\s*(am|pm)?$', re.I)
 _NOT_BEFORE_WORDING_RE = re.compile(
     r'\bnot\s+bef|(?<![A-Za-z])N\s*[./]?\s*B\.?\s*'
     r'\d{1,2}(?:[:.]\d{2}|\s*[ap]\.?m\.?)', re.I)
+# How long a document may lag a result before its silence about that result
+# means anything — one poll of `refresh_order_of_play` (scheduler.py, every 15
+# minutes). Below it, `fetched_at` cannot even place the sheet's publication.
+# See `pending_side_decided_before_document`.
+_REISSUE_LATENCY = _timedelta(minutes=15)
+
 # A clock the SHEET printed, as the LAW reads one off a slot note — stated
 # here and not imported from oop_parser for the reason _printed_instant gives:
 # the reading the law measures the parser against must not be the parser's.
@@ -539,6 +545,37 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
         # dropped what that document told us. On this very sheet the gate
         # separates the two sides correctly: side a's feeder finished 00:24
         # (before), side b's at 01:16 (after), and 238 printed exactly that.
+        #
+        # BOTH CLOCKS ARE OBSERVATIONS, NOT PUBLICATIONS, so a gap of minutes
+        # between them is not evidence of anything. `fetched_at` is when the
+        # poller happened to look, not when the sheet came out, and the tour
+        # does not re-issue an order of play the instant a match ends — a
+        # person does it. SP Open 2026-09-18 (document 284) printed
+        # "J. Mikulskyte / A. Smith OR V. Strakhova / A. Tikhonova" for a
+        # doubles quarter-final whose feeder our results feed timed at
+        # 21:21:45, and we downloaded it at 21:24:51: three minutes, and the
+        # row was convicted of losing a rendering that sheet never carried.
+        #
+        # The sheet's own "RELEASED" stamp cannot settle it either — that is
+        # the stamp of the ORIGINAL release and does not move when the tour
+        # amends the sheet in place. Documents 280 and 282 re-timed two slots
+        # between them ("After suitable rest" -> "Not before 6:15 PM") under
+        # an identical stamp, so it bounds neither what a document knew nor
+        # when it was generated.
+        #
+        # So the gap must clear the coarser of the two clocks before it says
+        # anything, and that is our own 15-minute poll (scheduler.py,
+        # "refresh_order_of_play"): inside one polling interval a document's
+        # publication cannot be placed at all. Measured over every stored row,
+        # the gate fires once at a grace of zero — this false conviction, at
+        # 3.1 minutes — and never at five minutes or beyond, while document
+        # 238's real incident sat at 44 and stays convicted with room to
+        # spare.
+        #
+        # A FLOOR ON THE EVIDENCE, not a tolerance on the fault: a slot still
+        # unresolved beyond it is caught exactly as before, and what keeps the
+        # page honest in the meantime is the serve path's resolver, which the
+        # API applies whatever the stored row says.
         if e.is_tbd and settled_idx:
             fetched = doc_fetched.get(e.last_document_id)
             for side_key in (e.tbd_side or "ab"):
@@ -552,7 +589,7 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                 key = frozenset().union(
                     *(_sheet_surnames([p.raw_name]) for p in alts))
                 done = decided_at.get(key)
-                if done is not None and done < fetched:
+                if done is not None and done + _REISSUE_LATENCY < fetched:
                     flag("pending_side_decided_before_document", e,
                          f"side {side_key} still offers "
                          + " or ".join(p.raw_name or "" for p in alts)
