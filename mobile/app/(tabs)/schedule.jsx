@@ -42,6 +42,7 @@ import { rowInTournaments } from '../../scheduleRows'
 import { MatchCard } from '../../scorecard'
 import { matchLine } from '../../matchLine'
 import { textWidth } from '../../measure'
+import { bestLeftColumn } from '../../nameColumns'
 import { groupPastDay } from '../../pastGroups'
 import { CourtRenameSheet } from '../../courtRename'
 import { ScoreHistorySheet } from '../../scoreHistory'
@@ -694,31 +695,31 @@ function LockPill({ matchId, live }) {
   )
 }
 
-/* THE COLUMNS OF A CARD (owner, 2026-09-17). Two equal halves around the
-   verb shrank a long name on one side while the other sat half empty —
-   "Samsonova" in small type beside "Day" with room to spare. So: the left
-   column is measured per card, as wide as the card's widest left name, and
-   the verb (with the flags) sits right after it on one x down the card.
-   Everything to the right of the verb is TETRIS (owner): the right name
-   flows toward its own row's score, which keeps its natural width at the
-   row's right edge — a name may sit above a longer score on the row below.
-   A name shrinks only in the row where it would touch its own score.
-   The left column shrinks only if the widest left name could not fit beside
-   even a short right name — never merely because one row is a five-setter. */
+/* THE COLUMNS OF A CARD (owner, 2026-09-17). One left-column width per
+   card — every left name right-aligned into it, the verb after it on one x
+   — chosen by nameColumns.js: no name under a readable floor where any
+   width can manage it, and otherwise as few names shrunk, as little, as
+   possible. To the right of the verb each name flows toward its own row's
+   score, which keeps its natural width at the row's right edge (a name may
+   sit above a longer score on the row below). Measured from font metrics,
+   per card, on every render; the optimiser is exact and cheap. */
 const NAME_FACE = 'Archivo_500Medium', NAME_SIZE = 13
 const VERB_W = 32                                  // "def." at 12pt plus its padding
 const FLAG_W = leading(17) + 6                     // FlagSlot plus its margins, per side
-const MIN_RIGHT = 48                               // a short right name must always fit
+const GAPS = 5 + 6 + 4                             // the row's gap, the score's margin, slack
 function rowColumns(list, past, innerW) {
-  let leftW = 0, flags = 0
-  for (const e of list) {
-    const { left } = matchLine(e)
-    leftW = Math.max(leftW, textWidth(left, NAME_FACE, NAME_SIZE))
-    if (e.discipline === 'singles') flags = 2 * FLAG_W
-  }
   const lead = past ? 0 : 58 + 5 + 30 + 5              // today's clock and round (or the score in their place)
-  const cap = Math.max(40, innerW - lead - flags - VERB_W - MIN_RIGHT)
-  return { leftW: Math.min(Math.ceil(leftW) + 1, cap) }
+  const rows = list.map(e => {
+    const { left, right, score } = matchLine(e)
+    const flags = e.discipline === 'singles' ? 2 * FLAG_W : 2 * leading(17) + 12
+    const scoreW = past && score ? Math.ceil(textWidth(score, 'Archivo_700Bold', 12) * 1.06) + 2 : 0
+    return {
+      a: textWidth(left, NAME_FACE, NAME_SIZE),
+      b: textWidth(right, NAME_FACE, NAME_SIZE),
+      room: innerW - lead - flags - VERB_W - scoreW - GAPS,
+    }
+  })
+  return { leftW: bestLeftColumn(rows) + 1 }
 }
 
 /* ONE MATCH, ONE ROW — the compact list. The clock the card would print
@@ -770,14 +771,14 @@ function MatchRow({ e, first, past, leftW, venueMode, venueTz, onHistory }) {
               against it, the second flush left — the halves stay equal, so the
               verb stays at the field's centre. */}
           <View style={[s.rowLeft, leftW ? { width: leftW } : null]}>
-            <FitText style={[s.rowNames, decided && s.rowNamesDone]} min={9} align="right">{left}</FitText>
+            <FitText style={[s.rowNames, decided && s.rowNamesDone]} min={10} align="right" wrapAtFloor>{left}</FitText>
           </View>
           {/* The flag slots stay even without a flag, so the verb sits on
               one x down a card that mixes singles and doubles. */}
           <View style={s.rowFlag}>{singles ? <FlagSlot codes={sideFlags(e.players, leftSide)} /> : <View style={s.rowFlagSpace} />}</View>
           <Text style={s.rowVerb}>{verb}</Text>
           <View style={s.rowFlag}>{singles ? <FlagSlot codes={sideFlags(e.players, leftSide === 'a' ? 'b' : 'a')} /> : <View style={s.rowFlagSpace} />}</View>
-          <FitText style={[s.rowNames, decided && s.rowNamesDone]} min={9}>{right}</FitText>
+          <FitText style={[s.rowNames, decided && s.rowNamesDone]} min={10} wrapAtFloor>{right}</FitText>
         </View>
       </View>
       {/* A past day: the score on the names' own line, at the row's right
