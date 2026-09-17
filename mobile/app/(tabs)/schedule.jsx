@@ -641,7 +641,7 @@ export default function ScheduleScreen() {
             {density === 'mid'
               ? (
                 <View style={s.rows}>
-                  {list.map((e, i) => <MatchMini key={e.id} e={e} first={i === 0} onHistory={openHist} />)}
+                  {list.map((e, i) => <MatchMini key={e.id} e={e} first={i === 0} past={past} onHistory={openHist} />)}
                 </View>
               )
               : compact
@@ -741,13 +741,13 @@ function rowColumns(list, past, innerW) {
    hairline between matches and no chrome — as many matches on a screen as
    the box score allows (owner, 2026-09-17). A started match opens its
    history on a tap, as the card does. */
-function MatchMini({ e, first, onHistory }) {
+function MatchMini({ e, first, past, onHistory }) {
   const openable = onHistory && ['live', 'completed', 'postponed', 'to_be_completed'].includes(e.status)
   const Wrap = openable ? Pressable : View
   return (
     <Wrap style={[s.miniRow, !first && s.miniNext]} onPress={openable ? () => onHistory(e) : undefined}
           accessibilityRole={openable ? 'button' : undefined}>
-      <MatchCard e={e} scale={0.8} />
+      <MatchCard e={e} scale={0.8} badges={!(past && e.discipline !== 'singles')} />
     </Wrap>
   )
 }
