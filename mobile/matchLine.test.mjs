@@ -35,9 +35,9 @@ assert.equal(sideSurnames([P('a', 'Juan Martín del Potro')], 'a'), 'del Potro')
 const doubles = { discipline: 'doubles', round_label: 'SF', status: 'scheduled',
   players: [P('a', 'Su-Wei Hsieh'), P('a', 'Jelena Ostapenko'), P('b', 'Julia Kempen'), P('b', 'Alexandra Panova')] }
 l = matchLine(doubles)
-assert.equal(l.names, 'Hsieh/Ostapen vs Kempen/Panova'); assert.equal(l.round, 'SF')
-// Seven letters of each doubles surname; singles keeps the whole name.
-assert.equal(sideSurnames([P('a', 'Timea Babos'), P('a', 'Kristina Mladenovic')], 'a'), 'Babos/Mladeno')
+assert.equal(l.names, 'Hsieh/Ostape vs Kempen/Panova'); assert.equal(l.round, 'SF')
+// Six letters of each doubles surname; singles keeps the whole name.
+assert.equal(sideSurnames([P('a', 'Timea Babos'), P('a', 'Kristina Mladenovic')], 'a'), 'Babos/Mladen')
 assert.equal(sideSurnames([P('a', 'Kristina Mladenovic')], 'a'), 'Mladenovic')
 
 // A walkover is decided, and says so where the score goes.
