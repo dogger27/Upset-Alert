@@ -6,7 +6,7 @@
  * the key and is shown beneath the field so the admin can see what they are
  * renaming; clearing the field, or "Use the sheet's name", puts it back. */
 import { useEffect, useState } from 'react'
-import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { setCourtAlias } from './api'
 import { invalidate } from './useApi'
 import { C, S, T } from './theme'
@@ -33,6 +33,12 @@ export function CourtRenameSheet({ court, onClose }) {
   }
   return (
     <Modal visible animationType="slide" transparent onRequestClose={onClose}>
+      {/* THE SHEET RISES WITH THE KEYBOARD. The field focuses itself, so the
+          keyboard is up before the sheet has settled, and a bottom sheet
+          under it is a sheet nobody can see (owner, 2026-09-17). On iOS the
+          container pads by the keyboard's height; Android resizes the window
+          itself. */}
+      <KeyboardAvoidingView style={s.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Pressable style={s.scrim} onPress={onClose} accessibilityLabel="Close" />
       <View style={s.sheet}>
         <View style={s.grabber} />
@@ -52,18 +58,20 @@ export function CourtRenameSheet({ court, onClose }) {
         </Pressable>
         {aliased && (
           <Pressable style={[s.btn, busy && s.dim]} onPress={() => save('')} disabled={busy} accessibilityRole="button">
-            <Text style={s.btnText}>Use the sheet\u2019s name</Text>
+            <Text style={s.btnText}>{'Use the sheet\u2019s name'}</Text>
           </Pressable>
         )}
         <Pressable style={s.btn} onPress={onClose} accessibilityRole="button">
           <Text style={s.btnText}>Cancel</Text>
         </Pressable>
       </View>
+      </KeyboardAvoidingView>
     </Modal>
   )
 }
 
 const s = StyleSheet.create({
+  fill: { flex: 1, justifyContent: 'flex-end' },
   scrim: { flex: 1, backgroundColor: '#000a' },
   sheet: {
     backgroundColor: C.card, borderTopLeftRadius: 18, borderTopRightRadius: 18,

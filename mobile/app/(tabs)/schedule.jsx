@@ -698,7 +698,7 @@ function MatchRow({ e, first, venueMode, venueTz, onHistory }) {
       {/* Measured fitting (FitText), never "…": the names shrink to the room
           the score leaves them, and the clock to its column. */}
       <View style={s.rowWhenSlot}><FitText style={s.rowWhen} min={9}>{when}</FitText></View>
-      <Text style={s.rowRound} numberOfLines={1}>{round}</Text>
+      <View style={s.rowRoundSlot}><FitText style={s.rowRound} min={8}>{round}</FitText></View>
       <FitText style={[s.rowNames, decided && s.rowNamesDone]} min={10} wrapAtFloor>{names}</FitText>
       {!!score && <Text style={[s.rowScore, live && s.rowScoreLive]} numberOfLines={1}>{score}</Text>}
     </Wrap>
@@ -860,7 +860,8 @@ const s = StyleSheet.create({
   rowNext: { borderTopWidth: 1, borderTopColor: C.border },
   rowWhenSlot: { width: 58, flexDirection: 'row' },
   rowWhen: { fontFamily: 'Archivo_500Medium', fontSize: 11, color: C.muted, fontVariant: ['tabular-nums'] },
-  rowRound: { fontFamily: 'Archivo_700Bold', fontSize: 11, color: C.faint, width: 34 },
+  rowRoundSlot: { width: 36, flexDirection: 'row' },   // "R128" at 11pt; FitText shrinks it at larger text sizes
+  rowRound: { fontFamily: 'Archivo_700Bold', fontSize: 11, color: C.faint },
   rowNames: { fontFamily: 'Archivo_500Medium', fontSize: 13, color: C.ink },   // FitText supplies the flex slot
   rowNamesDone: { color: C.inkBody },
   rowScore: { fontFamily: 'Archivo_700Bold', fontSize: 12, color: C.inkBody, flexShrink: 0, fontVariant: ['tabular-nums'] },
