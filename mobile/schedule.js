@@ -344,6 +344,13 @@ export function footTime(e, zone, venueMode, inCourt) {
    printed), else the sheet's own wording. Always a clock rather than
    "Followed by", because one column cannot carry a phrase; the wording that
    would have shown is returned as `displaced` for the accessibility label. */
+/* JUST THE CLOCK (owner, 2026-09-17): rowClock's text without the ladder's
+   phrases — "Started at", "Resumed at", "Not before" — or the "~" of an
+   estimate. The dense views print this and nothing else. */
+export function rowWhen(e, zone, venueMode) {
+  return String(rowClock(e, zone, venueMode).text || '').replace(/^[A-Za-z][A-Za-z ]* at /, '').replace(/^Not before /i, '').replace(/^~+/, '')
+}
+
 export function rowClock(e, zone, venueMode) {
   if (!e) return { text: '', estimated: false, displaced: null }
   const started = startedLine(e, zone)

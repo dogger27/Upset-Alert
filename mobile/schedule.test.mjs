@@ -3,7 +3,7 @@
 // hold on any machine: the "device" is Los Angeles, the venue New York.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { byTimeOfDay, footTime, whenLabel, isLive, isSuspended, startedFirst } from './schedule.js'
+import { byTimeOfDay, footTime, whenLabel, isLive, isSuspended, startedFirst, rowWhen } from './schedule.js'
 
 const LA = 'America/Los_Angeles', NY = 'America/New_York'
 const fixed = { status: 'scheduled', start_type: 'fixed', start_time_local: '11:00 AM',
@@ -119,4 +119,13 @@ test('startedFirst: a match on court rises above the ones waiting, each half in 
   ]
   assert.deepEqual(startedFirst(rows).map(r => r.id), [1, 3, 5, 2, 4, 6])
   assert.deepEqual(startedFirst([]), [])
+})
+
+test('rowWhen: the clock alone — no "Started at", no "Not before", no "~"', () => {
+  const zone = 'America/Vancouver'
+  const at = new Date('2026-09-17T18:30:00-07:00').toISOString()
+  assert.equal(rowWhen({ status: 'scheduled', expected_start_at: at, expected_source: 'sheet' }, zone, false), '6:30 PM')
+  assert.equal(rowWhen({ status: 'live', started_at: at }, zone, false), '6:30 PM')
+  assert.equal(rowWhen({ status: 'scheduled', expected_start_at: at, expected_source: 'estimated' }, zone, false), '6:30 PM')
+  assert.equal(rowWhen({ status: 'scheduled' }, zone, false), 'TBA')   // the sheet's word for a slot with no clock
 })
