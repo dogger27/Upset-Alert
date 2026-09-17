@@ -520,10 +520,15 @@ export default function ScheduleScreen() {
           <View style={s.events}>
             {events.map(t => {
               const on = !eventSel || eventSel.has(t.id)
+              // GREYED WHEN IT HAS NOTHING ON THIS DAY (owner, 2026-09-17): the
+              // days are every live tournament's, so a box can name an event
+              // that is idle today. Still a box — ticking it is harmless.
+              const playing = all.some(e => e.tournament_id === t.id)
               return (
                 <Pressable key={t.id} onPress={() => toggleEvent(t.id)}
-                           style={s.eventBox} accessibilityRole="button"
-                           accessibilityState={{ selected: on }}>
+                           style={[s.eventBox, !playing && s.eventIdle]} accessibilityRole="button"
+                           accessibilityState={{ selected: on }}
+                           accessibilityLabel={playing ? t.name : `${t.name}, no matches this day`}>
                   <View style={[s.check, on && s.checkOn]}>
                     {on ? <Ionicons name="checkmark" size={12} color={C.bg} /> : null}
                   </View>
@@ -1005,6 +1010,7 @@ const s = StyleSheet.create({
      than a phone and a horizontal scroller hides its own overflow. */
   events: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
   eventBox: {
+  eventIdle: { opacity: 0.4 },
     flexDirection: 'row', alignItems: 'center', gap: 6,
     borderRadius: R.pill, borderWidth: 1, borderColor: C.border,
     backgroundColor: C.card, paddingHorizontal: 10, paddingVertical: 5,
