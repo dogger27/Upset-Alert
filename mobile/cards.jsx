@@ -498,7 +498,7 @@ export function FitText({ children, style, min = 8, track = 0, wrapAtFloor = fal
   }
   const wrap = wrapAtFloor && floored
   return (
-    <View style={[u.fitSlot, align === 'center' && u.fitCenter]} onLayout={e => setAvail(e.nativeEvent.layout.width)}>
+    <View style={[u.fitSlot, align === 'center' && u.fitCenter, align === 'right' && u.fitRight]} onLayout={e => setAvail(e.nativeEvent.layout.width)}>
       {/* adjustsFontSizeToFit is the backstop for where iOS measures the face
           a hair wider than the tables do — it takes the last step rather than
           an ellipsis. The box must never have slack when it is on, or iOS
@@ -510,7 +510,7 @@ export function FitText({ children, style, min = 8, track = 0, wrapAtFloor = fal
           name. Scaled with the size, width is proportional and the ratio
           above is exact; it is also the eyebrow's own rule (tracking in
           proportion to its size). */}
-      <Text style={[style, align === 'center' && { textAlign: 'center' }, fontSize !== size && { fontSize, ...(track ? { letterSpacing: track * (fontSize / size) } : null) }]}
+      <Text style={[style, align === 'center' && { textAlign: 'center' }, align === 'right' && { textAlign: 'right' }, fontSize !== size && { fontSize, ...(track ? { letterSpacing: track * (fontSize / size) } : null) }]}
             numberOfLines={wrap ? undefined : 1} adjustsFontSizeToFit={!wrap} minimumFontScale={0.5}>
         {text}
       </Text>
@@ -624,6 +624,7 @@ const u = StyleSheet.create({
   // room there IS rather than the room the text took.
   fitSlot: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center' },
   fitCenter: { justifyContent: 'center' },
+  fitRight: { justifyContent: 'flex-end' },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   // The spare width of the title row, which is what CardTitle measures to know
   // how much the name may use. It replaced a flex:1 spacer that sat AFTER the

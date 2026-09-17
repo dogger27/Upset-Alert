@@ -710,9 +710,12 @@ function MatchRow({ e, first, past, venueMode, venueTz, onHistory }) {
           beneath, left, in the light green. */}
       <View style={s.rowPlayers}>
         <View style={s.rowNamesLine}>
-          <FitText style={[s.rowNames, decided && s.rowNamesDone]} min={9} align="center">{left}</FitText>
+          {/* Both names hug the verb (owner, 2026-09-17): the first flush right
+              against it, the second flush left — the halves stay equal, so the
+              verb stays at the field's centre. */}
+          <FitText style={[s.rowNames, decided && s.rowNamesDone]} min={9} align="right">{left}</FitText>
           <Text style={s.rowVerb}>{verb}</Text>
-          <FitText style={[s.rowNames, decided && s.rowNamesDone]} min={9} align="center">{right}</FitText>
+          <FitText style={[s.rowNames, decided && s.rowNamesDone]} min={9}>{right}</FitText>
         </View>
         {/* Today and ahead: the score on its own line under the verb. */}
         {!past && !!score && <Text style={[s.rowScore, live && s.rowScoreLive]} numberOfLines={1}>{score}</Text>}
