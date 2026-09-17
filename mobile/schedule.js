@@ -347,7 +347,9 @@ export function footTime(e, zone, venueMode, inCourt) {
 export function rowClock(e, zone, venueMode) {
   if (!e) return { text: '', estimated: false, displaced: null }
   const started = startedLine(e, zone)
-  if (started) return { ...stripScaffolding(started), estimated: false }
+  // "In progress" is the ladder's word for a live match with no known start —
+  // a status, not a clock. This column falls through to the sheet's time.
+  if (started && started !== 'In progress') return { ...stripScaffolding(started), estimated: false }
   const bare = stripScaffolding(expectedStart(e, zone, venueMode))
   if (bare.text) {
     return { text: bare.text, estimated: e.expected_source === 'estimated',
