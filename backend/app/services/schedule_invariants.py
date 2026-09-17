@@ -181,6 +181,48 @@ def clock_runs_backwards(rows, tz_name) -> list[tuple]:
     return out
 
 
+# A wording that places its match BEHIND something, and one that says the time
+# is unknown — the law's own reading of both, apart from oop_parser's.
+_CHAINS_BEHIND_RE = re.compile(r'follow|\bafter\b', re.I)
+_TIME_UNKNOWN_RE = re.compile(r'\bTB[ACD]\b|\bto\s+be\s+\w', re.I)
+
+
+def court_opener_untimed(rows) -> list:
+    """Rows that OPEN their court with a chaining wording and no clock at all.
+
+    A court's first stored row has nothing ahead of it to chain from, so a
+    "Followed by" there, with no clock, names a box the ingest never read. SP
+    Open 2026-09-17 (document 277) printed QUADRA 2's first box blank under
+    "Starting at 12:00 PM" and the next one "Followed by"; the parser dropped
+    the blank box and its noon with it, and Avanesyan/Charaeva went out with no
+    time at all, filed after the day's 7:20 PM finish.
+
+    Exempt: a note that SAYS the time is unknown (Guadalajara 2026-09-17,
+    "Time TBA - After suitable rest" under a court's blank, unworded first
+    band — silence the sheet chose), and a row already on court, whose start
+    is history. Read off start_type AND the note, so a misfiled type cannot
+    hide it.
+    """
+    courts: dict = {}
+    for r in rows:
+        if r.court:
+            courts.setdefault(r.court, []).append(r)
+    out = []
+    for court_rows in courts.values():
+        first = min(court_rows, key=lambda r: (r.court_order is None,
+                                               r.court_order or 0, r.id))
+        note = first.start_note or ""
+        if (first.start_time_local
+                or (first.start_type not in ("followed_by", "after_event")
+                    and not _CHAINS_BEHIND_RE.search(note))
+                or _TIME_UNKNOWN_RE.search(note)
+                or first.started_at or first.completed_at
+                or first.winner_side or first.live_scores_json):
+            continue
+        out.append(first)
+    return out
+
+
 async def check_day(db, tournament_id: int, play_date) -> list[dict]:
     """Every violation in one tournament-day. Empty list = lawful."""
     # `populate_existing`, because the law runs on what the day ACTUALLY
@@ -832,6 +874,19 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
              f"{e.court} #{e.court_order} prints {e.start_time_local!r}, earlier "
              f"than #{prev.court_order}'s {prev.start_time_local!r} above it — "
              f"a clock read in the wrong half of the day")
+
+    # 2026-09-17, SP Open document 277: QUADRA 2's first box was printed blank
+    # under "Starting at 12:00 PM" and the court's first match "Followed by".
+    # The noon was dropped with the blank box, so the row had no clock and
+    # nothing ahead of it: no estimate, a bare "Followed by" on the card, and
+    # a place at the bottom of the Time view. `untimed_slot_served_first`
+    # could not see it — the serve order was right about a row that should
+    # never have been untimed.
+    for e in court_opener_untimed(rows):
+        flag("court_opener_untimed", e,
+             f"{e.court} #{e.court_order} opens the court printed "
+             f"{e.start_note or e.start_type!r} with no clock — it follows a "
+             f"box the ingest never read, and the page can print no time")
 
     # 2026-08-26, Winston-Salem: re-reading the same sheet through a fixed
     # parser gave two courts a second row each — the clean names beside the

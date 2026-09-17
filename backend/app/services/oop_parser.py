@@ -831,6 +831,43 @@ def _slot_head(pre):
     return pre[len(pre) - keep:] if keep else []
 
 
+# A wording that places its match BEHIND the box above it rather than at a
+# clock: "Followed by", "After suitable rest", "30 mins after ceremony".
+_CHAINED_WORDING_RE = re.compile(r'followed\s+by|\bafter\b', re.I)
+# A wording that says the time is not known. It keeps its silence.
+_UNKNOWN_TIME_RE = re.compile(r'\bTB[ACD]\b|\bto\s+be\s+\w', re.I)
+
+
+def _carried_clock(box, court, text):
+    """The clock an EMPTY box hands to the chained slot printed under it.
+
+    SP Open's Thursday sheets (2026-09-17) leave QUADRA 2's first box blank
+    under "Starting at 12:00 PM". Document 275 printed the next box "Starting
+    at 12:00 PM" as well; the 9:12 PM reissue (document 277) printed it
+    "Followed by". Followed by nothing: the court still opens at noon, and
+    Avanesyan/Charaeva is its first match. flush() drops an empty box without a word (sheets print blank rows),
+    and the noon went with it, so the row was stored with no clock at all.
+    With nothing ahead of it to chain from, the estimate was NULL: the page
+    printed a bare "Followed by", and the Time view filed the court's opener
+    after the day's 7:20 PM finish.
+
+    The clock is still true of everything below the blank box: nothing on a
+    court starts before a time printed above it. So a slot whose own wording
+    only CHAINS inherits it, and the estimate chain treats it as a floor like
+    any clock on a chained slot (`schedule.recompute_expected_starts`).
+    `start_raw` is untouched — `start_note` keeps "Followed by", as printed.
+    A wording that states a time of its own keeps it, and one that says the
+    time is unknown ("Time TBA - After suitable rest") keeps its silence.
+    Ratchet: `schedule_invariants.court_opener_untimed`.
+    """
+    if (box is None or box.side_a or box.side_b or not box.time
+            or box.court != court):
+        return None
+    if not _CHAINED_WORDING_RE.search(text) or _UNKNOWN_TIME_RE.search(text):
+        return None
+    return box.time
+
+
 def _parse_column(lines, pno, dropped=None):
     """One column, top to bottom: court header, then time-delimited match slots.
 
@@ -995,10 +1032,13 @@ def _parse_column(lines, pno, dropped=None):
             # standalone "TBC" (2026-08-25) comes after a full slot and opens.
             if TBX_RE.match(text) and cur is not None and not (cur.side_a or cur.side_b):
                 continue
+            # Read before flush(), which forgets the box being closed.
+            carried = None if slot[0] else _carried_clock(cur, court, text)
             flush()
             pre = []
-            cur = Match(court=court, time=slot[0], discipline=slot[1],
-                        round=slot[2], start_raw=text, page=pno)
+            cur = Match(court=court, time=slot[0] or carried,
+                        discipline=slot[1], round=slot[2], start_raw=text,
+                        page=pno)
             after_vs = False
             continue
 

@@ -3202,12 +3202,16 @@ async def recompute_expected_starts(db, tournament_id: int, play_date: date,
 
             if s.start_type == 'fixed' and printed_dt:
                 expected, source = printed_dt, 'printed'
-            elif s.start_type in ('not_before', 'after_event') and printed_dt:
+            elif (s.start_type in ('not_before', 'after_event', 'followed_by')
+                  and printed_dt):
                 # A CLOCK PRINTED ON A CHAINED SLOT IS A FLOOR, whatever words
                 # surround it. "After suitable rest" with a time says the match
                 # waits for the rest AND the clock; reading only the rest let
                 # the predecessor's end undercut the printed time (Guadalajara
                 # 2026-09-15, "NB 3:30 PM - After suitable rest" -> "~2:50 PM").
+                # A "Followed by" holds a clock only when it inherited one from
+                # the blank box above it (oop_parser._carried_clock, SP Open
+                # 2026-09-17) — a floor for the same reason.
                 expected = max(printed_dt, prev_end) if prev_end else printed_dt
                 source = 'printed' if expected == printed_dt else 'estimated'
             elif prev_end:
