@@ -106,11 +106,13 @@ export function MatchCard({ e, scale = 1, badges = true }) {
                 on their own, have no seeds to align and the column was a hole
                 on the left (owner, 2026-09-17). */}
             {badges && <PosBadge seed={sideSeed(e.players, side)} drawRank={sideDrawRank(e.players, side)} />}
-            <FlagSlot codes={sideFlags(e.players, side)} slots={flagSlots} />
+            {/* A pair's flags ride inside the name, one before each (owner, 2026-09-17). */}
+            {!doubles && <FlagSlot codes={sideFlags(e.players, side)} slots={flagSlots} />}
             <View style={s.nameWrap}>
             <PlayerName
               name={sideName(e.players, side)}
               doubles={doubles}
+              flags={doubles ? sideFlags(e.players, side) : null}
               /* 1.27x rather than bodyMed's 1.4: tight enough to pull the two
                  rows together, and still clear of the ~1.2 floor where
                  descenders start to clip. */
