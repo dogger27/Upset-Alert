@@ -739,8 +739,17 @@ function MatchRow({ e, first, past, scoreW, venueMode, venueTz, onHistory }) {
           the score leaves them, and the clock to its column. */}
       {/* A PAST DAY IS A RECORD: the round is the group's heading and the
           clock is history, so neither takes a column (owner, 2026-09-17). */}
-      {!past && <View style={s.rowWhenSlot}><FitText style={s.rowWhen} min={9}>{when}</FitText></View>}
-      {!past && <View style={s.rowRoundSlot}><FitText style={s.rowRound} min={8}>{round}</FitText></View>}
+      {/* TODAY, ONCE A MATCH HAS A SCORE (live or over), the score takes the
+          clock's and the round's columns (owner, 2026-09-17): the row's first
+          thing is the thing that changes. Still to play: clock and round. */}
+      {!past && score ? (
+        <View style={s.rowLeadSlot}><FitText style={[s.rowScore, s.rowScoreLead, live && s.rowScoreLive]} min={9}>{score}</FitText></View>
+      ) : !past ? (
+        <>
+          <View style={s.rowWhenSlot}><FitText style={s.rowWhen} min={9}>{when}</FitText></View>
+          <View style={s.rowRoundSlot}><FitText style={s.rowRound} min={8}>{round}</FitText></View>
+        </>
+      ) : null}
       {/* THE PLAYERS' FIELD (owner, 2026-09-17): each name centred in its own
           half, "def." or "vs" between them; the score on a line of its own
           beneath, left, in the light green. */}
@@ -755,8 +764,6 @@ function MatchRow({ e, first, past, scoreW, venueMode, venueTz, onHistory }) {
           {singles && <View style={s.rowFlag}><FlagSlot codes={sideFlags(e.players, leftSide === 'a' ? 'b' : 'a')} /></View>}
           <FitText style={[s.rowNames, decided && s.rowNamesDone]} min={9}>{right}</FitText>
         </View>
-        {/* Today and ahead: the score on its own line under the verb. */}
-        {!past && !!score && <Text style={[s.rowScore, live && s.rowScoreLive]} numberOfLines={1}>{score}</Text>}
       </View>
       {/* A past day: the score on the names' own line, at the row's right
           (owner, 2026-09-17) — the columns it would have shared the row with
@@ -937,6 +944,9 @@ const s = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 5, minHeight: leading(34) },
   rowNext: { borderTopWidth: 1, borderTopColor: C.border },
   rowWhenSlot: { width: 58, flexDirection: 'row' },
+  // The clock's and the round's columns together, for a score in their place.
+  rowLeadSlot: { width: 58 + 5 + 30, flexDirection: 'row' },
+  rowScoreLead: { textAlign: 'left', marginTop: 0 },
   rowWhen: { fontFamily: 'Archivo_500Medium', fontSize: 11, color: C.muted, fontVariant: ['tabular-nums'] },
   rowRoundSlot: { width: 30, flexDirection: 'row' },   // "R128" at 11pt bold is ~28; FitText shrinks it at larger text sizes
   rowRound: { fontFamily: 'Archivo_700Bold', fontSize: 11, color: C.faint },
