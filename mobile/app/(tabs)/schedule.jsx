@@ -661,7 +661,7 @@ function MatchRow({ e, first, venueMode, venueTz, onHistory }) {
           the score leaves them, and the clock to its column. */}
       <View style={s.rowWhenSlot}><FitText style={s.rowWhen} min={9}>{when}</FitText></View>
       <Text style={s.rowRound} numberOfLines={1}>{round}</Text>
-      <FitText style={[s.rowNames, decided && s.rowNamesDone]} min={10}>{names}</FitText>
+      <FitText style={[s.rowNames, decided && s.rowNamesDone]} min={10} wrapAtFloor>{names}</FitText>
       {!!score && <Text style={[s.rowScore, live && s.rowScoreLive]} numberOfLines={1}>{score}</Text>}
     </Wrap>
   )
