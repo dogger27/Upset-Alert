@@ -769,7 +769,7 @@ async def compare_picks(
     unseeded = sorted((e for e in all_entries if e.seed is None),
                       key=lambda e: (e.ranking is None, e.ranking or 0))
     implied = {e.id: offset + i + 1 for i, e in enumerate(unseeded)}
-    entry_names = {e.id: {"name": e.name, "seed": e.seed,
+    entry_names = {e.id: {"name": e.display_name, "seed": e.seed,
                           "implied": implied.get(e.id),
                           "entry_type": e.entry_type}
                    for e in all_entries}
@@ -1123,7 +1123,7 @@ async def match_predictors(
                     if wid is not None and wid != match.winner_id}
     picked_names = {}
     if name_ids:
-        picked_names = {e.id: e.name for e in (await db.execute(
+        picked_names = {e.id: e.display_name for e in (await db.execute(
             select(DrawEntry).where(DrawEntry.id.in_(name_ids)))).scalars()}
 
     correct, incorrect = [], []
@@ -1396,7 +1396,7 @@ async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get
     # WHAT-IF WORLDS, from the semis on: every way the last matches can go,
     # each labelled by its final, with everyone's picks on those matches so
     # the table can be re-scored under any of them in the browser.
-    names_by_entry = {e.id: e.name for e in all_entries}
+    names_by_entry = {e.id: e.display_name for e in all_entries}
     worlds = enumerate_worlds(all_matches, pts_table, names_by_entry)
     world_ids = {r["match_id"] for w in (worlds or []) for r in w["results"]}
     world_predictions = {

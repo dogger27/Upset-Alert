@@ -902,14 +902,18 @@ async def ingest_document(db, tournament, play_date: date, url: str,
     for d in draw_rows:
         ents = (await db.execute(
             select(DrawEntry.id, DrawEntry.name, DrawEntry.nationality,
-                   DrawEntry.seed, DrawEntry.entry_type)
+                   DrawEntry.seed, DrawEntry.entry_type, DrawEntry.sofa_name)
             .where(DrawEntry.draw_id == d.id))).all()
-        # Each entry carries BOTH folds — see _match_tokens. Built once here
-        # rather than per name, because every slot on the sheet probes it.
+        # Each entry carries BOTH folds — see _match_tokens — and BOTH
+        # spellings: Wikipedia's from the draw and Sofascore's when we have it
+        # ("Alexander" and "Aleksandr" Shevchenko; the sheet prints the
+        # latter). Built once here rather than per name, because every slot
+        # on the sheet probes it.
         draws.append({'draw': d,
-                      'entries': [(e[0], set(_norm(e[1] or '').split()),
-                                   set(_ascii_fold(e[1] or '').split()))
-                                  for e in ents],
+                      'entries': [(e[0], set(_norm(nm or '').split()),
+                                   set(_ascii_fold(nm or '').split()))
+                                  for e in ents
+                                  for nm in dict.fromkeys((e[1], e[5])) if nm],
                       # Everything a sheet prints about a player, for a slot
                       # the bracket settles — see _sheet_form.
                       'people': {e[0]: (e[1], e[2], e[3], e[4]) for e in ents}})
@@ -2529,6 +2533,20 @@ async def resolve_settled_alternatives(db, tournament_id: int) -> int:
     return collapsed
 
 
+def fold_index(rows) -> dict:
+    """{fold: [entry ids]} over (id, name, sofa_name) rows — every spelling we
+    hold for an entry leads to it, each id once per fold."""
+    out: dict = {}
+    for eid, *spellings in rows:
+        for nm in dict.fromkeys(spellings):
+            if not nm:
+                continue
+            ids = out.setdefault(_fold(nm), [])
+            if eid not in ids:
+                ids.append(eid)
+    return out
+
+
 def surname_agrees(sheet_name: str, draw_name: str) -> bool:
     """The same surname under a plain ASCII fold — the sheet's last token
     against the draw's. The given name is left out on purpose: the sheet
@@ -2708,13 +2726,12 @@ async def relink_bracket_matches(db, tournament_id: int) -> int:
         return 0
     draw_by_id = {d.id: d for d in draw_rows}
     dents = (await db.execute(
-        select(DrawEntry.id, DrawEntry.name)
+        select(DrawEntry.id, DrawEntry.name, DrawEntry.sofa_name)
         .where(DrawEntry.draw_id.in_(list(draw_by_id))))).all()
     # Keyed on `_fold`, the fold under which the draw's "Mees Röttgering" and
-    # the sheet's "ROTTGERING" finally agree — see _match_tokens.
-    by_fold: dict = {}
-    for eid, name in dents:
-        by_fold.setdefault(_fold(name), []).append(eid)
+    # the sheet's "ROTTGERING" finally agree — see _match_tokens — under both
+    # spellings we hold for an entry.
+    by_fold = fold_index(dents)
     pair_match = {}
     for m in (await db.execute(
             select(Match).where(Match.draw_id.in_(list(draw_by_id)),

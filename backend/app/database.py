@@ -499,6 +499,7 @@ async def _migrate(conn):
         "ALTER TABLE draws ADD COLUMN sofa_tournament_id INTEGER",
         "ALTER TABLE draws ADD COLUMN sofa_season_id INTEGER",
         "ALTER TABLE draw_entries ADD COLUMN sofa_player_id INTEGER",
+        "ALTER TABLE draw_entries ADD COLUMN sofa_name VARCHAR",
         ("CREATE INDEX IF NOT EXISTS ix_draw_entries_sofa "
          "ON draw_entries (sofa_player_id)"),
         # Un-stamp the quarter-finals that _classify called qualifying because

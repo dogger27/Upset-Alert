@@ -449,6 +449,17 @@ class DrawEntry(Base):
     date_of_birth: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     te_player_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     te_slug: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    # SOFASCORE'S SPELLING of this player, learned from any event we read that
+    # carries their id — "Aleksandr Shevchenko" where Wikipedia's draw has
+    # "Alexander". The tours print the same Latinisation Sofascore does, so this
+    # is what a reader should see and what a sheet should be matched against;
+    # Wikipedia keeps the draw's SHAPE and its release, nothing more (owner,
+    # 2026-09-17: "demote Wikipedia wherever possible").
+    sofa_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+
+    @property
+    def display_name(self) -> str:
+        return self.sofa_name or self.name
     # Sofascore's player id, resolved once against this draw's own field and
     # then joined on rather than re-matched. ESPN is matched by name on every
     # poll because it publishes no id; this column is what stops the live-score

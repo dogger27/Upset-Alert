@@ -208,8 +208,8 @@ async def _gather_round_payload(
             continue
         round_match_info.append((
             m.id, m.winner_id,
-            _last_name(winner_entry.name), _entry_status(winner_entry), winner_entry.ranking,
-            _last_name(loser_entry.name), _entry_status(loser_entry), loser_entry.ranking,
+            _last_name(winner_entry.display_name), _entry_status(winner_entry), winner_entry.ranking,
+            _last_name(loser_entry.display_name), _entry_status(loser_entry), loser_entry.ranking,
             _match_score_str(m),
         ))
 
@@ -1390,8 +1390,8 @@ async def _gather_standout_payload(db, rows: list) -> list[dict]:
             "label": _tournament_label(draw.name, draw.category or "", draw.gender or "M"),
             "tier": _tier_badge(draw.category or "", draw.gender),
             "round_name": _email_round_label(draw.round_name(m.round_number)),
-            "winner": m.winner.name,
-            "loser": loser.name,
+            "winner": m.winner.display_name,
+            "loser": loser.display_name,
             "score": _match_score_str(m),
             "correct_count": r.correct_count,
             "participant_count": r.participant_count,
