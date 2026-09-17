@@ -10,11 +10,16 @@
  * `widths` are the chips' text widths at their own size; `active` is the
  * index of the chosen chip, which is a size up and carries its own padding
  * and minimum. `room` is the width the row may occupy. */
+/* A chip is never narrower than a two-glyph label needs (owner, 2026-09-17:
+   "the minimum width of the day spots is too narrow"): the tight level's
+   floor was 0, so a "7" stood on a chip as wide as the digit, cramped beside
+   "Q5". The floors rise a step at every level; the strip scrolls a little
+   sooner, which is the trade the owner asked for. */
 export const LEVELS = [
-  { gap: 6, pad: 8, min: 34, padOn: 10, minOn: 40 },   // roomy — a 250's week
-  { gap: 4, pad: 6, min: 30, padOn: 8,  minOn: 36 },
-  { gap: 3, pad: 4, min: 26, padOn: 6,  minOn: 32 },
-  { gap: 2, pad: 3, min: 0,  padOn: 4,  minOn: 0  },   // tight — before scrolling
+  { gap: 6, pad: 8, min: 38, padOn: 10, minOn: 44 },   // roomy — a 250's week
+  { gap: 4, pad: 6, min: 34, padOn: 8,  minOn: 40 },
+  { gap: 3, pad: 4, min: 30, padOn: 6,  minOn: 36 },
+  { gap: 2, pad: 3, min: 26, padOn: 4,  minOn: 32 },   // tight — before scrolling
 ]
 
 // Measurement is not layout: a couple of points of slack, so a strip that
