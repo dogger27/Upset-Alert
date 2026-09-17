@@ -561,24 +561,9 @@ export default function ScheduleScreen() {
         )}
         {day.data && all.length > 0 && visible.length === 0 && (
           <Card>
-            <Title>Nothing left to show for this day.</Title>
-            <Muted>
-              {!showDone && all.some(e => e.status === 'completed' || e.status === 'postponed')
-                ? 'Every match listed is finished or postponed — switch Completed on to see them.'
-                : !showDoubles && all.every(e => e.discipline !== 'singles')
-                  ? 'Only doubles is listed — switch Doubles on to see it.'
-                  : pinnedEvent != null
-                    /* Pinned: the rows hidden are every other tournament's,
-                       which the reader did not ask for and cannot switch on
-                       from here. Name what IS being shown instead. */
-                    ? 'This tournament has nothing listed for this day.'
-                    : eventFilter && !all.some(e => rowInTournaments(e, eventFilter))
-                      /* The one filter that is NOT a switch on this screen, so
-                         it has to name itself: the reader set it on the way in
-                         and has nothing here to point at. */
-                      ? 'None of the tournaments you chose is playing today — tap Schedule again to change that.'
-                      : 'The current switches hide every match listed.'}
-            </Muted>
+            {/* One line, whatever hid them (owner, 2026-09-17): the switches
+                are on screen, and a reader who filtered can un-filter. */}
+            <Title>All matches have been filtered out.</Title>
           </Card>
         )}
 
