@@ -778,15 +778,15 @@ function MatchMini({ e, first, alt, tourBar, past, tournament, venueMode, venueT
       {when ? <LineTag first={first} alt={alt}>{when}</LineTag> : null}
       {tournament ? <LineTag first={first} alt={alt} right>{tournament}</LineTag> : null}
       <View style={s.miniCell}>
-        <Pressable style={s.miniBar} onPress={picks ? () => onPredictors(matchFromEntry(e)) : undefined} hitSlop={4}
+        <Pressable style={[s.miniBar, picks && s.miniPill]} onPress={picks ? () => onPredictors(matchFromEntry(e)) : undefined} hitSlop={4}
                    disabled={!picks} accessibilityRole={picks ? 'button' : undefined}
                    accessibilityLabel={picks ? (e.winner_side != null ? 'Who called it' : 'Who’s still in it') : undefined}>
-          {picks ? <Ionicons name="people" size={15} color={C.greenLit} /> : null}
+          {picks ? <Ionicons name="people" size={16} color={CHIP.text} /> : null}
         </Pressable>
         <View style={s.miniCard}>
           <MatchCard e={e} scale={0.8} badges={!(past && e.discipline !== 'singles' && !(e.players || []).some(p => p.seed || p.draw_rank != null))} />
         </View>
-        <Pressable style={s.miniBar} onPress={pair ? () => onH2H(pair) : undefined} hitSlop={4}
+        <Pressable style={[s.miniBar, pair && s.miniPill]} onPress={pair ? () => onH2H(pair) : undefined} hitSlop={4}
                    disabled={!pair} accessibilityRole={pair ? 'button' : undefined} accessibilityLabel={pair ? 'Head to head' : undefined}>
           {pair ? <Text style={s.miniBarText}>H2H</Text> : null}
         </Pressable>
@@ -1003,6 +1003,8 @@ const TOURN_SMALL = eyebrowType({ size: 18, color: C.clayLight })
 
 // The tour chips' own colours, for the bar.
 const TOUR_BAR = { ATP: '#2563eb', WTA: '#db2777' }
+// The bracket's chip inks (bracket.jsx): --green-500 line, --brand-text word.
+const CHIP = { line: '#40916c', text: '#5fbf8f' }
 
 const s = StyleSheet.create({
   /* FAR LESS AIR AROUND A COURT NAME (owner, 2026-09-17): the group's
@@ -1050,9 +1052,12 @@ const s = StyleSheet.create({
   // The cell: [group bar][card][H2H bar], the bars full height.
   miniCell: { flexDirection: 'row', alignItems: 'stretch' },
   miniCard: { flex: 1, minWidth: 0, paddingHorizontal: 4 },
-  miniBar: { width: 26, alignItems: 'center', justifyContent: 'center' },
-  // "H2H" on its side: the box stays the word's width, rotated about its centre.
-  miniBarText: { fontFamily: 'Archivo_700Bold', fontSize: 10, lineHeight: leading(14), letterSpacing: 0.5, color: C.greenLit, width: 40, textAlign: 'center', transform: [{ rotate: '-90deg' }] },
+  /* THE DRAW VIEW'S SIDE TABS, run top to bottom (owner, 2026-09-17): the
+     bracket's chip — 24 wide, 1px green-500 on the card fill, radius 4 —
+     stretched to the row's height, the word on its side, the icon upright. */
+  miniBar: { width: 24, alignItems: 'center', justifyContent: 'center', marginHorizontal: 2 },
+  miniPill: { borderRadius: 4, borderWidth: 1, borderColor: CHIP.line, backgroundColor: C.card },
+  miniBarText: { fontFamily: 'Archivo_700Bold', fontSize: 12, lineHeight: leading(16), letterSpacing: 0.25, color: CHIP.text, width: 40, textAlign: 'center', transform: [{ rotate: '-90deg' }] },
   miniFirstWhen: { paddingTop: 13 },
   // 16 tall, centred on the 2px line above: 8 above it, 8 below.
   miniTag: { position: 'absolute', top: -9, height: 16, paddingHorizontal: 4, justifyContent: 'center', zIndex: 1, maxWidth: '55%' },
