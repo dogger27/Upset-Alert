@@ -57,6 +57,8 @@ const SCREENS = [
   { name: 'day-strip',     mobile: '/schedule?tournament=92&date=2026-09-01', pwa: '/schedule?date=2026-09-01' },
   { name: 'day-strip-end', mobile: '/schedule?tournament=92&date=2026-09-10', pwa: '/schedule?date=2026-09-10' },
   { name: 'day-strip-q',   mobile: '/schedule?tournament=92&date=2026-08-24', pwa: '/schedule?date=2026-08-24' },
+  // An eight-day event: every chip fits, so the strip must not scroll.
+  { name: 'day-strip-fit', mobile: '/schedule?tournament=59&date=2026-08-25', pwa: '/schedule?date=2026-08-25' },
   // A day with a washout behind it: postponed, carried-over and resumed rows.
   { name: 'washout',   mobile: '/schedule?date=2026-09-01', pwa: '/schedule?date=2026-09-01' },
   // The same day scrolled to its end, where the postponed rows live, and with
