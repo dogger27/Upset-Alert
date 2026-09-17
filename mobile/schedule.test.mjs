@@ -25,7 +25,7 @@ test('venue mode keeps the sheet clock; my time rewrites it', () => {
 test('wording is canonical whatever the sheet printed', () => {
   const nb = { ...fixed, start_type: 'not_before', start_note: 'Not Before 11:00 AM' }
   assert.deepEqual(line(nb, NY, true), { text: '11:00 AM', estimated: false, displaced: 'Not before 11:00 AM' })
-  assert.equal(line({ ...fixed, start_note: 'Followed By' }, LA, false).text, 'Followed by')
+  assert.equal(line({ status: 'scheduled', start_type: 'followed_by', start_note: 'Followed By' }, LA, false).text, 'Followed by')
   // A dotted clock, as en-CA devices print it, must still split off the wording.
   assert.deepEqual(line({ ...fixed, start_note: 'Starts At 11:00 a.m.', start_time_local: '11:00 a.m.' }, NY, true),
                    { text: '11:00 a.m.', estimated: false, displaced: 'Starting at 11:00 a.m.' })
@@ -89,4 +89,21 @@ test('a clock the sheet printed without PM still follows the zone switch', () =>
   // The digits are matched whole: a 2:30 clock never rewrites a 12:30 inside a note.
   const noon = { ...nb, start_time_local: '2:30 PM', start_note: 'After 12:30 match, NB 2:30' }
   assert.equal(line(noon, LA, false).text, 'After 12:30 match, NB 11:30 AM')
+})
+
+/* SP Open, 2026-09-17 (doc 277): QUADRA 2's first box was blank under
+   "Starting at 12:00 PM" and the court's first match printed "Followed by".
+   The ingest keeps the noon on the row and the note as printed, so a line
+   built from the note alone printed "Followed by" — followed by nothing — and
+   no time. The row's clock is the line, in either zone. */
+test('a clock handed down from a blank box is the line', () => {
+  const opener = { status: 'scheduled', start_type: 'followed_by', start_time_local: '12:00 PM',
+                   printed_start_at: '2026-09-17T15:00:00Z', start_note: 'Followed by',
+                   expected_start_at: '2026-09-17T15:00:00Z', expected_source: 'printed' }
+  assert.deepEqual(line(opener, NY, true), { text: '12:00 PM', estimated: false, displaced: null })
+  assert.equal(line(opener, LA, false).text, '8:00 AM')
+  assert.equal(footTime(opener, LA, false, false).text, '8:00 AM')
+  // No clock on the row: the wording is all there is.
+  assert.equal(line({ ...opener, start_time_local: null, printed_start_at: null }, LA, false).text,
+               'Followed by')
 })

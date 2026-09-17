@@ -2,7 +2,7 @@
 //
 // The clock inside a printed slot note, rewritten into the reader's zone.
 import assert from 'node:assert/strict'
-import { rewriteNoteClock } from './noteClock.js'
+import { noteHasClock, rewriteNoteClock } from './noteClock.js'
 
 let failed = 0
 function check(label, fn) {
@@ -29,6 +29,15 @@ check('digits are matched whole', () => {
 })
 check('a clock that is not in the note leaves it alone', () => {
   assert.equal(rewriteNoteClock('After suitable rest', '2:30 PM', '11:30 AM'), 'After suitable rest')
+})
+/* SP Open, 2026-09-17: "Followed by" under a blank box printed "Starting at
+   12:00 PM" — the row holds the noon, the note does not. */
+check('a note with no clock of its own is told apart', () => {
+  assert.equal(noteHasClock('Followed by'), false)
+  assert.equal(noteHasClock('After suitable rest'), false)
+  assert.equal(noteHasClock(null), false)
+  assert.equal(noteHasClock('NB 2:30 possible court change'), true)
+  assert.equal(noteHasClock('Starts At 14.30'), true)
 })
 
 if (failed) { console.log(`${failed} FAILED`); process.exit(1) }
