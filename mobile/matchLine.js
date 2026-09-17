@@ -30,7 +30,11 @@ export function matchLine(e) {
   const a = sideSurnames(e.players, 'a'), b = sideSurnames(e.players, 'b')
   const won = e.status === 'completed' ? winnerSide(e) : null
   const decided = won === 'a' || won === 'b'
-  const names = decided ? `${won === 'a' ? a : b} def. ${won === 'a' ? b : a}` : `${a} vs ${b}`
+  // The winner on the left once decided; the sheet's order until then.
+  const left = decided && won === 'b' ? b : a
+  const right = decided && won === 'b' ? a : b
+  const verb = decided ? 'def.' : 'vs'
+  const names = `${left} ${verb} ${right}`
   /* THE SCORE READS FROM THE WINNER'S SIDE once the winner is named first:
      "Lys def. Knutson 6-3 6-3", never "3-6 3-6". The sets are stored in the
      sheet's order (side a first), so a side-b winner has the rows swapped
@@ -41,7 +45,7 @@ export function matchLine(e) {
   if (won === 'b' && Array.isArray(sets) && sets.length >= 2) sets = [sets[1], sets[0]]
   return {
     round: shortRound(e.round_label) || '',
-    names,
+    names, left, right, verb,
     decided,
     score: scoreLine(sets, ' ') || '',
   }

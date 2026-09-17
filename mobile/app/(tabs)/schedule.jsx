@@ -663,7 +663,7 @@ function LockPill({ matchId, live }) {
    app's rule for names — and a started match opens its history on a tap,
    as the card does. */
 function MatchRow({ e, first, venueMode, venueTz, onHistory }) {
-  const { round, names, score, decided } = matchLine(e)
+  const { round, names, left, right, verb, score, decided } = matchLine(e)
   const live = isLive(e)
   // rowClock, not footTime: the card goes quiet once a match is on or over;
   // this column cannot.
@@ -683,8 +683,17 @@ function MatchRow({ e, first, venueMode, venueTz, onHistory }) {
           the score leaves them, and the clock to its column. */}
       <View style={s.rowWhenSlot}><FitText style={s.rowWhen} min={9}>{when}</FitText></View>
       <View style={s.rowRoundSlot}><FitText style={s.rowRound} min={8}>{round}</FitText></View>
-      <FitText style={[s.rowNames, decided && s.rowNamesDone]} min={10} wrapAtFloor>{names}</FitText>
-      {!!score && <Text style={[s.rowScore, live && s.rowScoreLive]} numberOfLines={1}>{score}</Text>}
+      {/* THE PLAYERS' FIELD (owner, 2026-09-17): each name centred in its own
+          half, "def." or "vs" between them; the score on a line of its own
+          beneath, left, in the light green. */}
+      <View style={s.rowPlayers}>
+        <View style={s.rowNamesLine}>
+          <FitText style={[s.rowNames, decided && s.rowNamesDone]} min={9} align="center">{left}</FitText>
+          <Text style={s.rowVerb}>{verb}</Text>
+          <FitText style={[s.rowNames, decided && s.rowNamesDone]} min={9} align="center">{right}</FitText>
+        </View>
+        {!!score && <Text style={[s.rowScore, live && s.rowScoreLive]} numberOfLines={1}>{score}</Text>}
+      </View>
     </Wrap>
   )
 }
@@ -848,16 +857,20 @@ const s = StyleSheet.create({
      the page's own margin — and the round sits close on the names. */
   edge: { marginHorizontal: -(S.lg - S.sm) },
   rows: { borderRadius: R.md, borderWidth: 1, borderColor: C.border, backgroundColor: C.card, overflow: 'hidden', marginHorizontal: -(S.lg - S.sm) },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, minHeight: leading(34) },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 5, minHeight: leading(34) },
   rowNext: { borderTopWidth: 1, borderTopColor: C.border },
   rowWhenSlot: { width: 58, flexDirection: 'row' },
   rowWhen: { fontFamily: 'Archivo_500Medium', fontSize: 11, color: C.muted, fontVariant: ['tabular-nums'] },
   rowRoundSlot: { width: 30, flexDirection: 'row' },   // "R128" at 11pt bold is ~28; FitText shrinks it at larger text sizes
   rowRound: { fontFamily: 'Archivo_700Bold', fontSize: 11, color: C.faint },
-  rowNames: { fontFamily: 'Archivo_500Medium', fontSize: 13, color: C.ink },   // FitText supplies the flex slot
+  rowPlayers: { flex: 1, minWidth: 0 },
+  rowNamesLine: { flexDirection: 'row', alignItems: 'center' },
+  rowNames: { fontFamily: 'Archivo_500Medium', fontSize: 13, color: C.ink },   // FitText supplies the flex slot; each side is one
   rowNamesDone: { color: C.inkBody },
-  rowScore: { fontFamily: 'Archivo_700Bold', fontSize: 12, color: C.inkBody, flexShrink: 0, fontVariant: ['tabular-nums'] },
-  rowScoreLive: { color: C.greenLit },
+  rowVerb: { fontFamily: 'Archivo_500Medium', fontSize: 12, color: C.muted, paddingHorizontal: 6 },
+  // The second line: the sets, left, in the light green — brighter when live.
+  rowScore: { fontFamily: 'Archivo_700Bold', fontSize: 12, color: C.greenLit, marginTop: 1, fontVariant: ['tabular-nums'] },
+  rowScoreLive: { color: C.greenBright },
   /* flex-end, not center. The left side is TWO lines — court above time — so
      centring left the buttons floating on the seam between them, level with
      neither. Bottom-aligned they sit on the time, which is the line they are
