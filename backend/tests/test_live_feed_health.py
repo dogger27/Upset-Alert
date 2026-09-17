@@ -28,4 +28,4 @@ def test_open_breaker_is_not_healthy():
             return sl.live_feed_healthy()
         finally:
             sofascore._blocked_until = old
-    assert asyncio.get_event_loop().run_until_complete(go()) is False
+    assert asyncio.run(go()) is False

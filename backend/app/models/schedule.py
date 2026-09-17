@@ -236,3 +236,23 @@ class ScheduleChange(Base):
     new_value: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     changed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class CourtAlias(Base):
+    """A court's DISPLAY name, set by an admin — per tournament, because every
+    venue has a "Court 1". The sheet's own name (`court`) stays the key on
+    every schedule row: ingest, ordering, dedupe and the verifier all match
+    on it, and only the API's outgoing `court` is swapped for the alias
+    (owner, 2026-09-17: "Quadra Central Maria Esther Bueno" is "Central").
+    Deleting the row restores the sheet's name everywhere."""
+    __tablename__ = "court_aliases"
+    __table_args__ = (UniqueConstraint("tournament_id", "court", name="uq_court_alias"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tournament_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("tournaments.id"), nullable=False, index=True)
+    court: Mapped[str] = mapped_column(String, nullable=False)
+    display_name: Mapped[str] = mapped_column(String, nullable=False)
+    updated_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
