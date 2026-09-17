@@ -58,3 +58,20 @@ class TeRankingsSnapshot(Base):
 
 
 Index("idx_te_snap_week", TeRankingsSnapshot.week_date)
+
+
+class TeDoublesSnapshot(Base):
+    """DOUBLES ranking for one player in one week (owner, 2026-09-17), from
+    Tennis Explorer's doubles list — a separate table, not a column: a
+    doubles specialist has no singles row for a column to hang off. Read by
+    services/doubles_rank for a pair's inferred seed. Immutable once written."""
+
+    __tablename__ = "te_doubles_snapshots"
+
+    player_id: Mapped[int] = mapped_column(ForeignKey("te_players.id"), primary_key=True)
+    week_date: Mapped[date] = mapped_column(Date, primary_key=True)
+    rank: Mapped[int] = mapped_column(Integer, nullable=False)
+    points: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+
+Index("idx_te_dbl_week", TeDoublesSnapshot.week_date)
