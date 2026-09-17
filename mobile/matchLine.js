@@ -12,10 +12,18 @@ import { scoreLine, scoreSets } from './score.js'
 import { surname } from './scoring.js'
 import { shortRound } from './rounds.js'
 
+/* Doubles: seven letters of each surname at most (owner, 2026-09-17) — two
+   pairs of full surnames do not share a row with a score. A cut, not an
+   ellipsis: "Ostapen/Hsieh" reads; "Ostape…/Hsieh" does not. Singles keeps
+   the whole surname. */
+const DOUBLES_LETTERS = 7
+
 export function sideSurnames(players, side) {
   const full = sideName(players, side)
   if (full === 'TBD') return 'TBD'
-  return full.split(' / ').map(surname).join('/')
+  const names = full.split(' / ').map(surname)
+  if (names.length < 2) return names[0]
+  return names.map(n => n.slice(0, DOUBLES_LETTERS)).join('/')
 }
 
 export function matchLine(e) {
