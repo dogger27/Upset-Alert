@@ -29,9 +29,9 @@ import { hideFromLockScreen, showMatchOnLockScreen, useShowingOnLockScreen } fro
 import { showToast } from '../../toast'
 import { useLiveUpdates } from '../../live'
 import { useApi } from '../../useApi'
-import { byTimeOfDay, footTime, isLive, isSuspended, matchFromEntry, rowClock, whenLabel } from '../../schedule'
+import { byTimeOfDay, footTime, isLive, isSuspended, matchFromEntry, rowClock, sideFlags, whenLabel } from '../../schedule'
 import { leading } from '../../fontScale.js'
-import { FitText, TourBadge } from '../../cards'
+import { FitText, FlagSlot, TourBadge } from '../../cards'
 import { setScheduleTournaments, useScheduleTournaments } from '../../scheduleFilter'
 import { useChoosableTournaments } from '../../choosableTournaments'
 import { DayStrip } from '../../DayStrip'
@@ -717,7 +717,9 @@ function scoreColumn(list, past) {
    app's rule for names — and a started match opens its history on a tap,
    as the card does. */
 function MatchRow({ e, first, past, scoreW, venueMode, venueTz, onHistory }) {
-  const { round, names, left, right, verb, score, decided } = matchLine(e)
+  const { round, names, left, right, verb, leftSide, score, decided } = matchLine(e)
+  // Singles: each player's flag beside the verb (owner, 2026-09-17); doubles has four and no room.
+  const singles = e.discipline === 'singles'
   const live = isLive(e)
   // rowClock, not footTime: the card goes quiet once a match is on or over;
   // this column cannot.
@@ -748,7 +750,9 @@ function MatchRow({ e, first, past, scoreW, venueMode, venueTz, onHistory }) {
               against it, the second flush left — the halves stay equal, so the
               verb stays at the field's centre. */}
           <FitText style={[s.rowNames, decided && s.rowNamesDone]} min={9} align="right">{left}</FitText>
+          {singles && <View style={s.rowFlag}><FlagSlot codes={sideFlags(e.players, leftSide)} /></View>}
           <Text style={s.rowVerb}>{verb}</Text>
+          {singles && <View style={s.rowFlag}><FlagSlot codes={sideFlags(e.players, leftSide === 'a' ? 'b' : 'a')} /></View>}
           <FitText style={[s.rowNames, decided && s.rowNamesDone]} min={9}>{right}</FitText>
         </View>
         {/* Today and ahead: the score on its own line under the verb. */}
@@ -940,7 +944,8 @@ const s = StyleSheet.create({
   rowNamesLine: { flexDirection: 'row', alignItems: 'center' },
   rowNames: { fontFamily: 'Archivo_500Medium', fontSize: 13, color: C.ink },   // FitText supplies the flex slot; each side is one
   rowNamesDone: { color: C.inkBody },
-  rowVerb: { fontFamily: 'Archivo_500Medium', fontSize: 12, color: C.muted, paddingHorizontal: 6 },
+  rowVerb: { fontFamily: 'Archivo_500Medium', fontSize: 12, color: C.muted, paddingHorizontal: 4 },
+  rowFlag: { marginHorizontal: 3 },
   // The second line: the sets, centred under the verb (the halves are equal,
   // so the field's centre is the verb's), in a darker green — lit when live.
   rowScore: { fontFamily: 'Archivo_700Bold', fontSize: 12, color: C.greenMid, marginTop: 1, textAlign: 'center', fontVariant: ['tabular-nums'] },
