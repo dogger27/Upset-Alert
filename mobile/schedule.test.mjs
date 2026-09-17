@@ -3,7 +3,7 @@
 // hold on any machine: the "device" is Los Angeles, the venue New York.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { byTimeOfDay, footTime, whenLabel, isLive, isSuspended } from './schedule.js'
+import { byTimeOfDay, footTime, whenLabel, isLive, isSuspended, startedFirst } from './schedule.js'
 
 const LA = 'America/Los_Angeles', NY = 'America/New_York'
 const fixed = { status: 'scheduled', start_type: 'fixed', start_time_local: '11:00 AM',
@@ -106,4 +106,17 @@ test('a clock handed down from a blank box is the line', () => {
   // No clock on the row: the wording is all there is.
   assert.equal(line({ ...opener, start_time_local: null, printed_start_at: null }, LA, false).text,
                'Followed by')
+})
+
+test('startedFirst: a match on court rises above the ones waiting, each half in its own order', () => {
+  const rows = [
+    { id: 1, status: 'completed' },
+    { id: 2, status: 'scheduled' },
+    { id: 3, status: 'live' },
+    { id: 4, status: 'to_be_completed' },
+    { id: 5, status: 'live', suspended: true },
+    { id: 6, status: 'scheduled' },
+  ]
+  assert.deepEqual(startedFirst(rows).map(r => r.id), [1, 3, 5, 2, 4, 6])
+  assert.deepEqual(startedFirst([]), [])
 })

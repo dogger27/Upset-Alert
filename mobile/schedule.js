@@ -424,6 +424,15 @@ export function whenLabel(e) {
  * court, so it had no estimate; an empty key sorts before every instant and
  * listed the one match nobody can time above the 1:00 PM opener.
  */
+/* STARTED ABOVE NOT STARTED (owner, 2026-09-17): in the dense views a
+   match that is on court or over rises above the ones still waiting, each
+   half keeping its chronology. Live is the server's word (a suspended match
+   is still 'live'); a carried match waits with the rest. Stable. */
+export function startedFirst(entries) {
+  const started = e => e.status === 'live' || e.status === 'completed'
+  return [...entries.filter(started), ...entries.filter(e => !started(e))]
+}
+
 export function byTimeOfDay(entries) {
   const key = e => {
     if (e.resumed_at) return e.resumed_at
