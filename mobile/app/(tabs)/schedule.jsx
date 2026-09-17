@@ -745,7 +745,7 @@ function MatchMini({ e, first, onHistory }) {
   const openable = onHistory && ['live', 'completed', 'postponed', 'to_be_completed'].includes(e.status)
   const Wrap = openable ? Pressable : View
   return (
-    <Wrap style={[s.miniRow, !first && s.rowNext]} onPress={openable ? () => onHistory(e) : undefined}
+    <Wrap style={[s.miniRow, !first && s.miniNext]} onPress={openable ? () => onHistory(e) : undefined}
           accessibilityRole={openable ? 'button' : undefined}>
       <MatchCard e={e} scale={0.8} />
     </Wrap>
@@ -992,6 +992,9 @@ const s = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 5, minHeight: leading(34) },
   rowNext: { borderTopWidth: 1, borderTopColor: C.border },
   miniRow: { paddingHorizontal: 8, paddingVertical: 5 },
+  // A clear rule between matches (owner, 2026-09-17): two lines of box score
+  // per match need a firmer division than the list's hairline.
+  miniNext: { borderTopWidth: 2, borderTopColor: C.borderLit },
   rowWhenSlot: { width: 58, flexDirection: 'row' },
   // The clock's and the round's columns together, for a score in their place.
   rowLeadSlot: { width: 58 + 5 + 30, flexDirection: 'row' },
