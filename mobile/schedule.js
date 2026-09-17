@@ -337,6 +337,25 @@ export function footTime(e, zone, venueMode, inCourt) {
   return { ...stripScaffolding(canon(printedStart(e, zone, venueMode))), estimated: false }
 }
 
+/* THE COMPACT LIST'S CLOCK — footTime's ladder without its silence. A row
+   that is one line has nothing but this column to say when, and "when did it
+   start" is still the first thing on the line once a match is on or over:
+   the hour it began if it has, else the expected start (estimated or
+   printed), else the sheet's own wording. Always a clock rather than
+   "Followed by", because one column cannot carry a phrase; the wording that
+   would have shown is returned as `displaced` for the accessibility label. */
+export function rowClock(e, zone, venueMode) {
+  if (!e) return { text: '', estimated: false, displaced: null }
+  const started = startedLine(e, zone)
+  if (started) return { ...stripScaffolding(started), estimated: false }
+  const bare = stripScaffolding(expectedStart(e, zone, venueMode))
+  if (bare.text) {
+    return { text: bare.text, estimated: e.expected_source === 'estimated',
+             displaced: estimateSupersedes(e) ? canon(printedStart(e, zone, venueMode)) : bare.displaced }
+  }
+  return { ...stripScaffolding(canon(printedStart(e, zone, venueMode))), estimated: false }
+}
+
 /* The STATUS, and only the status — the site's pill block, which draws
    nothing at all on a row that has not started (pages/Schedule.jsx). This used
    to fall through to the printed start, so a scheduled row announced its time
