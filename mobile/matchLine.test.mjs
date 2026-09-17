@@ -10,6 +10,7 @@ const singles = (a, b, extra = {}) => ({ discipline: 'singles', round_label: 'R1
 let l = matchLine(singles('Francisco Comesaña', 'Flavio Cobolli'))
 assert.equal(l.names, 'Comesaña vs Cobolli'); assert.equal(l.score, ''); assert.equal(l.decided, false)
 assert.deepEqual([l.left, l.verb, l.right], ['Comesaña', 'vs', 'Cobolli'])
+assert.equal(l.leftSide, 'a')
 assert.equal(l.round, 'R128')
 
 // Decided: the winner first, "def.", the sets on one line with the loser's tiebreak.
@@ -17,6 +18,7 @@ l = matchLine(singles('Francisco Comesaña', 'Flavio Cobolli', {
   status: 'completed', winner_side: 1, scores: [['6', '6', '3', '4', '4'], ['3', '2', '6', '6', '6']] }))
 assert.equal(l.names, 'Cobolli def. Comesaña'); assert.equal(l.decided, true)
 assert.deepEqual([l.left, l.verb, l.right], ['Cobolli', 'def.', 'Comesaña'])
+assert.equal(l.leftSide, 'b')      // the winner, side b, is on the left
 // Side b won, so the sets read from Cobolli's side.
 assert.equal(l.score, '3-6 2-6 6-3 6-4 6-4')
 l = matchLine(singles('Gabriela Knutson', 'Eva Lys', { status: 'completed', winner_side: 1, scores: [['3', '3'], ['6', '6']] }))

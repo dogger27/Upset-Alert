@@ -31,8 +31,10 @@ export function matchLine(e) {
   const won = e.status === 'completed' ? winnerSide(e) : null
   const decided = won === 'a' || won === 'b'
   // The winner on the left once decided; the sheet's order until then.
-  const left = decided && won === 'b' ? b : a
-  const right = decided && won === 'b' ? a : b
+  const swapped = decided && won === 'b'
+  const left = swapped ? b : a
+  const right = swapped ? a : b
+  const leftSide = swapped ? 'b' : 'a'      // which sheet side is on the left — for flags, seeds, anything per side
   const verb = decided ? 'def.' : 'vs'
   const names = `${left} ${verb} ${right}`
   /* THE SCORE READS FROM THE WINNER'S SIDE once the winner is named first:
@@ -45,7 +47,7 @@ export function matchLine(e) {
   if (won === 'b' && Array.isArray(sets) && sets.length >= 2) sets = [sets[1], sets[0]]
   return {
     round: shortRound(e.round_label) || '',
-    names, left, right, verb,
+    names, left, right, verb, leftSide,
     decided,
     score: scoreLine(sets, ' ') || '',
   }
