@@ -760,7 +760,7 @@ function MatchMini({ e, first, alt, tourBar, past, tournament, venueMode, venueT
       {tourBar ? <View style={[s.rowBar, { backgroundColor: tourBar }]} /> : null}
       {when ? <LineTag first={first} alt={alt}>{when}</LineTag> : null}
       {tournament ? <LineTag first={first} alt={alt} right>{tournament}</LineTag> : null}
-      <MatchCard e={e} scale={0.8} badges={!(past && e.discipline !== 'singles')} />
+      <MatchCard e={e} scale={0.8} badges={!(past && e.discipline !== 'singles' && !(e.players || []).some(p => p.seed || p.draw_rank != null))} />
     </Wrap>
   )
 }
@@ -981,7 +981,7 @@ const s = StyleSheet.create({
   courtHead: { flexDirection: 'row', alignItems: 'center', gap: S.sm, marginBottom: -S.xs },
   courtGroup: { marginTop: -S.xs },
   tournHead: { marginBottom: -(S.sm - 2) },
-  subHead: { marginBottom: -(S.sm - 3) },          // 3pt to the card beneath
+  subHead: { marginBottom: -S.sm },                // flush to the card beneath; the line box's own descent is the air (owner, 2026-09-17)
   subHeadFirst: { marginTop: -(S.sm + 2) },        // 10pt from the card above, not 20
   courtEdit: { paddingHorizontal: 4, paddingVertical: 2 },
   // The scroll body's own gap and growth, restated: the wrapper took its children.

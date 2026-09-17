@@ -25,6 +25,7 @@ from app.models.schedule import CourtAlias, ScheduleEntry, ScheduleEntryPlayer
 from app.models.rankings import TePlayer, TeRankingsSnapshot
 from app.services.schedule import (carry_surname, settle_from_result_rows,
                                    settled_sides_index)
+from app.services.doubles_rank import doubles_pair_ranks
 from app.services.rankings import _norm
 from app.models.tournament import Draw, DrawEntry, Match, Tournament
 from app.models.prediction import UserPrediction
@@ -326,7 +327,7 @@ async def _slugs_by_name(db, raws: list) -> dict:
 
 def _player_out(p, nats: dict, seeds: dict, types: dict, ranks: dict, from_bracket: bool,
                 slugs: dict = None, extra: dict = None, by_name: dict = None,
-                extra_by_name: dict = None):
+                extra_by_name: dict = None, pair_rank: Optional[int] = None):
     """One player, preferring what the bracket knows over what the sheet printed.
 
     `from_bracket` is false for anything but main-draw singles. A doubles
@@ -346,6 +347,12 @@ def _player_out(p, nats: dict, seeds: dict, types: dict, ranks: dict, from_brack
         # so an inferred seed read off it would describe a different event
         # entirely — the exact mistake the seeding guard above exists to stop.
         draw_rank = ranks.get(p.draw_entry_id)
+    elif pair_rank is not None:
+        # A DOUBLES PAIR'S INFERRED SEED (owner, 2026-09-17): the rank of the
+        # pair's summed doubles rankings among the field at the seeding week,
+        # behind the seeds — services/doubles_rank. About the event being
+        # played, so it may sit where the singles figure may not.
+        draw_rank = pair_rank
     return SchedulePlayerOut(
         side=p.side, position=p.position,
         name=p.raw_name,
@@ -642,6 +649,12 @@ async def schedule_day(
             by_draw[de.draw_id].append(de)
         for _did, _es in by_draw.items():
             ent_ranks.update(_compute_draw_ranks(_es))
+
+    # The doubles pairs' inferred seeds, per tournament on the page — cached
+    # inside doubles_rank, since this endpoint is polled every ten seconds.
+    pair_ranks: dict = {}
+    for _tid in {e.tournament_id for e in entries if e.discipline == "doubles"}:
+        pair_ranks.update(await doubles_pair_ranks(db, _tid))
 
     nats = {}
     ent_seeds = {}
@@ -1074,7 +1087,8 @@ async def schedule_day(
         players = [
             _player_out(p, nats, ent_seeds, ent_types, ent_ranks,
                         e.discipline == "singles" and e.stage == "main",
-                        ent_slugs, ent_extra, slugs_by_name, extra_by_name)
+                        ent_slugs, ent_extra, slugs_by_name, extra_by_name,
+                        pair_rank=pair_ranks.get((e.id, p.side)))
             for p in ordered
         ]
         # A row whose match finished on another day holds no result of its

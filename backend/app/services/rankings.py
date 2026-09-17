@@ -49,7 +49,8 @@ _TE_ROW_RE = re.compile(
     r'<td class="rank first">(\d+)\.</td>.*?<td class="t-name"><a href="([^"]+)">(.*?)</a></td>.*?<td class="long-point">(\d+)</td>',
     re.DOTALL,
 )
-_TE_SLUG_RE = re.compile(r'^/player/([^/]+)/?$')
+# The doubles list links each player as /player/<slug>/?type=doubles — the slug is the same.
+_TE_SLUG_RE = re.compile(r'^/player/([^/?]+)/?(?:\?.*)?$')
 # TE appends "(YYYY)" to disambiguate duplicate names on ranking pages — strip before storing.
 _YEAR_BRACKET_RE = re.compile(r'\s*\(\d{4}\)\s*')
 
@@ -335,7 +336,20 @@ def _fuzzy_match_te(wiki_name: str, id_to_norm: dict[int, str]) -> Optional[int]
 # Tennis Explorer scraper
 # ---------------------------------------------------------------------------
 
-async def _scrape_te(gender: str, week_date: Optional[date] = None, log_errors: bool = True) -> list[tuple[str, int, Optional[str], Optional[int]]]:
+def _te_params(week_date: Optional[date], doubles: bool = False, page: int = 1) -> dict:
+    """The ranking page's query: a date for a past week, `t=doubles` for the
+    doubles list (owner, 2026-09-17), and the page."""
+    params: dict = {}
+    if week_date:
+        params["date"] = week_date.isoformat()
+    if doubles:
+        params["t"] = "doubles"
+    params["page"] = page
+    return params
+
+
+async def _scrape_te(gender: str, week_date: Optional[date] = None, log_errors: bool = True,
+                     doubles: bool = False) -> list[tuple[str, int, Optional[str], Optional[int]]]:
     """
     Scrape all pages of Tennis Explorer rankings for the given gender.
     Returns [(name_raw, rank, te_slug, points), ...] in TE's "Surname Firstname" format.
@@ -346,13 +360,12 @@ async def _scrape_te(gender: str, week_date: Optional[date] = None, log_errors: 
     import httpx
 
     url = _TE_URLS[gender]
-    base_params: dict = {"date": week_date.isoformat()} if week_date else {}
     results: list[tuple[str, int, Optional[str], Optional[int]]] = []
     try:
         async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
             page = 1
             while True:
-                params = {**base_params, "page": page}
+                params = _te_params(week_date, doubles, page)
                 resp = await client.get(url, params=params, headers=_TE_HEADERS)
                 resp.raise_for_status()
                 rows = _TE_ROW_RE.findall(resp.text)
@@ -366,7 +379,7 @@ async def _scrape_te(gender: str, week_date: Optional[date] = None, log_errors: 
                     results.append((clean_name, int(rank_str), slug, points))
                 page += 1
                 await asyncio.sleep(0.1)
-        logger.info("Tennis Explorer %s scrape: %d players across %d pages", gender, len(results), page - 1)
+        logger.info("Tennis Explorer %s %s scrape: %d players across %d pages", gender, "doubles" if doubles else "singles", len(results), page - 1)
     except Exception as exc:
         from app.services.http_errors import describe_exception, is_transient_http_error
         err = describe_exception(exc)
@@ -536,6 +549,67 @@ async def ensure_te_week(gender: str, week_date: date, db: AsyncSession, log_err
 # ---------------------------------------------------------------------------
 # High-level entry point
 # ---------------------------------------------------------------------------
+
+async def ensure_te_doubles_week(gender: str, week_date: date, db: AsyncSession, log_errors: bool = True) -> bool:
+    """te_doubles_snapshots for (gender, week_date), scraped once (owner, 2026-09-17).
+
+    The doubles list names players the singles list never does — doubles
+    specialists — so a row is created for each newcomer the way ensure_te_week
+    creates one; a name already known by spelling, token set or slug is reused.
+    Returns True when it stored a week. Does not commit — the caller owns the
+    transaction.
+    """
+    from app.models.rankings import TeDoublesSnapshot, TePlayer
+
+    have = (await db.execute(
+        select(func.count()).select_from(TeDoublesSnapshot)
+        .join(TePlayer, TePlayer.id == TeDoublesSnapshot.player_id)
+        .where(TePlayer.gender == gender, TeDoublesSnapshot.week_date == week_date)
+    )).scalar_one()
+    if have:
+        return False
+
+    logger.info("Scraping Tennis Explorer doubles for %s week %s...", gender, week_date)
+    raw_rows = await _scrape_te(gender, week_date=week_date, log_errors=log_errors, doubles=True)
+    if len(raw_rows) < 100:
+        logger.warning("TE %s doubles scrape returned only %d players for week %s — not storing",
+                       gender, len(raw_rows), week_date)
+        if log_errors:
+            from app.services.system_log import app_log
+            await app_log("warning", "rankings", f"TE {gender} doubles scrape returned only {len(raw_rows)} players — aborting",
+                          {"gender": gender, "count": len(raw_rows), "week": week_date.isoformat()},
+                          dedup_key=f"te_doubles_scrape_low_{gender}", dedup_hours=6)
+        return False
+
+    players = list((await db.execute(select(TePlayer).where(TePlayer.gender == gender))).scalars())
+    by_raw = {p.name_raw: p for p in players}
+    by_ts = {frozenset(p.name_norm.split()): p for p in players}
+    by_slug = {p.te_slug: p for p in players if p.te_slug}
+    created = 0
+    for name_raw, rank, slug, points in raw_rows:
+        tp = by_raw.get(name_raw) or (by_slug.get(slug) if slug else None) or by_ts.get(frozenset(_norm(name_raw).split()))
+        if tp is None:
+            tp = TePlayer(gender=gender, name_raw=name_raw, name_norm=_norm(name_raw), te_slug=slug)
+            db.add(tp)
+            await db.flush()
+            _invalidate_te_index()
+            created += 1
+            by_raw[name_raw] = tp
+            by_ts[frozenset(tp.name_norm.split())] = tp
+            if slug:
+                by_slug[slug] = tp
+        elif slug and tp.te_slug is None:
+            tp.te_slug = slug
+        snap = await db.get(TeDoublesSnapshot, (tp.id, week_date))
+        if snap is None:
+            db.add(TeDoublesSnapshot(player_id=tp.id, week_date=week_date, rank=rank, points=points))
+        else:
+            snap.rank = rank
+            snap.points = points
+    await db.flush()
+    logger.info("Stored %d TE doubles rankings for %s week %s (%d new players)", len(raw_rows), gender, week_date, created)
+    return True
+
 
 async def assign_seed_week_rankings(
     players: list,
