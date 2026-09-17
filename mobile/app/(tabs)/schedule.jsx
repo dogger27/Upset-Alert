@@ -36,10 +36,12 @@ import { setScheduleTournaments, useScheduleTournaments } from '../../scheduleFi
 import { useChoosableTournaments } from '../../choosableTournaments'
 import { DayStrip } from '../../DayStrip'
 import { SWIPE_PX, SWIPE_VX, swipeStep } from '../../swipeDay'
+import { beginSwipe, endSwipe, unlessSwiping } from '../../swipeGuard'
 import { dayLabels, relativeDayWord } from '../../dayLabels'
 import { rowInTournaments } from '../../scheduleRows'
 import { MatchCard } from '../../scorecard'
 import { matchLine } from '../../matchLine'
+import { CourtRenameSheet } from '../../courtRename'
 import { ScoreHistorySheet } from '../../scoreHistory'
 import { C, R, S, T } from '../../theme'
 import { Card, CardLink, ErrorNote, Loading, Muted, Screen, Title, eyebrowType } from '../../ui'
@@ -109,6 +111,7 @@ export default function ScheduleScreen() {
      once; it is on the Status tab with the other preferences now. Absent means
      my time: that is the question a schedule is usually being asked. */
   const { me } = useAuth()
+  const isAdmin = !!me?.is_admin
   const tzMode = me?.schedule_tz === 'venue' ? 'venue' : 'user'
   const [h2h, setH2H] = useState(null)
   const [hist, setHist] = useState(null)
@@ -116,6 +119,8 @@ export default function ScheduleScreen() {
   const [view, setView] = useState('time')
   // The compact list: one match, one row (owner, 2026-09-17). Session-only, like the switches above.
   const [compact, setCompact] = useState(false)
+  // The court being renamed by an admin: { tournament_id, court_key, current }, or null.
+  const [renaming, setRenaming] = useState(null)
 
   /* WHICH TOURNAMENTS THE TAB CHOSE (scheduleFilter). A schedule row always
      carries a tournament_id — unlike draw_id, which is null for qualifying and
@@ -229,11 +234,28 @@ export default function ScheduleScreen() {
   const dayPan = useMemo(() => Gesture.Pan()
     .activeOffsetX([-12, 12])
     .failOffsetY([-8, 8])
+    /* A SWIPE IS NOT A TAP (swipeGuard): the release at the end of a swipe
+       reached the Pressable under the finger as a press and opened the match
+       history. From activation until a beat after the gesture settles, the
+       page's tap handlers decline. */
+    .onStart(() => {
+      'worklet'
+      scheduleOnRN(beginSwipe)
+    })
     .onEnd((ev) => {
       'worklet'
       const delta = swipeStep(ev.translationX, ev.velocityX, SWIPE_PX, SWIPE_VX)
       if (delta) scheduleOnRN(stepDay, delta)
+    })
+    .onFinalize(() => {
+      'worklet'
+      scheduleOnRN(endSwipe)
     }), [stepDay])
+  /* Every tap the page hands its rows, guarded — the history, the H2H, the
+     predictors — so no swipe ever opens anything. */
+  const openHist = useMemo(() => unlessSwiping(setHist), [])
+  const openH2H = useMemo(() => unlessSwiping(setH2H), [])
+  const openPredictors = useMemo(() => unlessSwiping(setPredictors), [])
   const day = useApi(`schedule:${date}`, () => getScheduleDay(date))
   /* Refetch the day whenever any tournament on it changes — the site's rule.
      A day can span two tournaments, and subscribing to only the first would
@@ -567,20 +589,36 @@ export default function ScheduleScreen() {
                 eyebrow, through the measuring fitter: shrunk as far as it must,
                 never "…". Uppercased here so the measurement is of the string
                 that is drawn. */}
-            {court ? <FitText style={COURT.style} track={COURT.track} min={9}>{court.toUpperCase()}</FitText> : null}
+            {court ? (
+              <View style={s.courtHead}>
+                <FitText style={COURT.style} track={COURT.track} min={9}>{court.toUpperCase()}</FitText>
+                {/* ADMINS RENAME A COURT FROM HERE (owner, 2026-09-17): the
+                    pencil after the name opens the sheet; the name it sets is
+                    the court's everywhere the schedule is served. The sheet's
+                    own name is the key, carried on every row as court_key. */}
+                {isAdmin && (
+                  <Pressable
+                    onPress={() => setRenaming({ tournament_id: list[0].tournament_id, court_key: list[0].court_key || court, current: court })}
+                    hitSlop={8} style={s.courtEdit} accessibilityRole="button" accessibilityLabel={`Rename ${court}`}>
+                    <Ionicons name="pencil" size={14} color={C.muted} />
+                  </Pressable>
+                )}
+              </View>
+            ) : null}
             {compact
               ? (
                 <View style={s.rows}>
-                  {list.map((e, i) => <MatchRow key={e.id} e={e} first={i === 0} venueMode={venueMode} venueTz={venueTzOf(e)} onHistory={setHist} />)}
+                  {list.map((e, i) => <MatchRow key={e.id} e={e} first={i === 0} venueMode={venueMode} venueTz={venueTzOf(e)} onHistory={openHist} />)}
                 </View>
               )
-              : list.map(e => <EntryRow venueMode={venueMode} venueTz={venueTzOf(e)} onH2H={setH2H} onHistory={setHist} onPredictors={setPredictors} onChampion={setChampion} key={e.id} e={e} inCourt={view === 'court'} />)}
+              : list.map(e => <EntryRow venueMode={venueMode} venueTz={venueTzOf(e)} onH2H={openH2H} onHistory={openHist} onPredictors={openPredictors} onChampion={setChampion} key={e.id} e={e} inCourt={view === 'court'} />)}
           </View>
         ))}
       </View>
       </GestureDetector>
       </Screen>
       {champion && <ChampionFanfare key={champion} width={screenW} />}
+      <CourtRenameSheet court={renaming} onClose={() => setRenaming(null)} />
       <H2HSheet visible={!!h2h} onClose={() => setH2H(null)} a={h2h?.a} b={h2h?.b} />
       {/* drawId comes off the ROW, not the page: the schedule mixes the men's
           and women's draws on one day, so there is no single draw to pass. */}
@@ -794,6 +832,8 @@ function shortDate(iso) {
 const COURT = eyebrowType()
 
 const s = StyleSheet.create({
+  courtHead: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
+  courtEdit: { paddingHorizontal: 4, paddingVertical: 2 },
   // The scroll body's own gap and growth, restated: the wrapper took its children.
   swipeBody: { flexGrow: 1, gap: S.md },
   arrowOff: { opacity: 0.3 },
