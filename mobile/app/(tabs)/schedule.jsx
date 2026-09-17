@@ -12,7 +12,7 @@
  * has to be above the fold rather than sorted correctly.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams } from 'expo-router'
 import { Alert, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
@@ -208,8 +208,8 @@ export default function ScheduleScreen() {
      right for the one before, and the strip slides its chip to the centre
      to show it. The pan is axis-locked the way the draw page's scrub is (12pt
      sideways to activate, 8pt vertical to fail), so the list still scrolls
-     and pulls to refresh, and it WAITS FOR THE STRIP'S OWN PAN TO FAIL, so
-     a drag that starts on the strip scrolls the strip and turns no page.
+     and pulls to refresh. The strip is outside its subtree (see the JSX),
+     so a drag that starts on the strip scrolls the strip and turns no page.
      The decision is made on release — distance or a flick — so a drag that
      comes back to where it started changes nothing. */
   const stepDay = useCallback((delta) => {
@@ -217,9 +217,7 @@ export default function ScheduleScreen() {
     const j = i + delta
     if (i >= 0 && j >= 0 && j < available.length) setPinned(available[j])
   }, [available, date])
-  const stripPan = useRef(null)
   const dayPan = useMemo(() => Gesture.Pan()
-    .requireExternalGestureToFail(stripPan)
     .activeOffsetX([-12, 12])
     .failOffsetY([-8, 8])
     .onEnd((ev) => {
@@ -384,15 +382,20 @@ export default function ScheduleScreen() {
 
   return (
     <>
-      {/* touchAction pan-y: on web the browser must not pan sideways under the
-          gesture (nothing here scrolls sideways but the strip, which has its
-          own). The View is the detector's native child; Screen is a component. */}
-      <GestureDetector gesture={dayPan} touchAction="pan-y">
-      <View style={s.swipeHost} collapsable={false}>
       <Screen onRefresh={refetch} touchAction="pan-y pinch-zoom">
         {/* THE DAYS, as chips; the chosen one's date is written out on the
             line below, where it has always been. */}
-        {days.length > 0 && <DayStrip days={days} active={date} onPick={setPinned} panRef={stripPan} />}
+        {days.length > 0 && <DayStrip days={days} active={date} onPick={setPinned} />}
+        {/* THE SWIPE LIVES INSIDE THE SCROLL VIEW, BELOW THE STRIP. Above it —
+            an ancestor of the ScrollView — the pan never fired on the phone:
+            iOS hands a sideways drag to the scroll view's own recogniser
+            before an ancestor RNGH handler can claim it. Inside, it is the
+            arrangement RNGH's own Swipeable rows rely on in every list, and
+            the strip is simply not in its subtree, so a drag on the strip
+            scrolls the strip and turns no page. flexGrow fills the column,
+            so the empty space under a short day swipes too. */}
+        <GestureDetector gesture={dayPan} touchAction="pan-y">
+        <View style={s.swipeBody} collapsable={false}>
         <View style={s.bar}>
           <Pressable
             onPress={() => idx > 0 && setPinned(available[idx - 1])}
@@ -557,9 +560,9 @@ export default function ScheduleScreen() {
             {list.map(e => <EntryRow venueMode={venueMode} venueTz={venueTzOf(e)} onH2H={setH2H} onHistory={setHist} onPredictors={setPredictors} onChampion={setChampion} key={e.id} e={e} inCourt={view === 'court'} />)}
           </View>
         ))}
-      </Screen>
       </View>
       </GestureDetector>
+      </Screen>
       {champion && <ChampionFanfare key={champion} width={screenW} />}
       <H2HSheet visible={!!h2h} onClose={() => setH2H(null)} a={h2h?.a} b={h2h?.b} />
       {/* drawId comes off the ROW, not the page: the schedule mixes the men's
@@ -734,7 +737,8 @@ function prettyDate(iso) {
 }
 
 const s = StyleSheet.create({
-  swipeHost: { flex: 1 },
+  // The scroll body's own gap and growth, restated: the wrapper took its children.
+  swipeBody: { flexGrow: 1, gap: S.md },
   bar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: S.md },
   dateBox: { alignItems: 'center' },
   arrow: {
