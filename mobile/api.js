@@ -261,8 +261,16 @@ export const endActivity = (activityId) =>
      winner_side 0 = side a, 1 = side b. */
 /* Scoped to one tournament when arriving from its card, so the landing-day
    rule below picks from THAT event's sheets. open_counts rides along. */
-export const getScheduleDates = (tournamentId) =>
-  request(`/schedule/dates${tournamentId ? `?tournament_id=${tournamentId}` : ''}`)
+/* One id, several, or none. Several become a repeated `tournament_id=` —
+   the schedule tab walks the days of every tournament its chooser has
+   ticked, and those days are one answer, not one answer per box. None
+   means every tournament on record, which is how the chooser learns what
+   is on the sheets at all. */
+export const getScheduleDates = (tournamentIds) => {
+  const ids = [].concat(tournamentIds ?? []).filter(id => id != null)
+  const qs = ids.map(id => `tournament_id=${id}`).join('&')
+  return request(`/schedule/dates${qs ? `?${qs}` : ''}`)
+}
 
 /* One draw's standings. Public — no auth — and the shape is
    {rank, user, total_points, correct_count, has_upset_pick}. Used on the

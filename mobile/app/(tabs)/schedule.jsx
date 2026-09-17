@@ -102,7 +102,84 @@ export default function ScheduleScreen() {
   const [predictors, setPredictors] = useState(null)
   const [view, setView] = useState('time')
 
-  const dates = useApi(`schedule-dates:${tournament ?? 'all'}`, () => getScheduleDates(tournament))
+  /* WHICH TOURNAMENTS THE TAB CHOSE (scheduleFilter). A schedule row always
+     carries a tournament_id — unlike draw_id, which is null for qualifying and
+     doubles — so this needs nothing derived and nothing to go wrong. */
+  const eventSel = useScheduleTournaments()
+  /* WHAT THE PAGE'S OWN CHECKBOXES OFFER — the same derivation the tab bar's
+     sheet uses, so the two controls list the same tournaments and either can
+     undo the other. */
+  const { all: allDraws, choosable: events } = useChoosableTournaments()
+  /* PINNED TO ONE EVENT — arriving from a tournament the chooser does not
+     offer.
+   *
+   * The chooser lists what is open or being played. Press Order of Play on a
+   * finished event (or one that has not opened) and you land here with its
+   * tournament in the URL and NOTHING on screen about it: the boxes name two
+   * other tournaments, and the selection they hold decides what you see, so
+   * the sheets you asked for are filtered by a control that cannot even name
+   * them (owner, 2026-09-15).
+   *
+   * So that arrival pins the page to that one event: its rows only, and no
+   * chooser, because there is nothing to choose between. The date list
+   * follows `scope` below, so the arrows walk that event's days and no
+   * others.
+   *
+   * READINESS IS THE DRAW LIST, NOT THE CHOOSABLE SET. The first version
+   * waited for `events.length`, on the theory that an empty list meant the
+   * answer was still in flight — but an empty list is also a RIGHT answer, and
+   * a common one: nothing live in the off-season, or a week whose sheets are
+   * not out yet. So the pin never engaged in the case it exists for, and the
+   * page went on showing every tournament playing that day (three of them, on
+   * 26 August in the dev snapshot). `all` is the draw list the choosable set
+   * is derived FROM: non-empty means the question has been answered, whatever
+   * the answer turned out to be. */
+  const pinnedEvent = tournament != null && allDraws.length > 0
+    && !events.some(e => e.id === tournament)
+    ? tournament
+    : null
+  /* `null` in the store means EVERY tournament, so a box is ticked when there
+     is no selection at all. Turning the last one off would empty the screen
+     with nothing on it to explain why, so the whole set comes back instead —
+     which is the same state, said the other way, and leaves every box ticked
+     rather than every box blank. */
+  /* THE TOURNAMENTS THIS PAGE IS ABOUT — one answer, read by the date list
+     and by every row filter. The pin outranks the store, it is the reason the
+     reader is here; otherwise the store's selection, or every choosable event
+     when the store says "all". `null` while the draw list is in flight: not
+     none — not yet known.
+
+     "ALL" USED TO MEAN ALL ON RECORD. The store's null is "every tournament",
+     and the date list took that literally: fetched with no tournament at
+     all, it held every date the sheets have ever named, so with both boxes
+     ticked the arrows walked back to a Cincinnati Friday that neither ticked
+     event played — and its rows, from a tournament the chooser could not
+     even name, came through a filter of null (owner, 2026-09-17). All means
+     the boxes on screen, and the days on offer are theirs.
+
+     Keyed on primitives so the array — and the Set built from it — keep
+     their identity across renders; `events` is rebuilt every render, and a
+     fresh Set each time would re-run every filter below. */
+  const liveKey = events.map(t => t.id).join(',')
+  const scope = useMemo(() => {
+    if (pinnedEvent != null) return [pinnedEvent]
+    if (allDraws.length === 0) return null
+    const live = liveKey ? liveKey.split(',').map(Number) : []
+    const chosen = eventSel ? live.filter(id => eventSel.has(id)) : live
+    // A stored selection naming nothing live is no selection — the store's
+    // own rule: turning the last box off brings every box back.
+    return chosen.length ? chosen : live
+  }, [pinnedEvent, allDraws.length, liveKey, eventSel])
+  const scopeKey = scope ? scope.join(',') : null
+  /* Rows are tested against a Set, never against null: while the scope is
+     unknown nothing passes, so a slow draw list shows a page that fills
+     rather than rows that vanish. */
+  const eventFilter = useMemo(() => new Set(scope || []), [scope])
+  /* THE DAYS ON OFFER ARE THE SCOPE'S DAYS. Nothing is fetched until the
+     scope is known, and nothing is fetched for an empty one — an unscoped
+     call answers with every date on record, which is the bug above. */
+  const dates = useApi(scope?.length ? `schedule-dates:${scopeKey}` : null,
+                       () => getScheduleDates(scope), { enabled: !!scope?.length })
   const available = dates.data?.dates || []
   /* A pinned day only counts while it EXISTS in the list this page is showing.
      The reset above is the cure for the stale day; this is the belt to its
@@ -123,54 +200,6 @@ export default function ScheduleScreen() {
   // recompute on every keystroke of state elsewhere. Memoised on the identity
   // of the fetched data instead.
   const all = useMemo(() => day.data?.entries || [], [day.data])
-  /* WHICH TOURNAMENTS THE TAB CHOSE (scheduleFilter). A schedule row always
-     carries a tournament_id — unlike draw_id, which is null for qualifying and
-     doubles — so this needs nothing derived and nothing to go wrong. */
-  const eventSel = useScheduleTournaments()
-  /* WHAT THE PAGE'S OWN CHECKBOXES OFFER — the same derivation the tab bar's
-     sheet uses, so the two controls list the same tournaments and either can
-     undo the other. */
-  const { all: allDraws, choosable: events } = useChoosableTournaments()
-  /* PINNED TO ONE EVENT — arriving from a tournament the chooser does not
-     offer.
-   *
-   * The chooser lists what is open or being played. Press Order of Play on a
-   * finished event (or one that has not opened) and you land here with its
-   * tournament in the URL and NOTHING on screen about it: the boxes name two
-   * other tournaments, and the selection they hold decides what you see, so
-   * the sheets you asked for are filtered by a control that cannot even name
-   * them (owner, 2026-09-15).
-   *
-   * So that arrival pins the page to that one event: its rows only, and no
-   * chooser, because there is nothing to choose between. The date list is
-   * already scoped — getScheduleDates(tournament) — so the arrows walk that
-   * event's days and no others.
-   *
-   * READINESS IS THE DRAW LIST, NOT THE CHOOSABLE SET. The first version
-   * waited for `events.length`, on the theory that an empty list meant the
-   * answer was still in flight — but an empty list is also a RIGHT answer, and
-   * a common one: nothing live in the off-season, or a week whose sheets are
-   * not out yet. So the pin never engaged in the case it exists for, and the
-   * page went on showing every tournament playing that day (three of them, on
-   * 26 August in the dev snapshot). `all` is the draw list the choosable set
-   * is derived FROM: non-empty means the question has been answered, whatever
-   * the answer turned out to be. */
-  const pinnedEvent = tournament != null && allDraws.length > 0
-    && !events.some(e => e.id === tournament)
-    ? tournament
-    : null
-  /* `null` in the store means EVERY tournament, so a box is ticked when there
-     is no selection at all. Turning the last one off would empty the screen
-     with nothing on it to explain why, so the whole set comes back instead —
-     which is the same state, said the other way, and leaves every box ticked
-     rather than every box blank. */
-  /* THE SELECTION EVERY ROW IS TESTED AGAINST. The pin outranks the store —
-     it is the reason the reader is on this page — and memoised so the Set's
-     identity does not change per render and re-run every filter below. */
-  const eventFilter = useMemo(
-    () => (pinnedEvent != null ? new Set([pinnedEvent]) : eventSel),
-    [pinnedEvent, eventSel],
-  )
   const toggleEvent = id => {
     const cur = new Set(eventSel ?? events.map(t => t.id))
     if (cur.has(id)) cur.delete(id)
