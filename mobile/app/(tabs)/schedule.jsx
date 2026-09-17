@@ -738,6 +738,7 @@ function EntryRow({ e, venueMode, venueTz, onH2H, onHistory, onPredictors, onCha
   const openable = onHistory && ['live', 'completed', 'postponed', 'to_be_completed'].includes(e.status)
   const Wrap = openable ? Pressable : View
   return (
+    <View style={s.edge}>
     <TierFx fx={fx} radius={14}>
     <Wrap style={[s.entry, live && s.entryLive]} onPress={openable ? () => onHistory(e) : undefined}>
       <View style={s.entryTop}>
@@ -817,6 +818,7 @@ function EntryRow({ e, venueMode, venueTz, onH2H, onHistory, onPredictors, onCha
       )}
     </Wrap>
     </TierFx>
+    </View>
   )
 }
 
@@ -857,12 +859,16 @@ const s = StyleSheet.create({
      are fixed columns so the names line up down the page; the score keeps
      its width and the names give. No lineHeight on the row's text — the row
      is a fixed height and iOS sinks caps under a lineHeight. */
-  rows: { borderRadius: R.md, borderWidth: 1, borderColor: C.border, backgroundColor: C.card, overflow: 'hidden' },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 10, minHeight: leading(34) },
+  /* EVERY POINT OF WIDTH (owner, 2026-09-17): the cards run to S.sm from
+     the glass rather than the page's S.lg — the text inside still lands on
+     the page's own margin — and the round sits close on the names. */
+  edge: { marginHorizontal: -(S.lg - S.sm) },
+  rows: { borderRadius: R.md, borderWidth: 1, borderColor: C.border, backgroundColor: C.card, overflow: 'hidden', marginHorizontal: -(S.lg - S.sm) },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, minHeight: leading(34) },
   rowNext: { borderTopWidth: 1, borderTopColor: C.border },
   rowWhenSlot: { width: 58, flexDirection: 'row' },
   rowWhen: { fontFamily: 'Archivo_500Medium', fontSize: 11, color: C.muted, fontVariant: ['tabular-nums'] },
-  rowRoundSlot: { width: 36, flexDirection: 'row' },   // "R128" at 11pt; FitText shrinks it at larger text sizes
+  rowRoundSlot: { width: 30, flexDirection: 'row' },   // "R128" at 11pt bold is ~28; FitText shrinks it at larger text sizes
   rowRound: { fontFamily: 'Archivo_700Bold', fontSize: 11, color: C.faint },
   rowNames: { fontFamily: 'Archivo_500Medium', fontSize: 13, color: C.ink },   // FitText supplies the flex slot
   rowNamesDone: { color: C.inkBody },
