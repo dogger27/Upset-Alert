@@ -29,7 +29,7 @@ import { hideFromLockScreen, showMatchOnLockScreen, useShowingOnLockScreen } fro
 import { showToast } from '../../toast'
 import { useLiveUpdates } from '../../live'
 import { useApi } from '../../useApi'
-import { byTimeOfDay, footTime, isLive, isSuspended, matchFromEntry, rowClock, sideFlags, whenLabel } from '../../schedule'
+import { byTimeOfDay, footTime, isLive, isSuspended, matchFromEntry, rowClock, sideFlags, startedFirst, whenLabel } from '../../schedule'
 import { leading } from '../../fontScale.js'
 import { FitText, FlagSlot, TourBadge } from '../../cards'
 import { setScheduleTournaments, useScheduleTournaments } from '../../scheduleFilter'
@@ -427,8 +427,11 @@ export default function ScheduleScreen() {
         list: g.list,
       }))
     }
-    return [{ key: 'all', list: chrono }]
-  }, [visible, view, past])
+    /* Today, in the dense views: a match that has started sits above the
+       ones that have not (owner, 2026-09-17); the cards keep the running
+       order, where the clock is what each card leads with. */
+    return [{ key: 'all', list: dense ? startedFirst(chrono) : chrono }]
+  }, [visible, view, past, dense])
 
   const refetch = () => { day.refetch(); dates.refetch() }
   /* ON COURT HERE, not on court anywhere. It counted the whole day's rows, so
