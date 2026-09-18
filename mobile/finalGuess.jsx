@@ -96,9 +96,16 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
   const [error, setError] = useState(null)
   const acesMax = Math.max(1, data?.ceilings?.aces_max || 0)
   const durMax = Math.max(1, data?.ceilings?.duration_max_min || 0)
+  /* THE SLIDERS OPEN ON THE DEFAULT — what this bracket is taken to have
+     said if it never touches them (owner, 2026-09-18): last year's average
+     for this gender, on this surface, in this format. So the dialog opens on
+     the answer you already have, and the references beside each slider are
+     there to help you beat it. */
   useEffect(() => {
     if (!data) return
     if (data.guess) { setAces(data.guess.final_aces); setMinutes(data.guess.final_duration_min); return }
+    const d = data.default
+    if (d) { setAces(d.aces); setMinutes(d.minutes); return }
     const ref = data.reference || {}
     const r = ref.champion?.vs_finalist || ref.champion?.on_surface || ref.champion?.overall || ref.tour
     const sets = data.best_of === 5 ? 4 : 2.5
@@ -124,6 +131,12 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
             Ties on points are broken by these two answers: closest on aces first, then on minutes.
             {data.champion?.name ? ` You have picked ${data.champion.name} to win${data.runner_up?.name ? ` over ${data.runner_up.name}` : ''}.` : ''}
           </Muted>
+          {!data.guess && data.default ? (
+            <Muted>
+              Leave this alone and you hold {data.tour} {data.surface.toLowerCase()}&apos;s {data.default.year} average:
+              {` ${data.default.aces} aces, ${fmtMinutes(data.default.minutes)}`}.
+            </Muted>
+          ) : null}
           <View style={s.q}>
             <Text style={s.label}>How many aces will the champion hit in the final?</Text>
             <View style={s.row}>
@@ -183,6 +196,7 @@ export function FinalGuessCard({ tournamentId, enabled, onOpen, refreshKey }) {
           <View style={{ flex: 1 }}>
             <Title>Tiebreak</Title>
             <Muted>{g ? `${g.final_aces} aces · ${fmtMinutes(g.final_duration_min)}`
+                      : data.default ? `Holding the average: ${data.default.aces} aces · ${fmtMinutes(data.default.minutes)}`
                       : (data.locked ? 'No answers given' : 'Answer the two questions about the final')}</Muted>
           </View>
           {data.actual ? <Muted>final: {data.actual.final_aces} · {fmtMinutes(data.actual.final_duration_min)}</Muted> : null}

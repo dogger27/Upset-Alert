@@ -101,3 +101,26 @@ def test_every_reference_figure_stays_on_its_own_tour():
     assert tour_reference(c, "wta", "Hard", today=date(2025, 9, 1))["aces_per_set"] == 1.5     # (4+2)/4 sets
     assert tour_reference(c, "atp", "Hard", today=date(2025, 9, 1))["matches"] == 2
     assert ceilings(c, "wta", "Hard", 3)["aces_max"] == 4 and ceilings(c, "atp", "Hard", 3)["aces_max"] == 30
+
+
+def test_the_default_is_last_years_average_for_the_gender_surface_and_format():
+    from app.services.history.final_stats import default_guess
+    c = sqlite3.connect(":memory:")
+    c.execute("""CREATE TABLE tml_matches (tour, tourney_name, tourney_date, surface, tourney_level, best_of,
+                 winner_id, loser_id, winner_name, loser_name, score, minutes, w_ace, l_ace)""")
+    c.executemany("INSERT INTO tml_matches VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", [
+        # 2025, WTA hard, best of three: the sample the default must use
+        ("wta", "A", "20250310", "Hard", "1000", 3, "1", "2", "W", "L", "6-4 6-4", 90, 4, 2),
+        ("wta", "B", "20250620", "Hard", "500", 3, "1", "2", "W", "L", "7-6 7-6", 120, 8, 5),
+        # excluded: a different year, a different surface, a Challenger, a walkover, junk
+        ("wta", "C", "20240310", "Hard", "1000", 3, "1", "2", "W", "L", "6-4 6-4", 200, 20, 2),
+        ("wta", "D", "20250310", "Clay", "1000", 3, "1", "2", "W", "L", "6-4 6-4", 200, 20, 2),
+        ("wta", "E", "20250310", "Hard", "C", 3, "1", "2", "W", "L", "6-4 6-4", 200, 20, 2),
+        ("wta", "F", "20250310", "Hard", "1000", 3, "1", "2", "W", "L", "W/O", 0, 0, 0),
+        ("wta", "G", "20250310", "Hard", "1000", 3, "1", "2", "W", "L", "6-0 6-0", 1531, 128, 0),
+        ("atp", "H", "20250310", "Hard", "500", 3, "1", "2", "W", "L", "6-4 6-4", 100, 14, 6),
+    ])
+    got = default_guess(c, "wta", "Hard", 3, today=date(2026, 9, 18))
+    assert got == {"aces": 6, "minutes": 105, "matches": 2, "year": 2025}   # (4+8)/2, (90+120)/2
+    assert default_guess(c, "atp", "Hard", 3, today=date(2026, 9, 18))["aces"] == 14
+    assert default_guess(c, "wta", "Grass", 3, today=date(2026, 9, 18)) is None

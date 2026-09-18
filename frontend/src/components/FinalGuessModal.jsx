@@ -71,6 +71,10 @@ export default function FinalGuessModal({ tournamentId, open, onClose, reason })
   useEffect(() => {
     if (!ctx) return
     if (ctx.guess) { setAces(ctx.guess.final_aces); setMinutes(ctx.guess.final_duration_min); return }
+    // THE SLIDERS OPEN ON THE DEFAULT — what this bracket holds if it never
+    // touches them (owner, 2026-09-18): last year's average for this gender,
+    // surface and format.
+    if (ctx.default) { setAces(ctx.default.aces); setMinutes(ctx.default.minutes); return }
     const ref = ctx.reference || {}
     const r = ref.champion?.vs_finalist || ref.champion?.on_surface || ref.champion?.overall || ref.tour
     const sets = bestOf === 5 ? 4 : 2.5
@@ -102,6 +106,12 @@ export default function FinalGuessModal({ tournamentId, open, onClose, reason })
             Ties on points are broken by these two answers: closest on aces first, then on minutes.
             {ctx?.champion?.name ? <> You have picked <strong>{ctx.champion.name}</strong> to win{ctx?.runner_up?.name ? <> over <strong>{ctx.runner_up.name}</strong></> : null}.</> : null}
           </p>
+          {ctx && !ctx.guess && ctx.default && (
+            <p className="fg-intro">
+              Leave this alone and you hold {ctx.tour} {ctx.surface.toLowerCase()}'s {ctx.default.year} average:
+              {` ${ctx.default.aces} aces, ${fmtMinutes(ctx.default.minutes)}`}.
+            </p>
+          )}
           {isLoading || aces == null ? <p className="fg-muted">Loading the history…</p> : (
             <>
               <section className="fg-q">
@@ -154,6 +164,7 @@ export function FinalGuessBar({ tournamentId, enabled, onOpen }) {
     <button type="button" className="fg-bar" onClick={onOpen}>
       <span className="fg-bar-label">Tiebreak</span>
       {g ? <span className="fg-bar-value">{g.final_aces} aces · {fmtMinutes(g.final_duration_min)}</span>
+         : ctx.default ? <span className="fg-bar-value fg-bar-value--ask">Holding the average: {ctx.default.aces} aces · {fmtMinutes(ctx.default.minutes)}</span>
          : <span className="fg-bar-value fg-bar-value--ask">{ctx.locked ? 'No answers given' : 'Answer the two questions about the final'}</span>}
       {ctx.actual && <span className="fg-bar-actual">final: {ctx.actual.final_aces} · {fmtMinutes(ctx.actual.final_duration_min)}</span>}
     </button>

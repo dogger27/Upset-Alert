@@ -169,3 +169,34 @@ def tour_reference(conn, tour: str, surface: str, today: Optional[date] = None) 
     return {"matches": n,
             "aces_per_set": round(aces / sets_a, 2) if sets_a else None,
             "minutes_per_set": round(mins / sets_m, 1) if sets_m else None}
+
+
+def default_guess(conn, tour: str, surface: str, best_of: int,
+                  today: Optional[date] = None) -> Optional[dict]:
+    """WHAT A BRACKET THAT NEVER ANSWERS IS TAKEN TO HAVE SAID (owner,
+    2026-09-18): last year's average, for this gender, on this surface, in
+    this format — the winner's aces in a match, and the match's length.
+
+    PER MATCH, not per set: the question is how many aces the champion hits
+    in the final and how long the final lasts, so the default has to be an
+    answer to those questions and not a rate. The previous CALENDAR year, so
+    every bracket in a season is defaulted against the same settled sample
+    rather than a window that slides under them. Tour levels only, and the
+    same plausibility caps as the ceilings, since the file holds junk.
+    """
+    year = (today or date.today()).year - 1
+    cap = PLAUSIBLE.get(best_of, PLAUSIBLE[3])
+    levels = _levels_sql(tour)
+    row = conn.execute(f"""
+        SELECT avg(w_ace), avg(minutes), count(*)
+        FROM tml_matches
+        WHERE tour = ? AND surface = ? AND best_of = ? AND tourney_level IN {levels}
+          AND tourney_date >= ? AND tourney_date <= ?
+          AND score NOT LIKE '%W/O%'
+          AND w_ace IS NOT NULL AND w_ace <= ?
+          AND minutes IS NOT NULL AND minutes > 0 AND minutes <= ?""",
+        (tour, surface, best_of, f"{year}0101", f"{year}1231", cap["aces"], cap["minutes"])).fetchone()
+    if not row or not row[2]:
+        return None
+    return {"aces": int(round(row[0])), "minutes": int(round(row[1])),
+            "matches": int(row[2]), "year": year}
