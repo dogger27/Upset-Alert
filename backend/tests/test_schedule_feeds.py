@@ -122,3 +122,27 @@ def test_a_feed_estimate_is_not_a_printed_clock():
     printed = NS(start_time_local="12:48", start_type="fixed", play_date=_d(2026, 9, 18))
     assert _printed_instant(estimated, "America/Sao_Paulo") is None
     assert _printed_instant(printed, "America/Sao_Paulo") is not None
+
+
+def test_a_womans_day_is_topped_up_from_sofascore_when_the_wta_feed_is_thin():
+    """SP Open's Friday: the WTA feed had 2 of 7 matches, Sofascore all 7.
+    Offering both keeps the WTA row where it exists and fills the rest, so no
+    other document is left owning part of the day (2026-09-18)."""
+    # A doubles row as the WTA feed really sends one: all four players.
+    wta = [{"MatchID": "dab-que", "CourtID": 1, "DateSeq": 2, "RoundID": "Q",
+            "MatchTimeStamp": "2026-09-18T15:48:00Z", "DrawMatchType": "D",
+            "PlayerNameFirstA": "Gabriela", "PlayerNameLastA": "Dabrowski", "PlayerCountryA": "CAN",
+            "PlayerNameFirstA2": "Luisa", "PlayerNameLastA2": "Stefani", "PlayerCountryA2": "BRA",
+            "PlayerNameFirstB": "Kaitlin", "PlayerNameLastB": "Quevedo", "PlayerCountryB": "ESP",
+            "PlayerNameFirstB2": "Dominika", "PlayerNameLastB2": "Salkova", "PlayerCountryB2": "CZE"}]
+    sofa = [_sofa("Dabrowski G / Stefani L", "Quevedo K / Salkova D", "Quadra 1", 15, 48),
+            _sofa("Barros V L / Leme Da Silva N", "Strakhova V / Tikhonova A", "Quadra 1", 17, 0),
+            _sofa("Stoiana M / Valdmannova V", "Dang Y / You X", "Quadra 1", 18, 40)]
+    doc = _doc(wta, [("doubles", "WTA", sofa, False)])
+    ms, meta = parse_day_document(doc, court_names={}, venue_tz="UTC")
+    assert len(ms) == 3, [m.side_a for m in ms]          # the whole day, not two rows
+    assert meta["wta"] == 1 and meta["sofa"] == 3
+    # The match both sources hold appears once, in the WTA's own rendering.
+    dab = [m for m in ms if any("abrowski" in n.lower() for n in m.side_a + m.side_b)]
+    assert len(dab) == 1                                   # once, not twice
+    assert "DABROWSKI CAN" in " ".join(dab[0].side_a)      # and in the WTA's own rendering
