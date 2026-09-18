@@ -1666,6 +1666,25 @@ def check_parse(meta, match_count: int | None = None,
             "detail": f"the sheet prints {headers} event header(s) stating a "
                       f"round and the parse kept none — see _EVENT_HEADER_RE",
         })
+
+    # 2026-09-19, Singapore Open doc 291: the layout wrapped Kai Ning Chanya
+    # NG's "SGP" onto a line of its own, COUNTRY_CODES knew Singapore only by
+    # its pre-2016 code SIN, and a lone three-capital line joins the name above
+    # only when it is a country — so her nationality was dropped with no record
+    # anywhere, and she published beside an empty flag box. (Her compatriot on
+    # the same sheet kept SGP inline and `name_trailing_noncountry` caught
+    # that half; the dropped half leaves no row text to judge.) The parser
+    # now hands back every such line it drops. Measured over 343 sheets:
+    # this one, and nothing once SGP was added.
+    for court, name, code in (meta or {}).get('orphan_codes') or []:
+        out.append({
+            "code": "nationality_code_unknown", "entry_id": None,
+            "court": court,
+            "detail": f"{court or '?'}: {code!r} printed under {name!r} has a "
+                      f"nationality's shape but is not in "
+                      f"oop_parser.COUNTRY_CODES, so it was dropped — add it "
+                      f"if it is a country",
+        })
     return out
 
 
