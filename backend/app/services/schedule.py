@@ -2864,6 +2864,17 @@ def _start_type_of(m) -> str:
     expected-start chain exists to model.
     """
     raw = (getattr(m, 'start_raw', '') or '').lower()
+    # AN ESTIMATE IS NOT A PRINTED CLOCK (2026-09-18). The feeds hand us a
+    # guess — Sofascore staggers one per court, the WTA flags its own with
+    # isEstimatedStartTime — and both spell it "Est. 14:00". Read as `fixed`
+    # it became a clock the tour never printed: SP Open's Friday stored
+    # "12:48" on QUADRA 1 under a 2:00 PM match and tripped
+    # printed_clock_runs_backwards, because an estimate legitimately moves
+    # when the court is re-staggered. Its own type keeps the value, keeps it
+    # out of every law about printed clocks, and reads as "~14:00" on the
+    # page, which is what it is.
+    if re.match(r'\s*est\b', raw) or raw.startswith('est.'):
+        return 'estimated'
     if _NOT_BEFORE_RE.search(raw):
         return 'not_before'
     if 'followed by' in raw:
@@ -3420,7 +3431,7 @@ async def recompute_expected_starts(db, tournament_id: int, play_date: date,
                 # the chain needs from here is when the court frees up.
                 if printed_dt:
                     s.expected_start_at = printed_dt
-                    s.expected_source = 'printed'
+                    s.expected_source = 'estimated' if s.start_type == 'estimated' else 'printed'
                 elif prev_end:
                     s.expected_start_at = s.expected_start_at or prev_end
                     s.expected_source = s.expected_source or 'estimated'
@@ -3468,7 +3479,7 @@ async def recompute_expected_starts(db, tournament_id: int, play_date: date,
                             # other pending row, and reads as one.
                             s.expected_start_at = anchor
                             s.expected_source = ('printed' if anchor == printed_dt
-                                                 else 'estimated')
+                                                 and s.start_type != 'estimated' else 'estimated')
                     prev_end = anchor + timedelta(
                         minutes=_remaining_minutes(
                             live_json, s.discipline,

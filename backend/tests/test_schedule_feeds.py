@@ -101,3 +101,24 @@ def test_a_doubles_player_with_two_initials_keeps_both_before_the_surname():
     assert _surname_last("Bhambri Y") == "Y Bhambri"
     assert _surname_last("Van de Zandschulp B") == "B Van de Zandschulp"
     assert _surname_last("Daniel Altmaier") == "Daniel Altmaier"
+
+
+def test_a_feed_estimate_is_not_a_printed_clock():
+    """Sofascore staggers an estimate per court and the WTA flags its own;
+    both spell it "Est. 14:00". Read as a printed clock it tripped
+    printed_clock_runs_backwards on SP Open's Friday (2026-09-18)."""
+    from datetime import date as _d
+    from types import SimpleNamespace as NS
+    from app.services.schedule import _start_type_of
+    from app.services.schedule_invariants import _printed_instant
+
+    assert _start_type_of(NS(start_raw="Est. 12:48", time="12:48")) == "estimated"
+    assert _start_type_of(NS(start_raw="est 2:00 PM", time="2:00 PM")) == "estimated"
+    assert _start_type_of(NS(start_raw="2:00 PM", time="2:00 PM")) == "fixed"
+    assert _start_type_of(NS(start_raw="Not before 3:30 PM", time="3:30 PM")) == "not_before"
+    assert _start_type_of(NS(start_raw="Followed by", time=None)) == "followed_by"
+
+    estimated = NS(start_time_local="12:48", start_type="estimated", play_date=_d(2026, 9, 18))
+    printed = NS(start_time_local="12:48", start_type="fixed", play_date=_d(2026, 9, 18))
+    assert _printed_instant(estimated, "America/Sao_Paulo") is None
+    assert _printed_instant(printed, "America/Sao_Paulo") is not None
