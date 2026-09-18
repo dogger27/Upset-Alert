@@ -244,7 +244,8 @@ function TournamentDraw() {
     if (node) node.addEventListener('touchmove', nativeTouchMove, { passive: false })
   }, [bodyWidthRef, nativeTouchMove])
   const [viewedUserId, setViewedUserId] = useState(() => { const u = searchParams.get('user'); return u ? Number(u) : null })
-  const finalGuess = useFinalGuess(id, !!user && viewedUserId == null)
+  // Own bracket only: the page holds the viewed user as null OR as yourself.
+  const finalGuess = useFinalGuess(id, !!user && (viewedUserId == null || viewedUserId === user.id))
   const [viewedUserName, setViewedUserName] = useState(null)
   /* BracketView's score-history popup target. CombinedView hosts its own copy
      of this state (its convention — h2h and predictors already live there);
@@ -1581,7 +1582,7 @@ function TournamentDraw() {
 
   return (
     <div className="draw-page">
-      {user && viewedUserId == null && (
+      {user && (viewedUserId == null || viewedUserId === user.id) && (
         <FinalGuessModal tournamentId={id} open={!!finalGuessOpen} reason={finalGuessOpen}
                          onClose={() => setFinalGuessOpen(null)} />
       )}
@@ -1656,9 +1657,6 @@ function TournamentDraw() {
           </button>
         </div>
         */}
-        {user && viewedUserId == null && (
-          <FinalGuessBar tournamentId={id} enabled onOpen={() => setFinalGuessOpen('edit')} />
-        )}
         <div className="draw-header-center">
           {showPager && headerStage === 'minimal' && (
             <div className="bracket-pager bracket-pager--minimal">
@@ -1824,6 +1822,11 @@ function TournamentDraw() {
         </div>
         )}
       </div>
+      {/* THE TIEBREAK BAR sits under the header at every stage — the header
+          collapses once a draw is in play, and the answers must still be a tap away. */}
+      {user && (viewedUserId == null || viewedUserId === user.id) && (
+        <FinalGuessBar tournamentId={id} enabled onOpen={() => setFinalGuessOpen('edit')} />
+      )}
 
       {lockToast && (
         <div className="lock-toast" key={lockToast.key} role="status" aria-live="polite">
