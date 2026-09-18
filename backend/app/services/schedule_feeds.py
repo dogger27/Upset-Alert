@@ -108,6 +108,7 @@ def parse_day_document(doc: bytes, court_names: Optional[dict] = None,
                        venue_tz: Optional[str] = None):
     """(matches, meta) from bytes written by build_day_document."""
     from app.services import sofa_schedule, wta_feed
+    from app.services.oop_parser import feed_order
 
     court_names = court_names or {}
     parts = json.loads(doc.decode("utf-8"))
@@ -152,7 +153,7 @@ def parse_day_document(doc: bytes, court_names: Optional[dict] = None,
             continue
         seen.add(key)
         matches.append(m)
-    matches.sort(key=lambda m: (m.court or "", m.time or ""))
+    matches.sort(key=feed_order)
     meta["count"] = len(matches)
     return matches, meta
 
