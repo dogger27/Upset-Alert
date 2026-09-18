@@ -52,6 +52,14 @@ def main():
         ok &= check("the sheet still yields 8 slots", len(matches) == 8)
         ok &= check("Desvignes keeps SGP", "[WC] Eva Marie DESVIGNES SGP" in names)
         ok &= check("Ng keeps SGP", "[WC] Kai Ning Chanya NG SGP" in names)
+        ok &= check("nothing dropped as an unknown code", not _meta["orphan_codes"])
+
+    # The half nothing logged: a nationality-shaped line the table does not
+    # know is dropped, and the parse must now SAY so.
+    got = schedule_invariants.check_parse(
+        {"orphan_codes": [("CENTER COURT", "[WC] Kai Ning Chanya NG", "XYZ")]})
+    ok &= check("a dropped unknown code is a violation",
+                [v["code"] for v in got] == ["nationality_code_unknown"])
 
     print("PASS" if ok else "FAIL")
     return 0 if ok else 1

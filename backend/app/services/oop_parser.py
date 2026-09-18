@@ -563,7 +563,12 @@ def parse_pdf(pdf_bytes):
             # header at all. Every match box in every layout opens with one of
             # these — it is what `_column_origins` anchors the columns on. See
             # `sheet_is_blank`.
-            'slot_markers': 0}
+            'slot_markers': 0,
+            # Lone three-capital lines under a name that are NOT a known
+            # country, so they were dropped instead of joining the name as its
+            # nationality. (court, name above, code). See check_parse's
+            # `nationality_code_unknown`.
+            'orphan_codes': []}
     matches = []
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
         meta['pages'] = len(pdf.pages)
@@ -649,7 +654,8 @@ def parse_pdf(pdf_bytes):
 
             for i in sorted(buckets):
                 rows = [(y, t) for y, t in sorted(buckets[i])]
-                matches += _parse_column(rows, pno, meta['dropped_slots'])
+                matches += _parse_column(rows, pno, meta['dropped_slots'],
+                                          meta['orphan_codes'])
 
     settle_meridiems(matches)
     if not matches and meta['reason'] is None:
@@ -915,12 +921,14 @@ def _carried_clock(box, court, text):
     return box.time
 
 
-def _parse_column(lines, pno, dropped=None):
+def _parse_column(lines, pno, dropped=None, orphans=None):
     """One column, top to bottom: court header, then time-delimited match slots.
 
     `dropped` collects slots that the sheet opened and this parse could not
     fill — see the flush() comment. The caller surfaces them in meta so the
     ingest can alert on a slot the site would otherwise be silently missing.
+    `orphans` collects nationality-shaped lines no country matched — see the
+    continuation branch.
     """
     out, court, cur, after_vs = [], '', None, False
     # Lines seen since the court header with no slot marker yet. Usually the
@@ -992,6 +1000,14 @@ def _parse_column(lines, pno, dropped=None):
             if side:
                 side[-1] = f'{side[-1]} {text}'
             return
+        if CONT_RE.match(text) and side and orphans is not None:
+            # Three capitals on their own line straight under a name, and not
+            # a country we know. It is dropped below (it is no player, and the
+            # TBC incident is why it cannot join the name unvetted) — but
+            # dropping it SILENTLY is how Kai Ning Chanya NG lost her SGP on
+            # 2026-09-19 with nothing anywhere saying so. Measured over 343
+            # sheets: that one line, and nothing once SGP was in the table.
+            orphans.append((court, side[-1], text))
         if alt:
             cur.tbd = True
             # WITH ITS SIDE, exactly as _regroup_alternatives records it. This

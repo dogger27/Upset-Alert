@@ -4,7 +4,7 @@ import { shortRound } from '../utils/rounds'
 import { createPortal } from 'react-dom'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { getH2H, getPlayerForm } from '../api/players'
-import { splitPlayerName } from '../utils/flags'
+import { IOC_TO_ISO2, splitPlayerName } from '../utils/flags'
 import './H2HPanel.css'
 
 function teKeys(tournSurface) {
@@ -136,23 +136,6 @@ function PickableName({ className, player, fallback, picked, onPick }) {
       <PlayerName player={player} fallback={fallback} />
     </button>
   )
-}
-
-const IOC_TO_ISO2 = {
-  AUS:'AU', USA:'US', GBR:'GB', FRA:'FR', GER:'DE', ESP:'ES', ITA:'IT',
-  RUS:'RU', CAN:'CA', JPN:'JP', CHN:'CN', KOR:'KR', ARG:'AR', BRA:'BR',
-  SUI:'CH', AUT:'AT', BEL:'BE', NED:'NL', DEN:'DK', NOR:'NO', SWE:'SE',
-  FIN:'FI', POL:'PL', CZE:'CZ', SVK:'SK', HUN:'HU', ROU:'RO', BUL:'BG',
-  SRB:'RS', CRO:'HR', SLO:'SI', BIH:'BA', MKD:'MK', GRE:'GR', TUR:'TR',
-  POR:'PT', GEO:'GE', KAZ:'KZ', UKR:'UA', BLR:'BY', LAT:'LV', LTU:'LT',
-  EST:'EE', ISR:'IL', RSA:'ZA', EGY:'EG', MAR:'MA', TUN:'TN', NGR:'NG',
-  CHI:'CL', COL:'CO', PER:'PE', URU:'UY', VEN:'VE', ECU:'EC', BOL:'BO',
-  PAR:'PY', MEX:'MX', IND:'IN', PAK:'PK', THA:'TH', VIE:'VN', INA:'ID',
-  MAS:'MY', PHI:'PH', TPE:'TW', HKG:'HK', NZL:'NZ', BAH:'BS', DOM:'DO',
-  HAI:'HT', PUR:'PR', TTO:'TT', JAM:'JM', BAR:'BB', GUA:'GT', CRC:'CR',
-  MON:'MC', LUX:'LU', ISL:'IS', IRL:'IE', CYP:'CY', MLT:'MT',
-  ALG:'DZ', MDA:'MD', ARM:'AM', AZE:'AZ', UZB:'UZ', KGZ:'KG', TJK:'TJ',
-  TKM:'TM', BIZ:'BZ', PAN:'PA', NCA:'NI', ESA:'SV', HON:'HN',
 }
 
 function iocToFlagClass(ioc) {

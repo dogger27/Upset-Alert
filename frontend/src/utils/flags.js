@@ -30,6 +30,14 @@ export const IOC_TO_ISO2 = {
   // which reads a trailing code as a country only if it is in this table —
   // printed "SGP" as the last word of her name.
   SIN:'SG', SGP:'SG',
+  // Folded in from H2HPanel.jsx, which kept its own copy of this table and
+  // drifted both ways: it had these ten and lacked Singapore, so the same
+  // player flew a flag on one screen and not the other (2026-09-19). The
+  // panel imports this table now. Web only: mobile/flags.js doubles as the
+  // app's test for "is this last word a country" (names.js sheetName), and
+  // HON/PAN are surnames there — "Priscilla HON" would lose hers.
+  ALG:'DZ', MDA:'MD', AZE:'AZ', KGZ:'KG', TJK:'TJ', TKM:'TM', BIZ:'BZ',
+  PAN:'PA', NCA:'NI', HON:'HN',
 }
 
 export function nationalityIso2(nat) {
