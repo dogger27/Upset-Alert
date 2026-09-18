@@ -98,8 +98,14 @@ def _surname_last(part: str) -> str:
     # The INITIAL is what identifies this form, wherever the surname ends —
     # "Van de Zandschulp B" is the same shape as "Bhambri Y" and was missed by
     # a rule that only looked at two-token names.
-    if len(toks) > 1 and len(toks[-1].rstrip(".")) == 1 and toks[-1].rstrip(".").isalpha():
-        return " ".join([toks[-1]] + toks[:-1])
+    # ALL trailing initials move, not only the last: "Barros V L" is one
+    # player with two given names, and taking one made her "L Barros V"
+    # (SP Open doubles, 2026-09-18).
+    initials = []
+    while len(toks) > 1 and len(toks[-1].rstrip(".")) == 1 and toks[-1].rstrip(".").isalpha():
+        initials.insert(0, toks.pop())
+    if initials:
+        return " ".join(initials + toks)
     return part
 
 
