@@ -425,6 +425,17 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
 
     v: list[dict] = []
 
+    # ROWS FROM THE FEEDS ARE NOT SHEET ROWS (2026-09-18). The WTA's JSON and
+    # Sofascore render a name as "Anna Blinkova" or "Dabrowski G / Stefani L",
+    # never as the sheet's "Anna BLINKOVA FRA" — so the sheet-form law is for
+    # rows a sheet wrote. Which document wrote a row is on the row.
+    from app.models.schedule import ScheduleDocument
+    feed_docs = {d.id for d in (await db.execute(
+        select(ScheduleDocument).where(
+            ScheduleDocument.tournament_id == tournament_id,
+            ScheduleDocument.play_date == play_date))).scalars()
+        if (d.source_url or "").startswith("feeds://") or "api.wtatennis.com" in (d.source_url or "")}
+
     # 2026-08-25, "CHOINSKI or ROTTGERING" beside a bracket that already knew
     # Rottgering had won: an unresolved side whose deciding match is complete
     # asserts an open question the draw has closed. The resolver
@@ -965,6 +976,8 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
         # alternatives they offer ("D. Parry or D. Vekic").
         for p in players:
             raw = (p.raw_name or "").strip()
+            if getattr(e, "last_document_id", None) in feed_docs:
+                break        # a feed's rendering, by design — see above
             if raw and p.side not in tbd_side and not _SHEET_CAPS_RE.search(raw):
                 flag("name_not_sheet_form", e,
                      f"side {p.side}: {raw!r} has no capitalised surname — "
