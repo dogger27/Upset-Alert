@@ -270,8 +270,24 @@ async def _structured(db, tournament, draws, day: date):
     return out, ",".join(sources)
 
 
+async def day_is_feed_sourced(db, tournament_id: int, day: date) -> bool:
+    """True when the day's latest document came from the WTA's JSON — the feed
+    is the schedule there (order_of_play, 2026-09-18), so comparing the feed
+    to it would only agree with itself."""
+    from app.models.schedule import ScheduleDocument
+    doc = (await db.execute(
+        select(ScheduleDocument)
+        .where(ScheduleDocument.tournament_id == tournament_id,
+               ScheduleDocument.play_date == day)
+        .order_by(ScheduleDocument.id.desc()))).scalars().first()
+    return bool(doc and "api.wtatennis.com" in (doc.source_url or ""))
+
+
 async def compare_day(db, tournament, draws, day: date) -> Optional[dict]:
     """What the feeds say against what the sheet stored. Writes nothing."""
+    if await day_is_feed_sourced(db, tournament.id, day):
+        logger.info("shadow: %s %s is served from the WTA feed; nothing to compare", tournament.name, day)
+        return None
     stored = await _stored(db, tournament.id, day)
     if not stored:
         return None
@@ -324,7 +340,22 @@ async def learn_courts(db, tournament_id: int, votes: dict) -> dict:
     return {c: Counter(t).most_common(1)[0][0] for c, t in stored.items() if t}
 
 
-async def court_names(db, tournament_id: int) -> dict:
+def court_winners(tally: dict, min_votes: int = 1) -> dict:
+    """The name each feed court is called, by majority — only where the winner
+    has at least `min_votes`. A court seen on one day of one comparison is a
+    guess; the authoritative feed asks for a few (Cincinnati's "Court 4" held
+    two votes for two different names, 2026-09-18)."""
+    out = {}
+    for court, names in (tally or {}).items():
+        if not names:
+            continue
+        name, votes = Counter(names).most_common(1)[0]
+        if votes >= min_votes:
+            out[court] = name
+    return out
+
+
+async def court_names(db, tournament_id: int, min_votes: int = 1) -> dict:
     """The learned CourtID -> sheet name mapping, for the feed to render with."""
     import json
     from app.services import settings as st
@@ -335,7 +366,7 @@ async def court_names(db, tournament_id: int) -> dict:
         tally = json.loads(raw)
     except ValueError:
         return {}
-    return {c: Counter(t).most_common(1)[0][0] for c, t in tally.items() if t}
+    return court_winners(tally, min_votes)
 
 
 async def run_shadow(db, tournament, draws, day: date) -> Optional[dict]:
