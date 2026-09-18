@@ -131,7 +131,12 @@ def matches_for_day(rows: list[dict], day: date,
             continue
         cid = str(m.get("CourtID") or "").strip()
         venue = (m.get("Venue") or {}).get("name")
-        court = venue or court_names.get(cid) or (f"Court {cid}" if cid else "")
+        # The learned mapping (schedule_shadow.learn_courts) is keyed by the
+        # court string THIS function emitted when it had no name — "Court 1" —
+        # not by the bare id; a lookup by "1" alone found nothing and every
+        # promoted day would have read "Court 1" (2026-09-18).
+        court = (venue or court_names.get(cid) or court_names.get(f"Court {cid}")
+                 or (f"Court {cid}" if cid else ""))
         # VENUE-LOCAL, like the sheet prints. The feed stamps UTC, so a
         # Monterrey night match reads 01:36 raw — tomorrow's date, and an hour
         # nobody played at. Without the zone the raw value is kept rather than
