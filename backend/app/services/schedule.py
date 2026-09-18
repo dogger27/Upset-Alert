@@ -777,7 +777,8 @@ async def _log_parse_violations(tournament, play_date, violations: list) -> None
 
 async def ingest_document(db, tournament, play_date: date, url: str,
                           pdf_bytes: bytes, tour: Optional[str] = None,
-                          parser=None, queue_verify: bool = True) -> dict:
+                          parser=None, queue_verify: bool = True,
+                          reclaim: bool = True) -> dict:
     """Parse one document revision and reconcile it into schedule_entries.
 
     `parser` defaults to the PDF parser; the US Open's JSON feed passes its
@@ -787,6 +788,11 @@ async def ingest_document(db, tournament, play_date: date, url: str,
     also pass queue_verify=False — the verifier's whole toolchain (pdfplumber,
     the PDF-vs-page prompt) assumes a PDF, and a queued JSON would only make
     every run fail its parse step.
+
+    `reclaim=False` lets bytes already seen stay skipped even when another
+    source has written the day since — for a caller that only reached this
+    document because the source it prefers FAILED, and should not have the
+    page flip over a network blip. See `superseded` below.
     """
     digest = hashlib.sha256(pdf_bytes).hexdigest()
     existing = (await db.execute(
@@ -795,13 +801,34 @@ async def ingest_document(db, tournament, play_date: date, url: str,
             ScheduleDocument.play_date == play_date,
             ScheduleDocument.sha256 == digest,
         ))).scalars().first()
-    if existing:
+    # THE DOCUMENT IN FORCE — the day's rows are this one's reading.
+    prev = (await db.execute(
+        select(ScheduleDocument).where(
+            ScheduleDocument.tournament_id == tournament.id,
+            ScheduleDocument.play_date == play_date,
+        ).order_by(ScheduleDocument.id.desc()))).scalars().first()
+    # "Seen these bytes before" only means "nothing to do" while the day is
+    # still in the hands of the source that sent them. On a WTA-only day the
+    # feed and the sheet take turns (order_of_play.use_wta_feed): the feed
+    # wrote Korea, Singapore and Guadalajara at 10:13 UTC on 2026-09-18 with
+    # no courts, the sheet was to take those days back — and could not, since
+    # its PDF was byte-identical to one already stored. The page kept blank
+    # courts and plain-case names until the tour happened to reissue.
+    superseded = reclaim and prev is not None and prev.source_url != url
+    # A PDF's bytes stand in for its parse because parsing one costs seconds.
+    # A feed's parse is a dict walk, and its bytes do NOT stand in for it: a
+    # corrected feed parser must reach the days it already read, which the
+    # byte check would hide forever behind a feed that has not moved. The
+    # content check below is the feed's "unchanged".
+    if existing and not superseded and parser is None:
         return {'skipped': 'unchanged', 'document_id': existing.id}
 
     # OFF THE EVENT LOOP, same incident as scraper.parse_draw: pdfplumber is
     # seconds of sync CPU per sheet, and a burst of revisions parsed inline
     # froze every request in flight.
     matches, meta = await asyncio.to_thread(parser or parse_pdf, pdf_bytes)
+    if existing and not superseded and not matches:
+        return {'skipped': 'unchanged', 'document_id': existing.id}
     # The law, applied to the parse itself. Computed here and LOGGED AFTER THE
     # COMMIT, both below: a slot the parse threw away leaves no row for
     # check_day to judge, and `app_log` opens its own session — awaiting it
@@ -824,11 +851,6 @@ async def ingest_document(db, tournament, play_date: date, url: str,
          m.tbd, m.tbd_side, tuple(m.side_a), tuple(m.side_b))
         for m in matches
     ]).encode()).hexdigest()
-    prev = (await db.execute(
-        select(ScheduleDocument).where(
-            ScheduleDocument.tournament_id == tournament.id,
-            ScheduleDocument.play_date == play_date,
-        ).order_by(ScheduleDocument.id.desc()))).scalars().first()
     if (matches and prev is not None and prev.content_sha == content_fp
             and not str(prev.sha256 or '').startswith('forced')):
         return {'skipped': 'republished', 'document_id': prev.id}

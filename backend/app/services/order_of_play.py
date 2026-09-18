@@ -692,12 +692,20 @@ async def refresh_order_of_play() -> int:
                     # coverage — but the rows come from the feed, which needs
                     # no parsing and no verifier. A feed that fails or is
                     # empty leaves the sheet in charge, as before.
-                    feed_doc = None
+                    #
+                    # A feed that DECLINES the day (nothing for it, or a court
+                    # it cannot name) hands it to the sheet, and the sheet
+                    # takes it back even over rows the feed wrote. A feed that
+                    # FAILS says nothing about the day, so the sheet then only
+                    # moves the page if the sheet itself moved (reclaim=False)
+                    # — or one timeout would flip every row and back again.
+                    feed_doc, feed_failed = None, False
                     if use_wta_feed(src_tour, covers_atp):
                         try:
                             feed_doc = await _wta_feed_document(
                                 db, tournament, draws, oop_date, season_year)
                         except Exception as exc:     # noqa: BLE001 — the sheet is the fallback
+                            feed_failed = True
                             logger.info("WTA feed unavailable for %s %s (%s); using the sheet",
                                         tournament.name, oop_date, describe_exception(exc))
 
@@ -708,7 +716,8 @@ async def refresh_order_of_play() -> int:
                                 sdb, t, oop_date, feed_doc["url"], feed_doc["bytes"],
                                 tour="WTA", parser=feed_doc["parser"], queue_verify=False)
                         return await schedule_svc.ingest_document(
-                            sdb, t, oop_date, url, resp.content, tour=src_tour)
+                            sdb, t, oop_date, url, resp.content, tour=src_tour,
+                            reclaim=not feed_failed)
 
                     async def _estimates(sdb):
                         return await schedule_svc.recompute_expected_starts(

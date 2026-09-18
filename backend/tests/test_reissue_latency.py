@@ -92,6 +92,20 @@ def test_a_chain_of_reparses_carries_the_original_clock():
     assert clocks[286] == first
 
 
+def test_a_reclaimed_sheet_keeps_the_clock_of_its_first_fetch():
+    """The WTA feed held Korea's 2026-09-19 from 10:13; when it declined the
+    day the sheet took it back, storing the PDF of 09:04 again under the same
+    sha. Nothing the tour did happened at the reclaim."""
+    sheet = datetime(2026, 9, 18, 9, 4, 7)
+    clocks = document_clocks([
+        _doc(293, sheet, 'ab12cd'),
+        _doc(297, datetime(2026, 9, 18, 10, 13, 58), 'feed01'),
+        _doc(301, datetime(2026, 9, 18, 10, 45, 0), 'ab12cd'),
+    ])
+    assert clocks[301] == sheet
+    assert clocks[297] == datetime(2026, 9, 18, 10, 13, 58)
+
+
 def test_an_ordinary_revision_keeps_its_own_clock():
     """A real re-fetch of genuinely new bytes is what the check is FOR."""
     a = datetime(2026, 9, 17, 20, 17, 21)

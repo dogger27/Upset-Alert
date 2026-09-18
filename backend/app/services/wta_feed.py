@@ -25,7 +25,7 @@ from datetime import date, datetime
 from typing import Optional
 from urllib.request import Request, urlopen
 
-from app.services.oop_parser import Match
+from app.services.oop_parser import COUNTRY_CODES, Match
 
 logger = logging.getLogger(__name__)
 
@@ -61,21 +61,61 @@ def event_id_from_pdf_url(url: Optional[str]) -> Optional[int]:
     return int(m.group(1)) if m else None
 
 
-def _name(first: str, last: str) -> str:
-    """'Nikola Bartunkova' — the sheet's own rendering is SURNAME in caps, but
-    the ingest normalises before matching, so the plain form is enough."""
-    return " ".join(p for p in ((first or "").strip(), (last or "").strip()) if p)
+def _name(first: str, last: str, country: str = "", mark: str = "") -> str:
+    """One player in SHEET FORM — "[WC] Gaeul JANG KOR" — because the
+    stored name IS the page's rendering, and every reader of it was written
+    against the sheet.
+
+    This returned the plain "Alexandra Shubladze", on the reasoning that the
+    ingest normalises before matching. Matching is not the only reader. The
+    first feed days (2026-09-18, 10:13 UTC) re-stamped forty rows out of sheet
+    form and `name_not_sheet_form` convicted every one — rightly: the serve
+    path reads a qualifying or doubles row's seed and entry type off the
+    name's bracket (`_printed_mark`), so every [2] and [WC] left the page, and
+    the readers that find a surname by its capitals (the frontend's
+    parseSheetName, `_sheet_surnames`) fell back to the LAST word, which makes
+    Beatriz Haddad Maia a Ms Maia. The feed names the surname outright, so
+    capitalising it guesses nothing. uso_feed._person builds the same form.
+
+    The COUNTRY goes on the end as the sheet prints it, and only a code we
+    know (anything else would be `name_trailing_noncountry`). Without it a
+    three-letter surname is the name's last token, and the readers that strip
+    a trailing code take it for one: `_fold` would read "Eunhye LEE" as plain
+    "eunhye", `_clean_name` "Priscilla HON" as a Honduran called Priscilla.
+
+    A row without both names is a role, not a person, and stays as written.
+    """
+    first, last = (first or "").strip(), (last or "").strip()
+    if not (first and last):
+        return first or last
+    code = (country or "").strip().upper()
+    return " ".join(p for p in (mark, first, last.upper(),
+                                code if code in COUNTRY_CODES else "") if p)
+
+
+def _mark(m: dict, side: str) -> str:
+    """The bracket a sheet prints before a side: the seed, else the entry type.
+
+    Once per SIDE, on its first player — a doubles seed belongs to the team,
+    and SP Open prints "[2] Valeriya STRAKHOVA UKR" over a bare "Anastasia
+    TIKHONOVA"."""
+    seed = str(m.get(f"Seed{side}") or "").strip()
+    entry = str(m.get(f"EntryType{side}") or "").strip()
+    return f"[{seed or entry}]" if (seed or entry) else ""
 
 
 def _side(m: dict, side: str) -> tuple[list, list]:
     """One side's players and their nations, doubles included (the A2/B2 pair)."""
     names, nations = [], []
+    mark = _mark(m, side)
     for suffix in ("", "2"):
+        country = (m.get(f"PlayerCountry{side}{suffix}") or "").strip()
         nm = _name(m.get(f"PlayerNameFirst{side}{suffix}"),
-                   m.get(f"PlayerNameLast{side}{suffix}"))
+                   m.get(f"PlayerNameLast{side}{suffix}"),
+                   country, "" if names else mark)
         if nm:
             names.append(nm)
-            nations.append((m.get(f"PlayerCountry{side}{suffix}") or "").strip())
+            nations.append(country)
     return names, nations
 
 
