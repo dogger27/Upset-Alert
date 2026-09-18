@@ -26,18 +26,18 @@ def _db():
                  winner_id, loser_id, winner_name, loser_name, score, minutes, w_ace, l_ace)""")
     rows = [
         # a real best-of-three ace record on the tour, and a junk row above it
-        ("atp", "Halle", "20250615", "Grass", "500", 3, "A1", "B1", "Big Server", "Someone", "7-6(5) 7-6(4)", 118, 44, 9),
-        ("wta", "Junk", "20240101", "Hard", "250", 3, "J1", "J2", "Bad Row", "Bad Row", "6-0 6-0", 40, 128, 0),
-        ("wta", "Wimbledon", "20250701", "Grass", "G", 3, "W1", "W2", "Ace Queen", "Other", "6-4 7-6(2)", 110, 19, 3),
+        ("atp", "Halle", "2025-06-15", "Grass", "500", 3, "A1", "B1", "Big Server", "Someone", "7-6(5) 7-6(4)", 118, 44, 9),
+        ("wta", "Junk", "2024-01-01", "Hard", "250", 3, "J1", "J2", "Bad Row", "Bad Row", "6-0 6-0", 40, 128, 0),
+        ("wta", "Wimbledon", "2025-07-01", "Grass", "G", 3, "W1", "W2", "Ace Queen", "Other", "6-4 7-6(2)", 110, 19, 3),
         # the longest plausible clay best-of-three, and a 25-hour junk row
-        ("atp", "Rome", "20250512", "Clay", "M", 3, "A2", "B2", "Grinder", "Wall", "7-6(10) 6-7(8) 7-6(11)", 245, 5, 4),
-        ("atp", "Junk", "20240301", "Clay", "250", 3, "J3", "J4", "Bad", "Bad", "6-4 6-4", 1531, 2, 2),
+        ("atp", "Rome", "2025-05-12", "Clay", "M", 3, "A2", "B2", "Grinder", "Wall", "7-6(10) 6-7(8) 7-6(11)", 245, 5, 4),
+        ("atp", "Junk", "2024-03-01", "Clay", "250", 3, "J3", "J4", "Bad", "Bad", "6-4 6-4", 1531, 2, 2),
         # a Challenger row must not set a tour ceiling, but does feed a player's own rate
-        ("atp", "Bergamo", "20250301", "Hard", "C", 3, "A1", "C9", "Big Server", "Kid", "6-1 6-1", 50, 21, 0),
+        ("atp", "Bergamo", "2025-03-01", "Hard", "C", 3, "A1", "C9", "Big Server", "Kid", "6-1 6-1", 50, 21, 0),
         # the champion's history on hard in the window, and against the runner-up
-        ("atp", "Cincinnati", "20250810", "Hard", "M", 3, "A1", "R1", "Big Server", "Runner", "6-4 6-4", 80, 14, 6),
-        ("atp", "Miami", "20250325", "Hard", "M", 3, "R1", "A1", "Runner", "Big Server", "6-3 6-3", 70, 4, 10),
-        ("atp", "Old", "20190101", "Hard", "M", 3, "A1", "R1", "Big Server", "Runner", "6-0 6-0", 45, 30, 0),   # out of the window
+        ("atp", "Cincinnati", "2025-08-10", "Hard", "M", 3, "A1", "R1", "Big Server", "Runner", "6-4 6-4", 80, 14, 6),
+        ("atp", "Miami", "2025-03-25", "Hard", "M", 3, "R1", "A1", "Runner", "Big Server", "6-3 6-3", 70, 4, 10),
+        ("atp", "Old", "2019-01-01", "Hard", "M", 3, "A1", "R1", "Big Server", "Runner", "6-0 6-0", 45, 30, 0),   # out of the window
     ]
     c.executemany("INSERT INTO tml_matches VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows)
     return c
@@ -89,9 +89,9 @@ def test_every_reference_figure_stays_on_its_own_tour():
     c.execute("""CREATE TABLE tml_matches (tour, tourney_name, tourney_date, surface, tourney_level, best_of,
                  winner_id, loser_id, winner_name, loser_name, score, minutes, w_ace, l_ace)""")
     c.executemany("INSERT INTO tml_matches VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", [
-        ("wta", "Doha", "20250201", "Hard", "1000", 3, "7", "8", "Her", "Her Rival", "6-4 6-4", 90, 4, 2),
-        ("atp", "Doha", "20250201", "Hard", "500", 3, "7", "9", "Him", "His Rival", "6-4 6-4", 80, 24, 10),
-        ("atp", "Doha", "20250202", "Hard", "500", 3, "7", "9", "Him", "His Rival", "7-6(3) 7-6(5)", 120, 30, 12),
+        ("wta", "Doha", "2025-02-01", "Hard", "1000", 3, "7", "8", "Her", "Her Rival", "6-4 6-4", 90, 4, 2),
+        ("atp", "Doha", "2025-02-01", "Hard", "500", 3, "7", "9", "Him", "His Rival", "6-4 6-4", 80, 24, 10),
+        ("atp", "Doha", "2025-02-02", "Hard", "500", 3, "7", "9", "Him", "His Rival", "7-6(3) 7-6(5)", 120, 30, 12),
     ])
     her = player_reference(c, "wta", "7", "Hard", "8", today=date(2025, 9, 1))
     assert her["on_surface"]["matches"] == 1 and her["on_surface"]["aces_per_set"] == 2.0
@@ -110,17 +110,36 @@ def test_the_default_is_last_years_average_for_the_gender_surface_and_format():
                  winner_id, loser_id, winner_name, loser_name, score, minutes, w_ace, l_ace)""")
     c.executemany("INSERT INTO tml_matches VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", [
         # 2025, WTA hard, best of three: the sample the default must use
-        ("wta", "A", "20250310", "Hard", "1000", 3, "1", "2", "W", "L", "6-4 6-4", 90, 4, 2),
-        ("wta", "B", "20250620", "Hard", "500", 3, "1", "2", "W", "L", "7-6 7-6", 120, 8, 5),
+        ("wta", "A", "2025-03-10", "Hard", "1000", 3, "1", "2", "W", "L", "6-4 6-4", 90, 4, 2),
+        ("wta", "B", "2025-06-20", "Hard", "500", 3, "1", "2", "W", "L", "7-6 7-6", 120, 8, 5),
         # excluded: a different year, a different surface, a Challenger, a walkover, junk
-        ("wta", "C", "20240310", "Hard", "1000", 3, "1", "2", "W", "L", "6-4 6-4", 200, 20, 2),
-        ("wta", "D", "20250310", "Clay", "1000", 3, "1", "2", "W", "L", "6-4 6-4", 200, 20, 2),
-        ("wta", "E", "20250310", "Hard", "C", 3, "1", "2", "W", "L", "6-4 6-4", 200, 20, 2),
-        ("wta", "F", "20250310", "Hard", "1000", 3, "1", "2", "W", "L", "W/O", 0, 0, 0),
-        ("wta", "G", "20250310", "Hard", "1000", 3, "1", "2", "W", "L", "6-0 6-0", 1531, 128, 0),
-        ("atp", "H", "20250310", "Hard", "500", 3, "1", "2", "W", "L", "6-4 6-4", 100, 14, 6),
+        ("wta", "C", "2024-03-10", "Hard", "1000", 3, "1", "2", "W", "L", "6-4 6-4", 200, 20, 2),
+        ("wta", "D", "2025-03-10", "Clay", "1000", 3, "1", "2", "W", "L", "6-4 6-4", 200, 20, 2),
+        ("wta", "E", "2025-03-10", "Hard", "C", 3, "1", "2", "W", "L", "6-4 6-4", 200, 20, 2),
+        ("wta", "F", "2025-03-10", "Hard", "1000", 3, "1", "2", "W", "L", "W/O", 0, 0, 0),
+        ("wta", "G", "2025-03-10", "Hard", "1000", 3, "1", "2", "W", "L", "6-0 6-0", 1531, 128, 0),
+        ("atp", "H", "2025-03-10", "Hard", "500", 3, "1", "2", "W", "L", "6-4 6-4", 100, 14, 6),
     ])
     got = default_guess(c, "wta", "Hard", 3, today=date(2026, 9, 18))
     assert got == {"aces": 6, "minutes": 105, "matches": 2, "year": 2025}   # (4+8)/2, (90+120)/2
     assert default_guess(c, "atp", "Hard", 3, today=date(2026, 9, 18))["aces"] == 14
     assert default_guess(c, "wta", "Grass", 3, today=date(2026, 9, 18)) is None
+
+
+def test_dates_are_compared_as_dashed_iso_the_way_the_table_spells_them():
+    """Every tml_matches row is dashed ("2025-03-10"), and a compact bound
+    half works: "2025-03-10" >= "20250101" is FALSE on the fifth character.
+    That emptied the default and shortened every rate by a season
+    (2026-09-18)."""
+    from app.services.history.final_stats import _since, default_guess
+    assert _since(date(2026, 9, 18)) == "2024-01-01"
+    c = sqlite3.connect(":memory:")
+    c.execute("""CREATE TABLE tml_matches (tour, tourney_name, tourney_date, surface, tourney_level, best_of,
+                 winner_id, loser_id, winner_name, loser_name, score, minutes, w_ace, l_ace)""")
+    c.executemany("INSERT INTO tml_matches VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", [
+        ("wta", "Jan", "2025-01-06", "Hard", "500", 3, "1", "2", "W", "L", "6-4 6-4", 100, 5, 2),
+        ("wta", "Dec", "2025-12-29", "Hard", "500", 3, "1", "2", "W", "L", "6-4 6-4", 120, 7, 3),
+        ("wta", "Next", "2026-01-06", "Hard", "500", 3, "1", "2", "W", "L", "6-4 6-4", 999, 99, 3),
+    ])
+    got = default_guess(c, "wta", "Hard", 3, today=date(2026, 9, 18))
+    assert got["matches"] == 2 and got["aces"] == 6 and got["minutes"] == 110   # both ends of 2025, not 2026

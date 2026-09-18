@@ -51,8 +51,19 @@ def sets_in(score: Optional[str]) -> int:
 
 
 def _since(today: Optional[date] = None) -> str:
+    """The window's first day, as `tml_matches.tourney_date` actually spells a
+    date: DASHED ISO, "2024-01-01".
+
+    Every one of the 494,876 rows is dashed, though Sackmann's own files are
+    YYYYMMDD — our loader normalises them. A compact bound silently half
+    worked and was worse than failing: "2025-03-10" >= "20250101" compares
+    the fifth characters, "-" against "0", and is FALSE, so a bound of
+    20250101 dropped all of 2025 while a bound of 20230101 kept 2024 onward
+    and dropped 2023. The default came back empty and the per-set rates were
+    quietly short a season (2026-09-18).
+    """
     y = (today or date.today()).year - (SINCE_SEASONS - 1)
-    return f"{y}0101"
+    return f"{y}-01-01"
 
 
 def _levels_sql(tour: str) -> str:
@@ -195,7 +206,7 @@ def default_guess(conn, tour: str, surface: str, best_of: int,
           AND score NOT LIKE '%W/O%'
           AND w_ace IS NOT NULL AND w_ace <= ?
           AND minutes IS NOT NULL AND minutes > 0 AND minutes <= ?""",
-        (tour, surface, best_of, f"{year}0101", f"{year}1231", cap["aces"], cap["minutes"])).fetchone()
+        (tour, surface, best_of, f"{year}-01-01", f"{year}-12-31", cap["aces"], cap["minutes"])).fetchone()
     if not row or not row[2]:
         return None
     return {"aces": int(round(row[0])), "minutes": int(round(row[1])),
