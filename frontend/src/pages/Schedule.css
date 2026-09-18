@@ -659,10 +659,18 @@
   white-space: nowrap;
 }
 
-/* flag-icons needs an explicit box or it collapses; 4:3 matches the artwork. */
+/* flag-icons needs an explicit box or it collapses; 4:3 matches the artwork.
+   !important on the size: flag-icons' own `.fi { width: 1.333333em }` has the
+   same specificity and lands LATER in the bundle, so it was winning — every
+   real flag drew 21px wide while the blank box beside a withheld country
+   (.flag-blank, no `fi`) kept this 16.8px, and Sofya LANSERE's name started
+   4.5px left of every other name in the column (Singapore 2026-09-19, doc
+   294). MatchScoreCard's fitting pass budgets 1.05rem per flag, too, so the
+   wider flag was also eating room the names had been promised. .cv-flag and
+   .player-flag pin themselves the same way for the same tie. */
 .sched-flag {
-  width: 1.05rem;
-  height: 0.79rem;
+  width: 1.05rem !important;
+  height: 0.79rem !important;
   flex: 0 0 auto;
   /* Centred against the name as it always was. Opting out here is what lets the
      row above use baseline alignment for the thing that needs it — a flag has
@@ -1200,8 +1208,11 @@
 @media (max-width: 330px) {
   .sched-competitor-name { font-size: 0.82rem; }
   .sched-competitors--doubles .sched-competitor-name { font-size: 0.72rem; }
-  /* Last resort before wrapping: the flag is decoration, the name is not. */
-  .sched-competitor-name .fi { display: none; }
+  /* Last resort before wrapping: the flag is decoration, the name is not.
+     Keyed on .sched-flag, NOT .fi — the blank box for a withheld country has
+     no `fi`, so it alone stayed and pushed that one name a flag's width right
+     of every other. */
+  .sched-competitor-name .sched-flag { display: none; }
 }
 
 /* H2H strip on a schedule row. Reuses .h2h-strip from BracketView.css so the

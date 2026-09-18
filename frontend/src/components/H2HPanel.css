@@ -422,10 +422,15 @@ html.h2h-modal-open body {
   min-width: 0;
 }
 
-/* Flag icon before player name */
+/* Flag icon before player name.
+   !important on the size, as .sched-flag/.cv-flag: flag-icons' `.fi { width:
+   1.333333em }` ties on specificity and comes later in the bundle, so a real
+   flag drew 1.333em while the blank box for a withheld country (no `fi`) kept
+   1.1em — that name started a few px left of its opponent's (doc 294). The
+   phone rule below repeats it so it still wins inside its media query. */
 .h2h-flag {
-  width: 1.1em;
-  height: 0.82em;
+  width: 1.1em !important;
+  height: 0.82em !important;
   vertical-align: middle;
   border-radius: 2px;
   flex-shrink: 0;
@@ -751,8 +756,8 @@ html.h2h-modal-open body {
   }
 
   .h2h-player-name .h2h-flag {
-    width: 1.5rem;
-    height: 1.12rem;
+    width: 1.5rem !important;
+    height: 1.12rem !important;
     margin: 0 0 0.12rem;
   }
 
