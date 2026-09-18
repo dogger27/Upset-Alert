@@ -243,7 +243,7 @@ def test_a_bot_takes_no_place_and_consumes_none():
     got = finish_range(ms, pts, 3, banked, picks, bots={2})
     assert got[1] == (1, 1), got
     assert got[3] == (2, 2), got
-    assert got[2][0] == 1                    # the bot's own row is placed against the people
+    assert 2 not in got                      # the bot's own row stays blank
 
     class Even:
         cache_key = "even"
