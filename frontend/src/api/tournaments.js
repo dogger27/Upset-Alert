@@ -40,3 +40,9 @@ export const getComparePicks = (tournamentId, leagueId) =>
 export const getMyStandouts = (tournamentId, userId) =>
   client.get(`/tournaments/${tournamentId}/my-standouts`,
     userId != null ? { params: { user_id: userId } } : {}).then(r => r.data)
+
+/* THE TIEBREAK QUESTIONS (owner, 2026-09-18): the champion's aces in the
+   final and the final's minutes. GET hands back the slider ends and the
+   reference figures for the user's own finalists; PUT stores the answers. */
+export const getFinalGuess = (id) => client.get(`/tournaments/${id}/final-guess`).then(r => r.data)
+export const putFinalGuess = (id, body) => client.put(`/tournaments/${id}/final-guess`, body).then(r => r.data)

@@ -11,6 +11,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
 import { getDraw, listTournaments, refreshDraw, toggleUnlockSelections } from '../api/tournaments'
 import { getPredictions, savePredictions } from '../api/predictions'
+import FinalGuessModal, { FinalGuessBar, finalGuessKey, useFinalGuess } from '../components/FinalGuessModal'
 import { getMyStandouts } from '../api/tournaments'
 import { useAuth } from '../store/auth'
 /* LIVE DRAW IS OFF (2026-09-04, at the owner's request) and the component is
@@ -154,6 +155,10 @@ function TournamentDraw() {
 
   // All state declared first
   const [picks, setPicks] = useState({})
+  // THE TIEBREAK QUESTIONS (owner, 2026-09-18): asked once, the first time
+  // this bracket names its champion, and open from the bar any time after.
+  const [finalGuessOpen, setFinalGuessOpen] = useState(null)   // null | 'entered' | 'edit'
+  const finalGuessAsked = useRef(false)
   const [otherPicks, setOtherPicks] = useState({})
   // 'combined' (labelled "Picks" in the switcher) is the default; 'live'
   // shows BracketView with actual results only, no predictions. The old
@@ -239,6 +244,7 @@ function TournamentDraw() {
     if (node) node.addEventListener('touchmove', nativeTouchMove, { passive: false })
   }, [bodyWidthRef, nativeTouchMove])
   const [viewedUserId, setViewedUserId] = useState(() => { const u = searchParams.get('user'); return u ? Number(u) : null })
+  const finalGuess = useFinalGuess(id, !!user && viewedUserId == null)
   const [viewedUserName, setViewedUserName] = useState(null)
   /* BracketView's score-history popup target. CombinedView hosts its own copy
      of this state (its convention — h2h and predictors already live there);
@@ -657,6 +663,15 @@ function TournamentDraw() {
     onSuccess: (rows) => {
       applySaved(rows)
       qc.invalidateQueries({ queryKey: ['predictions', id] })
+      // The finalists may have changed: the reference figures follow them.
+      qc.invalidateQueries({ queryKey: finalGuessKey(id) })
+      const maxRound = Math.max(0, ...(data?.matches || []).map(m => m.round_number))
+      const finalIds = new Set((data?.matches || []).filter(m => m.round_number === maxRound).map(m => m.id))
+      const namedChampion = (rows || []).some(p => finalIds.has(p.match_id) && p.predicted_winner_id != null)
+      if (namedChampion && !finalGuessAsked.current && finalGuess.data && !finalGuess.data.guess && !finalGuess.data.locked) {
+        finalGuessAsked.current = true
+        setFinalGuessOpen('entered')
+      }
     },
     onError: (err) => {
       reportSaveFailure(err)
@@ -1566,6 +1581,10 @@ function TournamentDraw() {
 
   return (
     <div className="draw-page">
+      {user && viewedUserId == null && (
+        <FinalGuessModal tournamentId={id} open={!!finalGuessOpen} reason={finalGuessOpen}
+                         onClose={() => setFinalGuessOpen(null)} />
+      )}
       <div className={clsx('draw-header', `draw-header--${headerStage}`, { 'draw-header--collapsed': headerHidden || headerForcedHidden })}>
         {headerStage === 'full' && (
         <div className="draw-header-top">
@@ -1637,6 +1656,9 @@ function TournamentDraw() {
           </button>
         </div>
         */}
+        {user && viewedUserId == null && (
+          <FinalGuessBar tournamentId={id} enabled onOpen={() => setFinalGuessOpen('edit')} />
+        )}
         <div className="draw-header-center">
           {showPager && headerStage === 'minimal' && (
             <div className="bracket-pager bracket-pager--minimal">

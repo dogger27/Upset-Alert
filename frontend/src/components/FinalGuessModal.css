@@ -1,0 +1,27 @@
+/* THE TIEBREAK QUESTIONS — the modal shares the profile dialog's frame. */
+.fg-modal { width: min(520px, 100%); }
+.fg-intro { margin: 0 0 0.9rem; color: var(--text-muted); font-size: 0.9rem; line-height: 1.4; }
+.fg-muted { color: var(--text-muted); }
+.fg-q { margin: 0 0 1.1rem; }
+.fg-label { display: block; font-weight: 700; margin-bottom: 0.4rem; }
+.fg-row { display: flex; align-items: center; gap: 0.8rem; }
+.fg-row input[type="range"] { flex: 1; accent-color: var(--green-500, #40916c); height: 28px; cursor: pointer; }
+.fg-value { min-width: 4.5rem; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; font-size: 1.15rem; }
+.fg-ends { display: flex; justify-content: space-between; gap: 0.5rem; font-size: 0.72rem; color: var(--text-muted); margin-top: 0.15rem; }
+.fg-ref { margin: 0.45rem 0 0; padding-left: 1.1rem; font-size: 0.85rem; line-height: 1.35; color: var(--text); }
+.fg-ref li + li { margin-top: 0.15rem; }
+.fg-actual { margin: 0 0 0.8rem; font-weight: 600; }
+.fg-actions { display: flex; justify-content: flex-end; gap: 0.6rem; margin-top: 0.4rem; }
+.fg-btn { border: 1px solid var(--green-500, #40916c); background: var(--green-500, #40916c); color: #fff; border-radius: 8px; padding: 0.5rem 0.9rem; font-weight: 700; cursor: pointer; }
+.fg-btn:disabled { opacity: 0.6; cursor: default; }
+.fg-btn--quiet { background: transparent; color: var(--text); border-color: var(--border); }
+.fg-error { color: var(--danger, #c0392b); margin: 0.5rem 0 0; font-size: 0.85rem; }
+/* The bar on the draw page */
+.fg-bar { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.35rem 0.75rem; width: 100%; text-align: left;
+          margin: 0.4rem 0 0.6rem; padding: 0.55rem 0.8rem; border-radius: 10px; border: 1px solid var(--border);
+          background: var(--surface-card); color: var(--text); cursor: pointer; }
+.fg-bar:hover { border-color: var(--green-500, #40916c); }
+.fg-bar-label { font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
+.fg-bar-value { font-weight: 700; }
+.fg-bar-value--ask { font-weight: 600; color: var(--green-500, #40916c); }
+.fg-bar-actual { margin-left: auto; font-size: 0.85rem; color: var(--text-muted); }
