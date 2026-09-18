@@ -6,9 +6,11 @@ Public, unauthenticated, and keyed by the SAME id that appears in the PDF URL
 we already fetch — wtafiles.wtatennis.com/pdf/draws/2026/1039/OP.pdf is event
 1039 — so nothing has to be mapped or looked up.
 
-Per match it states the things a sheet only implies through layout: DateSeq is
-the order on court, MatchTimeStamp the time, isEstimatedStartTime whether that
-time is a promise or a guess (the "Followed by" case), and RoundID the round.
+Per match it states the things a sheet only implies through layout:
+MatchTimeStamp the time, isEstimatedStartTime whether that time is a promise or
+a guess (the "Followed by" case), and RoundID the round. DateSeq is NOT the
+order on court — it numbers the tournament's day (every SP Open court shared
+DateSeq 5 on 2026-09-16), so the order is the clocks'.
 It also carries seeds, entry types, nationalities and tour player ids, which a
 PDF makes us recover from printed text.
 
@@ -18,6 +20,17 @@ supply the mapping it has (learned from a sheet we already ingested, or from
 Sofascore, which names courts at every level); without one the court is emitted
 as "Court {id}", which is right often enough to be legible and wrong quietly
 enough that it must not be trusted for matching.
+
+TWO SHAPES OF ROW. The above is a match that has been PLAYED (or is on court):
+CourtID, DateSeq, the real start time. A match that has only been PUBLISHED —
+the next day's sheet, or the rest of today's — comes in another shape entirely
+(Singapore's and Korea's qualifying, 2026-09-19): no CourtID and no DateSeq,
+but `CourtName` ("Center Court"), `NotBefore` ("Starting at 11:00 AM", "Not
+before 5:00 PM", "Followed By"), and `Unscheduled: true` on every "Followed
+By" row, whose MatchTimeStamp is the 23:59 placeholder. That shape does NOT
+say in which order the "Followed By" matches come — the array is in no court
+order, nor is MatchID — so `unordered_courts` names the courts a caller must
+not take from this feed.
 """
 
 import logging
@@ -177,12 +190,20 @@ def matches_for_day(rows: list[dict], day: date,
             continue
         cid = str(m.get("CourtID") or "").strip()
         venue = (m.get("Venue") or {}).get("name")
+        # A PUBLISHED match names its court outright and has no CourtID (see
+        # the module docstring). Reading CourtID alone put Singapore's and
+        # Korea's whole qualifying day on one blank court, eight matches
+        # chained to 11:36 PM (2026-09-19, documents 306/307). The name goes
+        # through the learned mapping first — "Estadio Skarch" is the sheet's
+        # "ESTADIO SKARCH".
+        named = (m.get("CourtName") or "").strip()
         # The learned mapping (schedule_shadow.learn_courts) is keyed by the
         # court string THIS function emitted when it had no name — "Court 1" —
         # not by the bare id; a lookup by "1" alone found nothing and every
         # promoted day would have read "Court 1" (2026-09-18).
-        court = (venue or court_names.get(cid) or court_names.get(f"Court {cid}")
-                 or (f"Court {cid}" if cid else ""))
+        court = (venue or (court_names.get(named) if named else None)
+                 or ((court_names.get(cid) or court_names.get(f"Court {cid}")) if cid else None)
+                 or named or (f"Court {cid}" if cid else ""))
         # VENUE-LOCAL, like the sheet prints. The feed stamps UTC, so a
         # Monterrey night match reads 01:36 raw — tomorrow's date, and an hour
         # nobody played at. Without the zone the raw value is kept rather than
@@ -205,6 +226,10 @@ def matches_for_day(rows: list[dict], day: date,
         # bracket's. None leaves the round to the bracket and the row.
         rid = m.get("RoundID")
         rnd = _ROUNDS.get(rid.strip()) if isinstance(rid, str) else None
+        # A published match carries the sheet's own wording. Without it "Not
+        # before 5:00 PM" was stored as a fixed 17:00 (Guadalajara's Bucsa v
+        # Jovic, 2026-09-18), and the chain lost the floor.
+        printed = (m.get("NotBefore") or "").strip()
         out.append(Match(
             court=court,
             time=hhmm,
@@ -214,13 +239,47 @@ def matches_for_day(rows: list[dict], day: date,
                         else "singles"),
             # The feed states the time's standing outright, where a sheet makes
             # us read it off wording like "Followed by".
-            start_raw=(f"Est. {hhmm}" if estimated and hhmm else hhmm),
+            start_raw=(printed or (f"Est. {hhmm}" if estimated and hhmm else hhmm)),
             printed_score=(m.get("ScoreString") or None),
             printed_status=(m.get("MatchState") or None),
             side_a=names_a, side_b=names_b,
             nations_a=nats_a, nations_b=nats_b,
+            published=not cid,
         ))
     out.sort(key=feed_order)
+    return out
+
+
+def unordered_courts(matches: list[Match]) -> list[str]:
+    """The courts whose order of play these rows do NOT state.
+
+    `feed_order` sorts a court by its clocks, untimed last, and that is a
+    reading of the feed only while the clocks decide it. They do not when a
+    court holds two or more unplayed rows with no clock — the published
+    "Followed By" matches, which the feed lists in no court order — or one such
+    row and an unplayed timed row after the court's first, since a "Followed
+    by" may come before a "Not before 5:00 PM" as easily as after it. Two
+    unplayed rows at one clock are no order either. Singapore 2026-09-19: the
+    sheet prints Garland v Perez third on CENTER COURT, the feed's own order
+    fourth.
+
+    A row in the PLAYED shape (it has a CourtID) carries its real start, so it
+    precedes everything still to be played and never makes a court ambiguous.
+    MatchState cannot say which rows have begun here: normalize_day strips it
+    from the stored bytes as volatile.
+    """
+    by_court: dict = {}
+    for m in matches:
+        by_court.setdefault(m.court or "", []).append(m)
+    out = []
+    for court, ms in by_court.items():
+        untimed = [m for m in ms if m.published and not m.time]
+        timed = sorted((m for m in ms if m.time), key=lambda m: m.time)
+        later = [m for m in timed[1:] if m.published]
+        clocks = [m.time for m in ms if m.published and m.time]
+        if (len(untimed) > 1 or (untimed and later)
+                or len(set(clocks)) < len(clocks)):
+            out.append(court)
     return out
 
 

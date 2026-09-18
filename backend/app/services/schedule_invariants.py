@@ -326,6 +326,59 @@ def court_opener_untimed(rows) -> list:
     return out
 
 
+def court_unnamed(rows) -> list:
+    """Rows stored with no court at all.
+
+    Every order of play prints a court over every box, so a blank court is a
+    source that did not say where the match is. Singapore and Korea
+    2026-09-19 (feed documents 306/307): the WTA's published shape names its
+    court in `CourtName`, the reader looked only at `CourtID`, and sixteen
+    qualifying matches went on the page under no heading.
+    """
+    return [r for r in rows if not (r.court or "").strip()]
+
+
+def court_opened_twice(rows) -> list[tuple]:
+    """(row, other) pairs printed to START at the same clock on the same court.
+
+    A court begins one match at a time. Two fixed starts at one clock on one
+    court are two courts read as one — the same Singapore/Korea day, where
+    CENTER COURT's and COURT 1's "Starting at 11:00 AM" openers both landed on
+    the one blank court. Independent of the court's name, so it also holds
+    when two named courts are mapped onto one.
+    """
+    seen: dict = {}
+    out = []
+    for r in sorted(rows, key=lambda r: (r.court_order is None, r.court_order or 0, r.id)):
+        if r.start_type != "fixed" or not r.start_time_local:
+            continue
+        k = (r.court or "", r.start_time_local)
+        if k in seen:
+            out.append((r, seen[k]))
+        else:
+            seen[k] = r
+    return out
+
+
+def feed_order_unstated(rows, feed_docs) -> list[list]:
+    """Courts, as lists of rows, whose order a FEED wrote without knowing it.
+
+    A sheet's page is its order; a feed has only clocks. The WTA publishes
+    every "Followed By" match with no clock and no place on its court (see
+    wta_feed.unordered_courts), so two or more of them on one court were put
+    in SOME order by a sort, not by the tour — Singapore 2026-09-19 had Garland
+    v Perez fourth on CENTER COURT where the sheet prints it third, and every
+    estimate down the court followed the invented order. Rows already begun
+    are history, not an order question.
+    """
+    courts: dict = {}
+    for r in rows:
+        if (r.last_document_id in feed_docs and not r.start_time_local
+                and not (r.started_at or r.completed_at or r.winner_side)):
+            courts.setdefault(r.court or "", []).append(r)
+    return [rs for rs in courts.values() if len(rs) > 1]
+
+
 def _law_person(raw: str) -> str:
     """A printed name as the LAW identifies a person: brackets gone, every
     trailing country code gone (by membership, looped — SURESH IND ANY),
@@ -1177,6 +1230,27 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
              f"{e.court} #{e.court_order} opens the court printed "
              f"{e.start_note or e.start_type!r} with no clock — it follows a "
              f"box the ingest never read, and the page can print no time")
+
+    # 2026-09-19, Singapore and Korea qualifying (feed documents 306/307):
+    # the WTA's published shape names its court in `CourtName` and gives the
+    # "Followed By" matches no order; read as the played shape, both days
+    # went up as eight matches on one blank court, chained to 11:36 PM. The
+    # law passed it — nothing here asked where a row IS or who ordered it.
+    for e in court_unnamed(rows):
+        flag("court_unnamed", e,
+             f"#{e.court_order} is stored with no court — every sheet prints "
+             f"one over every box, so the source's court went unread")
+    for e, other in court_opened_twice(rows):
+        flag("court_opened_twice", e,
+             f"{e.court!r} #{e.court_order} and #{other.court_order} (entry "
+             f"{other.id}) both START at {e.start_time_local!r} — two courts "
+             f"read as one")
+    for rs in feed_order_unstated(rows, feed_docs):
+        first = min(rs, key=lambda r: (r.court_order or 0, r.id))
+        flag("feed_order_unstated", first,
+             f"{first.court!r}: {len(rs)} rows a feed wrote with no clock "
+             f"(entries {sorted(r.id for r in rs)}) — the feed states no order "
+             f"among them, so the court's order was invented")
 
     # 2026-09-18, SP Open document 284: "After suitable rest - NB 4pm" on
     # QUADRA 1. Every clock reader in the ingest demanded minutes, so the hour

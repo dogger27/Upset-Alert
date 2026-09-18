@@ -13,6 +13,9 @@ combined sheet a single feed cannot hold), so they are the schedule now:
                       starts staggered per court, singles and doubles
     a Slam         -> its own feed (uso_feed), handled before this module
     nothing at all -> the PDF, fetched and parsed only then, and logged
+    a day the feeds cannot order or name -> the PDF too (`declined`): the
+                      WTA publishes a sheet's "Followed By" matches with no
+                      order on court at all (Singapore 2026-09-19)
 
 One DOCUMENT per tournament-day holds every part — the women from the WTA,
 the men from Sofascore — so a combined venue is one schedule again, as its
@@ -142,6 +145,8 @@ def parse_day_document(doc: bytes, court_names: Optional[dict] = None,
                 s = _sig(m)
                 if s and s in by_sig:
                     m.court = _map_court(by_sig[s], court_names)
+        # After the fill, so a court Sofascore supplied is judged by its name.
+        meta["unordered"] = wta_feed.unordered_courts(wta_rows)
     meta["wta"] = len(wta_rows)
 
     # The women's rows from the WTA, the men's from Sofascore; a match offered
@@ -155,7 +160,28 @@ def parse_day_document(doc: bytes, court_names: Optional[dict] = None,
         matches.append(m)
     matches.sort(key=feed_order)
     meta["count"] = len(matches)
+    meta["unnamed"] = sum(1 for m in matches if not (m.court or "").strip())
     return matches, meta
+
+
+def declined(meta: dict) -> Optional[str]:
+    """Why these feeds cannot be the day's schedule, or None when they can.
+
+    A ROW WITHOUT A COURT IS NOT A SCHEDULE, and neither is a court whose
+    order the feed does not state. The first rule was written at 10:15 UTC on
+    2026-09-18, after Guadalajara's semi-finals went on the page under a blank
+    court, and was lost an hour later when this module took the day over from
+    order_of_play. Singapore and Korea 2026-09-19 then arrived with eight
+    qualifying matches each on one unnamed court, chained until 11:36 PM,
+    where the sheet printed two courts of four (documents 306/307). A declined
+    day goes to the PDF, which prints both.
+    """
+    why = []
+    if meta.get("unnamed"):
+        why.append(f"{meta['unnamed']} row(s) with no court")
+    if meta.get("unordered"):
+        why.append("no order on " + ", ".join(repr(c) for c in meta["unordered"]))
+    return "; ".join(why) or None
 
 
 async def _sofa_parts(draw, day: date, venue_tz: Optional[str], tour: str,
@@ -185,7 +211,9 @@ async def _sofa_parts(draw, day: date, venue_tz: Optional[str], tour: str,
 async def build_day_document(db, tournament, draws, day: date, season_year: int,
                              venue_tz: Optional[str]) -> Optional[dict]:
     """One day's schedule from the feeds: {url, bytes, parser, count, atp, wta,
-    sources} ready for ingest_document, or None when no feed has a row."""
+    sources} ready for ingest_document, None when no feed has a row, or
+    {"declined": why, ...} when the feeds have the day but cannot state it
+    (see `declined`) — the caller then gives the day to the PDF."""
     from app.services import schedule_shadow, wta_feed
 
     event_id = await schedule_shadow.wta_event_id(db, tournament.id, draws)
@@ -230,6 +258,9 @@ async def build_day_document(db, tournament, draws, day: date, season_year: int,
     matches, meta = parser(doc)
     if not matches:
         return None
+    reason = declined(meta)
+    if reason:
+        return {"declined": reason, "count": len(matches), "sources": sources}
     return {"url": f"feeds://{'+'.join(sources)}/{day.isoformat()}", "bytes": doc, "parser": parser,
             "count": len(matches), "atp": sum(1 for m in matches if m.tour == "ATP"),
             "wta": sum(1 for m in matches if m.tour == "WTA"), "sources": sources}

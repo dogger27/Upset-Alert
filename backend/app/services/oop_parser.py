@@ -267,6 +267,11 @@ class Match:
     # two-column sheet can file a header under the wrong court, and only the
     # slot's own players can say so. Applied by _apply_header at flush.
     header: Optional[tuple] = None
+    # INTERNAL. True for a WTA feed row in its PUBLISHED shape — no CourtID,
+    # so not yet begun, and its clock (if any) is the sheet's "Starting at" or
+    # "Not before" rather than a start. Such rows are what can leave a court's
+    # order unstated; see wta_feed.unordered_courts.
+    published: bool = False
     # INTERNAL. Lines this slot swallowed that no rule could read as a name,
     # a score, a round or the sheet's furniture. Kept only so that a slot which
     # ends up with no players can say WHY it is empty — see meta['dropped_slots'].
