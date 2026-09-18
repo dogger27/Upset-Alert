@@ -1,4 +1,5 @@
-import { nameForms, pairForms } from './names.js'
+import { nameForms, pairForms, sheetName } from './names.js'
+import { flagEmoji } from './flags.js'
 
 let fail = 0
 const eq = (label, got, want) => {
@@ -22,6 +23,15 @@ eq('a rung that saves nothing is dropped', nameForms('Bu Yunchaokete'),
    ['Bu Yunchaokete', 'Yunchaokete'])
 eq('doubles collapse together', pairForms('Jean Julien Rojer / Horia Tecau'),
    ['Jean Julien Rojer / Horia Tecau', 'J. J. Rojer / H. Tecau', 'Rojer / Tecau'])
+
+// Singapore's ISO code, as the WTA's own Singapore Open sheet printed it for
+// both wildcards (2026-09-19). sheetName only reads a code the flag table
+// knows, so until it did, "SGP" stayed on as the last word of her name.
+eq('SGP is a country', sheetName('[WC] Kai Ning Chanya NG SGP'),
+   { name: 'Kai Ning Chanya NG', nat: 'SGP' })
+eq('SIN and SGP fly the same flag', [flagEmoji('SIN'), flagEmoji('SGP')], ['🇸🇬', '🇸🇬'])
+eq('a three-letter surname is still a name', sheetName('Orlando LUZ'),
+   { name: 'Orlando LUZ', nat: null })
 
 console.log(fail ? `\n${fail} failed` : '\n  all passed')
 process.exit(fail ? 1 : 0)
