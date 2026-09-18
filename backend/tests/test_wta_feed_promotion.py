@@ -27,8 +27,8 @@ def test_the_learned_name_is_found_under_the_feed_court_string():
     rows = [_row(1, 1, "Dabrowski", "Pereira"), _row(3, 1, "Avanesyan", "Charaeva")]
     names = {"Court 1": "QUADRA CENTRAL MARIA ESTHER BUENO", "Court 3": "QUADRA 2"}
     got = {m.side_a[0]: m.court for m in matches_for_day(rows, date(2026, 9, 17), court_names=names)}
-    assert got["A Dabrowski"] == "QUADRA CENTRAL MARIA ESTHER BUENO"
-    assert got["A Avanesyan"] == "QUADRA 2"
+    assert got["A DABROWSKI BRA"] == "QUADRA CENTRAL MARIA ESTHER BUENO"
+    assert got["A AVANESYAN BRA"] == "QUADRA 2"
 
 
 def test_a_court_without_a_learned_name_says_court_n():

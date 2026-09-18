@@ -216,15 +216,24 @@ def document_clocks(day_docs) -> dict:
     about the tour happened at that moment, so the re-parse inherits the clock
     of the fetch it re-reads — the cleared sha on the document before it is
     the marker, and a chain of them carries the original clock through.
+
+    A RECLAIM is the same re-read without the marker. When the sheet takes a
+    day back from the WTA feed (schedule.ingest_document, `superseded`) it
+    stores bytes it already holds, under the SAME sha — so a sha seen earlier
+    in the day keeps the clock of the first fetch that brought it.
     """
     out: dict = {}
     carried = None
+    first_seen: dict = {}
     for d in sorted(day_docs, key=lambda x: x.id):
         when = _naive_utc(d.fetched_at)
         if carried is not None:
             when, carried = carried, None
-        if str(d.sha256 or '').startswith('forced'):
+        sha = str(d.sha256 or '')
+        if sha.startswith('forced'):
             carried = when
+        elif sha:
+            when = first_seen.setdefault(sha, when)
         out[d.id] = when
     return out
 
