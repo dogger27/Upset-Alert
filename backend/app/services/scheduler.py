@@ -2167,12 +2167,20 @@ def start_scheduler() -> None:
         id="prune_score_snapshots",
         misfire_grace_time=3600,
     )
+    # FIVE MINUTES BEHIND THE ORDER-OF-PLAY PASS, not level with it. Both run
+    # every 15 minutes from startup, so they came due in the same second, and
+    # the sweep — registered first, and taking day_write_lock before it does
+    # anything else — always judged the day before the ingest that was about to
+    # rewrite it. After a deploy that fixes a reading, the first thing the law
+    # saw was the rows the fix was on its way to replace (2026-09-18: the WTA
+    # feed's plain-case names, which the next OOP pass re-reads).
     scheduler.add_job(
         _on_shutdown_quietly(_sweep_schedule_invariants),
         "interval",
         minutes=15,
         id="sweep_schedule_invariants",
         misfire_grace_time=600,
+        next_run_time=datetime.now(timezone.utc) + timedelta(minutes=20),
     )
     scheduler.add_job(
         _on_shutdown_quietly(_sweep_oop_verifications),
