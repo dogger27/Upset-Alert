@@ -800,20 +800,24 @@ function MatchMini({ e, first, alt, tourBar, past, tournament, venueMode, venueT
       {/* The first row's tags are drawn by MiniRows, over the card's edge. */}
       {!first && when ? <LineTag alt={alt}>{when}</LineTag> : null}
       {!first && tournament ? <LineTag alt={alt} right>{tournament}</LineTag> : null}
-      {/* THE TABS RUN THE ROW'S FULL HEIGHT, divider to divider, with no
-          top or bottom line of their own (owner, 2026-09-17). */}
-      <Pressable style={[s.miniBar, s.miniBarLeft, picks && s.miniPill, picks && s.miniPillLeft]} onPress={picks ? () => onPredictors(matchFromEntry(e)) : undefined} hitSlop={4}
-                 disabled={!picks} accessibilityRole={picks ? 'button' : undefined}
-                 accessibilityLabel={picks ? (e.winner_side != null ? 'Who called it' : 'Who’s still in it') : undefined}>
-        {picks ? <Ionicons name="people" size={16} color={CHIP.text} /> : null}
-      </Pressable>
       <View style={s.miniCard}>
         <MatchCard e={e} scale={0.8} badges={!(past && e.discipline !== 'singles' && !(e.players || []).some(p => p.seed || p.draw_rank != null))} />
       </View>
-      <Pressable style={[s.miniBar, s.miniBarRight, pair && s.miniPill, pair && s.miniPillRight]} onPress={pair ? () => onH2H(pair) : undefined} hitSlop={4}
-                 disabled={!pair} accessibilityRole={pair ? 'button' : undefined} accessibilityLabel={pair ? 'Head to head' : undefined}>
-        {pair ? <Text style={s.miniBarText}>H2H</Text> : null}
-      </Pressable>
+      {/* ONE COLUMN ON THE RIGHT, split in two (owner, 2026-09-18): H2H above,
+          the group below, the icon turned to lie the way the word does. The
+          column runs divider to divider with only its inside line; a half
+          with nothing to open stays empty. */}
+      <View style={[s.miniBar, s.miniBarRight, (pair || picks) && s.miniPill, (pair || picks) && s.miniPillRight]}>
+        <Pressable style={s.miniHalf} onPress={pair ? () => onH2H(pair) : undefined} hitSlop={4}
+                   disabled={!pair} accessibilityRole={pair ? 'button' : undefined} accessibilityLabel={pair ? 'Head to head' : undefined}>
+          {pair ? <Text style={s.miniBarText}>H2H</Text> : null}
+        </Pressable>
+        <Pressable style={[s.miniHalf, pair && picks && s.miniHalfBelow]} onPress={picks ? () => onPredictors(matchFromEntry(e)) : undefined} hitSlop={4}
+                   disabled={!picks} accessibilityRole={picks ? 'button' : undefined}
+                   accessibilityLabel={picks ? (e.winner_side != null ? 'Who called it' : 'Who’s still in it') : undefined}>
+          {picks ? <Ionicons name="people" size={16} color={CHIP.text} style={s.miniIconTurned} /> : null}
+        </Pressable>
+      </View>
     </Wrap>
   )
 }
@@ -1077,23 +1081,24 @@ const s = StyleSheet.create({
   rowsInWrap: { marginHorizontal: 0 },
   // The cell: [group bar][card][H2H bar], the bars full height.
   // Room for a tab on either side: the tour bar, the tab, a hair.
-  miniCard: { paddingLeft: 27, paddingRight: 27 },
+  miniCard: { paddingLeft: 8, paddingRight: 27 },
   /* THE DRAW VIEW'S SIDE TABS, run top to bottom (owner, 2026-09-17): the
      bracket's chip — 24 wide, 1px green-500 on the card fill, radius 4 —
      stretched to the row's height, the word on its side, the icon upright. */
   /* TO THE CARD'S SIDE EDGES (owner, 2026-09-17): the tab's outer edge is
      the card's own, so its only line is the inside one; the dividers above
      and below are its ends. The tour bar rides over its outer 3pt. */
-  miniBar: { position: 'absolute', top: 0, bottom: 0, width: 24, alignItems: 'center', justifyContent: 'center', zIndex: 1 },
-  miniBarLeft: { left: 0 },
+  miniBar: { position: 'absolute', top: 0, bottom: 0, width: 24, zIndex: 1 },
   miniBarRight: { right: 0 },
   miniPill: { borderColor: CHIP.line, backgroundColor: C.card },
-  miniPillLeft: { borderRightWidth: 1 },
   miniPillRight: { borderLeftWidth: 1 },
+  miniHalf: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  miniHalfBelow: { borderTopWidth: 1, borderTopColor: CHIP.line },
+  miniIconTurned: { transform: [{ rotate: '-90deg' }] },
   miniBarText: { fontFamily: 'Archivo_700Bold', fontSize: 12, lineHeight: leading(16), letterSpacing: 0.25, color: CHIP.text, width: 40, textAlign: 'center', transform: [{ rotate: '-90deg' }] },
   // 16 tall, centred on the 2px line above: 8 above it, 8 below.
   miniTag: { position: 'absolute', top: -9, height: 16, paddingHorizontal: 4, justifyContent: 'center', zIndex: 1, maxWidth: '55%' },
-  miniTagLeft: { left: 30 },
+  miniTagLeft: { left: 10 },
   miniTagRight: { right: 28 },
   miniTagHalf: { position: 'absolute', left: 0, right: 0, height: 8 },
   // A clear rule between matches (owner, 2026-09-17): two lines of box score
