@@ -207,6 +207,32 @@ _CHAINS_BEHIND_RE = re.compile(r'follow|\bafter\b', re.I)
 _TIME_UNKNOWN_RE = re.compile(r'\bTB[ACD]\b|\bto\s+be\s+\w', re.I)
 
 
+_LAW_ROUND_RE = re.compile(r'^(?:R(\d+)|(\d)R)$', re.I)
+
+
+def _law_round_number(label, num_rounds) -> int | None:
+    """The bracket round a label names, or None when it names none the law
+    can check. F / SF / QF count back from the final. "R2" and "2R" are a
+    round NUMBER (the sheets and the WTA feed); "R16" and up a FIELD SIZE
+    (the bracket's own labels) — no draw has 8 rounds, and no field of 8 is
+    called anything but QF, so the two never collide."""
+    lab = (label or "").strip().upper()
+    if not lab or not num_rounds:
+        return None
+    back = {"F": 0, "SF": 1, "QF": 2}.get(lab)
+    if back is not None:
+        return num_rounds - back
+    m = _LAW_ROUND_RE.match(lab)
+    if not m:
+        return None
+    k = int(m.group(1) or m.group(2))
+    if k < 8:
+        return k
+    if k & (k - 1) == 0:
+        return num_rounds - (k.bit_length() - 1) + 1
+    return None
+
+
 def document_clocks(day_docs) -> dict:
     """-> {document id: when its BYTES were downloaded}.
 
@@ -414,6 +440,13 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
     for de in dents:
         by_fold.setdefault(_fold(de.name), []).append(de.id)
     de_nat = {de.id: de.nationality for de in dents if de.nationality}
+    # {match id: (its round number, its draw's number of rounds)} for every
+    # bracket match a row of this day is linked to — `round_contradicts_bracket`.
+    linked = {e.match_id for e in rows if e.match_id is not None}
+    match_round = {mid: (rn, nr) for mid, rn, nr in (await db.execute(
+        select(Match.id, Match.round_number, Draw.num_rounds)
+        .join(Draw, Draw.id == Match.draw_id)
+        .where(Match.id.in_(linked)))).all()} if linked else {}
     decided = {frozenset((m.player1_id, m.player2_id)): m.winner_id
                for m in (await db.execute(
                    select(Match).where(Match.draw_id.in_(draw_ids),
@@ -905,6 +938,21 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
             flag("bracket_link_outside_main", e,
                  f"{e.stage}/{e.discipline} row ({e.round_label}) holds "
                  f"match_id {e.match_id} — only main-draw singles has one")
+
+        # 2026-09-18, Guadalajara: the WTA feed states an unplaced match's
+        # RoundID as a bare integer placeholder — 2 on all three semi-finals —
+        # the feed reader took it for the second round, and ingest writes the
+        # source's round OVER the one it derives from the bracket. A row linked
+        # to a bracket match is the one row whose round is KNOWN, so its label
+        # must name that match's round. The law's own reading of a label, not
+        # schedule._round_label: "R2" is a round NUMBER, "R16" a field size.
+        if e.match_id is not None and e.match_id in match_round:
+            said = _law_round_number(e.round_label, match_round[e.match_id][1])
+            if said is not None and said != match_round[e.match_id][0]:
+                flag("round_contradicts_bracket", e,
+                     f"labelled {e.round_label!r} but bracket match {e.match_id} "
+                     f"is round {match_round[e.match_id][0]} of "
+                     f"{match_round[e.match_id][1]}")
 
         # 2026-08-25, Medvedev vs Damm: the row was created from a revision
         # that printed the slot unresolved, the bracket resolver replaced both

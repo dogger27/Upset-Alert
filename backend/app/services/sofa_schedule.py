@@ -19,7 +19,7 @@ import logging
 from datetime import date, datetime
 from typing import Optional
 
-from app.services.oop_parser import NEUTRAL_NATIONS, Match
+from app.services.oop_parser import NEUTRAL_NATIONS, Match, feed_order
 
 logger = logging.getLogger(__name__)
 
@@ -158,7 +158,7 @@ def parse_sofa_day(doc: bytes, venue_tz: Optional[str] = None,
             start_raw=(f"Est. {hhmm}" if hhmm else None),
             side_a=a, side_b=b, nations_a=na, nations_b=nb,
         ))
-    out.sort(key=lambda m: (m.court, m.time or ""))
+    out.sort(key=feed_order)
     return out, {"source": "sofascore", "day": day.isoformat() if day else None,
                  "count": len(out)}
 

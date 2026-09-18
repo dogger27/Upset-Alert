@@ -25,7 +25,8 @@ from datetime import date, datetime
 from typing import Optional
 from urllib.request import Request, urlopen
 
-from app.services.oop_parser import COUNTRY_CODES, NEUTRAL_NATIONS, Match
+from app.services.oop_parser import (COUNTRY_CODES, NEUTRAL_NATIONS, Match,
+                                     feed_order)
 
 logger = logging.getLogger(__name__)
 
@@ -195,11 +196,20 @@ def matches_for_day(rows: list[dict], day: date,
             hhmm = None
         names_a, nats_a = _side(m, "A")
         names_b, nats_b = _side(m, "B")
+        # The ROUND of an unplaced match is a placeholder too. Every placed
+        # match states RoundID as a STRING ("1", "2", "Q", "S", "F"); the
+        # unplaced ones carry a bare INTEGER — 2 on Guadalajara's three
+        # semi-finals (2026-09-18), 11 on Korea's and Singapore's next-day
+        # qualifying — which is no round at all. Read as "2" it made every
+        # semi-final an "R2", and ingest takes the feed's round over the
+        # bracket's. None leaves the round to the bracket and the row.
+        rid = m.get("RoundID")
+        rnd = _ROUNDS.get(rid.strip()) if isinstance(rid, str) else None
         out.append(Match(
             court=court,
             time=hhmm,
             tour="WTA",
-            round=_ROUNDS.get(str(m.get("RoundID") or "").strip()),
+            round=rnd,
             discipline=("doubles" if (m.get("DrawMatchType") or "").upper() == "D"
                         else "singles"),
             # The feed states the time's standing outright, where a sheet makes
@@ -210,7 +220,7 @@ def matches_for_day(rows: list[dict], day: date,
             side_a=names_a, side_b=names_b,
             nations_a=nats_a, nations_b=nats_b,
         ))
-    out.sort(key=lambda x: (x.court, x.time or ""))
+    out.sort(key=feed_order)
     return out
 
 

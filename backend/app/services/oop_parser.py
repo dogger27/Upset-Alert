@@ -304,6 +304,19 @@ class Match:
         return bool(self.side_a and self.side_b)
 
 
+def feed_order(m: Match) -> tuple:
+    """A feed row's place in the day: by court, then by clock — UNTIMED LAST.
+
+    A feed has no page to read an order off, so the ingest's court_order is
+    this sort. `m.time or ""` put a row with no clock FIRST on its court: the
+    WTA feed's unplaced Samsonova v Stearns (Guadalajara 2026-09-18, a 23:59
+    placeholder the feed reader rightly empties) would have opened ESTADIO
+    SKARCH ahead of the 3:00 PM doubles, where the sheet prints it third,
+    "Followed by". A match nobody has placed yet is not the first one played.
+    The same reading as `routers/schedule.day_order` (NULLs last)."""
+    return (m.court or "", m.time is None, m.time or "")
+
+
 def _cells(words, run_gap=14):
     """Split each visual row into CELLS — runs of words separated by a real gap.
 
