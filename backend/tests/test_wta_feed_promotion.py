@@ -41,3 +41,11 @@ def test_court_winners_need_the_votes():
     tally = {"Court 1": {"ESTADIO": 70, "GRANDSTAND": 2}, "Court 4": {"A": 1, "B": 1}, "Court 5": {}}
     assert court_winners(tally) == {"Court 1": "ESTADIO", "Court 4": "A"}
     assert court_winners(tally, min_votes=3) == {"Court 1": "ESTADIO"}
+
+
+def test_a_feed_row_without_a_court_id_has_no_court_name():
+    # The sheet keeps such a day (order_of_play._wta_feed_document): a blank
+    # court on the page is worse than a parsed PDF.
+    rows = [_row(None, 1, "Kostyuk", "Samsonova")]
+    ms = matches_for_day(rows, date(2026, 9, 17), court_names={"Court 1": "ESTADIO SKARCH"})
+    assert ms[0].court == ""
