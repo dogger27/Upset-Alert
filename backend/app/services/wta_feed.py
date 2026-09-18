@@ -25,7 +25,7 @@ from datetime import date, datetime
 from typing import Optional
 from urllib.request import Request, urlopen
 
-from app.services.oop_parser import COUNTRY_CODES, Match
+from app.services.oop_parser import COUNTRY_CODES, NEUTRAL_NATIONS, Match
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +110,11 @@ def _side(m: dict, side: str) -> tuple[list, list]:
     mark = _mark(m, side)
     for suffix in ("", "2"):
         country = (m.get(f"PlayerCountry{side}{suffix}") or "").strip()
+        # The feed states what the sheet withholds (Samsonova "RUS",
+        # Guadalajara 2026-09-18), and the name's trailing code and the nation
+        # each become a flag on the page. See oop_parser.NEUTRAL_NATIONS.
+        if country.upper() in NEUTRAL_NATIONS:
+            country = ""
         nm = _name(m.get(f"PlayerNameFirst{side}{suffix}"),
                    m.get(f"PlayerNameLast{side}{suffix}"),
                    country, "" if names else mark)

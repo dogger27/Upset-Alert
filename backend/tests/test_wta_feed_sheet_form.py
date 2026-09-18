@@ -56,9 +56,11 @@ def _one(row):
 
 def test_a_feed_row_is_printed_the_way_the_sheet_prints_it():
     m = _one(_row("Alexandra", "Shubladze", "Gaeul", "Jang", seed_a="2", entry_b="WC"))
-    assert m.side_a == ["[2] Alexandra SHUBLADZE RUS"]
+    # Her "RUS" is withheld, as the Korea sheet withholds it — see
+    # test_neutral_nations_withheld.
+    assert m.side_a == ["[2] Alexandra SHUBLADZE"]
     assert m.side_b == ["[WC] Gaeul JANG KOR"]
-    assert m.nations_a == ["RUS"] and m.nations_b == ["KOR"]
+    assert m.nations_a == [""] and m.nations_b == ["KOR"]
     for name in m.side_a + m.side_b:
         assert _SHEET_CAPS_RE.search(name), name        # name_not_sheet_form's own test
 
@@ -78,8 +80,8 @@ def test_the_feed_and_the_sheet_name_the_same_person_the_same_way():
 
 
 def test_a_two_word_surname_is_capitalised_whole():
-    m = _one(_row("Beatriz", "Haddad Maia", "Gaeul", "Jang"))
-    assert m.side_a == ["Beatriz HADDAD MAIA RUS"]
+    m = _one(_row("Beatriz", "Haddad Maia", "Gaeul", "Jang", nat_a="BRA"))
+    assert m.side_a == ["Beatriz HADDAD MAIA BRA"]
     assert _sheet_surnames(m.side_a) == {"haddad", "maia"}
 
 
@@ -115,7 +117,7 @@ def _m(court, a, b):
 
 SHEET = [_m("CENTRE COURT", "[2] Alexandra SHUBLADZE", "[WC] Gaeul JANG KOR")]
 OLD_FEED = [_m("", "Alexandra Shubladze", "Gaeul Jang")]
-NEW_FEED = [_m("", "[2] Alexandra SHUBLADZE RUS", "[WC] Gaeul JANG KOR")]
+NEW_FEED = [_m("", "[2] Alexandra SHUBLADZE", "[WC] Gaeul JANG KOR")]
 
 
 def _parser(matches):
@@ -186,7 +188,7 @@ async def _flow(monkeypatch):
         assert "skipped" in await feed(OLD_FEED)
         # Same bytes, CORRECTED parse: the correction reaches the day.
         assert "skipped" not in await feed(NEW_FEED)
-        assert await _names(db, 97) == [("", "[2] Alexandra SHUBLADZE RUS"),
+        assert await _names(db, 97) == [("", "[2] Alexandra SHUBLADZE"),
                                          ("", "[WC] Gaeul JANG KOR")]
         assert "skipped" in await feed(NEW_FEED)
     await engine.dispose()

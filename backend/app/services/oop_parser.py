@@ -155,6 +155,21 @@ SWE SWZ SYR TAN TCH TGA THA TJK TKM TLS TOG TPE TTO TUN TUR TUV UAE UGA UKR URU
 USA UZB VAN VEN VIE VIN YEM ZAM ZIM
 """.split())
 
+# Countries the tours WITHHOLD: Russian and Belarusian players compete as
+# neutral athletes, and the official order of play prints no country for them
+# — "[8] Liudmila SAMSONOVA", where everyone else on the page has a code. Not
+# one of 348 sheets (the 285-file corpus plus the live archive, measured
+# 2026-09-18) prints either, whatever the note above allows for.
+# The FEEDS state it anyway: the WTA's JSON gives Samsonova PlayerCountry
+# "RUS", and on the first feed days (2026-09-18) five rows across Guadalajara,
+# Singapore and Korea took it — onto the name ("... SAMSONOVA RUS") and onto
+# the row's nationality, and the web and the app each turn either one into a
+# flag — so the page flew a Russian flag where the sheet leaves a blank box.
+# A feed renders SHEET form, and the sheet's form here is nothing. Still in
+# COUNTRY_CODES, which answers a different question ("is this trailing token
+# a country or a surname?").
+NEUTRAL_NATIONS = frozenset({"RUS", "BLR"})
+
 
 def _is_continuation(text):
     """Is this line the wrapped tail of the name above — or the sheet's own furniture?
