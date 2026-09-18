@@ -98,6 +98,13 @@ def _clear_phantom(match: Match) -> bool:
     return True
 
 
+
+async def _bot_ids(db) -> set[int]:
+    """See routers.leagues._bot_ids: a bot competes but takes no place."""
+    from app.models.user import User
+    return set((await db.execute(select(User.id).where(User.is_bot.is_(True)))).scalars().all())
+
+
 async def _log_phantom_cleared(match: Match, tournament: Draw, mr) -> None:
     """A stored result was undone. That is worth a row in /issues even though
     it is the fix working: the interesting question is why it was there."""
@@ -1255,7 +1262,7 @@ async def global_standings(tournament_id: int, db: AsyncSession = Depends(get_db
     # Where each bracket can still finish, once the draw is down to R16.
     ranges = await finish_range_async(
         tournament_id, all_matches, pts_table, tournament.num_rounds,
-        {s.user_id: s for s in scores}, picks_map) or {}
+        {s.user_id: s for s in scores}, picks_map, bots=await _bot_ids(db)) or {}
     return [
         LeaderboardEntry(rank=i + 1, user=user_map[s.user_id], total_points=s.total_points,
                          correct_count=s.correct_count, max_points=max_map[s.user_id],
@@ -1387,7 +1394,7 @@ async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get
             if picks_shut and chances_available(all_matches) else None)
     ranges = await finish_range_async(
         tournament_id, all_matches, pts_table, tournament.num_rounds or 7, banked, picks_map,
-        odds=odds, sample=sampled)
+        odds=odds, sample=sampled, bots=await _bot_ids(db))
     for e in entries:
         rng = (ranges or {}).get(e["user_id"])
         e["best_rank"], e["worst_rank"] = (rng[0], rng[1]) if rng else (None, None)
@@ -1460,7 +1467,7 @@ async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get
     # one under the thumb, and prints a dash before `finish_from`.
     finish_from, finish_hist = await finish_history_async(
         tournament_id, all_matches, [m["id"] for m in timeline], pts_table, tournament.num_rounds or 7,
-        picks_map, odds=odds)
+        picks_map, odds=odds, bots=await _bot_ids(db))
     # [best, worst, p_win, p_podium] — the Chances columns follow the slider
     # for the same reason Finish does: the row under the thumb is a snapshot,
     # and two columns disagreeing about which moment they describe is worse

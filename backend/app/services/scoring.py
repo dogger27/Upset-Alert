@@ -246,6 +246,7 @@ def finish_range(
     odds=None,
     sample: bool = False,
     samples: Optional[int] = None,
+    bots: Optional[set] = None,
 ) -> Optional[dict[int, tuple]]:
     """Best and worst finishing place for every bracket, over every future.
 
@@ -296,6 +297,11 @@ def finish_range(
     import numpy as np
 
     users = sorted(banked)
+    # A BOT TAKES NO PLACE AND CONSUMES NONE (the standings' own rule, and the
+    # what-if's): Highest_Rank is compared against, never counted as "ahead".
+    # Its own row is placed against the people only, like everyone else's.
+    bot_mask = np.array([u in (bots or ()) for u in users], dtype=bool)
+    people = ~bot_mask if (~bot_mask).any() else np.ones(len(users), dtype=bool)
     u_count = len(users)
     by_slot = {(m.round_number, m.match_number): m for m in all_matches}
     col_of = {m.id: i for i, m in enumerate(undecided)}
@@ -469,14 +475,16 @@ def finish_range(
             # Dropping the cube took a full 128 draw from four seconds to
             # well under one, which is what makes the column affordable in
             # the first week rather than only the last weekend.
-            top1 = key.max(1)
-            kth = (np.partition(key, -PODIUM_PLACES, axis=1)[:, -PODIUM_PLACES]
-                   if u_count > PODIUM_PLACES else key.min(1))
-            p_win += (key == top1[:, None]).sum(0)
+            pk = key[:, people]                                       # the people's keys only
+            top1 = pk.max(1)
+            kth = (np.partition(pk, -PODIUM_PLACES, axis=1)[:, -PODIUM_PLACES]
+                   if pk.shape[1] > PODIUM_PLACES else pk.min(1))
+            p_win += (key >= top1[:, None]).sum(0)
             p_pod += (key >= kth[:, None]).sum(0)
             p_total += float(size)
         else:
             ahead = key[:, None, :] > key[:, :, None]                # [w, me, other]
+            ahead[:, :, bot_mask] = False                            # a bot is never "ahead"
             place = 1 + ahead.sum(2)                                 # worlds × users
             best = np.minimum(best, place.min(0))
             worst = np.maximum(worst, place.max(0))
@@ -644,9 +652,10 @@ def chances_history_held(key: tuple, timeline_ids: list[int]) -> dict[int, dict]
 
 def finish_range_cached(draw_id: int, all_matches: list, pts_table: dict[int, int], num_rounds: int,
                         banked: dict[int, UserScore], picks: dict[int, dict[int, Optional[int]]],
-                        odds=None, sample: bool = False, samples: Optional[int] = None):
+                        odds=None, sample: bool = False, samples: Optional[int] = None,
+                        bots: Optional[set] = None):
     key = (
-        draw_id, num_rounds,
+        draw_id, num_rounds, tuple(sorted(bots or ())),
         tuple(sorted((m.id, m.winner_id, bool(m.is_bye), m.player1_id, m.player2_id) for m in all_matches)),
         tuple(sorted((u, tuple(sorted((k, v) for k, v in (picks.get(u) or {}).items() if v is not None)))
                      for u in banked)),
@@ -663,7 +672,7 @@ def finish_range_cached(draw_id: int, all_matches: list, pts_table: dict[int, in
         return _FINISH_CACHE[key]
     global _FINISH_CACHE_MISSES
     _FINISH_CACHE_MISSES += 1
-    out = finish_range(all_matches, pts_table, num_rounds, banked, picks, odds, sample, samples)
+    out = finish_range(all_matches, pts_table, num_rounds, banked, picks, odds, sample, samples, bots=bots)
     if len(_FINISH_CACHE) >= _FINISH_CACHE_MAX:
         _FINISH_CACHE.pop(next(iter(_FINISH_CACHE)))
     _FINISH_CACHE[key] = out
@@ -672,7 +681,7 @@ def finish_range_cached(draw_id: int, all_matches: list, pts_table: dict[int, in
 
 async def finish_range_async(draw_id: int, all_matches: list, pts_table: dict[int, int], num_rounds: int,
                              banked: dict[int, UserScore], picks: dict[int, dict[int, Optional[int]]],
-                             odds=None, sample: bool = False):
+                             odds=None, sample: bool = False, bots: Optional[set] = None):
     """finish_range_cached off the event loop. The matches are copied to plain
     records first, so no ORM object is touched from the worker thread — and
     neither does `odds`, which is built on the loop and is pure data after."""
@@ -682,7 +691,7 @@ async def finish_range_async(draw_id: int, all_matches: list, pts_table: dict[in
                              player1_id=m.player1_id, player2_id=m.player2_id,
                              winner_id=m.winner_id, is_bye=bool(m.is_bye)) for m in all_matches]
     return await asyncio.to_thread(finish_range_cached, draw_id, plain, pts_table, num_rounds,
-                                   banked, picks, odds, sample)
+                                   banked, picks, odds, sample, None, bots)
 
 
 # A podium is locked when the worst place a bracket can hold is third or
@@ -786,7 +795,7 @@ def _snapshot(all_matches: list, decided: set) -> list:
 
 def finish_history(draw_id: int, all_matches: list, timeline_ids: list[int], pts_table: dict[int, int],
                    num_rounds: int, picks: dict[int, dict[int, Optional[int]]],
-                   odds=None) -> tuple[Optional[int], dict]:
+                   odds=None, bots: Optional[set] = None) -> tuple[Optional[int], dict]:
     """{position: {user_id: (best, worst[, p_win, p_podium])}} for every position from
     the first at which the range is computable (FINISH_RANGE_MAX_UNDECIDED
     matches left) through the present, and that first position. The slider
@@ -805,7 +814,7 @@ def finish_history(draw_id: int, all_matches: list, timeline_ids: list[int], pts
     odds = odds.without_live() if hasattr(odds, "without_live") else odds
     for p in range(first, len(timeline_ids) + 1):
         rng = _position_range(draw_id, all_matches, byes, timeline_ids, p, pts_table,
-                              num_rounds, picks, odds, sample=False)
+                              num_rounds, picks, odds, sample=False, bots=bots)
         if rng:
             out[p] = rng
     return first, out
@@ -814,7 +823,7 @@ def finish_history(draw_id: int, all_matches: list, timeline_ids: list[int], pts
 def _position_range(draw_id: int, all_matches: list, byes: set, timeline_ids: list[int], position: int,
                     pts_table: dict[int, int], num_rounds: int,
                     picks: dict[int, dict[int, Optional[int]]], odds=None, sample: bool = False,
-                    samples: Optional[int] = None):
+                    samples: Optional[int] = None, bots: Optional[set] = None):
     """One snapshot: the draw as it stood after `position` results, scored, and
     run through the same walk the live table uses."""
     by_id = {m.id: m for m in all_matches}
@@ -830,12 +839,12 @@ def _position_range(draw_id: int, all_matches: list, byes: set, timeline_ids: li
                 by_round[m.round_number] = by_round.get(m.round_number, 0) + 1
         banked[uid] = UserScore(user_id=uid, total_points=total, correct_count=sum(by_round.values()),
                                 correct_by_round=by_round)
-    return finish_range_cached(draw_id, snap, pts_table, num_rounds, banked, picks, odds, sample, samples)
+    return finish_range_cached(draw_id, snap, pts_table, num_rounds, banked, picks, odds, sample, samples, bots=bots)
 
 
 def chances_at(draw_id: int, all_matches: list, timeline_ids: list[int], position: int,
                pts_table: dict[int, int], num_rounds: int,
-               picks: dict[int, dict[int, Optional[int]]], odds=None):
+               picks: dict[int, dict[int, Optional[int]]], odds=None, bots: Optional[set] = None):
     """THE CHANCES OF ONE SNAPSHOT, COMPUTED ON DEMAND — the position under the
     slider's thumb, and only that one.
 
@@ -862,7 +871,7 @@ def chances_at(draw_id: int, all_matches: list, timeline_ids: list[int], positio
         return sample, {}
     rng = _position_range(draw_id, all_matches, byes, timeline_ids, position, pts_table,
                           num_rounds, picks, odds, sample=sample,
-                          samples=CHANCES_SCRUB_SAMPLES if sample else None)
+                          samples=CHANCES_SCRUB_SAMPLES if sample else None, bots=bots)
     if not rng:
         return sample, {}
     out = {u: (v[2], v[3]) for u, v in rng.items() if len(v) > 3}
@@ -898,11 +907,11 @@ async def chances_at_async(draw_id, all_matches, timeline_ids, position, pts_tab
 
 
 async def finish_history_async(draw_id, all_matches, timeline_ids, pts_table, num_rounds, picks,
-                               odds=None):
+                               odds=None, bots=None):
     import asyncio
     from types import SimpleNamespace
     plain = [SimpleNamespace(id=m.id, round_number=m.round_number, match_number=m.match_number,
                              player1_id=m.player1_id, player2_id=m.player2_id,
                              winner_id=m.winner_id, is_bye=bool(m.is_bye)) for m in all_matches]
     return await asyncio.to_thread(finish_history, draw_id, plain, list(timeline_ids), pts_table,
-                                   num_rounds, picks, odds)
+                                   num_rounds, picks, odds, bots)
