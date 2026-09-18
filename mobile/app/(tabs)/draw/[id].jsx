@@ -22,6 +22,7 @@ import { GestureDetector } from 'react-native-gesture-handler'
 import { getDraw, getMyStandouts, getPredictions } from '../../../api'
 import { useAuth } from '../../../auth'
 import { H2HSheet } from '../../../h2h'
+import { FinalGuessCard, FinalGuessSheet } from '../../../finalGuess'
 import { useLiveUpdates } from '../../../live'
 import { ScoreHistorySheet, entryFromMatch } from '../../../scoreHistory'
 import { PredictorsSheet } from '../../../predictors'
@@ -109,6 +110,9 @@ export default function DrawScreen() {
   )
 
   const [h2h, setH2H] = useState(null)
+  // THE TIEBREAK QUESTIONS (owner, 2026-09-18): the card shows the answers, the sheet takes them.
+  const [finalGuessOpen, setFinalGuessOpen] = useState(false)
+  const [finalGuessKey, setFinalGuessKey] = useState(0)
   const [predictors, setPredictors] = useState(null)
   const [scoreMatch, setScoreMatch] = useState(null)
 
@@ -264,6 +268,10 @@ export default function DrawScreen() {
         {rounds.length > 1 && (
           <RoundStrip rounds={rounds} active={active} onPick={setPicked} scrub={scrub} />
         )}
+        {!viewing && rounds.length > 0 && (
+          <FinalGuessCard tournamentId={Number(id)} enabled refreshKey={finalGuessKey}
+                          onOpen={() => setFinalGuessOpen(true)} />
+        )}
 
         {/* Swipe sideways to pull the next round in; the row under the
             finger stays under the finger, and the strip's pill glides. */}
@@ -290,6 +298,8 @@ export default function DrawScreen() {
       {/* One sheet for the whole screen, not one per match: 64 mounted Modals
           is 64 mounted Modals. The match hands it a pair and it fetches. */}
       <H2HSheet visible={!!h2h} onClose={() => setH2H(null)} a={h2h?.a} b={h2h?.b} />
+      <FinalGuessSheet tournamentId={Number(id)} visible={finalGuessOpen} onClose={() => setFinalGuessOpen(false)}
+                       onSaved={() => setFinalGuessKey(k => k + 1)} />
       {/* The site's scoreInsteadOfPick: a started match answers a tap with its
           score and history — its pick is locked by then, so the tap is free to
           mean "show me". Looked up fresh by id so a live match keeps ticking. */}
