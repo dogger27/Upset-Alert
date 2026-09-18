@@ -19,7 +19,7 @@ import logging
 from datetime import date, datetime
 from typing import Optional
 
-from app.services.oop_parser import Match
+from app.services.oop_parser import NEUTRAL_NATIONS, Match
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +109,10 @@ def _names(team: dict) -> tuple[list, list]:
     name = (team or {}).get("name") or ""
     parts = [_surname_last(p.strip()) for p in name.split("/") if p.strip()]
     country = (((team or {}).get("country") or {}).get("alpha3") or "").strip()
+    # A neutral athlete's country is one the tour's sheet withholds; see
+    # oop_parser.NEUTRAL_NATIONS.
+    if country.upper() in NEUTRAL_NATIONS:
+        country = ""
     # Sofascore states one country per TEAM, so a mixed-nationality pair would
     # be mislabelled; better to leave both blank than to assert the wrong flag.
     nations = [country] * len(parts) if len(parts) == 1 else [""] * len(parts)

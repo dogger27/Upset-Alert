@@ -40,8 +40,8 @@ from app.models.schedule import (ScheduleChange, ScheduleDocument,
                                  ScheduleEntry, ScheduleEntryPlayer)
 from app.models.tournament import Draw, DrawEntry, Match
 from app.services.live_state import is_suspended
-from app.services.oop_parser import (COUNTRY_CODES, is_placeholder, parse_pdf,
-                                     sheet_is_blank)
+from app.services.oop_parser import (COUNTRY_CODES, NEUTRAL_NATIONS,
+                                     is_placeholder, parse_pdf, sheet_is_blank)
 from app.services.oop_parser import _CLOCK_BODY as _OOP_CLOCK_BODY
 from app.services.rankings import _norm
 
@@ -592,6 +592,11 @@ async def _sync_players(db, entry, na: list, nb: list, ids: list,
             i = base + pos - 1
             eid = ids[i] if i < len(ids) else None
             nat = nats[i] if nats and i < len(nats) else None
+            # A country the tour withholds is never stored, whichever source
+            # stated it — the one place every feed's nations pass through.
+            # See oop_parser.NEUTRAL_NATIONS.
+            if nat and nat.upper() in NEUTRAL_NATIONS:
+                nat = None
             row = by_slot.pop((side, pos), None)
             if row is None:
                 db.add(ScheduleEntryPlayer(
@@ -603,8 +608,16 @@ async def _sync_players(db, entry, na: list, nb: list, ids: list,
                 row.raw_name = nm
             # Like draw_entry_id below: a code the source states wins, a
             # None never erases one already known.
+            #
+            # Except a WITHHELD one, which no source may state. The rule
+            # above let the WTA feed's "RUS" outlive the sheet that took the
+            # day back: Guadalajara 2026-09-18, doc 298 re-read a sheet
+            # printing "[8] Liudmila SAMSONOVA" with no country, its None
+            # erased nothing, and the page kept the feed's Russian flag.
             if nat is not None:
                 row.nationality = nat
+            elif (row.nationality or "").upper() in NEUTRAL_NATIONS:
+                row.nationality = None
             # Never trade an id already proved for a None this pass could not
             # resolve: a qualifier reaches draw_entries days after the sheet
             # first names them.

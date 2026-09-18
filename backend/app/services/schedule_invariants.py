@@ -64,6 +64,9 @@ _SLOT_WORDING_RE = re.compile(
     r'to\s+be\s+(?:arranged|confirmed|announced|advised|determined))\b', re.I)
 _TRAILING_SEED_RE = re.compile(r'(?:\s*\[[^\]]*\])+\s*$')
 _TRAILING_CODE_RE = re.compile(r'\s([A-Z]{3})$')
+# Russian and Belarusian players are neutral athletes: no sheet in 348 prints
+# either code. See `withheld_nation_served`.
+_WITHHELD_NATIONS = frozenset({"RUS", "BLR"})
 # Order-of-play sheets print the SURNAME in capitals, every tour, every tier.
 # A stored name with no capitalised run therefore did not come from the sheet.
 _SHEET_CAPS_RE = re.compile(r'(?<![A-Za-z])[A-Z]{2,}(?![a-z])')
@@ -410,6 +413,7 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
     by_fold = {}
     for de in dents:
         by_fold.setdefault(_fold(de.name), []).append(de.id)
+    de_nat = {de.id: de.nationality for de in dents if de.nationality}
     decided = {frozenset((m.player1_id, m.player2_id)): m.winner_id
                for m in (await db.execute(
                    select(Match).where(Match.draw_id.in_(draw_ids),
@@ -782,6 +786,35 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                 if any(w.isupper() and any(c.isalpha() for c in w) for w in before):
                     flag("name_trailing_noncountry", e,
                          f"side {p.side}: {raw!r} ends in {m.group(1)!r}, not a country")
+
+        # 2026-09-18, Guadalajara doc 298: the sheet printed "[8] Liudmila
+        # SAMSONOVA" with no country, as every sheet does for a neutral
+        # athlete, and the page flew a Russian flag beside her. The WTA feed
+        # that held the day an hour earlier states PlayerCountry "RUS"; it
+        # wrote the code onto her row, and `_sync_players` let no later None
+        # erase it. The web and the app each make a flag from EITHER the
+        # served nationality or a name's trailing code, so both are judged —
+        # the served one as the serve path computes it, draw entry first.
+        # "Arantxa RUS" is a surname: a trailing code counts only after a
+        # capitalised surname, as in name_trailing_noncountry above. Its own
+        # copy of the codes, not oop_parser's: the law must not go blind when
+        # the thing it checks is edited. Over every stored row: the five the
+        # feed wrote that morning, nothing else.
+        for p in players:
+            served = de_nat.get(p.draw_entry_id) or p.nationality
+            if (served or "").upper() in _WITHHELD_NATIONS:
+                flag("withheld_nation_served", e,
+                     f"side {p.side}: {p.raw_name!r} is served nationality "
+                     f"{served!r}, which the tour's sheet withholds")
+                continue
+            stripped = _TRAILING_SEED_RE.sub("", (p.raw_name or "").strip())
+            m = _TRAILING_CODE_RE.search(stripped)
+            if m and m.group(1) in _WITHHELD_NATIONS:
+                before = stripped[:m.start()].split()
+                if any(w.isupper() and any(c.isalpha() for c in w) for w in before):
+                    flag("withheld_nation_served", e,
+                         f"side {p.side}: {p.raw_name!r} ends in "
+                         f"{m.group(1)!r}, which the tour's sheet withholds")
 
         # 2026-08-26, Winston-Salem "Ra p h a e l C O L L IG N O N ( B EL)or":
         # a cell whose text the sheet had shrunk to fit was clustered into one
