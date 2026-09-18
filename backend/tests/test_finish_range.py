@@ -216,3 +216,38 @@ def test_history_ends_on_the_live_range():
     for u in picks:
         b8, w8 = hist[8][u]; b12, w12 = hist[12][u]
         assert b8 <= b12 and w8 >= w12
+
+
+def test_a_bot_takes_no_place_and_consumes_none():
+    # Guadalajara 2026 in miniature: an 8-draw down to the final. Person 1
+    # and the bot are LEVEL on points, and the bot's picks give it the better
+    # tiebreak (a correct pick in a later round) whatever the final brings.
+    # The standings print the person first because a bot takes no place; so
+    # must the finish range, and the person's chance to win is a certainty.
+    ms = [_m(1, 1, 1, 1, 2, winner=1), _m(2, 1, 2, 3, 4, winner=3),
+          _m(3, 1, 3, 5, 6, winner=5), _m(4, 1, 4, 7, 8, winner=7),
+          _m(5, 2, 1, 1, 3, winner=1), _m(6, 2, 2, 5, 7, winner=5),
+          _m(7, 3, 1, 1, 5)]
+    pts = {1: 1, 2: 2, 3: 4}
+    picks = {
+        1: {1: 1, 2: 3, 3: 5, 4: 7, 5: 3, 6: 7, 7: 1},      # four R1 right, both R2 wrong: 4 points
+        2: {1: 1, 2: 3, 3: 6, 4: 8, 5: 1, 6: 7, 7: 1},      # the bot: two R1 + one R2 right: 4 points, better key
+        3: {},                                              # a person with nothing
+    }
+    banked = _banked(ms, pts, picks)
+    assert banked[1].total_points == banked[2].total_points == 4
+    assert rank_users([banked[1], banked[2]], 3)[0].user_id == 2   # the bot IS ahead on the tiebreak
+    # Without the rule the bot displaces the person in every future...
+    assert finish_range(ms, pts, 3, banked, picks)[1] == (2, 2)
+    # ...and with it the person is first in every future and the other person second.
+    got = finish_range(ms, pts, 3, banked, picks, bots={2})
+    assert got[1] == (1, 1), got
+    assert got[3] == (2, 2), got
+    assert got[2][0] == 1                    # the bot's own row is placed against the people
+
+    class Even:
+        cache_key = "even"
+        def pair_prob(self, a, b, match_id=None): return 0.5
+        def live_override(self, match_id): return None
+    b, w, p_win, p_pod = finish_range(ms, pts, 3, banked, picks, odds=Even(), bots={2})[1]
+    assert (b, w) == (1, 1) and p_win == 1.0

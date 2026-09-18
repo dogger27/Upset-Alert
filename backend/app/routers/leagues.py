@@ -68,6 +68,14 @@ def _league_out(league: League, member_count: int = 0) -> LeagueOut:
     )
 
 
+
+async def _bot_ids(db) -> set[int]:
+    """The synthetic accounts (Highest_Rank): a bot competes but takes no
+    place, so the finish range and the chances must never count it as ahead
+    of a person (2026-09-18)."""
+    from app.models.user import User
+    return set((await db.execute(select(User.id).where(User.is_bot.is_(True)))).scalars().all())
+
 async def _can_manage(db, league, user) -> bool:
     """Who runs a league: its owner, any member it made admin, or a site
     admin. One answer for update and delete — the settings panel is one
@@ -581,7 +589,7 @@ async def leaderboard(
     # Where each bracket can still finish, once the draw is down to R16.
     ranges = await finish_range_async(
         tournament_id, all_matches, pts_table, tournament.num_rounds,
-        {s.user_id: s for _, s in scores}, picks_map) or {}
+        {s.user_id: s for _, s in scores}, picks_map, bots=await _bot_ids(db)) or {}
 
     entries = [
         LeaderboardEntry(
@@ -837,7 +845,7 @@ async def round_scores(
             if picks_shut and chances_available(all_matches) else None)
     ranges = await finish_range_async(
         tournament_id, all_matches, pts_table, tournament.num_rounds or 7, banked, picks_map,
-        odds=odds, sample=sampled)
+        odds=odds, sample=sampled, bots=await _bot_ids(db))
     for e in entries:
         rng = (ranges or {}).get(e["user_id"])
         e["best_rank"], e["worst_rank"] = (rng[0], rng[1]) if rng else (None, None)
@@ -904,7 +912,7 @@ async def round_scores(
     # one under the thumb, and prints a dash before `finish_from`.
     finish_from, finish_hist = await finish_history_async(
         tournament_id, all_matches, [m["id"] for m in timeline], pts_table, tournament.num_rounds or 7,
-        picks_map, odds=odds)
+        picks_map, odds=odds, bots=await _bot_ids(db))
     # [best, worst, p_win, p_podium] — the Chances columns follow the slider
     # for the same reason Finish does: the row under the thumb is a snapshot,
     # and two columns disagreeing about which moment they describe is worse
