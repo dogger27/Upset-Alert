@@ -429,7 +429,6 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
     # Sofascore render a name as "Anna Blinkova" or "Dabrowski G / Stefani L",
     # never as the sheet's "Anna BLINKOVA FRA" — so the sheet-form law is for
     # rows a sheet wrote. Which document wrote a row is on the row.
-    from app.models.schedule import ScheduleDocument
     feed_docs = {d.id for d in (await db.execute(
         select(ScheduleDocument).where(
             ScheduleDocument.tournament_id == tournament_id,
