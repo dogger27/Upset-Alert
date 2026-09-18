@@ -138,6 +138,29 @@ def _side(m: dict, side: str) -> tuple[list, list]:
     return names, nations
 
 
+# A WALKOVER WAS NEVER ON COURT, so its MatchTimeStamp is not a start: it is
+# the moment the result was ENTERED. SP Open 2026-09-18: Dabrowski/Stefani's
+# doubles QF, printed "After suitable rest - NB 4pm" as QUADRA 1's second
+# match, went w/o when Quevedo walked on for her singles, and the feed stamped
+# it 15:48:22 UTC — 12:48 PM local, MatchTimeTotal 00:00:00. Read as the played
+# shape's real start, that became a FIXED "12:48" written over the sheet's
+# wording, under the court's 2:00 PM opener (`printed_clock_runs_backwards`),
+# and it sorted the walkover FIRST on its court. The score fields that say so
+# are volatile and stripped from the stored bytes (normalize_day), so the fact
+# is kept there under its own key: it changes once, when the w/o is entered,
+# which is a real revision of the day.
+_WALKOVER_KEY = "Walkover"
+
+
+def _is_walkover(m: dict) -> bool:
+    if m.get(_WALKOVER_KEY):
+        return True
+    import re
+    # The result line carries names too, so only the slashed form counts there.
+    return bool(re.search(r"\bW/?O\b", str(m.get("ScoreString") or ""), re.I)
+                or re.search(r"\bW/O\b", str(m.get("ResultString") or ""), re.I))
+
+
 def _local_hhmm(ts: Optional[str], venue_tz: Optional[str]) -> Optional[str]:
     if not ts or len(ts) < 16:
         return None
@@ -214,6 +237,11 @@ def matches_for_day(rows: list[dict], day: date,
         # order (Guadalajara 2026-09-18, Samsonova v Stearns). That is a
         # placeholder, not a time — printed as "11:59 PM" it would be a lie.
         if (m.get("MatchTimeStamp") or "")[11:16] == "23:59" and not m.get("DateSeq") and not cid:
+            hhmm = None
+        # Nor is a walkover's stamp a time (see _is_walkover). No clock and no
+        # wording is the sheet's own silence over a w/o box, and ingest keeps
+        # the wording an earlier revision printed for exactly that case.
+        if _is_walkover(m):
             hhmm = None
         names_a, nats_a = _side(m, "A")
         names_b, nats_b = _side(m, "B")
@@ -310,9 +338,13 @@ def normalize_day(rows: list[dict], day: date,
     for m in rows:
         if play_date_of(m, venue_tz) != day:
             continue
-        keep.append({k: v for k, v in sorted(m.items())
-                     if k not in _VOLATILE and not str(k).startswith("ScoreSet")
-                     and not str(k).startswith("ScoreTb")})
+        row = {k: v for k, v in sorted(m.items())
+               if k not in _VOLATILE and not str(k).startswith("ScoreSet")
+               and not str(k).startswith("ScoreTb")}
+        # Absent unless true, so a day with no walkover hashes as it always did.
+        if _is_walkover(m):
+            row[_WALKOVER_KEY] = True
+        keep.append(row)
     keep.sort(key=lambda m: (str(m.get("CourtID") or ""),
                              str(m.get("DateSeq") or ""), str(m.get("MatchID") or "")))
     return json.dumps(keep, sort_keys=True, separators=(",", ":")).encode("utf-8")

@@ -461,6 +461,72 @@ def player_on_two_courts(rows) -> list[tuple]:
     return out
 
 
+# The law's own reading of the rest wording, apart from schedule's.
+_LAW_REST_RE = re.compile(r'\brest\b', re.I)
+
+
+def rest_slot_ahead_of_its_match(rows) -> list[tuple]:
+    """(rest row, the match it waits for, the person) wherever a slot worded
+    "after (suitable) rest" is expected to START BEFORE its player's match on
+    another court does.
+
+    SP Open 2026-09-18 (document 313): Stoiana's doubles QF on QUADRA 1,
+    "After suitable rest", read "~3:40 PM" while her singles QF on CENTRAL was
+    "Not before 5:30 PM". `player_on_two_courts` passed it — the windows did
+    not overlap, the doubles' 80 minutes ending before 5:30 — and the chain
+    had used the rest wording only to break a tie between overlapping
+    windows. The wording is an ORDER: the rest is from the player's other
+    match, so that match comes first. Checked on the order alone (start before
+    start), not the length of the rest, so a match in play whose remaining
+    time the law cannot read still convicts nothing it should not.
+
+    The match waited for is the EARLIEST any of its players has on another
+    court (a partner's evening singles is not what the rest is for); none when
+    one of them has a match earlier on the rest row's own court (the rest is
+    for that one), and nobody waits for a walkover (it has no duration). Exempt:
+    a start the sheet fixed, and a rest row already under way.
+    """
+    def pending(r):
+        return not (r.started_at or r.completed_at or r.winner_side
+                    or r.live_scores_json or r.status in ("live", "completed"))
+
+    def begins(r):
+        return _naive_utc(r.started_at) or _naive_utc(r.expected_start_at)
+
+    def people(r):
+        open_sides = (r.tbd_side or "ab") if r.is_tbd else ""
+        out = {}
+        for p in r.players or []:
+            if p.side in open_sides or _names_nobody(p.raw_name or ""):
+                continue
+            key = _law_person(p.raw_name)
+            if key:
+                out[key] = p.raw_name
+        return out
+
+    who = {r.id: people(r) for r in rows}
+    out = []
+    for r in rows:
+        if (not _LAW_REST_RE.search(r.start_note or "") or not pending(r)
+                or (r.start_type == "fixed" and r.expected_source == "printed")
+                or begins(r) is None):
+            continue
+        mine = [(o, name) for key, name in who[r.id].items()
+                for o in rows if o.id != r.id and key in who[o.id]]
+        if any((o.court or "") == (r.court or "")
+               and (o.court_order or 0) < (r.court_order or 0) for o, _ in mine):
+            continue
+        others = [(o, name) for o, name in mine if (o.court or "") != (r.court or "")
+                  and not _LAW_REST_RE.search(o.start_note or "")
+                  and o.estimated_duration_min and begins(o) is not None]
+        if not others:
+            continue
+        first, name = min(others, key=lambda x: (begins(x[0]), x[0].id))
+        if (begins(first) - begins(r)).total_seconds() > 60:
+            out.append((r, first, name))
+    return out
+
+
 async def check_day(db, tournament_id: int, play_date) -> list[dict]:
     """Every violation in one tournament-day. Empty list = lawful."""
     # `populate_existing`, because the law runs on what the day ACTUALLY
@@ -1769,6 +1835,15 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
              f"{a.estimated_duration_min} min) and on {b.court!r} (entry "
              f"{b.id}, {_naive_utc(b.expected_start_at):%H:%M} UTC) at once")
 
+    # 2026-09-18, SP Open doc 313 — see rest_slot_ahead_of_its_match.
+    for r, first, name in rest_slot_ahead_of_its_match(rows):
+        flag("rest_slot_ahead_of_its_match", r,
+             f"{r.court!r} #{r.court_order} is printed {r.start_note!r} but "
+             f"expected at {_naive_utc(r.expected_start_at):%H:%M} UTC, before "
+             f"{name!r}'s match on {first.court!r} (entry {first.id}, "
+             f"{(_naive_utc(first.started_at) or _naive_utc(first.expected_start_at)):%H:%M} UTC) "
+             f"that the rest is from")
+
     return v
 
 
@@ -1887,7 +1962,8 @@ def check_parse(meta, match_count: int | None = None,
 # half-written estimate.
 INGEST_DEFERRED = frozenset({"expected_contradicts_printed",
                              "expected_undercuts_printed_floor",
-                             "player_on_two_courts"})
+                             "player_on_two_courts",
+                             "rest_slot_ahead_of_its_match"})
 
 
 async def check_and_log(db, tournament, play_date, *,

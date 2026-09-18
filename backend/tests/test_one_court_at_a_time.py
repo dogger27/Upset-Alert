@@ -19,7 +19,8 @@ from types import SimpleNamespace
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.services.schedule import one_court_at_a_time            # noqa: E402
-from app.services.schedule_invariants import player_on_two_courts  # noqa: E402
+from app.services.schedule_invariants import (                    # noqa: E402
+    player_on_two_courts, rest_slot_ahead_of_its_match)
 
 T = datetime(2026, 9, 18)
 
@@ -144,6 +145,78 @@ def test_law_acquits_the_doubles_after_rest():
                  'estimated', SINGLES.expected_start_at
                  + timedelta(minutes=105 + 45), 80, DOUBLES.players)
     assert player_on_two_courts([SINGLES, after]) == []
+
+
+# Document 313 (12:50 PM): the 2:00 PM doubles QF went w/o and left the sheet,
+# QUADRA 1's chain ran out at ~3:40 PM, and the rest-worded doubles no longer
+# OVERLAPPED the singles it must follow — so it was listed two hours ahead.
+EARLY = _row(1299, 'QUADRA 1', 'After suitable rest', 'after_event',
+             'estimated', _at(18, 40), 80, DOUBLES.players)
+
+
+def test_rest_orders_the_match_even_without_an_overlap():
+    edges = set()
+    one_court_at_a_time([SINGLES, EARLY],
+                        {r.id: _span(r) for r in (SINGLES, EARLY)}, edges)
+    assert edges == {(1263, 1299)}
+
+
+def test_rest_waits_for_the_players_earliest_other_match():
+    # A partner's evening singles is not what the rest is for.
+    early = _row(1, 'CENTRAL', 'Starting at 1:00 PM', 'fixed', 'printed',
+                 _at(16), 105, [_p('a', 'Mary STOIANA USA', 5948)],
+                 discipline='singles')
+    late = _row(2, 'CENTRAL', 'Not before 7:00 PM', 'not_before', 'printed',
+                _at(22), 105, [_p('a', 'Vendula VALDMANNOVA CZE', 5932)],
+                discipline='singles')
+    d = _row(3, 'QUADRA 1', 'After suitable rest', 'after_event', 'estimated',
+             _at(18), 80, DOUBLES.players)
+    edges = set()
+    one_court_at_a_time([early, late, d],
+                        {r.id: _span(r) for r in (early, late, d)}, edges)
+    assert edges == {(1, 3)}
+    assert rest_slot_ahead_of_its_match([early, late, d]) == []
+
+
+def test_rest_for_a_match_on_its_own_court_is_the_chains():
+    own = _row(1, 'QUADRA 1', 'Starting at 11:00 AM', 'fixed', 'printed',
+               _at(14), 105, [_p('a', 'Mary STOIANA USA', 5948)],
+               discipline='singles')
+    d = _row(2, 'QUADRA 1', 'After suitable rest', 'after_event', 'estimated',
+             _at(18, 40), 80, DOUBLES.players)
+    d.court_order = 2
+    edges = set()
+    one_court_at_a_time([own, SINGLES, d],
+                        {r.id: _span(r) for r in (own, SINGLES, d)}, edges)
+    assert (1263, 2) not in edges
+    assert rest_slot_ahead_of_its_match([own, SINGLES, d]) == []
+
+
+def test_rest_after_enough_rest_adds_nothing():
+    d = _row(1299, 'QUADRA 1', 'After suitable rest', 'after_event',
+             'estimated', SINGLES.expected_start_at + timedelta(minutes=105 + 45),
+             80, DOUBLES.players)
+    edges = set()
+    one_court_at_a_time([SINGLES, d], {r.id: _span(r) for r in (SINGLES, d)}, edges)
+    assert edges == set()
+
+
+def test_law_convicts_a_rest_slot_listed_ahead_of_its_match():
+    # player_on_two_courts is blind to it: the windows do not overlap.
+    assert player_on_two_courts([SINGLES, EARLY]) == []
+    hits = rest_slot_ahead_of_its_match([SINGLES, EARLY])
+    assert [(r.id, o.id) for r, o, _ in hits] == [(1299, 1263)]
+
+
+def test_law_waits_for_nobody_behind_a_walkover():
+    wo = _row(1297, 'QUADRA 1', 'After suitable rest - NB 4pm', 'not_before',
+              'printed', _at(19), 0,
+              [_p('b', 'Kaitlin QUEVEDO ESP', 5929)])
+    wo.status, wo.winner_side = 'completed', 'a'
+    s = _row(1261, 'QUADRA CENTRAL', 'Starting at 1:00 PM', 'fixed', 'printed',
+             _at(16), 105, [_p('b', '[7] Kaitlin QUEVEDO ESP', 5929)],
+             discipline='singles')
+    assert rest_slot_ahead_of_its_match([s, wo]) == []
 
 
 if __name__ == '__main__':
