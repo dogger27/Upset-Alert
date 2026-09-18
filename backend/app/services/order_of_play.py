@@ -536,6 +536,16 @@ async def _wta_feed_document(db, tournament, draws, day: date, season_year: int)
     matches, _meta = parser(doc)
     if not matches:
         return None
+    # A ROW WITHOUT A COURT IS NOT A SCHEDULE. Guadalajara's semi-final day
+    # came through the feed with no CourtID at all (2026-09-18, 10:13 UTC) and
+    # three rows went on the page with a blank court where the sheet said
+    # ESTADIO SKARCH. The sheet keeps the day whenever the feed cannot name
+    # every court on it.
+    if any(not (m.court or "").strip() for m in matches):
+        logger.info("WTA feed names no court for %d of %d rows at %s %s; using the sheet",
+                    sum(1 for m in matches if not (m.court or "").strip()), len(matches),
+                    tournament.name, day)
+        return None
     return {"url": f"{_WTA_API}{event_id}/{season_year}/matches", "bytes": doc,
             "parser": parser, "count": len(matches)}
 
