@@ -24,6 +24,12 @@ export const IOC_TO_ISO2 = {
   // nationality and cannot be told apart on the page.
   UZB:'UZ', ARM:'AM', JOR:'JO', LBN:'LB', QAT:'QA', MNE:'ME', AND:'AD',
   BDI:'BI', ESA:'SV', VAN:'VU', DEU:'DE',
+  // Singapore, under both codes: SIN is the IOC's, SGP the ISO one the
+  // WTA's own Singapore Open sheet printed for its wildcards (2026-09-19).
+  // Neither was here, so a Singaporean flew no flag, and the mobile app —
+  // which reads a trailing code as a country only if it is in this table —
+  // printed "SGP" as the last word of her name.
+  SIN:'SG', SGP:'SG',
 }
 
 export function nationalityIso2(nat) {

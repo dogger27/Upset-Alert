@@ -4,7 +4,7 @@
 // through. Each case is a name a real sheet printed and this function once
 // got wrong.
 import assert from 'node:assert/strict'
-import { splitPlayerName } from './flags.js'
+import { nationalityIso2, splitPlayerName } from './flags.js'
 
 let failed = 0
 function check(label, fn) {
@@ -46,6 +46,13 @@ check('abbreviated team reads two surnames', () => {
 })
 check('caps team still reads its surnames', () =>
   assert.equal(last('[1] ARRIBAGE FRA / GUINARD FRA'), 'ARRIBAGE / GUINARD'))
+
+check('Singapore under either code (WTA Singapore Open, 2026-09-19)', () => {
+  const r = splitPlayerName('[WC] Eva Marie DESVIGNES SGP')
+  assert.deepEqual([r.last, r.nat], ['DESVIGNES', 'SGP'])
+  assert.equal(nationalityIso2('SGP'), 'SG')
+  assert.equal(nationalityIso2('SIN'), 'SG')
+})
 
 if (failed) { console.log(`\n${failed} failed`); process.exit(1) }
 console.log('\nall passed')

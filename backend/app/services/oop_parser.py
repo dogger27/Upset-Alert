@@ -132,6 +132,15 @@ def _event_header(text):
 # their place (DEU for Germany, and RUS/BLR which persist on some sheets
 # despite the neutral-athlete rules). Lives HERE, and schedule.py imports it,
 # because two copies of a country table drift and the failure is silent.
+#
+# SGP is Singapore's ISO code; the IOC's is SIN. The WTA's own Singapore Open
+# sheet (2026-09-19, doc 291) printed its two wildcards as "Eva Marie DESVIGNES
+# SGP" and "Kai Ning Chanya NG SGP", everyone else on the page in IOC codes.
+# Unrecognised, SGP failed both ways at once: glued to Desvignes's name
+# it tripped name_trailing_noncountry, and on Ng's line, where it sat 0.6pt
+# lower and wrapped onto a line of its own, it was not a continuation and was
+# silently thrown away. Add a code here only when a sheet has printed it: a
+# full ISO list would admit surnames (CHE, MAC) as countries.
 COUNTRY_CODES = frozenset("""
 AFG AHO ALB ALG AND ANG ANT ARG ARM ARU ASA AUS AUT AZE BAH BAN BAR BDI BEL BEN
 BER BHU BIH BIZ BLR BOL BOT BRA BRN BRU BUL BUR CAF CAM CAN CAY CGO CHA CHI CHN
@@ -141,7 +150,7 @@ GUM GUY HAI HKG HON HUN INA IND IRI IRL IRQ ISL ISR ISV ITA IVB JAM JOR JPN KAZ
 KEN KGZ KIR KOR KOS KSA KUW LAO LAT LBA LBN LBR LCA LES LIE LTU LUX MAD MAR MAS
 MAW MDA MDV MEX MGL MHL MKD MLI MLT MNE MON MOZ MRI MTN MYA NAM NCA NED NEP NGR
 NIG NOR NRU NZL OMA PAK PAN PAR PER PHI PLE PLW PNG POL POR PRK PUR QAT ROU RSA
-RUS RWA SAM SEN SEY SIN SKN SLE SLO SMR SOL SOM SRB SRI SSD STP SUD SUI SUR SVK
+RUS RWA SAM SEN SEY SGP SIN SKN SLE SLO SMR SOL SOM SRB SRI SSD STP SUD SUI SUR SVK
 SWE SWZ SYR TAN TCH TGA THA TJK TKM TLS TOG TPE TTO TUN TUR TUV UAE UGA UKR URU
 USA UZB VAN VEN VIE VIN YEM ZAM ZIM
 """.split())
