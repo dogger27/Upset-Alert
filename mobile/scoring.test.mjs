@@ -35,7 +35,7 @@ check('ties share a rank and the next rank skips', () => {
   assert.deepEqual(competitionRanks(e), [1, 1, 1, 4])
 })
 
-check('same total is a tie whatever the rounds say; the final's guesses separate it', () => {
+check('same total is a tie whatever the rounds say; the final guesses separate it', () => {
   // THE TIEBREAK IS THE FINAL (owner, 2026-09-18): level on points is level
   // until the final is played, when the closest guess on the champion's
   // aces, then on minutes, separates them; a bracket that never answered
@@ -142,7 +142,9 @@ check('a chosen world is certainties, not chances', () => {
     assert.equal(r.p_win, r.best_rank === 1 ? 1 : 0)
     assert.equal(r.p_podium, r.best_rank <= 3 ? 1 : 0)
   }
-  assert.equal(rows.filter(r => r.p_win === 1).length, 1)
+  // 1 and 2 finish level on 10 and share first (the final's tiebreak is
+  // unknown in a chosen world, owner 2026-09-18): two winners, not one.
+  assert.equal(rows.filter(r => r.p_win === 1).length, 2)
 })
 
 
