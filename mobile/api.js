@@ -317,3 +317,10 @@ export const getGrandSlamTotals = (leagueId) => request(`/leagues/${leagueId}/gr
    is everybody), and its tally is every entrant's. */
 export const getGlobalDraws = () => request('/tournaments/global-draws')
 export const getGlobalGSTotals = () => request('/tournaments/global-gs-totals')
+
+/* THE TIEBREAK QUESTIONS (owner, 2026-09-18): the champion's aces in the
+   final and the final's minutes. GET hands back the slider ends and the
+   reference figures for this bracket's own finalists; PUT stores the answers. */
+export const getFinalGuess = (tournamentId) => request(`/tournaments/${tournamentId}/final-guess`)
+export const putFinalGuess = (tournamentId, body) =>
+  request(`/tournaments/${tournamentId}/final-guess`, { method: 'PUT', body })
