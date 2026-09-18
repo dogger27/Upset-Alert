@@ -3099,6 +3099,110 @@ async def _observed_duration(db, draw, discipline: str = 'singles',
     return int(round(median)), len(mins), basis
 
 
+# A PLAYER IS ON ONE COURT AT A TIME. The chain below runs down each court on
+# its own, so it cannot see that a name is booked on two. SP Open 2026-09-18
+# printed Stoiana's doubles QF on QUADRA 1 "After suitable rest", third on a
+# court opening at 2:00 PM, and her singles QF on CENTRAL "Not before 5:30 PM".
+# QUADRA 1's chain alone ran out at 5:29 PM, so the page said "~5:30 PM" for
+# the doubles and listed it ABOVE the singles she would be playing at that
+# moment. The sheet's "after suitable rest" is the tour saying exactly this: the
+# match waits for its players' earlier match, not just for its court.
+#
+# How long "suitable" is, measured: in every stored day where a rest-worded
+# doubles shared a player with a singles on another court, the doubles was
+# played after it — Dolehide at Guadalajara 2026-09-14 walked on 50 minutes
+# after her singles ended, the tightest of them. 45 is that, rounded down,
+# because the estimate should err early rather than tell someone they have
+# time they do not.
+_SUITABLE_REST_MIN = 45
+_REST_WORDING_RE = re.compile(r'\brest\b', re.I)
+# A fixed point is reached in two passes on any real day (one to find the
+# clash, one to apply it); the cap only exists so a pathological sheet cannot
+# spin. Not reaching it is logged.
+_PERSON_PASSES = 6
+
+
+def _person_keys(entry) -> set:
+    """Who is certainly on court in this row, as keys two rows can share.
+
+    The draw entry when there is one — a doubles player's draw_entry_id points
+    at their SINGLES entry, which is wrong for a seed but exactly right for
+    "the same person" — and the folded printed name as well, because a doubles
+    partner often has no singles entry at all (Yiming DANG, 2026-09-18).
+    Nobody on a side the sheet leaves open counts: "X or Y" is not a booking
+    of X, and "Qualifier" is not a person.
+    """
+    open_sides = (entry.tbd_side or 'ab') if entry.is_tbd else ''
+    keys = set()
+    for p in entry.players or []:
+        if p.side in open_sides or is_placeholder(p.raw_name or ''):
+            continue
+        if p.draw_entry_id:
+            keys.add(('id', p.draw_entry_id))
+        folded = _fold(p.raw_name)
+        if folded:
+            keys.add(('name', folded))
+    return keys
+
+
+def one_court_at_a_time(rows, spans: dict, edges: set) -> None:
+    """Add (first, second) to `edges` for every two rows on different courts
+    that book one person into overlapping windows.
+
+    `spans` is {row id: (start, finish, movable)} from a pass of the chain;
+    `movable` is a row whose start is ours to estimate — not yet on court, and
+    not a clock the sheet fixed. Which of the two waits:
+
+    * whichever can move, when only one can — a match on court, or one the
+      sheet started at a stated time, is not a guess;
+    * the one worded "after (suitable) rest", when only one is — the tour has
+      said which match that player comes to second;
+    * otherwise the one the chain already had starting later, singles first
+      on a tie (doubles is scheduled around singles, not the other way).
+
+    An edge, once added, is kept: later passes push the second row clear of
+    the first, and the overlap that justified the edge is gone by design.
+    Split out so the judgement can be tested without a database.
+    """
+    by_key: dict = {}
+    for r in rows:
+        for k in _person_keys(r):
+            by_key.setdefault(k, set()).add(r.id)
+    by_id = {r.id: r for r in rows}
+    seen = set()
+    for ids in by_key.values():
+        for a_id in ids:
+            for b_id in ids:
+                if a_id >= b_id or (a_id, b_id) in seen:
+                    continue
+                seen.add((a_id, b_id))
+                if (a_id, b_id) in edges or (b_id, a_id) in edges:
+                    continue
+                a, b = by_id[a_id], by_id[b_id]
+                # One court is already one match at a time — the chain's job.
+                if (a.court or '') == (b.court or ''):
+                    continue
+                sa, sb = spans.get(a_id), spans.get(b_id)
+                if not sa or not sb or None in (sa[0], sa[1], sb[0], sb[1]):
+                    continue
+                if not (sa[0] < sb[1] and sb[0] < sa[1]):
+                    continue
+                if sa[2] != sb[2]:
+                    second = a if sa[2] else b
+                elif not sa[2]:
+                    continue  # neither is ours to move
+                else:
+                    rest_a = bool(_REST_WORDING_RE.search(a.start_note or ''))
+                    rest_b = bool(_REST_WORDING_RE.search(b.start_note or ''))
+                    if rest_a != rest_b:
+                        second = a if rest_a else b
+                    else:
+                        second = max((a, b), key=lambda r: (
+                            spans[r.id][0], r.discipline != 'singles', r.id))
+                first = b if second is a else a
+                edges.add((first.id, second.id))
+
+
 async def recompute_expected_starts(db, tournament_id: int, play_date: date,
                                     venue_tz: Optional[str] = None) -> int:
     """Chain expected starts per court, anchored on what has actually happened.
@@ -3216,15 +3320,27 @@ async def recompute_expected_starts(db, tournament_id: int, play_date: date,
                 _full_decider(d, slot.discipline, stage))
         return _dur_cache[key], d
 
-    touched = 0
-    for court, slots in by_court.items():
+    # Taken once, not per pass: the chain can run more than once (see
+    # one_court_at_a_time), and "touched" means changed by this call.
+    before_all = {s.id: (s.expected_start_at, s.expected_source) for s in rows}
+
+    async def _chain(floors: dict) -> dict:
+        """One pass down every court. `floors` holds, per row id, the
+        earliest its players are free from a match on ANOTHER court.
+        -> {row id: (start, finish, movable)} for every row that occupies
+        its court, `finish` being when that match ends (no changeover)."""
+        spans: dict = {}
+        for court, slots in by_court.items():
+            await _chain_court(slots, floors, spans)
+        return spans
+
+    async def _chain_court(slots, floors: dict, spans: dict) -> None:
         prev_end: Optional[datetime] = None
         for s in sorted(slots, key=lambda x: x.court_order):
             m = matches.get(s.match_id) if s.match_id else None
             # Doubles keeps the constant: only main-draw singles are timed, so
             # a measured figure would be one borrowed from a different game.
             dur, draw = await _duration_of(s)
-            before = (s.expected_start_at, s.expected_source)
 
             # Resolve the printed clock FIRST, so every branch below can write a
             # start rather than leaving whatever was there before. The live and
@@ -3289,6 +3405,7 @@ async def recompute_expected_starts(db, tournament_id: int, play_date: date,
                 elif finished_at:
                     prev_end = finished_at + gap
                     s.estimated_duration_min = dur
+                    spans[s.id] = (_aware(s.expected_start_at), finished_at, False)
                 else:
                     # A LIVE SCORE DOES NOT MEAN A MATCH ON COURT. A match
                     # suspended overnight keeps its score, and its row on the
@@ -3325,8 +3442,7 @@ async def recompute_expected_starts(db, tournament_id: int, play_date: date,
                             full_decider=_full_decider(
                                 draw, s.discipline, s.stage))) + gap
                     s.estimated_duration_min = dur
-                if before != (s.expected_start_at, s.expected_source):
-                    touched += 1
+                    spans[s.id] = (_aware(s.expected_start_at), prev_end - gap, False)
                 continue
 
             if s.start_type == 'fixed' and printed_dt:
@@ -3348,6 +3464,14 @@ async def recompute_expected_starts(db, tournament_id: int, play_date: date,
             else:
                 expected, source = printed_dt, ('printed' if printed_dt else None)
 
+            # Its players are still on another court (one_court_at_a_time).
+            # A floor like a printed "not before", and never over a start the
+            # sheet fixed — that row is not given one.
+            movable = not (s.start_type == 'fixed' and printed_dt)
+            floor = floors.get(s.id)
+            if movable and floor and expected and floor > expected:
+                expected, source = floor, 'estimated'
+
             # Clamp only a CHAINED estimate, never a printed start.
             #
             # A time the tournament printed is a fact about the schedule: the
@@ -3366,10 +3490,45 @@ async def recompute_expected_starts(db, tournament_id: int, play_date: date,
             s.expected_start_at = expected
             s.expected_source = source
             s.estimated_duration_min = dur
-            if before != (expected, source):
-                touched += 1
             if expected:
                 prev_end = expected + timedelta(minutes=dur) + gap
+                spans[s.id] = (expected, expected + timedelta(minutes=dur), movable)
 
+    # Chain, look across courts for a person booked twice, chain again with
+    # the later match floored at the earlier one's end plus rest — until the
+    # floors stop moving. A day with no player on two courts (nearly every
+    # day) is exactly one pass, as before.
+    rest = max(gap, timedelta(minutes=_SUITABLE_REST_MIN))
+    edges: set = set()
+    floors: dict = {}
+    for _ in range(_PERSON_PASSES):
+        spans = await _chain(floors)
+        one_court_at_a_time(rows, spans, edges)
+        wanted: dict = {}
+        for first, second in edges:
+            span = spans.get(first)
+            if span and span[1]:
+                wanted[second] = max(wanted.get(second, span[1] + rest), span[1] + rest)
+        if wanted == floors:
+            break
+        floors = wanted
+    else:
+        from app.services.system_log import app_log
+        await app_log(
+            "warning", "scheduler",
+            f"Expected starts for tournament {tournament_id} on {play_date} "
+            f"did not settle in {_PERSON_PASSES} passes: players booked on "
+            f"two courts keep pushing each other",
+            {"tournament_id": tournament_id, "play_date": str(play_date),
+             "edges": sorted(edges)},
+            dedup_key=f"person_floor_unsettled:{tournament_id}:{play_date}",
+            dedup_hours=6.0)
+    if edges:
+        logger.info("expected starts: %d cross-court booking(s) floored on "
+                    "tournament %s %s: %s", len(edges), tournament_id,
+                    play_date, sorted(edges))
+
+    touched = sum(1 for s in rows
+                  if before_all.get(s.id) != (s.expected_start_at, s.expected_source))
     await db.commit()
     return touched

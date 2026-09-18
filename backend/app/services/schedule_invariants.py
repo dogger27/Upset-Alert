@@ -288,6 +288,83 @@ def court_opener_untimed(rows) -> list:
     return out
 
 
+def _law_person(raw: str) -> str:
+    """A printed name as the LAW identifies a person: brackets gone, every
+    trailing country code gone (by membership, looped — SURESH IND ANY),
+    accents and case folded. Its own reading, apart from schedule._fold."""
+    s = re.sub(r'\[[^\]]*\]', ' ', raw or '')
+    toks = s.split()
+    while len(toks) > 1 and toks[-1] in COUNTRY_CODES:
+        toks.pop()
+    s = _ud.normalize("NFKD", " ".join(toks))
+    return " ".join(re.sub(r'[^a-z ]', '', "".join(
+        c for c in s if not _ud.combining(c)).lower()).split())
+
+
+def player_on_two_courts(rows) -> list[tuple]:
+    """(row, other row, the person) wherever two rows still to come book one
+    person on different courts into overlapping windows.
+
+    SP Open 2026-09-18 (document 289): Stoiana's doubles QF on QUADRA 1,
+    printed "After suitable rest", was estimated "~5:30 PM" and listed ABOVE
+    her singles QF on CENTRAL at "Not before 5:30 PM". The estimate chain runs
+    down one court at a time and never saw the name on the other one. Nothing
+    was wrong with the rows the sheet printed; the page was simply impossible.
+
+    A window is [expected_start_at, + estimated_duration_min]. Only rows not
+    yet on court, since a match in play has a remaining time the law cannot
+    read. Exempt: two starts the sheet itself FIXED ("Starting at"), which no
+    estimate may move — the tour's own clash, not ours. Nobody on a side the
+    sheet leaves open is booked, nor a role ("Qualifier"). Split out so the
+    judgement can be tested without a database. Measured over every stored
+    tournament-day when written: that one pair, of 23 that share a player.
+    """
+    def pending(r):
+        return not (r.started_at or r.completed_at or r.winner_side
+                    or r.live_scores_json or r.status in ("live", "completed"))
+
+    def fixed(r):
+        return r.start_type == "fixed" and r.expected_source == "printed"
+
+    def window(r):
+        start = _naive_utc(r.expected_start_at)
+        if start is None or not r.estimated_duration_min:
+            return None
+        return start, start + _timedelta(minutes=r.estimated_duration_min)
+
+    booked: dict = {}
+    for r in rows:
+        if not pending(r):
+            continue
+        open_sides = (r.tbd_side or "ab") if r.is_tbd else ""
+        for p in r.players or []:
+            if p.side in open_sides or _names_nobody(p.raw_name or ""):
+                continue
+            keys = {("name", _law_person(p.raw_name))}
+            if p.draw_entry_id:
+                keys.add(("id", p.draw_entry_id))
+            for k in keys:
+                if k[1]:
+                    booked.setdefault(k, {})[r.id] = (r, p.raw_name)
+    out, seen = [], set()
+    for by_row in booked.values():
+        items = sorted(by_row.values(), key=lambda x: x[0].id)
+        for i, (a, name) in enumerate(items):
+            for b, _ in items[i + 1:]:
+                if (a.id, b.id) in seen or (a.court or "") == (b.court or ""):
+                    continue
+                if fixed(a) and fixed(b):
+                    continue
+                wa, wb = window(a), window(b)
+                if not wa or not wb:
+                    continue
+                overlap = min(wa[1], wb[1]) - max(wa[0], wb[0])
+                if overlap.total_seconds() > 60:
+                    seen.add((a.id, b.id))
+                    out.append((a, b, name))
+    return out
+
+
 async def check_day(db, tournament_id: int, play_date) -> list[dict]:
     """Every violation in one tournament-day. Empty list = lawful."""
     # `populate_existing`, because the law runs on what the day ACTUALLY
@@ -1500,6 +1577,14 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                  f"nobody can time as earlier than a timed one")
             break
 
+    # 2026-09-18, SP Open doc 289 — see player_on_two_courts.
+    for a, b, name in player_on_two_courts(rows):
+        flag("player_on_two_courts", b,
+             f"{name!r} is booked on {a.court!r} (entry {a.id}, "
+             f"{_naive_utc(a.expected_start_at):%H:%M} UTC, "
+             f"{a.estimated_duration_min} min) and on {b.court!r} (entry "
+             f"{b.id}, {_naive_utc(b.expected_start_at):%H:%M} UTC) at once")
+
     return v
 
 
@@ -1595,9 +1680,11 @@ def check_parse(meta, match_count: int | None = None,
 # on settled state, so a real contradiction is still caught — just not blamed
 # on the ingest that was about to fix it. Same lesson as the two-transaction
 # window the sweep itself had to learn.
-# `expected_undercuts_printed_floor` reads the same half-written estimate.
+# `expected_undercuts_printed_floor` and `player_on_two_courts` read the same
+# half-written estimate.
 INGEST_DEFERRED = frozenset({"expected_contradicts_printed",
-                             "expected_undercuts_printed_floor"})
+                             "expected_undercuts_printed_floor",
+                             "player_on_two_courts"})
 
 
 async def check_and_log(db, tournament, play_date, *,
