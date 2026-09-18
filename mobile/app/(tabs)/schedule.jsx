@@ -1077,8 +1077,11 @@ const s = StyleSheet.create({
   // A touch tighter than the tag's full 8 below the line: the glyphs stop short of it (owner, 2026-09-17).
   miniRow: { paddingHorizontal: 0, paddingTop: 6, paddingBottom: 5 },
   // The wrapper carries the card's side margin so the first row's tags can sit on its edge.
-  miniWrap: { marginHorizontal: -(S.lg - S.sm) },
-  rowsInWrap: { marginHorizontal: 0 },
+  /* EDGE TO EDGE (owner, 2026-09-18): the mid view's card is rows across the
+     whole screen — the page's own padding taken back, no corners, no side
+     lines; the top and bottom lines stay, the same weight as the dividers. */
+  miniWrap: { marginHorizontal: -S.lg },
+  rowsInWrap: { marginHorizontal: 0, borderRadius: 0, borderLeftWidth: 0, borderRightWidth: 0 },
   // The cell: [group bar][card][H2H bar], the bars full height.
   // Room for a tab on either side: the tour bar, the tab, a hair.
   miniCard: { paddingLeft: 8, paddingRight: 27 },
