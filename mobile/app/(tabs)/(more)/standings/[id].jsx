@@ -79,10 +79,6 @@ export default function GlobalStandings() {
   }, [standings]) // eslint: the hook object is stable per screen
   const rankOf = new Map(entries.map((e, i) => [e.user_id, ranks[i]]))
   const order = new Map(entries.map((e, i) => [e.user_id, i]))
-  const rows = sortKey === 'total' ? entries
-    : sortKey === 'finish' ? [...entries].sort(byFinish(order))
-    : [...entries].sort((a, b) =>
-      ((b[sortKey] ?? 0) - (a[sortKey] ?? 0)) || (order.get(a.user_id) - order.get(b.user_id)))
   /* WHERE EACH BRACKET CAN STILL FINISH, from R16 on: the server enumerates
      every future of the last fifteen matches and sends the best and worst
      place. Before that there are too many futures and the column is not
@@ -99,7 +95,24 @@ export default function GlobalStandings() {
      give way — the site drops this same column below 400px for the
      same reason. On a 430pt phone both fit with room to spare. */
   const { width: screenW } = useWindowDimensions()
-  const podiumCol = oddsAvail && screenW >= 410
+  /* A DECIDED DRAW HAS NO CHANCES LEFT (owner, 2026-09-18). At the far right
+     of a finished draw every Win reads 100% or 0%, which is the Finish column
+     said a second time — so the chances give their track back to the tick,
+     and the column says how many picks each bracket actually got right.
+     `placesDecided` is exactly "the draw is over and the slider is not
+     scrubbing" (scoring.js), which is the state the owner described. */
+  const decided = !!view.placesDecided
+  const chanceCols = oddsAvail && !decided
+  const podiumCol = chanceCols && screenW >= 410
+  const checkCol = !finishAvail || decided
+  /* A column that is gone cannot be the sorted one: a draw that finishes
+     under the thumb would otherwise leave the table ordered by an invisible
+     Win. The points order is where it came from. */
+  const sortedBy = decided && (sortKey === 'p_win' || sortKey === 'p_podium') ? 'total' : sortKey
+  const rows = sortedBy === 'total' ? entries
+    : sortedBy === 'finish' ? [...entries].sort(byFinish(order))
+    : [...entries].sort((a, b) =>
+      ((b[sortedBy] ?? 0) - (a[sortedBy] ?? 0)) || (order.get(a.user_id) - order.get(b.user_id)))
   const cashPool = false
 
   const sortHead = (key, label, style, extra, a11y) => (
@@ -160,7 +173,7 @@ export default function GlobalStandings() {
               {/* The tick gives its track to the finish range from R16 on — the
                   site does the same at phone width; the count is a second
                   reading of the score, the range is news. */}
-              {finishAvail ? null : sortHead('correct_count', '✓', s.right, null, 'Correct picks — sort by this')}
+              {checkCol ? sortHead('correct_count', '✓', s.right, null, 'Correct picks — sort by this') : null}
               {/* ONE HEADING OVER TWO COLUMNS: "Score", then "Curr." and
                   "Max" beneath it — where a bracket stands and the best it
                   can still finish on are one fact read two ways. The group
@@ -208,7 +221,7 @@ export default function GlobalStandings() {
                               'Chance of finishing in the top three — sort by this')}
                   </View>
                 </View>
-              ) : oddsAvail ? (
+              ) : chanceCols ? (
                 /* One column left, so no group to head: "Chances" over a
                    single "Win" is a heading for a pair that is not there,
                    and it does not fit in one cell either. */
@@ -232,7 +245,7 @@ export default function GlobalStandings() {
                     </View>
                     {/* The sorted column is the lit one: white and bold, the
                       other two muted. */}
-                  {finishAvail ? null : <Text style={[s.right, sortKey === 'correct_count' && s.on]}>{e.correct_count}</Text>}
+                  {checkCol ? <Text style={[s.right, sortKey === 'correct_count' && s.on]}>{e.is_bot ? '' : e.correct_count}</Text> : null}
                     <Text style={[s.num, oddsAvail && s.numTight, sortKey === 'total' && s.on]}>{Math.round(e.total)}</Text>
                     {oddsAvail ? null : <Text style={[s.num, sortKey === 'max_points' && s.on]}>{e.max_points != null ? Math.round(e.max_points) : '–'}</Text>}
                     {/* A place clinched is the one certainty in the column,
@@ -247,7 +260,7 @@ export default function GlobalStandings() {
                     ) : null}
                     {/* 100% has stopped being a probability, so it reads like the
                         fact it is; 0% is out of the race and steps back. */}
-                    {oddsAvail ? (
+                    {chanceCols ? (
                       <>
                         <Text style={[s.chance, sortKey === 'p_win' && s.on, e.p_win >= 1 && s.chanceSure, e.p_win === 0 && s.chanceOut]}
                               numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{e.is_bot ? '' : pct(e.p_win)}</Text>
