@@ -211,3 +211,19 @@ export function worldEntries(entries, world, worldPredictions) {
         podium_locked: ranks[i] <= 3,
         p_win: ranks[i] === 1 ? 1 : 0, p_podium: ranks[i] <= 3 ? 1 : 0 }))
 }
+
+
+/* WHERE THE TIEBREAK SHOWS AT ALL (owner, 2026-09-18: "do not show the
+ * tiebreak button or popup at all until next week's draw start").
+ *
+ * The two questions are about a final nobody has played, and they can only be
+ * answered while the picks are open — so the card and the sheet appear on a
+ * draw that is still open, and on one you already answered, where the answer
+ * and the final's actual figures are worth reading back. This week's draws are
+ * locked and unanswered, so nothing shows on them; next week's open for picks
+ * and it appears by itself, with no date written down anywhere.
+ */
+export function tiebreakVisible(ctx) {
+  if (!ctx) return false
+  return !ctx.locked || !!ctx.guess
+}

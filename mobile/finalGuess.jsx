@@ -20,6 +20,7 @@ import { Sheet } from './sheet'
 import { Card, Muted, Title } from './ui'
 import { C, R, S, T } from './theme'
 import { useApi } from './useApi'
+import { tiebreakVisible } from './scoring'
 
 export function fmtMinutes(m) {
   if (m == null) return '–'
@@ -171,7 +172,9 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
 export function FinalGuessCard({ tournamentId, enabled, onOpen, refreshKey }) {
   const ctx = useApi(enabled ? `final-guess:${tournamentId}:card:${refreshKey || 0}` : null, () => getFinalGuess(tournamentId), { enabled: !!enabled })
   const data = ctx.data
-  if (!enabled || !data) return null
+  // Hidden until the draw is open for picks, or this bracket has answered
+  // (owner, 2026-09-18) — scoring.tiebreakVisible.
+  if (!enabled || !tiebreakVisible(data)) return null
   const g = data.guess
   return (
     <Pressable onPress={onOpen} accessibilityRole="button" accessibilityLabel="Tiebreak answers">

@@ -11,7 +11,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
 import { getDraw, listTournaments, refreshDraw, toggleUnlockSelections } from '../api/tournaments'
 import { getPredictions, savePredictions } from '../api/predictions'
-import FinalGuessModal, { FinalGuessBar, finalGuessKey, useFinalGuess } from '../components/FinalGuessModal'
+import FinalGuessModal, { FinalGuessBar, finalGuessKey, tiebreakVisible, useFinalGuess } from '../components/FinalGuessModal'
 import { getMyStandouts } from '../api/tournaments'
 import { useAuth } from '../store/auth'
 /* LIVE DRAW IS OFF (2026-09-04, at the owner's request) and the component is
@@ -1583,7 +1583,7 @@ function TournamentDraw() {
   return (
     <div className="draw-page">
       {user && (viewedUserId == null || viewedUserId === user.id) && (
-        <FinalGuessModal tournamentId={id} open={!!finalGuessOpen} reason={finalGuessOpen}
+        <FinalGuessModal tournamentId={id} open={!!finalGuessOpen && tiebreakVisible(finalGuess.data)} reason={finalGuessOpen}
                          onClose={() => setFinalGuessOpen(null)} />
       )}
       <div className={clsx('draw-header', `draw-header--${headerStage}`, { 'draw-header--collapsed': headerHidden || headerForcedHidden })}>
