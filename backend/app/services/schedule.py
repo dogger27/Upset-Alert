@@ -3191,18 +3191,22 @@ def _person_keys(entry) -> set:
     return keys
 
 
-def one_court_at_a_time(rows, spans: dict, edges: set) -> None:
+def one_court_at_a_time(rows, spans: dict, edges: set,
+                        rest: timedelta = timedelta(minutes=_SUITABLE_REST_MIN)) -> None:
     """Add (first, second) to `edges` for every two rows on different courts
-    that book one person into overlapping windows.
+    that book one person into overlapping windows — and for every match
+    worded "after (suitable) rest" that would start before its players have
+    rested from their match on another court.
 
     `spans` is {row id: (start, finish, movable)} from a pass of the chain;
     `movable` is a row whose start is ours to estimate — not yet on court, and
     not a clock the sheet fixed. Which of the two waits:
 
+    * the one worded "after (suitable) rest", whether or not the windows
+      overlap — the tour has said which match that player comes to second
+      (see the first loop below);
     * whichever can move, when only one can — a match on court, or one the
       sheet started at a stated time, is not a guess;
-    * the one worded "after (suitable) rest", when only one is — the tour has
-      said which match that player comes to second;
     * otherwise the one the chain already had starting later, singles first
       on a tie (doubles is scheduled around singles, not the other way).
 
@@ -3215,6 +3219,44 @@ def one_court_at_a_time(rows, spans: dict, edges: set) -> None:
         for k in _person_keys(r):
             by_key.setdefault(k, set()).add(r.id)
     by_id = {r.id: r for r in rows}
+
+    def _rest_worded(r) -> bool:
+        return bool(_REST_WORDING_RE.search(r.start_note or ''))
+
+    # REST IS AN ORDER, NOT A TIE-BREAK. This used to be read only once two
+    # windows already overlapped, so whether Stoiana's doubles waited for her
+    # singles depended on where QUADRA 1's chain happened to run out. SP Open
+    # 2026-09-18: at 00:17 (doc 289) it ran out at 5:29 PM, overlapped her NB
+    # 5:30 PM singles, and was floored to ~7:50 PM. At 12:50 (doc 313) the
+    # court's other doubles QF had gone w/o and left the sheet, the chain ran
+    # out at ~3:40 PM, clear of the singles — and the page put the match she
+    # can only play after resting from her singles two hours AHEAD of it.
+    # The wording names the match it waits for: the player's match on another
+    # court. Her earliest one, when she has several (a partner's evening
+    # singles is not what the rest is for); none at all when the rest is
+    # already explained by a match of hers earlier on the SAME court, which
+    # the court's own chain handles. Two rest-worded rows sharing a person say
+    # nothing about each other's order and are left to the overlap test.
+    for r in rows:
+        sr = spans.get(r.id)
+        if not _rest_worded(r) or not sr or sr[0] is None or not sr[2]:
+            continue
+        mates = {i for k in _person_keys(r) for i in by_key.get(k, ()) if i != r.id}
+        court = r.court or ''
+        if any((by_id[i].court or '') == court
+               and (by_id[i].court_order or 0) < (r.court_order or 0) for i in mates):
+            continue
+        others = [by_id[i] for i in mates
+                  if (by_id[i].court or '') != court and not _rest_worded(by_id[i])
+                  and spans.get(i) and None not in spans[i][:2]]
+        if not others:
+            continue
+        target = min(others, key=lambda o: (spans[o.id][0], o.id))
+        if (r.id, target.id) in edges:
+            continue
+        if sr[0] < spans[target.id][1] + rest:
+            edges.add((target.id, r.id))
+
     seen = set()
     for ids in by_key.values():
         for a_id in ids:
@@ -3238,8 +3280,7 @@ def one_court_at_a_time(rows, spans: dict, edges: set) -> None:
                 elif not sa[2]:
                     continue  # neither is ours to move
                 else:
-                    rest_a = bool(_REST_WORDING_RE.search(a.start_note or ''))
-                    rest_b = bool(_REST_WORDING_RE.search(b.start_note or ''))
+                    rest_a, rest_b = _rest_worded(a), _rest_worded(b)
                     if rest_a != rest_b:
                         second = a if rest_a else b
                     else:
@@ -3549,7 +3590,7 @@ async def recompute_expected_starts(db, tournament_id: int, play_date: date,
     floors: dict = {}
     for _ in range(_PERSON_PASSES):
         spans = await _chain(floors)
-        one_court_at_a_time(rows, spans, edges)
+        one_court_at_a_time(rows, spans, edges, rest)
         wanted: dict = {}
         for first, second in edges:
             span = spans.get(first)
