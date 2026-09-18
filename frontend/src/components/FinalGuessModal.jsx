@@ -17,6 +17,14 @@ import './FinalGuessModal.css'
 
 export const finalGuessKey = (id) => ['final-guess', String(id)]
 
+/* WHERE IT SHOWS AT ALL (owner, 2026-09-18: "do not show the tiebreak button
+   or popup at all until next week's draw start"). The questions are about a
+   final nobody has played and can only be answered while the picks are open,
+   so: an open draw asks, an answered draw reads back, and this week's locked
+   unanswered draws show nothing. No date is written down — next week's draws
+   open for picks and it appears by itself. */
+export const tiebreakVisible = (ctx) => !!ctx && (!ctx.locked || !!ctx.guess)
+
 export function useFinalGuess(id, enabled) {
   return useQuery({ queryKey: finalGuessKey(id), queryFn: () => getFinalGuess(id), enabled: !!enabled && !!id })
 }
@@ -140,7 +148,7 @@ export default function FinalGuessModal({ tournamentId, open, onClose, reason })
 /* The line on the draw page: the answers as they stand, and the way in. */
 export function FinalGuessBar({ tournamentId, enabled, onOpen }) {
   const { data: ctx } = useFinalGuess(tournamentId, enabled)
-  if (!enabled || !ctx) return null
+  if (!enabled || !tiebreakVisible(ctx)) return null
   const g = ctx.guess
   return (
     <button type="button" className="fg-bar" onClick={onOpen}>

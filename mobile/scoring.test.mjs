@@ -19,7 +19,7 @@ import assert from 'node:assert/strict'
 import { Buffer } from 'node:buffer'
 
 const src = readFileSync(new URL('./scoring.js', import.meta.url), 'utf8')
-const { competitionRanks, sameStanding, slotLabel, pct, placesDecided, scrubEntries, worldEntries } =
+const { competitionRanks, sameStanding, slotLabel, pct, placesDecided, scrubEntries, tiebreakVisible, worldEntries } =
   await import('data:text/javascript;base64,' + Buffer.from(src).toString('base64'))
 
 let n = 0
@@ -210,3 +210,13 @@ console.log(`\n  ${n} passed`)
   assert.equal(by[9].best_rank, null); assert.equal(by[9].p_win, null); assert.equal(by[9].p_podium, null); assert.equal(by[9].podium_locked, false)
   assert.equal(by[2].best_rank, 2)
 }
+
+
+check('the tiebreak stays hidden until a draw is open for picks', () => {
+  // Owner, 2026-09-18: nothing until next week's draw start. A locked draw
+  // with no answer shows nothing; an open one asks; an answered one reads back.
+  assert.equal(tiebreakVisible(null), false)
+  assert.equal(tiebreakVisible({ locked: true, guess: null }), false)
+  assert.equal(tiebreakVisible({ locked: false, guess: null }), true)
+  assert.equal(tiebreakVisible({ locked: true, guess: { final_aces: 6, final_duration_min: 95 } }), true)
+})
