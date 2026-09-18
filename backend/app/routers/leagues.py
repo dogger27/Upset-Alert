@@ -31,6 +31,8 @@ from app.services.win_chances import ATTRIBUTION as ODDS_ATTRIBUTION, draw_odds
 from app.services.scoring import potential_points, _points_table as _pts_table_for
 from app.services.upsets import has_upset_pick
 
+from app.services import final_tiebreak
+
 router = APIRouter(prefix="/leagues", tags=["leagues"])
 
 
@@ -584,6 +586,8 @@ async def leaderboard(
         max_map[member.user_id] = score.total_points + potential_points(
             picks_map[member.user_id], all_matches, position_by_entry, pts_table)
 
+    guesses = await final_tiebreak.guesses_for(db, tournament_id)
+    final_tiebreak.apply([s for _, s in scores], tournament, guesses)
     ranked = rank_users([s for _, s in scores], tournament.num_rounds)
     user_map = {u.id: u for u, _ in scores}
     # Where each bracket can still finish, once the draw is down to R16.
@@ -601,6 +605,9 @@ async def leaderboard(
             has_upset_pick=has_upset_map[score.user_id],
             best_rank=ranges.get(score.user_id, (None, None))[0],
             worst_rank=ranges.get(score.user_id, (None, None))[1],
+            final_guess_aces=(guesses.get(score.user_id) or (None, None))[0],
+            final_guess_minutes=(guesses.get(score.user_id) or (None, None))[1],
+            tie_aces_diff=score.tie_aces_diff, tie_minutes_diff=score.tie_minutes_diff,
             podium_locked=podium_locked(ranges.get(score.user_id)),
         )
         for rank_idx, score in enumerate(ranked, start=1)
@@ -765,6 +772,7 @@ async def round_scores(
     picks_map: dict[int, dict] = {}
     # A cash pool on this draw hides everyone who did not pay in.
     visible = await _pool_visible(db, league.id, tournament_id)
+    guesses_d = await final_tiebreak.guesses_for(db, tournament_id)
     for member in league.members:
         if visible is not None and member.user_id not in visible:
             continue
@@ -809,6 +817,9 @@ async def round_scores(
             # numbering, so they need to know which row this is.
             "is_bot": bool(member.user.is_bot),
             "round_points": pts_list,
+            "final_guess": (lambda g: {"aces": g[0], "minutes": g[1]} if g else None)(guesses_d.get(member.user_id)),
+            "tie_aces_diff": final_tiebreak.diffs_for(guesses_d.get(member.user_id), tournament.final_winner_aces, tournament.final_duration_min)[0],
+            "tie_minutes_diff": final_tiebreak.diffs_for(guesses_d.get(member.user_id), tournament.final_winner_aces, tournament.final_duration_min)[1],
             "total": sum(pts_list),
             "correct_count": correct_count,
             "max_points": sum(pts_list) + potential_points(
@@ -873,7 +884,10 @@ async def round_scores(
         key=lambda x: (x["round_number"], x["match_number"])) if worlds else None
 
     # Primary: total points desc. Tiebreaker: points in latest rounds first (Final → SF → QF → …)
-    entries.sort(key=lambda x: (-x["total"],) + tuple(-rp for rp in reversed(x["round_points"])))
+    # Points, then the final tiebreak (services/final_tiebreak); level stays level.
+    _big = 10 ** 6
+    entries.sort(key=lambda x: (-x["total"], x["tie_aces_diff"] if x["tie_aces_diff"] is not None else _big,
+                                x["tie_minutes_diff"] if x["tie_minutes_diff"] is not None else _big))
     rounds_with_matches = sorted({m.round_number for m in completed_matches})
 
     # A round is "complete" only once every non-bye match in it has finished —

@@ -17,8 +17,10 @@
  */
 export function sameStanding(a, b) {
   if (!a || !b || a.total !== b.total) return false
-  const x = a.round_points || [], y = b.round_points || []
-  return x.length === y.length && x.every((v, i) => v === y[i])
+  // THE TIEBREAK IS THE FINAL (owner, 2026-09-18): closest on the champion's
+  // aces, then on minutes, once the final is played; before it, level is level.
+  return (a.tie_aces_diff ?? null) === (b.tie_aces_diff ?? null)
+      && (a.tie_minutes_diff ?? null) === (b.tie_minutes_diff ?? null)
 }
 
 /* Competition ranking: 1, 1, 1, 4 — not 1, 1, 1, 2.
@@ -136,14 +138,14 @@ export const worldLine = w => `${surname(w.final.winner)} def. ${surname(w.final
 
 /* The standings order: points, then the later rounds first — the site's
  * sort and the server's, for rows re-scored on the phone. */
+const BIG = 1e9
 export function sortStandings(rows) {
   return [...rows].sort((a, b) => {
     if (b.total !== a.total) return b.total - a.total
-    for (let i = a.round_points.length - 1; i >= 0; i--) {
-      const d = (b.round_points[i] ?? 0) - (a.round_points[i] ?? 0)
-      if (d !== 0) return d
-    }
-    return 0
+    // The final's tiebreak: closest on aces, then on minutes; no answer last.
+    const da = (a.tie_aces_diff ?? BIG) - (b.tie_aces_diff ?? BIG)
+    if (da !== 0) return da
+    return (a.tie_minutes_diff ?? BIG) - (b.tie_minutes_diff ?? BIG)
   })
 }
 

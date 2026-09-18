@@ -39,7 +39,7 @@ export default function Rules() {
                 </tbody>
               </table>
               <p className="about-card-body" style={{marginTop:'0.85rem',fontSize:'0.85rem',color:'var(--text-muted)'}}>
-                <strong>Tiebreak:</strong> If a league is tied at the time in which the draw is completed, results will be weighted towards competitors who performed better in the later rounds of the draw.
+                <strong>Tiebreak:</strong> When you enter a draw you are asked how many aces the champion will hit in the final and how long the final will last. Brackets level on points are separated by whoever came closest on aces, then on minutes. Until the final is played, level brackets share the place.
               </p>
             </div>
             <div className="about-card">

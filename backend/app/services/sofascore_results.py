@@ -553,6 +553,10 @@ class SofascoreResultsMonitor:
             try:
                 async with AsyncSessionLocal() as db:
                     report = await sweep_once(db)
+                    try:
+                        await capture_final_stats()
+                    except Exception as exc:      # noqa: BLE001 — never the sweep's problem
+                        logger.warning("final stats capture failed: %s", exc)
                     if report["written"]:
                         logger.info("Sofascore results: %s", report)
             except SofascoreBlocked as exc:
@@ -578,3 +582,64 @@ class SofascoreResultsMonitor:
 
 
 monitor = SofascoreResultsMonitor()
+
+
+
+# ---------------------------------------------------------------------------
+# THE FINAL AS IT WAS PLAYED (owner, 2026-09-18): the champion's aces and the
+# match's minutes, written once onto the draw when its final has a winner,
+# for the tiebreak (services/final_tiebreak). Two reads at most per draw,
+# ever — the event for the side the champion sat on, the statistics for the
+# aces — and a walkover is 0 and 0 without either.
+# ---------------------------------------------------------------------------
+_FINAL_TRIED: dict[int, float] = {}
+_FINAL_RETRY_SECONDS = 3600
+
+
+async def capture_final_stats() -> int:
+    import time as _time
+    from app.database import AsyncSessionLocal
+    from app.models.tournament import Draw, DrawEntry, Match
+    from app.services.sofascore import _get
+    from app.services.sofascore_stats import stats_for
+    from app.services.system_log import app_log
+
+    written = 0
+    async with AsyncSessionLocal() as db:
+        finals = (await db.execute(
+            select(Draw, Match)
+            .join(Match, Match.draw_id == Draw.id)
+            .where(Draw.final_winner_aces.is_(None), Draw.final_duration_min.is_(None),
+                   Match.round_number == Draw.num_rounds, Match.match_number == 1,
+                   Match.is_bye == False, Match.winner_id.isnot(None))  # noqa: E712
+        )).all()
+        for draw, final in finals:
+            last = _FINAL_TRIED.get(draw.id, 0)
+            if _time.monotonic() - last < _FINAL_RETRY_SECONDS:
+                continue
+            _FINAL_TRIED[draw.id] = _time.monotonic()
+            minutes = final.sofa_duration_min or final.duration_min
+            aces = None
+            walkover = not (final.scores_json or final.sofa_scores_json)
+            if walkover:
+                aces, minutes = 0, 0
+            elif final.sofa_event_id:
+                ev = (await _get(f"/event/{final.sofa_event_id}") or {}).get("event") or {}
+                winner = await db.get(DrawEntry, final.winner_id)
+                home_ids = set(_event_player_ids(ev.get("homeTeam") or {}))
+                side = "home" if (winner and winner.sofa_player_id in home_ids) else "away"
+                stats = await stats_for(final.sofa_event_id, finished=True)
+                rows = (stats or {}).get("ALL") or []
+                row = next((r for r in rows if r.get("label") == "Aces"), None)
+                if row is not None:
+                    aces = int((row.get(side) or [0])[0] or 0)
+            if aces is None or minutes is None:
+                logger.info("final stats for draw %s not available yet (aces=%s, minutes=%s)", draw.id, aces, minutes)
+                continue
+            draw.final_winner_aces = int(aces)
+            draw.final_duration_min = int(minutes)
+            await db.commit()
+            written += 1
+            await app_log("info", "scoring", f"{draw.name}: final played — champion hit {aces} aces in {minutes} min; the tiebreak is now decided",
+                          {"draw_id": draw.id, "aces": aces, "minutes": minutes})
+    return written

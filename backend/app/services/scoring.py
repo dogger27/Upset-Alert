@@ -64,14 +64,25 @@ class UserScore:
     user_id: int
     total_points: float
     correct_count: int
-    # correct picks per round_number; used for tiebreaking
+    # correct picks per round_number — kept for the round-points columns;
+    # no longer a tiebreak (owner, 2026-09-18).
     correct_by_round: dict[int, int] = field(default_factory=dict)
+    # THE TIEBREAK: how far this bracket's two final guesses were from the
+    # final as played (services/final_tiebreak). None until the final is
+    # played, or when the bracket never answered — which sorts last among
+    # level brackets, as a non-answer should.
+    tie_aces_diff: Optional[int] = None
+    tie_minutes_diff: Optional[int] = None
 
-    def tiebreak_key(self, num_rounds: int) -> tuple:
-        """Lower value = better rank. Compares round-by-round from Final backwards."""
+    def tiebreak_key(self, num_rounds: int = 0) -> tuple:
+        """Lower value = better rank: points, then closest on the champion's
+        aces in the final, then closest on the final's minutes. `num_rounds`
+        is accepted for the old callers and unused."""
+        big = 10 ** 6
         return (
             -self.total_points,
-            *(-self.correct_by_round.get(r, 0) for r in range(num_rounds, 0, -1)),
+            self.tie_aces_diff if self.tie_aces_diff is not None else big,
+            self.tie_minutes_diff if self.tie_minutes_diff is not None else big,
         )
 
 
@@ -323,13 +334,11 @@ def finish_range(
 
     # Points and the tiebreak weight of a correct pick in each undecided match,
     # folded into one integer: points ride above every round count.
-    pts_scale = _KEY_BASE ** num_rounds
-    weight = np.array([pts_table.get(m.round_number, 0) * pts_scale
-                       + _KEY_BASE ** (m.round_number - 1) for m in undecided], dtype=np.int64)
-    base = np.array([
-        int(round(banked[u].total_points)) * pts_scale
-        + sum(banked[u].correct_by_round.get(r, 0) * _KEY_BASE ** (r - 1) for r in range(1, num_rounds + 1))
-        for u in users], dtype=np.int64)
+    # POINTS ALONE (owner, 2026-09-18): a future cannot know the final's aces
+    # or minutes, so level brackets share the place in every future — the
+    # round-by-round weighting that used to separate them is gone.
+    weight = np.array([pts_table.get(m.round_number, 0) for m in undecided], dtype=np.int64)
+    base = np.array([int(round(banked[u].total_points)) for u in users], dtype=np.int64)
     pick_mat = np.full((u_count, n), _NO_PICK, dtype=np.int64)
     for ui, u in enumerate(users):
         mine = picks.get(u) or {}

@@ -690,11 +690,10 @@ const ROW_SLOT = 41 // px per row slot (bar height 34px + gap 7px)
    the numbers still say how many people are ahead of you. */
 function sameStanding(a, b) {
   if (!a || !b || a.total !== b.total) return false
-  const ra = a.round_points || [], rb = b.round_points || []
-  if (ra.length !== rb.length) return false
-  // Equality is order-independent, so this needs no Final-backwards walk —
-  // it is only the SORT that cares which round is compared first.
-  return ra.every((p, i) => (p ?? 0) === (rb[i] ?? 0))
+  // THE TIEBREAK IS THE FINAL (owner, 2026-09-18): closest on the champion's
+  // aces, then on minutes, once the final is played; before it, level is level.
+  return (a.tie_aces_diff ?? null) === (b.tie_aces_diff ?? null)
+      && (a.tie_minutes_diff ?? null) === (b.tie_minutes_diff ?? null)
 }
 
 /** The competition rank of the entry at `i` in an already-sorted list. */
@@ -1477,14 +1476,8 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
         }
         return { ...e, round_points, total, correct_count, max_points: total }
       })
-      scored.sort((a, b) => {
-        if (b.total !== a.total) return b.total - a.total
-        for (let i = a.round_points.length - 1; i >= 0; i--) {
-          const diff = (b.round_points[i] ?? 0) - (a.round_points[i] ?? 0)
-          if (diff !== 0) return diff
-        }
-        return 0
-      })
+      // A chosen world has no final played, so level is level: points alone.
+      scored.sort((a, b) => b.total - a.total)
       // A BOT TAKES NO PLACE AND CONSUMES NONE, and its row stays blank
       // (owner, 2026-09-18): places count the people only.
       let place = 1, placedPeople = 0, lastPerson = null

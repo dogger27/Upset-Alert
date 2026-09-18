@@ -38,8 +38,10 @@ export default function Rules() {
             </View>
           </ScrollView>
           <Muted>
-            Tiebreak: if a league is tied when a draw completes, results are weighted
-            towards competitors who performed better in the later rounds.
+            Tiebreak: when you enter a draw you are asked how many aces the champion
+            will hit in the final and how long the final will last. Brackets level on
+            points are separated by whoever came closest on aces, then on minutes.
+            Until the final is played, level brackets share the place.
           </Muted>
         </Card>
         <Card>

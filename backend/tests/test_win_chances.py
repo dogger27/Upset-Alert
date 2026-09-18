@@ -391,7 +391,7 @@ def test_sampling_reaches_where_enumeration_cannot(monkeypatch):
     for best, worst, pw, pp in out.values():
         assert best is None and worst is None        # an extreme is not sampled
         assert 0.0 <= pw <= pp <= 1.0
-    assert sum(v[2] for v in out.values()) == pytest.approx(1.0, abs=0.02)
+    assert 0.97 <= sum(v[2] for v in out.values()) <= 1.5   # level brackets share a win (owner, 2026-09-18): the sum is at least one
     # Deterministic: the same state gives the same number, every time.
     again = finish_range(ms, pts, 5, banked, picks, odds, sample=True)
     assert again == out
@@ -440,7 +440,7 @@ def test_chances_at_a_timeline_position_the_history_cannot_reach():
     # A position the history does not reach still answers, by sampling.
     sampled, early = chances_at(1, ms, tl, 5, pts, 5, picks, odds=odds)
     assert sampled and len(early) == 5
-    assert sum(p for p, _ in early.values()) == pytest.approx(1.0, abs=0.03)
+    assert 0.97 <= sum(p for p, _ in early.values()) <= 1.5   # level brackets share a win (owner, 2026-09-18): the sum is at least one
     for pw, pp in early.values():
         assert 0.0 <= pw <= pp <= 1.0
     # Deterministic, so scrubbing back to the same moment reads the same.
@@ -481,7 +481,7 @@ def test_a_draw_too_young_for_any_history_still_has_chances():
     assert finish_history(1, ms, tl, pts, 6, picks, odds=odds) == (None, {})
     sampled, out = chances_at(1, ms, tl, len(tl), pts, 6, picks, odds=odds)
     assert sampled and len(out) == 4
-    assert sum(p for p, _ in out.values()) == pytest.approx(1.0, abs=0.03)
+    assert 0.97 <= sum(p for p, _ in out.values()) <= 1.5   # level brackets share a win (owner, 2026-09-18): the sum is at least one
     # And position 1 — one match into the draw — answers too.
     assert len(chances_at(1, ms, tl, 1, pts, 6, picks, odds=odds)[1]) == 4
 

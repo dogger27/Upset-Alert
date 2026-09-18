@@ -17,6 +17,7 @@ from app.schemas.league import LeaderboardEntry, LeagueTournamentOut
 from app.schemas.tournament import DrawEntryOut, DrawOut, MatchOut, TournamentCreate, TournamentOut
 from app.schemas.user import UserPublicOut
 from app.services.draw_changes import classify_change
+from app.services import final_tiebreak
 from app.services.rankings import assign_rankings, assign_seed_week_rankings
 from app.services.scraper import scrape_tournament, snap_to_monday
 from app.services.scoring import (UserScore, _points_table, enumerate_worlds, finish_history_async,
@@ -1257,6 +1258,8 @@ async def global_standings(tournament_id: int, db: AsyncSession = Depends(get_db
         max_map[user.id] = total_pts + potential_points(
             pred_by_match, all_matches, position_by_entry, pts_table)
 
+    guesses = await final_tiebreak.guesses_for(db, tournament_id)
+    final_tiebreak.apply(scores, tournament, guesses)
     ranked = rank_users(scores, tournament.num_rounds)
     user_map = {u.id: u for u in users}
     # Where each bracket can still finish, once the draw is down to R16.
@@ -1269,6 +1272,9 @@ async def global_standings(tournament_id: int, db: AsyncSession = Depends(get_db
                          has_upset_pick=has_upset_map[s.user_id],
                          best_rank=ranges.get(s.user_id, (None, None))[0],
                          worst_rank=ranges.get(s.user_id, (None, None))[1],
+                         final_guess_aces=(guesses.get(s.user_id) or (None, None))[0],
+                         final_guess_minutes=(guesses.get(s.user_id) or (None, None))[1],
+                         tie_aces_diff=s.tie_aces_diff, tie_minutes_diff=s.tie_minutes_diff,
                          podium_locked=podium_locked(ranges.get(s.user_id)))
         for i, s in enumerate(ranked)
     ]
@@ -1320,6 +1326,7 @@ async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get
     entries = []
     banked: dict[int, UserScore] = {}
     picks_map: dict[int, dict] = {}
+    guesses_d = await final_tiebreak.guesses_for(db, tournament_id)
     for user in users:
         preds_result = await db.execute(
             select(UserPrediction).where(
@@ -1358,6 +1365,9 @@ async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get
             # numbering, so they need to know which row this is.
             "is_bot": bool(user.is_bot),
             "round_points": pts_list,
+            "final_guess": (lambda g: {"aces": g[0], "minutes": g[1]} if g else None)(guesses_d.get(user.id)),
+            "tie_aces_diff": final_tiebreak.diffs_for(guesses_d.get(user.id), tournament.final_winner_aces, tournament.final_duration_min)[0],
+            "tie_minutes_diff": final_tiebreak.diffs_for(guesses_d.get(user.id), tournament.final_winner_aces, tournament.final_duration_min)[1],
             "total": sum(pts_list),
             "correct_count": correct_count,
             "max_points": sum(pts_list) + potential_points(
@@ -1421,7 +1431,10 @@ async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get
          for m in all_matches if m.round_number >= nr - 1 and not m.is_bye),
         key=lambda x: (x["round_number"], x["match_number"])) if worlds else None
 
-    entries.sort(key=lambda x: (-x["total"],) + tuple(-rp for rp in reversed(x["round_points"])))
+    # Points, then the final tiebreak (services/final_tiebreak); level stays level.
+    _big = 10 ** 6
+    entries.sort(key=lambda x: (-x["total"], x["tie_aces_diff"] if x["tie_aces_diff"] is not None else _big,
+                                x["tie_minutes_diff"] if x["tie_minutes_diff"] is not None else _big))
     rounds_with_matches = sorted({m.round_number for m in completed_matches})
 
     # A round is "complete" only once every non-bye match in it has finished —

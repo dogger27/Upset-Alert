@@ -63,6 +63,12 @@ class LeaderboardEntry(BaseModel):
     # matches (R32 complete): see scoring.FINISH_RANGE_MAX_UNDECIDED.
     best_rank: Optional[int] = None
     worst_rank: Optional[int] = None
+    # THE TIEBREAK (owner, 2026-09-18): the bracket's two final guesses and how far
+    # each was from the final as played; None until the final is played.
+    final_guess_aces: Optional[int] = None
+    final_guess_minutes: Optional[int] = None
+    tie_aces_diff: Optional[int] = None
+    tie_minutes_diff: Optional[int] = None
     # Third or better in every future, ties sharing a place. None before the
     # finish range exists.
     podium_locked: Optional[bool] = None

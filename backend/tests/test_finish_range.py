@@ -236,10 +236,11 @@ def test_a_bot_takes_no_place_and_consumes_none():
     }
     banked = _banked(ms, pts, picks)
     assert banked[1].total_points == banked[2].total_points == 4
-    assert rank_users([banked[1], banked[2]], 3)[0].user_id == 2   # the bot IS ahead on the tiebreak
-    # Without the rule the bot displaces the person in every future...
-    assert finish_range(ms, pts, 3, banked, picks)[1] == (2, 2)
-    # ...and with it the person is first in every future and the other person second.
+    # Level on points is level (the final's aces and minutes are the only
+    # tiebreak now, and no future knows them): even unmasked the person is
+    # first. The mask is what keeps the bot from CONSUMING a place below.
+    assert finish_range(ms, pts, 3, banked, picks)[1] == (1, 1)
+    assert finish_range(ms, pts, 3, banked, picks)[3] == (3, 3)      # the bot sat second, pushing person 3 to third
     got = finish_range(ms, pts, 3, banked, picks, bots={2})
     assert got[1] == (1, 1), got
     assert got[3] == (2, 2), got
