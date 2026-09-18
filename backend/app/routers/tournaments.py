@@ -1259,7 +1259,8 @@ async def global_standings(tournament_id: int, db: AsyncSession = Depends(get_db
             pred_by_match, all_matches, position_by_entry, pts_table)
 
     guesses = await final_tiebreak.guesses_for(db, tournament_id)
-    final_tiebreak.apply(scores, tournament, guesses)
+    final_tiebreak.apply(scores, tournament, guesses,
+                         await final_tiebreak.default_for(tournament))
     ranked = rank_users(scores, tournament.num_rounds)
     user_map = {u.id: u for u in users}
     # Where each bracket can still finish, once the draw is down to R16.
@@ -1327,6 +1328,7 @@ async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get
     banked: dict[int, UserScore] = {}
     picks_map: dict[int, dict] = {}
     guesses_d = await final_tiebreak.guesses_for(db, tournament_id)
+    default_d = await final_tiebreak.default_for(tournament)
     for user in users:
         preds_result = await db.execute(
             select(UserPrediction).where(
@@ -1366,8 +1368,8 @@ async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get
             "is_bot": bool(user.is_bot),
             "round_points": pts_list,
             "final_guess": (lambda g: {"aces": g[0], "minutes": g[1]} if g else None)(guesses_d.get(user.id)),
-            "tie_aces_diff": final_tiebreak.diffs_for(guesses_d.get(user.id), tournament.final_winner_aces, tournament.final_duration_min)[0],
-            "tie_minutes_diff": final_tiebreak.diffs_for(guesses_d.get(user.id), tournament.final_winner_aces, tournament.final_duration_min)[1],
+            "tie_aces_diff": final_tiebreak.diffs_for(guesses_d.get(user.id) or default_d, tournament.final_winner_aces, tournament.final_duration_min)[0],
+            "tie_minutes_diff": final_tiebreak.diffs_for(guesses_d.get(user.id) or default_d, tournament.final_winner_aces, tournament.final_duration_min)[1],
             "total": sum(pts_list),
             "correct_count": correct_count,
             "max_points": sum(pts_list) + potential_points(
@@ -2721,7 +2723,9 @@ async def get_final_guess(tournament_id: int, db: AsyncSession = Depends(get_db)
     run_tml, run_name = await _tml_id_of(db, runner_up_id)
 
     def _read(conn):
+        from app.services.history.final_stats import default_guess
         return {
+            "default": default_guess(conn, tour, surface, best_of),
             "ceilings": ceilings(conn, tour, surface, best_of),
             "champion": (player_reference(conn, tour, champ_tml, surface, run_tml) if champ_tml else None),
             "tour": tour_reference(conn, tour, surface),
@@ -2738,6 +2742,8 @@ async def get_final_guess(tournament_id: int, db: AsyncSession = Depends(get_db)
         "runner_up": {"entry_id": runner_up_id, "name": run_name, "has_history": bool(run_tml)},
         "reference": {"champion": stats["champion"], "tour": stats["tour"]},
         "ceilings": stats["ceilings"],
+        # What this bracket is taken to have said if it never answers.
+        "default": stats["default"],
         "guess": ({"final_aces": guess.final_aces, "final_duration_min": guess.final_duration_min}
                   if guess else None),
         "actual": ({"final_aces": draw.final_winner_aces, "final_duration_min": draw.final_duration_min}

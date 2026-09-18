@@ -138,13 +138,32 @@ export default function DrawScreen() {
      refetch, a sheet opening, and the landing's own commit, right when the
      scrub had just come to rest (owner: "some lag", 2026-09-09). Everything
      it closes over is memoised on the data or a state setter. */
+  /* THE FINAL'S OWN ROUND. The champion sits in a round of its own (the
+     trophy tab), so the last round that holds a real match is the final. */
+  const finalRound = useMemo(() => {
+    let best = 0
+    for (const [n, ms] of rounds) for (const m of (ms || [])) if (!m.champion && n > best) best = n
+    return best
+  }, [rounds])
+  /* THE TIEBREAK BUTTON SITS BELOW THE FINAL (owner, 2026-09-18), so a
+     reader has to come all the way to the last match to meet it. Leaving it
+     alone is an answer in itself — the bracket holds last year's average —
+     which is why it can afford to be this far in. */
   const renderRow = useCallback(m => (m.champion
     ? <ChampionGroup m={m} B={B} drawRanks={drawRanks} />
-    : <MatchGroup m={m} roundIdx={roundIdx.get(m.round_number) ?? 0} B={B}
-                  drawRanks={drawRanks} zone={zone} onH2H={setH2H}
-                  onPredictors={setPredictors} onShowScore={setScoreMatch}
-                  standout={standoutIds.has(m.id)} />
-  ), [B, drawRanks, roundIdx, zone, standoutIds])
+    : (
+      <>
+        <MatchGroup m={m} roundIdx={roundIdx.get(m.round_number) ?? 0} B={B}
+                    drawRanks={drawRanks} zone={zone} onH2H={setH2H}
+                    onPredictors={setPredictors} onShowScore={setScoreMatch}
+                    standout={standoutIds.has(m.id)} />
+        {!viewing && m.round_number === finalRound ? (
+          <FinalGuessCard tournamentId={Number(id)} enabled refreshKey={finalGuessKey}
+                          onOpen={() => setFinalGuessOpen(true)} />
+        ) : null}
+      </>
+    )
+  ), [B, drawRanks, roundIdx, zone, standoutIds, finalRound, viewing, id, finalGuessKey])
 
   // Follows the live round until the user picks one, then stays put — moving
   // the screen under someone because a match finished elsewhere is worse than
@@ -267,10 +286,6 @@ export default function DrawScreen() {
             this is the coarse one. */}
         {rounds.length > 1 && (
           <RoundStrip rounds={rounds} active={active} onPick={setPicked} scrub={scrub} />
-        )}
-        {!viewing && rounds.length > 0 && (
-          <FinalGuessCard tournamentId={Number(id)} enabled refreshKey={finalGuessKey}
-                          onOpen={() => setFinalGuessOpen(true)} />
         )}
 
         {/* Swipe sideways to pull the next round in; the row under the

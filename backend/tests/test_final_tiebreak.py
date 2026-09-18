@@ -38,3 +38,23 @@ def test_before_the_final_nothing_is_stamped_and_points_alone_order():
     apply(scores, draw, {1: (10, 120), 2: (15, 120)})
     assert scores[1].tie_aces_diff is None and scores[2].tie_aces_diff is None
     assert scores[1].tiebreak_key() == scores[2].tiebreak_key()
+
+
+def test_a_bracket_that_never_answered_holds_the_default():
+    # Owner, 2026-09-18: no click means you chose last year's average, so you
+    # are separable like everyone else rather than sorted last.
+    draw = NS(final_winner_aces=8, final_duration_min=100)
+    scores = {1: _s(1, 27), 2: _s(2, 27), 3: _s(3, 27)}
+    apply(scores, draw, {1: (8, 100), 3: (20, 200)}, default=(6, 95))
+    assert (scores[1].tie_aces_diff, scores[1].tie_minutes_diff) == (0, 0)     # exact
+    assert (scores[2].tie_aces_diff, scores[2].tie_minutes_diff) == (2, 5)     # the default
+    assert (scores[3].tie_aces_diff, scores[3].tie_minutes_diff) == (12, 100)  # a bad guess
+    assert [x.user_id for x in rank_users(list(scores.values()), 5)] == [1, 2, 3]
+
+
+def test_without_a_default_a_silent_bracket_still_sorts_last():
+    draw = NS(final_winner_aces=8, final_duration_min=100)
+    scores = {1: _s(1, 27), 2: _s(2, 27)}
+    apply(scores, draw, {1: (20, 200)}, default=None)
+    assert scores[2].tie_aces_diff is None
+    assert [x.user_id for x in rank_users(list(scores.values()), 5)] == [1, 2]

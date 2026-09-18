@@ -36,15 +36,47 @@ async def guesses_for(db, draw_id: int) -> dict[int, tuple[int, int]]:
     return {g.user_id: (g.final_aces, g.final_duration_min) for g in rows}
 
 
+_DEFAULTS: dict = {}
+
+
+async def default_for(draw) -> Optional[tuple]:
+    """(aces, minutes) a bracket that never answered is taken to have said —
+    last year's average for this gender, surface and format. Cached per
+    (tour, surface, format, year) for the process: it is a settled figure."""
+    from app.services.history import db as hdb
+    from app.services.history.final_stats import default_guess
+    from app.services.history.link import norm_surface
+    from app.services.schedule import _best_of
+
+    tour = "wta" if (getattr(draw, "gender", "") or "").upper() == "F" else "atp"
+    surface = norm_surface(getattr(draw, "surface", None))
+    best_of = _best_of(draw, "singles", "main")
+    key = (tour, surface, best_of)
+    if key not in _DEFAULTS:
+        try:
+            got = await hdb.run(lambda c: default_guess(c, tour, surface, best_of))
+        except Exception:      # noqa: BLE001 — a missing default must not break a page
+            got = None
+        _DEFAULTS[key] = (got["aces"], got["minutes"]) if got else None
+    return _DEFAULTS[key]
+
+
 def final_played(draw) -> bool:
     return getattr(draw, "final_winner_aces", None) is not None or getattr(draw, "final_duration_min", None) is not None
 
 
-def apply(scores, draw, guesses: dict) -> None:
+def apply(scores, draw, guesses: dict, default: Optional[tuple] = None) -> None:
     """Stamp each UserScore's tie diffs from its guess and the draw's actuals.
-    Nothing is stamped before the final is played: level stays level."""
+
+    A BRACKET THAT NEVER ANSWERED IS TAKEN TO HAVE SAID THE DEFAULT (owner,
+    2026-09-18): last year's average for this gender, surface and format. So
+    everyone is separable, and a reader who never opened the dialog is not
+    punished for it — they simply held the average. Nothing is stamped before
+    the final is played: level stays level.
+    """
     if not final_played(draw):
         return
     for s in (scores.values() if isinstance(scores, dict) else scores):
-        a, m = diffs_for(guesses.get(s.user_id), draw.final_winner_aces, draw.final_duration_min)
+        a, m = diffs_for(guesses.get(s.user_id) or default,
+                         draw.final_winner_aces, draw.final_duration_min)
         s.tie_aces_diff, s.tie_minutes_diff = a, m
