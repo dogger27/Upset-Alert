@@ -492,8 +492,9 @@ def finish_range(
                 p_win += ((place == 1) * weight_of[:, None]).sum(0)
                 p_pod += ((place <= PODIUM_PLACES) * weight_of[:, None]).sum(0)
                 p_total += float(weight_of.sum())
+    # A BOT'S ROW STAYS BLANK (owner, 2026-09-18): no place and no chance of its own.
     if odds is None:
-        return {u: (int(best[i]), int(worst[i])) for i, u in enumerate(users)}
+        return {u: (int(best[i]), int(worst[i])) for i, u in enumerate(users) if not bot_mask[i]}
     # Normalised, not assumed: the weights sum to one by construction, and
     # dividing by what they actually summed to is what keeps a rounding drift
     # or a degenerate walkover from showing up as 101%.
@@ -504,8 +505,10 @@ def finish_range(
         # the extreme ones; the callers read None and print a dash, which is
         # what the column already does before the range is computable.
         return {u: (None, None, float(p_win[i] * scale), float(p_pod[i] * scale))
-                for i, u in enumerate(users)}
+                for i, u in enumerate(users) if not bot_mask[i]}
     for i, u in enumerate(users):
+        if bot_mask[i]:
+            continue
         lo, hi = int(best[i]), int(worst[i])
         pw, pp = float(p_win[i] * scale), float(p_pod[i] * scale)
         # THE RANGE IS THE AUTHORITY ON CERTAINTY, not the sum of fifteen

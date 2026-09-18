@@ -181,3 +181,17 @@ check('a table of nothing but bots numbers nobody', () => {
 })
 
 console.log(`\n  ${n} passed`)
+
+
+test('worldEntries: a bot has no place and no chance in a chosen world', () => {
+  const entries = [
+    { user_id: 1, username: 'Tono', total: 27, round_points: [27], correct_count: 5, is_bot: false },
+    { user_id: 9, username: 'Highest_Rank', total: 27, round_points: [27], correct_count: 5, is_bot: true },
+    { user_id: 2, username: 'dogger27', total: 26, round_points: [26], correct_count: 4, is_bot: false },
+  ]
+  const got = worldEntries(entries, { results: [] }, {})
+  const by = Object.fromEntries(got.map(e => [e.user_id, e]))
+  assert.equal(by[1].best_rank, 1); assert.equal(by[1].p_win, 1)
+  assert.equal(by[9].best_rank, null); assert.equal(by[9].p_win, null); assert.equal(by[9].p_podium, null); assert.equal(by[9].podium_locked, false)
+  assert.equal(by[2].best_rank, 2)      // the bot consumed no place
+})

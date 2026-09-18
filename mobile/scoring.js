@@ -202,7 +202,10 @@ export function worldEntries(entries, world, worldPredictions) {
   const sorted = sortStandings(rows)
   const ranks = competitionRanks(sorted)
   // A chosen world has nothing left to play, so a chance is what happened.
-  return sorted.map((e, i) => ({ ...e, best_rank: ranks[i], worst_rank: ranks[i],
-                                 podium_locked: ranks[i] <= 3,
-                                 p_win: ranks[i] === 1 ? 1 : 0, p_podium: ranks[i] <= 3 ? 1 : 0 }))
+  // A bot's row stays blank (owner, 2026-09-18): no place, no chance.
+  return sorted.map((e, i) => (ranks[i] == null
+    ? { ...e, best_rank: null, worst_rank: null, podium_locked: false, p_win: null, p_podium: null }
+    : { ...e, best_rank: ranks[i], worst_rank: ranks[i],
+        podium_locked: ranks[i] <= 3,
+        p_win: ranks[i] === 1 ? 1 : 0, p_podium: ranks[i] <= 3 ? 1 : 0 }))
 }

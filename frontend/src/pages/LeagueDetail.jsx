@@ -1485,9 +1485,16 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
         }
         return 0
       })
-      let place = 1
-      const placed = scored.map((e, i) => {
-        if (i > 0 && !sameStanding(scored[i - 1], e)) place = i + 1
+      // A BOT TAKES NO PLACE AND CONSUMES NONE, and its row stays blank
+      // (owner, 2026-09-18): places count the people only.
+      let place = 1, placedPeople = 0, lastPerson = null
+      const placed = scored.map(e => {
+        if (e.is_bot) {
+          return { ...e, best_rank: null, worst_rank: null, podium_locked: false, p_win: null, p_podium: null }
+        }
+        placedPeople += 1
+        if (lastPerson && !sameStanding(lastPerson, e)) place = placedPeople
+        lastPerson = e
         return { ...e, best_rank: place, worst_rank: place, podium_locked: place <= 3,
                  /* A chosen world has nothing left to play, so a chance is no
                     longer a chance: it is what happened in that world. */
@@ -2127,7 +2134,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                 {finishShown && (
                   <span className={`lt-progress-finish${colSort === 'finish' ? ' lt-col-on' : ''}${entry.best_rank != null && entry.best_rank === entry.worst_rank ? ' lt-progress-finish--locked' : ''}`}
                         title={finishTitle(entry)}>
-                    {finishText(entry)}
+                    {entry.is_bot ? '' : finishText(entry)}
                   </span>
                 )}
                 {/* A CERTAINTY READS LIKE ONE. 100% is a fact rather than an
@@ -2138,11 +2145,11 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                   <>
                     <span className={`lt-progress-pwin${colSort === 'pwin' ? ' lt-col-on' : ''}${entry.p_win >= 1 ? ' lt-chance--sure' : ''}${entry.p_win === 0 ? ' lt-chance--out' : ''}`}
                           title={chanceTitle(entry, 'win')}>
-                      {pct(entry.p_win)}
+                      {entry.is_bot ? '' : pct(entry.p_win)}
                     </span>
                     <span className={`lt-progress-ppod${colSort === 'ppod' ? ' lt-col-on' : ''}${entry.p_podium >= 1 ? ' lt-chance--sure' : ''}${entry.p_podium === 0 ? ' lt-chance--out' : ''}`}
                           title={chanceTitle(entry, 'podium')}>
-                      {pct(entry.p_podium)}
+                      {entry.is_bot ? '' : pct(entry.p_podium)}
                     </span>
                   </>
                 )}

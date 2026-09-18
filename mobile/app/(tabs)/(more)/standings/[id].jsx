@@ -242,7 +242,7 @@ export default function GlobalStandings() {
                             accessibilityLabel={e.best_rank == null ? undefined
                               : e.best_rank === e.worst_rank ? `Finishes ${e.best_rank} whatever happens`
                               : `Can still finish anywhere from ${e.best_rank} to ${e.worst_rank}`}>
-                        {finishText(e)}
+                        {e.is_bot ? '' : finishText(e)}
                       </Text>
                     ) : null}
                     {/* 100% has stopped being a probability, so it reads like the
@@ -250,10 +250,10 @@ export default function GlobalStandings() {
                     {oddsAvail ? (
                       <>
                         <Text style={[s.chance, sortKey === 'p_win' && s.on, e.p_win >= 1 && s.chanceSure, e.p_win === 0 && s.chanceOut]}
-                              numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{pct(e.p_win)}</Text>
+                              numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{e.is_bot ? '' : pct(e.p_win)}</Text>
                         {podiumCol ? (
                           <Text style={[s.chance, sortKey === 'p_podium' && s.on, e.p_podium >= 1 && s.chanceSure, e.p_podium === 0 && s.chanceOut]}
-                                      numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{pct(e.p_podium)}</Text>
+                                      numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{e.is_bot ? '' : pct(e.p_podium)}</Text>
                         ) : null}
                       </>
                     ) : null}
