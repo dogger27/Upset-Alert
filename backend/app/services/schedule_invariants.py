@@ -176,6 +176,21 @@ def _printed_instant(entry, tz_name):
                        tzinfo=tz).astimezone(_tz.utc)
 
 
+_LAW_WALKOVER_RE = re.compile(r'^\s*w\s*/?\s*o\.?\s*$', re.I)
+
+
+def _walked_over(entry) -> bool:
+    """Did this slot's match end in a walkover? The law's own reading, apart
+    from schedule._played: a result cell or a printed score that is "w/o"."""
+    if _LAW_WALKOVER_RE.match(str(getattr(entry, "printed_score", None) or "")):
+        return True
+    for side in (getattr(entry, "scores_json", None) or []):
+        for cell in (side if isinstance(side, (list, tuple)) else [side]):
+            if _LAW_WALKOVER_RE.match(str(cell or "")):
+                return True
+    return False
+
+
 def clock_runs_backwards(rows, tz_name) -> list[tuple]:
     """(row, the row above it) wherever a court's printed clock goes BACK in time.
 
@@ -186,10 +201,18 @@ def clock_runs_backwards(rows, tz_name) -> list[tuple]:
     through the law's own `_printed_instant`, so it does not share the
     parser's `settle_meridiems`. Measured over every stored court-day when it
     was written (278): those two rows and nothing else.
+
+    A WALKOVER HAS NO PLACE IN THAT ORDER. It never occupied the court, so the
+    chain frees the court from whatever came before it (schedule._played), and
+    its clock is not a time anything on the court ran to: whatever wrote it —
+    the sheet before the w/o, or the WTA feed stamping the moment the result
+    was ENTERED — it neither convicts nor is convicted. SP Open 2026-09-18:
+    Dabrowski/Stefani's doubles QF went w/o, the feed stamped it 12:48, and it
+    sat as QUADRA 1 #2 under the 2:00 PM opener, reported on every sweep.
     """
     courts: dict = {}
     for r in rows:
-        if r.court:
+        if r.court and not _walked_over(r):
             courts.setdefault(r.court, []).append(r)
     out = []
     for court_rows in courts.values():
