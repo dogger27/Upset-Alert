@@ -117,6 +117,30 @@ def test_the_law_convicts_the_stored_rows_and_acquits_the_fix():
     assert clock_runs_backwards(stored, tz) == []
 
 
+def test_a_walkover_neither_convicts_nor_is_convicted():
+    """SP Open 2026-09-18, entry 1297: Dabrowski/Stefani's doubles QF went
+    w/o, the WTA feed stamped it 12:48 (when the result was entered), and it
+    sat as QUADRA 1 #2 under the court's 2:00 PM opener — reported on every
+    sweep. A walkover never occupied the court; its clock orders nothing."""
+    tz = 'America/Sao_Paulo'
+    opener = _row('QUADRA 1', 1, '2:00 PM')
+    wo = _row('QUADRA 1', 2, '12:48')
+    wo.scores_json = [['w/o'], ['']]
+    rest = _row('QUADRA 1', 3, None)
+    assert clock_runs_backwards([opener, wo, rest], tz) == []
+    # Its clock does not convict the row below it either.
+    wo.start_time_local, rest.start_time_local = '6:00 PM', '4:00 PM'
+    assert clock_runs_backwards([opener, wo, rest], tz) == []
+    # A printed "W/O" says the same thing as a result cell.
+    wo.scores_json, wo.printed_score, wo.start_time_local = None, 'W/O', '12:48'
+    assert clock_runs_backwards([opener, wo, rest], tz) == []
+    # The same clock on a match that was played is still convicted.
+    wo.printed_score = None
+    wo.scores_json = [['6', '6'], ['3', '4']]
+    bad = clock_runs_backwards([opener, wo, rest], tz)
+    assert [(r.court_order, prev.court_order) for r, prev in bad] == [(2, 1)]
+
+
 def test_the_law_reads_courts_apart_and_in_court_order():
     tz = 'America/Sao_Paulo'
     rows = [_row('Q2', 2, '2:30 PM'), _row('Q1', 1, '6:00 PM'),
