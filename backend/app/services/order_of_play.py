@@ -599,9 +599,11 @@ async def refresh_order_of_play() -> int:
             # THE FEEDS FIRST (owner, 2026-09-18): every day in the window the
             # WTA's JSON or Sofascore can supply is written from them — see
             # schedule_feeds. A Slam keeps its own feed below. The PDF is
-            # fetched only when no feed has a row for any day, and then the
-            # log says so.
+            # fetched only when no feed has a row for any day, or when a feed
+            # had a day it could not state (`declined`: no court, or no order
+            # on a court), and then the log says so.
             feed_days: dict = {}
+            declined_days: dict = {}
             if tournament.name not in _SLAM_FEEDS:
                 for day_ in (today - timedelta(days=1), today,
                              today + timedelta(days=1), today + timedelta(days=2)):
@@ -612,25 +614,28 @@ async def refresh_order_of_play() -> int:
                         fd = None
                         logger.info("feeds failed for %s %s: %s", tournament.name, day_,
                                     describe_exception(exc))
-                    if fd:
+                    if fd and fd.get("declined"):
+                        declined_days[day_] = fd["declined"]
+                    elif fd:
                         feed_days[day_] = fd
             if feed_days:
                 await _ingest_feed_days(tournament, draws, feed_days, tz)
 
             oop_date, atp_labels, wta_labels = None, 0, 0
             resp = None
-            if feed_days:
-                # The chip's day: today when the feeds have it, else the next.
-                oop_date = (today if today in feed_days
-                            else min((d for d in feed_days if d > today), default=max(feed_days)))
-                atp_labels, wta_labels = feed_days[oop_date]["atp"], feed_days[oop_date]["wta"]
-            want_pdf = not feed_days and (tournament.name in _SLAM_FEEDS or schedule_feeds.PDF_FALLBACK)
+            # The day the PDF is FOR, when it is to be ingested — never one the
+            # feeds already hold, or the two would take turns writing it.
+            pdf_date, pdf_atp, pdf_wta = None, 0, 0
+            want_pdf = ((not feed_days or bool(declined_days))
+                        and (tournament.name in _SLAM_FEEDS or schedule_feeds.PDF_FALLBACK))
             try:
                 if want_pdf:
                     async with httpx.AsyncClient(timeout=30, headers=_HEADERS) as client:
                         resp = await client.get(url)
                 if resp is not None and resp.status_code == 200:
-                    oop_date, atp_labels, wta_labels = _parse_oop(resp.content)
+                    pdf_date, pdf_atp, pdf_wta = _parse_oop(resp.content)
+                    if pdf_date is not None and pdf_date in feed_days:
+                        pdf_date = None
                 elif resp is not None and resp.status_code != 404:
                     resp.raise_for_status()
             except Exception as exc:
@@ -639,7 +644,20 @@ async def refresh_order_of_play() -> int:
                                   f"OOP fetch failed for '{tournament.name}': "
                                   f"{describe_exception(exc)}",
                                   dedup_key=f"oop_fetch_{tournament.id}", dedup_hours=6)
-                continue  # leave yesterday's value; the next tick re-checks
+                # The feeds' days still stand; only a tournament with nothing
+                # else keeps yesterday's value for the next tick to re-check.
+                if not feed_days:
+                    continue
+                resp, pdf_date = None, None
+
+            # The chip's day: today when a source has it, else the next.
+            have = {d: (f["atp"], f["wta"]) for d, f in feed_days.items()}
+            if pdf_date is not None:
+                have[pdf_date] = (pdf_atp, pdf_wta)
+            if have:
+                oop_date = (today if today in have
+                            else min((d for d in have if d > today), default=max(have)))
+                atp_labels, wta_labels = have[oop_date]
 
             # THE SLAMS HOST THEIR OWN SHEET. When neither tour file yielded a
             # dated order of play and this tournament is one the tours never
@@ -687,7 +705,8 @@ async def refresh_order_of_play() -> int:
             # Store the schedule itself, not just the link. Only when the file
             # is current: an out-of-date PDF would otherwise write a finished
             # tournament's last day over and over on every tick.
-            if fresh and resp is not None and resp.status_code == 200:
+            if (pdf_date is not None and pdf_date >= today - timedelta(days=1)
+                    and resp is not None and resp.status_code == 200):
                 try:
                     from app.services import schedule as schedule_svc
                     from app.services.db_retry import with_write_retry
@@ -724,27 +743,36 @@ async def refresh_order_of_play() -> int:
                         t = await sdb.get(type(tournament), tournament.id)
                         if feed_doc:
                             return await schedule_svc.ingest_document(
-                                sdb, t, oop_date, feed_doc["url"], feed_doc["bytes"],
+                                sdb, t, pdf_date, feed_doc["url"], feed_doc["bytes"],
                                 tour="WTA", parser=feed_doc["parser"], queue_verify=False)
                         return await schedule_svc.ingest_document(
-                            sdb, t, oop_date, url, resp.content, tour=src_tour,
+                            sdb, t, pdf_date, url, resp.content, tour=src_tour,
                             reclaim=not feed_failed)
 
                     async def _estimates(sdb):
                         return await schedule_svc.recompute_expected_starts(
-                            sdb, tournament.id, oop_date,
+                            sdb, tournament.id, pdf_date,
                             venue_tz=next((d.venue_timezone for d in draws
                                            if d.venue_timezone), None))
 
                     async with schedule_svc.day_write_lock:   # see schedule.day_write_lock
                         ingested = await with_write_retry(_ingest, what=f"oop ingest {tournament.id}")
                         await with_write_retry(_estimates, what=f"oop estimates {tournament.id}")
-                    if not (ingested or {}).get("skipped"):
+                    if not (ingested or {}).get("skipped") and pdf_date in declined_days:
+                        # INFO, not a warning: the WTA publishes every sheet's
+                        # "Followed By" matches unordered until they are
+                        # played, so this is the ordinary state of a next day
+                        # rather than a gap anyone can act on.
+                        await app_log("info", "order_of_play",
+                                      f"{tournament.name} {pdf_date}: the feeds could not state "
+                                      f"the day ({declined_days[pdf_date]}); the PDF filled in",
+                                      dedup_key=f"pdf_declined_{tournament.id}", dedup_hours=24)
+                    elif not (ingested or {}).get("skipped"):
                         # A warning, deliberately: a day no feed could supply
                         # is a gap in the feeds (an id not yet resolved, a
                         # feed down), and the watcher should look at it.
                         await app_log("warning", "order_of_play",
-                                      f"{tournament.name} {oop_date}: no feed had a schedule; "
+                                      f"{tournament.name} {pdf_date}: no feed had a schedule; "
                                       f"the PDF filled in",
                                       dedup_key=f"pdf_fallback_{tournament.id}", dedup_hours=24)
                 except Exception as exc:
