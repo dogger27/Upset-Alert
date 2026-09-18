@@ -183,6 +183,12 @@ class Draw(Base):
     # Stated, not inferred — see schedule.py::_best_of, which had to guess it
     # from category, gender and stage and said so.
     sofa_number_of_sets: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # THE FINAL AS IT WAS PLAYED (owner, 2026-09-18): the champion's aces and
+    # the match's minutes, written once by the results sweep when the final
+    # finishes. The two tiebreak guesses (models/final_guess) are judged
+    # against these. Null until then; a walkover final is 0 and 0.
+    final_winner_aces: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    final_duration_min: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # IS A DECIDING SET PLAYED OUT, or replaced by a first-to-10 match
     # tiebreak? Only meaningful for a best-of-THREE match; a best-of-five
     # always plays its fifth. Two columns because one tournament answers it

@@ -2634,3 +2634,123 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
     # commit — see the note where this used to be stamped.
     tournament.last_scraped_at = datetime.now(timezone.utc)
 
+
+
+
+# ---------------------------------------------------------------------------
+# THE TIEBREAK QUESTIONS (owner, 2026-09-18): the champion's aces in the
+# final and the final's length, asked when a user enters a draw, judged
+# once the final is played (scoring.tiebreak_key). The GET hands the page
+# the slider ends and the reference figures for the player the user has
+# picked to win; the PUT stores the answers, until the picks lock.
+# ---------------------------------------------------------------------------
+from pydantic import BaseModel as _BaseModel, Field as _Field  # noqa: E402
+from app.models.final_guess import DrawFinalGuess  # noqa: E402
+
+
+class FinalGuessIn(_BaseModel):
+    final_aces: int = _Field(ge=0, le=200)
+    final_duration_min: int = _Field(ge=0, le=900)
+
+
+def predicted_finalists(picks: dict, matches: list, num_rounds: int) -> tuple[Optional[int], Optional[int]]:
+    """(champion entry id, runner-up entry id) as the user's own bracket has
+    them: the final's pick, and the semi-final pick that is not the champion."""
+    by = {(m.round_number, m.match_number): m for m in matches if not getattr(m, "is_bye", False)}
+    final = by.get((num_rounds, 1))
+    champion = picks.get(final.id) if final else None
+    runner_up = None
+    for k in (1, 2):
+        sf = by.get((num_rounds - 1, k))
+        w = picks.get(sf.id) if sf else None
+        if w is not None and w != champion:
+            runner_up = w
+    return champion, runner_up
+
+
+async def _tml_id_of(db, entry_id: Optional[int]) -> tuple[Optional[str], Optional[str]]:
+    """(TennisMyLife id, display name) for a draw entry, through its Tennis Explorer row."""
+    if not entry_id:
+        return None, None
+    entry = await db.get(DrawEntry, entry_id)
+    if entry is None:
+        return None, None
+    name = getattr(entry, "display_name", None) or entry.name
+    if entry.te_player_id:
+        tp = await db.get(TePlayer, entry.te_player_id)
+        if tp is not None and tp.tml_player_id:
+            return tp.tml_player_id, name
+    return None, name
+
+
+@router.get("/{tournament_id}/final-guess")
+async def get_final_guess(tournament_id: int, db: AsyncSession = Depends(get_db),
+                          current_user: User = Depends(get_current_user)):
+    from app.services.history import db as hdb
+    from app.services.history.final_stats import ceilings, player_reference, tour_reference
+    from app.services.history.link import norm_surface
+    from app.services.locking import draw_lock_state
+    from app.services.schedule import _best_of
+
+    draw = await db.get(Draw, tournament_id)
+    if draw is None:
+        raise HTTPException(status_code=404, detail="Draw not found")
+    tour = "wta" if (draw.gender or "").upper() == "F" else "atp"
+    surface = norm_surface(draw.surface)
+    best_of = _best_of(draw, "singles", "main")
+
+    matches = (await db.execute(select(Match).where(Match.draw_id == tournament_id))).scalars().all()
+    preds = (await db.execute(select(UserPrediction).where(
+        UserPrediction.draw_id == tournament_id, UserPrediction.user_id == current_user.id))).scalars().all()
+    picks = {p.match_id: p.predicted_winner_id for p in preds if p.predicted_winner_id is not None}
+    champion_id, runner_up_id = predicted_finalists(picks, matches, draw.num_rounds)
+    champ_tml, champ_name = await _tml_id_of(db, champion_id)
+    run_tml, run_name = await _tml_id_of(db, runner_up_id)
+
+    def _read(conn):
+        return {
+            "ceilings": ceilings(conn, tour, surface, best_of),
+            "champion": (player_reference(conn, tour, champ_tml, surface, run_tml) if champ_tml else None),
+            "tour": tour_reference(conn, tour, surface),
+        }
+    stats = await hdb.run(_read)
+
+    guess = (await db.execute(select(DrawFinalGuess).where(
+        DrawFinalGuess.draw_id == tournament_id, DrawFinalGuess.user_id == current_user.id))).scalars().first()
+    lock = await draw_lock_state(db, draw)
+    return {
+        "draw_id": tournament_id, "tour": tour.upper(), "surface": surface, "best_of": best_of,
+        "locked": bool(lock.draw_locked) or draw.status == "completed",
+        "champion": {"entry_id": champion_id, "name": champ_name, "has_history": bool(champ_tml)},
+        "runner_up": {"entry_id": runner_up_id, "name": run_name, "has_history": bool(run_tml)},
+        "reference": {"champion": stats["champion"], "tour": stats["tour"]},
+        "ceilings": stats["ceilings"],
+        "guess": ({"final_aces": guess.final_aces, "final_duration_min": guess.final_duration_min}
+                  if guess else None),
+        "actual": ({"final_aces": draw.final_winner_aces, "final_duration_min": draw.final_duration_min}
+                   if draw.final_winner_aces is not None or draw.final_duration_min is not None else None),
+    }
+
+
+@router.put("/{tournament_id}/final-guess")
+async def put_final_guess(tournament_id: int, body: FinalGuessIn, db: AsyncSession = Depends(get_db),
+                          current_user: User = Depends(get_current_user)):
+    from app.services.locking import draw_lock_state
+
+    draw = await db.get(Draw, tournament_id)
+    if draw is None:
+        raise HTTPException(status_code=404, detail="Draw not found")
+    lock = await draw_lock_state(db, draw)
+    if lock.draw_locked or draw.status == "completed":
+        raise HTTPException(status_code=409, detail="Picks are locked for this draw")
+    guess = (await db.execute(select(DrawFinalGuess).where(
+        DrawFinalGuess.draw_id == tournament_id, DrawFinalGuess.user_id == current_user.id))).scalars().first()
+    if guess is None:
+        guess = DrawFinalGuess(user_id=current_user.id, draw_id=tournament_id,
+                               final_aces=body.final_aces, final_duration_min=body.final_duration_min)
+        db.add(guess)
+    else:
+        guess.final_aces = body.final_aces
+        guess.final_duration_min = body.final_duration_min
+    await db.commit()
+    return {"final_aces": guess.final_aces, "final_duration_min": guess.final_duration_min}
