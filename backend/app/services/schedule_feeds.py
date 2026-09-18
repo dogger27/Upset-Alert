@@ -43,6 +43,8 @@ from datetime import date
 from functools import partial
 from typing import Optional
 
+from sqlalchemy import select
+
 logger = logging.getLogger(__name__)
 
 # The PDF as the fallback of last resort. "0" retires it entirely: a day no
@@ -208,6 +210,17 @@ async def _sofa_parts(draw, day: date, venue_tz: Optional[str], tour: str,
     return parts
 
 
+async def _sheet_match_count(db, tournament_id: int, day: date) -> int:
+    """How many matches the last document for this day held, whatever wrote it."""
+    from app.models.schedule import ScheduleDocument
+    doc = (await db.execute(
+        select(ScheduleDocument)
+        .where(ScheduleDocument.tournament_id == tournament_id,
+               ScheduleDocument.play_date == day)
+        .order_by(ScheduleDocument.id.desc()))).scalars().first()
+    return int(getattr(doc, "match_count", 0) or 0) if doc else 0
+
+
 async def build_day_document(db, tournament, draws, day: date, season_year: int,
                              venue_tz: Optional[str]) -> Optional[dict]:
     """One day's schedule from the feeds: {url, bytes, parser, count, atp, wta,
@@ -230,9 +243,16 @@ async def build_day_document(db, tournament, draws, day: date, season_year: int,
                 if json.loads(wdoc):
                     parts["wta"] = wdoc.decode("utf-8")
                     sources.append(f"wta:{event_id}")
-                    # The women's Sofascore rows ride along for their courts only.
+                    # AND HER SOFASCORE ROWS AS ROWS, not just for their courts
+                    # (2026-09-18). The WTA feed answered SP Open's Friday with
+                    # TWO of its seven matches; preferring it wholesale wrote a
+                    # two-row day, the sheet reclaimed the rest, and the day
+                    # ended up owned by two documents with contradictory clocks
+                    # — which is what printed_clock_runs_backwards reported.
+                    # Offering both lets the parser keep one row per match (the
+                    # WTA's where it has one) and top the day up from Sofascore.
                     if has_sofa:
-                        parts["sofa"] += await _sofa_parts(draw, day, venue_tz, "WTA", courts_only=True)
+                        parts["sofa"] += await _sofa_parts(draw, day, venue_tz, "WTA")
                 elif has_sofa:
                     # THE WTA FEED HAS NOTHING FOR THE DAY (SP Open's Thursday,
                     # 2026-09-18) — Sofascore is then the women's schedule,
@@ -252,11 +272,20 @@ async def build_day_document(db, tournament, draws, day: date, season_year: int,
 
     if parts["wta"] is None and not [p for p in parts["sofa"] if not p.get("courts_only")]:
         return None
+    sheet_count = await _sheet_match_count(db, tournament.id, day)
     names = await schedule_shadow.court_names(db, tournament.id, min_votes=3)
     parser = partial(parse_day_document, court_names=names, venue_tz=venue_tz)
     doc = json.dumps(parts, sort_keys=True, separators=(",", ":")).encode("utf-8")
     matches, meta = parser(doc)
     if not matches:
+        return None
+    # A THIN DAY NEVER REPLACES A FULLER ONE. Whatever the source, a day that
+    # holds fewer matches than the sheet already stored for it is a partial
+    # answer, not a revision: it leaves the rest of the day owned by whatever
+    # wrote it last (SP Open, 2026-09-18).
+    if sheet_count and len(matches) < sheet_count:
+        logger.info("feeds have %d of %s %s's %d matches; leaving the day alone",
+                    len(matches), tournament.name, day, sheet_count)
         return None
     reason = declined(meta)
     if reason:
