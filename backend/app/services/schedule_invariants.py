@@ -531,6 +531,11 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                 decided_at[frozenset(a | b)] = _naive_utc(r.completed_at)
 
     def flag(code, entry, detail):
+        # ROWS THE FEEDS WROTE ARE NOT JUDGED BY THE SHEET'S RENDERING
+        # (2026-09-18): every name_* law reads how a PDF prints a name; a
+        # WTA-JSON or Sofascore row is rendered by its feed, by design.
+        if str(code).startswith("name_") and getattr(entry, "last_document_id", None) in feed_docs:
+            return
         v.append({"code": code, "entry_id": entry.id if entry else None,
                   "court": getattr(entry, "court", None), "detail": detail})
 
@@ -975,8 +980,6 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
         # alternatives they offer ("D. Parry or D. Vekic").
         for p in players:
             raw = (p.raw_name or "").strip()
-            if getattr(e, "last_document_id", None) in feed_docs:
-                break        # a feed's rendering, by design — see above
             if raw and p.side not in tbd_side and not _SHEET_CAPS_RE.search(raw):
                 flag("name_not_sheet_form", e,
                      f"side {p.side}: {raw!r} has no capitalised surname — "

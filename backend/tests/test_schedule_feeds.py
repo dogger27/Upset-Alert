@@ -93,3 +93,11 @@ def test_the_court_fill_matches_on_surnames_across_the_two_spellings():
                [("singles", "WTA", [_sofa("Bucsa C.", "Jovic I.", "Estadio", 17, 0)], True)])
     ms, _ = parse_day_document(doc, court_names={}, venue_tz="UTC")
     assert ms[0].court == "Estadio"
+
+
+def test_a_doubles_player_with_two_initials_keeps_both_before_the_surname():
+    from app.services.sofa_schedule import _surname_last
+    assert _surname_last("Barros V L") == "V L Barros"
+    assert _surname_last("Bhambri Y") == "Y Bhambri"
+    assert _surname_last("Van de Zandschulp B") == "B Van de Zandschulp"
+    assert _surname_last("Daniel Altmaier") == "Daniel Altmaier"
