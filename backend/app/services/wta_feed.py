@@ -183,6 +183,11 @@ def matches_for_day(rows: list[dict], day: date,
         # guessed at, and the caller can see it is unconverted.
         hhmm = _local_hhmm(m.get("MatchTimeStamp"), venue_tz)
         estimated = bool(m.get("isEstimatedStartTime"))
+        # A MATCH NOT YET PLACED: the feed stamps it 23:59 with no court and no
+        # order (Guadalajara 2026-09-18, Samsonova v Stearns). That is a
+        # placeholder, not a time — printed as "11:59 PM" it would be a lie.
+        if (m.get("MatchTimeStamp") or "")[11:16] == "23:59" and not m.get("DateSeq") and not cid:
+            hhmm = None
         names_a, nats_a = _side(m, "A")
         names_b, nats_b = _side(m, "B")
         out.append(Match(

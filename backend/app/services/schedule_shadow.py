@@ -271,7 +271,7 @@ async def _structured(db, tournament, draws, day: date):
 
 
 async def day_is_feed_sourced(db, tournament_id: int, day: date) -> bool:
-    """True when the day's latest document came from the WTA's JSON — the feed
+    """True when the day's latest document came from the feeds — they are
     is the schedule there (order_of_play, 2026-09-18), so comparing the feed
     to it would only agree with itself."""
     from app.models.schedule import ScheduleDocument
@@ -280,7 +280,8 @@ async def day_is_feed_sourced(db, tournament_id: int, day: date) -> bool:
         .where(ScheduleDocument.tournament_id == tournament_id,
                ScheduleDocument.play_date == day)
         .order_by(ScheduleDocument.id.desc()))).scalars().first()
-    return bool(doc and "api.wtatennis.com" in (doc.source_url or ""))
+    url = (doc.source_url or "") if doc else ""
+    return bool(doc and ("api.wtatennis.com" in url or url.startswith("feeds://")))
 
 
 async def compare_day(db, tournament, draws, day: date) -> Optional[dict]:

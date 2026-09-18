@@ -4,16 +4,8 @@ under a learned name.
 """
 from datetime import date
 
-from app.services.order_of_play import use_wta_feed
 from app.services.schedule_shadow import court_winners
 from app.services.wta_feed import matches_for_day
-
-
-def test_the_feed_takes_a_wta_only_day_and_leaves_a_combined_sheet_alone():
-    assert use_wta_feed("WTA", covers_atp=False) is True
-    assert use_wta_feed("WTA", covers_atp=True) is False      # the men are only on the sheet
-    assert use_wta_feed("ATP", covers_atp=False) is False     # the feed holds women only
-    assert use_wta_feed(None, covers_atp=False) is False
 
 
 def _row(court_id, seq, last_a, last_b, ts="2026-09-17T14:00:00Z"):
@@ -49,3 +41,11 @@ def test_a_feed_row_without_a_court_id_has_no_court_name():
     rows = [_row(None, 1, "Kostyuk", "Samsonova")]
     ms = matches_for_day(rows, date(2026, 9, 17), court_names={"Court 1": "ESTADIO SKARCH"})
     assert ms[0].court == ""
+
+
+def test_the_wta_placeholder_time_is_no_time():
+    rows = [dict(_row(None, None, "Samsonova", "Stearns", ts="2026-09-17T23:59:00Z"))]
+    ms = matches_for_day(rows, date(2026, 9, 17), court_names={})
+    assert ms[0].time is None and ms[0].start_raw is None
+    placed = [dict(_row(1, 2, "Samsonova", "Stearns", ts="2026-09-17T23:59:00Z"))]
+    assert matches_for_day(placed, date(2026, 9, 17), court_names={})[0].time == "23:59"
