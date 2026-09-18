@@ -910,6 +910,11 @@ input:focus, select:focus { outline: none; border-color: var(--brand-line); }
    made these boxes render square in production once already. With no `fi`
    there is no competing width at all.
 
+   THE OTHER HALF: the REAL flag beside it does carry `fi`, so the flag class
+   must pin its own size with !important, or `fi` wins on the real flag only
+   and the two stop matching. .sched-flag and .h2h-flag did not, and every
+   withheld-country name sat 2–5px left of its column (doc 294, 2026-09-18).
+
    `!important` on the border for the same reason in reverse: .cv-flag sets its
    own border colour, and this has to beat it whichever order they land in.
    `border-box` keeps the outlined box the exact size of a real flag, which is
