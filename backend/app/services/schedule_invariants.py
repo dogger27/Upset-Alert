@@ -153,6 +153,11 @@ def _printed_instant(entry, tz_name):
 
     if not entry.start_time_local or not tz_name or not entry.play_date:
         return None
+    # An ESTIMATE is not a printed clock, and every law that reads one is about
+    # what the tour printed (2026-09-18): a feed's guess moves when a court is
+    # re-staggered, which is not a contradiction to report.
+    if getattr(entry, "start_type", None) == "estimated":
+        return None
     m = _CLOCK_RE.match(entry.start_time_local.strip())
     if not m:
         return None
