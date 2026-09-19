@@ -12,22 +12,37 @@ test('others’ picks: the mode decides the wait, and an active draw has none', 
   assert.match(othersPicksNote({ status: 'open' }), /after pick selection closes\.$/)
 })
 
-/* THE TWO KINDS OF DEADLINE (owner, 2026-09-19): a clock, or a place in the
-   tournament. `label` leads quietly and `value` carries the weight. */
+/* ONE DEADLINE, BOTH MODES (owner, 2026-09-19, correcting himself the same
+   day): locking STARTS at the first ball whatever the mode, so every draw
+   counts down to it. `label` leads quietly and `value` carries the weight. */
 const AT = '2026-09-21T15:00:00'
 const at = (h, m = 0) => Date.parse(`${AT}Z`) - ((h * 60 + m) * 60_000)
 
-test('a match-by-match draw locks at an EVENT, and names no hour for it', () => {
-  const got = lockLabel({ pick_lock_mode: 'r1_progressive', closing_time: AT }, at(30))
-  assert.equal(got.label, 'Lock at:')
-  assert.equal(got.value, 'End of R1')
-  assert.equal(got.text, 'Lock at: End of R1')
-  assert.equal(got.urgent, false)
-  // Even with a closing_time sitting right there, it must not be counted down.
-  assert.ok(!/hr|min|day/.test(got.text))
+test('a match-by-match draw counts down like any other', () => {
+  const prog = { pick_lock_mode: 'r1_progressive', closing_time: AT }
+  const plain = { pick_lock_mode: 'draw_start', closing_time: AT }
+  // The mode changes which picks survive the first ball, not when the first
+  // ball is — so the line reads the same on both.
+  assert.equal(lockLabel(prog, at(35)).text, 'Locks in: 35 hrs')
+  assert.equal(lockLabel(prog, at(35)).text, lockLabel(plain, at(35)).text)
+  assert.equal(lockLabel(prog, at(4, 30)).text, 'Locks in: 4h 30m')
 })
 
-test('every other draw counts down to its moment', () => {
+test('once the first ball has gone, the two modes part company', () => {
+  const prog = { pick_lock_mode: 'r1_progressive', closing_time: AT }
+  const plain = { pick_lock_mode: 'draw_start', closing_time: AT }
+  /* THE ONE WINDOW THAT DIFFERS. A progressive draw is not `is_locked` until
+     round one COMPLETES, so between the first ball and that moment a card
+     would otherwise claim picks were closed for the two days a first round
+     takes — while the draw screen still accepts changes to untouched later
+     rounds. */
+  assert.equal(lockLabel(prog, at(-1)).text, 'Lock at: End of R1')
+  assert.equal(lockLabel(plain, at(-1)).text, 'Picks closed')
+  // And once it HAS locked, it is closed like anything else.
+  assert.equal(lockLabel({ ...prog, is_locked: true }, at(-30)).text, 'Picks closed')
+})
+
+test('every draw counts down to its moment', () => {
   const t = { pick_lock_mode: 'draw_start', closing_time: AT }
   // Hours right out to three days — the owner's own example was "52 hrs".
   assert.equal(lockLabel(t, at(52)).text, 'Locks in: 52 hrs')
@@ -53,7 +68,8 @@ test('closed is closed, whichever way it got there', () => {
   assert.equal(lockLabel({ is_locked: true }).text, 'Picks closed')
   // The clock ran out but nothing has stamped it yet.
   assert.equal(lockLabel({ closing_time: AT }, at(-1)).text, 'Picks closed')
-  // A progressive draw that HAS locked reads closed, not "End of R1".
+  // A progressive draw that HAS locked reads closed, not "End of R1" —
+  // is_locked is checked before the clock for exactly this reason.
   assert.equal(lockLabel({ is_locked: true, pick_lock_mode: 'r1_progressive' }).text, 'Picks closed')
 })
 

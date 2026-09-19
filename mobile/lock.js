@@ -1,43 +1,52 @@
 /*
- * How long until picks close — and when to refuse to say.
+ * How long until picks close.
  *
- * closing_time is a PREDICTION of day one's first ball. Under the original
- * rule the whole bracket shuts then, so a countdown is honest. Under
- * pick_lock_mode 'r1_progressive' picking closes when the first round is
- * COMPLETE, which depends on how the tennis goes and cannot be named in
- * advance — printing a time there promises something exact and wrong. The
- * website learned this and says nothing; so does this.
+ * closing_time is a PREDICTION of day one's first ball, and EVERY draw counts
+ * down to it — including a match-by-match one (owner, 2026-09-19, correcting
+ * the earlier reading in this file).
+ *
+ * The old reasoning here was that a 'r1_progressive' draw closes when the
+ * first round is COMPLETE, an hour nobody can name in advance, so it should
+ * name none. That describes the last pick to freeze rather than the first.
+ * Locking under that mode STARTS at the first ball: the match going on court
+ * freezes, and so does every match downstream of it
+ * (services/locking._locked_with_downstream), which is most of a bracket by
+ * the end of the round. A reader who wants to finish their picks has until the
+ * first ball in either mode, and that is the deadline this line is for.
+ *
+ * Residual edits — a later-round match whose path is still untouched — remain
+ * possible through round one under that mode. They are the exception, they are
+ * what the draw screen's own refusals explain match by match, and they are not
+ * what a card on the dashboard is counting down to.
  */
 
-/* TWO DIFFERENT SENTENCES, BECAUSE THEY ARE TWO DIFFERENT FACTS (owner,
-   2026-09-19). A draw on the original rule locks at a MOMENT, so it gets
-   "Locks in: 52 hrs" — a quantity that counts down. A match-by-match draw
-   locks at an EVENT nobody can time, so it gets "Lock at: End of R1" — a
-   place in the tournament, not a clock. The old wording ran the unit after
-   the number as a suffix ("52 hrs until lock"), which read as a caption on
-   the number rather than a statement about the draw.
-
-   A LABEL AND A VALUE, so the card can set the value loud and the label
-   quiet: the value is the part you can miss. */
+/* A LABEL AND A VALUE, so the card can set the value loud and the label quiet:
+   the value is the part you can miss. The old wording ran the unit after the
+   number as a suffix ("52 hrs until lock"), which read as a caption on the
+   number rather than a statement about the draw. */
 const mk = (label, value, urgent = false) =>
   ({ label, value, text: `${label} ${value}`.trim(), urgent })
 
 export function lockLabel(t, now = Date.now()) {
   if (!t) return null
   if (t.is_locked) return mk('Picks', 'closed')
-  if (t.pick_lock_mode === 'r1_progressive') {
-    /* NO CLOCK, on purpose — see the note at the top of the file. The first
-       round finishes when the tennis says so, and naming an hour for it would
-       promise something exact and wrong. */
-    return mk('Lock at:', 'End of R1')
-  }
   if (!t.closing_time) return null
 
   // SQLite hands these back without a zone; they are UTC.
   const at = new Date(t.closing_time.endsWith('Z') ? t.closing_time : t.closing_time + 'Z')
   const ms = at.getTime() - now
   if (Number.isNaN(ms)) return null
-  if (ms <= 0) return mk('Picks', 'closed')
+  if (ms <= 0) {
+    /* THE COUNTDOWN IS SPENT. Under the original rule that is simply the end
+       of it. Under match-by-match the draw is not `is_locked` until the first
+       round COMPLETES, so this is the one window where a card would otherwise
+       claim picks were closed for the two days a first round takes — while the
+       draw screen still accepts changes to untouched later rounds. It says
+       where the closing has got to instead. */
+    return t.pick_lock_mode === 'r1_progressive'
+      ? mk('Lock at:', 'End of R1')
+      : mk('Picks', 'closed')
+  }
 
   const mins = Math.floor(ms / 60000)
   const hrs = Math.floor(mins / 60)
