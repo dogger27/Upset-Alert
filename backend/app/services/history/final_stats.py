@@ -338,9 +338,32 @@ TIER_LEVELS = {
 # aces and minutes get a reading per set, so five years is already thousands.
 SETS_YEARS = 10
 RATE_YEARS = 5
-# What a changeover between sets costs, in the owner's arithmetic for the
-# head-to-head duration estimate: 225 seconds each, taken (sets - 1) times.
+# What a changeover between sets costs: 225 seconds each, taken (sets - 1)
+# times (owner, 2026-09-19).
+#
+# IT COMES OUT BEFORE ANY AVERAGING AND GOES BACK ON AFTERWARDS. The record
+# stores whole-match `minutes`, breaks included, so total/sets is a per-set
+# figure with the breaks of THAT match's set count amortised into it. Scaling
+# such a figure to a different set count carries the wrong number of breaks,
+# and adding 225s on top of it counts them twice.
+#
+# So every per-set duration here is PLAYING time: strip (sets - 1) breaks from
+# each match before dividing, average that, and let estimate_minutes put the
+# breaks back for the set count the reader actually predicted. A three-set
+# prediction then carries two breaks whatever the history went.
 BETWEEN_SETS_SECONDS = 225
+BREAK_MINUTES = BETWEEN_SETS_SECONDS / 60
+
+
+def _play_minutes(total: Optional[int], sets: int) -> Optional[float]:
+    """One match's PLAYING minutes: the clock less its changeovers.
+
+    Clamped at zero. A mis-recorded 40-minute three-setter would otherwise
+    contribute negative playing time and drag an average below the floor.
+    """
+    if total is None or not sets:
+        return None
+    return max(0.0, total - BREAK_MINUTES * (sets - 1))
 
 
 def _levels_for(tour: str, tier: str) -> tuple:
@@ -398,7 +421,7 @@ def _both_sides(rows) -> Optional[dict]:
     A tour baseline is about the match rather than about one player in it, so
     an ace is an ace whoever served it — the same reading tour_reference uses.
     """
-    aces = sets_a = mins = sets_m = sets_total = n = 0
+    aces = sets_a = play = sets_m = sets_total = n = 0
     for wa, la, m, score in rows:
         s = sets_in(score)
         if not s:
@@ -409,14 +432,16 @@ def _both_sides(rows) -> Optional[dict]:
             aces += wa + la
             sets_a += 2 * s
         if m is not None and m > 0:
-            mins += m
+            play += _play_minutes(m, s)
             sets_m += s
     if not n:
         return None
     return {"matches": n,
             "sets_per_match": round(sets_total / n, 2),
             "aces_per_set": round(aces / sets_a, 2) if sets_a else None,
-            "minutes_per_set": round(mins / sets_m, 1) if sets_m else None}
+            # PLAYING minutes per set — breaks stripped. estimate_minutes puts
+            # them back for the predicted set count.
+            "play_minutes_per_set": round(play / sets_m, 1) if sets_m else None}
 
 
 def player_rates(conn, tour: str, tml_id: str, surface: Optional[str], years: int,
@@ -453,8 +478,21 @@ def player_rates(conn, tour: str, tml_id: str, surface: Optional[str], years: in
     got = _rate(rows)
     if not got:
         return None
-    sets_total = sum(sets_in(r[2]) for r in rows)
+    sets_total = play = sets_m = 0
+    for _a, m, score in rows:
+        st = sets_in(score)
+        if not st:
+            continue
+        sets_total += st
+        if m is not None and m > 0:
+            play += _play_minutes(m, st)
+            sets_m += st
     got["sets_per_match"] = round(sets_total / got["matches"], 2) if got["matches"] else None
+    # Breaks stripped, like every per-set duration here. `minutes_per_set` from
+    # _rate still carries them, so it is dropped rather than left to be read by
+    # mistake — the two are different quantities.
+    got.pop("minutes_per_set", None)
+    got["play_minutes_per_set"] = round(play / sets_m, 1) if sets_m else None
     got["years"] = years
     return got
 
@@ -507,30 +545,29 @@ def h2h_set_minutes(conn, tour: str, tml_id: str, opponent_tml_id: str,
           AND ((winner_id = ? AND loser_id = ?) OR (winner_id = ? AND loser_id = ?))
           AND score NOT LIKE '%W/O%' AND minutes IS NOT NULL AND minutes > 0""",
         (tour, surface, tml_id, opponent_tml_id, opponent_tml_id, tml_id)).fetchall()
-    mins = sets = 0
+    play = sets = 0
     n = 0
     for m, score in rows:
         s = sets_in(score)
         if not s:
             continue
         n += 1
-        mins += m
+        play += _play_minutes(m, s)
         sets += s
     if not sets:
         return None
-    return {"matches": n, "minutes_per_set": round(mins / sets, 1)}
+    return {"matches": n, "play_minutes_per_set": round(play / sets, 1)}
 
 
-def estimate_minutes(minutes_per_set: Optional[float], sets: int) -> Optional[int]:
-    """The owner's head-to-head duration estimate: the average set times the
-    number of sets, plus a 225-second changeover between each pair of them.
+def estimate_minutes(play_minutes_per_set: Optional[float], sets: int) -> Optional[int]:
+    """A duration for a final of `sets` sets: playing time times the sets, plus
+    a changeover between each pair of them.
 
-    Worth knowing when reading the number: `minutes` in the record is the whole
-    match, so dividing it by sets has already spread the real changeovers
-    across them. The added 225s is therefore deliberate padding on top rather
-    than the first time breaks are counted — it was specified that way, and it
-    pushes the estimate a few minutes long on purpose.
+    TAKES PLAYING TIME, NOT A RAW PER-SET AVERAGE. Its input must already have
+    had the breaks stripped (see BREAK_MINUTES) — that is what lets the number
+    of breaks follow the reader's PREDICTION rather than whatever the history
+    happened to go. Handing it a total/sets figure counts every break twice.
     """
-    if minutes_per_set is None or not sets:
+    if play_minutes_per_set is None or not sets:
         return None
-    return int(round(minutes_per_set * sets + (BETWEEN_SETS_SECONDS / 60) * (sets - 1)))
+    return int(round(play_minutes_per_set * sets + BREAK_MINUTES * (sets - 1)))

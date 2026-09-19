@@ -2790,6 +2790,9 @@ async def get_final_guess(tournament_id: int, db: AsyncSession = Depends(get_db)
         DrawFinalGuess.draw_id == tournament_id, DrawFinalGuess.user_id == current_user.id))).scalars().first()
     lock = await draw_lock_state(db, draw)
 
+    # The set counts a final of this format can go — a best-of-three cannot
+    # be four sets, so no figure is offered for one.
+    _lengths = (2, 3) if best_of == 3 else (3, 4, 5)
     tier_label = {"GS": "Grand Slam", "1000": f"{tour.upper()} 1000",
                   "500": f"{tour.upper()} 500", "250": f"{tour.upper()} 250"}.get(tier, tier)
     h2h_min = live["h2h_set_minutes"]
@@ -2815,15 +2818,22 @@ async def get_final_guess(tournament_id: int, db: AsyncSession = Depends(get_db)
             "tier_finals": (tier_ref or {}).get("rates"),
             # Already multiplied out per set count, from the cache.
             "tier_minutes_by_sets": (tier_ref or {}).get("minutes_by_sets"),
-            "champion_on_surface": live["champion_on_surface"],
-            # The owner's estimate: the average set between these two, times
-            # the sets chosen, plus 225s per changeover. Pre-computed for every
-            # length this format allows so the client does no arithmetic.
+            # EVERY DURATION ROW IS MODELLED THE SAME WAY (owner, 2026-09-19):
+            # playing time per set, times the predicted sets, plus a changeover
+            # between each pair of them. Pre-computed for every length this
+            # format allows, so the client does no arithmetic and cannot get
+            # the break count wrong.
+            "champion_on_surface": (None if not live["champion_on_surface"] else {
+                **live["champion_on_surface"],
+                "by_sets": {str(n): estimate_minutes(
+                    live["champion_on_surface"].get("play_minutes_per_set"), n)
+                    for n in _lengths},
+            }),
             "h2h_estimate": (None if not h2h_min else {
-                "minutes_per_set": h2h_min["minutes_per_set"],
+                "play_minutes_per_set": h2h_min["play_minutes_per_set"],
                 "matches": h2h_min["matches"],
-                "by_sets": {str(n): estimate_minutes(h2h_min["minutes_per_set"], n)
-                            for n in ((2, 3) if best_of == 3 else (3, 4, 5))},
+                "by_sets": {str(n): estimate_minutes(h2h_min["play_minutes_per_set"], n)
+                            for n in _lengths},
             }),
         },
         # Every match the two picked finalists have played, most recent first.

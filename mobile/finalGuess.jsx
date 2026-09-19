@@ -292,14 +292,21 @@ function minutesRows(data, sets) {
   const where = q.tier_finals?.surface_scoped === false ? 'all surfaces' : surf
   const key = String(sets)
   const rows = []
+  /* EVERY DURATION COMES PRE-COMPUTED PER SET COUNT, and the client
+     deliberately does no arithmetic of its own: a per-set duration is PLAYING
+     time with the changeovers stripped out, and putting the right number of
+     them back for the reader's predicted length is the server's job. Doing it
+     here with a multiply would count the history's breaks instead of this
+     prediction's (owner's correction, 2026-09-19). */
   const tierMins = q.tier_minutes_by_sets?.[key]
   if (tierMins != null) {
     rows.push({ label: `A ${sets}-set ${data.tier_label} final on ${where}, past ${q.tier_finals?.years ?? 5} years`,
                 value: fmtMinutes(tierMins), note: `${q.tier_finals?.matches ?? ''} finals`.trim() })
   }
-  if (q.champion_on_surface?.minutes_per_set != null) {
+  const champMins = q.champion_on_surface?.by_sets?.[key]
+  if (champMins != null) {
     rows.push({ label: `A ${sets}-set ${a} match on ${surf}, past ${q.champion_on_surface.years} years`,
-                value: fmtMinutes(Math.round(q.champion_on_surface.minutes_per_set * sets)),
+                value: fmtMinutes(champMins),
                 note: `${q.champion_on_surface.matches} matches` })
   }
   const est = q.h2h_estimate?.by_sets?.[key]

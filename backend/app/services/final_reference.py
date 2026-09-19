@@ -6,7 +6,8 @@ who opens the drawer and they cannot change while the tournament runs:
 
   * how many sets a final at this tour and tier, on this surface, has gone
     over the past ten years
-  * the aces per set and the minutes per set in those finals over the past five
+  * the aces per set, and the PLAYING minutes per set, in those finals over
+    the past five
   * and from the second of those, what a two, three, four or five-set final
     works out to in minutes
 
@@ -44,9 +45,13 @@ from app.models.tournament import Draw
 
 logger = logging.getLogger(__name__)
 
-# Bump when the shape or the arithmetic changes, so stored blocks are recomputed
-# rather than read forever under a schema they predate.
-VERSION = 1
+# Bump when the shape or the arithmetic changes, so stored blocks are
+# recomputed rather than read forever under a schema they predate.
+#   2 — per-set durations became PLAYING time, breaks stripped before
+#       averaging and re-added for the predicted set count (owner,
+#       2026-09-19). A block from version 1 has the breaks counted twice in
+#       its minutes_by_sets and must not be trusted.
+VERSION = 2
 # The set counts a final can go, per format. A best-of-three final cannot be
 # four sets, and offering a figure for one would be nonsense.
 SET_COUNTS = {3: (2, 3), 5: (3, 4, 5)}
@@ -56,11 +61,13 @@ def compute(conn, tour: str, tier: str, surface: str, best_of: int,
             today: Optional[date] = None) -> dict:
     """The block, from one connection. Pure: no session, no draw, no writes."""
     from app.services.history.final_stats import (
-        RATE_YEARS, SETS_YEARS, tier_finals,
+        RATE_YEARS, SETS_YEARS, estimate_minutes, tier_finals,
     )
     sets = tier_finals(conn, tour, tier, surface, SETS_YEARS, today)
     rates = tier_finals(conn, tour, tier, surface, RATE_YEARS, today)
-    per_set = (rates or {}).get("minutes_per_set")
+    # PLAYING minutes per set: breaks already stripped, so putting them back
+    # below gives each predicted set count its own correct number of them.
+    play = (rates or {}).get("play_minutes_per_set")
     return {
         "version": VERSION,
         "tour": tour, "tier": tier, "surface": surface, "best_of": best_of,
@@ -75,16 +82,17 @@ def compute(conn, tour: str, tier: str, surface: str, best_of: int,
         # The per-set rates, over five.
         "rates": None if not rates else {
             "aces_per_set": rates["aces_per_set"],
-            "minutes_per_set": rates["minutes_per_set"],
+            "play_minutes_per_set": rates["play_minutes_per_set"],
             "matches": rates["matches"],
             "years": rates["years"],
             "surface_scoped": rates["surface_scoped"],
         },
-        # And what that reads as for a final of each length this format allows,
-        # so the drawer needs no arithmetic of its own.
+        # A two, three, four or five-set final in minutes — playing time times
+        # the sets, plus a changeover between each pair. NOT per_set * n: that
+        # would carry the history's break count instead of this length's.
         "minutes_by_sets": (
-            {str(n): int(round(per_set * n)) for n in SET_COUNTS.get(best_of, SET_COUNTS[3])}
-            if per_set else None
+            {str(n): estimate_minutes(play, n) for n in SET_COUNTS.get(best_of, SET_COUNTS[3])}
+            if play else None
         ),
     }
 

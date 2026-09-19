@@ -100,16 +100,40 @@ def test_h2h_sets_counts_the_surface_and_what_is_elsewhere():
     assert h2h_sets(c, "wta", "A", "Z", "Hard")["on_surface"] is None
 
 
-def test_the_h2h_duration_estimate_adds_a_changeover_between_sets():
+def test_a_per_set_duration_is_PLAYING_time_with_the_breaks_taken_out():
+    """The correction (owner, 2026-09-19). The record stores whole-match
+    minutes, so total/sets carries the breaks of THAT match's set count. Strip
+    them before averaging, and let the estimate put back the number of breaks
+    the reader's own prediction implies — otherwise every break is counted
+    twice, and counted for the wrong set count."""
     c = _db()
     per = h2h_set_minutes(c, "wta", "A", "B", "Hard")
-    # (90 + 150) minutes over (2 + 3) sets
-    assert per["minutes_per_set"] == 48.0
+    gap = BETWEEN_SETS_SECONDS / 60                       # 3.75 minutes
+    # Seoul: 90 min over 2 sets, so one break comes out. Hobart: 150 over 3,
+    # two breaks out. Playing time is (90 - 3.75) + (150 - 7.5) over 5 sets.
+    expected = round(((90 - gap) + (150 - 2 * gap)) / 5, 1)
+    assert per["play_minutes_per_set"] == expected
+    # …and the naive figure would have been higher, which is the whole point.
+    assert expected < 48.0
+
+
+def test_the_estimate_re_adds_a_changeover_for_the_PREDICTED_set_count():
     gap = BETWEEN_SETS_SECONDS / 60
-    assert estimate_minutes(48.0, 2) == round(48 * 2 + gap)
-    assert estimate_minutes(48.0, 3) == round(48 * 3 + gap * 2)
-    # A two-set final gets one changeover, not two — and nothing without data.
-    assert estimate_minutes(None, 3) is None and estimate_minutes(48.0, 0) is None
+    # Two sets means one changeover; three means two — whatever the history
+    # those 45 playing minutes came from happened to go.
+    assert estimate_minutes(45.0, 2) == round(45 * 2 + gap)
+    assert estimate_minutes(45.0, 3) == round(45 * 3 + gap * 2)
+    assert estimate_minutes(45.0, 5) == round(45 * 5 + gap * 4)
+    assert estimate_minutes(None, 3) is None and estimate_minutes(45.0, 0) is None
+
+
+def test_a_mis_recorded_short_match_cannot_drag_playing_time_negative():
+    # A 40-minute "three-setter" would otherwise contribute -3.75 playing
+    # minutes a set and pull an average below the floor.
+    from app.services.history.final_stats import _play_minutes
+    assert _play_minutes(40, 3) == 40 - 2 * (BETWEEN_SETS_SECONDS / 60)
+    assert _play_minutes(3, 5) == 0.0
+    assert _play_minutes(None, 3) is None and _play_minutes(90, 0) is None
 
 
 # ── The cached draw-level block ──────────────────────────────────────────────
@@ -130,8 +154,11 @@ def test_the_cached_block_carries_its_conditions_and_the_minutes_per_length():
     assert got["sets"]["matches"] == 3 and got["rates"]["matches"] == 2
     # A best-of-three final is two or three sets — never four.
     assert set(got["minutes_by_sets"]) == {"2", "3"}
-    per = got["rates"]["minutes_per_set"]
-    assert got["minutes_by_sets"]["2"] == int(round(per * 2))
+    play = got["rates"]["play_minutes_per_set"]
+    gap = BETWEEN_SETS_SECONDS / 60
+    # Each length carries its OWN break count, not the history's.
+    assert got["minutes_by_sets"]["2"] == int(round(play * 2 + gap))
+    assert got["minutes_by_sets"]["3"] == int(round(play * 3 + gap * 2))
     assert final_reference.compute(_db(), "atp", "1000", "Clay", 5, TODAY)["minutes_by_sets"] is not None
 
 
