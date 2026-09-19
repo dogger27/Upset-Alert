@@ -47,24 +47,25 @@ logger = logging.getLogger(__name__)
 
 # Bump when the shape or the arithmetic changes, so stored blocks are
 # recomputed rather than read forever under a schema they predate.
+#   3 — the tier's finals are filtered by FORMAT as well as surface; the ATP's
+#       legacy 250 code had six best-of-five finals in it (2026-09-19).
 #   2 — per-set durations became PLAYING time, breaks stripped before
 #       averaging and re-added for the predicted set count (owner,
 #       2026-09-19). A block from version 1 has the breaks counted twice in
 #       its minutes_by_sets and must not be trusted.
-VERSION = 2
-# The set counts a final can go, per format. A best-of-three final cannot be
-# four sets, and offering a figure for one would be nonsense.
-SET_COUNTS = {3: (2, 3), 5: (3, 4, 5)}
+VERSION = 3
+# The lengths a final can go live in final_stats.set_lengths — one definition,
+# imported here and by the endpoint, because two copies drift.
 
 
 def compute(conn, tour: str, tier: str, surface: str, best_of: int,
             today: Optional[date] = None) -> dict:
     """The block, from one connection. Pure: no session, no draw, no writes."""
     from app.services.history.final_stats import (
-        RATE_YEARS, SETS_YEARS, estimate_minutes, tier_finals,
+        RATE_YEARS, SETS_YEARS, estimate_minutes, set_lengths, tier_finals,
     )
-    sets = tier_finals(conn, tour, tier, surface, SETS_YEARS, today)
-    rates = tier_finals(conn, tour, tier, surface, RATE_YEARS, today)
+    sets = tier_finals(conn, tour, tier, surface, SETS_YEARS, today, best_of)
+    rates = tier_finals(conn, tour, tier, surface, RATE_YEARS, today, best_of)
     # PLAYING minutes per set: breaks already stripped, so putting them back
     # below gives each predicted set count its own correct number of them.
     play = (rates or {}).get("play_minutes_per_set")
@@ -78,6 +79,7 @@ def compute(conn, tour: str, tier: str, surface: str, best_of: int,
             "matches": sets["matches"],
             "years": sets["years"],
             "surface_scoped": sets["surface_scoped"],
+            "format_scoped": sets["format_scoped"],
         },
         # The per-set rates, over five.
         "rates": None if not rates else {
@@ -86,12 +88,13 @@ def compute(conn, tour: str, tier: str, surface: str, best_of: int,
             "matches": rates["matches"],
             "years": rates["years"],
             "surface_scoped": rates["surface_scoped"],
+            "format_scoped": rates["format_scoped"],
         },
         # A two, three, four or five-set final in minutes — playing time times
         # the sets, plus a changeover between each pair. NOT per_set * n: that
         # would carry the history's break count instead of this length's.
         "minutes_by_sets": (
-            {str(n): estimate_minutes(play, n) for n in SET_COUNTS.get(best_of, SET_COUNTS[3])}
+            {str(n): estimate_minutes(play, n) for n in set_lengths(best_of)}
             if play else None
         ),
     }

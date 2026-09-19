@@ -366,6 +366,16 @@ def _play_minutes(total: Optional[int], sets: int) -> Optional[float]:
     return max(0.0, total - BREAK_MINUTES * (sets - 1))
 
 
+def set_lengths(best_of: int) -> tuple:
+    """The set counts a final of this format can go.
+
+    A best-of-three final is two or three sets and a best-of-five is three,
+    four or five — never four for the former. One definition, imported by the
+    cache and the endpoint alike, because two copies drift.
+    """
+    return (3, 4, 5) if best_of == 5 else (2, 3)
+
+
 def _levels_for(tour: str, tier: str) -> tuple:
     return TIER_LEVELS.get(tour, {}).get(tier, ())
 
@@ -383,16 +393,23 @@ def _in(values) -> str:
 
 
 def tier_finals(conn, tour: str, tier: str, surface: str, years: int,
-                today: Optional[date] = None) -> Optional[dict]:
+                today: Optional[date] = None, best_of: Optional[int] = None) -> Optional[dict]:
     """What a final at THIS tour and tier, on THIS surface, has looked like.
 
     Finals only — the question is about a final, and a final is not an average
     match: it is two players who have each won five matches that fortnight.
 
-    Falls back to every surface when the surface itself has none, which is not
-    a rare edge: there has never been a WTA 1000 on grass. The caller is told
-    which it got (`surface_scoped`) so the label can stay honest rather than
-    claiming a figure for a surface that never hosted the event.
+    FORMAT MATTERS MORE THAN SURFACE, so it is the condition given up last. A
+    best-of-five final simply has more sets in it, and one tier does mix the
+    two: the ATP's legacy 'A' code is its old 250 level and six of those finals
+    inside a ten-year window were best-of-five, which nudged the 250's sets
+    average up (found auditing this, 2026-09-19). Passing the draw's own format
+    removes them.
+
+    Conditions are given up in order, and the caller is told what it got:
+    surface first (there has never been a WTA 1000 on grass), then format.
+    Claiming a figure for a surface or a format that never hosted the event is
+    the failure this avoids.
     """
     levels = _levels_for(tour, tier)
     if not levels:
@@ -402,17 +419,28 @@ def tier_finals(conn, tour: str, tier: str, surface: str, years: int,
         SELECT w_ace, l_ace, minutes, score FROM tml_matches
         WHERE tour = ? AND round = 'F' AND tourney_level IN {_in(levels)}
           AND tourney_date >= ? AND score NOT LIKE '%W/O%'"""
-    rows = conn.execute(base + " AND surface = ?", (tour, since, surface)).fetchall()
-    scoped = bool(rows)
-    if not rows:
-        rows = conn.execute(base, (tour, since)).fetchall()
-    if not rows:
-        return None
-    out = _both_sides(rows)
-    if out:
-        out["surface_scoped"] = scoped
-        out["years"] = years
-    return out
+
+    def attempt(surf: bool, fmt: bool):
+        sql, params = base, [tour, since]
+        if surf:
+            sql += " AND surface = ?"
+            params.append(surface)
+        if fmt and best_of:
+            sql += " AND best_of = ?"
+            params.append(best_of)
+        return conn.execute(sql, tuple(params)).fetchall()
+
+    # (surface, format) — both, then without the surface, then neither.
+    for surf, fmt in ((True, True), (False, True), (True, False), (False, False)):
+        rows = attempt(surf, fmt)
+        if rows:
+            out = _both_sides(rows)
+            if out:
+                out["surface_scoped"] = surf
+                out["format_scoped"] = bool(fmt and best_of)
+                out["years"] = years
+            return out
+    return None
 
 
 def _both_sides(rows) -> Optional[dict]:

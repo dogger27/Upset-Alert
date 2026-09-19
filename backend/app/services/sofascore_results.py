@@ -599,21 +599,28 @@ _FINAL_RETRY_SECONDS = 3600
 def _sets_in_scores(scores) -> Optional[int]:
     """How many sets a stored score represents.
 
-    scores_json is a list of per-set entries, and the shape has grown over
-    time (a pair of games, sometimes with a tiebreak and a retirement marker
-    beside them), so this counts ENTRIES THAT NAME A GAME COUNT for both
-    players rather than trying to parse each one. A trailing status element —
-    the live feed's "suspended" and friends — is not a set.
+    THE OUTER LIST IS ONE ELEMENT PER PLAYER, NOT PER SET — `[[p1 cells],
+    [p2 cells]]`, as _final_scores above documents — and the cells are STRINGS
+    with the tiebreak annotated ("7(7)") and a retirement marked on the cell
+    ("2r"). A walkover is [["w/o"], [""]].
+
+    So a set is a COLUMN both players have a game count in, counted through
+    this module's own cell parser rather than a second reading of the same
+    format. `_games` returns None for "" and for "w/o", which is what keeps a
+    walkover at zero sets and an unplayed column out of the count.
+
+    The first version of this counted outer ELEMENTS whose first two members
+    were ints. Both halves of that were wrong — the elements are players, and
+    the games are strings — so it returned None for every real match and the
+    sets tiebreak would silently never have been recorded (2026-09-19).
     """
-    if not scores:
+    if not isinstance(scores, (list, tuple)) or len(scores) < 2:
         return None
-    n = 0
-    for row in scores:
-        if isinstance(row, (list, tuple)) and len(row) >= 2:
-            a, b = row[0], row[1]
-            if isinstance(a, int) and isinstance(b, int):
-                n += 1
-    return n or None
+    a, b = scores[0] or [], scores[1] or []
+    if not isinstance(a, (list, tuple)) or not isinstance(b, (list, tuple)):
+        return None
+    return sum(1 for i in range(min(len(a), len(b)))
+               if _games(a[i]) is not None and _games(b[i]) is not None)
 
 
 async def capture_final_stats() -> int:
@@ -626,6 +633,36 @@ async def capture_final_stats() -> int:
 
     written = 0
     async with AsyncSessionLocal() as db:
+        # ── SETS ALONE, WITH NO NETWORK ──────────────────────────────────────
+        # A draw whose aces and minutes are already captured is excluded from
+        # the sweep below (its guard needs both to be null), so a final caught
+        # before the sets question existed — or one where the count could not
+        # be read at the time — would never get one, and the FIRST tiebreak key
+        # would stay null for everybody on that draw.
+        #
+        # Sets need no API: they are read off the score already stored. So this
+        # is a separate, cheap pass rather than a widening of that guard, which
+        # would put every historical draw back through the Sofascore path.
+        catch_up = (await db.execute(
+            select(Draw, Match)
+            .join(Match, Match.draw_id == Draw.id)
+            .where(Draw.final_sets.is_(None),
+                   Draw.final_winner_aces.isnot(None),
+                   Match.round_number == Draw.num_rounds, Match.match_number == 1,
+                   Match.is_bye == False, Match.winner_id.isnot(None))  # noqa: E712
+        )).all()
+        for draw, final in catch_up:
+            n = _sets_in_scores(final.scores_json or final.sofa_scores_json)
+            if n is None:
+                continue
+            draw.final_sets = int(n)
+            written += 1
+            await app_log("info", "scoring",
+                          f"{draw.name}: final went {n} sets — the sets tiebreak is now decided",
+                          {"draw_id": draw.id, "sets": n})
+        if catch_up:
+            await db.commit()
+
         finals = (await db.execute(
             select(Draw, Match)
             .join(Match, Match.draw_id == Draw.id)

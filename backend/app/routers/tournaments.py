@@ -2735,7 +2735,7 @@ async def get_final_guess(tournament_id: int, db: AsyncSession = Depends(get_db)
     from app.services.history import db as hdb
     from app.services.history.final_stats import (
         RATE_YEARS, ceilings, estimate_minutes, h2h_set_minutes, h2h_sets,
-        head_to_head, player_rates,
+        head_to_head, player_rates, set_lengths,
     )
     from app.services.history.link import norm_surface
     from app.services.locking import draw_lock_state
@@ -2790,9 +2790,7 @@ async def get_final_guess(tournament_id: int, db: AsyncSession = Depends(get_db)
         DrawFinalGuess.draw_id == tournament_id, DrawFinalGuess.user_id == current_user.id))).scalars().first()
     lock = await draw_lock_state(db, draw)
 
-    # The set counts a final of this format can go — a best-of-three cannot
-    # be four sets, so no figure is offered for one.
-    _lengths = (2, 3) if best_of == 3 else (3, 4, 5)
+    _lengths = set_lengths(best_of)
     tier_label = {"GS": "Grand Slam", "1000": f"{tour.upper()} 1000",
                   "500": f"{tour.upper()} 500", "250": f"{tour.upper()} 250"}.get(tier, tier)
     h2h_min = live["h2h_set_minutes"]

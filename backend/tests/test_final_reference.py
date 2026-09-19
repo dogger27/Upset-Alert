@@ -178,3 +178,45 @@ def test_a_block_is_stale_when_the_draw_it_describes_has_changed():
     assert final_reference._stale(None, _draw()) is True
     assert final_reference._stale({"version": 0}, _draw()) is True
     assert final_reference._stale("not a dict", _draw()) is True
+
+
+def test_a_tier_that_mixes_formats_is_filtered_to_the_draws_own():
+    """Found auditing this (2026-09-19). The ATP's legacy 'A' code is its old
+    250 level and some of those finals were best-of-FIVE, which pulls a 250's
+    sets average up. A best-of-five final simply has more sets in it, so the
+    draw's own format is a condition — and the one given up last."""
+    c = sqlite3.connect(":memory:")
+    c.execute("""CREATE TABLE tml_matches (tour, tourney_name, tourney_date, surface, tourney_level,
+                 round, best_of, winner_id, loser_id, winner_name, loser_name, score, minutes,
+                 w_ace, l_ace)""")
+    c.executemany("INSERT INTO tml_matches VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", [
+        # Two modern best-of-three 250 finals…
+        ("atp", "Metz", "2025-09-21", "Hard", "250", "F", 3, "A", "B", "One", "Two",
+         "6-4 6-3", 90, 5, 3),
+        ("atp", "Doha", "2026-02-21", "Hard", "250", "F", 3, "B", "A", "Two", "One",
+         "6-4 6-4", 92, 6, 4),
+        # …and one of the old best-of-five ones, under the legacy code.
+        ("atp", "Milan", "2019-02-10", "Hard", "A", "F", 5, "A", "C", "One", "Three",
+         "6-4 3-6 6-4 7-5", 210, 12, 9),
+    ])
+    bo3 = tier_finals(c, "atp", "250", "Hard", 10, TODAY, best_of=3)
+    assert bo3["matches"] == 2 and bo3["format_scoped"] is True
+    assert bo3["sets_per_match"] == 2.0, "the four-setter is another format"
+    # Unfiltered — what this used to do — blends the formats.
+    blended = tier_finals(c, "atp", "250", "Hard", 10, TODAY)
+    assert blended["matches"] == 3 and blended["sets_per_match"] > 2.0
+
+    # A format with no finals of its own gives up that condition and says so,
+    # rather than returning nothing to show.
+    bo5 = tier_finals(c, "atp", "500", "Hard", 10, TODAY, best_of=5)
+    assert bo5 is None, "no 500 finals at all, in any format"
+    got = tier_finals(c, "atp", "250", "Clay", 10, TODAY, best_of=3)
+    assert got["surface_scoped"] is False and got["format_scoped"] is True
+
+
+def test_the_set_lengths_have_one_definition():
+    from app.services.history.final_stats import set_lengths
+    assert set_lengths(3) == (2, 3)
+    assert set_lengths(5) == (3, 4, 5)
+    # Anything unexpected reads as best-of-three rather than crashing a page.
+    assert set_lengths(None) == (2, 3) and set_lengths(0) == (2, 3)
