@@ -260,11 +260,13 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
   const tint = data?.tour === 'WTA' ? TOUR.F : TOUR.M
   const champ = surname(data?.champion?.name)
   const run = surname(data?.runner_up?.name)
-  /* ONE NAME THROUGH THE FLOW: the card on the draw page says "Tiebreak", so
-     the drawer it opens says Tiebreak. It used to say "The final", which the
-     hero line then repeated two rows lower. */
+  /* ONE NAME THROUGH THE FLOW: the card on the draw page and the drawer it
+     opens carry the same words. "Tiebreak" alone was too ambiguous about what
+     it breaks a tie IN (owner, 2026-09-19) — it is the league standings, not
+     a tiebreak in the tennis sense, which on a draw page is the more obvious
+     reading of the word. */
   return (
-    <Sheet visible={visible} onClose={onClose} title="Tiebreak">
+    <Sheet visible={visible} onClose={onClose} title="Standings Tiebreak Questions">
       {!data || aces == null ? <Muted>Loading the history…</Muted> : (
         /* TWO QUESTIONS, TWO SLIDERS, TWO STAT TABLES AND A HEAD-TO-HEAD DO NOT
            FIT AN 80% SHEET (owner, 2026-09-19: "it's longer than the page").
@@ -279,6 +281,16 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
               "which final?", and the two questions below are meaningless
               without them. The champion carries the weight and the tour's
               colour; "def." is furniture and stays out of the way. */}
+          {/* WHAT THE TWO QUESTIONS ARE FOR, in the reader's terms and before
+              the match they are about (owner, 2026-09-19). This replaces a
+              line that sat under the names and said the same thing more
+              narrowly — "final score ties" read as a tie in the final's SCORE
+              rather than a tie in the table. */}
+          <Text style={s.intro}>
+            Scores occurring in the final standings of all leagues will be decided
+            by the questions below.
+          </Text>
+
           <View style={s.hero}>
             <Text style={s.heroLabel}>Your current prediction for the final:</Text>
             {champ ? (
@@ -294,14 +306,6 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
             ) : (
               <Text style={s.heroEmpty}>Pick a champion in the draw and this fills in</Text>
             )}
-            {/* THE TAIL IS THE LIVE SLIDER STATE, not the saved answer, so
-                dragging a knob cannot leave a sentence above it claiming
-                something else (owner's wording, 2026-09-19). Quiet, because
-                the two plates below say the same thing loudly — at these two
-                weights it reads as a summary rather than a repeat. */}
-            <Text style={s.heroNote}>
-              Final score ties broken by the questions below — {aces} aces · {fmtLong(minutes)}
-            </Text>
           </View>
 
           {/* ── QUESTION ONE ─────────────────────────────────────────────────
@@ -408,7 +412,7 @@ export function FinalGuessCard({ tournamentId, enabled, onOpen, refreshKey }) {
   const g = data.guess
   return (
     <Pressable onPress={onOpen} accessibilityRole="button"
-               accessibilityLabel="Your prediction for the final, and the tiebreak questions">
+               accessibilityLabel="Standings tiebreak questions: your answers about the final">
       <Card>
         <View style={s.cardRow}>
           <View style={{ flex: 1 }}>
@@ -417,7 +421,7 @@ export function FinalGuessCard({ tournamentId, enabled, onOpen, refreshKey }) {
                 sheet — "only visible once you click in" — because this card
                 sits in the draw between match groups, and a four-line panel
                 there is reading matter in the way of the bracket. */}
-            <Title>Tiebreak</Title>
+            <Title>Standings Tiebreak Questions</Title>
             <Muted>{g ? `${g.final_aces} aces · ${fmtMinutes(g.final_duration_min)}`
                       : data.default ? `Holding the average: ${data.default.aces} aces · ${fmtMinutes(data.default.minutes)}`
                       : (data.locked ? 'No answers given' : 'Answer the two questions about the final')}</Muted>
@@ -450,7 +454,8 @@ const s = StyleSheet.create({
   def: { ...T.tiny, color: C.faint },
   runner: { ...T.h2, flexShrink: 1 },
   heroEmpty: { ...T.bodyMed, color: C.muted },
-  heroNote: { ...T.tiny, color: C.faint, marginTop: 2 },
+  /* The one line of explanation in the drawer, directly under its title. */
+  intro: { ...T.small, color: C.inkBody },
 
   /* ── A question ────────────────────────────────────────────────────────── */
   q: { gap: S.sm },

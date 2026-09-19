@@ -9,7 +9,7 @@
  * player the user has picked to win: their aces and minutes per set on this
  * surface, and against the runner-up they picked whenever the two have met.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getFinalGuess, putFinalGuess } from '../api/tournaments'
@@ -160,26 +160,31 @@ export default function FinalGuessModal({ tournamentId, open, onClose, reason })
   }, [open, onClose])
 
   const record = ctx?.ceilings
-  const title = useMemo(() => (reason === 'entered' ? 'One more thing: the final' : 'Your tiebreak answers'), [reason])
+  /* THE SAME WORDS AS THE APP (owner, 2026-09-19). "Tiebreak" alone did not
+     say what it breaks a tie IN — the league standings, not a tiebreak in the
+     tennis sense, which is the more obvious reading of the word on a draw
+     page. `reason` no longer changes the heading: the dialog is the same thing
+     however it was opened. */
+  const title = 'Standings Tiebreak Questions'
   if (!open) return null
   return createPortal(
     <div className="profile-modal-backdrop" onClick={onClose}>
       <div className="profile-modal fg-modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Tiebreak">
         <div className="profile-edit-form">
           <p className="profile-edit-title">{title}</p>
+          {/* WHAT THE QUESTIONS ARE FOR, before the match they are about. This
+              replaces a line that sat lower and said the same thing more
+              narrowly — "final score ties" read as a tie in the final's SCORE
+              rather than a tie in the table (owner, 2026-09-19). */}
+          <p className="fg-intro">
+            Scores occurring in the final standings of all leagues will be decided
+            by the questions below.
+          </p>
           {/* The bracket's own answer to "which final?", so the two questions
-              below are about a match the reader can see named (owner,
-              2026-09-19). */}
+              below are about a match the reader can see named. */}
           <p className="fg-intro">
             Your current prediction for the final:
             <strong className="fg-final">{finalLine(ctx) || 'No champion picked yet'}</strong>
-          </p>
-          {/* The tail is the LIVE slider state, not the saved answer, so
-              dragging a knob cannot leave a sentence above it saying something
-              else (owner's wording, 2026-09-19). */}
-          <p className="fg-intro">
-            Final score ties broken by the questions below
-            {aces != null ? ` — ${aces} aces · ${fmtLong(minutes)}` : ''}
           </p>
           {ctx && !ctx.guess && ctx.default && (
             <p className="fg-intro">
@@ -241,7 +246,7 @@ export function FinalGuessBar({ tournamentId, enabled, onOpen }) {
       {/* ONE LINE AND THE ANSWERS (owner, 2026-09-19). The picked final and the
           sentence about ties live in the dialog — "only visible once you click
           in" — so this stays the quiet way in that it was. */}
-      <span className="fg-bar-label">Tiebreak</span>
+      <span className="fg-bar-label">Standings Tiebreak Questions</span>
       {g ? <span className="fg-bar-value">{g.final_aces} aces · {fmtMinutes(g.final_duration_min)}</span>
          : ctx.default ? <span className="fg-bar-value fg-bar-value--ask">Holding the average: {ctx.default.aces} aces · {fmtMinutes(ctx.default.minutes)}</span>
          : <span className="fg-bar-value fg-bar-value--ask">{ctx.locked ? 'No answers given' : 'Answer the two questions about the final'}</span>}
