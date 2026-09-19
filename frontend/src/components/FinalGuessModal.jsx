@@ -37,6 +37,22 @@ export function fmtMinutes(m) {
 
 const perSet = (r, key) => (r && r[key] != null ? r[key] : null)
 
+/* THE PICKED FINAL, IN A LINE (owner, 2026-09-19): "Ostapenko def. Birrell".
+   Surnames, on the bracket's own reading of where a surname starts — every
+   token after the first — so "Díaz Acosta" survives whole (CombinedView's
+   lastNameOf). */
+const surname = (full) => {
+  const parts = String(full || '').trim().split(/\s+/)
+  return parts.length > 1 ? parts.slice(1).join(' ') : parts[0]
+}
+
+export function finalLine(ctx) {
+  const champ = ctx?.champion?.name
+  if (!champ) return null
+  const run = ctx?.runner_up?.name
+  return run ? `${surname(champ)} def. ${surname(run)}` : surname(champ)
+}
+
 /* One line of reference, in words a person would say. */
 function Reference({ ctx, which }) {
   const champ = ctx?.champion?.name
@@ -102,10 +118,14 @@ export default function FinalGuessModal({ tournamentId, open, onClose, reason })
       <div className="profile-modal fg-modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Tiebreak">
         <div className="profile-edit-form">
           <p className="profile-edit-title">{title}</p>
+          {/* The bracket's own answer to "which final?", so the two questions
+              below are about a match the reader can see named (owner,
+              2026-09-19). */}
           <p className="fg-intro">
-            Ties on points are broken by these two answers: closest on aces first, then on minutes.
-            {ctx?.champion?.name ? <> You have picked <strong>{ctx.champion.name}</strong> to win{ctx?.runner_up?.name ? <> over <strong>{ctx.runner_up.name}</strong></> : null}.</> : null}
+            Your current prediction for the final:
+            <strong className="fg-final">{finalLine(ctx) || 'No champion picked yet'}</strong>
           </p>
+          <p className="fg-intro">Final score ties broken by the questions below:</p>
           {ctx && !ctx.guess && ctx.default && (
             <p className="fg-intro">
               Leave this alone and you hold {ctx.tour} {ctx.surface.toLowerCase()}'s {ctx.default.year} average:
@@ -162,11 +182,15 @@ export function FinalGuessBar({ tournamentId, enabled, onOpen }) {
   const g = ctx.guess
   return (
     <button type="button" className="fg-bar" onClick={onOpen}>
-      <span className="fg-bar-label">Tiebreak</span>
-      {g ? <span className="fg-bar-value">{g.final_aces} aces · {fmtMinutes(g.final_duration_min)}</span>
-         : ctx.default ? <span className="fg-bar-value fg-bar-value--ask">Holding the average: {ctx.default.aces} aces · {fmtMinutes(ctx.default.minutes)}</span>
-         : <span className="fg-bar-value fg-bar-value--ask">{ctx.locked ? 'No answers given' : 'Answer the two questions about the final'}</span>}
+      <span className="fg-bar-label">Your current prediction for the final</span>
+      <span className="fg-bar-value">{finalLine(ctx) || 'No champion picked yet'}</span>
       {ctx.actual && <span className="fg-bar-actual">final: {ctx.actual.final_aces} · {fmtMinutes(ctx.actual.final_duration_min)}</span>}
+      <span className="fg-bar-note">
+        Final score ties broken by the questions below
+        {g ? ` — ${g.final_aces} aces · ${fmtMinutes(g.final_duration_min)}`
+           : ctx.default ? ` — holding the average: ${ctx.default.aces} aces · ${fmtMinutes(ctx.default.minutes)}`
+           : (ctx.locked ? ' — no answers given' : '')}
+      </span>
     </button>
   )
 }
