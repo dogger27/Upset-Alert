@@ -17,22 +17,25 @@ def _row(court_id, seq, last_a, last_b, ts="2026-09-17T14:00:00Z"):
 
 def test_the_learned_name_is_found_under_the_feed_court_string():
     rows = [_row(1, 1, "Dabrowski", "Pereira"), _row(3, 1, "Avanesyan", "Charaeva")]
-    names = {"Court 1": "QUADRA CENTRAL MARIA ESTHER BUENO", "Court 3": "QUADRA 2"}
+    names = {"CourtID 1": "QUADRA CENTRAL MARIA ESTHER BUENO", "CourtID 3": "QUADRA 2"}
     got = {m.side_a[0]: m.court for m in matches_for_day(rows, date(2026, 9, 17), court_names=names)}
     assert got["A DABROWSKI BRA"] == "QUADRA CENTRAL MARIA ESTHER BUENO"
     assert got["A AVANESYAN BRA"] == "QUADRA 2"
 
 
-def test_a_court_without_a_learned_name_says_court_n():
+def test_a_court_without_a_learned_name_has_none():
+    # Not "Court 2" — a guess that is some real court's name (Singapore,
+    # 2026-09-19; see test_wta_court_id_namespace).
     rows = [_row(2, 1, "Lamens", "Sierra")]
-    ms = matches_for_day(rows, date(2026, 9, 17), court_names={"Court 1": "ESTADIO"})
-    assert ms[0].court == "Court 2"
+    ms = matches_for_day(rows, date(2026, 9, 17), court_names={"CourtID 1": "ESTADIO"})
+    assert ms[0].court == "" and ms[0].court_key == "CourtID 2"
 
 
 def test_court_winners_need_the_votes():
-    tally = {"Court 1": {"ESTADIO": 70, "GRANDSTAND": 2}, "Court 4": {"A": 1, "B": 1}, "Court 5": {}}
-    assert court_winners(tally) == {"Court 1": "ESTADIO", "Court 4": "A"}
-    assert court_winners(tally, min_votes=3) == {"Court 1": "ESTADIO"}
+    tally = {"CourtID 1": {"ESTADIO": 70, "GRANDSTAND": 2}, "CourtID 4": {"A": 1, "B": 1},
+             "CourtID 5": {}}
+    assert court_winners(tally) == {"CourtID 1": "ESTADIO", "CourtID 4": "A"}
+    assert court_winners(tally, min_votes=3) == {"CourtID 1": "ESTADIO"}
 
 
 def test_a_feed_row_without_a_court_id_has_no_court_name():

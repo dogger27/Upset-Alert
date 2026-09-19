@@ -46,7 +46,7 @@ def _wta(nat_a, nat_b="USA", *, doubles=False, nat_a2=""):
 
 
 def test_the_wta_feed_prints_a_neutral_athlete_as_the_sheet_does():
-    (m,) = matches_for_day([_wta("RUS")], DAY, court_names={"Court 1": "ESTADIO SKARCH"})
+    (m,) = matches_for_day([_wta("RUS")], DAY, court_names={"CourtID 1": "ESTADIO SKARCH"})
     assert m.side_a == ["[8] Liudmila SAMSONOVA"]      # the sheet, verbatim
     assert m.nations_a == [""]
     assert m.side_b == ["Peyton STEARNS USA"] and m.nations_b == ["USA"]
