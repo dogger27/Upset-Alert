@@ -67,8 +67,14 @@ BARE_TIME_RE = re.compile(r'^' + _CLOCK_BODY + r'$', re.I)
 # "COURT TBA" is a court NAME (2025_741) and "AFTER REST, TIME TBA" is already
 # a slot by its first three words; matching either as a marker would lose the
 # court and split a slot in two. Only a line that is nothing but the token.
+#
+# "Time TBC" is the same header with its noun (Korea 2026-09-20: the second
+# box on both courts, the Q2 slots still waiting on Q1s). Unread, each court's
+# second box was glued into the first — "[5] Ye-Xin MA CHN Time TBC M.
+# Kuramochi" as one of Lee's opponents, two matches parsed off a four-box
+# sheet.
 TBX_RE = re.compile(
-    r'^(?:TB[ACD]|to\s+be\s+(?:confirmed|announced|advised|determined))$', re.I)
+    r'^(?:time\s+)?(?:TB[ACD]|to\s+be\s+(?:confirmed|announced|advised|determined))$', re.I)
 VS_RE = re.compile(r'^(?:vs\.?|v\.?|contre)$', re.I)
 TOUR_RE = re.compile(r'^(ATP|WTA)$', re.I)
 ROUND_RE = re.compile(r'^(F|SF|QF|R\d{1,3}|Q\d?|FQ|1R|2R|3R|4R)$', re.I)
