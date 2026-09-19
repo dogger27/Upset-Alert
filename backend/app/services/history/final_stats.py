@@ -70,39 +70,81 @@ def _levels_sql(tour: str) -> str:
     return "(" + ",".join(f"'{lv}'" for lv in TOUR_LEVELS.get(tour, ())) + ")"
 
 
-def ceilings(conn, tour: str, surface: str, best_of: int) -> dict:
+def _year_ago(today: Optional[date] = None) -> str:
+    """A year back from today, dashed ISO — the window the slider ends read.
+
+    See feedback_history_db_dates_are_dashed: a compact bound here would half
+    work and silently drop a season.
+    """
+    d = today or date.today()
+    try:
+        return d.replace(year=d.year - 1).isoformat()
+    except ValueError:                      # 29 February
+        return d.replace(year=d.year - 1, day=28).isoformat()
+
+
+def ceilings(conn, tour: str, surface: str, best_of: int,
+             today: Optional[date] = None) -> dict:
     """The slider ends: the most aces one player has hit in a match on this
     tour in this format, and the longest a match has run on this surface in
-    this format — the plausible maxima, with the match that set each."""
+    this format — the plausible maxima, with the match that set each.
+
+    THE PAST YEAR, NOT ALL TIME (owner, 2026-09-19). All-time ends were both
+    stale and useless as a scale: the WTA best-of-three aces record is
+    Pliskova's 31 from the 2016 Australian Open, and the longest hard-court
+    match ran 5h 16m, so the answers anybody actually gives — a couple of aces,
+    an hour and a half — lived in the first third of each track. A year of the
+    same tour and format puts the whole slider inside reachable numbers while
+    still being a real match somebody played.
+
+    The window can be empty (a tour and format with no matches yet this year),
+    and a ceiling of zero is a slider with no range, so each end falls back to
+    all time rather than breaking the control.
+    """
     cap = PLAUSIBLE.get(best_of, PLAUSIBLE[3])
     levels = _levels_sql(tour)
-    row = conn.execute(f"""
+    since = _year_ago(today)
+
+    def newest_first(sql: str, params: tuple):
+        """The windowed answer if the year has one, else all time."""
+        row = conn.execute(sql.format(window="AND tourney_date >= ?"),
+                           params + (since,)).fetchone()
+        return row or conn.execute(sql.format(window=""), params).fetchone()
+
+    ace_sql = f"""
         SELECT tourney_name, tourney_date, winner_name, loser_name, w_ace, l_ace, score
         FROM tml_matches
         WHERE tour = ? AND best_of = ? AND tourney_level IN {levels}
           AND max(coalesce(w_ace, 0), coalesce(l_ace, 0)) <= ?
-        ORDER BY max(coalesce(w_ace, 0), coalesce(l_ace, 0)) DESC LIMIT 1""",
-        (tour, best_of, cap["aces"])).fetchone()
+          {{window}}
+        ORDER BY max(coalesce(w_ace, 0), coalesce(l_ace, 0)) DESC LIMIT 1"""
+    row = newest_first(ace_sql, (tour, best_of, cap["aces"]))
     aces_max = max(row[4] or 0, row[5] or 0) if row else 0
     aces_rec = None
     if row:
         who = row[2] if (row[4] or 0) >= (row[5] or 0) else row[3]
         aces_rec = {"player": who, "aces": aces_max, "tournament": row[0],
                     "year": str(row[1])[:4], "score": row[6]}
-    drow = conn.execute(f"""
+
+    dur_sql = f"""
         SELECT tourney_name, tourney_date, winner_name, loser_name, minutes, score
         FROM tml_matches
         WHERE tour = ? AND best_of = ? AND surface = ? AND tourney_level IN {levels}
           AND minutes IS NOT NULL AND minutes <= ?
-        ORDER BY minutes DESC LIMIT 1""",
-        (tour, best_of, surface, cap["minutes"])).fetchone()
+          {{window}}
+        ORDER BY minutes DESC LIMIT 1"""
+    drow = newest_first(dur_sql, (tour, best_of, surface, cap["minutes"]))
     if not drow:
-        drow = conn.execute(f"""
+        # No match on this surface at all: the format's own longest, so the
+        # track still has a sane end.
+        any_surface = f"""
             SELECT tourney_name, tourney_date, winner_name, loser_name, minutes, score
             FROM tml_matches
             WHERE tour = ? AND best_of = ? AND tourney_level IN {levels}
               AND minutes IS NOT NULL AND minutes <= ?
-            ORDER BY minutes DESC LIMIT 1""", (tour, best_of, cap["minutes"])).fetchone()
+              {{window}}
+            ORDER BY minutes DESC LIMIT 1"""
+        drow = newest_first(any_surface, (tour, best_of, cap["minutes"]))
     duration_max = int(drow[4]) if drow else 0
     dur_rec = ({"players": f"{drow[2]} d. {drow[3]}", "minutes": duration_max,
                 "tournament": drow[0], "year": str(drow[1])[:4], "score": drow[5]} if drow else None)

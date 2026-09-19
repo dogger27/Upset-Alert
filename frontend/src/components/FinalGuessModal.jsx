@@ -196,7 +196,7 @@ export default function FinalGuessModal({ tournamentId, open, onClose, reason })
                          onChange={e => setAces(Number(e.target.value))} disabled={ctx?.locked} />
                   <output className="fg-value" htmlFor="fg-aces">{aces}</output>
                 </div>
-                <div className="fg-ends"><span>0 · walkover</span><span>{acesMax} · most ever{record?.aces_record ? ` (${record.aces_record.player}, ${record.aces_record.tournament} ${record.aces_record.year})` : ''}</span></div>
+                <div className="fg-ends"><span>0 · walkover</span><span>{acesMax} · the most in 12 months{record?.aces_record ? ` (${record.aces_record.player}, ${record.aces_record.tournament} ${record.aces_record.year})` : ''}</span></div>
                 <Reference ctx={ctx} which="aces" />
               </section>
               <section className="fg-q">
@@ -206,7 +206,7 @@ export default function FinalGuessModal({ tournamentId, open, onClose, reason })
                          onChange={e => setMinutes(Number(e.target.value))} disabled={ctx?.locked} />
                   <output className="fg-value" htmlFor="fg-min">{fmtMinutes(minutes)}<small>{minutes} min</small></output>
                 </div>
-                <div className="fg-ends"><span>0 · walkover</span><span>{fmtLong(durMax)} · longest on {ctx.surface.toLowerCase()}{record?.duration_record ? ` (${record.duration_record.tournament} ${record.duration_record.year})` : ''}</span></div>
+                <div className="fg-ends"><span>0 · walkover</span><span>{fmtLong(durMax)} · the longest on {ctx.surface.toLowerCase()} in 12 months{record?.duration_record ? ` (${record.duration_record.tournament} ${record.duration_record.year})` : ''}</span></div>
                 <Reference ctx={ctx} which="minutes" />
               </section>
               <Meetings ctx={ctx} />

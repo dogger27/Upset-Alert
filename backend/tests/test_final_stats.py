@@ -45,14 +45,17 @@ def _db():
     return c
 
 
+SEPT = date(2025, 9, 1)   # every fixture row above falls inside a year of this
+
+
 def test_ceilings_are_the_largest_plausible_values_on_the_tour():
     c = _db()
-    got = ceilings(c, "atp", "Clay", 3)
+    got = ceilings(c, "atp", "Clay", 3, today=SEPT)
     assert got["aces_max"] == 44 and got["aces_record"]["player"] == "Big Server"   # the Challenger 21 and junk excluded
     assert got["duration_max_min"] == 245 and got["duration_record"]["tournament"] == "Rome"
-    wta = ceilings(c, "wta", "Grass", 3)
+    wta = ceilings(c, "wta", "Grass", 3, today=SEPT)
     assert wta["aces_max"] == 19                     # 128 is junk
-    assert ceilings(c, "wta", "Clay", 3)["duration_max_min"] == 110   # no clay rows: the tour's format-wide max
+    assert ceilings(c, "wta", "Clay", 3, today=SEPT)["duration_max_min"] == 110   # no clay rows: the tour's format-wide max
 
 
 def test_a_players_rate_is_per_set_on_the_surface_and_against_the_finalist():
@@ -213,3 +216,40 @@ def test_head_to_head_is_none_when_they_have_never_met():
     assert head_to_head(c, "wta", None, "P2") is None
     # Wrong tour, same ids: a WTA pair has no ATP history.
     assert head_to_head(c, "atp", "P1", "P2") is None
+
+
+def test_the_ceilings_read_the_past_YEAR_not_all_time():
+    """The slider ends are a scale, and an all-time end is no use as one — the
+    WTA best-of-three aces record is from 2016 (owner, 2026-09-19)."""
+    c = sqlite3.connect(":memory:")
+    c.execute("""CREATE TABLE tml_matches (tour, tourney_name, tourney_date, surface, tourney_level, best_of,
+                 winner_id, loser_id, winner_name, loser_name, score, minutes, w_ace, l_ace)""")
+    c.executemany("INSERT INTO tml_matches VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", [
+        # The all-time high, and long out of the window.
+        ("wta", "Australian Open", "2016-01-20", "Hard", "G", 3,
+         "A", "B", "Big Hitter", "Other", "7-6(5) 7-6(4)", 316, 31, 4),
+        # This year's high — what the slider should end at.
+        ("wta", "Ningbo", "2025-10-13", "Hard", "250", 3,
+         "C", "D", "Recent One", "Someone", "5-7 6-4 7-5", 213, 8, 6),
+    ])
+    got = ceilings(c, "wta", "Hard", 3, today=date(2026, 9, 19))
+    assert got["aces_max"] == 8, "2016's 31 is outside the year"
+    assert got["aces_record"]["year"] == "2025"
+    assert got["duration_max_min"] == 213
+    assert got["duration_record"]["year"] == "2025"
+
+
+def test_an_empty_year_falls_back_to_all_time_rather_than_a_dead_slider():
+    """A ceiling of zero is a track with no range — the clients clamp it to 1
+    and the control stops working. A tour and format with nothing in the last
+    year takes the all-time end instead."""
+    c = sqlite3.connect(":memory:")
+    c.execute("""CREATE TABLE tml_matches (tour, tourney_name, tourney_date, surface, tourney_level, best_of,
+                 winner_id, loser_id, winner_name, loser_name, score, minutes, w_ace, l_ace)""")
+    c.executemany("INSERT INTO tml_matches VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", [
+        ("wta", "Australian Open", "2016-01-20", "Hard", "G", 3,
+         "A", "B", "Big Hitter", "Other", "7-6(5) 7-6(4)", 316, 31, 4),
+    ])
+    got = ceilings(c, "wta", "Hard", 3, today=date(2026, 9, 19))
+    assert got["aces_max"] == 31 and got["duration_max_min"] == 316
+    assert got["aces_record"]["year"] == "2016"

@@ -330,9 +330,11 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
               <View style={s.endRight}>
                 <Text style={[s.endValue, s.endRecord]}>{acesMax}</Text>
                 <Text style={[s.endWho, s.endWhoRight]} numberOfLines={2}>
+                  {/* "the record" implied all time, and the ends read the
+                      past 12 months now (final_stats.ceilings). */}
                   {rec?.aces_record
-                    ? `the record — ${surname(rec.aces_record.player)}, ${rec.aces_record.tournament} ${rec.aces_record.year}`
-                    : 'the record'}
+                    ? `the most in 12 months — ${surname(rec.aces_record.player)}, ${rec.aces_record.tournament} ${rec.aces_record.year}`
+                    : 'the most in 12 months'}
                 </Text>
               </View>
             </View>
@@ -356,8 +358,8 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
                 <Text style={[s.endValue, s.endRecord]}>{fmtLong(durMax)}</Text>
                 <Text style={[s.endWho, s.endWhoRight]} numberOfLines={2}>
                   {rec?.duration_record
-                    ? `the longest — ${rec.duration_record.tournament} ${rec.duration_record.year}`
-                    : 'the longest'}
+                    ? `the longest in 12 months — ${rec.duration_record.tournament} ${rec.duration_record.year}`
+                    : 'the longest in 12 months'}
                 </Text>
               </View>
             </View>
