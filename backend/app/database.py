@@ -568,6 +568,24 @@ async def _migrate(conn):
         # The floor under the automatic resolver's retries — see the column note
         # in models/tournament.py.
         "ALTER TABLE draws ADD COLUMN sofa_resolved_at DATETIME",
+        # A schedule row's tour from its EVENT when no source stated it — the
+        # same reading as schedule.event_tour (the linked draw's gender, else
+        # the tournament's only gender; never mixed doubles). Ingest now
+        # writes it; this reaches the rows written before, which the PDFs no
+        # longer reprint. Korea Open 2026-09-20 (doc 345) served half its day
+        # as WTA and half as nothing. Deliberately unguarded: it touches only
+        # NULLs the event decides, so it converges to zero rows.
+        # No bare HAVING: SQLite before 3.39 rejects one without GROUP BY, and
+        # this list swallows errors — it would do nothing, silently.
+        ("UPDATE schedule_entries SET tour = ("
+         "  SELECT CASE WHEN COUNT(DISTINCT UPPER(d.gender)) = 1 THEN"
+         "    CASE MAX(UPPER(d.gender)) WHEN 'F' THEN 'WTA' WHEN 'M' THEN 'ATP' END END"
+         "  FROM draws d"
+         "  WHERE d.gender IS NOT NULL AND ("
+         "    (schedule_entries.draw_id IS NOT NULL AND d.id = schedule_entries.draw_id)"
+         "    OR (schedule_entries.draw_id IS NULL"
+         "        AND d.tournament_id = schedule_entries.tournament_id))) "
+         "WHERE tour IS NULL AND discipline != 'mixed'"),
     ]
     for sql in migrations:
         try:
