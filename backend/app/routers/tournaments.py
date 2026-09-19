@@ -2702,7 +2702,9 @@ async def _tml_id_of(db, entry_id: Optional[int]) -> tuple[Optional[str], Option
 async def get_final_guess(tournament_id: int, db: AsyncSession = Depends(get_db),
                           current_user: User = Depends(get_current_user)):
     from app.services.history import db as hdb
-    from app.services.history.final_stats import ceilings, player_reference, tour_reference
+    from app.services.history.final_stats import (
+        ceilings, head_to_head, player_reference, tour_reference,
+    )
     from app.services.history.link import norm_surface
     from app.services.locking import draw_lock_state
     from app.services.schedule import _best_of
@@ -2729,6 +2731,8 @@ async def get_final_guess(tournament_id: int, db: AsyncSession = Depends(get_db)
             "ceilings": ceilings(conn, tour, surface, best_of),
             "champion": (player_reference(conn, tour, champ_tml, surface, run_tml) if champ_tml else None),
             "tour": tour_reference(conn, tour, surface),
+            # The meetings themselves, not just their rate (owner, 2026-09-19).
+            "h2h": head_to_head(conn, tour, champ_tml, run_tml),
         }
     stats = await hdb.run(_read)
 
@@ -2741,6 +2745,8 @@ async def get_final_guess(tournament_id: int, db: AsyncSession = Depends(get_db)
         "champion": {"entry_id": champion_id, "name": champ_name, "has_history": bool(champ_tml)},
         "runner_up": {"entry_id": runner_up_id, "name": run_name, "has_history": bool(run_tml)},
         "reference": {"champion": stats["champion"], "tour": stats["tour"]},
+        # Every match the two picked finalists have played, most recent first.
+        "h2h": stats["h2h"],
         "ceilings": stats["ceilings"],
         # What this bracket is taken to have said if it never answers.
         "default": stats["default"],

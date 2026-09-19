@@ -51,6 +51,12 @@ export function useChoosableTournaments(ready = true) {
   return {
     all,
     live,
+    /* WHICH SECTION a draw sits in — 'open', 'active' — off the cohort above,
+       which was clustered over EVERY draw. Exposed so a caller can GROUP what
+       this hook returned without recomputing that clustering on the filtered
+       list, which is exactly the mistake the note at the top warns about
+       (drawGroups.js). */
+    sectionOf: t => getHomeSection(t, cohort),
     // Every live event, whether or not a sheet has been published for it.
     events,
     // The ones a filter can usefully name. Falls back to `events` while the

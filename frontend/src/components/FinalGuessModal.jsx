@@ -35,6 +35,16 @@ export function fmtMinutes(m) {
   return h ? `${h}h ${String(mm).padStart(2, '0')}m` : `${mm}m`
 }
 
+/* EVERY DURATION IN THE DIALOG CARRIES BOTH FORMS (owner, 2026-09-19): the
+   clock reading and the plain minutes. The slider answers in minutes and the
+   references read in hours, and converting between them while comparing the
+   two is the one job this dialog should not hand back. Under an hour the two
+   forms are the same number, so it is said once. */
+export function fmtLong(m) {
+  if (m == null) return '–'
+  return m >= 60 ? `${fmtMinutes(m)} (${m} min)` : `${m} min`
+}
+
 const perSet = (r, key) => (r && r[key] != null ? r[key] : null)
 
 /* THE PICKED FINAL, IN A LINE (owner, 2026-09-19): "Ostapenko def. Birrell".
@@ -71,6 +81,45 @@ function Reference({ ctx, which }) {
   if (tour != null) lines.push(`${ctx.tour} on ${ctx.surface.toLowerCase()}: ${tour} ${unit} per set`)
   if (!lines.length) lines.push(champ ? `No history held for ${champ} yet` : 'Pick your champion to see their history here')
   return <ul className="fg-ref">{lines.map((l, i) => <li key={i}>{l}</li>)}</ul>
+}
+
+/* THE MEETINGS THEMSELVES (owner, 2026-09-19). The reference lines give the
+   RATE; this gives the matches behind it — who won, the score, the length and
+   the aces each player hit. Sackmann's score is written from the winner's
+   side, so naming the winner in front of it makes "6-4 6-3" read the right
+   way round. */
+function Meetings({ ctx }) {
+  const h = ctx?.h2h
+  if (!h?.matches?.length) return null
+  const a = surname(ctx?.champion?.name)
+  const b = surname(ctx?.runner_up?.name)
+  return (
+    <section className="fg-q">
+      <span className="fg-label">
+        When they have met{h.total > 1 ? ` — ${a} ${h.champion_wins}, ${b} ${h.opponent_wins}` : ''}
+      </span>
+      <ul className="fg-meets">
+        {h.matches.map((m, i) => (
+          <li key={`${m.date}-${i}`}>
+            <span className="fg-meet-when">
+              {[m.year, m.tournament, m.round, m.surface].filter(Boolean).join(' · ')}
+            </span>
+            <span className="fg-meet-score">
+              {surname(m.winner_name)} {m.score}{m.minutes ? ` · ${fmtLong(m.minutes)}` : ''}
+            </span>
+            <span className="fg-meet-aces">
+              {m.champion_aces != null || m.opponent_aces != null
+                ? `${a} ${m.champion_aces ?? '–'} aces · ${b} ${m.opponent_aces ?? '–'}`
+                : 'Aces not recorded for this match'}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {h.total > h.shown && (
+        <p className="fg-muted">The {h.shown} most recent of {h.total} meetings</p>
+      )}
+    </section>
+  )
 }
 
 export default function FinalGuessModal({ tournamentId, open, onClose, reason }) {
@@ -130,12 +179,12 @@ export default function FinalGuessModal({ tournamentId, open, onClose, reason })
               else (owner's wording, 2026-09-19). */}
           <p className="fg-intro">
             Final score ties broken by the questions below
-            {aces != null ? ` — ${aces} aces · ${fmtMinutes(minutes)}` : ''}
+            {aces != null ? ` — ${aces} aces · ${fmtLong(minutes)}` : ''}
           </p>
           {ctx && !ctx.guess && ctx.default && (
             <p className="fg-intro">
               Leave this alone and you hold {ctx.tour} {ctx.surface.toLowerCase()}'s {ctx.default.year} average:
-              {` ${ctx.default.aces} aces, ${fmtMinutes(ctx.default.minutes)}`}.
+              {` ${ctx.default.aces} aces, ${fmtLong(ctx.default.minutes)}`}.
             </p>
           )}
           {isLoading || aces == null ? <p className="fg-muted">Loading the history…</p> : (
@@ -155,13 +204,14 @@ export default function FinalGuessModal({ tournamentId, open, onClose, reason })
                 <div className="fg-row">
                   <input id="fg-min" type="range" min={0} max={durMax} step={1} value={minutes}
                          onChange={e => setMinutes(Number(e.target.value))} disabled={ctx?.locked} />
-                  <output className="fg-value" htmlFor="fg-min">{fmtMinutes(minutes)}</output>
+                  <output className="fg-value" htmlFor="fg-min">{fmtMinutes(minutes)}<small>{minutes} min</small></output>
                 </div>
-                <div className="fg-ends"><span>0 · walkover</span><span>{fmtMinutes(durMax)} · longest on {ctx.surface.toLowerCase()}{record?.duration_record ? ` (${record.duration_record.tournament} ${record.duration_record.year})` : ''}</span></div>
+                <div className="fg-ends"><span>0 · walkover</span><span>{fmtLong(durMax)} · longest on {ctx.surface.toLowerCase()}{record?.duration_record ? ` (${record.duration_record.tournament} ${record.duration_record.year})` : ''}</span></div>
                 <Reference ctx={ctx} which="minutes" />
               </section>
+              <Meetings ctx={ctx} />
               {ctx?.actual && (
-                <p className="fg-actual">The final: {ctx.actual.final_aces} aces, {fmtMinutes(ctx.actual.final_duration_min)}.</p>
+                <p className="fg-actual">The final: {ctx.actual.final_aces} aces, {fmtLong(ctx.actual.final_duration_min)}.</p>
               )}
               <div className="fg-actions">
                 <button type="button" className="fg-btn fg-btn--quiet" onClick={onClose}>{ctx?.locked ? 'Close' : 'Later'}</button>

@@ -7,7 +7,9 @@ import sqlite3
 from datetime import date
 from types import SimpleNamespace as NS
 
-from app.services.history.final_stats import ceilings, player_reference, sets_in, tour_reference
+from app.services.history.final_stats import (
+    ceilings, head_to_head, player_reference, sets_in, tour_reference,
+)
 from app.routers.tournaments import predicted_finalists
 
 
@@ -143,3 +145,71 @@ def test_dates_are_compared_as_dashed_iso_the_way_the_table_spells_them():
     ])
     got = default_guess(c, "wta", "Hard", 3, today=date(2026, 9, 18))
     assert got["matches"] == 2 and got["aces"] == 6 and got["minutes"] == 110   # both ends of 2025, not 2026
+
+
+def _h2h_db():
+    """A pair's own meetings. Its own table because head_to_head reads `round`,
+    which the ceilings/rates fixture above has no column for."""
+    c = sqlite3.connect(":memory:")
+    c.execute("""CREATE TABLE tml_matches (tour, tourney_name, tourney_date, surface, round, best_of,
+                 winner_id, loser_id, winner_name, loser_name, score, minutes, w_ace, l_ace)""")
+    c.executemany("INSERT INTO tml_matches VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", [
+        # The champion won this one, most recent.
+        ("wta", "Australian Open", "2026-01-20", "Hard", "R16", 3,
+         "P1", "P2", "Champ Pick", "Other Pick", "7-6(5) 6-1", 100, 5, 4),
+        # …and lost this one, so the aces have to follow the PLAYER, not the result.
+        ("wta", "Rome", "2025-05-12", "Clay", "QF", 3,
+         "P2", "P1", "Other Pick", "Champ Pick", "6-4 6-3", 93, 2, 1),
+        # A walkover is a meeting in the record but not a match anyone served in.
+        ("wta", "Doha", "2025-02-14", "Hard", "SF", 3,
+         "P1", "P2", "Champ Pick", "Other Pick", "W/O", None, None, None),
+        # An older one, to prove the ordering and the cap.
+        ("wta", "Fed Cup", "2018-04-21", "Hard", "RR", 3,
+         "P1", "P2", "Champ Pick", "Other Pick", "6-3 6-3", 64, 2, 3),
+        # Somebody else's match must never appear.
+        ("wta", "Miami", "2025-03-25", "Hard", "F", 3,
+         "P1", "P9", "Champ Pick", "Nobody", "6-0 6-0", 45, 9, 0),
+    ])
+    return c
+
+
+def test_head_to_head_lists_the_meetings_newest_first_with_each_players_aces():
+    c = _h2h_db()
+    got = head_to_head(c, "wta", "P1", "P2")
+    # Three real meetings: the walkover is out, and so is the match against P9.
+    assert got["total"] == 3 and got["shown"] == 3
+    assert got["champion_wins"] == 2 and got["opponent_wins"] == 1
+    first, second, third = got["matches"]
+    assert [m["year"] for m in got["matches"]] == ["2026", "2025", "2018"]
+
+    assert first["tournament"] == "Australian Open" and first["round"] == "R16"
+    assert first["champion_won"] is True
+    assert first["champion_aces"] == 5 and first["opponent_aces"] == 4
+    assert first["minutes"] == 100 and first["sets"] == 2
+
+    # THE ACES FOLLOW THE PLAYER. This one the champion LOST, so the winner's
+    # column belongs to the opponent — reading w_ace as "the champion's" would
+    # silently swap them on every defeat.
+    assert second["champion_won"] is False
+    assert second["champion_aces"] == 1 and second["opponent_aces"] == 2
+    assert second["winner_name"] == "Other Pick"
+
+    assert third["surface"] == "Hard" and third["minutes"] == 64
+
+
+def test_head_to_head_caps_the_list_but_still_counts_them_all():
+    c = _h2h_db()
+    got = head_to_head(c, "wta", "P1", "P2", limit=2)
+    assert got["total"] == 3 and got["shown"] == 2
+    assert [m["year"] for m in got["matches"]] == ["2026", "2025"]
+    # The record is over every meeting, not only the ones shown.
+    assert got["champion_wins"] == 2 and got["opponent_wins"] == 1
+
+
+def test_head_to_head_is_none_when_they_have_never_met():
+    c = _h2h_db()
+    assert head_to_head(c, "wta", "P1", "P404") is None
+    assert head_to_head(c, "wta", "P1", None) is None
+    assert head_to_head(c, "wta", None, "P2") is None
+    # Wrong tour, same ids: a WTA pair has no ATP history.
+    assert head_to_head(c, "atp", "P1", "P2") is None

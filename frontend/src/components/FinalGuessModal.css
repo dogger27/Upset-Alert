@@ -28,3 +28,15 @@
 .fg-bar-value { font-weight: 700; }
 .fg-bar-value--ask { font-weight: 600; color: var(--green-500, #40916c); }
 .fg-bar-actual { margin-left: auto; font-size: 0.85rem; color: var(--text-muted); }
+
+/* The head-to-head meetings: a rule between them rather than a card each —
+   inside a dialog this dense, four bordered boxes are four more things to
+   look at. */
+.fg-meets { list-style: none; margin: 0.35rem 0 0; padding: 0; }
+.fg-meets li { display: flex; flex-direction: column; gap: 0.05rem;
+               padding-top: 0.35rem; margin-top: 0.35rem; border-top: 1px solid var(--border); }
+.fg-meet-when { font-size: 0.72rem; color: var(--text-muted); }
+.fg-meet-score { font-weight: 600; }
+.fg-meet-aces { font-size: 0.8rem; color: var(--text-muted); }
+/* The raw minutes under the clock reading, inside the slider's own readout. */
+.fg-value small { display: block; font-size: 0.7rem; font-weight: 400; color: var(--text-muted); }

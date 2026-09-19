@@ -154,6 +154,57 @@ def player_reference(conn, tour: str, tml_id: str, surface: str,
     return {"on_surface": on_surface, "overall": overall, "vs_finalist": vs}
 
 
+def head_to_head(conn, tour: str, tml_id: str, opponent_tml_id: str,
+                 limit: int = 12) -> Optional[dict]:
+    """THE MEETINGS THEMSELVES (owner, 2026-09-19): every match we hold between
+    the two players this bracket has picked for the final, each with its score,
+    its length, and the aces EACH of them hit — not just the per-set rate the
+    reference lines carry.
+
+    All-time, not the three-season window the rates use: a head-to-head is a
+    short list and its oldest entry is still the answer to "have they played".
+    Most recent first, capped at `limit` with the full count returned beside
+    it, because a pair can have met thirty times and this goes in a drawer.
+
+    Walkovers are left out. A W/O is a meeting in the record but not a match
+    anybody hit an ace in, so every column this exists to show would be blank —
+    and it is the same exclusion `_rate` makes, which keeps the list's length
+    and the reference line's match count from contradicting each other.
+    """
+    if not tml_id or not opponent_tml_id:
+        return None
+    rows = conn.execute("""
+        SELECT tourney_date, tourney_name, surface, round, score, minutes, best_of,
+               winner_id, winner_name, loser_name, w_ace, l_ace
+        FROM tml_matches
+        WHERE tour = :tour
+          AND ((winner_id = :p AND loser_id = :o) OR (winner_id = :o AND loser_id = :p))
+          AND score NOT LIKE '%W/O%'
+        ORDER BY tourney_date DESC""",
+        {"p": tml_id, "o": opponent_tml_id, "tour": tour}).fetchall()
+    if not rows:
+        return None
+    out = []
+    for r in rows[:limit]:
+        (tdate, tname, surf, rnd, score, minutes, best_of, wid, wname, lname, w_ace, l_ace) = r
+        mine_won = wid == tml_id
+        out.append({
+            "date": tdate, "year": str(tdate)[:4], "tournament": tname,
+            "surface": surf, "round": rnd, "score": score,
+            "minutes": minutes, "best_of": best_of,
+            "sets": sets_in(score),
+            "winner_name": wname, "loser_name": lname,
+            "champion_won": mine_won,
+            # Whose aces are whose: the file stores them by result, not by name.
+            "champion_aces": (w_ace if mine_won else l_ace),
+            "opponent_aces": (l_ace if mine_won else w_ace),
+        })
+    wins = sum(1 for r in rows if r[7] == tml_id)
+    return {"total": len(rows), "shown": len(out),
+            "champion_wins": wins, "opponent_wins": len(rows) - wins,
+            "matches": out}
+
+
 def tour_reference(conn, tour: str, surface: str, today: Optional[date] = None) -> Optional[dict]:
     """The tour's own rate on this surface: aces per set per PLAYER (each
     match counts both players' aces over the sets played), minutes per set."""

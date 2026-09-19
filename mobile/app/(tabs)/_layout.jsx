@@ -18,13 +18,14 @@ import { Ionicons } from '@expo/vector-icons'
 import { BracketIcon } from '../../BracketIcon'
 import { TourBadge } from '../../cards'
 import { Sheet } from '../../sheet'
-import { BrandMark } from '../../ui'
+import { BrandMark, Eyebrow } from '../../ui'
 import { useAuth } from '../../auth'
 import { hasDrawData, useChoosableTournaments } from '../../choosableTournaments'
 import { setCurrentDraw, useCurrentDraw } from '../../currentDraw'
+import { groupDrawsByStatus, showGroupHeadings } from '../../drawGroups'
 import { useLastLeague } from '../../lastLeague'
 import { pruneScheduleTournaments, setScheduleTournaments, useScheduleTournaments } from '../../scheduleFilter'
-import { C, T } from '../../theme'
+import { C, S, T } from '../../theme'
 
 /* THE TAB BAR'S OWN HEIGHT ARITHMETIC, because it has to be reproduced to be
    trimmed. getTabBarHeight() returns TABBAR_HEIGHT_UIKIT + insets.bottom and
@@ -105,7 +106,12 @@ export default function TabLayout() {
   const ready = phase === 'ready'
   /* The one derivation, shared with the Schedule page's own checkboxes so the
      two controls can never offer different tournaments. */
-  const { all, live, choosable } = useChoosableTournaments(ready)
+  const { all, live, choosable, sectionOf } = useChoosableTournaments(ready)
+  /* The chooser's rows, in their two groups. Not memoised: it is a filter over
+     the handful of draws being played, and `live` is a fresh array on every
+     render anyway, so a memo here would buy a comparison and no work. */
+  const drawGroups = groupDrawsByStatus(live, sectionOf)
+  const groupHeadings = showGroupHeadings(drawGroups)
   /* The tab's destination falls back past `live` to any released draw, so the
      bar keeps four tabs through an off-season week with nothing being played.
      The chooser still lists only what is live and says so when that is
@@ -314,39 +320,30 @@ export default function TabLayout() {
       <Tabs.Screen name="(more)" options={{ href: null, headerShown: false }} />
     </Tabs>
 
+    {/* GROUPED BY STATUS (owner, 2026-09-19). The list answers two questions
+        at once — which draws still take picks, and which are being played —
+        and flat, four rows read as one undifferentiated list with the only
+        deadline in it invisible. The two headings are the DASHBOARD's own
+        words and colours, in its order, so this teaches no second vocabulary
+        for the same fact. One group draws no heading at all: see
+        drawGroups.showGroupHeadings. */}
     <Sheet visible={picking} onClose={() => setPicking(false)} title="Draws">
-      {live.length ? live.map(t => (
-        <Pressable key={t.id} style={s.row} accessibilityRole="button"
-                   /* The mark says "this one" to anyone who can see it; this
-                      says it to anyone who cannot. Neither the tick before it
-                      nor the logo now carries a label of its own — a mark that
-                      means "current" is the ROW's state, not a thing in it. */
-                   accessibilityState={{ selected: t.id === showing }}
-                   onPress={() => { setPicking(false); router.push(`/draw/${t.id}`) }}>
-          {/* The tour's colour is how the two halves of a combined event tell
-              themselves apart everywhere else in the app; a list of draws is
-              exactly where that matters most. */}
-          <View style={[s.tint, { backgroundColor: t.gender === 'F' ? C.wta : C.atp }]} />
-          {/* THE MARK BELONGS TO THE NAME, not to the row. Pushed out to the
-              far edge it read as a column of its own, a long way from the
-              thing it marks; beside the name it says "this one" (owner,
-              2026-09-12). The group takes the slack so the badge still sits
-              right, and the name shrinks before the mark does.
-
-              THE BRAND DOT RATHER THAN A TICK (owner, 2026-09-16). A green
-              checkmark is the app's "done/correct" mark — it grades a pick in
-              the bracket, and it confirms a choice in four other sheets — so
-              on this row it was answering a question nobody asked. The logo
-              answers the right one: this is the draw you are in. It is also
-              the one mark in the app that cannot mean anything else. */}
-          <View style={s.nameWrap}>
-            <Text style={s.name} numberOfLines={1}>{t.name}</Text>
-            {t.id === showing ? <BrandMark size={16} /> : null}
-          </View>
-          {/* The app's own badge, not a second one: same pill, same two
-              colours as every draw card and bracket header. */}
-          <TourBadge gender={t.gender} />
-        </Pressable>
+      {live.length ? drawGroups.map(g => (
+        <View key={g.key}>
+          {groupHeadings ? (
+            <View style={s.groupHead}>
+              <Eyebrow color={GROUP_TONE[g.key] || C.muted}>{g.title}</Eyebrow>
+              <View style={s.groupRule} />
+            </View>
+          ) : null}
+          {g.draws.map((t, i) => (
+            <DrawRow key={t.id} t={t} showing={showing}
+                     /* The heading brought its own rule, so the first row
+                        under one must not draw a second immediately below it. */
+                     underHeading={groupHeadings && i === 0}
+                     onPress={() => { setPicking(false); router.push(`/draw/${t.id}`) }} />
+          ))}
+        </View>
       )) : (
         <Text style={s.none}>No draws are being played right now.</Text>
       )}
@@ -429,11 +426,59 @@ export default function TabLayout() {
   )
 }
 
+/* ONE DRAW IN THE CHOOSER. Its own component now that the list is grouped: the
+   rows are drawn from inside a second map, and the alternative was this body
+   nested two levels deep in the sheet. */
+function DrawRow({ t, showing, underHeading, onPress }) {
+  return (
+    <Pressable style={[s.row, underHeading && s.rowUnderHeading]} accessibilityRole="button"
+               /* The mark says "this one" to anyone who can see it; this
+                  says it to anyone who cannot. Neither the tick before it
+                  nor the logo now carries a label of its own — a mark that
+                  means "current" is the ROW's state, not a thing in it. */
+               accessibilityState={{ selected: t.id === showing }}
+               onPress={onPress}>
+      {/* The tour's colour is how the two halves of a combined event tell
+          themselves apart everywhere else in the app; a list of draws is
+          exactly where that matters most. */}
+      <View style={[s.tint, { backgroundColor: t.gender === 'F' ? C.wta : C.atp }]} />
+      {/* THE MARK BELONGS TO THE NAME, not to the row. Pushed out to the
+          far edge it read as a column of its own, a long way from the
+          thing it marks; beside the name it says "this one" (owner,
+          2026-09-12). The group takes the slack so the badge still sits
+          right, and the name shrinks before the mark does.
+
+          THE BRAND DOT RATHER THAN A TICK (owner, 2026-09-16). A green
+          checkmark is the app's "done/correct" mark — it grades a pick in
+          the bracket, and it confirms a choice in four other sheets — so
+          on this row it was answering a question nobody asked. The logo
+          answers the right one: this is the draw you are in. It is also
+          the one mark in the app that cannot mean anything else. */}
+      <View style={s.nameWrap}>
+        <Text style={s.name} numberOfLines={1}>{t.name}</Text>
+        {t.id === showing ? <BrandMark size={16} /> : null}
+      </View>
+      {/* The app's own badge, not a second one: same pill, same two
+          colours as every draw card and bracket header. */}
+      <TourBadge gender={t.gender} />
+    </Pressable>
+  )
+}
+
+/* The dashboard's own two tones for these sections, so a reader who has seen
+   the home screen recognises the heading before reading it. */
+const GROUP_TONE = { open: C.clay, active: C.greenLit }
+
 const s = {
   row: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     paddingVertical: 12, borderTopWidth: 1, borderTopColor: C.border,
   },
+  rowUnderHeading: { borderTopWidth: 0 },
+  /* The heading and the rule that runs off it — the dashboard's Section head,
+     the same three numbers. */
+  groupHead: { flexDirection: 'row', alignItems: 'center', gap: S.sm, paddingTop: S.sm },
+  groupRule: { flex: 1, height: 1, backgroundColor: C.border },
   tint: { width: 3, height: 20, borderRadius: 2 },
   /* The heading's own controls. Small and quiet — they act on the list below
      rather than being the choice itself, so they read as tools beside the

@@ -28,6 +28,16 @@ export function fmtMinutes(m) {
   return h ? `${h}h ${String(mm).padStart(2, '0')}m` : `${mm}m`
 }
 
+/* EVERY DURATION IN THE DRAWER CARRIES BOTH FORMS (owner, 2026-09-19): the
+   clock reading and the plain minutes. The slider answers in minutes and the
+   references read in hours, and leaving the reader to convert between the two
+   while comparing them is the one job this dialog should not hand back.
+   Under an hour the two forms are the same number, so it is said once. */
+export function fmtLong(m) {
+  if (m == null) return '–'
+  return m >= 60 ? `${fmtMinutes(m)} (${m} min)` : `${m} min`
+}
+
 /* THE PICKED FINAL, IN A LINE (owner, 2026-09-19): "Ostapenko def. Birrell".
    Surnames, because that is what identifies a player in a line about two of
    them, and it is the reading the bracket's own boxes use — everything after
@@ -112,6 +122,45 @@ function refLines(ctx, which) {
   return out
 }
 
+/* THE MEETINGS THEMSELVES (owner, 2026-09-19). The reference lines under each
+   slider give the RATE; this gives the matches it was computed from — who won,
+   the score, how long it took and the aces each of them hit — which is what a
+   person actually reasons from when the two have met before.
+   Sackmann's score is written from the winner's side, so naming the winner in
+   front of it makes "6-4 6-3" read the right way round. */
+function Meetings({ data }) {
+  const h = data?.h2h
+  if (!h?.matches?.length) return null
+  const a = surname(data?.champion?.name)
+  const b = surname(data?.runner_up?.name)
+  return (
+    <View style={s.q}>
+      <Text style={s.label}>
+        When they have met{h.total > 1 ? ` — ${a} ${h.champion_wins}, ${b} ${h.opponent_wins}` : ''}
+      </Text>
+      {h.matches.map((m, i) => (
+        <View key={`${m.date}-${i}`} style={s.meet}>
+          <Text style={s.meetWhen} numberOfLines={1}>
+            {[m.year, m.tournament, m.round, m.surface].filter(Boolean).join(' · ')}
+          </Text>
+          <Text style={s.meetScore} numberOfLines={1}>
+            {surname(m.winner_name)} {m.score}
+            {m.minutes ? ` · ${fmtLong(m.minutes)}` : ''}
+          </Text>
+          <Text style={s.meetAces} numberOfLines={1}>
+            {m.champion_aces != null || m.opponent_aces != null
+              ? `${a} ${m.champion_aces ?? '–'} aces · ${b} ${m.opponent_aces ?? '–'}`
+              : 'Aces not recorded for this match'}
+          </Text>
+        </View>
+      ))}
+      {h.total > h.shown
+        ? <Muted>{`The ${h.shown} most recent of ${h.total} meetings`}</Muted>
+        : null}
+    </View>
+  )
+}
+
 export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
   const ctx = useApi(visible ? `final-guess:${tournamentId}` : null, () => getFinalGuess(tournamentId), { enabled: !!visible })
   const data = ctx.data
@@ -171,11 +220,11 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
               what this bracket holds as you look at it, so dragging a slider
               cannot leave a sentence on screen contradicting the knob under
               it (owner's wording, 2026-09-19). */}
-          <Muted>Final score ties broken by the questions below — {aces} aces · {fmtMinutes(minutes)}</Muted>
+          <Muted>Final score ties broken by the questions below — {aces} aces · {fmtLong(minutes)}</Muted>
           {!data.guess && data.default ? (
             <Muted>
               Leave this alone and you hold {data.tour} {data.surface.toLowerCase()}&apos;s {data.default.year} average:
-              {` ${data.default.aces} aces, ${fmtMinutes(data.default.minutes)}`}.
+              {` ${data.default.aces} aces, ${fmtLong(data.default.minutes)}`}.
             </Muted>
           ) : null}
           <View style={s.q}>
@@ -198,15 +247,19 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
               <View style={{ flex: 1 }}>
                 <ValueSlider value={minutes} min={0} max={durMax} onChange={setMinutes} disabled={data.locked} accessibilityLabel="Length of the final" />
               </View>
-              <Text style={s.value}>{fmtMinutes(minutes)}</Text>
+              <View style={s.valueCol}>
+                <Text style={s.value}>{fmtMinutes(minutes)}</Text>
+                <Text style={s.valueSub}>{minutes} min</Text>
+              </View>
             </View>
             <View style={s.ends}>
               <Text style={s.end}>0 · walkover</Text>
-              <Text style={[s.end, { textAlign: 'right', flexShrink: 1 }]} numberOfLines={2}>{fmtMinutes(durMax)} · longest on {data.surface.toLowerCase()}{rec?.duration_record ? ` (${rec.duration_record.tournament} ${rec.duration_record.year})` : ''}</Text>
+              <Text style={[s.end, { textAlign: 'right', flexShrink: 1 }]} numberOfLines={2}>{fmtLong(durMax)} · longest on {data.surface.toLowerCase()}{rec?.duration_record ? ` (${rec.duration_record.tournament} ${rec.duration_record.year})` : ''}</Text>
             </View>
             {refLines(data, 'minutes').map((l, i) => <Text key={i} style={s.ref}>• {l}</Text>)}
           </View>
-          {data.actual ? <Text style={s.actual}>The final: {data.actual.final_aces} aces, {fmtMinutes(data.actual.final_duration_min)}.</Text> : null}
+          <Meetings data={data} />
+          {data.actual ? <Text style={s.actual}>The final: {data.actual.final_aces} aces, {fmtLong(data.actual.final_duration_min)}.</Text> : null}
           {error ? <Text style={s.error}>{error}</Text> : null}
           <View style={s.actions}>
             <Pressable onPress={onClose} style={[s.btn, s.btnQuiet]} accessibilityRole="button"><Text style={s.btnQuietText}>{data.locked ? 'Close' : 'Later'}</Text></Pressable>
@@ -265,7 +318,16 @@ const s = StyleSheet.create({
   finalLine: { ...T.h2, color: C.ink },
   label: { ...T.bodyMed, color: C.ink },
   row: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
-  value: { ...T.score, color: C.ink, minWidth: 64, textAlign: 'right' },
+  value: { ...T.score, color: C.ink, textAlign: 'right' },
+  valueCol: { minWidth: 64, alignItems: 'flex-end' },
+  valueSub: { ...T.tiny, color: C.muted },
+  /* One meeting: when, who won it and in what, then the aces. Divided by a
+     rule rather than boxed — inside a drawer that already scrolls, four
+     bordered cards would be four more things to look at. */
+  meet: { paddingTop: 5, marginTop: 4, borderTopWidth: 1, borderTopColor: C.border },
+  meetWhen: { ...T.tiny, color: C.muted },
+  meetScore: { ...T.bodyMed, color: C.ink },
+  meetAces: { ...T.small, color: C.muted },
   ends: { flexDirection: 'row', justifyContent: 'space-between', gap: S.sm },
   end: { ...T.tiny, color: C.muted },
   ref: { ...T.small, color: C.ink, marginTop: 2 },
