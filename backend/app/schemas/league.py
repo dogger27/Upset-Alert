@@ -67,6 +67,7 @@ class LeaderboardEntry(BaseModel):
     # each was from the final as played; None until the final is played.
     final_guess_aces: Optional[int] = None
     final_guess_minutes: Optional[int] = None
+    tie_sets_diff: Optional[int] = None
     tie_aces_diff: Optional[int] = None
     tie_minutes_diff: Optional[int] = None
     # Third or better in every future, ties sharing a place. None before the

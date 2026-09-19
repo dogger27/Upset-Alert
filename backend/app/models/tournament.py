@@ -189,6 +189,14 @@ class Draw(Base):
     # against these. Null until then; a walkover final is 0 and 0.
     final_winner_aces: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     final_duration_min: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # How many sets the final went — the first of the three tiebreak answers
+    # to be compared (owner, 2026-09-19), read off the final's own score.
+    final_sets: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # The tiebreak drawer's DRAW-LEVEL reference figures, worked out once and
+    # kept here so opening it costs no history queries (services/
+    # final_reference). Per-finalist figures are not in this: they depend on
+    # who the reader picked and are fetched live.
+    final_ref_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     # IS A DECIDING SET PLAYED OUT, or replaced by a first-to-10 match
     # tiebreak? Only meaningful for a best-of-THREE match; a best-of-five
     # always plays its fifth. Two columns because one tournament answers it

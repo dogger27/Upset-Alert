@@ -596,6 +596,26 @@ _FINAL_TRIED: dict[int, float] = {}
 _FINAL_RETRY_SECONDS = 3600
 
 
+def _sets_in_scores(scores) -> Optional[int]:
+    """How many sets a stored score represents.
+
+    scores_json is a list of per-set entries, and the shape has grown over
+    time (a pair of games, sometimes with a tiebreak and a retirement marker
+    beside them), so this counts ENTRIES THAT NAME A GAME COUNT for both
+    players rather than trying to parse each one. A trailing status element —
+    the live feed's "suspended" and friends — is not a set.
+    """
+    if not scores:
+        return None
+    n = 0
+    for row in scores:
+        if isinstance(row, (list, tuple)) and len(row) >= 2:
+            a, b = row[0], row[1]
+            if isinstance(a, int) and isinstance(b, int):
+                n += 1
+    return n or None
+
+
 async def capture_final_stats() -> int:
     import time as _time
     from app.database import AsyncSessionLocal
@@ -621,8 +641,13 @@ async def capture_final_stats() -> int:
             minutes = final.sofa_duration_min or final.duration_min
             aces = None
             walkover = not (final.scores_json or final.sofa_scores_json)
+            # HOW MANY SETS IT WENT — the first tiebreak answer to be compared
+            # (owner, 2026-09-19). Counted off the score we already hold rather
+            # than fetched: a set is a set whichever feed reported it, and this
+            # must not depend on the statistics endpoint answering.
+            sets_played = _sets_in_scores(final.scores_json or final.sofa_scores_json)
             if walkover:
-                aces, minutes = 0, 0
+                aces, minutes, sets_played = 0, 0, 0
             elif final.sofa_event_id:
                 ev = (await _get(f"/event/{final.sofa_event_id}") or {}).get("event") or {}
                 winner = await db.get(DrawEntry, final.winner_id)
@@ -638,8 +663,10 @@ async def capture_final_stats() -> int:
                 continue
             draw.final_winner_aces = int(aces)
             draw.final_duration_min = int(minutes)
+            if sets_played is not None:
+                draw.final_sets = int(sets_played)
             await db.commit()
             written += 1
-            await app_log("info", "scoring", f"{draw.name}: final played — champion hit {aces} aces in {minutes} min; the tiebreak is now decided",
-                          {"draw_id": draw.id, "aces": aces, "minutes": minutes})
+            await app_log("info", "scoring", f"{draw.name}: final played — {sets_played} sets, champion hit {aces} aces in {minutes} min; the tiebreak is now decided",
+                          {"draw_id": draw.id, "sets": sets_played, "aces": aces, "minutes": minutes})
     return written

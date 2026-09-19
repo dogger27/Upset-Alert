@@ -1275,6 +1275,7 @@ async def global_standings(tournament_id: int, db: AsyncSession = Depends(get_db
                          worst_rank=ranges.get(s.user_id, (None, None))[1],
                          final_guess_aces=(guesses.get(s.user_id) or (None, None))[0],
                          final_guess_minutes=(guesses.get(s.user_id) or (None, None))[1],
+                         tie_sets_diff=s.tie_sets_diff,
                          tie_aces_diff=s.tie_aces_diff, tie_minutes_diff=s.tie_minutes_diff,
                          podium_locked=podium_locked(ranges.get(s.user_id)))
         for i, s in enumerate(ranked)
@@ -1367,9 +1368,20 @@ async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get
             # numbering, so they need to know which row this is.
             "is_bot": bool(user.is_bot),
             "round_points": pts_list,
-            "final_guess": (lambda g: {"aces": g[0], "minutes": g[1]} if g else None)(guesses_d.get(user.id)),
-            "tie_aces_diff": final_tiebreak.diffs_for(guesses_d.get(user.id) or default_d, tournament.final_winner_aces, tournament.final_duration_min)[0],
-            "tie_minutes_diff": final_tiebreak.diffs_for(guesses_d.get(user.id) or default_d, tournament.final_winner_aces, tournament.final_duration_min)[1],
+            # THREE ANSWERS AND THREE GAPS, computed ONCE. diffs_for returns
+            # (sets, aces, minutes) and it used to return (aces, minutes) —
+            # anything still reading [0] as the aces gap now silently sorts on
+            # sets under the wrong name.
+            **(lambda g, d: {
+                "final_guess": ({"sets": g[0], "aces": g[1], "minutes": g[2]} if g else None),
+                "tie_sets_diff": d[0], "tie_aces_diff": d[1], "tie_minutes_diff": d[2],
+            })(
+                guesses_d.get(user.id),
+                final_tiebreak.diffs_for(
+                    guesses_d.get(user.id) or default_d,
+                    tournament.final_winner_aces, tournament.final_duration_min,
+                    tournament.final_sets),
+            ),
             "total": sum(pts_list),
             "correct_count": correct_count,
             "max_points": sum(pts_list) + potential_points(
@@ -1435,7 +1447,9 @@ async def global_round_scores(tournament_id: int, db: AsyncSession = Depends(get
 
     # Points, then the final tiebreak (services/final_tiebreak); level stays level.
     _big = 10 ** 6
-    entries.sort(key=lambda x: (-x["total"], x["tie_aces_diff"] if x["tie_aces_diff"] is not None else _big,
+    entries.sort(key=lambda x: (-x["total"],
+                                x["tie_sets_diff"] if x["tie_sets_diff"] is not None else _big,
+                                x["tie_aces_diff"] if x["tie_aces_diff"] is not None else _big,
                                 x["tie_minutes_diff"] if x["tie_minutes_diff"] is not None else _big))
     rounds_with_matches = sorted({m.round_number for m in completed_matches})
 
@@ -2664,6 +2678,9 @@ from app.models.final_guess import DrawFinalGuess  # noqa: E402
 
 
 class FinalGuessIn(_BaseModel):
+    # Optional so a client that predates the sets question can still save the
+    # other two rather than being refused outright.
+    final_sets: Optional[int] = _Field(default=None, ge=2, le=5)
     final_aces: int = _Field(ge=0, le=200)
     final_duration_min: int = _Field(ge=0, le=900)
 
@@ -2701,9 +2718,24 @@ async def _tml_id_of(db, entry_id: Optional[int]) -> tuple[Optional[str], Option
 @router.get("/{tournament_id}/final-guess")
 async def get_final_guess(tournament_id: int, db: AsyncSession = Depends(get_db),
                           current_user: User = Depends(get_current_user)):
+    """THE THREE TIEBREAK QUESTIONS AND WHAT TO ANSWER THEM WITH.
+
+    Every figure is conditioned on THIS draw — its tour, its tier, its surface
+    — and on the two players this bracket picked for the final. A WTA 250 on
+    clay is never answered with ATP hard numbers.
+
+    Two kinds of figure, from two places. The draw-level ones (how many sets a
+    final here goes, the aces and minutes per set) are the same for every
+    reader and are cached on the draw by a scheduler sweep
+    (services/final_reference). The per-finalist ones depend on who was picked,
+    so they are fetched live — and they are the only history queries a normal
+    open costs.
+    """
+    from app.services import final_reference
     from app.services.history import db as hdb
     from app.services.history.final_stats import (
-        ceilings, head_to_head, player_reference, tour_reference,
+        RATE_YEARS, ceilings, estimate_minutes, h2h_set_minutes, h2h_sets,
+        head_to_head, player_rates,
     )
     from app.services.history.link import norm_surface
     from app.services.locking import draw_lock_state
@@ -2715,6 +2747,7 @@ async def get_final_guess(tournament_id: int, db: AsyncSession = Depends(get_db)
     tour = "wta" if (draw.gender or "").upper() == "F" else "atp"
     surface = norm_surface(draw.surface)
     best_of = _best_of(draw, "singles", "main")
+    tier = draw.scoring_tier
 
     matches = (await db.execute(select(Match).where(Match.draw_id == tournament_id))).scalars().all()
     preds = (await db.execute(select(UserPrediction).where(
@@ -2724,36 +2757,85 @@ async def get_final_guess(tournament_id: int, db: AsyncSession = Depends(get_db)
     champ_tml, champ_name = await _tml_id_of(db, champion_id)
     run_tml, run_name = await _tml_id_of(db, runner_up_id)
 
+    # Cached, and never written from this read (feedback_reads_must_not_write).
+    tier_ref = await final_reference.for_draw(db, draw)
+
     def _read(conn):
+        """The per-finalist half — the only part that cannot be cached."""
         from app.services.history.final_stats import default_guess
+        h2h_min = (h2h_set_minutes(conn, tour, champ_tml, run_tml, surface)
+                   if champ_tml and run_tml else None)
         return {
             "default": default_guess(conn, tour, surface, best_of),
             "ceilings": ceilings(conn, tour, surface, best_of),
-            "champion": (player_reference(conn, tour, champ_tml, surface, run_tml) if champ_tml else None),
-            "tour": tour_reference(conn, tour, surface),
-            # The meetings themselves, not just their rate (owner, 2026-09-19).
             "h2h": head_to_head(conn, tour, champ_tml, run_tml),
+            "h2h_sets": (h2h_sets(conn, tour, champ_tml, run_tml, surface)
+                         if champ_tml and run_tml else None),
+            "h2h_set_minutes": h2h_min,
+            # The champion's own rates, and theirs against this opponent.
+            "champion_on_surface": (player_rates(conn, tour, champ_tml, surface, RATE_YEARS)
+                                    if champ_tml else None),
+            "champion_vs": (player_rates(conn, tour, champ_tml, surface, RATE_YEARS,
+                                         opponent_tml_id=run_tml)
+                            if champ_tml and run_tml else None),
         }
-    stats = await hdb.run(_read)
+
+    try:
+        live = await hdb.run(_read)
+    except Exception:       # noqa: BLE001 — history is a convenience, not the page
+        live = {k: None for k in ("default", "ceilings", "h2h", "h2h_sets",
+                                  "h2h_set_minutes", "champion_on_surface", "champion_vs")}
 
     guess = (await db.execute(select(DrawFinalGuess).where(
         DrawFinalGuess.draw_id == tournament_id, DrawFinalGuess.user_id == current_user.id))).scalars().first()
     lock = await draw_lock_state(db, draw)
+
+    tier_label = {"GS": "Grand Slam", "1000": f"{tour.upper()} 1000",
+                  "500": f"{tour.upper()} 500", "250": f"{tour.upper()} 250"}.get(tier, tier)
+    h2h_min = live["h2h_set_minutes"]
     return {
         "draw_id": tournament_id, "tour": tour.upper(), "surface": surface, "best_of": best_of,
+        "tier": tier, "tier_label": tier_label,
         "locked": bool(lock.draw_locked) or draw.status == "completed",
         "champion": {"entry_id": champion_id, "name": champ_name, "has_history": bool(champ_tml)},
         "runner_up": {"entry_id": runner_up_id, "name": run_name, "has_history": bool(run_tml)},
-        "reference": {"champion": stats["champion"], "tour": stats["tour"]},
+        # ── The three questions, each with only the figures it needs ────────
+        "sets_question": {
+            "tier_finals": (tier_ref or {}).get("sets"),
+            "h2h": live["h2h_sets"],
+        },
+        "aces_question": {
+            # Per SET; the client multiplies by the sets the reader chose, as
+            # the owner specified, so the figure follows question one's answer.
+            "tier_finals": (tier_ref or {}).get("rates"),
+            "champion_vs": live["champion_vs"],
+            "champion_on_surface": live["champion_on_surface"],
+        },
+        "minutes_question": {
+            "tier_finals": (tier_ref or {}).get("rates"),
+            # Already multiplied out per set count, from the cache.
+            "tier_minutes_by_sets": (tier_ref or {}).get("minutes_by_sets"),
+            "champion_on_surface": live["champion_on_surface"],
+            # The owner's estimate: the average set between these two, times
+            # the sets chosen, plus 225s per changeover. Pre-computed for every
+            # length this format allows so the client does no arithmetic.
+            "h2h_estimate": (None if not h2h_min else {
+                "minutes_per_set": h2h_min["minutes_per_set"],
+                "matches": h2h_min["matches"],
+                "by_sets": {str(n): estimate_minutes(h2h_min["minutes_per_set"], n)
+                            for n in ((2, 3) if best_of == 3 else (3, 4, 5))},
+            }),
+        },
         # Every match the two picked finalists have played, most recent first.
-        "h2h": stats["h2h"],
-        "ceilings": stats["ceilings"],
+        "h2h": live["h2h"],
+        "ceilings": live["ceilings"],
         # What this bracket is taken to have said if it never answers.
-        "default": stats["default"],
-        "guess": ({"final_aces": guess.final_aces, "final_duration_min": guess.final_duration_min}
-                  if guess else None),
-        "actual": ({"final_aces": draw.final_winner_aces, "final_duration_min": draw.final_duration_min}
-                   if draw.final_winner_aces is not None or draw.final_duration_min is not None else None),
+        "default": live["default"],
+        "guess": ({"final_sets": guess.final_sets, "final_aces": guess.final_aces,
+                   "final_duration_min": guess.final_duration_min} if guess else None),
+        "actual": ({"final_sets": draw.final_sets, "final_aces": draw.final_winner_aces,
+                    "final_duration_min": draw.final_duration_min}
+                   if final_tiebreak.final_played(draw) else None),
     }
 
 
@@ -2772,9 +2854,14 @@ async def put_final_guess(tournament_id: int, body: FinalGuessIn, db: AsyncSessi
         DrawFinalGuess.draw_id == tournament_id, DrawFinalGuess.user_id == current_user.id))).scalars().first()
     if guess is None:
         guess = DrawFinalGuess(user_id=current_user.id, draw_id=tournament_id,
+                               final_sets=body.final_sets,
                                final_aces=body.final_aces, final_duration_min=body.final_duration_min)
         db.add(guess)
     else:
+        # Only overwrite sets when the client sent one: an older client
+        # omitting the field must not erase an answer already given.
+        if body.final_sets is not None:
+            guess.final_sets = body.final_sets
         guess.final_aces = body.final_aces
         guess.final_duration_min = body.final_duration_min
     await db.commit()

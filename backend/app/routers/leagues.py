@@ -608,6 +608,7 @@ async def leaderboard(
             worst_rank=ranges.get(score.user_id, (None, None))[1],
             final_guess_aces=(guesses.get(score.user_id) or (None, None))[0],
             final_guess_minutes=(guesses.get(score.user_id) or (None, None))[1],
+            tie_sets_diff=score.tie_sets_diff,
             tie_aces_diff=score.tie_aces_diff, tie_minutes_diff=score.tie_minutes_diff,
             podium_locked=podium_locked(ranges.get(score.user_id)),
         )
@@ -819,9 +820,20 @@ async def round_scores(
             # numbering, so they need to know which row this is.
             "is_bot": bool(member.user.is_bot),
             "round_points": pts_list,
-            "final_guess": (lambda g: {"aces": g[0], "minutes": g[1]} if g else None)(guesses_d.get(member.user_id)),
-            "tie_aces_diff": final_tiebreak.diffs_for(guesses_d.get(member.user_id) or default_d, tournament.final_winner_aces, tournament.final_duration_min)[0],
-            "tie_minutes_diff": final_tiebreak.diffs_for(guesses_d.get(member.user_id) or default_d, tournament.final_winner_aces, tournament.final_duration_min)[1],
+            # THREE ANSWERS AND THREE GAPS, computed ONCE. diffs_for returns
+            # (sets, aces, minutes) and it used to return (aces, minutes) —
+            # anything still reading [0] as the aces gap now silently sorts on
+            # sets under the wrong name.
+            **(lambda g, d: {
+                "final_guess": ({"sets": g[0], "aces": g[1], "minutes": g[2]} if g else None),
+                "tie_sets_diff": d[0], "tie_aces_diff": d[1], "tie_minutes_diff": d[2],
+            })(
+                guesses_d.get(member.user_id),
+                final_tiebreak.diffs_for(
+                    guesses_d.get(member.user_id) or default_d,
+                    tournament.final_winner_aces, tournament.final_duration_min,
+                    tournament.final_sets),
+            ),
             "total": sum(pts_list),
             "correct_count": correct_count,
             "max_points": sum(pts_list) + potential_points(
@@ -888,7 +900,9 @@ async def round_scores(
     # Primary: total points desc. Tiebreaker: points in latest rounds first (Final → SF → QF → …)
     # Points, then the final tiebreak (services/final_tiebreak); level stays level.
     _big = 10 ** 6
-    entries.sort(key=lambda x: (-x["total"], x["tie_aces_diff"] if x["tie_aces_diff"] is not None else _big,
+    entries.sort(key=lambda x: (-x["total"],
+                                x["tie_sets_diff"] if x["tie_sets_diff"] is not None else _big,
+                                x["tie_aces_diff"] if x["tie_aces_diff"] is not None else _big,
                                 x["tie_minutes_diff"] if x["tie_minutes_diff"] is not None else _big))
     rounds_with_matches = sorted({m.round_number for m in completed_matches})
 

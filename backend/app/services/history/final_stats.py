@@ -291,16 +291,246 @@ def default_guess(conn, tour: str, surface: str, best_of: int,
     year = (today or date.today()).year - 1
     cap = PLAUSIBLE.get(best_of, PLAUSIBLE[3])
     levels = _levels_sql(tour)
-    row = conn.execute(f"""
-        SELECT avg(w_ace), avg(minutes), count(*)
+    rows = conn.execute(f"""
+        SELECT w_ace, minutes, score
         FROM tml_matches
         WHERE tour = ? AND surface = ? AND best_of = ? AND tourney_level IN {levels}
           AND tourney_date >= ? AND tourney_date <= ?
           AND score NOT LIKE '%W/O%'
           AND w_ace IS NOT NULL AND w_ace <= ?
           AND minutes IS NOT NULL AND minutes > 0 AND minutes <= ?""",
-        (tour, surface, best_of, f"{year}-01-01", f"{year}-12-31", cap["aces"], cap["minutes"])).fetchone()
-    if not row or not row[2]:
+        (tour, surface, best_of, f"{year}-01-01", f"{year}-12-31", cap["aces"], cap["minutes"])).fetchall()
+    if not rows:
         return None
-    return {"aces": int(round(row[0])), "minutes": int(round(row[1])),
-            "matches": int(row[2]), "year": year}
+    n = len(rows)
+    sets_total = sum(sets_in(r[2]) for r in rows)
+    return {"aces": int(round(sum(r[0] for r in rows) / n)),
+            "minutes": int(round(sum(r[1] for r in rows) / n)),
+            # THE THIRD DEFAULT (owner, 2026-09-19). Rounded, because the
+            # answer is a whole number of sets: at 2.4 the average match is a
+            # straight-sets win, which is what a bracket holding the default
+            # should be taken to have said.
+            "sets": int(round(sets_total / n)) if sets_total else None,
+            "matches": n, "year": year}
+
+
+# ── THE THREE TIEBREAK QUESTIONS' REFERENCE FIGURES (owner, 2026-09-19) ──────
+#
+# Every figure below is conditioned on the DRAW the questions belong to: its
+# tour, its tier, its surface, and the two players that bracket has picked for
+# the final. A WTA 250 on clay must never be answered with ATP hard numbers.
+#
+# THE TIER VOCABULARIES DO NOT MATCH, and folding them is the whole reason this
+# table exists. Our draws carry "Grand Slam" / "ATP 1000" / "WTA 250" and
+# Draw.scoring_tier reduces that to GS/1000/500/250. Sackmann's file spells the
+# same thing per tour and per ERA: the ATP's old 250s are 'A', and the WTA ran
+# Premier / Premier 5 / Premier Mandatory before the 2021 rename to 500/1000 —
+# ten years of finals spans that change, so the legacy names have to come with
+# their modern equivalent or a 1000's sample loses half its history.
+TIER_LEVELS = {
+    "atp": {"GS": ("G",), "1000": ("M",), "500": ("500",), "250": ("250", "A")},
+    "wta": {"GS": ("G",), "1000": ("1000", "PM", "P5"), "500": ("500", "P"),
+            "250": ("250", "I")},
+}
+# How far back each figure looks. The owner's own numbers: ten years for how
+# many SETS a final goes, five for the per-set rates. Sets is one number per
+# match and a decade of one tier's finals is still only a few dozen of them;
+# aces and minutes get a reading per set, so five years is already thousands.
+SETS_YEARS = 10
+RATE_YEARS = 5
+# What a changeover between sets costs, in the owner's arithmetic for the
+# head-to-head duration estimate: 225 seconds each, taken (sets - 1) times.
+BETWEEN_SETS_SECONDS = 225
+
+
+def _levels_for(tour: str, tier: str) -> tuple:
+    return TIER_LEVELS.get(tour, {}).get(tier, ())
+
+
+def _years_ago(years: int, today: Optional[date] = None) -> str:
+    d = today or date.today()
+    try:
+        return d.replace(year=d.year - years).isoformat()
+    except ValueError:                      # 29 February
+        return d.replace(year=d.year - years, day=28).isoformat()
+
+
+def _in(values) -> str:
+    return "(" + ",".join(f"'{v}'" for v in values) + ")"
+
+
+def tier_finals(conn, tour: str, tier: str, surface: str, years: int,
+                today: Optional[date] = None) -> Optional[dict]:
+    """What a final at THIS tour and tier, on THIS surface, has looked like.
+
+    Finals only — the question is about a final, and a final is not an average
+    match: it is two players who have each won five matches that fortnight.
+
+    Falls back to every surface when the surface itself has none, which is not
+    a rare edge: there has never been a WTA 1000 on grass. The caller is told
+    which it got (`surface_scoped`) so the label can stay honest rather than
+    claiming a figure for a surface that never hosted the event.
+    """
+    levels = _levels_for(tour, tier)
+    if not levels:
+        return None
+    since = _years_ago(years, today)
+    base = f"""
+        SELECT w_ace, l_ace, minutes, score FROM tml_matches
+        WHERE tour = ? AND round = 'F' AND tourney_level IN {_in(levels)}
+          AND tourney_date >= ? AND score NOT LIKE '%W/O%'"""
+    rows = conn.execute(base + " AND surface = ?", (tour, since, surface)).fetchall()
+    scoped = bool(rows)
+    if not rows:
+        rows = conn.execute(base, (tour, since)).fetchall()
+    if not rows:
+        return None
+    out = _both_sides(rows)
+    if out:
+        out["surface_scoped"] = scoped
+        out["years"] = years
+    return out
+
+
+def _both_sides(rows) -> Optional[dict]:
+    """Per-set rates counting BOTH players' aces, plus sets per match.
+
+    A tour baseline is about the match rather than about one player in it, so
+    an ace is an ace whoever served it — the same reading tour_reference uses.
+    """
+    aces = sets_a = mins = sets_m = sets_total = n = 0
+    for wa, la, m, score in rows:
+        s = sets_in(score)
+        if not s:
+            continue
+        n += 1
+        sets_total += s
+        if wa is not None and la is not None:
+            aces += wa + la
+            sets_a += 2 * s
+        if m is not None and m > 0:
+            mins += m
+            sets_m += s
+    if not n:
+        return None
+    return {"matches": n,
+            "sets_per_match": round(sets_total / n, 2),
+            "aces_per_set": round(aces / sets_a, 2) if sets_a else None,
+            "minutes_per_set": round(mins / sets_m, 1) if sets_m else None}
+
+
+def player_rates(conn, tour: str, tml_id: str, surface: Optional[str], years: int,
+                 opponent_tml_id: Optional[str] = None,
+                 today: Optional[date] = None) -> Optional[dict]:
+    """One player's own rates — their aces per set, their minutes per set, and
+    how many sets their matches go.
+
+    Every round, not finals only: a player's serve does not change because it
+    is a final, and restricting it would leave most of the field with nothing.
+    `surface` None means every surface; `opponent_tml_id` narrows it to the
+    matches between these two, which is the head-to-head the drawer shows.
+
+    THE ACES ARE THIS PLAYER'S, not the winner's. The file stores them by
+    result, so reading w_ace without checking who won attributes every defeat's
+    aces to the wrong person.
+    """
+    if not tml_id:
+        return None
+    sql = """
+        SELECT CASE WHEN winner_id = :p THEN w_ace ELSE l_ace END, minutes, score
+        FROM tml_matches
+        WHERE tour = :tour AND score NOT LIKE '%W/O%' AND tourney_date >= :since"""
+    params = {"p": tml_id, "tour": tour, "since": _years_ago(years, today)}
+    if opponent_tml_id:
+        sql += " AND ((winner_id = :p AND loser_id = :o) OR (winner_id = :o AND loser_id = :p))"
+        params["o"] = opponent_tml_id
+    else:
+        sql += " AND (winner_id = :p OR loser_id = :p)"
+    if surface:
+        sql += " AND surface = :surface"
+        params["surface"] = surface
+    rows = conn.execute(sql, params).fetchall()
+    got = _rate(rows)
+    if not got:
+        return None
+    sets_total = sum(sets_in(r[2]) for r in rows)
+    got["sets_per_match"] = round(sets_total / got["matches"], 2) if got["matches"] else None
+    got["years"] = years
+    return got
+
+
+def h2h_sets(conn, tour: str, tml_id: str, opponent_tml_id: str, surface: str) -> dict:
+    """How many sets these two have gone, on this surface and overall.
+
+    ALL TIME, unlike the rates: a head-to-head is a short list and its oldest
+    entry still answers "how do these two usually play". Two figures, and the
+    second only earns its place when it says something the first does not —
+    `off_surface` counts the meetings that were somewhere else, so the caller
+    can drop an "all surfaces" row that would just repeat the surface one.
+    """
+    if not tml_id or not opponent_tml_id:
+        return {"on_surface": None, "overall": None, "off_surface": 0}
+    rows = conn.execute("""
+        SELECT surface, score FROM tml_matches
+        WHERE tour = ?
+          AND ((winner_id = ? AND loser_id = ?) OR (winner_id = ? AND loser_id = ?))
+          AND score NOT LIKE '%W/O%'""",
+        (tour, tml_id, opponent_tml_id, opponent_tml_id, tml_id)).fetchall()
+    played = [(surf, sets_in(sc)) for surf, sc in rows if sets_in(sc)]
+    if not played:
+        return {"on_surface": None, "overall": None, "off_surface": 0}
+    here = [s for surf, s in played if surf == surface]
+    return {
+        "on_surface": ({"matches": len(here), "sets_per_match": round(sum(here) / len(here), 2)}
+                       if here else None),
+        "overall": {"matches": len(played),
+                    "sets_per_match": round(sum(s for _, s in played) / len(played), 2)},
+        "off_surface": len(played) - len(here),
+    }
+
+
+def h2h_set_minutes(conn, tour: str, tml_id: str, opponent_tml_id: str,
+                    surface: str) -> Optional[dict]:
+    """The average SET between these two on this surface, in minutes.
+
+    The owner's arithmetic for the duration estimate: this figure times the
+    number of sets the reader chose, plus 225 seconds for each changeover
+    between them (estimate_minutes below). All time, like h2h_sets, and this
+    surface only — the owner asked for the row to appear only when they have
+    met on it.
+    """
+    if not tml_id or not opponent_tml_id:
+        return None
+    rows = conn.execute("""
+        SELECT minutes, score FROM tml_matches
+        WHERE tour = ? AND surface = ?
+          AND ((winner_id = ? AND loser_id = ?) OR (winner_id = ? AND loser_id = ?))
+          AND score NOT LIKE '%W/O%' AND minutes IS NOT NULL AND minutes > 0""",
+        (tour, surface, tml_id, opponent_tml_id, opponent_tml_id, tml_id)).fetchall()
+    mins = sets = 0
+    n = 0
+    for m, score in rows:
+        s = sets_in(score)
+        if not s:
+            continue
+        n += 1
+        mins += m
+        sets += s
+    if not sets:
+        return None
+    return {"matches": n, "minutes_per_set": round(mins / sets, 1)}
+
+
+def estimate_minutes(minutes_per_set: Optional[float], sets: int) -> Optional[int]:
+    """The owner's head-to-head duration estimate: the average set times the
+    number of sets, plus a 225-second changeover between each pair of them.
+
+    Worth knowing when reading the number: `minutes` in the record is the whole
+    match, so dividing it by sets has already spread the real changeovers
+    across them. The added 225s is therefore deliberate padding on top rather
+    than the first time breaks are counted — it was specified that way, and it
+    pushes the estimate a few minutes long on purpose.
+    """
+    if minutes_per_set is None or not sets:
+        return None
+    return int(round(minutes_per_set * sets + (BETWEEN_SETS_SECONDS / 60) * (sets - 1)))

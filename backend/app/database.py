@@ -502,6 +502,13 @@ async def _migrate(conn):
         "ALTER TABLE draw_entries ADD COLUMN sofa_name VARCHAR",
         "ALTER TABLE draws ADD COLUMN final_winner_aces INTEGER",
         "ALTER TABLE draws ADD COLUMN final_duration_min INTEGER",
+        # The third tiebreak answer (owner, 2026-09-19): how many sets the
+        # final went. Nullable on both sides — an existing guess predates the
+        # question and holds the default, and a final not yet played has no
+        # actual.
+        "ALTER TABLE draws ADD COLUMN final_sets INTEGER",
+        "ALTER TABLE draw_final_guesses ADD COLUMN final_sets INTEGER",
+        "ALTER TABLE draws ADD COLUMN final_ref_json JSON",
         ("CREATE INDEX IF NOT EXISTS ix_draw_entries_sofa "
          "ON draw_entries (sofa_player_id)"),
         # Un-stamp the quarter-finals that _classify called qualifying because

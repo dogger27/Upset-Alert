@@ -606,6 +606,20 @@ def release_bucket(draw) -> tuple:
     return (draw.year, draw.week)
 
 
+async def _cache_final_references() -> None:
+    """Fill the tiebreak drawer's draw-level reference figures where missing.
+
+    Wrapped rather than registered directly so a failure here is a log line
+    and not a dead scheduler job: these figures are a convenience, and the
+    drawer computes them live when a draw has none.
+    """
+    from app.services import final_reference
+    try:
+        await final_reference.fill_missing()
+    except Exception as exc:        # noqa: BLE001
+        logger.warning("Caching final reference figures failed: %s", exc)
+
+
 async def _notify_pending_draw_releases() -> None:
     """
     Centralized, idempotent "draw released" email dispatch.
@@ -2431,6 +2445,21 @@ def start_scheduler() -> None:
         minute=40,
         id="history_sync",
         misfire_grace_time=3600,
+    )
+    # THE TIEBREAK DRAWER'S DRAW-LEVEL FIGURES, cached on each draw so opening
+    # it costs no history queries (services/final_reference). A SWEEP rather
+    # than a hook at the three places a draw can be created: two of four call
+    # sites once had the draw-release check and Swedish Open's announcement was
+    # never sent. Hourly is far more often than it needs — the figures are a
+    # decade of finals and move once a week at most — and it fills a new draw
+    # long before its bracket is out.
+    scheduler.add_job(
+        _on_shutdown_quietly(_cache_final_references),
+        "interval",
+        hours=1,
+        id="cache_final_references",
+        next_run_time=datetime.now(timezone.utc) + timedelta(minutes=3),
+        misfire_grace_time=1800,
     )
     eventstream._on_season_page_edit = _on_season_page_edit
     scheduler.start()

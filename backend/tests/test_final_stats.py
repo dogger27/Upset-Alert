@@ -126,7 +126,10 @@ def test_the_default_is_last_years_average_for_the_gender_surface_and_format():
         ("atp", "H", "2025-03-10", "Hard", "500", 3, "1", "2", "W", "L", "6-4 6-4", 100, 14, 6),
     ])
     got = default_guess(c, "wta", "Hard", 3, today=date(2026, 9, 18))
-    assert got == {"aces": 6, "minutes": 105, "matches": 2, "year": 2025}   # (4+8)/2, (90+120)/2
+    # (4+8)/2 aces, (90+120)/2 minutes, and the third default (2026-09-19):
+    # the rounded average number of sets, which is what a bracket holding the
+    # default is taken to have said about the length of the final.
+    assert got == {"aces": 6, "minutes": 105, "sets": 2, "matches": 2, "year": 2025}
     assert default_guess(c, "atp", "Hard", 3, today=date(2026, 9, 18))["aces"] == 14
     assert default_guess(c, "wta", "Grass", 3, today=date(2026, 9, 18)) is None
 

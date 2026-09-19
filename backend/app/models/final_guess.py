@@ -9,6 +9,8 @@ answer and the slider's floor.
 """
 from datetime import datetime, timezone
 
+from typing import Optional
+
 from sqlalchemy import DateTime, ForeignKey, Integer, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -22,6 +24,10 @@ class DrawFinalGuess(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     draw_id: Mapped[int] = mapped_column(ForeignKey("draws.id"), nullable=False, index=True)
+    # NULLABLE, unlike the other two: this question was added on 2026-09-19
+    # and every guess stored before it has no answer here. Null means "never
+    # answered", which holds the default exactly as an untouched slider does.
+    final_sets: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     final_aces: Mapped[int] = mapped_column(Integer, nullable=False)
     final_duration_min: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))

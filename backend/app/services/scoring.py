@@ -67,20 +67,27 @@ class UserScore:
     # correct picks per round_number — kept for the round-points columns;
     # no longer a tiebreak (owner, 2026-09-18).
     correct_by_round: dict[int, int] = field(default_factory=dict)
-    # THE TIEBREAK: how far this bracket's two final guesses were from the
+    # THE TIEBREAK: how far this bracket's three final guesses were from the
     # final as played (services/final_tiebreak). None until the final is
     # played, or when the bracket never answered — which sorts last among
     # level brackets, as a non-answer should.
+    tie_sets_diff: Optional[int] = None
     tie_aces_diff: Optional[int] = None
     tie_minutes_diff: Optional[int] = None
 
     def tiebreak_key(self, num_rounds: int = 0) -> tuple:
-        """Lower value = better rank: points, then closest on the champion's
-        aces in the final, then closest on the final's minutes. `num_rounds`
-        is accepted for the old callers and unused."""
+        """Lower value = better rank: points, then closest on how many SETS the
+        final went, then on the champion's aces, then on the final's minutes
+        (owner, 2026-09-19). `num_rounds` is accepted for the old callers and
+        unused.
+
+        A missing answer sorts last on that key rather than counting as zero —
+        including a guess stored before the sets question existed, which has no
+        sets answer of its own and is carried by the default instead."""
         big = 10 ** 6
         return (
             -self.total_points,
+            self.tie_sets_diff if self.tie_sets_diff is not None else big,
             self.tie_aces_diff if self.tie_aces_diff is not None else big,
             self.tie_minutes_diff if self.tie_minutes_diff is not None else big,
         )
