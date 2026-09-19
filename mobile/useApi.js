@@ -42,6 +42,19 @@ export function invalidate(prefix, { refetch = true } = {}) {
   for (const m of [...mounted]) if (m.key && hit(m.key)) m.run(true)
 }
 
+/* A WRITE'S OWN ANSWER, STRAIGHT INTO THE CACHE. Saving a bracket returns the
+   settled rows, so fetching them again would be a second round trip for
+   something already in hand — and on a slow connection the screen would sit on
+   its optimistic state until that landed. Every mounted hook on the key is
+   handed the data directly, which is what makes this different from
+   invalidate(): nothing is requested. */
+export function prime(key, data) {
+  if (!key) return
+  cache.set(key, data)
+  inflight.delete(key)
+  for (const m of [...mounted]) if (m.key === key) m.set(data)
+}
+
 export function useApi(key, fetcher, { enabled = true } = {}) {
   const [data, setData] = useState(() => (key ? cache.get(key) : undefined))
   const [error, setError] = useState(null)
@@ -81,7 +94,9 @@ export function useApi(key, fetcher, { enabled = true } = {}) {
 
   useEffect(() => { alive.current = true; run() }, [run])
   useEffect(() => {
-    const m = { key, run }
+    // `set` is what prime() writes through; setData is stable for the life of
+    // the hook, so this record needs no dependency on it.
+    const m = { key, run, set: setData }
     mounted.add(m)
     return () => { mounted.delete(m) }
   }, [key, run])

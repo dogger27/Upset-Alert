@@ -28,6 +28,23 @@ export function fmtMinutes(m) {
   return h ? `${h}h ${String(mm).padStart(2, '0')}m` : `${mm}m`
 }
 
+/* THE PICKED FINAL, IN A LINE (owner, 2026-09-19): "Ostapenko def. Birrell".
+   Surnames, because that is what identifies a player in a line about two of
+   them, and it is the reading the bracket's own boxes use — everything after
+   the first token is the surname, so "Díaz Acosta" survives whole
+   (bracket.jsx lastNameOf). */
+function surname(full) {
+  const parts = String(full || '').trim().split(/\s+/)
+  return parts.length > 1 ? parts.slice(1).join(' ') : parts[0]
+}
+
+function finalLine(data) {
+  const champ = data?.champion?.name
+  if (!champ) return null
+  const run = data?.runner_up?.name
+  return run ? `${surname(champ)} def. ${surname(run)}` : surname(champ)
+}
+
 const KNOB = 28
 
 /* A draggable whole-number slider. `onChange` fires as the knob moves. */
@@ -127,10 +144,14 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
     <Sheet visible={visible} onClose={onClose} title="The final">
       {!data || aces == null ? <Muted>Loading the history…</Muted> : (
         <View style={{ gap: S.md }}>
-          <Muted>
-            Ties on points are broken by these two answers: closest on aces first, then on minutes.
-            {data.champion?.name ? ` You have picked ${data.champion.name} to win${data.runner_up?.name ? ` over ${data.runner_up.name}` : ''}.` : ''}
-          </Muted>
+          {/* The bracket's own answer to "which final?", so the two questions
+              below are about a match the reader can see named (owner,
+              2026-09-19). */}
+          <View style={{ gap: 2 }}>
+            <Muted>Your current prediction for the final:</Muted>
+            <Text style={s.finalLine}>{finalLine(data) || 'No champion picked yet'}</Text>
+          </View>
+          <Muted>Final score ties broken by the questions below:</Muted>
           {!data.guess && data.default ? (
             <Muted>
               Leave this alone and you hold {data.tour} {data.surface.toLowerCase()}&apos;s {data.default.year} average:
@@ -190,11 +211,14 @@ export function FinalGuessCard({ tournamentId, enabled, onOpen, refreshKey }) {
   if (!enabled || !tiebreakVisible(data)) return null
   const g = data.guess
   return (
-    <Pressable onPress={onOpen} accessibilityRole="button" accessibilityLabel="Tiebreak answers">
+    <Pressable onPress={onOpen} accessibilityRole="button"
+               accessibilityLabel="Your prediction for the final, and the tiebreak questions">
       <Card>
         <View style={s.cardRow}>
           <View style={{ flex: 1 }}>
-            <Title>Tiebreak</Title>
+            <Title>Your current prediction for the final</Title>
+            <Text style={s.finalLine}>{finalLine(data) || 'No champion picked yet'}</Text>
+            <Muted style={s.cardNote}>Final score ties broken by the questions below</Muted>
             <Muted>{g ? `${g.final_aces} aces · ${fmtMinutes(g.final_duration_min)}`
                       : data.default ? `Holding the average: ${data.default.aces} aces · ${fmtMinutes(data.default.minutes)}`
                       : (data.locked ? 'No answers given' : 'Answer the two questions about the final')}</Muted>
@@ -213,6 +237,10 @@ const s = StyleSheet.create({
   knob: { position: 'absolute', left: 0, width: KNOB, height: KNOB, borderRadius: KNOB / 2, backgroundColor: C.greenLit, borderWidth: 2, borderColor: C.bg },
   knobOff: { backgroundColor: C.muted },
   q: { gap: 4 },
+  // The picked final itself: the loudest line in either surface, because it
+  // is the thing being talked about.
+  finalLine: { ...T.h2, color: C.ink },
+  cardNote: { marginTop: 2 },
   label: { ...T.bodyMed, color: C.ink },
   row: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
   value: { ...T.score, color: C.ink, minWidth: 64, textAlign: 'right' },

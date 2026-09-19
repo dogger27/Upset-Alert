@@ -191,6 +191,38 @@ export const getDraw = (tournamentId) => request(`/tournaments/${tournamentId}/d
    honours once picking has closed — the site's sidebar rule. */
 export const getPredictions = (tournamentId, userId) =>
   request(`/predictions/${tournamentId}${userId != null ? `?user_id=${userId}` : ''}`)
+
+/* SAVING A BRACKET. The whole pick set goes every time — the server compares it
+   against what it holds and refuses only actual CHANGES to frozen matches, so
+   sending less would make a draw with one match in play unsavable in its
+   entirety. It answers with the settled rows, blanks filled, which are the
+   truth from then on.
+
+   A DROPPED REPLY IS NOT A FAILED SAVE. On a weak connection the PUT reaches
+   the server, the picks are stored, and the response never arrives — and the
+   bracket would snap back having in fact saved. So a transport failure
+   (err.offline: the server never spoke, as opposed to a 403 or a 503, which
+   mean something) asks the server what it now holds: if that agrees with what
+   we sent, the save happened. The site does this for the same reason
+   (frontend/src/api/predictions.js). */
+export const savePredictions = async (tournamentId, picks, userId) => {
+  const qs = userId != null ? `?user_id=${userId}` : ''
+  try {
+    return await request(`/predictions/${tournamentId}${qs}`, { method: 'PUT', body: { picks } })
+  } catch (err) {
+    if (!err.offline) throw err                                // the server spoke
+    const rows = await getPredictions(tournamentId, userId)     // may throw again
+    const stored = new Map((rows || []).map(p => [String(p.match_id), p.predicted_winner_id]))
+    const landed = Object.entries(picks).every(([matchId, winnerId]) => (
+      winnerId == null
+        ? (stored.get(String(matchId)) ?? null) == null
+        : stored.get(String(matchId)) === winnerId
+    ))
+    if (landed) return rows
+    throw err
+  }
+}
+
 /* Match ids where that bracket called a result most of the field missed —
    the site's standout chips. Mine by default; another member's with user_id. */
 export const getMyStandouts = (tournamentId, userId) =>

@@ -417,14 +417,20 @@ function TennisBall() {
 }
 const BALL = 16
 
-function PlayerBox({ box, serving, picked, won, noteWon, drawRanks, B }) {
+function PlayerBox({ box, serving, picked, won, noteWon, drawRanks, B, onPress, pickLabel }) {
   const p = box.player
   const tone = box.isBye ? s.boxBye
     : box.correct ? s.boxCorrect
     : box.wrong ? s.boxWrong
     : !p ? s.boxTbd : null
-  return (
-    <View>
+  /* A TAP IS A GESTURE TAP, for the same reason useTap exists at all: the round
+     scrub is a native pan over this whole screen, and a JS Pressable never
+     hears that a native gesture took the touch — so every sideways drag that
+     happened to start on a name would end by picking that player. */
+  const tap = useTap(onPress || null)
+  const body = (
+    <View accessible={!!onPress} accessibilityRole={onPress ? 'button' : undefined}
+          accessibilityLabel={onPress ? pickLabel : undefined}>
       <View style={[s.box, tone]}>
         {box.isBye ? (
           <Text style={[s.name, s.nameMuted, { marginLeft: 6 }]}>BYE</Text>
@@ -468,6 +474,7 @@ function PlayerBox({ box, serving, picked, won, noteWon, drawRanks, B }) {
       )}
     </View>
   )
+  return onPress ? <GestureDetector gesture={tap}>{body}</GestureDetector> : body
 }
 
 /* A pill on the outline's border, rotated to read upwards. `side` picks the
@@ -573,7 +580,7 @@ export function ChampionGroup({ m, B, drawRanks }) {
   )
 }
 
-export function MatchGroup({ m, roundIdx, B, drawRanks, zone, onH2H, onPredictors, onShowScore, standout = false }) {
+export function MatchGroup({ m, roundIdx, B, drawRanks, zone, onH2H, onPredictors, onShowScore, onPick, standout = false }) {
   const top = roundIdx === 0 ? entrantBox(m, 0, B) : feederBox(m, 0, B)
   const bot = roundIdx === 0 ? entrantBox(m, 1, B) : feederBox(m, 1, B)
 
@@ -639,6 +646,23 @@ export function MatchGroup({ m, roundIdx, B, drawRanks, zone, onH2H, onPredictor
   const openable = !!onShowScore && matchStarted(m)
   const tap = useTap(openable ? () => onShowScore(m) : null)
 
+  /* TAP A PLAYER TO PICK THEM TO WIN THIS MATCH (owner, 2026-09-19).
+     Simpler than the site, and deliberately: there a box lives in the round it
+     came OUT of, so a click lands on the match one column to the right
+     (nextMatchOnClick). Here the group IS one match and its two boxes are that
+     match's own resolved entrants, so the tap means what it looks like.
+     A REFUSED TAP STILL CALLS onPick. The screen owns every reason and says it
+     out loud, because a box that quietly ignores a tap is indistinguishable
+     from a page that never registered one (TournamentDraw.pickRefusal). The
+     two exceptions are decided here rather than there, because neither is a
+     refusal to explain: a bye has no outcome to predict, and a started match's
+     tap already belongs to its score. */
+  const pickable = !!onPick && !m.is_bye && !openable
+  const pickOn = box => (pickable && box.playerId != null
+    ? () => onPick(m.id, box.playerId)
+    : null)
+  const pickLabel = box => `Pick ${box.player?.name || 'this qualifier'} to win`
+
   /* The scrub's stretch, if any: the caps slide apart or together with the
      boxes, the middle and the connector's bar scale to keep the outline and
      the elbow continuous. Four transforms; nothing here lays out per frame.
@@ -681,7 +705,8 @@ export function MatchGroup({ m, roundIdx, B, drawRanks, zone, onH2H, onPredictor
         <View style={s.boxTop}>
           <PlayerBox box={top} B={B} drawRanks={drawRanks}
                      serving={serving === 1} picked={pickId != null && pickId === top.playerId}
-                     won={wonBy(top)} noteWon={noteWonBy(top)} />
+                     won={wonBy(top)} noteWon={noteWonBy(top)}
+                     onPress={pickOn(top)} pickLabel={pickLabel(top)} />
         </View>
         {/* The elbow's run out of this box, and the line it arrived on. */}
         <View style={[s.line, s.runTop]} pointerEvents="none" />
@@ -691,7 +716,8 @@ export function MatchGroup({ m, roundIdx, B, drawRanks, zone, onH2H, onPredictor
         <View style={s.boxBot}>
           <PlayerBox box={bot} B={B} drawRanks={drawRanks}
                      serving={serving === 2} picked={pickId != null && pickId === bot.playerId}
-                     won={wonBy(bot)} noteWon={noteWonBy(bot)} />
+                     won={wonBy(bot)} noteWon={noteWonBy(bot)}
+                     onPress={pickOn(bot)} pickLabel={pickLabel(bot)} />
         </View>
         <View style={[s.line, s.runBot]} pointerEvents="none" />
         {roundIdx > 0 && <View style={[s.line, s.inBot]} pointerEvents="none" />}

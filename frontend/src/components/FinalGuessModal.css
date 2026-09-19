@@ -2,6 +2,9 @@
 .fg-modal { width: min(520px, 100%); }
 .fg-intro { margin: 0 0 0.9rem; color: var(--text-muted); font-size: 0.9rem; line-height: 1.4; }
 .fg-muted { color: var(--text-muted); }
+/* The picked final: the loudest line in the dialog, since it names the match
+   the two questions are about. Its own line under the lead-in. */
+.fg-final { display: block; font-size: 1.15rem; color: var(--text); margin-top: 0.15rem; }
 .fg-q { margin: 0 0 1.1rem; }
 .fg-label { display: block; font-weight: 700; margin-bottom: 0.4rem; }
 .fg-row { display: flex; align-items: center; gap: 0.8rem; }
@@ -25,3 +28,6 @@
 .fg-bar-value { font-weight: 700; }
 .fg-bar-value--ask { font-weight: 600; color: var(--green-500, #40916c); }
 .fg-bar-actual { margin-left: auto; font-size: 0.85rem; color: var(--text-muted); }
+/* Its own row under the prediction: the explainer plus the answers as they
+   stand. flex-basis pushes it to a full line whatever sits above it. */
+.fg-bar-note { flex-basis: 100%; font-size: 0.8rem; color: var(--text-muted); }

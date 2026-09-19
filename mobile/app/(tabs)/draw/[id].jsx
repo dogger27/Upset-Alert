@@ -13,13 +13,17 @@
  * same ones, so reaching a draw should not require choosing a league first.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { FONT_SCALE, leading } from '../../../fontScale.js'
 import { Ionicons } from '@expo/vector-icons'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { GestureDetector } from 'react-native-gesture-handler'
-import { getDraw, getMyStandouts, getPredictions } from '../../../api'
+import { getDraw, getMyStandouts, getPredictions, savePredictions } from '../../../api'
+import {
+  blockedByLive, computeNextPicks, picksFromRows, picksMap, projectPicks,
+} from '../../../picks'
+import { showToast } from '../../../toast'
 import { useAuth } from '../../../auth'
 import { H2HSheet } from '../../../h2h'
 import { FinalGuessCard, FinalGuessSheet } from '../../../finalGuess'
@@ -29,7 +33,7 @@ import { PredictorsSheet } from '../../../predictors'
 import { computeDrawRanks } from '../../../drawRanks'
 import { hasDrawData, useChoosableTournaments } from '../../../choosableTournaments'
 import { nextLiveDraw } from '../../../drawCycle'
-import { useApi } from '../../../useApi'
+import { invalidate, prime, useApi } from '../../../useApi'
 import { currentRound } from '../../../rounds'
 import { C, R, S, T } from '../../../theme'
 import { TourSwitch } from '../../../cards'
@@ -55,7 +59,8 @@ export default function DrawScreen() {
      ?name= so the banner can say whose picks these are without a second
      request. Null, or my own id, means me. */
   const viewing = user && Number(user) !== me?.id ? Number(user) : null
-  const preds = useApi(`preds:${id}:${viewing ?? 'me'}`, () => getPredictions(id, viewing))
+  const predsKey = `preds:${id}:${viewing ?? 'me'}`
+  const preds = useApi(predsKey, () => getPredictions(id, viewing))
   useLiveUpdates(draw.data?.tournament?.id, [`draw:${id}`, 'hist:'])
   /* The site's standout chips: matches where this bracket called a result
      most of the field missed. Follows ?user= like the picks do. */
@@ -116,11 +121,36 @@ export default function DrawScreen() {
   const [predictors, setPredictors] = useState(null)
   const [scoreMatch, setScoreMatch] = useState(null)
 
-  const pickBy = useMemo(() => {
-    const m = new Map()
-    for (const p of preds.data || []) m.set(p.match_id, p.predicted_winner_id)
-    return m
-  }, [preds.data])
+  /* ── MAKING PICKS ────────────────────────────────────────────────────────
+     Tapping a player picks them to win the match their box sits in. The
+     arithmetic is in picks.js, ported from the site and from what the server
+     does on save; this is the screen's half — what is shown, what is sent, and
+     what each refused tap says.
+
+     `edits` is null for "whatever the server last told us". A tap fills it
+     with the whole PROJECTED set (no match ever shows blank), while the save
+     sends the un-projected one (the user's own picks and nothing more). It
+     returns to null the moment the save lands — prime() puts the settled rows
+     in the cache — or fails, when the server's truth is the only safe thing to
+     show. Deliberately not an effect seeded from preds.data: this screen
+     refetches on pull and after every save, and state reseeded from fresh data
+     is exactly how the app has dropped a reader's input before
+     (feedback_effect_reseeds_on_refetch). */
+  const [edits, setEdits] = useState(null)
+  const serverPicks = useMemo(() => picksFromRows(preds.data), [preds.data])
+  const picks = edits || serverPicks
+  const pickBy = useMemo(() => picksMap(picks), [picks])
+
+  const drawLocked = !!draw.data?.draw_locked
+  /* Matches frozen one at a time under match-by-match locking: the one in play
+     AND every match downstream of it, since watching a seed go down 0-6 0-5
+     tells you plenty about the quarter-final. The server works this out
+     (services/locking._locked_with_downstream) and flags each match, so this
+     is a read of its answer rather than a second opinion on the question. */
+  const lockedIds = useMemo(
+    () => new Set((draw.data?.matches || []).filter(m => m.locked).map(m => m.id)),
+    [draw.data],
+  )
 
   /* The bracket as a whole — who fed whom, whose pick stands where, who is
      already out — built once per fetch. Every group on screen reads it; none
@@ -145,6 +175,89 @@ export default function DrawScreen() {
     for (const [n, ms] of rounds) for (const m of (ms || [])) if (!m.champion && n > best) best = n
     return best
   }, [rounds])
+  /* NOTHING POPS UP WHEN A CHAMPION IS NAMED (owner, 2026-09-18: the button
+     sits below the final, "the user needs to scroll to the final to even see
+     it", and "if the user does not click it, then they automatically just
+     choose the default"). The site still opens its dialog on the save that
+     first names a champion; that predates the instruction above, and on a
+     phone it would be a sheet over a bracket the reader is in the middle of
+     filling in. So the card below the final is the only way in here, and a
+     bracket that never taps it holds last year's average. */
+
+  /* Everything a tap needs, read at TAP time rather than closed over.
+     handlePick has to be stable: renderRow is memoised on it, and every
+     mounted match group re-renders whenever it changes (see renderRow's own
+     note below). */
+  const latest = useRef({})
+  latest.current = {
+    picks, matches: draw.data?.matches, entries: draw.data?.draw_entries,
+    drawLocked, lockedIds, viewing, meId: me?.id, lockReason: draw.data?.lock_reason,
+    drawId: Number(id), predsKey,
+    refetchDraw: draw.refetch, refetchPreds: preds.refetch,
+  }
+  /* AN OUT-OF-ORDER REPLY MUST NOT WIN. Two quick taps are two PUTs, each
+     carrying the whole set, and if the first one answers second its rows
+     would replace the newer ones on screen. Only the latest save may write. */
+  const saveSeq = useRef(0)
+
+  const save = useCallback(async (payload) => {
+    const seq = ++saveSeq.current
+    const st = latest.current
+    try {
+      const rows = await savePredictions(st.drawId, payload)
+      if (seq !== saveSeq.current) return
+      prime(st.predsKey, rows)
+      setEdits(null)
+      /* Both of these follow from a save: the dashboard's chip counts picks,
+         and the card below the final names the two finalists this bracket
+         chose, which a pick anywhere in the draw can change. */
+      invalidate('entry-status')
+      invalidate('final-guess:')
+    } catch (e) {
+      if (seq !== saveSeq.current) return
+      showToast(e?.message || 'Your pick could not be saved')
+      /* BACK TO WHAT THE SERVER HOLDS. A refused pick left on screen is the
+         worst outcome of the three: the bracket then shows something the
+         server never agreed to, and only a reload puts it right. */
+      setEdits(null)
+      st.refetchPreds()
+      // And find out whether the draw locked underneath us — a screen opened
+      // before the first ball still holds draw_locked:false, and would go on
+      // offering edits it cannot save.
+      st.refetchDraw()
+    }
+  }, [])
+
+  /* EVERY REFUSED TAP SAYS WHY, checked in the order each reason becomes true
+     so the toast names the thing actually stopping this pick rather than the
+     first rule that happens to apply (TournamentDraw.pickRefusal). A started
+     match never reaches here: its tap shows the score instead, which is the
+     better answer and needs no words. */
+  const handlePick = useCallback((matchId, playerId) => {
+    const st = latest.current
+    if (!st.meId) { showToast('Sign in to make picks'); return }
+    if (st.viewing != null) { showToast('You can only change your own picks'); return }
+    if (st.drawLocked) {
+      showToast(`Picks are closed — ${st.lockReason || 'the draw has started'}`)
+      return
+    }
+    if (st.lockedIds.has(matchId)) {
+      showToast('This match stems from one already under way')
+      return
+    }
+    const next = computeNextPicks(st.picks, matchId, playerId, st.matches)
+    /* THE WHOLE CHANGE IS TESTED BEFORE ANY OF IT IS APPLIED. Moving a winner
+       clears the path that player was carrying, and if any match on that path
+       has started the server refuses those writes — rightly. Asking the same
+       question here means nothing moves and nothing has to be put back. */
+    if (blockedByLive(st.picks, next, st.lockedIds)) {
+      showToast('That would change a match which has already started')
+      return
+    }
+    setEdits(projectPicks(next, st.matches, st.entries))
+    save(next)
+  }, [save])
+
   /* THE TIEBREAK BUTTON SITS BELOW THE FINAL (owner, 2026-09-18), so a
      reader has to come all the way to the last match to meet it. Leaving it
      alone is an answer in itself — the bracket holds last year's average —
@@ -156,6 +269,7 @@ export default function DrawScreen() {
         <MatchGroup m={m} roundIdx={roundIdx.get(m.round_number) ?? 0} B={B}
                     drawRanks={drawRanks} zone={zone} onH2H={setH2H}
                     onPredictors={setPredictors} onShowScore={setScoreMatch}
+                    onPick={handlePick}
                     standout={standoutIds.has(m.id)} />
         {!viewing && m.round_number === finalRound ? (
           <FinalGuessCard tournamentId={Number(id)} enabled refreshKey={finalGuessKey}
@@ -163,7 +277,7 @@ export default function DrawScreen() {
         ) : null}
       </>
     )
-  ), [B, drawRanks, roundIdx, zone, standoutIds, finalRound, viewing, id, finalGuessKey])
+  ), [B, drawRanks, roundIdx, zone, standoutIds, finalRound, viewing, id, finalGuessKey, handlePick])
 
   // Follows the live round until the user picks one, then stays put — moving
   // the screen under someone because a match finished elsewhere is worse than
@@ -180,6 +294,8 @@ export default function DrawScreen() {
        otherwise land on the old round number, which may not even exist in a
        draw of a different size. Null means "follow the live round" again. */
     setPicked(null)
+    // And let go of any pick state belonging to the draw we just left.
+    setEdits(null)
   }, [id])
 
   const active = picked ?? currentRound(rounds)
@@ -195,6 +311,13 @@ export default function DrawScreen() {
 
   const loading = (draw.loading && !draw.data) || (preds.loading && !preds.data)
   const refetch = () => { draw.refetch(); preds.refetch() }
+
+  /* THE ONE THING A NEW READER HAS TO BE TOLD. Nothing about a player box says
+     it is a control, and an empty bracket gives no clue either — so a draw
+     that is open and holds no picks yet carries one line, and the first tap
+     takes it away for good. */
+  const showHint = !viewing && !drawLocked && rounds.length > 0
+    && !edits && !Object.keys(serverPicks).length
 
   return (
     <>
@@ -281,6 +404,13 @@ export default function DrawScreen() {
           </View>
         )}
 
+        {showHint && (
+          <View style={s.hint}>
+            <Ionicons name="hand-left-outline" size={leading(13)} color={C.greenLit} />
+            <Text style={s.hintText} numberOfLines={1}>Tap a player to pick them to win</Text>
+          </View>
+        )}
+
         {/* Every round on one line, and a scrub along it to move between
             them. RoundScrub below is the same journey at fine resolution;
             this is the coarse one. */}
@@ -331,6 +461,13 @@ export default function DrawScreen() {
 }
 
 const s = StyleSheet.create({
+  /* One line, centred, no box: this is an instruction, not a status, and it
+     has to cost the draw as little height as a line of type can. */
+  hint: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: S.xs, paddingTop: S.xs,
+  },
+  hintText: { ...T.small, color: C.muted },
   viewing: {
     flexDirection: 'row', alignItems: 'center', gap: S.sm,
     borderWidth: 1, borderColor: C.info, borderRadius: R.md, backgroundColor: C.card,
