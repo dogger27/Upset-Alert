@@ -791,7 +791,8 @@ async def _log_parse_violations(tournament, play_date, violations: list) -> None
 async def ingest_document(db, tournament, play_date: date, url: str,
                           pdf_bytes: bytes, tour: Optional[str] = None,
                           parser=None, queue_verify: bool = True,
-                          reclaim: bool = True) -> dict:
+                          reclaim: bool = True,
+                          last_modified: Optional[str] = None) -> dict:
     """Parse one document revision and reconcile it into schedule_entries.
 
     `parser` defaults to the PDF parser; the US Open's JSON feed passes its
@@ -806,6 +807,10 @@ async def ingest_document(db, tournament, play_date: date, url: str,
     source has written the day since — for a caller that only reached this
     document because the source it prefers FAILED, and should not have the
     page flip over a network blip. See `superseded` below.
+
+    `last_modified` is the server's Last-Modified for these bytes, kept as
+    the document's publication clock — see
+    schedule_invariants.publication_clocks.
     """
     digest = hashlib.sha256(pdf_bytes).hexdigest()
     existing = (await db.execute(
@@ -873,6 +878,7 @@ async def ingest_document(db, tournament, play_date: date, url: str,
         tour=tour, sha256=digest, revision_label=meta.get('date_line'),
         parse_status=meta.get('kind') or 'ok', match_count=len(matches),
         content_sha=content_fp,
+        http_last_modified=last_modified,
         # What the SHEET printed, as opposed to what we read off it. Stored so
         # the law can tell an emptied day from a broken parser without the PDF
         # — see `blank_sheet_slot_not_retired`. None from a feed that counts

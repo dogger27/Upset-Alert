@@ -15,7 +15,9 @@ combined sheet a single feed cannot hold), so they are the schedule now:
     nothing at all -> the PDF, fetched and parsed only then, and logged
     a day the feeds cannot order or name -> the PDF too (`declined`): the
                       WTA publishes a sheet's "Followed By" matches with no
-                      order on court at all (Singapore 2026-09-19)
+                      order on court at all (Singapore 2026-09-19), and a
+                      slot whose players are still being decided as "TBD"
+                      where the sheet prints "A OR B" (Korea 2026-09-20)
 
 One DOCUMENT per tournament-day holds every part — the women from the WTA,
 the men from Sofascore — so a combined venue is one schedule again, as its
@@ -174,6 +176,14 @@ def parse_day_document(doc: bytes, court_names: Optional[dict] = None,
     matches.sort(key=feed_order)
     meta["count"] = len(matches)
     meta["unnamed"] = sum(1 for m in matches if not (m.court or "").strip())
+    # A SIDE NAMING NOBODY. The WTA reserves a court for a slot whose players
+    # are not yet decided — PlayerIDA/B "TBD", no names, "Time TBC" — where
+    # the sheet prints the alternatives ("M. Kuramochi OR B. Jeong vs X. Yao
+    # OR P. Hon", Korea 2026-09-20). With no names and no ids a pairing key
+    # has nothing to hash but the day, so every such row of a day is one key:
+    # RS004 and RS006 collapsed onto one entry with nobody in it (feed
+    # document 340, `entry_empty`), and a Grandstand slot left the page.
+    meta["nameless"] = sum(1 for m in matches if not (m.side_a and m.side_b))
     return matches, meta
 
 
@@ -188,10 +198,16 @@ def declined(meta: dict) -> Optional[str]:
     qualifying matches each on one unnamed court, chained until 11:36 PM,
     where the sheet printed two courts of four (documents 306/307). A declined
     day goes to the PDF, which prints both.
+
+    Nor is a slot whose players the feed does not state: the sheet names who
+    it will be ("A OR B"), and the feed takes the day back once the rounds
+    feeding it are played and it names them too.
     """
     why = []
     if meta.get("unnamed"):
         why.append(f"{meta['unnamed']} row(s) with no court")
+    if meta.get("nameless"):
+        why.append(f"{meta['nameless']} row(s) naming nobody on a side")
     if meta.get("unordered"):
         why.append("no order on " + ", ".join(repr(c) for c in meta["unordered"]))
     return "; ".join(why) or None

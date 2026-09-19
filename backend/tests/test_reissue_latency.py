@@ -34,7 +34,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from types import SimpleNamespace                               # noqa: E402
 
 from app.services.schedule_invariants import (                  # noqa: E402
-    _REISSUE_LATENCY, document_clocks)
+    _REISSUE_LATENCY, document_clocks, publication_clocks)
 
 
 def _convicts(gap_minutes):
@@ -65,8 +65,9 @@ def test_a_slot_left_unresolved_for_hours_is_still_convicted():
     assert _convicts(600)
 
 
-def _doc(i, when, sha):
-    return SimpleNamespace(id=i, fetched_at=when, sha256=sha)
+def _doc(i, when, sha, last_modified=None):
+    return SimpleNamespace(id=i, fetched_at=when, sha256=sha,
+                           http_last_modified=last_modified)
 
 
 def test_a_forced_reparse_inherits_the_clock_of_the_fetch_it_rereads():
@@ -140,3 +141,25 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+def test_a_sheet_fetched_late_is_dated_by_its_last_modified():
+    """Korea 2026-09-20: the sheet went up at 08:45:18 UTC printing "M.
+    Kuramochi OR B. Jeong", whose Q1 finished at 08:50:42. The feeds held the
+    day, so the PDF was first fetched when they declined it, an hour later —
+    and on fetched_at the law convicted a sheet that could not have known."""
+    done = datetime(2026, 9, 19, 8, 50, 42)
+    fetched = datetime(2026, 9, 19, 9, 59, 15)
+    docs = [_doc(341, fetched, 'c0ffee', 'Sat, 19 Sep 2026 08:45:18 GMT')]
+    assert document_clocks(docs)[341] == fetched
+    published = publication_clocks(docs)[341]
+    assert published == datetime(2026, 9, 19, 8, 45, 18)
+    assert not done + _REISSUE_LATENCY < published
+
+
+def test_last_modified_never_dates_a_sheet_after_its_fetch_and_bad_ones_are_ignored():
+    fetched = datetime(2026, 9, 19, 9, 0, 0)
+    docs = [_doc(1, fetched, 'a', 'Sat, 19 Sep 2026 10:00:00 GMT'),   # skewed clock
+            _doc(2, fetched, 'b', 'not a date'),
+            _doc(3, fetched, 'c', None)]
+    assert publication_clocks(docs) == {1: fetched, 2: fetched, 3: fetched}

@@ -295,6 +295,37 @@ def document_clocks(day_docs) -> dict:
     return out
 
 
+def publication_clocks(day_docs) -> dict:
+    """-> {document id: the latest moment its bytes can have been written}.
+
+    `document_clocks`, tightened by the server's Last-Modified where the
+    fetch recorded one — which is what `pending_side_decided_before_document`
+    asks: could this sheet have known the result?
+
+    `fetched_at` answered that only while the PDF was polled every quarter
+    hour. Since the feeds took the schedule (2026-09-18) it is fetched when a
+    feed DECLINES a day, and the first such fetch can come hours after the
+    sheet was published. Korea's Sunday sheet (2026-09-20) was released at
+    08:45:18 UTC, printed "M. Kuramochi OR B. Jeong" honestly, since that Q1
+    finished at 08:50; fetched an hour later, the law convicted it of losing
+    a rendering it never carried. Last-Modified is the file's own mtime, so
+    unlike the printed RELEASED stamp it moves when a sheet is amended in
+    place. Not used for the pull laws: those mirror `_retire_pulled_slots`,
+    which reads `fetched_at`, and a law on a different clock from the pass
+    it checks convicts the pass for disagreeing.
+    """
+    from email.utils import parsedate_to_datetime
+    out = document_clocks(day_docs)
+    for d in day_docs:
+        try:
+            lm = _naive_utc(parsedate_to_datetime(d.http_last_modified))
+        except (TypeError, ValueError, AttributeError):
+            continue
+        if lm is not None and (out.get(d.id) is None or lm < out[d.id]):
+            out[d.id] = lm
+    return out
+
+
 def printed_clock_not_captured(rows) -> list:
     """Slots whose printed NOTE states a clock the row did not store.
 
@@ -663,6 +694,7 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
     # the restamp alone. The cleared sha is the marker of the re-read, so the
     # document that follows it inherits the clock of the fetch it re-reads.
     doc_fetched: dict = document_clocks(day_docs)
+    doc_published: dict = publication_clocks(day_docs)
     if any(e.is_tbd for e in rows):
         wins = (await db.execute(
             select(ScheduleEntry).where(
@@ -886,7 +918,8 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
         # amends the sheet in place. Documents 280 and 282 re-timed two slots
         # between them ("After suitable rest" -> "Not before 6:15 PM") under
         # an identical stamp, so it bounds neither what a document knew nor
-        # when it was generated.
+        # when it was generated. The server's Last-Modified does, where the
+        # fetch kept it — see `publication_clocks`.
         #
         # So the gap must clear the coarser of the two clocks before it says
         # anything, and that is our own 15-minute poll (scheduler.py,
@@ -902,7 +935,7 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
         # page honest in the meantime is the serve path's resolver, which the
         # API applies whatever the stored row says.
         if e.is_tbd and settled_idx:
-            fetched = doc_fetched.get(e.last_document_id)
+            fetched = doc_published.get(e.last_document_id)
             for side_key in (e.tbd_side or "ab"):
                 alts = sorted((p for p in players if p.side == side_key),
                               key=lambda x: x.position or 1)

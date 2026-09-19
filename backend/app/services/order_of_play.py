@@ -747,7 +747,8 @@ async def refresh_order_of_play() -> int:
                                 tour="WTA", parser=feed_doc["parser"], queue_verify=False)
                         return await schedule_svc.ingest_document(
                             sdb, t, pdf_date, url, resp.content, tour=src_tour,
-                            reclaim=not feed_failed)
+                            reclaim=not feed_failed,
+                            last_modified=resp.headers.get("last-modified"))
 
                     async def _estimates(sdb):
                         return await schedule_svc.recompute_expected_starts(
