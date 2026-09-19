@@ -117,7 +117,7 @@ function StatTable({ rows, unit }) {
       </View>
       {rows.map((r, i) => (
         <View key={r.label} style={[s.tr, i > 0 && s.trRule]}>
-          <Text style={s.tdLabel} numberOfLines={1}>{r.label}</Text>
+          <Text style={s.tdLabel} numberOfLines={2}>{r.label}</Text>
           <Text style={s.tdValue}>{r.value}</Text>
           <Text style={s.tdNote} numberOfLines={1}>{r.note || ''}</Text>
         </View>
@@ -619,18 +619,19 @@ const s = StyleSheet.create({
   /* ── The evidence, as a table ──────────────────────────────────────────── */
   table: { marginTop: S.xs },
   tableHead: { flexDirection: 'row', alignItems: 'flex-end', gap: S.sm, paddingBottom: 2 },
-  tableUnit: { ...T.tiny, color: C.muted, minWidth: 54, textAlign: 'right' },
-  sampleCol: { width: 78 },
+  tableUnit: { ...T.tiny, color: C.muted, minWidth: 62, textAlign: 'right' },
+  sampleCol: { width: 62 },
   tr: { flexDirection: 'row', alignItems: 'center', gap: S.sm, paddingVertical: 4 },
   trRule: { borderTopWidth: 1, borderTopColor: C.border },
   tdLabel: { ...T.small, color: C.inkBody, flex: 1 },
+  // Room for '1h 44m' without squeezing the label beside it.
   /* The numeric spine: one width, right-aligned, tabular figures. Three
      numbers in a column can be compared without being read. */
   tdValue: {
-    ...T.score, color: C.ink, minWidth: 54, textAlign: 'right',
+    ...T.score, color: C.ink, minWidth: 62, textAlign: 'right',
     fontVariant: ['tabular-nums'],
   },
-  tdNote: { ...T.tiny, color: C.faint, width: 78, textAlign: 'right' },
+  tdNote: { ...T.tiny, color: C.faint, width: 62, textAlign: 'right' },
 
   /* ── A section heading: title, rule, and a number on the end ───────────── */
   section: { gap: S.xs },
