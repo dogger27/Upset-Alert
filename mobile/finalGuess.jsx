@@ -176,7 +176,6 @@ function Meetings({ data }) {
   const h = data?.h2h
   if (!h?.matches?.length) return null
   const a = surname(data?.champion?.name)
-  const b = surname(data?.runner_up?.name)
   return (
     <View style={s.section}>
       <View style={s.sectionHead}>
@@ -213,9 +212,9 @@ function Meetings({ data }) {
       {h.total > h.shown ? (
         <Text style={s.more}>{`The ${h.shown} most recent of ${h.total}`}</Text>
       ) : null}
-      <Text style={s.meetKey} numberOfLines={2}>
-        {`W/L and the first ace count are ${a}’s; ${b}’s second.`}
-      </Text>
+      {/* One short line, because the chip and the champion-first ace pair are
+          nearly self-evident — this only has to name whose side they are. */}
+      <Text style={s.meetKey} numberOfLines={1}>{`Read from ${a}’s side`}</Text>
     </View>
   )
 }
@@ -261,8 +260,11 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
   const tint = data?.tour === 'WTA' ? TOUR.F : TOUR.M
   const champ = surname(data?.champion?.name)
   const run = surname(data?.runner_up?.name)
+  /* ONE NAME THROUGH THE FLOW: the card on the draw page says "Tiebreak", so
+     the drawer it opens says Tiebreak. It used to say "The final", which the
+     hero line then repeated two rows lower. */
   return (
-    <Sheet visible={visible} onClose={onClose} title="The final">
+    <Sheet visible={visible} onClose={onClose} title="Tiebreak">
       {!data || aces == null ? <Muted>Loading the history…</Muted> : (
         /* TWO QUESTIONS, TWO SLIDERS, TWO STAT TABLES AND A HEAD-TO-HEAD DO NOT
            FIT AN 80% SHEET (owner, 2026-09-19: "it's longer than the page").
@@ -315,15 +317,23 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
             </View>
             <ValueSlider value={aces} min={0} max={acesMax} onChange={setAces}
                          disabled={data.locked} accessibilityLabel="Aces in the final" />
+            {/* THE TWO ENDS OF THE TRACK, as value over meaning — no separator
+                between them, because the line break is the separator. Only the
+                NUMBER takes the clay: the words beside it are ordinary labels,
+                and the brand's one warm note is worth less the more of it
+                there is. */}
             <View style={s.ends}>
-              <Text style={s.end}>0 · a walkover</Text>
+              <View>
+                <Text style={s.endValue}>0</Text>
+                <Text style={s.endWho}>a walkover</Text>
+              </View>
               <View style={s.endRight}>
-                <Text style={s.endRecord}>{acesMax} · the record</Text>
-                {rec?.aces_record ? (
-                  <Text style={s.endWho} numberOfLines={2}>
-                    {`${surname(rec.aces_record.player)}, ${rec.aces_record.tournament} ${rec.aces_record.year}`}
-                  </Text>
-                ) : null}
+                <Text style={[s.endValue, s.endRecord]}>{acesMax}</Text>
+                <Text style={[s.endWho, s.endWhoRight]} numberOfLines={2}>
+                  {rec?.aces_record
+                    ? `the record — ${surname(rec.aces_record.player)}, ${rec.aces_record.tournament} ${rec.aces_record.year}`
+                    : 'the record'}
+                </Text>
               </View>
             </View>
             <StatTable rows={refRows(data, 'aces')} unit="aces / set" />
@@ -338,14 +348,17 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
             <ValueSlider value={minutes} min={0} max={durMax} onChange={setMinutes}
                          disabled={data.locked} accessibilityLabel="Length of the final" />
             <View style={s.ends}>
-              <Text style={s.end}>0 · a walkover</Text>
+              <View>
+                <Text style={s.endValue}>0</Text>
+                <Text style={s.endWho}>a walkover</Text>
+              </View>
               <View style={s.endRight}>
-                <Text style={s.endRecord}>{fmtLong(durMax)} · the longest</Text>
-                {rec?.duration_record ? (
-                  <Text style={s.endWho} numberOfLines={2}>
-                    {`${rec.duration_record.tournament} ${rec.duration_record.year}`}
-                  </Text>
-                ) : null}
+                <Text style={[s.endValue, s.endRecord]}>{fmtLong(durMax)}</Text>
+                <Text style={[s.endWho, s.endWhoRight]} numberOfLines={2}>
+                  {rec?.duration_record
+                    ? `the longest — ${rec.duration_record.tournament} ${rec.duration_record.year}`
+                    : 'the longest'}
+                </Text>
               </View>
             </View>
             <StatTable rows={refRows(data, 'minutes')} unit="min / set" />
@@ -457,11 +470,14 @@ const s = StyleSheet.create({
 
   /* The slider's two ends. The left is a floor nobody aims at; the right is a
      record, which is the one number here worth a name under it. */
-  ends: { flexDirection: 'row', justifyContent: 'space-between', gap: S.sm, marginTop: -2 },
-  end: { ...T.tiny, color: C.faint },
+  ends: { flexDirection: 'row', justifyContent: 'space-between', gap: S.md, marginTop: -2 },
   endRight: { flexShrink: 1, alignItems: 'flex-end' },
-  endRecord: { ...T.tiny, color: C.clay },
-  endWho: { ...T.tiny, color: C.faint, textAlign: 'right' },
+  // Right-aligned only on the right end; the left keeps the default.
+
+  endValue: { ...T.smallMed, color: C.muted, fontVariant: ['tabular-nums'] },
+  endRecord: { color: C.clay },
+  endWho: { ...T.tiny, color: C.faint },
+  endWhoRight: { textAlign: 'right' },
 
   /* ── The evidence, as a table ──────────────────────────────────────────── */
   table: { marginTop: S.xs },
