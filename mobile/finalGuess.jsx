@@ -100,37 +100,12 @@ export function ValueSlider({ value, min = 0, max = 1, onChange, disabled, acces
   )
 }
 
-const perSet = (r, key) => (r && r[key] != null ? r[key] : null)
-
-/* THE REFERENCES AS A TABLE, NOT SENTENCES.
-   Three numbers exist to be COMPARED — that is the whole reason three are
-   shown — and as prose bullets ("Ostapenko on hard: 1.66 aces per set (70
-   matches)") the reader had to parse each one to do it. One label column, one
-   right-aligned numeric column with the unit stated once in its head, and the
-   sample size trailing faint: the eye runs down the numbers.
-   Widest evidence first, narrowest last — against this opponent, then on this
-   surface, then the tour at large — so the most specific figure is the one the
-   reader meets first. */
-function refRows(data, which) {
-  const ref = data?.reference || {}
-  const key = which === 'aces' ? 'aces_per_set' : 'minutes_per_set'
-  const champ = surname(data?.champion?.name)
-  const run = surname(data?.runner_up?.name)
-  const surf = (data?.surface || '').toLowerCase()
-  const rows = []
-  const add = (label, r, note) => {
-    const v = perSet(r, key)
-    if (v != null) rows.push({ label, value: String(v), note })
-  }
-  const vs = ref.champion?.vs_finalist
-  if (run) add(`v ${run}`, vs, vs ? `${vs.matches} ${vs.matches === 1 ? 'meeting' : 'meetings'}` : null)
-  const surface = ref.champion?.on_surface
-  if (surface) add(`${champ} on ${surf}`, surface, `${surface.matches} matches`)
-  else if (ref.champion?.overall) add(champ, ref.champion.overall, `${ref.champion.overall.matches} matches`)
-  add(`${data?.tour} on ${surf}`, ref.tour, 'all players')
-  return rows
-}
-
+/* The three per-question reference builders live beside the wizard below —
+   setsRows, acesRows and minutesRows. This table renders whichever it is
+   given: one label column, one right-aligned numeric column with the unit
+   stated once in its head, and the sample size trailing faint. Three numbers
+   are shown so they can be COMPARED, and prose bullets made the reader parse
+   each one to do it. */
 function StatTable({ rows, unit }) {
   if (!rows.length) return null
   return (
@@ -219,47 +194,177 @@ function Meetings({ data }) {
   )
 }
 
+/* ONE QUESTION PER PAGE (owner, 2026-09-19). Four pages: what the questions
+   decide, then sets, then aces, then the duration, with Next between them.
+   The pages are deliberately not a scrolling list of three — each question
+   carries its own reference figures, and three questions' worth of evidence on
+   one page is the wall of numbers this replaced. */
+const PAGES = ['intro', 'sets', 'aces', 'minutes']
+
+/* How many sets a final of this format can go. A best-of-three cannot be four,
+   and offering the choice would be nonsense. */
+const setChoices = (bestOf) => (bestOf === 5 ? [3, 4, 5] : [2, 3])
+
+/* A ROW OF CHOICES, not a slider. Two or three whole numbers is a question
+   with a handful of answers, and a track with two stops is a worse control
+   than two buttons. */
+function SetPicker({ value, options, onChange, disabled }) {
+  return (
+    <View style={s.setRow}>
+      {options.map(n => {
+        const on = value === n
+        return (
+          <Pressable key={n} onPress={() => !disabled && onChange(n)}
+                     accessibilityRole="button"
+                     accessibilityState={{ selected: on, disabled: !!disabled }}
+                     accessibilityLabel={`${n} sets`}
+                     style={({ pressed }) => [s.setBtn, on && s.setBtnOn,
+                                              pressed && !disabled && { opacity: 0.7 }]}>
+            <Text style={[s.setBtnN, on && s.setBtnNOn]}>{n}</Text>
+            <Text style={[s.setBtnLabel, on && s.setBtnLabelOn]}>sets</Text>
+          </Pressable>
+        )
+      })}
+    </View>
+  )
+}
+
+/* ── The reference rows, per question ─────────────────────────────────────
+   Every label names the real conditions of THIS draw — its tour, its tier,
+   its surface, the two players picked — because a WTA 250 on clay answered
+   with ATP hard numbers is worse than no figure at all. Every window is
+   stated: rules change and the reader deserves to know how current a number
+   is (owner, 2026-09-19).
+
+   `sets` scales the per-set figures into a whole-match one, which is why the
+   sets question comes first: these rows change as soon as it is answered. */
+const round1 = (n) => (n == null ? null : Math.round(n * 10) / 10)
+
+function setsRows(data) {
+  const tier = data?.sets_question?.tier_finals
+  const h = data?.sets_question?.h2h
+  const a = surname(data?.champion?.name), b = surname(data?.runner_up?.name)
+  const where = tier?.surface_scoped === false ? 'all surfaces' : (data?.surface || '').toLowerCase()
+  const rows = []
+  if (tier?.sets_per_match != null) {
+    rows.push({ label: `${data.tier_label} finals on ${where}, past ${tier.years} years`,
+                value: String(tier.sets_per_match), note: `${tier.matches} finals` })
+  }
+  const met = (n) => `over ${n} H2H ${n === 1 ? 'match' : 'matches'}`
+  if (h?.on_surface) {
+    rows.push({ label: `${a} v ${b} on ${(data.surface || '').toLowerCase()}`,
+                value: String(h.on_surface.sets_per_match), note: met(h.on_surface.matches) })
+  }
+  // Only worth a row when there are meetings the surface row does not cover.
+  if (h?.overall && h.off_surface > 0) {
+    rows.push({ label: `${a} v ${b}, all surfaces`,
+                value: String(h.overall.sets_per_match), note: met(h.overall.matches) })
+  }
+  return rows
+}
+
+function acesRows(data, sets) {
+  const q = data?.aces_question || {}
+  const a = surname(data?.champion?.name), b = surname(data?.runner_up?.name)
+  const surf = (data?.surface || '').toLowerCase()
+  const where = q.tier_finals?.surface_scoped === false ? 'all surfaces' : surf
+  const rows = []
+  const scale = (r) => (r?.aces_per_set == null ? null : round1(r.aces_per_set * sets))
+  if (q.tier_finals?.aces_per_set != null) {
+    rows.push({ label: `A ${sets}-set ${data.tier_label} final on ${where}, past ${q.tier_finals.years} years`,
+                value: String(scale(q.tier_finals)), note: `${q.tier_finals.matches} finals` })
+  }
+  if (q.champion_vs?.aces_per_set != null) {
+    rows.push({ label: `${a} v ${b} on ${surf}`, value: String(scale(q.champion_vs)),
+                note: `${q.champion_vs.matches} ${q.champion_vs.matches === 1 ? 'match' : 'matches'}` })
+  }
+  if (q.champion_on_surface?.aces_per_set != null) {
+    rows.push({ label: `${a} on ${surf}, anyone`, value: String(scale(q.champion_on_surface)),
+                note: `${q.champion_on_surface.matches} matches` })
+  }
+  return rows
+}
+
+function minutesRows(data, sets) {
+  const q = data?.minutes_question || {}
+  const a = surname(data?.champion?.name), b = surname(data?.runner_up?.name)
+  const surf = (data?.surface || '').toLowerCase()
+  const where = q.tier_finals?.surface_scoped === false ? 'all surfaces' : surf
+  const key = String(sets)
+  const rows = []
+  const tierMins = q.tier_minutes_by_sets?.[key]
+  if (tierMins != null) {
+    rows.push({ label: `A ${sets}-set ${data.tier_label} final on ${where}, past ${q.tier_finals?.years ?? 5} years`,
+                value: fmtMinutes(tierMins), note: `${q.tier_finals?.matches ?? ''} finals`.trim() })
+  }
+  if (q.champion_on_surface?.minutes_per_set != null) {
+    rows.push({ label: `A ${sets}-set ${a} match on ${surf}, past ${q.champion_on_surface.years} years`,
+                value: fmtMinutes(Math.round(q.champion_on_surface.minutes_per_set * sets)),
+                note: `${q.champion_on_surface.matches} matches` })
+  }
+  const est = q.h2h_estimate?.by_sets?.[key]
+  if (est != null) {
+    rows.push({ label: `${a} v ${b} on ${surf}, estimated`, value: fmtMinutes(est),
+                note: `${q.h2h_estimate.matches} H2H ${q.h2h_estimate.matches === 1 ? 'match' : 'matches'}` })
+  }
+  return rows
+}
+
 export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
   const ctx = useApi(visible ? `final-guess:${tournamentId}` : null, () => getFinalGuess(tournamentId), { enabled: !!visible })
   const data = ctx.data
+  const [step, setStep] = useState(0)
+  const [sets, setSets] = useState(null)
   const [aces, setAces] = useState(null)
   const [minutes, setMinutes] = useState(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const acesMax = Math.max(1, data?.ceilings?.aces_max || 0)
   const durMax = Math.max(1, data?.ceilings?.duration_max_min || 0)
-  /* THE SLIDERS OPEN ON THE DEFAULT — what this bracket is taken to have
-     said if it never touches them (owner, 2026-09-18): last year's average
-     for this gender, on this surface, in this format. So the dialog opens on
-     the answer you already have, and the references beside each slider are
-     there to help you beat it. */
+  const options = setChoices(data?.best_of || 3)
+
+  /* THE ANSWERS OPEN ON THE DEFAULT — what this bracket is taken to have said
+     if it never touches them (owner, 2026-09-18): last year's average for
+     this gender, surface and format. So the wizard opens on an answer the
+     reader already holds, and the references are there to help them beat it. */
   useEffect(() => {
     if (!data) return
-    if (data.guess) { setAces(data.guess.final_aces); setMinutes(data.guess.final_duration_min); return }
+    const g = data.guess
     const d = data.default
+    const firstSet = options[0]
+    const fallbackSets = Math.min(Math.max(
+      Math.round(data.sets_question?.tier_finals?.sets_per_match ?? firstSet), options[0]),
+      options[options.length - 1])
+    setSets(g?.final_sets ?? d?.sets ?? fallbackSets)
+    if (g) { setAces(g.final_aces); setMinutes(g.final_duration_min); return }
     if (d) { setAces(d.aces); setMinutes(d.minutes); return }
-    const ref = data.reference || {}
-    const r = ref.champion?.vs_finalist || ref.champion?.on_surface || ref.champion?.overall || ref.tour
-    const sets = data.best_of === 5 ? 4 : 2.5
-    setAces(r?.aces_per_set != null ? Math.round(r.aces_per_set * sets) : Math.round(acesMax / 4))
-    setMinutes(r?.minutes_per_set != null ? Math.round(r.minutes_per_set * sets) : Math.round(durMax / 3))
-  }, [data, acesMax, durMax])
+    setAces(Math.round(acesMax / 4))
+    setMinutes(Math.round(durMax / 3))
+  }, [data, acesMax, durMax])     // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A fresh open starts at the beginning rather than wherever it was left.
+  useEffect(() => { if (visible) { setStep(0); setError(null) } }, [visible])
 
   const save = async () => {
     setSaving(true); setError(null)
     try {
-      await putFinalGuess(tournamentId, { final_aces: aces, final_duration_min: minutes })
+      await putFinalGuess(tournamentId, {
+        final_sets: sets, final_aces: aces, final_duration_min: minutes,
+      })
       onSaved?.(); onClose?.()
     } catch (e) {
       setError(e?.message || 'Could not save')
     } finally { setSaving(false) }
   }
+
   const rec = data?.ceilings
-  /* The finalists wear their TOUR's colour, the way every other name in this
-     app does — the one place colour is spent on data here. */
   const tint = data?.tour === 'WTA' ? TOUR.F : TOUR.M
   const champ = surname(data?.champion?.name)
   const run = surname(data?.runner_up?.name)
+  const locked = !!data?.locked
+  const page = PAGES[step]
+  const last = step === PAGES.length - 1
+
   /* ONE NAME THROUGH THE FLOW: the card on the draw page and the drawer it
      opens carry the same words. "Tiebreak" alone was too ambiguous about what
      it breaks a tie IN (owner, 2026-09-19) — it is the league standings, not
@@ -267,139 +372,147 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
      reading of the word. */
   return (
     <Sheet visible={visible} onClose={onClose} title="Standings Tiebreak Questions">
-      {!data || aces == null ? <Muted>Loading the history…</Muted> : (
-        /* TWO QUESTIONS, TWO SLIDERS, TWO STAT TABLES AND A HEAD-TO-HEAD DO NOT
-           FIT AN 80% SHEET (owner, 2026-09-19: "it's longer than the page").
-           The sheet itself does not scroll — its children are a plain column —
-           so a sheet that overflows brings its own ScrollView, the way league
-           settings does. flexShrink lets it give up height inside the sheet's
-           maxHeight; without it the column keeps its full content height and
-           the overflow is simply clipped. */
+      {!data || sets == null || aces == null ? <Muted>Loading the history…</Muted> : (
         <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={s.body}>
-          {/* ── THE MATCH THIS IS ABOUT ──────────────────────────────────────
-              The names are the hero: they are the bracket's own answer to
-              "which final?", and the two questions below are meaningless
-              without them. The champion carries the weight and the tour's
-              colour; "def." is furniture and stays out of the way. */}
-          {/* WHAT THE TWO QUESTIONS ARE FOR, in the reader's terms and before
-              the match they are about (owner, 2026-09-19). This replaces a
-              line that sat under the names and said the same thing more
-              narrowly — "final score ties" read as a tie in the final's SCORE
-              rather than a tie in the table. */}
-          <Text style={s.intro}>
-            Scores occurring in the final standings of all leagues will be decided
-            by the questions below.
-          </Text>
-
-          <View style={s.hero}>
-            <Text style={s.heroLabel}>Your current prediction for the final:</Text>
-            {champ ? (
-              <View style={s.heroNames}>
-                <Text style={[s.champ, { color: tint.text }]} numberOfLines={1}
-                      adjustsFontSizeToFit minimumFontScale={0.6}>{champ}</Text>
-                {run ? <Text style={s.def}>def.</Text> : null}
-                {run ? (
-                  <Text style={[s.runner, { color: tint.muted }]} numberOfLines={1}
-                        adjustsFontSizeToFit minimumFontScale={0.6}>{run}</Text>
-                ) : null}
-              </View>
-            ) : (
-              <Text style={s.heroEmpty}>Pick a champion in the draw and this fills in</Text>
-            )}
-          </View>
-
-          {/* ── QUESTION ONE ─────────────────────────────────────────────────
-              Both questions take the SAME anatomy — heading and plate, then
-              the slider full width, its two ends, then the evidence. That
-              repetition is the structure, which is why neither is boxed in a
-              card of its own: identical rounded cards would say "two things"
-              where the rule and the spacing already do. */}
-          <View style={s.q}>
-            <View style={s.qHead}>
-              <Text style={s.qTitle}>Aces by the champion</Text>
-              <Plate value={String(aces)} />
-            </View>
-            <ValueSlider value={aces} min={0} max={acesMax} onChange={setAces}
-                         disabled={data.locked} accessibilityLabel="Aces in the final" />
-            {/* THE TWO ENDS OF THE TRACK, as value over meaning — no separator
-                between them, because the line break is the separator. Only the
-                NUMBER takes the clay: the words beside it are ordinary labels,
-                and the brand's one warm note is worth less the more of it
-                there is. */}
-            <View style={s.ends}>
-              <View>
-                <Text style={s.endValue}>0</Text>
-                <Text style={s.endWho}>a walkover</Text>
-              </View>
-              <View style={s.endRight}>
-                <Text style={[s.endValue, s.endRecord]}>{acesMax}</Text>
-                <Text style={[s.endWho, s.endWhoRight]} numberOfLines={2}>
-                  {/* "the record" implied all time, and the ends read the
-                      past 12 months now (final_stats.ceilings). */}
-                  {rec?.aces_record
-                    ? `the most in 12 months — ${surname(rec.aces_record.player)}, ${rec.aces_record.tournament} ${rec.aces_record.year}`
-                    : 'the most in 12 months'}
+          {page === 'intro' ? (
+            <>
+              <Text style={s.intro}>
+                Scores occurring in the final standings of all leagues will be decided
+                by the questions below.
+              </Text>
+              <View style={s.hero}>
+                <Text style={s.heroLabel}>Your current prediction for the final:</Text>
+                {champ ? (
+                  <View style={s.heroNames}>
+                    <Text style={[s.champ, { color: tint.text }]} numberOfLines={1}
+                          adjustsFontSizeToFit minimumFontScale={0.6}>{champ}</Text>
+                    {run ? <Text style={s.def}>def.</Text> : null}
+                    {run ? (
+                      <Text style={[s.runner, { color: tint.muted }]} numberOfLines={1}
+                            adjustsFontSizeToFit minimumFontScale={0.6}>{run}</Text>
+                    ) : null}
+                  </View>
+                ) : (
+                  <Text style={s.heroEmpty}>Pick a champion in the draw and this fills in</Text>
+                )}
+                <Text style={s.heroWhere}>
+                  {[data.tier_label, (data.surface || '').toLowerCase(),
+                    data.best_of === 5 ? 'best of five' : 'best of three'].filter(Boolean).join(' · ')}
                 </Text>
               </View>
-            </View>
-            <StatTable rows={refRows(data, 'aces')} unit="aces / set" />
-          </View>
+              {/* Three questions, and the reader is told so before the first. */}
+              <Text style={s.intro}>
+                Three questions, one at a time. Ties are settled on the sets first,
+                then the aces, then the minutes.
+              </Text>
+            </>
+          ) : null}
 
-          {/* ── QUESTION TWO ── */}
-          <View style={[s.q, s.qRule]}>
-            <View style={s.qHead}>
-              <Text style={s.qTitle}>Length of the final</Text>
-              <Plate value={fmtMinutes(minutes)} sub={`${minutes} min`} />
+          {page === 'sets' ? (
+            <View style={s.q}>
+              <Step n={1} of={3} />
+              <Text style={s.qTitle}>How many sets will the final be?</Text>
+              <SetPicker value={sets} options={options} onChange={setSets} disabled={locked} />
+              <StatTable rows={setsRows(data)} unit="sets" />
             </View>
-            <ValueSlider value={minutes} min={0} max={durMax} onChange={setMinutes}
-                         disabled={data.locked} accessibilityLabel="Length of the final" />
-            <View style={s.ends}>
-              <View>
-                <Text style={s.endValue}>0</Text>
-                <Text style={s.endWho}>a walkover</Text>
+          ) : null}
+
+          {page === 'aces' ? (
+            <View style={s.q}>
+              <Step n={2} of={3} />
+              <View style={s.qHead}>
+                <Text style={s.qTitle}>How many aces will the champion hit in the final?</Text>
+                <Plate value={String(aces)} />
               </View>
-              <View style={s.endRight}>
-                <Text style={[s.endValue, s.endRecord]}>{fmtLong(durMax)}</Text>
-                <Text style={[s.endWho, s.endWhoRight]} numberOfLines={2}>
-                  {rec?.duration_record
-                    ? `the longest in 12 months — ${rec.duration_record.tournament} ${rec.duration_record.year}`
-                    : 'the longest in 12 months'}
+              <ValueSlider value={aces} min={0} max={acesMax} onChange={setAces}
+                           disabled={locked} accessibilityLabel="Aces in the final" />
+              <Ends max={acesMax} rec={rec?.aces_record} what="the most in 12 months" />
+              {/* Scaled to the sets just chosen, which is why that question
+                  comes first (owner, 2026-09-19). */}
+              <StatTable rows={acesRows(data, sets)} unit={`aces, ${sets} sets`} />
+            </View>
+          ) : null}
+
+          {page === 'minutes' ? (
+            <View style={s.q}>
+              <Step n={3} of={3} />
+              <View style={s.qHead}>
+                <Text style={s.qTitle}>What will be the match duration of the final?</Text>
+                <Plate value={fmtMinutes(minutes)} sub={`${minutes} min`} />
+              </View>
+              <ValueSlider value={minutes} min={0} max={durMax} onChange={setMinutes}
+                           disabled={locked} accessibilityLabel="Length of the final" />
+              <Ends max={fmtLong(durMax)} rec={rec?.duration_record} what="the longest in 12 months" />
+              <StatTable rows={minutesRows(data, sets)} unit={`${sets} sets`} />
+              <Meetings data={data} />
+              {!data.guess && data.default ? (
+                <Text style={s.default}>
+                  {`Leave these alone and you hold ${data.tour} ${(data.surface || '').toLowerCase()}’s ${data.default.year} average: `}
+                  <Text style={s.defaultStrong}>
+                    {`${data.default.sets ?? options[0]} sets, ${data.default.aces} aces, ${fmtLong(data.default.minutes)}`}
+                  </Text>
                 </Text>
-              </View>
+              ) : null}
+              {data.actual ? (
+                <Text style={s.actual}>
+                  {`The final: ${data.actual.final_sets ?? '–'} sets, ${data.actual.final_aces} aces, ${fmtLong(data.actual.final_duration_min)}.`}
+                </Text>
+              ) : null}
             </View>
-            <StatTable rows={refRows(data, 'minutes')} unit="min / set" />
-          </View>
-
-          <Meetings data={data} />
-
-          {/* WHAT LEAVING IT ALONE MEANS. Last, not first: it is the answer for
-              somebody who has decided not to answer, and until then it is the
-              least useful line in the drawer (owner, 2026-09-18). */}
-          {!data.guess && data.default ? (
-            <Text style={s.default}>
-              {`Leave this alone and you hold ${data.tour} ${data.surface.toLowerCase()}’s ${data.default.year} average: `}
-              <Text style={s.defaultStrong}>{`${data.default.aces} aces, ${fmtLong(data.default.minutes)}`}</Text>
-            </Text>
           ) : null}
-          {data.actual ? (
-            <Text style={s.actual}>
-              {`The final: ${data.actual.final_aces} aces, ${fmtLong(data.actual.final_duration_min)}.`}
-            </Text>
-          ) : null}
+
           {error ? <Text style={s.error}>{error}</Text> : null}
           <View style={s.actions}>
-            <Pressable onPress={onClose} style={[s.btn, s.btnQuiet]} accessibilityRole="button">
-              <Text style={s.btnQuietText}>{data.locked ? 'Close' : 'Later'}</Text>
-            </Pressable>
-            {!data.locked && (
-              <Pressable onPress={save} disabled={saving} style={[s.btn, saving && { opacity: 0.6 }]} accessibilityRole="button">
-                <Text style={s.btnText}>{saving ? 'Saving…' : 'Save answers'}</Text>
+            {step > 0 ? (
+              <Pressable onPress={() => setStep(n => n - 1)} style={[s.btn, s.btnQuiet]}
+                         accessibilityRole="button">
+                <Text style={s.btnQuietText}>Back</Text>
+              </Pressable>
+            ) : (
+              <Pressable onPress={onClose} style={[s.btn, s.btnQuiet]} accessibilityRole="button">
+                <Text style={s.btnQuietText}>{locked ? 'Close' : 'Later'}</Text>
+              </Pressable>
+            )}
+            {last ? (
+              locked ? null : (
+                <Pressable onPress={save} disabled={saving} style={[s.btn, saving && { opacity: 0.6 }]}
+                           accessibilityRole="button">
+                  <Text style={s.btnText}>{saving ? 'Saving…' : 'Save answers'}</Text>
+                </Pressable>
+              )
+            ) : (
+              <Pressable onPress={() => setStep(n => n + 1)} style={s.btn} accessibilityRole="button">
+                <Text style={s.btnText}>Next</Text>
               </Pressable>
             )}
           </View>
         </ScrollView>
       )}
     </Sheet>
+  )
+}
+
+/* Where the reader is, in three. Small: it orients rather than instructs. */
+function Step({ n, of }) {
+  return <Text style={s.step}>{`Question ${n} of ${of}`}</Text>
+}
+
+/* The two ends of a slider's track — value over meaning, no separator. */
+function Ends({ max, rec, what }) {
+  const who = rec
+    ? `${what} — ${rec.player ? `${surname(rec.player)}, ` : ''}${rec.tournament} ${rec.year}`
+    : what
+  return (
+    <View style={s.ends}>
+      <View>
+        <Text style={s.endValue}>0</Text>
+        <Text style={s.endWho}>a walkover</Text>
+      </View>
+      <View style={s.endRight}>
+        <Text style={[s.endValue, s.endRecord]}>{max}</Text>
+        <Text style={[s.endWho, s.endWhoRight]} numberOfLines={2}>{who}</Text>
+      </View>
+    </View>
   )
 }
 
@@ -422,9 +535,13 @@ export function FinalGuessCard({ tournamentId, enabled, onOpen, refreshKey }) {
                 sits in the draw between match groups, and a four-line panel
                 there is reading matter in the way of the bracket. */}
             <Title>Standings Tiebreak Questions</Title>
-            <Muted>{g ? `${g.final_aces} aces · ${fmtMinutes(g.final_duration_min)}`
-                      : data.default ? `Holding the average: ${data.default.aces} aces · ${fmtMinutes(data.default.minutes)}`
-                      : (data.locked ? 'No answers given' : 'Answer the two questions about the final')}</Muted>
+            <Muted>{g
+              ? [g.final_sets ? `${g.final_sets} sets` : null,
+                 `${g.final_aces} aces`, fmtMinutes(g.final_duration_min)].filter(Boolean).join(' · ')
+              : data.default
+                ? `Holding the average: ${[data.default.sets ? `${data.default.sets} sets` : null,
+                     `${data.default.aces} aces`, fmtMinutes(data.default.minutes)].filter(Boolean).join(' · ')}`
+                : (data.locked ? 'No answers given' : 'Answer the three questions about the final')}</Muted>
           </View>
           {data.actual ? <Muted>final: {data.actual.final_aces} · {fmtMinutes(data.actual.final_duration_min)}</Muted> : null}
         </View>
@@ -457,10 +574,23 @@ const s = StyleSheet.create({
   /* The one line of explanation in the drawer, directly under its title. */
   intro: { ...T.small, color: C.inkBody },
 
+  step: { ...T.tiny, color: C.faint },
+  /* A row of whole-number choices, sized as controls rather than as chips:
+     two or three answers deserve a target, not a track. */
+  setRow: { flexDirection: 'row', gap: S.sm },
+  setBtn: {
+    flex: 1, alignItems: 'center', paddingVertical: S.sm,
+    borderRadius: R.sm, borderWidth: 1, borderColor: C.border, backgroundColor: C.sunken,
+  },
+  setBtnOn: { borderColor: C.greenLit, backgroundColor: C.greenDeep },
+  setBtnN: { ...T.h1, color: C.muted },
+  setBtnNOn: { color: C.greenBright },
+  setBtnLabel: { ...T.tiny, color: C.faint, marginTop: -4 },
+  setBtnLabelOn: { color: C.greenLit },
+  heroWhere: { ...T.tiny, color: C.faint, marginTop: 2 },
+
   /* ── A question ────────────────────────────────────────────────────────── */
   q: { gap: S.sm },
-  // The rule between the two questions, and the only one in this half.
-  qRule: { borderTopWidth: 1, borderTopColor: C.border, paddingTop: S.lg },
   qHead: { flexDirection: 'row', alignItems: 'center', gap: S.md },
   qTitle: { ...T.h2, color: C.ink, flex: 1 },
 
