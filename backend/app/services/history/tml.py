@@ -69,6 +69,18 @@ def name_key(name: str) -> str:
     return " ".join(sorted(tokens))
 
 
+def name_keys(name: str) -> set[str]:
+    """Every key a name may be filed under: name_key, and for a hyphenated
+    name also the key with the hyphen closed up. A hyphen is two spellings —
+    "Auger-Aliassime" is two words in every source, but our "Park So-hyun" and
+    "Back Da-yeon" are "Sohyun Park" and "Dayeon Back" in Tennis Explorer and
+    TML, and a split key never meets a solid one."""
+    keys = {name_key(name)}
+    if "-" in str(name or ""):
+        keys.add(name_key(str(name).replace("-", "")))
+    return keys - {""}
+
+
 def _int(v) -> Optional[int]:
     try:
         return int(float(v)) if v not in (None, "") else None

@@ -141,9 +141,23 @@ def _match_token_set(wiki_name: str, te_index: dict[frozenset, list[int]]) -> Op
     Umlaut fallback: _PRE_NFD_TRANS expands ö→oe, ü→ue, ä→ae but TE stores
     plain ASCII vowels. Try collapsing each expansion before giving up.
     """
-    wiki_ts = frozenset(_norm(_clean_wiki_name(wiki_name)).split())
+    cleaned = _clean_wiki_name(wiki_name)
+    wiki_ts = frozenset(_norm(cleaned).split())
 
-    result = _apply_rules(wiki_ts, te_index)
+    # A HYPHEN IS TWO SPELLINGS. _norm splits it, which is right for
+    # "Auger-Aliassime" (Tennis Explorer: "Auger Aliassime Felix") and wrong
+    # for a romanised Korean given name: our "Park So-hyun" is TE's
+    # "Park Sohyun". Split, {park, so, hyun} matched nothing strictly, so the
+    # loose rules ran on the leftovers and linked her to Alycia Parks
+    # ("park" → "parks") or Lee Hyunyee ("hyun" → "hyunyee"); the nightly
+    # repair cleared it and the roster sweep put it straight back (2026-09-19).
+    # Every strict rule is tried on BOTH spellings before any loose rule.
+    joined_ts = frozenset(_norm(cleaned.replace("-", "")).split()) if "-" in cleaned else None
+    result = _strict_rules(wiki_ts, te_index)
+    if result is None and joined_ts:
+        result = _strict_rules(joined_ts, te_index)
+    if result is None:
+        result = _loose_rules(wiki_ts, te_index)
     if result is not None:
         return result
 
@@ -159,6 +173,12 @@ def _match_token_set(wiki_name: str, te_index: dict[frozenset, list[int]]) -> Op
 
 
 def _apply_rules(wiki_ts: frozenset, te_index: dict[frozenset, list[int]]) -> Optional[int]:
+    result = _strict_rules(wiki_ts, te_index)
+    return result if result is not None else _loose_rules(wiki_ts, te_index)
+
+
+def _strict_rules(wiki_ts: frozenset, te_index: dict[frozenset, list[int]]) -> Optional[int]:
+    """Rules 1–3b: the whole name, or all of it bar extra components."""
     # Rule 1: exact set match
     hits = te_index.get(wiki_ts, [])
     if len(hits) == 1:
@@ -214,6 +234,11 @@ def _apply_rules(wiki_ts: frozenset, te_index: dict[frozenset, list[int]]) -> Op
         if len(rule3b) == 1:
             return rule3b[0]
 
+    return None
+
+
+def _loose_rules(wiki_ts: frozenset, te_index: dict[frozenset, list[int]]) -> Optional[int]:
+    """Rules 4–5: one token carries the match. Only after every strict rule."""
     # Rule 4: unique identifying token — handles first-name spelling variants
     # (Kasatkina/Darya vs Daria, Minnen/Greetje vs Greet, Starodubtseva/Yulia vs Yuliia).
     # If exactly one TE player has a given wiki token, that token uniquely identifies them.
@@ -240,6 +265,11 @@ def _apply_rules(wiki_ts: frozenset, te_index: dict[frozenset, list[int]]) -> Op
 
     # Rule 5: wiki token is a strict prefix of a unique TE token (min 4 chars).
     # Catches nicknames/abbreviations: "rafa" → "rafael", "stan" → "stanislas".
+    # A nickname stands for a given name, so the rest of the name must still
+    # be there: at least one token shared outright ("nadal"), and the guard
+    # judges the tokens LEFT OVER once the matched pair is set aside. It used
+    # to include that pair, and "hyun" always shares "hyu" with "hyunyee" — so
+    # the guard could never fire, and "Park So-hyun" became Lee Hyunyee.
     for tok in wiki_ts:
         if len(tok) < 4:
             continue
@@ -250,8 +280,10 @@ def _apply_rules(wiki_ts: frozenset, te_index: dict[frozenset, list[int]]) -> Op
         if len(prefix_hits) == 1:
             te_id = prefix_hits[0]
             te_ts_match = next(te_ts for te_ts, ids in te_index.items() if te_id in ids)
-            wiki_extra = wiki_ts - te_ts_match
-            te_extra = te_ts_match - wiki_ts
+            if not wiki_ts & te_ts_match:
+                continue
+            wiki_extra = wiki_ts - te_ts_match - {tok}
+            te_extra = {t for t in te_ts_match - wiki_ts if not t.startswith(tok)}
             if wiki_extra and te_extra:
                 if not any(we[:3] == te[:3] for we in wiki_extra for te in te_extra):
                     continue
