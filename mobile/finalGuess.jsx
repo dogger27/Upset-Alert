@@ -12,7 +12,7 @@
  * this stays inside the gesture library the draw already uses.
  */
 import { useEffect, useMemo, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-native-reanimated'
 import { getFinalGuess, putFinalGuess } from './api'
@@ -61,6 +61,14 @@ export function ValueSlider({ value, min = 0, max = 1, onChange, disabled, acces
   }
   const pan = useMemo(() => Gesture.Pan()
     .enabled(!disabled)
+    /* HORIZONTAL DRAGS ONLY, now that the sheet around this scrolls. With no
+       offset the pan activated on ANY movement, so a finger that came down on
+       a knob and pulled down to scroll dragged the value instead of the page.
+       activeOffsetX claims the touch only once it has travelled sideways, and
+       a vertical pull is left to the ScrollView.
+       No failOffsetY, deliberately: once the drag belongs to the slider,
+       drifting off-axis must not abandon it half way along the track. */
+    .activeOffsetX([-8, 8])
     .onBegin(() => { startX.value = x.value })
     .onUpdate(e => {
       const nx = Math.min(Math.max(startX.value + e.translationX, 0), usable)
@@ -143,7 +151,15 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
   return (
     <Sheet visible={visible} onClose={onClose} title="The final">
       {!data || aces == null ? <Muted>Loading the history…</Muted> : (
-        <View style={{ gap: S.md }}>
+        /* TWO QUESTIONS, TWO SLIDERS AND SIX REFERENCE LINES DO NOT FIT AN 80%
+           SHEET (owner, 2026-09-19: "it's longer than the page"). The sheet
+           itself does not scroll — its children are a plain column — so a
+           sheet that overflows brings its own ScrollView, the way league
+           settings does. flexShrink lets it give up height inside the sheet's
+           maxHeight; without it the column keeps its full content height and
+           the overflow is simply clipped. */
+        <ScrollView style={{ flexShrink: 1 }}
+                    contentContainerStyle={{ gap: S.md, paddingBottom: S.md }}>
           {/* The bracket's own answer to "which final?", so the two questions
               below are about a match the reader can see named (owner,
               2026-09-19). */}
@@ -200,7 +216,7 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
               </Pressable>
             )}
           </View>
-        </View>
+        </ScrollView>
       )}
     </Sheet>
   )
