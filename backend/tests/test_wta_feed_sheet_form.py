@@ -50,7 +50,7 @@ def _row(first_a, last_a, first_b, last_b, *, seed_a="", entry_b="", nat_a="RUS"
 
 
 def _one(row):
-    (m,) = matches_for_day([row], DAY, court_names={"Court 1": "CENTRE COURT"})
+    (m,) = matches_for_day([row], DAY, court_names={"CourtID 1": "CENTRE COURT"})
     return m
 
 

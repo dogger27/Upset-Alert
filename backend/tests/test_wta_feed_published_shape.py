@@ -101,7 +101,7 @@ def test_a_follower_beside_a_later_floor_is_no_order():
     played = [dict(r, CourtID=1, DateSeq=6, NotBefore=None, CourtName=None,
                    MatchTimeStamp=ts) for r, ts in
               ((rows[0], "2026-09-19T07:02:11.5+00:00"), (rows[1], "2026-09-19T09:15:40+00:00"))]
-    ms = matches_for_day(played + rows[2:], DAY, court_names={"Court 1": "Estadio Skarch"}, venue_tz=TZ)
+    ms = matches_for_day(played + rows[2:], DAY, court_names={"CourtID 1": "Estadio Skarch"}, venue_tz=TZ)
     assert unordered_courts(ms) == []
 
 

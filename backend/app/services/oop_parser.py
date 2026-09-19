@@ -272,6 +272,10 @@ class Match:
     # "Not before" rather than a start. Such rows are what can leave a court's
     # order unstated; see wta_feed.unordered_courts.
     published: bool = False
+    # INTERNAL. The key the learned court mapping votes and looks up under,
+    # where that is not the court's printed name — a WTA row's numbered court
+    # ("CourtID 1", see wta_feed.court_id_key). None means `court` is the key.
+    court_key: Optional[str] = None
     # INTERNAL. Lines this slot swallowed that no rule could read as a name,
     # a score, a round or the sheet's furniture. Kept only so that a slot which
     # ends up with no players can say WHY it is empty — see meta['dropped_slots'].

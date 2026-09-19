@@ -17,9 +17,10 @@ PDF makes us recover from printed text.
 WHAT IT DOES NOT GIVE is the court's NAME. Tour events carry CourtID only — 1,
 2, 3 — while the Slams carry Venue.name as well. `court_names` lets a caller
 supply the mapping it has (learned from a sheet we already ingested, or from
-Sofascore, which names courts at every level); without one the court is emitted
-as "Court {id}", which is right often enough to be legible and wrong quietly
-enough that it must not be trusted for matching.
+Sofascore, which names courts at every level), keyed `court_id_key` — never
+"Court {id}", which is a name real courts are called. Without a learned name the
+row has NO court: the caller takes Sofascore's court for the same match or
+gives the day to the sheet, and never guesses.
 
 TWO SHAPES OF ROW. The above is a match that has been PLAYED (or is on court):
 CourtID, DateSeq, the real start time. A match that has only been PUBLISHED —
@@ -161,6 +162,15 @@ def _is_walkover(m: dict) -> bool:
                 or re.search(r"\bW/O\b", str(m.get("ResultString") or ""), re.I))
 
 
+def _parse_ts(ts: str) -> datetime:
+    """The feed's stamp as a datetime. It writes as many fractional digits as
+    it likes ("03:04:16.44"), which Python 3.10's fromisoformat refuses — so
+    they are padded to six first."""
+    import re
+    ts = re.sub(r"(\.\d{1,5})(?=\D|$)", lambda f: f.group(1).ljust(7, "0"), ts.replace("Z", "+00:00"))
+    return datetime.fromisoformat(ts)
+
+
 def _local_hhmm(ts: Optional[str], venue_tz: Optional[str]) -> Optional[str]:
     if not ts or len(ts) < 16:
         return None
@@ -168,7 +178,7 @@ def _local_hhmm(ts: Optional[str], venue_tz: Optional[str]) -> Optional[str]:
         return ts[11:16]
     try:
         from zoneinfo import ZoneInfo
-        dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        dt = _parse_ts(ts)
         return dt.astimezone(ZoneInfo(venue_tz)).strftime("%H:%M")
     except Exception:
         return ts[11:16]
@@ -186,7 +196,7 @@ def play_date_of(m: dict, venue_tz: Optional[str] = None) -> Optional[date]:
     if not ts:
         return None
     try:
-        dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        dt = _parse_ts(ts)
     except ValueError:
         return None
     if venue_tz:
@@ -196,6 +206,22 @@ def play_date_of(m: dict, venue_tz: Optional[str] = None) -> Optional[date]:
         except Exception:
             pass
     return dt.date()
+
+
+def court_id_key(cid) -> str:
+    """The learned mapping's key for a numbered court — a string no court is
+    ever called.
+
+    It was "Court {id}", which IS a court's name at Singapore: CourtID 1 is
+    CENTER COURT there and "Court 1" is COURT 1, both voted under the one key,
+    and the 106 votes Sofascore's "Court 1" cast outweighed the 14 the played
+    CourtID 1 rows did. From 14:41 local on 2026-09-19 every Center Court
+    match that had been played was filed on COURT 1 (feed document 328), and
+    the court's one unplayed "Followed By" match was left opening it
+    (`court_opener_untimed`). Guessing "Court {id}" for an unmapped id made the
+    same mistake with no mapping at all.
+    """
+    return f"CourtID {cid}"
 
 
 def matches_for_day(rows: list[dict], day: date,
@@ -220,13 +246,12 @@ def matches_for_day(rows: list[dict], day: date,
         # through the learned mapping first — "Estadio Skarch" is the sheet's
         # "ESTADIO SKARCH".
         named = (m.get("CourtName") or "").strip()
-        # The learned mapping (schedule_shadow.learn_courts) is keyed by the
-        # court string THIS function emitted when it had no name — "Court 1" —
-        # not by the bare id; a lookup by "1" alone found nothing and every
-        # promoted day would have read "Court 1" (2026-09-18).
+        # A numbered court is looked up, and voted for, under its own key and
+        # nothing else (see court_id_key); unmapped, it is no court at all.
+        id_key = court_id_key(cid) if cid and not venue and not named else None
         court = (venue or (court_names.get(named) if named else None)
-                 or ((court_names.get(cid) or court_names.get(f"Court {cid}")) if cid else None)
-                 or named or (f"Court {cid}" if cid else ""))
+                 or (court_names.get(id_key) if id_key else None)
+                 or named or "")
         # VENUE-LOCAL, like the sheet prints. The feed stamps UTC, so a
         # Monterrey night match reads 01:36 raw — tomorrow's date, and an hour
         # nobody played at. Without the zone the raw value is kept rather than
@@ -273,6 +298,7 @@ def matches_for_day(rows: list[dict], day: date,
             side_a=names_a, side_b=names_b,
             nations_a=nats_a, nations_b=nats_b,
             published=not cid,
+            court_key=id_key,
         ))
     out.sort(key=feed_order)
     return out

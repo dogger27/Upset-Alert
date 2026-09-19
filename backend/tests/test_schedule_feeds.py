@@ -51,7 +51,7 @@ def _doc(wta_rows, sofa_parts):
 def test_one_document_holds_the_women_from_the_wta_and_the_men_from_sofascore():
     doc = _doc([_wta("Peyton", "Stearns", "Sloane", "Stephens", 1, 1, 15, 0)],
                [("singles", "ATP", [_sofa("Ben Shelton", "Carlos Alcaraz", "Grandstand", 16, 0)], False)])
-    ms, meta = parse_day_document(doc, court_names={"Court 1": "ESTADIO", "Grandstand": "GRANDSTAND"}, venue_tz="UTC")
+    ms, meta = parse_day_document(doc, court_names={"CourtID 1": "ESTADIO", "Grandstand": "GRANDSTAND"}, venue_tz="UTC")
     # The WTA rows are rendered the way a sheet prints a name (surname in
     # caps, the IOC code last); Sofascore's stay as they came.
     got = {(m.tour, m.side_a[0].split()[1].upper(), m.court) for m in ms}

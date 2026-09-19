@@ -284,6 +284,18 @@ async def day_is_feed_sourced(db, tournament_id: int, day: date) -> bool:
     return bool(doc and ("api.wtatennis.com" in url or url.startswith("feeds://")))
 
 
+def court_votes(pairs) -> dict:
+    """Court names, learned only where both sources describe the same match —
+    under the feed row's mapping key (a numbered WTA court's `court_key`),
+    else its court as the feed named it."""
+    votes = defaultdict(Counter)
+    for row, m in pairs:
+        key = getattr(m, "court_key", None) or m.court
+        if key and row["court"]:
+            votes[key][row["court"]] += 1
+    return votes
+
+
 async def compare_day(db, tournament, draws, day: date) -> Optional[dict]:
     """What the feeds say against what the sheet stored. Writes nothing."""
     if await day_is_feed_sourced(db, tournament.id, day):
@@ -298,12 +310,7 @@ async def compare_day(db, tournament, draws, day: date) -> Optional[dict]:
 
     pairs, unmatched_sheet, unmatched_feed = _pair(stored, feed)
     matched = len(pairs)
-
-    # Court names, learned only where both sources describe the same match.
-    votes = defaultdict(Counter)
-    for row, m in pairs:
-        if m.court and row["court"]:
-            votes[m.court][row["court"]] += 1
+    votes = court_votes(pairs)
 
     return {
         "tournament": tournament.name, "day": day.isoformat(), "source": source,
@@ -345,9 +352,26 @@ def court_winners(tally: dict, min_votes: int = 1) -> dict:
     """The name each feed court is called, by majority — only where the winner
     has at least `min_votes`. A court seen on one day of one comparison is a
     guess; the authoritative feed asks for a few (Cincinnati's "Court 4" held
-    two votes for two different names, 2026-09-18)."""
+    two votes for two different names, 2026-09-18).
+
+    Until 2026-09-19 a numbered WTA court voted as "Court N", now
+    `wta_feed.court_id_key`. Those votes still count for the id — except where
+    a court really CALLED "Court N" voted beside them (a vote for its own
+    name), because then the two cannot be told apart: Singapore's "Court 1"
+    held COURT 1 106, CENTER COURT 14, and CourtID 1 is Center Court."""
+    import re
+    from app.services.wta_feed import court_id_key
+    tally = dict(tally or {})
+    for court, names in list(tally.items()):
+        num = re.fullmatch(r"Court (\d+)", court)
+        if not num or not names or any(
+                " ".join(n.split()).lower() == court.lower() for n in names):
+            continue
+        merged = Counter(tally.get(court_id_key(num.group(1))) or {})
+        merged.update(names)
+        tally[court_id_key(num.group(1))] = dict(merged)
     out = {}
-    for court, names in (tally or {}).items():
+    for court, names in tally.items():
         if not names:
             continue
         name, votes = Counter(names).most_common(1)[0]
