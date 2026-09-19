@@ -677,10 +677,18 @@ _PLACEHOLDER_NAME = re.compile(r"^(?:R\d+P\d+|Q\d*P?\d*|TBD|BYE|QUALIFIER)$", re
 
 
 def _is_placeholder(team: dict) -> bool:
-    """A slot in the tree rather than a person in the draw."""
+    """A slot in the tree rather than a person in the draw.
+
+    Also every shape _PLACEHOLDER_SLOT knows ("Qf1", "WSF2", "QFP3"). That is
+    the test _resolve_against_field uses to decide a bracket is unpublished and
+    take its id on name alone; if this one disagreed, the same tree would be
+    "unpublished" when the id was taken and "a field nobody matched" on every
+    pass after, which is the coverage warning this exists to prevent.
+    """
     if team.get("disabled"):
         return True
-    return bool(_PLACEHOLDER_NAME.match((team.get("name") or "").strip()))
+    name = (team.get("name") or "").strip()
+    return bool(_PLACEHOLDER_NAME.match(name) or _PLACEHOLDER_SLOT.match(name))
 
 
 def field_is_unnamed(field: list) -> bool:
@@ -864,7 +872,7 @@ async def _resolve_against_field(draw: Draw, entries: list) -> Optional[tuple]:
         named = [t for t in field
                  if not _PLACEHOLDER_SLOT.match(str(t.get("name") or ""))]
         if not named:
-            unpublished.append((cand["id"], season["id"]))
+            unpublished.append((cand["id"], season["id"], field))
             continue
         # Overlap is scored on the NAMES, but the raw cuptree is what gets
         # handed back — the caller needs the unfilled slots to tell a
@@ -894,14 +902,20 @@ async def _resolve_against_field(draw: Draw, entries: list) -> Optional[tuple]:
     # field, and it is deliberately not silent about it. If the guess is wrong,
     # no player will ever resolve against it, and the coverage check in
     # sofa_resolver says exactly that — "a tournament id but not one player
-    # resolved" — within the hour. A wrong id that announces itself beats a
-    # correct one that arrives after the tournament.
+    # resolved" — within the hour of the names going up, or of play being due.
+    # A wrong id that announces itself beats a correct one that arrives after
+    # the tournament.
+    #
+    # The tree it was accepted on is handed back as it is, placeholders and
+    # all. This returned [] — so resolve_draw read the pass that took the id as
+    # "cup tree empty" rather than "published without names", and the coverage
+    # check warned on the very pass that had just done the right thing.
     if len(unpublished) == 1:
-        uid, season_id = unpublished[0]
+        uid, season_id, field = unpublished[0]
         logger.info("Sofascore: accepting %s season %s for %s %s on name alone "
                     "— its bracket is not published yet",
                     uid, season_id, draw.name, draw.gender)
-        return uid, season_id, []
+        return uid, season_id, field
     return None
 
 
@@ -1086,6 +1100,11 @@ async def resolve_draw(db: AsyncSession, draw: Draw, *, force: bool = False) -> 
 # spending a request each time on an answer that will not change.
 RESOLVE_RETRY_HOURS = 6.0
 
+# The floor for a draw nothing on can score yet — no tournament id, or one and
+# not a single player stamped against it. Hourly, the resolver's own cadence:
+# these are waiting on a bracket going up, not on names Sofascore lacks.
+DARK_RETRY_HOURS = 1.0
+
 # A bracket slot Sofascore has created but not yet filled. It writes these in
 # more shapes than one — "R16P1" and "QFP3", but also "Qf1".."Qf8" for the eight
 # qualifier slots and "WQF1"/"WSF2" for a winner-of slot — and matching only the
@@ -1136,7 +1155,20 @@ async def resolve_pending_draws(db: AsyncSession, *, force: bool = False,
         # back as R16P1, R16P2, placeholders with no names to match against.
         # That resolves itself the hour the draw goes up, so check every hour
         # rather than leaving a tournament dark for most of its first day.
-        wait = retry_hours if draw.sofa_tournament_id else min(retry_hours, 1.0)
+        #
+        # A KNOWN ID WITH NOBODY STAMPED IS THE SAME DRAW. The id can be taken
+        # from the tree alone, before a single name is in it — Korea Open 2026
+        # had 2604 two days out, and a cuptree of thirty disabled R16P slots.
+        # It scores nothing either, and fills the same hour. On the six-hour
+        # floor it was looked at once in six passes, and the coverage check,
+        # which can only trust what THIS pass saw, called the other five a
+        # failure (2026-09-19).
+        dark = (not draw.sofa_tournament_id
+                or (await db.execute(
+                    select(DrawEntry.id).where(
+                        DrawEntry.draw_id == draw.id,
+                        DrawEntry.sofa_player_id.isnot(None)).limit(1))).first() is None)
+        wait = min(retry_hours, DARK_RETRY_HOURS) if dark else retry_hours
         if wait and draw.sofa_resolved_at is not None:
             last = draw.sofa_resolved_at
             if last.tzinfo is None:
