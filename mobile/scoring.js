@@ -17,9 +17,13 @@
  */
 export function sameStanding(a, b) {
   if (!a || !b || a.total !== b.total) return false
-  // THE TIEBREAK IS THE FINAL (owner, 2026-09-18): closest on the champion's
-  // aces, then on minutes, once the final is played; before it, level is level.
-  return (a.tie_aces_diff ?? null) === (b.tie_aces_diff ?? null)
+  /* THE TIEBREAK IS THE FINAL (owner, 2026-09-18; sets added 2026-09-19):
+     closest on the SETS, then on the champion's aces, then on minutes, once
+     the final is played; before it, level is level.
+     All three, or this calls two rows level that the server has deliberately
+     ordered — and then hands them the same rank. */
+  return (a.tie_sets_diff ?? null) === (b.tie_sets_diff ?? null)
+      && (a.tie_aces_diff ?? null) === (b.tie_aces_diff ?? null)
       && (a.tie_minutes_diff ?? null) === (b.tie_minutes_diff ?? null)
 }
 
@@ -142,7 +146,12 @@ const BIG = 1e9
 export function sortStandings(rows) {
   return [...rows].sort((a, b) => {
     if (b.total !== a.total) return b.total - a.total
-    // The final's tiebreak: closest on aces, then on minutes; no answer last.
+    /* The final's tiebreak, in the server's own order (scoring.tiebreak_key):
+       closest on the sets, then the aces, then the minutes; no answer sorts
+       last on that key. Missing a key here would order level brackets
+       differently on the phone than in the standings the server sent. */
+    const ds = (a.tie_sets_diff ?? BIG) - (b.tie_sets_diff ?? BIG)
+    if (ds !== 0) return ds
     const da = (a.tie_aces_diff ?? BIG) - (b.tie_aces_diff ?? BIG)
     if (da !== 0) return da
     return (a.tie_minutes_diff ?? BIG) - (b.tie_minutes_diff ?? BIG)

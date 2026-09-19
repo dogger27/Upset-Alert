@@ -690,9 +690,13 @@ const ROW_SLOT = 41 // px per row slot (bar height 34px + gap 7px)
    the numbers still say how many people are ahead of you. */
 function sameStanding(a, b) {
   if (!a || !b || a.total !== b.total) return false
-  // THE TIEBREAK IS THE FINAL (owner, 2026-09-18): closest on the champion's
-  // aces, then on minutes, once the final is played; before it, level is level.
-  return (a.tie_aces_diff ?? null) === (b.tie_aces_diff ?? null)
+  /* THE TIEBREAK IS THE FINAL (owner, 2026-09-18; sets added 2026-09-19):
+     closest on the SETS, then on the champion's aces, then on minutes, once
+     the final is played; before it, level is level.
+     All three, or this calls two rows level that the server has deliberately
+     ordered — and then hands them the same rank. */
+  return (a.tie_sets_diff ?? null) === (b.tie_sets_diff ?? null)
+      && (a.tie_aces_diff ?? null) === (b.tie_aces_diff ?? null)
       && (a.tie_minutes_diff ?? null) === (b.tie_minutes_diff ?? null)
 }
 

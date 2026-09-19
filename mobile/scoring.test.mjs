@@ -19,7 +19,7 @@ import assert from 'node:assert/strict'
 import { Buffer } from 'node:buffer'
 
 const src = readFileSync(new URL('./scoring.js', import.meta.url), 'utf8')
-const { competitionRanks, sameStanding, slotLabel, pct, placesDecided, scrubEntries, tiebreakVisible, worldEntries } =
+const { competitionRanks, sameStanding, slotLabel, pct, placesDecided, scrubEntries, sortStandings, tiebreakVisible, worldEntries } =
   await import('data:text/javascript;base64,' + Buffer.from(src).toString('base64'))
 
 let n = 0
@@ -219,4 +219,17 @@ check('the tiebreak stays hidden until a draw is open for picks', () => {
   assert.equal(tiebreakVisible({ locked: true, guess: null }), false)
   assert.equal(tiebreakVisible({ locked: false, guess: null }), true)
   assert.equal(tiebreakVisible({ locked: true, guess: { final_aces: 6, final_duration_min: 95 } }), true)
+})
+
+check('the sets gap is compared FIRST, on the phone as on the server', () => {
+  // A bracket that called the sets right beats one that was nearer on aces.
+  const rows = [
+    { user_id: 'aces', total: 27, tie_sets_diff: 1, tie_aces_diff: 0, tie_minutes_diff: 0 },
+    { user_id: 'sets', total: 27, tie_sets_diff: 0, tie_aces_diff: 11, tie_minutes_diff: 80 },
+  ]
+  assert.deepEqual(sortStandings(rows).map(r => r.user_id), ['sets', 'aces'])
+  // …and two rows differing ONLY on sets are not level, or they would share a
+  // rank the server never gave them.
+  assert.equal(sameStanding(rows[0], rows[1]), false)
+  assert.equal(sameStanding(rows[0], { ...rows[0] }), true)
 })
