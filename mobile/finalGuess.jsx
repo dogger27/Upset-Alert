@@ -16,9 +16,10 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-native-reanimated'
 import { getFinalGuess, putFinalGuess } from './api'
+import { leading } from './fontScale.js'
 import { Sheet } from './sheet'
 import { Card, Muted, Title } from './ui'
-import { C, R, S, T } from './theme'
+import { C, PICK, R, S, T, TOUR } from './theme'
 import { useApi } from './useApi'
 import { tiebreakVisible } from './scoring'
 
@@ -48,12 +49,6 @@ function surname(full) {
   return parts.length > 1 ? parts.slice(1).join(' ') : parts[0]
 }
 
-function finalLine(data) {
-  const champ = data?.champion?.name
-  if (!champ) return null
-  const run = data?.runner_up?.name
-  return run ? `${surname(champ)} def. ${surname(run)}` : surname(champ)
-}
 
 const KNOB = 28
 
@@ -107,56 +102,120 @@ export function ValueSlider({ value, min = 0, max = 1, onChange, disabled, acces
 
 const perSet = (r, key) => (r && r[key] != null ? r[key] : null)
 
-function refLines(ctx, which) {
-  const champ = ctx?.champion?.name, run = ctx?.runner_up?.name, ref = ctx?.reference || {}
+/* THE REFERENCES AS A TABLE, NOT SENTENCES.
+   Three numbers exist to be COMPARED — that is the whole reason three are
+   shown — and as prose bullets ("Ostapenko on hard: 1.66 aces per set (70
+   matches)") the reader had to parse each one to do it. One label column, one
+   right-aligned numeric column with the unit stated once in its head, and the
+   sample size trailing faint: the eye runs down the numbers.
+   Widest evidence first, narrowest last — against this opponent, then on this
+   surface, then the tour at large — so the most specific figure is the one the
+   reader meets first. */
+function refRows(data, which) {
+  const ref = data?.reference || {}
   const key = which === 'aces' ? 'aces_per_set' : 'minutes_per_set'
-  const unit = which === 'aces' ? 'aces' : 'min'
-  const out = []
-  const vs = perSet(ref.champion?.vs_finalist, key), surf = perSet(ref.champion?.on_surface, key)
-  const all = perSet(ref.champion?.overall, key), tour = perSet(ref.tour, key)
-  if (champ && vs != null) out.push(`${champ} v ${run}: ${vs} ${unit} per set (${ref.champion.vs_finalist.matches} meeting${ref.champion.vs_finalist.matches === 1 ? '' : 's'})`)
-  if (champ && surf != null) out.push(`${champ} on ${ctx.surface.toLowerCase()}: ${surf} ${unit} per set (${ref.champion.on_surface.matches} matches)`)
-  else if (champ && all != null) out.push(`${champ}: ${all} ${unit} per set (${ref.champion.overall.matches} matches)`)
-  if (tour != null) out.push(`${ctx.tour} on ${ctx.surface.toLowerCase()}: ${tour} ${unit} per set`)
-  if (!out.length) out.push(champ ? `No history held for ${champ} yet` : 'Pick your champion to see their history here')
-  return out
+  const champ = surname(data?.champion?.name)
+  const run = surname(data?.runner_up?.name)
+  const surf = (data?.surface || '').toLowerCase()
+  const rows = []
+  const add = (label, r, note) => {
+    const v = perSet(r, key)
+    if (v != null) rows.push({ label, value: String(v), note })
+  }
+  const vs = ref.champion?.vs_finalist
+  if (run) add(`v ${run}`, vs, vs ? `${vs.matches} ${vs.matches === 1 ? 'meeting' : 'meetings'}` : null)
+  const surface = ref.champion?.on_surface
+  if (surface) add(`${champ} on ${surf}`, surface, `${surface.matches} matches`)
+  else if (ref.champion?.overall) add(champ, ref.champion.overall, `${ref.champion.overall.matches} matches`)
+  add(`${data?.tour} on ${surf}`, ref.tour, 'all players')
+  return rows
 }
 
-/* THE MEETINGS THEMSELVES (owner, 2026-09-19). The reference lines under each
-   slider give the RATE; this gives the matches it was computed from — who won,
-   the score, how long it took and the aces each of them hit — which is what a
-   person actually reasons from when the two have met before.
-   Sackmann's score is written from the winner's side, so naming the winner in
-   front of it makes "6-4 6-3" read the right way round. */
+function StatTable({ rows, unit }) {
+  if (!rows.length) return null
+  return (
+    <View style={s.table}>
+      <View style={s.tableHead}>
+        <View style={{ flex: 1 }} />
+        <Text style={s.tableUnit}>{unit}</Text>
+        <View style={s.sampleCol} />
+      </View>
+      {rows.map((r, i) => (
+        <View key={r.label} style={[s.tr, i > 0 && s.trRule]}>
+          <Text style={s.tdLabel} numberOfLines={1}>{r.label}</Text>
+          <Text style={s.tdValue}>{r.value}</Text>
+          <Text style={s.tdNote} numberOfLines={1}>{r.note || ''}</Text>
+        </View>
+      ))}
+    </View>
+  )
+}
+
+/* THE ANSWER, ON A PLATE. The one bold object in the drawer: a recess in the
+   scoreboard face, at the top right of its question where the eye lands after
+   reading it. Everything else here is hairlines and quiet type — this is the
+   number the reader is actually setting, and it should be unmistakable. */
+function Plate({ value, sub }) {
+  return (
+    <View style={s.plate}>
+      <Text style={s.plateValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{value}</Text>
+      {sub ? <Text style={s.plateSub} numberOfLines={1}>{sub}</Text> : null}
+    </View>
+  )
+}
+
+/* THE MEETINGS, AS A RESULTS STRIP (owner, 2026-09-19).
+   The question a reader has about a head-to-head is "did my pick beat this
+   person?", so each meeting leads with a W or an L from the CHAMPION's point
+   of view — in the bracket's own pick colours, which already mean "your pick
+   came off" everywhere else in this app.
+   Sackmann's score is written from the winner's side, so the score is printed
+   winner-first and the W/L chip says whose side that is. The aces pair is
+   champion-first to match the chip. */
 function Meetings({ data }) {
   const h = data?.h2h
   if (!h?.matches?.length) return null
   const a = surname(data?.champion?.name)
   const b = surname(data?.runner_up?.name)
   return (
-    <View style={s.q}>
-      <Text style={s.label}>
-        When they have met{h.total > 1 ? ` — ${a} ${h.champion_wins}, ${b} ${h.opponent_wins}` : ''}
-      </Text>
+    <View style={s.section}>
+      <View style={s.sectionHead}>
+        <Text style={s.sectionTitle}>When they have met</Text>
+        <View style={s.sectionRule} />
+        <Text style={s.record}>{h.champion_wins}–{h.opponent_wins}</Text>
+      </View>
       {h.matches.map((m, i) => (
         <View key={`${m.date}-${i}`} style={s.meet}>
-          <Text style={s.meetWhen} numberOfLines={1}>
-            {[m.year, m.tournament, m.round, m.surface].filter(Boolean).join(' · ')}
-          </Text>
-          <Text style={s.meetScore} numberOfLines={1}>
-            {surname(m.winner_name)} {m.score}
-            {m.minutes ? ` · ${fmtLong(m.minutes)}` : ''}
-          </Text>
-          <Text style={s.meetAces} numberOfLines={1}>
-            {m.champion_aces != null || m.opponent_aces != null
-              ? `${a} ${m.champion_aces ?? '–'} aces · ${b} ${m.opponent_aces ?? '–'}`
-              : 'Aces not recorded for this match'}
-          </Text>
+          <View style={[s.wl, m.champion_won ? s.wlWon : s.wlLost]}>
+            <Text style={[s.wlText, { color: m.champion_won ? PICK.correct.border : PICK.wrong.border }]}>
+              {m.champion_won ? 'W' : 'L'}
+            </Text>
+          </View>
+          <View style={s.meetBody}>
+            <Text style={s.meetWhen} numberOfLines={1}>
+              <Text style={s.meetYear}>{m.year}</Text>
+              {`  ${[m.tournament, m.round].filter(Boolean).join('  ')}`}
+              {m.surface ? `  ${m.surface.toLowerCase()}` : ''}
+            </Text>
+            <Text style={s.meetScore} numberOfLines={1}>
+              {m.score}
+              {m.minutes ? <Text style={s.meetTime}>{`   ${fmtLong(m.minutes)}`}</Text> : null}
+            </Text>
+          </View>
+          <View style={s.meetAces}>
+            <Text style={s.meetAcesN}>
+              {m.champion_aces ?? '–'}<Text style={s.meetAcesDash}> – </Text>{m.opponent_aces ?? '–'}
+            </Text>
+            <Text style={s.meetAcesLabel}>aces</Text>
+          </View>
         </View>
       ))}
-      {h.total > h.shown
-        ? <Muted>{`The ${h.shown} most recent of ${h.total} meetings`}</Muted>
-        : null}
+      {h.total > h.shown ? (
+        <Text style={s.more}>{`The ${h.shown} most recent of ${h.total}`}</Text>
+      ) : null}
+      <Text style={s.meetKey} numberOfLines={2}>
+        {`W/L and the first ace count are ${a}’s; ${b}’s second.`}
+      </Text>
     </View>
   )
 }
@@ -197,72 +256,122 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
     } finally { setSaving(false) }
   }
   const rec = data?.ceilings
+  /* The finalists wear their TOUR's colour, the way every other name in this
+     app does — the one place colour is spent on data here. */
+  const tint = data?.tour === 'WTA' ? TOUR.F : TOUR.M
+  const champ = surname(data?.champion?.name)
+  const run = surname(data?.runner_up?.name)
   return (
     <Sheet visible={visible} onClose={onClose} title="The final">
       {!data || aces == null ? <Muted>Loading the history…</Muted> : (
-        /* TWO QUESTIONS, TWO SLIDERS AND SIX REFERENCE LINES DO NOT FIT AN 80%
-           SHEET (owner, 2026-09-19: "it's longer than the page"). The sheet
-           itself does not scroll — its children are a plain column — so a
-           sheet that overflows brings its own ScrollView, the way league
+        /* TWO QUESTIONS, TWO SLIDERS, TWO STAT TABLES AND A HEAD-TO-HEAD DO NOT
+           FIT AN 80% SHEET (owner, 2026-09-19: "it's longer than the page").
+           The sheet itself does not scroll — its children are a plain column —
+           so a sheet that overflows brings its own ScrollView, the way league
            settings does. flexShrink lets it give up height inside the sheet's
            maxHeight; without it the column keeps its full content height and
            the overflow is simply clipped. */
-        <ScrollView style={{ flexShrink: 1 }}
-                    contentContainerStyle={{ gap: S.md, paddingBottom: S.md }}>
-          {/* The bracket's own answer to "which final?", so the two questions
-              below are about a match the reader can see named (owner,
-              2026-09-19). */}
-          <View style={{ gap: 2 }}>
-            <Muted>Your current prediction for the final:</Muted>
-            <Text style={s.finalLine}>{finalLine(data) || 'No champion picked yet'}</Text>
+        <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={s.body}>
+          {/* ── THE MATCH THIS IS ABOUT ──────────────────────────────────────
+              The names are the hero: they are the bracket's own answer to
+              "which final?", and the two questions below are meaningless
+              without them. The champion carries the weight and the tour's
+              colour; "def." is furniture and stays out of the way. */}
+          <View style={s.hero}>
+            <Text style={s.heroLabel}>Your current prediction for the final:</Text>
+            {champ ? (
+              <View style={s.heroNames}>
+                <Text style={[s.champ, { color: tint.text }]} numberOfLines={1}
+                      adjustsFontSizeToFit minimumFontScale={0.6}>{champ}</Text>
+                {run ? <Text style={s.def}>def.</Text> : null}
+                {run ? (
+                  <Text style={[s.runner, { color: tint.muted }]} numberOfLines={1}
+                        adjustsFontSizeToFit minimumFontScale={0.6}>{run}</Text>
+                ) : null}
+              </View>
+            ) : (
+              <Text style={s.heroEmpty}>Pick a champion in the draw and this fills in</Text>
+            )}
+            {/* THE TAIL IS THE LIVE SLIDER STATE, not the saved answer, so
+                dragging a knob cannot leave a sentence above it claiming
+                something else (owner's wording, 2026-09-19). Quiet, because
+                the two plates below say the same thing loudly — at these two
+                weights it reads as a summary rather than a repeat. */}
+            <Text style={s.heroNote}>
+              Final score ties broken by the questions below — {aces} aces · {fmtLong(minutes)}
+            </Text>
           </View>
-          {/* THE TAIL IS THE LIVE SLIDER STATE, not the saved answer. It says
-              what this bracket holds as you look at it, so dragging a slider
-              cannot leave a sentence on screen contradicting the knob under
-              it (owner's wording, 2026-09-19). */}
-          <Muted>Final score ties broken by the questions below — {aces} aces · {fmtLong(minutes)}</Muted>
-          {!data.guess && data.default ? (
-            <Muted>
-              Leave this alone and you hold {data.tour} {data.surface.toLowerCase()}&apos;s {data.default.year} average:
-              {` ${data.default.aces} aces, ${fmtLong(data.default.minutes)}`}.
-            </Muted>
-          ) : null}
+
+          {/* ── QUESTION ONE ─────────────────────────────────────────────────
+              Both questions take the SAME anatomy — heading and plate, then
+              the slider full width, its two ends, then the evidence. That
+              repetition is the structure, which is why neither is boxed in a
+              card of its own: identical rounded cards would say "two things"
+              where the rule and the spacing already do. */}
           <View style={s.q}>
-            <Text style={s.label}>How many aces will the champion hit in the final?</Text>
-            <View style={s.row}>
-              <View style={{ flex: 1 }}>
-                <ValueSlider value={aces} min={0} max={acesMax} onChange={setAces} disabled={data.locked} accessibilityLabel="Aces in the final" />
-              </View>
-              <Text style={s.value}>{aces}</Text>
+            <View style={s.qHead}>
+              <Text style={s.qTitle}>Aces by the champion</Text>
+              <Plate value={String(aces)} />
             </View>
+            <ValueSlider value={aces} min={0} max={acesMax} onChange={setAces}
+                         disabled={data.locked} accessibilityLabel="Aces in the final" />
             <View style={s.ends}>
-              <Text style={s.end}>0 · walkover</Text>
-              <Text style={[s.end, { textAlign: 'right', flexShrink: 1 }]} numberOfLines={2}>{acesMax} · most ever{rec?.aces_record ? ` (${rec.aces_record.player}, ${rec.aces_record.tournament} ${rec.aces_record.year})` : ''}</Text>
+              <Text style={s.end}>0 · a walkover</Text>
+              <View style={s.endRight}>
+                <Text style={s.endRecord}>{acesMax} · the record</Text>
+                {rec?.aces_record ? (
+                  <Text style={s.endWho} numberOfLines={2}>
+                    {`${surname(rec.aces_record.player)}, ${rec.aces_record.tournament} ${rec.aces_record.year}`}
+                  </Text>
+                ) : null}
+              </View>
             </View>
-            {refLines(data, 'aces').map((l, i) => <Text key={i} style={s.ref}>• {l}</Text>)}
+            <StatTable rows={refRows(data, 'aces')} unit="aces / set" />
           </View>
-          <View style={s.q}>
-            <Text style={s.label}>How long will the final last?</Text>
-            <View style={s.row}>
-              <View style={{ flex: 1 }}>
-                <ValueSlider value={minutes} min={0} max={durMax} onChange={setMinutes} disabled={data.locked} accessibilityLabel="Length of the final" />
-              </View>
-              <View style={s.valueCol}>
-                <Text style={s.value}>{fmtMinutes(minutes)}</Text>
-                <Text style={s.valueSub}>{minutes} min</Text>
-              </View>
+
+          {/* ── QUESTION TWO ── */}
+          <View style={[s.q, s.qRule]}>
+            <View style={s.qHead}>
+              <Text style={s.qTitle}>Length of the final</Text>
+              <Plate value={fmtMinutes(minutes)} sub={`${minutes} min`} />
             </View>
+            <ValueSlider value={minutes} min={0} max={durMax} onChange={setMinutes}
+                         disabled={data.locked} accessibilityLabel="Length of the final" />
             <View style={s.ends}>
-              <Text style={s.end}>0 · walkover</Text>
-              <Text style={[s.end, { textAlign: 'right', flexShrink: 1 }]} numberOfLines={2}>{fmtLong(durMax)} · longest on {data.surface.toLowerCase()}{rec?.duration_record ? ` (${rec.duration_record.tournament} ${rec.duration_record.year})` : ''}</Text>
+              <Text style={s.end}>0 · a walkover</Text>
+              <View style={s.endRight}>
+                <Text style={s.endRecord}>{fmtLong(durMax)} · the longest</Text>
+                {rec?.duration_record ? (
+                  <Text style={s.endWho} numberOfLines={2}>
+                    {`${rec.duration_record.tournament} ${rec.duration_record.year}`}
+                  </Text>
+                ) : null}
+              </View>
             </View>
-            {refLines(data, 'minutes').map((l, i) => <Text key={i} style={s.ref}>• {l}</Text>)}
+            <StatTable rows={refRows(data, 'minutes')} unit="min / set" />
           </View>
+
           <Meetings data={data} />
-          {data.actual ? <Text style={s.actual}>The final: {data.actual.final_aces} aces, {fmtLong(data.actual.final_duration_min)}.</Text> : null}
+
+          {/* WHAT LEAVING IT ALONE MEANS. Last, not first: it is the answer for
+              somebody who has decided not to answer, and until then it is the
+              least useful line in the drawer (owner, 2026-09-18). */}
+          {!data.guess && data.default ? (
+            <Text style={s.default}>
+              {`Leave this alone and you hold ${data.tour} ${data.surface.toLowerCase()}’s ${data.default.year} average: `}
+              <Text style={s.defaultStrong}>{`${data.default.aces} aces, ${fmtLong(data.default.minutes)}`}</Text>
+            </Text>
+          ) : null}
+          {data.actual ? (
+            <Text style={s.actual}>
+              {`The final: ${data.actual.final_aces} aces, ${fmtLong(data.actual.final_duration_min)}.`}
+            </Text>
+          ) : null}
           {error ? <Text style={s.error}>{error}</Text> : null}
           <View style={s.actions}>
-            <Pressable onPress={onClose} style={[s.btn, s.btnQuiet]} accessibilityRole="button"><Text style={s.btnQuietText}>{data.locked ? 'Close' : 'Later'}</Text></Pressable>
+            <Pressable onPress={onClose} style={[s.btn, s.btnQuiet]} accessibilityRole="button">
+              <Text style={s.btnQuietText}>{data.locked ? 'Close' : 'Later'}</Text>
+            </Pressable>
             {!data.locked && (
               <Pressable onPress={save} disabled={saving} style={[s.btn, saving && { opacity: 0.6 }]} accessibilityRole="button">
                 <Text style={s.btnText}>{saving ? 'Saving…' : 'Save answers'}</Text>
@@ -275,7 +384,6 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
   )
 }
 
-/* The card on the draw screen: the answers as they stand, and the way in. */
 export function FinalGuessCard({ tournamentId, enabled, onOpen, refreshKey }) {
   const ctx = useApi(enabled ? `final-guess:${tournamentId}:card:${refreshKey || 0}` : null, () => getFinalGuess(tournamentId), { enabled: !!enabled })
   const data = ctx.data
@@ -312,25 +420,99 @@ const s = StyleSheet.create({
   fill: { position: 'absolute', left: KNOB / 2, height: 4, borderRadius: 2, backgroundColor: C.greenLit },
   knob: { position: 'absolute', left: 0, width: KNOB, height: KNOB, borderRadius: KNOB / 2, backgroundColor: C.greenLit, borderWidth: 2, borderColor: C.bg },
   knobOff: { backgroundColor: C.muted },
-  q: { gap: 4 },
-  // The picked final itself: the loudest line in either surface, because it
-  // is the thing being talked about.
-  finalLine: { ...T.h2, color: C.ink },
-  label: { ...T.bodyMed, color: C.ink },
-  row: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
-  value: { ...T.score, color: C.ink, textAlign: 'right' },
-  valueCol: { minWidth: 64, alignItems: 'flex-end' },
-  valueSub: { ...T.tiny, color: C.muted },
-  /* One meeting: when, who won it and in what, then the aces. Divided by a
-     rule rather than boxed — inside a drawer that already scrolls, four
-     bordered cards would be four more things to look at. */
-  meet: { paddingTop: 5, marginTop: 4, borderTopWidth: 1, borderTopColor: C.border },
-  meetWhen: { ...T.tiny, color: C.muted },
-  meetScore: { ...T.bodyMed, color: C.ink },
-  meetAces: { ...T.small, color: C.muted },
-  ends: { flexDirection: 'row', justifyContent: 'space-between', gap: S.sm },
-  end: { ...T.tiny, color: C.muted },
-  ref: { ...T.small, color: C.ink, marginTop: 2 },
+
+  /* The drawer's rhythm. Sections are separated by SPACE and one hairline —
+     not by cards — so the two questions read as two of a kind. */
+  body: { gap: S.lg, paddingBottom: S.md },
+
+  /* ── The match ─────────────────────────────────────────────────────────── */
+  hero: { gap: 2 },
+  heroLabel: { ...T.small, color: C.faint },
+  /* Baseline-aligned rather than centred: three words of different sizes on
+     one line, reading as a result. */
+  heroNames: { flexDirection: 'row', alignItems: 'baseline', gap: S.sm },
+  champ: { ...T.h1, flexShrink: 1 },
+  def: { ...T.tiny, color: C.faint },
+  runner: { ...T.h2, flexShrink: 1 },
+  heroEmpty: { ...T.bodyMed, color: C.muted },
+  heroNote: { ...T.tiny, color: C.faint, marginTop: 2 },
+
+  /* ── A question ────────────────────────────────────────────────────────── */
+  q: { gap: S.sm },
+  // The rule between the two questions, and the only one in this half.
+  qRule: { borderTopWidth: 1, borderTopColor: C.border, paddingTop: S.lg },
+  qHead: { flexDirection: 'row', alignItems: 'center', gap: S.md },
+  qTitle: { ...T.h2, color: C.ink, flex: 1 },
+
+  /* THE ONE BOLD OBJECT: a recess in the scoreboard face. The only rounded
+     thing in the drawer, so nothing competes with it. */
+  plate: {
+    minWidth: 92, alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: S.sm, paddingVertical: 6,
+    backgroundColor: C.sunken, borderRadius: R.sm,
+    borderWidth: 1, borderColor: C.borderOn,
+  },
+  plateValue: { ...T.display, color: C.greenBright, lineHeight: leading(32) },
+  plateSub: { ...T.tiny, color: C.faint, marginTop: -2 },
+
+  /* The slider's two ends. The left is a floor nobody aims at; the right is a
+     record, which is the one number here worth a name under it. */
+  ends: { flexDirection: 'row', justifyContent: 'space-between', gap: S.sm, marginTop: -2 },
+  end: { ...T.tiny, color: C.faint },
+  endRight: { flexShrink: 1, alignItems: 'flex-end' },
+  endRecord: { ...T.tiny, color: C.clay },
+  endWho: { ...T.tiny, color: C.faint, textAlign: 'right' },
+
+  /* ── The evidence, as a table ──────────────────────────────────────────── */
+  table: { marginTop: S.xs },
+  tableHead: { flexDirection: 'row', alignItems: 'flex-end', gap: S.sm, paddingBottom: 2 },
+  tableUnit: { ...T.tiny, color: C.muted, minWidth: 54, textAlign: 'right' },
+  sampleCol: { width: 78 },
+  tr: { flexDirection: 'row', alignItems: 'center', gap: S.sm, paddingVertical: 4 },
+  trRule: { borderTopWidth: 1, borderTopColor: C.border },
+  tdLabel: { ...T.small, color: C.inkBody, flex: 1 },
+  /* The numeric spine: one width, right-aligned, tabular figures. Three
+     numbers in a column can be compared without being read. */
+  tdValue: {
+    ...T.score, color: C.ink, minWidth: 54, textAlign: 'right',
+    fontVariant: ['tabular-nums'],
+  },
+  tdNote: { ...T.tiny, color: C.faint, width: 78, textAlign: 'right' },
+
+  /* ── A section heading: title, rule, and a number on the end ───────────── */
+  section: { gap: S.xs },
+  sectionHead: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
+  sectionTitle: { ...T.h2, color: C.ink },
+  sectionRule: { flex: 1, height: 1, backgroundColor: C.border },
+  record: { ...T.score, color: C.muted, fontVariant: ['tabular-nums'] },
+
+  /* ── One meeting ───────────────────────────────────────────────────────── */
+  meet: { flexDirection: 'row', alignItems: 'center', gap: S.sm, paddingVertical: 6 },
+  /* W or L from the CHAMPION's side, in the bracket's own pick colours. */
+  wl: {
+    width: 26, height: 26, borderRadius: R.sm, borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  wlWon: { backgroundColor: PICK.correct.bg, borderColor: PICK.correct.border },
+  wlLost: { backgroundColor: PICK.wrong.bg, borderColor: PICK.wrong.border },
+  wlText: { ...T.eyebrow, fontSize: 13 },
+  meetBody: { flex: 1, gap: 0 },
+  meetWhen: { ...T.tiny, color: C.faint },
+  meetYear: { ...T.tiny, color: C.muted },
+  meetScore: { ...T.smallMed, color: C.ink },
+  meetTime: { ...T.tiny, color: C.faint },
+  meetAces: { alignItems: 'flex-end' },
+  meetAcesN: { ...T.score, color: C.ink, fontVariant: ['tabular-nums'] },
+  meetAcesDash: { color: C.faint },
+  meetAcesLabel: { ...T.tiny, color: C.faint, marginTop: -3 },
+  more: { ...T.tiny, color: C.faint, paddingTop: 2 },
+  /* Which number belongs to whom, said once at the bottom rather than on
+     every row. */
+  meetKey: { ...T.tiny, color: C.faint, paddingTop: S.xs },
+
+  /* ── The tail ──────────────────────────────────────────────────────────── */
+  default: { ...T.small, color: C.muted },
+  defaultStrong: { ...T.smallMed, color: C.inkBody },
   actual: { ...T.bodyMed, color: C.ink },
   error: { ...T.small, color: C.lossMark },
   actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: S.sm, marginTop: S.xs },
@@ -338,5 +520,7 @@ const s = StyleSheet.create({
   btnText: { ...T.bodyMed, color: '#fff' },
   btnQuiet: { backgroundColor: 'transparent', borderWidth: 1, borderColor: C.border },
   btnQuietText: { ...T.bodyMed, color: C.ink },
+
+  /* ── The card on the draw page (outside the drawer) ────────────────────── */
   cardRow: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
 })
