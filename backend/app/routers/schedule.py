@@ -203,11 +203,53 @@ def _name_key(raw: str) -> str:
     one pass was — the guard needs another capitalised token in FRONT, so
     "Luca POW GBR" gives up GBR and then stops.
     """
+    return _norm(_name_words(raw))
+
+
+def _name_words(raw: str) -> str:
+    """The printed name's own words, tags and country gone, NOT normalised —
+    "[5] Ye-Xin MA CHN" -> "Ye-Xin MA". What `_name_key` folds, and what a
+    matcher that knows a hyphen is two spellings must be handed instead of the
+    key: `_norm` spaces the hyphen, and the joined spelling cannot be rebuilt
+    from "ye xin ma" afterwards."""
     toks = [t for t in _NAME_TAGS.sub(" ", raw or "").split() if len(t) >= 2]
     while (len(toks) >= 2 and _TRAILING_CAPS.match(toks[-1])
            and any(t.isupper() for t in toks[:-1])):
         toks = toks[:-1]
-    return _norm(" ".join(toks))
+    return " ".join(toks)
+
+
+def _spellings(words: str) -> set:
+    """Every key a name may be filed under. A HYPHEN IS TWO SPELLINGS (see
+    rankings._match_token_set, history.tml.name_keys): `_norm` spaces it, which
+    is right for "Auger-Aliassime" and wrong for a romanised Chinese or Korean
+    given name. Korea Open 2026-09-20, doc 348: the sheet's "[5] Ye-Xin MA CHN"
+    keyed as "ye xin ma", Tennis Explorer files her "Yexin Ma", and the Q2
+    card served her with no ranking, no Elo and no head-to-head link while the
+    three other qualifiers beside her had all of them. Applied to BOTH sides of
+    the compare — either source may be the one printing the hyphen."""
+    keys = {_norm(words or "")}
+    if "-" in (words or ""):
+        keys.add(_norm(words.replace("-", "")))
+    return keys - {""}
+
+
+def _name_keys(raw: str) -> set:
+    """`_name_key` under every spelling — the split and the joined."""
+    return _spellings(_name_words(raw))
+
+
+def _by_name(found: dict, raw: str):
+    """What a by-name lookup holds for a printed name: one answer or none.
+
+    `found` is keyed by spelling and holds None where one spelling names two
+    people. The spellings of one printed name must also agree with each other:
+    a split and a joined form reaching DIFFERENT players is as ambiguous as one
+    spelling shared by two, and walking away is the honest answer."""
+    hits = [found[k] for k in sorted(_name_keys(raw)) if k in found]
+    if not hits or any(h is None or h != hits[0] for h in hits):
+        return None
+    return hits[0]
 
 
 def _te_shortlist(keys: set):
@@ -257,7 +299,7 @@ async def _profiles_by_name(db, raws: list) -> dict:
     itself was already resolving by name, which is what made the gap look
     arbitrary rather than absent.
     """
-    keys = {k for k in (_name_key(r) for r in raws) if k}
+    keys = set().union(*(_name_keys(r) for r in raws))
     if not keys:
         return {}
     shortlist = _te_shortlist(keys)
@@ -268,10 +310,8 @@ async def _profiles_by_name(db, raws: list) -> dict:
         .where(shortlist))).all()
     by_key: dict = {}
     for te_id, display, dob in rows:
-        k = _norm(display or "")
-        if k not in keys:
-            continue
-        by_key[k] = None if k in by_key else (te_id, dob)
+        for k in _spellings(display or "") & keys:
+            by_key[k] = None if k in by_key else (te_id, dob)
     matched = {k: v for k, v in by_key.items() if v}
     if not matched:
         return {}
@@ -290,10 +330,11 @@ async def _profiles_by_name(db, raws: list) -> dict:
             ranks[pid] = rank
         if elo:
             elos[pid] = elo
+    # The None of an ambiguous spelling is kept: `_by_name` needs to see it.
     return {
-        k: {"ranking": ranks.get(te_id), "elo_rank": elos.get(te_id),
-            "date_of_birth": dob}
-        for k, (te_id, dob) in matched.items()
+        k: v and {"ranking": ranks.get(v[0]), "elo_rank": elos.get(v[0]),
+                  "date_of_birth": v[1]}
+        for k, v in by_key.items()
     }
 
 
@@ -306,7 +347,7 @@ async def _slugs_by_name(db, raws: list) -> dict:
     exactly one candidate is safe; anything else is left unresolved, which is
     the honest answer and the state this replaces anyway.
     """
-    keys = {k for k in (_name_key(r) for r in raws) if k}
+    keys = set().union(*(_name_keys(r) for r in raws))
     if not keys:
         return {}
     shortlist = _te_shortlist(keys)
@@ -317,12 +358,11 @@ async def _slugs_by_name(db, raws: list) -> dict:
             shortlist, TePlayer.te_slug.isnot(None)))).all()
     hits: dict = {}
     for slug, display in rows:
-        k = _norm(display or "")
-        if k not in keys:
-            continue
-        # Two people spelled the same way is exactly the case to walk away from.
-        hits[k] = None if k in hits else slug
-    return {k: v for k, v in hits.items() if v}
+        for k in _spellings(display or "") & keys:
+            # Two people spelled the same way is exactly the case to walk away
+            # from — so the None stays in the result, for `_by_name` to see.
+            hits[k] = None if k in hits else slug
+    return hits
 
 
 def _player_out(p, nats: dict, seeds: dict, types: dict, ranks: dict, from_bracket: bool,
@@ -367,11 +407,11 @@ def _player_out(p, nats: dict, seeds: dict, types: dict, ranks: dict, from_brack
         # qualifying row reported "no Tennis Explorer profile" for players who
         # plainly have one. Maya Joint is te_players 2322.
         te_slug=((slugs or {}).get(p.draw_entry_id)
-                 or (by_name or {}).get(_name_key(p.raw_name))),
+                 or _by_name(by_name or {}, p.raw_name)),
         # By draw entry where there is one, by NAME where there is not — the
         # same fallback te_slug above already had.
         **((extra or {}).get(p.draw_entry_id)
-           or (extra_by_name or {}).get(_name_key(p.raw_name))
+           or _by_name(extra_by_name or {}, p.raw_name)
            or {}),
     )
 

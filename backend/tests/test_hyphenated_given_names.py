@@ -219,3 +219,51 @@ def test_an_unlinked_player_who_has_played_is_still_news(tmp_path, monkeypatch):
     assert [(u["name"], u["played"]) for u in report["unlinked"]] == [("Debut Newcomer", True)]
     warned = [m for level, m in said if level == "warning"]
     assert len(warned) == 1 and warned[0].endswith("— NEW: unlinked")
+
+
+# ------------------------------------------------- THE ORDER OF PLAY'S LOOKUP
+#
+# 2026-09-20, Korea Open Q2 (doc 348): the sheet's "[5] Ye-Xin MA CHN" keyed as
+# "ye xin ma"; Tennis Explorer files her "Yexin Ma", so the card served her
+# with no ranking, no Elo and no head-to-head link. The page's by-name lookup
+# (routers/schedule) had been left out of the 09-19 fix.
+
+from app.routers.schedule import (_by_name, _name_keys, _name_words,  # noqa: E402
+                                  _profiles_by_name, _slugs_by_name)
+
+
+def test_the_sheet_name_is_filed_under_both_spellings():
+    assert _name_words("[5] Ye-Xin MA CHN") == "Ye-Xin MA"
+    assert _name_keys("[5] Ye-Xin MA CHN") == {"ye xin ma", "yexin ma"}
+    assert _name_keys("[1] Maya JOINT AUS") == {"maya joint"}
+
+
+def test_two_spellings_reaching_two_people_is_no_answer():
+    assert _by_name({"yexin ma": "ma-1"}, "Ye-Xin MA") == "ma-1"
+    assert _by_name({"yexin ma": "ma-1", "ye xin ma": "ma-2"}, "Ye-Xin MA") is None
+    assert _by_name({"yexin ma": None}, "Ye-Xin MA") is None
+
+
+def test_the_order_of_play_links_a_solid_spelling_either_way_round():
+    async def go():
+        engine, Session = await _db()
+        async with Session() as db:
+            db.add_all([
+                TePlayer(gender="F", name_raw="Ma Yexin", name_norm="ma yexin",
+                         name_display="Yexin Ma", te_slug="ma-2d7c9"),
+                TePlayer(gender="F", name_raw="Xu Yi-Fan", name_norm="xu yi fan",
+                         name_display="Yi-Fan Xu", te_slug="xu-f5123"),
+                TePlayer(gender="F", name_raw="Joint Maya", name_norm="joint maya",
+                         name_display="Maya Joint", te_slug="joint-2322"),
+            ])
+            await db.commit()
+            raws = ["[5] Ye-Xin MA CHN", "Yifan XU CHN", "[1] Maya JOINT AUS"]
+            slugs = await _slugs_by_name(db, raws)
+            profiles = await _profiles_by_name(db, raws)
+        await engine.dispose()
+        return slugs, profiles
+    slugs, profiles = asyncio.run(go())
+    assert [_by_name(slugs, r) for r in ("[5] Ye-Xin MA CHN", "Yifan XU CHN",
+                                         "[1] Maya JOINT AUS")] == [
+        "ma-2d7c9", "xu-f5123", "joint-2322"]
+    assert _by_name(profiles, "[5] Ye-Xin MA CHN") is not None

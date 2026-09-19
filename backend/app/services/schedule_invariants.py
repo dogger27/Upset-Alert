@@ -1642,9 +1642,25 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
     # the bug, whatever narrowing causes it next time. Qualifying and doubles
     # are where this bites, because those rows have no draw_entries row to
     # carry the link instead.
+    #
+    # 2026-09-20, Korea Open Q2 (doc 348): "[5] Ye-Xin MA CHN" served bare
+    # beside three linked qualifiers. Tennis Explorer files her "Yexin Ma";
+    # the serve path's key spaced the hyphen ("ye xin ma") and so did this
+    # law's, which is why it stayed silent — the exhaustive scan was only as
+    # wide as the one spelling both sides shared. A HYPHEN IS TWO SPELLINGS
+    # (rankings._match_token_set, history.tml.name_keys), and the law now
+    # reads it that way itself, on both sides, rather than borrowing the
+    # router's `_spellings`: a copy it shared would go blind with it.
     from app.models.rankings import TePlayer as _TePlayer
-    from app.routers.schedule import _name_key as _te_key, _slugs_by_name
+    from app.routers.schedule import (_by_name, _name_key as _te_key,
+                                      _slugs_by_name)
     from app.services.rankings import _norm as _te_norm
+
+    def _law_spellings(name: str, fold) -> set:
+        out = {fold(name)}
+        if "-" in name:
+            out.add(fold(name.replace("-", "")))
+        return out - {""}
 
     raws = [p.raw_name for e in rows for p in (e.players or []) if p.raw_name]
     if raws:
@@ -1653,21 +1669,31 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
         for slug, display in (await db.execute(
                 select(_TePlayer.te_slug, _TePlayer.name_display)
                 .where(_TePlayer.te_slug.isnot(None)))).all():
-            k = _te_norm(display or "")
-            if not k:
-                continue
-            # One name, two people, is a walk-away for the serve path too —
-            # so it must not count as something the shortlist "missed".
-            truth[k] = None if k in truth else slug
+            for k in _law_spellings(display or "", _te_norm):
+                # One name, two people, is a walk-away for the serve path too —
+                # so it must not count as something the shortlist "missed".
+                truth[k] = None if k in truth else slug
         for e in rows:
             for p in (e.players or []):
-                k = _te_key(p.raw_name or "")
-                want = truth.get(k) if k else None
-                if want and not served.get(k):
+                raw = p.raw_name or ""
+                hits = [truth[k] for k in sorted(_law_spellings(raw, _te_key))
+                        if k in truth]
+                # Two spellings reaching two people is a walk-away as well.
+                if not hits or any(h is None or h != hits[0] for h in hits):
+                    continue
+                want = hits[0]
+                if _by_name(served, raw):
+                    continue
+                if truth.get(_te_key(raw)):
                     flag("name_te_shortlist_missed", e,
-                         f"side {p.side}: {p.raw_name!r} is te_players "
+                         f"side {p.side}: {raw!r} is te_players "
                          f"{want} by whole name, and the serve path's "
                          f"shortlist did not offer it")
+                else:
+                    flag("name_te_spelling_missed", e,
+                         f"side {p.side}: {raw!r} is te_players {want} "
+                         f"with its hyphen closed up, and the serve path "
+                         f"read only the split spelling")
 
     # 2026-09-13, Guadalajara: Sunday's Q2 slot "[ALT] Nadiia KICHENOK UKR vs
     # [5] Nao HIBINO JPN" was served COMPLETED with a final score of 6-4 6-1,
