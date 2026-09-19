@@ -420,6 +420,39 @@ def _round_label(round_number: Optional[int], num_rounds: Optional[int]) -> Opti
     return f'R{remaining * 2}'
 
 
+# WHOSE MATCH A ROW IS, WHEN THE SHEET DOES NOT SAY (2026-09-19, Korea Open
+# doc 345). `tour` was only ever what the source printed: the parser reads it
+# off a sheet that labels its slots "ATP"/"WTA" (combined events), the feeds
+# stamp their own tour — and a single-tour sheet, which names no tour because
+# it has only one, left it NULL. Harmless while one source wrote a whole day.
+# Under feeds-first it is not: Korea's Sunday had its two 11:00 AM slots from
+# the WTA feed (tour WTA) and its two "Time TBC" slots from the PDF (NULL), so
+# half the day's cards wore the WTA tag and tint and half did not, the app
+# grouped the day into a "WTA" block and an untitled one, and the H2H popup —
+# which falls back to the row's tour for its gender — labelled the PDF rows'
+# ranking column "Rank (ATP)" for a women's qualifying match.
+#
+# The event knows even when the sheet does not: the draw the row is linked to,
+# else the tournament's only gender. NOT the document's host — see the comment
+# at the ScheduleEntry constructor for how that fallback stamped men's doubles
+# as WTA. A combined event's unlinked row stays unstated, and so does mixed
+# doubles, which belongs to neither tour. doubles_rank.gender_of reads a row's
+# gender the same way. Law: `tour_unstated`.
+_GENDER_TOUR = {'F': 'WTA', 'M': 'ATP'}
+
+
+def event_tour(draws, draw_id: Optional[int], discipline: str) -> Optional[str]:
+    """The tour a row belongs to by its event, or None when the event can't say."""
+    if discipline == 'mixed':
+        return None
+    if draw_id is not None:
+        gender = next((d.gender for d in draws if d.id == draw_id), None)
+    else:
+        genders = {d.gender for d in draws if d.gender}
+        gender = genders.pop() if len(genders) == 1 else None
+    return _GENDER_TOUR.get((gender or '').upper())
+
+
 def _pairing_key(tournament_id: int, play_date: date, discipline: str,
                  side_a: list, side_b: list, entry_ids: list) -> str:
     """Stable across court, time and order changes — those are what we detect."""
@@ -1189,6 +1222,12 @@ async def ingest_document(db, tournament, play_date: date, url: str,
             # discipline is, and so cannot change under a matched entry, but
             # stage is free to be re-derived from the sheet on every pass.
             entry.stage = stage
+            # After the draw link above, which is the better witness on a
+            # combined event. Never cleared: a revision that names no tour
+            # must not erase the one an earlier source stated. See event_tour.
+            tour = m.tour or event_tour(draw_rows, entry.draw_id, discipline)
+            if tour:
+                entry.tour = tour
             entry.start_type = start_type
             entry.start_time_local = printed_time
             # Not written back when the sheet printed no wording at all — see

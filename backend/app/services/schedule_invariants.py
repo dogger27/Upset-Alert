@@ -1900,6 +1900,32 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
              f"{(_naive_utc(first.started_at) or _naive_utc(first.expected_start_at)):%H:%M} UTC) "
              f"that the rest is from")
 
+    # 2026-09-19, Korea Open doc 345: the day's two 11:00 AM Q2 slots came
+    # from the WTA feed (tour WTA) and its two "Time TBC" slots from the PDF,
+    # which names no tour on a single-tour sheet (NULL). Every name, court and
+    # clock matched the sheet; half the cards wore the WTA tag and tint, the
+    # app split the day into a "WTA" group and an untitled one, and the H2H
+    # popup called a women's match's ranking column "Rank (ATP)". A row's tour
+    # is its EVENT's — the linked draw's gender, else the tournament's only
+    # one — whoever wrote the row. Stated here without schedule.event_tour, so
+    # a change there cannot quietly move the law with it. Mixed doubles and a
+    # combined event's unlinked row belong to no single tour and are not judged.
+    genders = {d_id: (g or "").upper() for d_id, g in (await db.execute(
+        select(Draw.id, Draw.gender).where(
+            Draw.tournament_id == tournament_id))).all()}
+    only = set(g for g in genders.values() if g)
+    for e in rows:
+        if e.discipline == "mixed":
+            continue
+        g = genders.get(e.draw_id) if e.draw_id is not None else (
+            next(iter(only)) if len(only) == 1 else None)
+        want = {"F": "WTA", "M": "ATP"}.get(g or "")
+        if want and e.tour != want:
+            flag("tour_unstated", e,
+                 f"{e.discipline} {e.round_label or ''} on {e.court!r} has tour "
+                 f"{e.tour!r} but its event is {want} — the page tags, tints, "
+                 f"groups and labels the H2H ranking by this field")
+
     return v
 
 
