@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.rankings import TePlayer
 from app.models.tournament import Draw, DrawEntry, Match, Tournament
 from app.services.history import db as hdb
-from app.services.history.tml import name_key
+from app.services.history.tml import name_key, name_keys
 
 logger = logging.getLogger(__name__)
 
@@ -164,7 +164,10 @@ def names_agree(entry_name: str, te_name: str) -> bool:
     "Sorana-Mihaela Cirstea" are, and so are "J.J. Wolf" and "Jeffrey John
     Wolf"; "Luciano Darderi" and "Alexander Bublik" are not. One set of tokens
     inside the other, or two tokens shared including the last (the surname), or
-    initials against the names they stand for, or simply near-identical."""
+    initials against the names they stand for, or simply near-identical.
+    "Park So-hyun" and "Sohyun Park" are one key once the hyphen closes up."""
+    if name_keys(entry_name) & name_keys(te_name):
+        return True
     a_, b_ = set(name_key(entry_name).split()), set(name_key(te_name).split())
     if not a_ or not b_:
         return False
@@ -224,8 +227,8 @@ def _tml_matches_of(conn, tour: str, tourney_id: str) -> list[dict]:
     rows = conn.execute("""
         SELECT round, winner_id, winner_name, loser_id, loser_name, score, match_num
         FROM tml_matches WHERE tour = ? AND tourney_id = ?""", (tour, tourney_id)).fetchall()
-    return [dict(round=r[0], w_id=r[1], w_name=r[2], w_key=name_key(r[2]), l_id=r[3], l_name=r[4],
-                 l_key=name_key(r[4]), score=r[5], match_num=r[6]) for r in rows]
+    return [dict(round=r[0], w_id=r[1], w_name=r[2], w_keys=name_keys(r[2]), l_id=r[3], l_name=r[4],
+                 l_keys=name_keys(r[4]), score=r[5], match_num=r[6]) for r in rows]
 
 
 def _tml_players(conn, tour: str) -> list[tuple]:
@@ -302,6 +305,11 @@ _REPAIR_MIN_RATIO = 0.85
 TML_PUBLISH_GRACE_DAYS = 3
 
 
+def _tml_has_published(draw) -> bool:
+    """Is this draw far enough past its last match for TML to have it?"""
+    return draw.end_date is not None and draw.end_date + timedelta(days=TML_PUBLISH_GRACE_DAYS) < date.today()
+
+
 def _close_name(entry_name: str, gender: str, te_rows: list) -> list:
     """Tennis Explorer players of this gender whose name is nearly this one's
     — at least one token in common and a high whole-name ratio.
@@ -337,7 +345,8 @@ async def repair_te_links(db: AsyncSession) -> dict:
     te_by_id = {p.id: p for p in te_rows}
     by_key: dict = {}
     for p in te_rows:
-        by_key.setdefault((p.gender, name_key(p.name_display or p.name_raw or "")), []).append(p)
+        for k in name_keys(p.name_display or p.name_raw or ""):
+            by_key.setdefault((p.gender, k), []).append(p)
     fixed, left, cleared = [], [], []
     rows = (await db.execute(select(DrawEntry, Draw.gender).join(Draw, Draw.id == DrawEntry.draw_id)
                              .where(DrawEntry.te_player_id.isnot(None)))).all()
@@ -345,7 +354,7 @@ async def repair_te_links(db: AsyncSession) -> dict:
         te = te_by_id.get(e.te_player_id)
         if te is None or names_agree(e.name, te.name_display or te.name_raw or ""):
             continue
-        cands = by_key.get((gender, name_key(e.name)), [])
+        cands = list({p.id: p for k in name_keys(e.name) for p in by_key.get((gender, k), [])}.values())
         # THE SAME NAME SPELLED ANOTHER WAY. Exact keys miss a
         # transliteration: our "Abdullah Shelbayh" against Tennis Explorer's
         # "Abedallah Shelbayh", which left the entry pointing at Marton
@@ -414,6 +423,11 @@ async def link_draws(db: AsyncSession, draw_ids: Optional[list[int]] = None) -> 
 
         players_by_tour = {t: _tml_players(conn, t) for t in ("atp", "wta")}
         player_info = {(t, p[0]): p for t in players_by_tour for p in players_by_tour[t]}
+        players_by_key: dict = {}
+        for t in players_by_tour:
+            for p in players_by_tour[t]:
+                for k in name_keys(p[1]) | {p[2]}:
+                    players_by_key.setdefault((t, k), []).append(p)
         te_rows = (await db.execute(select(TePlayer))).scalars().all()
         te_by_id = {p.id: p for p in te_rows}
         taken: dict = {}
@@ -477,9 +491,7 @@ async def link_draws(db: AsyncSession, draw_ids: Optional[list[int]] = None) -> 
                 # is the wrong test: it makes every event in progress look
                 # stuck. Guadalajara tripped this the hour its first ball was
                 # observed. Give the feed a few days past the last match.
-                played = (draw.end_date is not None
-                          and draw.end_date + timedelta(days=TML_PUBLISH_GRACE_DAYS) < date.today())
-                report["unpaired"].append({"draw_id": draw.id, "played": played,
+                report["unpaired"].append({"draw_id": draw.id, "played": _tml_has_published(draw),
                                            "name": f"{tournament.name} {draw.year} {draw.gender}"})
             entries = (await db.execute(select(DrawEntry).where(DrawEntry.draw_id == draw.id))).scalars().all()
             matches = (await db.execute(select(Match).where(Match.draw_id == draw.id, Match.winner_id.isnot(None),
@@ -514,14 +526,14 @@ async def link_draws(db: AsyncSession, draw_ids: Optional[list[int]] = None) -> 
                 tid = te.tml_player_id if te else None
                 if tid and tid in (t["w_id"], t["l_id"]):
                     side[e] = "w" if tid == t["w_id"] else "l"
-                elif key_of[e.id] and key_of[e.id] in (t["w_key"], t["l_key"]):
-                    side[e] = "w" if key_of[e.id] == t["w_key"] else "l"
+                elif key_of[e.id] & (t["w_keys"] | t["l_keys"]):
+                    side[e] = "w" if key_of[e.id] & t["w_keys"] else "l"
             return side
 
         # ── phase 1: exact, both sides ─────────────────────────────────────────
         for draw, tournament, tour, entries, matches, by_round in work:
             entry_by_id = {e.id: e for e in entries}
-            key_of = {e.id: name_key(e.name) for e in entries}
+            key_of = {e.id: name_keys(e.name) for e in entries}
             for m in matches:
                 rc = round_code(m.round_number, draw.num_rounds or 7)
                 e1, e2 = entry_by_id.get(m.player1_id), entry_by_id.get(m.player2_id)
@@ -546,8 +558,8 @@ async def link_draws(db: AsyncSession, draw_ids: Optional[list[int]] = None) -> 
         # ── phase 2: inferred, one side known, the other still unlinked ──────
         for draw, tournament, tour, entries, matches, by_round in work:
             entry_by_id = {e.id: e for e in entries}
-            key_of = {e.id: name_key(e.name) for e in entries}
-            field_keys = set(key_of.values())
+            key_of = {e.id: name_keys(e.name) for e in entries}
+            field_keys = set().union(*key_of.values())
             for m in matches:
                 rc = round_code(m.round_number, draw.num_rounds or 7)
                 e1, e2 = entry_by_id.get(m.player1_id), entry_by_id.get(m.player2_id)
@@ -567,22 +579,27 @@ async def link_draws(db: AsyncSession, draw_ids: Optional[list[int]] = None) -> 
                 if te is None or te.tml_player_id:
                     continue
                 their_id = t["l_id"] if side[known] == "w" else t["w_id"]
-                their_key = t["l_key"] if side[known] == "w" else t["w_key"]
+                their_keys = t["l_keys"] if side[known] == "w" else t["w_keys"]
                 # Not somebody else in our field, and recognisably the same name.
-                if their_key in field_keys - {key_of[other.id]}:
+                if their_keys & (field_keys - key_of[other.id]):
                     continue
-                if SequenceMatcher(None, key_of[other.id], their_key).ratio() < 0.8:
+                if max((SequenceMatcher(None, a, b).ratio() for a in key_of[other.id] for b in their_keys),
+                       default=0.0) < 0.8:
                     continue
                 _assign(te, tour, their_id, "inferred", other.name)
 
         # ── phase 3: the backup — the whole list, exact key then fuzzy ──────
         for draw, tournament, tour, entries, matches, by_round in work:
+            played_ids = {pid for m in matches for pid in (m.player1_id, m.player2_id)}
             for e in entries:
                 te = te_by_id.get(e.te_player_id)
                 if te is None or te.tml_player_id or not _trusted(e):
                     continue
                 k = name_key(e.name)
-                exact = [p for p in players_by_tour[tour] if p[2] == k]
+                exact = list(players_by_key.get((tour, k), []))
+                if not exact:
+                    exact = list({p[0]: p for kk in name_keys(e.name)
+                                  for p in players_by_key.get((tour, kk), [])}.values())
                 if len(exact) == 1:
                     _assign(te, tour, exact[0][0], "name", e.name)
                     continue
@@ -600,8 +617,20 @@ async def link_draws(db: AsyncSession, draw_ids: Optional[list[int]] = None) -> 
                         best, best_r = pid, r
                 if best and best_r >= FUZZY_MIN:
                     _assign(te, tour, best, "fuzzy", e.name)
-                elif not any(u["te_player_id"] == te.id for u in report["unlinked"]):
-                    report["unlinked"].append({"te_player_id": te.id, "name": e.name, "draw_id": draw.id})
+                    continue
+                # UNLINKED IS ONLY NEWS ONCE SHE HAS PLAYED. TML knows a player
+                # from her matches, so a debutant in a draw that has not been
+                # played is unlinkable by definition: Hayu Kinoshita warned the
+                # night before her first SP Open match and linked by match the
+                # day she played it (2026-09-14). The same test as "stuck":
+                # a completed match, in a draw TML has had time to publish.
+                played = e.id in played_ids and _tml_has_published(draw)
+                rec = next((u for u in report["unlinked"] if u["te_player_id"] == te.id), None)
+                if rec is None:
+                    report["unlinked"].append({"te_player_id": te.id, "name": e.name, "draw_id": draw.id,
+                                               "played": played})
+                elif played and not rec["played"]:
+                    rec.update(name=e.name, draw_id=draw.id, played=True)
 
         # ── our results, in their shape ──────────────────────────────────────
         for draw, tournament, tour, entries, matches, by_round in work:
@@ -681,7 +710,7 @@ async def link_all_async(draw_ids: Optional[list[int]] = None) -> dict:
         # Only draws that have been PLAYED: a future one is unpairable by
         # definition.
         "stuck": sum(1 for u in report["unpaired"] if u.get("played")),
-        "unlinked": len(report["unlinked"]),
+        "unlinked": sum(1 for u in report["unlinked"] if u.get("played")),
         "conflicts": len(report["conflicts"]),
         "bad_te_links": len(report["bad_te_links"]),
     }
