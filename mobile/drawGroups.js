@@ -16,17 +16,39 @@
  * "Last Week" starts stealing from "Active" (choosableTournaments.js).
  */
 
+/* The dashboard's own three sections, its words, its order, its colours — a
+   reader who has seen the home screen recognises a heading before reading it.
+   `upcoming` earns its place for the league page, whose Open / Active tab also
+   carries next week's releases; the tab bar's chooser is fed open and active
+   only, so that group is simply always empty there and dropped. */
 export const STATUS_GROUPS = [
   { key: 'open', title: 'Open' },
   { key: 'active', title: 'Active' },
+  { key: 'upcoming', title: 'Next week' },
 ]
+
+/* AN EVENT'S OWN SECTION, where a card holds more than one draw. A combined
+   tournament is one card with two halves in it and they can differ — the men's
+   already under way while the women's still takes picks. The card belongs to
+   the FIRST of the sections above that either half is in, because a card the
+   reader can still pick in is an open card. Null when none of them is a
+   section this groups by. */
+export function sectionOfMany(sections) {
+  const order = STATUS_GROUPS.map(g => g.key)
+  let best = null
+  for (const s of sections || []) {
+    const i = order.indexOf(s)
+    if (i >= 0 && (best === null || i < best)) best = i
+  }
+  return best === null ? null : order[best]
+}
 
 /* [{ key, title, draws }], in the dashboard's order, empty groups dropped.
  *
- * Anything whose section is neither lands in a trailing group rather than
- * being dropped. Today the sheet is fed a list already filtered to these two,
- * so that group is always empty — but a draw must never vanish from a chooser
- * because its status turned out to be a third thing, and a heading nobody
+ * Anything whose section is none of them lands in a trailing group rather than
+ * being dropped. Both callers pass lists already confined to these sections,
+ * so that group is normally empty — but a draw must never vanish from a list
+ * because its status turned out to be a fourth thing, and a heading nobody
  * planned is a far smaller failure than a draw the reader cannot reach. */
 export function groupDrawsByStatus(draws, sectionOf) {
   const rows = draws || []
@@ -41,6 +63,11 @@ export function groupDrawsByStatus(draws, sectionOf) {
   if (rest.length) out.push({ key: 'other', title: 'Other', draws: rest })
   return out
 }
+
+/* The tone each heading wears, beside its words — the dashboard's own pair,
+   plus muted for a week that has not started. Imported rather than repeated:
+   two screens with two copies of this drift. */
+export const GROUP_TONE = { open: 'clay', active: 'greenLit', upcoming: 'muted' }
 
 /* ONE GROUP IS NO GROUPING. A heading over the whole list says nothing the
    list does not already say, and in a sheet this short it costs a row of

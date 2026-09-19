@@ -13,6 +13,7 @@ import { setLastLeague } from '../../../../../lastLeague'
 import { useApi } from '../../../../../useApi'
 import { TourBadge } from '../../../../../cards'
 import { computeCohortInfo, getHomeSection } from '../../../../../drawStatus'
+import { GROUP_TONE, groupDrawsByStatus, sectionOfMany, showGroupHeadings } from '../../../../../drawGroups'
 import { C, R, T } from '../../../../../theme'
 import { Button, Card, CardLink, ErrorNote, Eyebrow, Loading, Muted, Screen, Title } from '../../../../../ui'
 
@@ -74,11 +75,21 @@ export default function LeagueDraws() {
       }
       for (const g of out) {
         g.items.sort((x, y) => (x.tournament.gender === 'M' ? 0 : 1) - (y.tournament.gender === 'M' ? 0 : 1))
+        /* WHICH HEADING THIS CARD SITS UNDER (owner, 2026-09-19). Worked out
+           here because `cohort` is in scope — it is clustered over every draw
+           in the league, and recomputing it from a filtered list moves the
+           boundaries (choosableTournaments.js). A combined card takes the more
+           open of its two halves; sectionOfMany has the reasoning. */
+        g.section = sectionOfMany(g.items.map(x => getHomeSection(x.tournament, cohort)))
       }
       return out
     }
     return { current: events(cur), previous: events(prev) }
   }, [draws.data, isGlobal])
+  /* The Open / Active tab's cards in their status groups. Cheap — a filter
+     over the handful of events a league is playing — so no memo. */
+  const currentGroups = groupDrawsByStatus(current, g => g.section)
+  const currentHeadings = showGroupHeadings(currentGroups)
   const [prevShown, setPrevShown] = useState(5)
   /* SHOW ONLY THE EVENTS THIS LEAGUE PLAYED FOR MONEY — the site's Previous
      filter. Most useful here, where a season's draws pile up and the question
@@ -226,11 +237,24 @@ export default function LeagueDraws() {
           <LeagueSettingsSheet key={league.data?.id} visible={settings} onClose={() => setSettings(false)} league={league.data} />
         ) : null}
 
-        {tab === 'current' && (
-          <>
-            {current.map(g => <DrawRow key={g.key} items={g.items} leagueId={id} isGlobal={isGlobal} />)}
-          </>
-        )}
+        {/* GROUPED BY STATUS (owner, 2026-09-19), the same three headings the
+            dashboard and the tab bar's draw chooser use — the tab holds draws
+            still taking picks, draws being played and next week's releases,
+            and flat it read as one list of all three. One group draws no
+            heading: see drawGroups.showGroupHeadings. */}
+        {tab === 'current' && currentGroups.map(grp => (
+          <View key={grp.key} style={s.statusGroup}>
+            {currentHeadings ? (
+              <View style={s.statusHead}>
+                <Eyebrow color={C[GROUP_TONE[grp.key]] || C.muted}>{grp.title}</Eyebrow>
+                <View style={s.statusRule} />
+              </View>
+            ) : null}
+            {grp.draws.map(g => (
+              <DrawRow key={g.key} items={g.items} leagueId={id} isGlobal={isGlobal} />
+            ))}
+          </View>
+        ))}
         {tab === 'previous' && (
           <>
             {/* The count and the filter share a line: a chip of its own would
@@ -461,6 +485,11 @@ const s = StyleSheet.create({
   innerCompact: { paddingVertical: 8 },
   nameCompact: { fontSize: 15 },
   bag: { fontSize: 13 },
+  /* A status group and its heading — the dashboard's Section head, the same
+     three numbers, so the league page and the home screen read alike. */
+  statusGroup: { gap: 10 },
+  statusHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  statusRule: { flex: 1, height: 1, backgroundColor: C.border },
   prevHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   poolChip: {
     paddingHorizontal: 10, paddingVertical: 3, borderRadius: R.pill,

@@ -22,7 +22,7 @@ import { BrandMark, Eyebrow } from '../../ui'
 import { useAuth } from '../../auth'
 import { hasDrawData, useChoosableTournaments } from '../../choosableTournaments'
 import { setCurrentDraw, useCurrentDraw } from '../../currentDraw'
-import { groupDrawsByStatus, showGroupHeadings } from '../../drawGroups'
+import { GROUP_TONE, groupDrawsByStatus, showGroupHeadings } from '../../drawGroups'
 import { useLastLeague } from '../../lastLeague'
 import { pruneScheduleTournaments, setScheduleTournaments, useScheduleTournaments } from '../../scheduleFilter'
 import { C, S, T } from '../../theme'
@@ -332,7 +332,7 @@ export default function TabLayout() {
         <View key={g.key}>
           {groupHeadings ? (
             <View style={s.groupHead}>
-              <Eyebrow color={GROUP_TONE[g.key] || C.muted}>{g.title}</Eyebrow>
+              <Eyebrow color={C[GROUP_TONE[g.key]] || C.muted}>{g.title}</Eyebrow>
               <View style={s.groupRule} />
             </View>
           ) : null}
@@ -465,9 +465,6 @@ function DrawRow({ t, showing, underHeading, onPress }) {
   )
 }
 
-/* The dashboard's own two tones for these sections, so a reader who has seen
-   the home screen recognises the heading before reading it. */
-const GROUP_TONE = { open: C.clay, active: C.greenLit }
 
 const s = {
   row: {
