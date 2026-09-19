@@ -146,3 +146,37 @@ def test_a_womans_day_is_topped_up_from_sofascore_when_the_wta_feed_is_thin():
     dab = [m for m in ms if any("abrowski" in n.lower() for n in m.side_a + m.side_b)]
     assert len(dab) == 1                                   # once, not twice
     assert "DABROWSKI CAN" in " ".join(dab[0].side_a)      # and in the WTA's own rendering
+
+
+def test_a_sofascore_row_sharing_a_player_with_a_wta_row_is_that_match():
+    """Korea's qualifying day (2026-09-19): the alternate Kuramochi replaced
+    Zidanšek against Jeong. The WTA said so and Sofascore did not, the two
+    sigs differed, and the day carried both — a phantom on GRANDSTAND."""
+    wta = [_wta("Miho", "Kuramochi", "Boyoung", "Jeong", 1, 1, 5, 54)]
+    sofa = [_sofa("Tamara Zidanšek", "Boyoung Jeong", "Grandstand", 4, 20),
+            _sofa("Alevtina Ibragimova", "Rina Saigo", "Grandstand", 7, 0)]
+    ms, _ = parse_day_document(_doc(wta, [("singles", "WTA", sofa, False)]),
+                               court_names={"CourtID 1": "GRANDSTAND", "Grandstand": "GRANDSTAND"},
+                               venue_tz="UTC")
+    assert len(ms) == 2, [m.side_a + m.side_b for m in ms]   # the real match and the top-up
+    assert not any("Zidan" in n for m in ms for n in m.side_a + m.side_b)
+
+
+def test_a_day_with_every_stored_match_is_not_thin_whatever_the_count():
+    """Guadalajara 2026-09-19: document 327 counted 3 for a 2-match day (a
+    duplicate the ingest merged), and the guard refused the WTA's correct
+    2-match day on every tick after. Fewer is thinner only when a stored match
+    has no counterpart."""
+    from app.services.schedule_feeds import accounts_for
+    wta = [_wta("Peyton", "Stearns", "Iva", "Jovic", 1, 1, 23, 0)]
+    ms, _ = parse_day_document(_doc(wta, []), court_names={"CourtID 1": "ESTADIO"}, venue_tz="UTC")
+    stored = [("singles", {"stearns", "jovic"})]
+    assert accounts_for(stored, ms)
+    # A stored slot whose one player is still on the day (a replaced opponent).
+    assert accounts_for([("singles", {"zidansek", "jovic"})], ms)
+    # SP Open's Friday: stored matches the feed does not hold stay refused.
+    assert not accounts_for(stored + [("singles", {"badosa", "podoroska"})], ms)
+    # A different discipline is not a counterpart, and a nameless row is unproven.
+    assert not accounts_for([("doubles", {"stearns", "jovic"})], ms)
+    assert not accounts_for([("singles", set())], ms)
+    assert not accounts_for([], ms)
