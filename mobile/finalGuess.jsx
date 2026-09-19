@@ -17,7 +17,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-native-reanimated'
 import { getFinalGuess, putFinalGuess } from './api'
 import { Sheet } from './sheet'
-import { Card, Muted, Title } from './ui'
+import { Card, Muted } from './ui'
 import { C, R, S, T } from './theme'
 import { useApi } from './useApi'
 import { tiebreakVisible } from './scoring'
@@ -216,9 +216,13 @@ export function FinalGuessCard({ tournamentId, enabled, onOpen, refreshKey }) {
       <Card>
         <View style={s.cardRow}>
           <View style={{ flex: 1 }}>
-            <Title>Your current prediction for the final</Title>
+            {/* The LEAD-IN is small and the NAMES are loud: the card is here to
+                say who the reader has in the final, and the sentence around
+                that is scaffolding. Both at Title size read as two headings
+                and neither won (measured in the harness, 2026-09-19). */}
+            <Muted>Your current prediction for the final:</Muted>
             <Text style={s.finalLine}>{finalLine(data) || 'No champion picked yet'}</Text>
-            <Muted style={s.cardNote}>Final score ties broken by the questions below</Muted>
+            <Muted style={s.cardNote}>Final score ties broken by the questions below:</Muted>
             <Muted>{g ? `${g.final_aces} aces · ${fmtMinutes(g.final_duration_min)}`
                       : data.default ? `Holding the average: ${data.default.aces} aces · ${fmtMinutes(data.default.minutes)}`
                       : (data.locked ? 'No answers given' : 'Answer the two questions about the final')}</Muted>
