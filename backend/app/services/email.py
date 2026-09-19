@@ -373,8 +373,14 @@ async def send_draw_release_digest(
     is_followup: bool = False,
     unsubscribe_url: str = "",
     tz_known: bool = False,
+    tour: Optional[str] = None,
 ) -> None:
     """One email covering every draw released this week.
+
+    `tour` ('F' or 'M') is set only when the week's digest was deliberately
+    split in two — see scheduler.TOUR_SPLIT_WEEKS. Both halves would otherwise
+    announce themselves as "this week's draws", and the second would read as a
+    correction of the first.
 
     draws is sorted soonest-deadline-first and its 'closes' strings are already
     rendered in this recipient's zone — the caller does that per recipient,
@@ -393,6 +399,9 @@ async def send_draw_release_digest(
     names = {d["name"] for d in draws}
     event = draws[0]["name"] if len(names) == 1 else None
 
+    # "WTA" / "ATP" when this covers one half of a split week, else nothing:
+    # on an ordinary week the digest IS the week and needs no qualifier.
+    side = {"F": "WTA", "M": "ATP"}.get(tour or "")
     if is_followup:
         # The week's digest already went out; these arrived late.
         subject = (f"One more draw is live — {draws[0]['name']}" if n == 1
@@ -404,12 +413,14 @@ async def send_draw_release_digest(
                  if n == 1 else
                  "They weren't out when we sent the rest of this week's draws. They're live now.")
     else:
+        what = f"{side} draws" if side else "draws"
         subject = (f"{event} is live — week of {week_label}" if event
-                   else f"{n} draws are live — week of {week_label}")
-        heading = "The draw is live!" if n == 1 else "This week's draws are live"
+                   else f"{n} {what} are live — week of {week_label}")
+        heading = ("The draw is live!" if n == 1
+                   else f"This week's {what} are live")
         intro = (f"The draw for <strong>{draws[0]['name']}</strong> has been released."
                  if n == 1 else
-                 f"{count_word} draws opened for the week of <strong>{week_label}</strong>. "
+                 f"{count_word} {what} opened for the week of <strong>{week_label}</strong>. "
                  f"Soonest deadline first.")
 
     rows = "".join(_digest_row(d, last=(i == n - 1)) for i, d in enumerate(draws))

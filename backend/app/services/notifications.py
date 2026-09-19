@@ -618,7 +618,8 @@ async def notify_round_complete(
 DRAW_RELEASED_PREF = "draw_released"
 
 
-async def notify_draw_release_batch(draw_ids: list[int], is_followup: bool = False) -> None:
+async def notify_draw_release_batch(draw_ids: list[int], is_followup: bool = False,
+                                    tour: Optional[str] = None) -> None:
     """
     Email every user with draw-release notifications on — one message covering
     every draw in the batch.
@@ -732,7 +733,7 @@ async def notify_draw_release_batch(draw_ids: list[int], is_followup: bool = Fal
         await send_draw_release_digest(
             email, rows_for_user, week_label,
             is_followup=is_followup, unsubscribe_url=unsubscribe_url,
-            tz_known=bool(user_tz),
+            tz_known=bool(user_tz), tour=tour,
         )
 
     # Exactly ONE push per week, after every draw in that week is out.

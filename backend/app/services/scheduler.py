@@ -10,6 +10,7 @@ import functools
 import logging
 import traceback
 from datetime import date, datetime, timedelta, timezone
+from typing import Optional
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import and_, case, func, or_, select
@@ -566,6 +567,44 @@ DRAW_RELEASE_NOTIFY_COOLDOWN = timedelta(minutes=10)
 # A week's draws are announced together, so exactly one email covers the week.
 # It waits for every draw in that week to be released — see the hold below.
 
+# ── ONE WEEK, TWO EMAILS ─────────────────────────────────────────────────────
+# A dated, one-off exemption granted by the owner (2026-09-19), and deliberately
+# a LIST OF WEEKS rather than a rule.
+#
+# Week 38 of 2026 holds four draws: Korea and Singapore (WTA, main draw from
+# Monday 21 September) and Chengdu and Hangzhou (ATP 250s, main draw from
+# WEDNESDAY 23 September, moved to work around the Laver Cup that weekend). One
+# email for the week would have had to hold the two released WTA draws for two
+# days waiting on ATP draws that had not been published yet.
+#
+# THIS DOES NOT WEAKEN THE NEVER-SPLIT RULE (feedback_digest_never_split). It
+# changes what a bucket IS for one named week; inside each bucket the hold is
+# still unconditional — the ATP pair waits until BOTH are released, with no
+# deadline and no partial send. There is no timeout, no lag cap and no "held
+# too long" escape hatch here, which is what that rule actually forbids.
+#
+# Adding a week here is a per-case decision that needs the owner's word, which
+# is why test_draw_release_buckets.py pins the set's exact contents.
+TOUR_SPLIT_WEEKS = {(2026, 38)}
+
+
+def release_bucket(draw) -> tuple:
+    """Which draw-release email a draw belongs to.
+
+    ONE function for both halves of the decision — the grouping below and the
+    sibling hold that waits on the rest of the bucket — because those two
+    disagreeing is how a bucket publishes short.
+
+    A draw with no week (an unparsed start date) can be batched with nothing,
+    so it goes out on its own rather than being held for a group it is not
+    part of.
+    """
+    if draw.week is None:
+        return ("solo", draw.id)
+    if (draw.year, draw.week) in TOUR_SPLIT_WEEKS:
+        return (draw.year, draw.week, draw.gender)
+    return (draw.year, draw.week)
+
 
 async def _notify_pending_draw_releases() -> None:
     """
@@ -598,27 +637,34 @@ async def _notify_pending_draw_releases() -> None:
         if not ready:
             return
 
-        # Group by the tennis week the draws belong to. A draw with no week
-        # (unparsed start date) can't be batched with anything, so it goes out
-        # on its own rather than being held for a group it isn't part of.
+        # Group by the tennis week the draws belong to — or, for a week in
+        # TOUR_SPLIT_WEEKS, by week AND tour. release_bucket owns that choice.
         groups: dict[tuple, list[Draw]] = {}
         for t in ready:
-            key = (t.year, t.week) if t.week is not None else ("solo", t.id)
-            groups.setdefault(key, []).append(t)
+            groups.setdefault(release_bucket(t), []).append(t)
 
-        batches: list[tuple[list[int], bool]] = []
+        # (draw ids, is_followup, tour) — tour is set only for a TOUR_SPLIT_WEEKS
+        # bucket, where the email has to say which half of the week it covers.
+        batches: list[tuple[list[int], bool, Optional[str]]] = []
         # Draws that arrived after their week's digest already went out. Stamped
         # as notified but never emailed — see the suppression branch below.
         suppressed: list[int] = []
         for key, members in groups.items():
             if key[0] == "solo":
-                batches.append(([members[0].id], False))
+                batches.append(([members[0].id], False, None))
                 continue
 
-            year, week = key
-            siblings = (await db.execute(
-                select(Draw).where(Draw.year == year, Draw.week == week)
-            )).scalars().all()
+            year, week = key[0], key[1]
+            # THE SAME FUNCTION DECIDES MEMBERSHIP. Re-deriving it here (an
+            # extra WHERE on gender, say) is how the group and its hold come to
+            # disagree about who is in the bucket — and a hold that waits on a
+            # draw the batch will not carry waits forever.
+            siblings = [
+                s for s in (await db.execute(
+                    select(Draw).where(Draw.year == year, Draw.week == week)
+                )).scalars().all()
+                if release_bucket(s) == key
+            ]
 
             ready_ids = {t.id for t in members}
             # Already-notified siblings mean this week's digest has gone out, so
@@ -661,22 +707,26 @@ async def _notify_pending_draw_releases() -> None:
                 )
                 continue
 
-            batches.append(([t.id for t in members], False))
+            # A split bucket names its tour, or the two emails for one week
+            # both claim to be "this week's draws".
+            batches.append(([t.id for t in members], False,
+                            key[2] if len(key) == 3 else None))
 
         if not batches and not suppressed:
             return
 
-        announced = {i for ids, _ in batches for i in ids} | set(suppressed)
+        announced = {i for ids, _, _ in batches for i in ids} | set(suppressed)
         for t in ready:
             if t.id in announced:
                 t.draw_release_notified_at = now
         await db.commit()
 
     from app.services.notifications import notify_draw_release_batch
-    for ids, is_followup in batches:
-        asyncio.create_task(notify_draw_release_batch(ids, is_followup=is_followup))
+    for ids, is_followup, tour in batches:
+        asyncio.create_task(
+            notify_draw_release_batch(ids, is_followup=is_followup, tour=tour))
     logger.info("Draw-release notification: dispatched %d batch(es) covering %d draw(s)",
-                len(batches), sum(len(ids) for ids, _ in batches))
+                len(batches), sum(len(ids) for ids, _, _ in batches))
 
 
 # A withdrawal rarely arrives alone: an editor updating a draw page replaces a
