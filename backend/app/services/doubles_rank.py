@@ -174,7 +174,7 @@ async def _compute(db, tournament_id: int) -> dict[tuple[int, str], int]:
 async def _rank_field(db, entries, gender: str, week: date) -> dict[tuple[int, str], int]:
     from app.models.rankings import TeDoublesSnapshot, TePlayer
     from app.models.tournament import DrawEntry
-    from app.routers.schedule import _name_key, _printed_mark
+    from app.routers.schedule import _name_key, _name_words, _printed_mark
     from app.services.rankings import _build_te_index, _match_token_set
 
     ranks_by_te = {s.player_id: s.rank for s in (await db.execute(
@@ -192,7 +192,10 @@ async def _rank_field(db, entries, gender: str, week: date) -> dict[tuple[int, s
     def te_id_of(p) -> Optional[int]:
         if p.draw_entry_id and p.draw_entry_id in te_by_entry:
             return te_by_entry[p.draw_entry_id]
-        name = _name_key(p.raw_name)
+        # The printed WORDS, not `_name_key`: the key has already spaced the
+        # hyphen, and `_match_token_set` retries the joined spelling ("So-hyun"
+        # is TE's "Sohyun") only when it can still see one (doc 348).
+        name = _name_words(p.raw_name)
         return _match_token_set(name, te_index) if name else None
 
     pairs: dict[object, tuple[Optional[int], Optional[int]]] = {}
