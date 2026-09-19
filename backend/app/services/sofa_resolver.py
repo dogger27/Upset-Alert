@@ -38,8 +38,8 @@ from app.database import AsyncSessionLocal
 from app.models.schedule import ScheduleEntry
 from app.models.tournament import Draw, DrawEntry, Match
 from app.services.draw_dates import release_deadline
-from app.services.sofascore import (RESOLVE_RETRY_HOURS, SofascoreBlocked,
-                                    resolve_pending_draws)
+from app.services.sofascore import (DARK_RETRY_HOURS, RESOLVE_RETRY_HOURS,
+                                    SofascoreBlocked, resolve_pending_draws)
 from app.services.system_log import app_log
 
 logger = logging.getLogger(__name__)
@@ -66,6 +66,13 @@ COVERAGE_LEAD_DAYS = 2
 # saying out loud. Long enough to cover a rain delay or a five-setter running
 # over on the same court, short enough to still be "before play gets away".
 COVERAGE_GRACE = timedelta(hours=3)
+
+# How old the resolver's last look at a dark draw may be before having no
+# verdict on it is itself the fault. A dark draw is looked at every
+# DARK_RETRY_HOURS, so a pass without a verdict follows one that had it — most
+# often the first pass after a restart, which lands inside the hour. Twice the
+# cadence leaves room for one pass's worth of lateness and no more.
+VERDICT_FRESH = timedelta(hours=2 * DARK_RETRY_HOURS)
 
 
 async def _play_was_due(db, draw, now: datetime) -> bool:
@@ -98,21 +105,23 @@ async def _play_was_due(db, draw, now: datetime) -> bool:
     return draw.start_date < now.date()
 
 
-async def _once() -> tuple[int, set]:
-    """Returns (entries stamped, draw ids whose Sofascore field is UNNAMED).
+async def _once() -> tuple[int, dict]:
+    """Returns (entries stamped, {draw id: field UNNAMED?} for every draw
+    looked at on this pass).
 
     The second half is for the coverage check in the same pass: "nobody
     stamped" means something different when Sofascore has published a bracket
     of placeholders than when it has published a field of real names and we
-    matched none of them.
+    matched none of them. A draw ABSENT from it was not looked at — which says
+    nothing either way, and is not the same as "looked at and named".
     """
     async with AsyncSessionLocal() as db:
         reports = await resolve_pending_draws(db, retry_hours=RESOLVE_RETRY_HOURS)
         await db.commit()
 
-    unnamed = {r.get("draw_id") for r in reports if r.get("field_unnamed")}
+    verdicts = {r.get("draw_id"): bool(r.get("field_unnamed")) for r in reports}
     if not reports:
-        return 0, unnamed
+        return 0, verdicts
     stamped = sum(r.get("resolved", 0) for r in reports)
     for r in reports:
         if r.get("error"):
@@ -125,7 +134,7 @@ async def _once() -> tuple[int, set]:
         else:
             logger.info("Sofascore resolve: %s — %d/%d entries stamped",
                         r.get("draw"), r.get("resolved", 0), r.get("total", 0))
-    return stamped, unnamed
+    return stamped, verdicts
 
 
 async def _refine_deadlines(db) -> int:
@@ -218,7 +227,7 @@ async def _refine_deadlines(db) -> int:
     return set_count
 
 
-async def _coverage_check(db, unnamed: set | None = None) -> None:
+async def _coverage_check(db, verdicts: dict | None = None) -> None:
     """Say so when a draw is about to be played and cannot be scored.
 
     THIS IS THE POINT OF THE WHOLE MODULE. Everything above is a mechanism, and
@@ -284,13 +293,29 @@ async def _coverage_check(db, unnamed: set | None = None) -> None:
                 # that is this module's whole guarantee, and a draw on court
                 # with placeholders for a field is exactly as unscoreable as
                 # one with no ids at all.
-                # `unnamed is None` means nobody told us — no information is
+                # `verdicts is None` means nobody told us — no information is
                 # not evidence of innocence, so it warns, as it always did.
-                if due or unnamed is None or d.id not in unnamed:
+                #
+                # NOT LOOKED AT IS NOT A VERDICT. This read "absent from this
+                # pass's unnamed set" as "named, and nobody matched" — but a
+                # draw is absent whenever the retry floor skipped it, and Korea
+                # Open 2026 warned on the pass after the one that had just
+                # seen its thirty R16P slots (2026-09-19). The resolver looks
+                # at a dark draw every hour, so no verdict now means one inside
+                # the hour and another on the next pass; only a last look
+                # older than that is a fault in its own right.
+                if due or verdicts is None:
+                    unexplained = True
+                elif d.id in verdicts:
+                    unexplained = not verdicts[d.id]
+                else:
+                    last = d.sofa_resolved_at
+                    if last is not None and last.tzinfo is None:
+                        last = last.replace(tzinfo=timezone.utc)
+                    unexplained = last is None or now - last > VERDICT_FRESH
+                if unexplained:
                     problem = ("a tournament id but not one player resolved, so "
                                "no match on it can be joined to a live event")
-                else:
-                    problem = None
             elif due:
                 # Playing, joinable, and still nothing has arrived. That is the
                 # case no amount of retrying fixes by itself.
@@ -326,14 +351,14 @@ async def start() -> None:
     while True:
         delay = POLL_INTERVAL
         try:
-            stamped, unnamed = await _once()
+            stamped, verdicts = await _once()
             # The first ball, from the one source that publishes it days ahead.
             async with AsyncSessionLocal() as db:
                 await _refine_deadlines(db)
             # AFTER resolving, so a draw fixed on this very pass is not reported
             # as broken a second later.
             async with AsyncSessionLocal() as db:
-                await _coverage_check(db, unnamed)
+                await _coverage_check(db, verdicts)
         except SofascoreBlocked as exc:
             delay = BLOCKED_BACKOFF
             logger.warning("Sofascore resolve blocked, backing off %.0fh: %s",
