@@ -28,6 +28,3 @@
 .fg-bar-value { font-weight: 700; }
 .fg-bar-value--ask { font-weight: 600; color: var(--green-500, #40916c); }
 .fg-bar-actual { margin-left: auto; font-size: 0.85rem; color: var(--text-muted); }
-/* Its own row under the prediction: the explainer plus the answers as they
-   stand. flex-basis pushes it to a full line whatever sits above it. */
-.fg-bar-note { flex-basis: 100%; font-size: 0.8rem; color: var(--text-muted); }

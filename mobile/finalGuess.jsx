@@ -17,7 +17,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-native-reanimated'
 import { getFinalGuess, putFinalGuess } from './api'
 import { Sheet } from './sheet'
-import { Card, Muted } from './ui'
+import { Card, Muted, Title } from './ui'
 import { C, R, S, T } from './theme'
 import { useApi } from './useApi'
 import { tiebreakVisible } from './scoring'
@@ -151,7 +151,11 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
             <Muted>Your current prediction for the final:</Muted>
             <Text style={s.finalLine}>{finalLine(data) || 'No champion picked yet'}</Text>
           </View>
-          <Muted>Final score ties broken by the questions below:</Muted>
+          {/* THE TAIL IS THE LIVE SLIDER STATE, not the saved answer. It says
+              what this bracket holds as you look at it, so dragging a slider
+              cannot leave a sentence on screen contradicting the knob under
+              it (owner's wording, 2026-09-19). */}
+          <Muted>Final score ties broken by the questions below — {aces} aces · {fmtMinutes(minutes)}</Muted>
           {!data.guess && data.default ? (
             <Muted>
               Leave this alone and you hold {data.tour} {data.surface.toLowerCase()}&apos;s {data.default.year} average:
@@ -216,13 +220,12 @@ export function FinalGuessCard({ tournamentId, enabled, onOpen, refreshKey }) {
       <Card>
         <View style={s.cardRow}>
           <View style={{ flex: 1 }}>
-            {/* The LEAD-IN is small and the NAMES are loud: the card is here to
-                say who the reader has in the final, and the sentence around
-                that is scaffolding. Both at Title size read as two headings
-                and neither won (measured in the harness, 2026-09-19). */}
-            <Muted>Your current prediction for the final:</Muted>
-            <Text style={s.finalLine}>{finalLine(data) || 'No champion picked yet'}</Text>
-            <Muted style={s.cardNote}>Final score ties broken by the questions below:</Muted>
+            {/* ONE LINE AND THE ANSWERS, nothing more (owner, 2026-09-19).
+                The picked final and the sentence about ties belong to the
+                sheet — "only visible once you click in" — because this card
+                sits in the draw between match groups, and a four-line panel
+                there is reading matter in the way of the bracket. */}
+            <Title>Tiebreak</Title>
             <Muted>{g ? `${g.final_aces} aces · ${fmtMinutes(g.final_duration_min)}`
                       : data.default ? `Holding the average: ${data.default.aces} aces · ${fmtMinutes(data.default.minutes)}`
                       : (data.locked ? 'No answers given' : 'Answer the two questions about the final')}</Muted>
@@ -244,7 +247,6 @@ const s = StyleSheet.create({
   // The picked final itself: the loudest line in either surface, because it
   // is the thing being talked about.
   finalLine: { ...T.h2, color: C.ink },
-  cardNote: { marginTop: 2 },
   label: { ...T.bodyMed, color: C.ink },
   row: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
   value: { ...T.score, color: C.ink, minWidth: 64, textAlign: 'right' },

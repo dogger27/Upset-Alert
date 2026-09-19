@@ -46,7 +46,7 @@ const surname = (full) => {
   return parts.length > 1 ? parts.slice(1).join(' ') : parts[0]
 }
 
-export function finalLine(ctx) {
+function finalLine(ctx) {
   const champ = ctx?.champion?.name
   if (!champ) return null
   const run = ctx?.runner_up?.name
@@ -125,7 +125,13 @@ export default function FinalGuessModal({ tournamentId, open, onClose, reason })
             Your current prediction for the final:
             <strong className="fg-final">{finalLine(ctx) || 'No champion picked yet'}</strong>
           </p>
-          <p className="fg-intro">Final score ties broken by the questions below:</p>
+          {/* The tail is the LIVE slider state, not the saved answer, so
+              dragging a knob cannot leave a sentence above it saying something
+              else (owner's wording, 2026-09-19). */}
+          <p className="fg-intro">
+            Final score ties broken by the questions below
+            {aces != null ? ` — ${aces} aces · ${fmtMinutes(minutes)}` : ''}
+          </p>
           {ctx && !ctx.guess && ctx.default && (
             <p className="fg-intro">
               Leave this alone and you hold {ctx.tour} {ctx.surface.toLowerCase()}'s {ctx.default.year} average:
@@ -182,15 +188,14 @@ export function FinalGuessBar({ tournamentId, enabled, onOpen }) {
   const g = ctx.guess
   return (
     <button type="button" className="fg-bar" onClick={onOpen}>
-      <span className="fg-bar-label">Your current prediction for the final</span>
-      <span className="fg-bar-value">{finalLine(ctx) || 'No champion picked yet'}</span>
+      {/* ONE LINE AND THE ANSWERS (owner, 2026-09-19). The picked final and the
+          sentence about ties live in the dialog — "only visible once you click
+          in" — so this stays the quiet way in that it was. */}
+      <span className="fg-bar-label">Tiebreak</span>
+      {g ? <span className="fg-bar-value">{g.final_aces} aces · {fmtMinutes(g.final_duration_min)}</span>
+         : ctx.default ? <span className="fg-bar-value fg-bar-value--ask">Holding the average: {ctx.default.aces} aces · {fmtMinutes(ctx.default.minutes)}</span>
+         : <span className="fg-bar-value fg-bar-value--ask">{ctx.locked ? 'No answers given' : 'Answer the two questions about the final'}</span>}
       {ctx.actual && <span className="fg-bar-actual">final: {ctx.actual.final_aces} · {fmtMinutes(ctx.actual.final_duration_min)}</span>}
-      <span className="fg-bar-note">
-        Final score ties broken by the questions below
-        {g ? ` — ${g.final_aces} aces · ${fmtMinutes(g.final_duration_min)}`
-           : ctx.default ? ` — holding the average: ${ctx.default.aces} aces · ${fmtMinutes(ctx.default.minutes)}`
-           : (ctx.locked ? ' — no answers given' : '')}
-      </span>
     </button>
   )
 }
