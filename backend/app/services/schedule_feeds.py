@@ -151,6 +151,17 @@ def parse_day_document(doc: bytes, court_names: Optional[dict] = None,
         meta["unordered"] = wta_feed.unordered_courts(wta_rows)
     meta["wta"] = len(wta_rows)
 
+    # A SOFASCORE ROW SHARING A PLAYER WITH A WTA ROW IS THAT MATCH, not
+    # another one. Korea 2026-09-19: the alternate Kuramochi had replaced
+    # Zidanšek against Jeong; the WTA said so, Sofascore did not, the two
+    # sigs differed, and the day carried both — a phantom on GRANDSTAND
+    # holding the live event while the real match sat "scheduled".
+    wta_players: dict = {}
+    for m in wta_rows:
+        wta_players.setdefault((m.tour, m.discipline), set()).update(_sig(m) or ())
+    sofa_rows = [m for m in sofa_rows
+                 if not ((_sig(m) or frozenset()) & wta_players.get((m.tour, m.discipline), set()))]
+
     # The women's rows from the WTA, the men's from Sofascore; a match offered
     # twice (a women's draw served by Sofascore as well) is kept once.
     matches, seen = [], set()
@@ -221,6 +232,32 @@ async def _sheet_match_count(db, tournament_id: int, day: date) -> int:
     return int(getattr(doc, "match_count", 0) or 0) if doc else 0
 
 
+def accounts_for(stored: list[tuple], matches) -> bool:
+    """True when every stored (discipline, surnames) slot has a match among
+    `matches` sharing a player with it — the day is all there, only fewer."""
+    offered: dict = {}
+    for m in matches:
+        offered.setdefault(m.discipline, set()).update(_sig(m) or ())
+    return bool(stored) and all(names and names & offered.get(disc, set())
+                                for disc, names in stored)
+
+
+async def _stored_slots(db, tournament_id: int, day: date) -> list[tuple]:
+    """(discipline, surnames) for every row the day holds now."""
+    from app.models.schedule import ScheduleEntry, ScheduleEntryPlayer
+    rows = (await db.execute(
+        select(ScheduleEntry.id, ScheduleEntry.discipline, ScheduleEntryPlayer.raw_name)
+        .outerjoin(ScheduleEntryPlayer, ScheduleEntryPlayer.schedule_entry_id == ScheduleEntry.id)
+        .where(ScheduleEntry.tournament_id == tournament_id,
+               ScheduleEntry.play_date == day))).all()
+    slots: dict = {}
+    for eid, disc, raw in rows:
+        names = slots.setdefault(eid, (disc, set()))[1]
+        if raw and _surname(raw):
+            names.add(_surname(raw))
+    return list(slots.values())
+
+
 async def build_day_document(db, tournament, draws, day: date, season_year: int,
                              venue_tz: Optional[str]) -> Optional[dict]:
     """One day's schedule from the feeds: {url, bytes, parser, count, atp, wta,
@@ -283,7 +320,14 @@ async def build_day_document(db, tournament, draws, day: date, season_year: int,
     # holds fewer matches than the sheet already stored for it is a partial
     # answer, not a revision: it leaves the rest of the day owned by whatever
     # wrote it last (SP Open, 2026-09-18).
-    if sheet_count and len(matches) < sheet_count:
+    #
+    # FEWER IS NOT THINNER when every match the day holds is still there. A
+    # count inflated by a duplicate the ingest later merged (Guadalajara
+    # 2026-09-19: WTA and Sofascore rows for one final, document 327 counted
+    # 3 for a 2-match day) refused the WTA's correct day on every tick after,
+    # and kept Sofascore's "Est. 17:00" over the printed "Not before 5:00 PM".
+    if (sheet_count and len(matches) < sheet_count
+            and not accounts_for(await _stored_slots(db, tournament.id, day), matches)):
         logger.info("feeds have %d of %s %s's %d matches; leaving the day alone",
                     len(matches), tournament.name, day, sheet_count)
         return None

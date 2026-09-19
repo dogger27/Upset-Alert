@@ -279,6 +279,12 @@ def matches_for_day(rows: list[dict], day: date,
         # bracket's. None leaves the round to the bracket and the row.
         rid = m.get("RoundID")
         rnd = _ROUNDS.get(rid.strip()) if isinstance(rid, str) else None
+        # A QUALIFYING round is numbered like a main-draw one: DrawLevelType
+        # "Q" with RoundID "1" is Q1, not R1. Read without the level, every
+        # played match of Singapore's and Korea's qualifying day was filed as
+        # main-draw R1 two days before either main draw began (2026-09-19).
+        if (m.get("DrawLevelType") or "").upper() == "Q" and isinstance(rid, str):
+            rnd = f"Q{rid.strip()}" if rid.strip().isdigit() else None
         # A published match carries the sheet's own wording. Without it "Not
         # before 5:00 PM" was stored as a fixed 17:00 (Guadalajara's Bucsa v
         # Jovic, 2026-09-18), and the chain lost the floor.
